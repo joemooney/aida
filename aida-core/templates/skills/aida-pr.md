@@ -131,6 +131,14 @@ aida push                     # one-shot: code + orphan store
 
 If `aida push` errors with "branch behind main", surface the rebase prompt rather than carry on. (See TASK-54.)
 
+**BUG-88: never claim a push "extends" a PR without verifying state.** Before reporting that a push went to PR-N, confirm PR-N is still open:
+
+```bash
+gh pr list --head <branch> --state open --json number
+```
+
+If the branch's previous PR has already merged, `aida push` warns and prompts before continuing — the commit would land on `origin/<branch>` but never reach `main`. Don't say "Pushed `<sha>` to PR-N" if PR-N is merged; the right action is a follow-up PR (`gh pr create --base main --head <branch>`) or cherry-picking onto a fresh branch off `origin/main`.
+
 ### 7. Draft the PR title + body
 
 **Title format** (mirrors PR-3 through PR-6):

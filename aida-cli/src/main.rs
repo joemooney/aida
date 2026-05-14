@@ -12753,8 +12753,57 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Pr
             stderr
         });
     }
-    let s = String::from_utf8_lossy(&out.stdout);
-    let Some(line) = s.lines().next().map(str::trim) else {
+    parse_gh_pr_line(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Detect whether `branch` was the head of a now-MERGED PR. Used by
+/// `aida push` (BUG-88) to warn that new commits will be stranded —
+/// pushing to a merged-PR branch puts the commit on `origin/<branch>`
+/// but it won't reach `main` without a new PR. Mirrors the shape of
+/// [`detect_open_pr_for_branch`] but queries `--state merged` and returns
+/// only the first hit (most recent). trace:BUG-88 | ai:claude
+fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return PrLookup::GhMissing,
+    };
+    let spawned = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "merged",
+            "--limit",
+            "1",
+            "--json",
+            "number,title,url",
+            "-q",
+            r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
+        ])
+        .output();
+    let out = match spawned {
+        Ok(o) => o,
+        Err(e) => return PrLookup::GhFailed(format!("spawn {:?}: {}", gh_bin.display(), e)),
+    };
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return PrLookup::GhFailed(if stderr.is_empty() {
+            format!("gh exited {}", out.status)
+        } else {
+            stderr
+        });
+    }
+    parse_gh_pr_line(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Parse a single tab-separated `gh pr list -q ...` line into a
+/// `PrLookup`. Extracted for unit-testing the empty / well-formed /
+/// malformed shapes without spawning `gh`. trace:BUG-88 | ai:claude
+fn parse_gh_pr_line(stdout: &str) -> PrLookup {
+    let Some(line) = stdout.lines().next().map(str::trim) else {
         return PrLookup::NoOpenPr;
     };
     if line.is_empty() {
@@ -13130,17 +13179,31 @@ fn try_auto_queue_pr_review(
     }
 
     // Pull the commit-range spec ids using the existing helpers from STORY-67.
+    // BUG-85: split into "delivered" (subject `(REQ-ID)` parens) and
+    // "referenced" (body content / trace comments). Only delivered IDs count
+    // toward "covers N specs" or get an `implements` relation — referenced
+    // IDs are informational (spot-check for regressions).
     let (base, head) = pr_base_head(project_root, ReviewForge::GitHub, pr.number)
         .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
     let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
     let mut spec_ids: Vec<String> = Vec::new();
+    let mut referenced_ids: Vec<String> = Vec::new();
     for msg in &messages {
         for id in extract_spec_ids_from_commit(msg) {
             if !spec_ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
                 spec_ids.push(id);
             }
         }
+        for id in extract_referenced_spec_ids_from_commit(msg) {
+            if !referenced_ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                referenced_ids.push(id);
+            }
+        }
     }
+    // A referenced ID delivered by ANOTHER commit in the same range is
+    // still delivered overall — drop it from references to keep the lists
+    // disjoint across the range. trace:BUG-85 | ai:claude
+    referenced_ids.retain(|r| !spec_ids.iter().any(|d| d.eq_ignore_ascii_case(r)));
 
     let session_short: &str = &session_id[..session_id.len().min(8)];
     let mut desc = String::new();
@@ -13159,6 +13222,16 @@ fn try_auto_queue_pr_review(
     } else {
         desc.push_str("## Covers\n\n");
         for id in &spec_ids {
+            desc.push_str(&format!("- {}\n", id));
+        }
+        desc.push('\n');
+    }
+    if !referenced_ids.is_empty() {
+        desc.push_str("## References (not delivered)\n\n");
+        desc.push_str(
+            "Spec IDs mentioned in commit bodies or trace comments — touched but not delivered by this PR. Spot-check for regressions.\n\n",
+        );
+        for id in &referenced_ids {
             desc.push_str(&format!("- {}\n", id));
         }
         desc.push('\n');
@@ -16338,6 +16411,79 @@ mod statusline_tests {
         // Mixed prose + ID still rejects (so release notes don't false-match).
         let msg = "release: stuff (foo BUG-23)\n";
         assert!(extract_spec_ids_from_commit(msg).is_empty());
+
+        // BUG-85: body content that ends in `(SPEC-ID)` must NOT pollute the
+        // delivered list. Only the subject's `(REQ-ID)` parens-suffix counts.
+        let msg = "[AI:claude] fix(scope): description (BUG-83)\n\n\
+            - aida role enter \"Queued for this role\" section (TASK-48)\n\
+            - aida role enter \"Last touched\" section (TASK-49)\n\
+            - aida session show --plan manifest table (STORY-98)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-83".to_string()]
+        );
+    }
+
+    /// BUG-85: end-to-end shape of the PR-14 over-counting incident. The
+    /// auto-queue extractor walked a multi-commit range and incorrectly
+    /// added body-referenced spec IDs to the "covers" list. After this fix,
+    /// delivered = subject parens-suffix only; referenced = body content,
+    /// disjoint. trace:BUG-85 | ai:claude
+    #[test]
+    fn bug_85_delivered_vs_referenced_disjoint() {
+        // Simulated 6-commit PR + 1 commit with body refs to non-delivered specs.
+        let messages = [
+            "[AI:claude] fix(queue,session,role): prefer agreed_id (BUG-83)\n\n\
+                Several render paths that share the same data weren't part of that sweep:\n\
+                - aida role enter \"Queued for this role\" section (TASK-48)\n\
+                - aida role enter \"Last touched\" section (TASK-49)\n\
+                - aida session show --plan manifest table (STORY-98)\n",
+            "[AI:claude] feat(db): aida db check --collisions audit (TASK-80)\n",
+            "[AI:claude] fix(hooks): commit-msg accepts comma-separated scopes (BUG-84)\n",
+            "[AI:claude] fix(release): non-interactive --yes support (TASK-79)\n",
+            "[AI:claude] feat(scaffold): pre-allow aida-family bash (TASK-82)\n",
+            "[AI:claude] docs(session,queue): surface 'auto' permission mode (TASK-83)\n",
+        ];
+        let mut delivered: Vec<String> = Vec::new();
+        let mut referenced: Vec<String> = Vec::new();
+        for msg in &messages {
+            for id in extract_spec_ids_from_commit(msg) {
+                if !delivered.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                    delivered.push(id);
+                }
+            }
+            for id in extract_referenced_spec_ids_from_commit(msg) {
+                if !referenced.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                    referenced.push(id);
+                }
+            }
+        }
+        referenced.retain(|r| !delivered.iter().any(|d| d.eq_ignore_ascii_case(r)));
+
+        assert_eq!(
+            delivered,
+            vec!["BUG-83", "TASK-80", "BUG-84", "TASK-79", "TASK-82", "TASK-83"]
+        );
+        assert_eq!(referenced, vec!["TASK-48", "TASK-49", "STORY-98"]);
+    }
+
+    /// BUG-85: referenced extractor excludes IDs already delivered in the
+    /// same commit's subject. trace:BUG-85 | ai:claude
+    #[test]
+    fn referenced_specs_disjoint_from_delivered_within_one_commit() {
+        // BUG-83 appears in BOTH the subject paren and the body; it's
+        // delivered, so it must NOT appear in referenced.
+        let msg = "fix(scope): description (BUG-83)\n\n\
+            - cleanup pass on (BUG-83)\n\
+            - touches the same area as (TASK-48)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-83".to_string()]
+        );
+        assert_eq!(
+            extract_referenced_spec_ids_from_commit(msg),
+            vec!["TASK-48".to_string()]
+        );
     }
 
     /// STORY-67: looks_like_spec_id validates the alpha-DASH-digits
@@ -16898,6 +17044,221 @@ hostname = "h"
         assert!(lease.pr_head_sha.is_none());
         assert!(lease.pr_base_sha.is_none());
         assert!(lease.pr_base_ref.is_none());
+    }
+}
+
+#[cfg(test)]
+mod bug_88_pr_lookup_parse_tests {
+    use super::*;
+
+    /// BUG-88: a well-formed `gh pr list -q` line parses into a Found PR.
+    /// trace:BUG-88 | ai:claude
+    #[test]
+    fn parses_single_well_formed_line() {
+        let stdout = "42\tFix the thing\thttps://github.com/o/r/pull/42\n";
+        match parse_gh_pr_line(stdout) {
+            PrLookup::Found(p) => {
+                assert_eq!(p.number, 42);
+                assert_eq!(p.title, "Fix the thing");
+                assert_eq!(p.url, "https://github.com/o/r/pull/42");
+            }
+            other => panic!("expected Found, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    /// BUG-88: empty stdout means no PR matched the query — distinct from
+    /// gh failing. trace:BUG-88 | ai:claude
+    #[test]
+    fn empty_stdout_is_no_open_pr() {
+        assert!(matches!(parse_gh_pr_line(""), PrLookup::NoOpenPr));
+        assert!(matches!(parse_gh_pr_line("\n"), PrLookup::NoOpenPr));
+        assert!(matches!(parse_gh_pr_line("   \n"), PrLookup::NoOpenPr));
+    }
+
+    /// BUG-88: malformed lines (too few fields, non-numeric PR number)
+    /// surface as GhFailed so the caller doesn't silently swallow them.
+    /// trace:BUG-88 | ai:claude
+    #[test]
+    fn malformed_line_is_gh_failed() {
+        // Only one field.
+        assert!(matches!(
+            parse_gh_pr_line("just-one-field\n"),
+            PrLookup::GhFailed(_)
+        ));
+        // Two fields (missing url).
+        assert!(matches!(
+            parse_gh_pr_line("42\ttitle\n"),
+            PrLookup::GhFailed(_)
+        ));
+        // Non-numeric PR number.
+        assert!(matches!(
+            parse_gh_pr_line("abc\ttitle\turl\n"),
+            PrLookup::GhFailed(_)
+        ));
+    }
+
+    /// BUG-88: only the first line is considered (we pass --limit 1 to gh
+    /// but defensively the parser shouldn't blow up if more arrive).
+    /// trace:BUG-88 | ai:claude
+    #[test]
+    fn only_first_line_consumed() {
+        let stdout = "11\tfirst\thttps://x/1\n22\tsecond\thttps://x/2\n";
+        match parse_gh_pr_line(stdout) {
+            PrLookup::Found(p) => assert_eq!(p.number, 11),
+            other => panic!("expected Found, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod bug_87_queue_filter_tests {
+    use super::*;
+
+    /// BUG-87: full composition matrix. `--for X` always wins over `--all`;
+    /// `--for any` selects unrouted; `--all` only suppresses the
+    /// active-session-role default. trace:BUG-87 | ai:claude
+    #[test]
+    fn resolve_role_filter_composition_matrix() {
+        // (role, all, session_role) -> (role_filter, only_unrouted)
+        let cases: &[(Option<&str>, bool, Option<&str>, Option<&str>, bool)] = &[
+            // --for X (X != "any") wins over --all and session.
+            (
+                Some("reviewer"),
+                true,
+                Some("implementer"),
+                Some("reviewer"),
+                false,
+            ),
+            (
+                Some("reviewer"),
+                false,
+                Some("implementer"),
+                Some("reviewer"),
+                false,
+            ),
+            (Some("reviewer"), true, None, Some("reviewer"), false),
+            (Some("reviewer"), false, None, Some("reviewer"), false),
+            // --for any → only_unrouted=true, regardless of --all/session.
+            (Some("any"), true, Some("implementer"), None, true),
+            (Some("any"), false, Some("implementer"), None, true),
+            (Some("any"), false, None, None, true),
+            // --for any is case-insensitive.
+            (Some("ANY"), false, Some("implementer"), None, true),
+            // --all alone: no filter (override session default).
+            (None, true, Some("implementer"), None, false),
+            (None, true, None, None, false),
+            // No flags: inherit session role.
+            (None, false, Some("implementer"), Some("implementer"), false),
+            // No flags, no session: no filter.
+            (None, false, None, None, false),
+            // Empty session var treated as "no session role".
+            (None, false, Some(""), None, false),
+        ];
+        for (role, all, session, want_role, want_unrouted) in cases {
+            let (got_role, got_unrouted) = resolve_queue_role_filter(*role, *all, *session);
+            assert_eq!(
+                (got_role.as_deref(), got_unrouted),
+                (*want_role, *want_unrouted),
+                "case role={:?} all={} session={:?}",
+                role,
+                all,
+                session
+            );
+        }
+    }
+
+    /// BUG-87: predicate honors only_unrouted before falling through
+    /// to the role-equality check. trace:BUG-87 | ai:claude
+    #[test]
+    fn entry_matches_filter_branches() {
+        // only_unrouted: only entries with for_role==None pass.
+        assert!(entry_matches_role_filter(None, None, true));
+        assert!(!entry_matches_role_filter(Some("reviewer"), None, true));
+        assert!(!entry_matches_role_filter(Some("implementer"), None, true));
+
+        // Routed filter: exact match required.
+        assert!(entry_matches_role_filter(
+            Some("reviewer"),
+            Some("reviewer"),
+            false
+        ));
+        assert!(!entry_matches_role_filter(
+            Some("implementer"),
+            Some("reviewer"),
+            false
+        ));
+        assert!(!entry_matches_role_filter(None, Some("reviewer"), false));
+
+        // No filter, no unrouted-only: everything passes.
+        assert!(entry_matches_role_filter(None, None, false));
+        assert!(entry_matches_role_filter(Some("anything"), None, false));
+    }
+
+    /// BUG-87: the original incident. `--all --for reviewer` against a
+    /// queue of mixed-role items returns ONLY reviewer-routed items.
+    /// trace:BUG-87 | ai:claude
+    #[test]
+    fn all_and_for_reviewer_returns_only_reviewer_routed() {
+        let entries: Vec<Option<&str>> = vec![
+            Some("implementer"),
+            Some("reviewer"),
+            Some("implementer"),
+            None,
+            Some("reviewer"),
+            Some("triage"),
+        ];
+        // Simulate `aida queue list --all --for reviewer` from an
+        // implementer session.
+        let (role_filter, only_unrouted) =
+            resolve_queue_role_filter(Some("reviewer"), true, Some("implementer"));
+        let kept: Vec<Option<&str>> = entries
+            .iter()
+            .copied()
+            .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
+            .collect();
+        assert_eq!(kept, vec![Some("reviewer"), Some("reviewer")]);
+    }
+
+    /// BUG-87: `--all --for any` returns ONLY unrouted items.
+    /// trace:BUG-87 | ai:claude
+    #[test]
+    fn all_and_for_any_returns_only_unrouted() {
+        let entries: Vec<Option<&str>> = vec![
+            Some("implementer"),
+            None,
+            Some("reviewer"),
+            None,
+            Some("triage"),
+        ];
+        let (role_filter, only_unrouted) =
+            resolve_queue_role_filter(Some("any"), true, Some("implementer"));
+        let kept: Vec<Option<&str>> = entries
+            .iter()
+            .copied()
+            .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
+            .collect();
+        assert_eq!(kept, vec![None, None]);
+    }
+
+    /// BUG-87: no regression — bare `aida queue list` in an implementer
+    /// session still filters to implementer-routed items.
+    /// trace:BUG-87 | ai:claude
+    #[test]
+    fn default_session_role_filter_preserved() {
+        let entries: Vec<Option<&str>> = vec![
+            Some("implementer"),
+            Some("reviewer"),
+            None,
+            Some("implementer"),
+        ];
+        let (role_filter, only_unrouted) =
+            resolve_queue_role_filter(None, false, Some("implementer"));
+        let kept: Vec<Option<&str>> = entries
+            .iter()
+            .copied()
+            .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
+            .collect();
+        assert_eq!(kept, vec![Some("implementer"), Some("implementer")]);
     }
 }
 
@@ -20405,6 +20766,63 @@ fn handle_push_command(
         } else {
             let branch =
                 git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+
+            // BUG-88: warn when pushing to a branch whose PR has
+            // already merged. New commits land on `origin/<branch>`
+            // but won't reach `main` without a fresh PR. Skipped on
+            // --no-rebase-check (scripts/CI/automation), main itself,
+            // and when gh isn't available (we can't confirm merged
+            // state without it — silent rather than crying wolf).
+            // trace:BUG-88 | ai:claude
+            if !no_rebase_check
+                && branch != "main"
+                && branch != "master"
+                && matches!(
+                    detect_open_pr_for_branch(&project_root, &branch),
+                    PrLookup::NoOpenPr
+                )
+            {
+                if let PrLookup::Found(pr) = detect_merged_pr_for_branch(&project_root, &branch) {
+                    eprintln!(
+                        "{} branch {} was the head of {} which already merged.",
+                        "⚠".yellow().bold(),
+                        branch.cyan(),
+                        format!("PR-{}", pr.number).cyan(),
+                    );
+                    eprintln!("  {}", pr.url.dimmed());
+                    eprintln!(
+                        "  {}",
+                        "New commits will land on origin/<branch> but won't reach main without a fresh PR.".dimmed(),
+                    );
+                    eprintln!("  {}", "Fix paths:".dimmed());
+                    eprintln!(
+                        "    {} open a follow-up PR: {}",
+                        "·".dimmed(),
+                        format!("gh pr create --base main --head {} --title \"...\"", branch)
+                            .cyan()
+                    );
+                    eprintln!(
+                        "    {} cherry-pick onto a fresh branch off main: {}",
+                        "·".dimmed(),
+                        "git checkout -b <new-branch> origin/main && git cherry-pick <sha>".cyan()
+                    );
+                    eprintln!(
+                        "  Push anyway? [y/N] (or pass --no-rebase-check to skip this check)"
+                    );
+                    use std::io::Write;
+                    let _ = std::io::stderr().flush();
+                    let mut answer = String::new();
+                    let _ = std::io::stdin().read_line(&mut answer);
+                    if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+                        eprintln!(
+                            "{}",
+                            "Push aborted. Open a follow-up PR or move the commits to a fresh branch."
+                                .dimmed()
+                        );
+                        return Ok(());
+                    }
+                }
+            }
 
             // TASK-54: pre-flight "behind main" check. If the current
             // branch lags `main` by N commits, prompt before pushing
@@ -25917,70 +26335,101 @@ fn extract_acceptance_section(description: &str) -> Option<String> {
     }
 }
 
-/// Pull `(REQ-ID)` trailers from a single commit message body. AIDA's
+/// Pull `(REQ-ID)` trailers from a commit message **subject** only. AIDA's
 /// commit format wraps the requirement id in parens at end-of-subject:
 /// `[AI:tool] feat(scope): description (REQ-ID)`. Also tolerates the
 /// shorter form without `[AI:tool]` (chores/docs).
+///
+/// Body content is ignored — those IDs are "referenced" (trace comments,
+/// prose, sub-commit lines in squash bodies) and are returned by
+/// [`extract_referenced_spec_ids_from_commit`] instead. trace:BUG-85 | ai:claude
 /// trace:STORY-67 | ai:claude
 fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
+    let subject = message.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
     let mut out = Vec::new();
-    for line in message.lines() {
-        let trimmed = line.trim();
-        // Walk the trailing `(...)` group(s) on the subject line. Squash
-        // commits land with a `(#N)` PR-number suffix — strip those first
-        // so the REQ-ID paren before it gets walked. BUG-78 | ai:claude
-        let mut tail: &str = trimmed;
-        while tail.ends_with(')') {
-            let Some(open_at) = tail.rfind('(') else {
-                break;
-            };
-            let inner = &tail[open_at + 1..tail.len() - 1];
-            // Is this an `(#N)` PR suffix? Skip past it and try the next group.
-            if inner.starts_with('#')
-                && inner.len() > 1
-                && inner[1..].chars().all(|c| c.is_ascii_digit())
-            {
-                tail = tail[..open_at].trim_end();
-                continue;
-            }
-            tail = &tail[..open_at + inner.len() + 2]; // include the close paren
-            break;
-        }
-        let Some(open_at) = tail.rfind('(') else {
-            continue;
-        };
-        if !tail.ends_with(')') {
+    push_paren_spec_ids_from_line(subject, &mut out);
+    out
+}
+
+/// Pull spec-id-shaped `(REQ-ID)` parens from BODY lines of a commit message
+/// (i.e. everything after the subject). These are informational
+/// "referenced" specs — the commit's code touches their areas but doesn't
+/// deliver them per AIDA's "one (REQ-ID) trailer in the subject" convention.
+/// IDs already present in the subject are excluded so the two lists are
+/// disjoint. trace:BUG-85 | ai:claude
+fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<String> {
+    let delivered = extract_spec_ids_from_commit(message);
+    let mut lines = message.lines();
+    // Skip blank prefix + subject line.
+    let _subject = lines.by_ref().find(|l| !l.trim().is_empty());
+    let mut raw: Vec<String> = Vec::new();
+    for line in lines {
+        push_paren_spec_ids_from_line(line, &mut raw);
+    }
+    let mut out: Vec<String> = Vec::new();
+    for id in raw {
+        if delivered.iter().any(|d| d.eq_ignore_ascii_case(&id)) {
             continue;
         }
-        let close_at = tail.len() - 1;
-        let inner = &tail[open_at + 1..close_at];
-        // BUG-78: accept comma / whitespace separated multi-spec parens
-        // like `(STORY-98 STORY-90 BUG-74)` or `(STORY-A, STORY-B)`.
-        // Single-spec parens fall through the same path (one token, one ID).
-        let line_start = out.len();
-        let mut all_ids = true;
-        let mut tok_count = 0;
-        for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
-            let tok = tok.trim();
-            if tok.is_empty() {
-                continue;
-            }
-            tok_count += 1;
-            if looks_like_spec_id(tok) {
-                out.push(tok.to_string());
-            } else {
-                all_ids = false;
-                break;
-            }
+        if out.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+            continue;
         }
-        // If any token wasn't spec-id-shaped this wasn't a multi-spec paren
-        // at all (release notes, commit prose). Drop what we collected for
-        // this line so version-like parens like `(1.2.3)` still don't match.
-        if !all_ids || tok_count == 0 {
-            out.truncate(line_start);
-        }
+        out.push(id);
     }
     out
+}
+
+/// Walk one commit-message line for a trailing `(REQ-ID[, REQ-ID...])`
+/// group and push the spec-id-shaped tokens into `out`. Strips an optional
+/// `(#N)` PR-number suffix first (squash commits). Drops the line's
+/// contribution entirely if any token isn't spec-id-shaped (so prose-y
+/// parens like `(1.2.3)` or `(foo BUG-23)` don't false-match).
+/// trace:BUG-78 BUG-85 | ai:claude
+fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
+    let trimmed = line.trim();
+    let mut tail: &str = trimmed;
+    while tail.ends_with(')') {
+        let Some(open_at) = tail.rfind('(') else {
+            break;
+        };
+        let inner = &tail[open_at + 1..tail.len() - 1];
+        if inner.starts_with('#')
+            && inner.len() > 1
+            && inner[1..].chars().all(|c| c.is_ascii_digit())
+        {
+            tail = tail[..open_at].trim_end();
+            continue;
+        }
+        tail = &tail[..open_at + inner.len() + 2];
+        break;
+    }
+    let Some(open_at) = tail.rfind('(') else {
+        return;
+    };
+    if !tail.ends_with(')') {
+        return;
+    }
+    let close_at = tail.len() - 1;
+    let inner = &tail[open_at + 1..close_at];
+    let line_start = out.len();
+    let mut all_ids = true;
+    let mut tok_count = 0;
+    for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
+        let tok = tok.trim();
+        if tok.is_empty() {
+            continue;
+        }
+        tok_count += 1;
+        if looks_like_spec_id(tok) {
+            out.push(tok.to_string());
+        } else {
+            all_ids = false;
+            break;
+        }
+    }
+    if !all_ids || tok_count == 0 {
+        out.truncate(line_start);
+    }
 }
 
 fn looks_like_spec_id(s: &str) -> bool {
@@ -28137,6 +28586,47 @@ fn current_user_id(user_override: Option<&str>) -> String {
     })
 }
 
+/// Resolve `--for <role>` / `--all` / active-session-role into the
+/// effective queue role filter. Returns `(role_filter, only_unrouted)`:
+/// `only_unrouted=true` means filter to entries with no `for_role`
+/// (driven by `--for any`); otherwise `role_filter` is `Some(role)` to
+/// match `for_role == Some(role)`, or `None` for no role filter.
+///
+/// `--for X` (non-"any") takes precedence over `--all` — that flag only
+/// suppresses the *default* active-role filter, not an explicit override.
+/// trace:BUG-87 | ai:claude
+fn resolve_queue_role_filter(
+    role: Option<&str>,
+    all: bool,
+    session_role: Option<&str>,
+) -> (Option<String>, bool) {
+    match role {
+        Some(r) if r.eq_ignore_ascii_case("any") => (None, true),
+        Some(r) => (Some(r.to_string()), false),
+        None if all => (None, false),
+        None => match session_role {
+            Some(s) if !s.is_empty() => (Some(s.to_string()), false),
+            _ => (None, false),
+        },
+    }
+}
+
+/// Predicate: does a queue entry pass the resolved role filter?
+/// trace:BUG-87 | ai:claude
+fn entry_matches_role_filter(
+    for_role: Option<&str>,
+    role_filter: Option<&str>,
+    only_unrouted: bool,
+) -> bool {
+    if only_unrouted {
+        return for_role.is_none();
+    }
+    match role_filter {
+        Some(r) => for_role == Some(r),
+        None => true,
+    }
+}
+
 // trace:STORY-0368 | ai:claude
 /// Handle queue commands
 fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
@@ -28166,24 +28656,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
             let store = storage.load()?;
 
-            // Determine effective role filter:
-            //   --all       → no filter (override active-role default)
-            //   --role X    → filter to for_role==X (or X="any" → no filter)
-            //   neither     → if AIDA_SESSION_ROLE set, filter to that
-            //                 else no filter
-            let role_filter: Option<String> = if *all {
-                None
-            } else if let Some(r) = role {
-                if r == "any" {
-                    None
-                } else {
-                    Some(r.clone())
-                }
-            } else {
-                std::env::var("AIDA_SESSION_ROLE")
-                    .ok()
-                    .filter(|s| !s.is_empty())
-            };
+            // Determine effective role filter. BUG-87: `--for X` is
+            // explicit user intent and takes precedence over `--all`,
+            // which only suppresses the *default* active-role filter.
+            // See `resolve_queue_role_filter` for the truth table.
+            // trace:BUG-87 | ai:claude
+            let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+            let (role_filter, only_unrouted) =
+                resolve_queue_role_filter(role.as_deref(), *all, session_role.as_deref());
 
             // Phase 3 scope: AND the active role's scope_tags / scope_status
             // on top of the role-routing filter. --all and --no-scope both
@@ -28254,9 +28734,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             });
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
-                .filter(|e| match &role_filter {
-                    Some(r) => e.for_role.as_deref() == Some(r.as_str()),
-                    None => true,
+                .filter(|e| {
+                    entry_matches_role_filter(
+                        e.for_role.as_deref(),
+                        role_filter.as_deref(),
+                        only_unrouted,
+                    )
                 })
                 .filter(|e| entry_scope_session_match(e, self_lease_for_routing.as_ref(), *all))
                 .filter(|e| {
@@ -28332,8 +28815,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             // Load global entries for the active role unless --local was passed.
             // The global queue is role-scoped (one file per role) — it only
-            // makes sense when there's a role filter in effect. trace:FR-1-012
-            let global_entries: Vec<global_queue::GlobalQueueEntry> = if *local {
+            // makes sense when there's a routed-role filter in effect.
+            // `--for any` (only_unrouted) targets entries with no role,
+            // which are not stored in the per-role global queue.
+            // trace:FR-1-012 BUG-87
+            let global_entries: Vec<global_queue::GlobalQueueEntry> = if *local || only_unrouted {
                 Vec::new()
             } else if let Some(role_name) = &role_filter {
                 global_queue::load(role_name).unwrap_or_default()
@@ -28342,11 +28828,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
 
             if entries.is_empty() && global_entries.is_empty() {
-                if let Some(r) = &role_filter {
+                // BUG-87: when --all is already passed, don't suggest
+                // "pass --all" — the user just did. Drop the hint.
+                let hint = if *all {
+                    ""
+                } else {
+                    "; pass --all to see your full queue"
+                };
+                if only_unrouted {
+                    println!("{} (no unrouted items{})", "Your queue".dimmed(), hint,);
+                } else if let Some(r) = &role_filter {
                     println!(
-                        "{} (no items routed to role {}; pass --all to see your full queue)",
+                        "{} (no items routed to role {}{})",
                         "Your queue".dimmed(),
-                        r.cyan()
+                        r.cyan(),
+                        hint,
                     );
                 } else {
                     println!("{}", "Your queue is empty.".dimmed());
@@ -28370,18 +28866,26 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
 
             let total = entries.len() + global_entries.len();
-            let title = match &role_filter {
-                Some(r) => format!(
-                    "My Queue · role:{} ({} item{})",
-                    r,
+            let title = if only_unrouted {
+                format!(
+                    "My Queue · unrouted ({} item{})",
                     total,
                     if total == 1 { "" } else { "s" }
-                ),
-                None => format!(
-                    "My Queue ({} item{})",
-                    total,
-                    if total == 1 { "" } else { "s" }
-                ),
+                )
+            } else {
+                match &role_filter {
+                    Some(r) => format!(
+                        "My Queue · role:{} ({} item{})",
+                        r,
+                        total,
+                        if total == 1 { "" } else { "s" }
+                    ),
+                    None => format!(
+                        "My Queue ({} item{})",
+                        total,
+                        if total == 1 { "" } else { "s" }
+                    ),
+                }
             };
             println!("{}", title.bold());
             println!("{}", "─".repeat(80));
@@ -29144,22 +29648,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
             let store = storage.load()?;
 
-            // Same role-filter logic as queue list: --all overrides; --role X
-            // explicit; otherwise inherit from active role; fall through to
-            // "no filter" if nothing's set.
-            let role_filter: Option<String> = if *all {
-                None
-            } else if let Some(r) = role {
-                if r == "any" {
-                    None
-                } else {
-                    Some(r.clone())
-                }
-            } else {
-                std::env::var("AIDA_SESSION_ROLE")
-                    .ok()
-                    .filter(|s| !s.is_empty())
-            };
+            // Same role-filter logic as queue list (BUG-87).
+            // `--for X` takes precedence over `--all`. trace:BUG-87 | ai:claude
+            let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+            let (role_filter, only_unrouted) =
+                resolve_queue_role_filter(role.as_deref(), *all, session_role.as_deref());
 
             // Phase 3 scope filter (see queue list).
             // trace:TASK-1-021 | ai:claude
@@ -29201,9 +29694,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             let next_entry = raw_entries
                 .iter()
-                .filter(|e| match &role_filter {
-                    Some(r) => e.for_role.as_deref() == Some(r.as_str()),
-                    None => true,
+                .filter(|e| {
+                    entry_matches_role_filter(
+                        e.for_role.as_deref(),
+                        role_filter.as_deref(),
+                        only_unrouted,
+                    )
                 })
                 .filter(|e| {
                     // STORY-57: scope/session routing — only show items
@@ -29276,9 +29772,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             // Local wins on tiebreak — the FR specifies that local-context
             // work takes precedence. Only fall through to global when local
-            // is empty (or --global was passed). trace:FR-1-012
+            // is empty (or --global was passed). `--for any` (only_unrouted)
+            // never falls through — global queues are per-role.
+            // trace:FR-1-012 BUG-87
             let global_next: Option<global_queue::GlobalQueueEntry> =
-                if *local || next_entry.is_some() {
+                if *local || only_unrouted || next_entry.is_some() {
                     None
                 } else if let Some(role_name) = &role_filter {
                     let entries = global_queue::load(role_name).unwrap_or_default();
@@ -29352,9 +29850,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     }
                 }
 
-                let scope = match &role_filter {
-                    Some(r) => format!(" for role {}", r.cyan()),
-                    None => String::new(),
+                let scope = if only_unrouted {
+                    format!(" for {}", "unrouted items".cyan())
+                } else {
+                    match &role_filter {
+                        Some(r) => format!(" for role {}", r.cyan()),
+                        None => String::new(),
+                    }
                 };
                 println!("{} Queue is empty{}.", "Nothing to do —".dimmed(), scope);
                 // STORY-48: if the queue would have had items but they were
