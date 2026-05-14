@@ -1,0 +1,83 @@
+id: 019e26e0-0aa7-79e1-a2c1-c0955fdad35e
+spec_id: TASK-234
+agreed_id: TASK-234
+title: 'aida queue list ''Done — awaiting merge'' section: group by PR + surface next-action per group'
+description: |-
+  TASK-222 shipped the in-flight section, but it shows Done items as a flat list with a single informational line at the bottom ('auto-bump to Completed fires when a commit referencing the spec lands on the default branch — aida pull'). Users seeing this output (especially first time) don't know what action to take. The phrasing is descriptive, not prescriptive.
+
+  ## Specific UX gap observed 2026-05-14
+
+  User saw 10 items in 'Done — awaiting merge' and asked: 'how do I interpret Done - awaiting merge? Is there an action I should do? Maybe aida merge story-122? It is not obvious how I got in this situation and what I can do to resolve it.'
+
+  The 10 items were actually in two distinct states:
+  - 6 items genuinely awaiting merge (PR-26 still open, CI running)
+  - 4 items 'stuck' — review stories for already-merged PRs where auto-bump silently missed (the 'now or never' property covered by TASK-226)
+
+  The flat list shows both states identically. Bad signal-to-noise.
+
+  ## Proposed grouped output
+
+    Done — awaiting merge (10 items):
+
+    PR-26 (open, CI in progress) — 6 specs:
+      ◐ STORY-122, TASK-220, TASK-232, TASK-231, TASK-0396, TASK-229
+      ▶ Next: gh run watch + gh pr merge 26 --squash → then aida pull
+
+    Stuck (PR merged, auto-bump missed) — 4 specs:
+      ◐ STORY-119 (PR-23 merged 9h ago)
+      ◐ STORY-120 (PR-24 merged 8h ago)
+      ◐ STORY-123 (PR-25 merged 6h ago)
+      ◐ TASK-222 (PR-25 merged 6h ago)
+      ▶ Next: aida edit <ID> --status completed (manual), or wait for TASK-226 (aida db reconcile-status)
+
+  Each group has:
+  1. Header: PR state OR 'Stuck' (auto-bump missed) classification
+  2. Spec list grouped under the header
+  3. ▶ Next-action line — concrete commands, not prose
+
+  ## Detection logic
+
+  For each Done item:
+  1. Find its referenced PR (via session manifest, commit trailer, or trace-comment graph)
+  2. Query gh pr view for state: OPEN → awaiting-merge group; MERGED → stuck group; CLOSED → 'closed without merge' group
+  3. Group items by PR + state
+
+  When gh is unavailable: degrade gracefully — show flat list with a hint 'gh unavailable; can't detect PR states. Done items below; act manually.'
+
+  ## Composes with
+
+  - TASK-222 (Done visible in queue list) - this TASK extends the in-flight section
+  - TASK-226 (aida db reconcile-status) - 'stuck' group's recommended action references this
+  - BUG-94 / BUG-95 (auto-bump gaps) - 'stuck' state is the symptom of these bugs
+  - TASK-220 (aida status) - could surface the same grouping in its Queue section
+  - BUG-74 (gh detection) - reuse for gh pr view calls
+
+  ## Why medium priority
+
+  The information IS present today (just flat). Users CAN figure out which items are stuck by running gh pr view per item. The UX improvement is making 'what do I do?' answerable at a glance instead of requiring per-item investigation.
+
+  ## Acceptance
+
+  - [ ] aida queue list Done section groups items by underlying PR + state (awaiting-merge / stuck / closed)
+  - [ ] Each group shows a concrete next-action line (commands, not prose)
+  - [ ] Detection uses gh pr view; graceful degrade when gh unavailable
+  - [ ] 'Stuck' detection identifies items whose referenced commit is already on default branch
+  - [ ] Tests: mixed-state queue (some awaiting, some stuck), gh-unavailable path, no-Done-items path
+
+  ## Discovered via
+
+  2026-05-14 — direct user feedback during overnight wrap-up: 'It is not obvious how I got in this situation and what I can do to resolve it.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T14:24:37.543192216Z
+modified_at: 2026-05-14T14:24:37.543192216Z
+req_type: Task
+tags:
+- awaiting-merge
+- done
+- next-action
+- queue
+- ux
+- visibility
