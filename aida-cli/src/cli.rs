@@ -361,6 +361,12 @@ pub enum SessionCommand {
     /// role + spec context extracted from each session's .jsonl. By
     /// default shows sessions with activity in the last 24 hours, up
     /// to 20 entries — `--all` bypasses the recency cutoff.
+    ///
+    /// This is the HISTORICAL view (past conversations). For the live
+    /// view of which scoped session leases are holding work right now,
+    /// use `aida session leases`. The two views answer different
+    /// questions; when in doubt for "what's running?" reach for
+    /// `aida session leases`. trace:BUG-98 | ai:claude
     List {
         /// Show at most N sessions (default 20).
         #[clap(long, short = 'n', default_value = "20")]
@@ -572,8 +578,14 @@ pub enum SessionCommand {
         skip_ci: bool,
     },
 
-    /// List active session leases (separately from the historical list
-    /// of past Claude Code sessions in `aida session list`).
+    /// List active session leases — the canonical "who holds what
+    /// scoped work right now" view.
+    ///
+    /// Separate from `aida session list`, which lists HISTORICAL Claude
+    /// Code conversations in this project (.jsonl files) — a different
+    /// concept that does NOT show the scoped leases `aida session start`
+    /// creates. For "what's running?" reach for `aida session leases`
+    /// first. trace:BUG-98 | ai:claude
     Leases {
         /// Probe live `claude` processes and warn about ones whose cwd is
         /// `(deleted)` (worktree was removed without ending claude — the

@@ -10075,6 +10075,20 @@ fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     out
 }
 
+/// BUG-98: cheap lease count for the `aida session list` footer hint.
+/// Users repeatedly reach for `session list` looking for "active
+/// sessions" when they really want `session leases` (the scoped-lease
+/// view). Exposing the count here lets the historical-view command
+/// nudge them at the right moment. Tries the current project root first
+/// and silently falls through to 0 if we're not inside a project.
+/// trace:BUG-98 | ai:claude
+pub(crate) fn active_lease_count_for_cwd() -> usize {
+    match find_project_root() {
+        Ok(root) => list_leases(&root).len(),
+        Err(_) => 0,
+    }
+}
+
 /// Find the active session lease whose worktree contains `cwd`, if any.
 /// Used by statusline + enforcement to identify which session "owns" the
 /// shell the user is operating from.
@@ -14014,6 +14028,14 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
             "Start one with: {} {}",
             "aida session start --owns".cyan(),
             "<scope>".dimmed()
+        );
+        // BUG-98: explicit pointer at the historical-conversations view so
+        // users who landed here looking for `list` know where it lives.
+        eprintln!();
+        eprintln!(
+            "{}",
+            "(for the historical list of Claude Code conversations in this project, run `aida session list`)"
+                .dimmed()
         );
         return Ok(());
     }
@@ -18003,6 +18025,52 @@ mod lease_enforcement_tests {
         let leases: Vec<SessionLease> = vec![];
         let owner = lease_owning_spec(&leases, None, a.id, a.spec_id.as_deref(), &store);
         assert!(owner.is_none());
+    }
+
+    /// BUG-98: list_leases scans the on-disk lease toml files and
+    /// returns one entry per file. This is the count `aida session list`
+    /// uses to decide whether to render the leases-hint footer. The
+    /// shape exercised here matches the BUG-98 repro (multiple leases
+    /// from concurrent worktrees on the project).
+    /// trace:BUG-98 | ai:claude
+    #[test]
+    fn list_leases_counts_active_lease_files() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project_root = tmp.path().to_path_buf();
+        let dir = leases_dir(&project_root);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Empty directory → 0.
+        assert_eq!(list_leases(&project_root).len(), 0);
+
+        // Drop three valid lease toml files and one bogus non-toml — the
+        // count should be 3.
+        for (idx, scope) in ["EPIC-20", "PR-19", "EPIC-21"].iter().enumerate() {
+            let id = format!("019e0000000{:01}", idx);
+            let toml = format!(
+                "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"{slug}\"\nowner = \"t\"\n\
+                 worktree_path = \"/tmp/{id}\"\nbranch = \"br\"\nstarted_at = \"2026-05-14T00:00:00Z\"\n\
+                 hostname = \"h\"\n",
+                id = id,
+                scope = scope,
+                slug = scope.to_lowercase(),
+            );
+            std::fs::write(dir.join(format!("{}.toml", id)), toml).unwrap();
+        }
+        std::fs::write(dir.join("README.txt"), "ignored").unwrap();
+        let leases = list_leases(&project_root);
+        assert_eq!(
+            leases.len(),
+            3,
+            "expected 3 active leases, got {} ({:?})",
+            leases.len(),
+            leases.iter().map(|l| l.scope.as_str()).collect::<Vec<_>>()
+        );
+        // Sorted by started_at (all equal here) — make sure no scope is
+        // dropped silently.
+        let scopes: Vec<&str> = leases.iter().map(|l| l.scope.as_str()).collect();
+        assert!(scopes.contains(&"EPIC-20"));
+        assert!(scopes.contains(&"PR-19"));
+        assert!(scopes.contains(&"EPIC-21"));
     }
 }
 
