@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:18:22.753480821Z
-modified_at: 2026-05-13T15:53:25.979312501Z
+modified_at: 2026-05-14T01:41:01.457445956Z
 req_type: Bug
 tags:
 - critical
@@ -83,6 +83,24 @@ comments:
     Test status: 25/25 db tests green; `cargo fmt --all -- --check` clean
   created_at: 2026-05-13T15:52:40.571599018Z
   modified_at: 2026-05-13T15:52:40.571599018Z
+- id: 019e2424-f191-75c1-a715-742e295529ec
+  author: joe
+  content: |-
+    Expanding the repro list — observed 2026-05-13 followup investigation: the third STORY-86 deletion (commit cb4d72fc on aida-store) was almost certainly triggered by aida pull's auto-commit step ('Committed pending orphan changes before pull'), NOT by an explicit aida add/edit/comment call.
+
+    This means BUG-96's risk surface is wider than the original description listed. Confirmed or strongly-suspected triggers:
+
+    - aida add / edit / comment add (described)
+    - aida pull (auto-commits pending orphan changes before pull — likely the cb4d72fc trigger)
+    - aida queue add/done/move/remove (queue mutations write to orphan store)
+    - aida db sync (orphan-store reconciliation)
+    - aida session end (depending on session-state writes)
+
+    Users running what they perceive as 'reads' (aida pull) can still trigger the destructive path. Fix scope must cover ALL writes to the orphan store, not just user-initiated edits.
+
+    cb4d72fc message pattern 'chore: update 1 requirements, delete 1' matches the BUG-96 fingerprint exactly. The deletion fired during a routine pull, surprising the user (who had no expectation of writes happening) and re-eating STORY-86 a third time in the same day.
+  created_at: 2026-05-14T01:41:01.457445956Z
+  modified_at: 2026-05-14T01:41:01.457445956Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T15:49:45.927190941Z
