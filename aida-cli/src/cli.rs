@@ -1230,6 +1230,34 @@ pub enum DbCommand {
         subcommand: BlockCommand,
     },
 
+    /// Replay the Done → Completed auto-bump scan over a wider commit
+    /// range than `aida pull` saw, recovering specs that got stranded
+    /// at Done. STORY-86's pull-time auto-bump only scans commits the
+    /// current pull brings in; if a spec's YAML was unreadable at pull
+    /// time (BUG-96 deletion), or the user pulled before flipping the
+    /// spec to Done, the bump silently misses and the spec is stuck
+    /// without manual intervention. trace:TASK-226 | ai:claude
+    ReconcileStatus {
+        /// Bound the scan range. Accepts a commit SHA, a tag, or any
+        /// `git rev-parse`-able ref. Without --since, walks the most
+        /// recent 200 commits on the default branch (an over-broad
+        /// window is safe — only Done specs flip, so idempotent on
+        /// already-Completed specs).
+        #[clap(long, value_name = "REF")]
+        since: Option<String>,
+
+        /// Limit the replay to a single spec. Faster than the full
+        /// scan when you know which spec is stuck. The same default-
+        /// branch + status-Done guards apply.
+        #[clap(long, value_name = "SPEC-ID")]
+        spec: Option<String>,
+
+        /// Show what would flip without writing anything. Pairs with
+        /// `--since` / `--spec` for previewing a targeted replay.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Audit the store for consistency problems. Currently supports
     /// `--collisions` (two requirements claiming the same short id, the
     /// shape BUG-82 prevents at gate time but doesn't retroactively detect).

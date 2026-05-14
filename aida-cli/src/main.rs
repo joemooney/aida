@@ -3218,6 +3218,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             handle_retire_legacy_ids(&backend, store_path, *dry_run)?;
         }
 
+        // trace:TASK-226 | ai:claude
+        Command::Db(DbCommand::ReconcileStatus {
+            since,
+            spec,
+            dry_run,
+        }) => {
+            handle_db_reconcile_status(store_path, since.as_deref(), spec.as_deref(), *dry_run)?;
+        }
+
         // trace:TASK-80 | ai:claude
         Command::Db(DbCommand::Check { collisions, repair }) => {
             if !*collisions {
@@ -19042,6 +19051,146 @@ mod auto_bump_done_tests {
             req.status
         );
     }
+
+    /// TASK-226: reconcile-status replays the same scan as the pull-time
+    /// auto-bump but over a wider, user-bounded range. Verifies the
+    /// recovery path for a spec whose YAML was unreadable at pull time:
+    /// the merge commit is already on local main (so pull's scan window
+    /// has moved past it), but reconcile-status still finds and flips it.
+    /// trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_replays_missed_bump() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9601");
+
+        // Land a commit referencing the spec on main. Imagine pull-time
+        // auto-bump missed it because the YAML was unreadable.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: x ({})", spec_id)],
+        );
+
+        let r = handle_db_reconcile_status(&store_path, None, None, false);
+        assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "spec should be Completed after reconcile, was {:?}",
+            req.status
+        );
+        let info = req.implementation_info.as_ref().expect("info populated");
+        assert!(info.completed_at.is_some());
+        assert!(info.completion_sha.is_some());
+    }
+
+    /// TASK-226: --dry-run reports the planned flips without writing.
+    /// trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_dry_run_does_not_write() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9602");
+
+        std::fs::write(project_root.join("f.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "f.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: y ({})", spec_id)],
+        );
+
+        let r = handle_db_reconcile_status(&store_path, None, None, true);
+        assert!(r.is_ok(), "dry-run failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "spec should still be Done after dry-run, was {:?}",
+            req.status
+        );
+    }
+
+    /// TASK-226: --spec narrows the candidate set to a single requirement.
+    /// Other Done specs (with referencing commits) stay untouched.
+    /// trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_spec_filter_narrows_candidates() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let target = seed_done_spec(&store_path, "STORY-9603");
+        let bystander = seed_done_spec(&store_path, "STORY-9604");
+
+        // Both specs have referencing commits.
+        std::fs::write(project_root.join("a.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "a.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: a ({})", target)],
+        );
+        std::fs::write(project_root.join("b.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "b.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: b ({})", bystander)],
+        );
+
+        // Narrow to just `target` — bystander must NOT flip.
+        let r = handle_db_reconcile_status(&store_path, None, Some(&target), false);
+        assert!(r.is_ok(), "reconcile failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let target_req = after.get_requirement_by_spec_id(&target).unwrap();
+        let bystander_req = after.get_requirement_by_spec_id(&bystander).unwrap();
+        assert!(matches!(target_req.status, RequirementStatus::Completed));
+        assert!(
+            matches!(bystander_req.status, RequirementStatus::Done),
+            "bystander should still be Done, was {:?}",
+            bystander_req.status
+        );
+    }
+
+    /// TASK-226: a spec already at Completed is a no-op (no double-write,
+    /// no error). This is the idempotency contract — running the
+    /// command twice in a row should be safe. trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_idempotent_on_completed_specs() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9605");
+        std::fs::write(project_root.join("f.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "f.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: z ({})", spec_id)],
+        );
+
+        // First run flips.
+        handle_db_reconcile_status(&store_path, None, None, false).unwrap();
+        // Second run should be a clean no-op (the spec is now Completed).
+        let r = handle_db_reconcile_status(&store_path, None, None, false);
+        assert!(r.is_ok(), "second reconcile failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(matches!(req.status, RequirementStatus::Completed));
+    }
+
+    /// TASK-226: refuses to run on a non-default branch — same guard as
+    /// the pull-time auto-bump, since the scan window only makes sense
+    /// for default-branch history. trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_refuses_non_default_branch() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let _ = seed_done_spec(&store_path, "STORY-9606");
+        run_git(&project_root, &["checkout", "-b", "feature/x"]);
+        let r = handle_db_reconcile_status(&store_path, None, None, false);
+        assert!(r.is_err(), "expected error on feature branch, got Ok");
+    }
 }
 
 /// BUG-95: regression coverage for the claim that `aida pull --code-only`
@@ -22893,6 +23042,229 @@ fn auto_bump_done_to_completed(
     Ok(confirmed)
 }
 
+/// TASK-226: manual replay of the Done → Completed scan over a wider
+/// range than `aida pull` saw. Used to recover specs stranded at Done
+/// when:
+/// - the YAML was unreadable at pull time (BUG-96 deletion);
+/// - the spec was flipped to Done after the referencing commit was
+///   already on local main;
+/// - the user cold-cloned and never had a pull moment where both the
+///   spec and the commit were visible together.
+///
+/// The handler reuses `auto_bump_done_to_completed`'s pure helpers
+/// (extract_spec_ids_from_commit + extract_pr_number_from_commit_subject
+/// + parse_review_story_pr_number) but does its own scan because the
+/// pull-time helper hard-codes pre_sha-or-HEAD~50 ranges. Here we accept
+/// `--since REF` for a bounded replay or default to a 200-commit window.
+/// `--spec SPEC-ID` narrows the candidate set to a single requirement.
+/// `--dry-run` previews without writing.
+/// trace:TASK-226 | ai:claude
+fn handle_db_reconcile_status(
+    store_path: &std::path::Path,
+    since: Option<&str>,
+    spec: Option<&str>,
+    dry_run: bool,
+) -> Result<()> {
+    use std::process::Command as ProcessCommand;
+
+    let project_root = store_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("could not derive project root from store path"))?;
+
+    let default_branch: Option<String> = ProcessCommand::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            String::from_utf8(o.stdout)
+                .ok()
+                .map(|s| s.trim().to_string())
+                .and_then(|s| s.strip_prefix("origin/").map(|x| x.to_string()))
+        });
+    let current = aida_core::git_ops::current_branch(project_root).ok();
+    let default_branch = default_branch.or_else(|| match current.as_deref() {
+        Some("main") | Some("master") => current.clone(),
+        _ => None,
+    });
+    let Some(default_branch) = default_branch else {
+        anyhow::bail!(
+            "could not detect default branch (no `origin/HEAD` symref and not on main/master) — \
+             reconcile-status only scans the default branch"
+        );
+    };
+    if current.as_deref() != Some(default_branch.as_str()) {
+        anyhow::bail!(
+            "reconcile-status must run on the default branch ({}). Currently on `{}`. \
+             Switch with `git checkout {}` first.",
+            default_branch,
+            current.as_deref().unwrap_or("(detached)"),
+            default_branch
+        );
+    }
+
+    let mut log_args: Vec<String> = vec!["log".to_string(), "--pretty=format:%H%x09%s".to_string()];
+    match since {
+        Some(s) => log_args.push(format!("{}..HEAD", s)),
+        None => {
+            log_args.push("--max-count=200".to_string());
+            log_args.push("HEAD".to_string());
+        }
+    }
+    let log_out = ProcessCommand::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(&log_args)
+        .output();
+    let log = match log_out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        Ok(o) => anyhow::bail!(
+            "git log failed (resolving `--since {}`?): {}",
+            since.unwrap_or("<auto>"),
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => anyhow::bail!("git log failed: {}", e),
+    };
+
+    let mut candidates: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
+    let mut pr_to_sha: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
+    for line in log.lines() {
+        let mut parts = line.splitn(2, '\t');
+        let sha = parts.next().unwrap_or("").trim();
+        let subject = parts.next().unwrap_or("").trim();
+        if sha.is_empty() || subject.is_empty() {
+            continue;
+        }
+        for id in extract_spec_ids_from_commit(subject) {
+            candidates.entry(id).or_insert_with(|| sha.to_string());
+        }
+        if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
+            pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
+        }
+    }
+
+    let storage = Storage::new(store_path.to_path_buf());
+    let store = storage.load()?;
+
+    // Build the planned-flip list. For --spec, we narrow to that one
+    // candidate (matched against either spec_id or review-story title).
+    let mut flips: Vec<(String, String)> = Vec::new();
+    for (spec_id, sha) in &candidates {
+        if let Some(target) = spec {
+            if !spec_id.eq_ignore_ascii_case(target) {
+                continue;
+            }
+        }
+        let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
+            continue;
+        };
+        if !matches!(req.status, RequirementStatus::Done) {
+            continue;
+        }
+        flips.push((spec_id.clone(), sha.clone()));
+    }
+    if !pr_to_sha.is_empty() {
+        for req in &store.requirements {
+            if !matches!(req.status, RequirementStatus::Done) {
+                continue;
+            }
+            let Some(pr_n) = parse_review_story_pr_number(&req.title) else {
+                continue;
+            };
+            let Some(sha) = pr_to_sha.get(&pr_n) else {
+                continue;
+            };
+            let Some(sid) = req.spec_id.as_deref() else {
+                continue;
+            };
+            if let Some(target) = spec {
+                if !sid.eq_ignore_ascii_case(target) {
+                    continue;
+                }
+            }
+            if flips.iter().any(|(id, _)| id == sid) {
+                continue;
+            }
+            flips.push((sid.to_string(), sha.clone()));
+        }
+    }
+
+    if flips.is_empty() {
+        match spec {
+            Some(s) => println!(
+                "No eligible flips for {}. Either it's not at status Done, \
+                 or no commit in the scan range references it.",
+                s
+            ),
+            None => println!(
+                "No eligible flips. All Done specs in the store either have no \
+                 referencing commit in the scan range, or are already Completed."
+            ),
+        }
+        return Ok(());
+    }
+
+    if dry_run {
+        println!(
+            "{} would flip {} Done spec{} → Completed:",
+            "dry-run:".dimmed(),
+            flips.len(),
+            if flips.len() == 1 { "" } else { "s" }
+        );
+        for (sid, sha) in &flips {
+            let short = if sha.len() >= 7 { &sha[..7] } else { sha };
+            println!("  {} ({})", sid.bold(), short.dimmed());
+        }
+        return Ok(());
+    }
+
+    let now = chrono::Utc::now();
+    let flips_for_write = flips.clone();
+    storage.update_atomically(|s| {
+        for (spec_id, sha) in &flips_for_write {
+            if let Some(r) = s
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+            {
+                if !matches!(r.status, RequirementStatus::Done) {
+                    continue;
+                }
+                r.set_status_from_str("Completed");
+                r.modified_at = now;
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.completed_at.get_or_insert(now);
+                if info.completion_sha.is_none() {
+                    info.completion_sha = Some(sha.clone());
+                }
+            }
+        }
+    })?;
+
+    let after = storage.load().unwrap_or_else(|_| store.clone());
+    let confirmed: Vec<(String, String)> = flips
+        .into_iter()
+        .filter(|(sid, _)| {
+            after
+                .get_requirement_by_spec_id(sid)
+                .map(|r| matches!(r.status, RequirementStatus::Completed))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    for (spec_id, _) in &confirmed {
+        record_role_activity(spec_id, "reconcile-status");
+    }
+
+    print_auto_bump_summary(&confirmed);
+    Ok(())
+}
+
 /// STORY-86: print the auto-bump summary line after a successful pull.
 /// Stays out of the way when nothing flipped. trace:STORY-86 | ai:claude
 fn print_auto_bump_summary(flips: &[(String, String)]) {
@@ -26662,6 +27034,13 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
         DbCommand::Check { .. } => {
             println!(
                 "{} db check only applies to git-backed stores. Run `aida init` to migrate.",
+                "!".yellow()
+            );
+        }
+        // trace:TASK-226 | ai:claude
+        DbCommand::ReconcileStatus { .. } => {
+            println!(
+                "{} db reconcile-status only applies to git-backed stores. Run `aida init` to migrate.",
                 "!".yellow()
             );
         }
