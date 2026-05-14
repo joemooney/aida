@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:20:03.365833533Z
-modified_at: 2026-05-14T06:39:37.655068672Z
+modified_at: 2026-05-14T07:11:35.195905377Z
 req_type: Task
 tags:
 - aida-pr
@@ -91,6 +91,19 @@ comments:
   content: TASK-111 shipped 2026-05-13 —  now probes CI internally. Updated /aida-pr templates to collapse the 3-step Wait-CI/End/Start block to 2 steps (End → Start), as anticipated. Conservative-path Wait-CI moved into session end itself with --wait-ci / --skip-ci flags.
   created_at: 2026-05-14T06:39:37.655068672Z
   modified_at: 2026-05-14T06:39:37.655068672Z
+- id: 019e2553-951b-7d10-b96e-bdd6d0c0babb
+  author: joe
+  content: |-
+    Implemented via epic-23-5 (commit adc4b127):
+
+    - Both Next-steps templates in /aida-pr reordered to put End-implementer BEFORE Start-reviewer (the implementer lease must be released first; a reviewer session on the same scope while the implementer lease is held would conflict).
+    - Sister bug in /aida-review fixed: End-reviewer moved to step 1 (▶) instead of step 3 (🚪) since the merge has landed and the lease is stale.
+    - Skill instruction text in both files now explicitly notes the rows are SEQUENTIAL steps in this block, not options (distinguishes from /aida-pickup's choice-semantics).
+    - Post TASK-111 follow-up commit (a1097ec9) collapsed the conservative-path Wait-CI step into End-implementer (now CI-aware), shrinking the block from 3 steps to 2.
+
+    Test status: skill templates are markdown-only; verified via `make sync-templates` that .claude/ symlinks pick up the change. 332/332 cargo tests green at end of batch.
+  created_at: 2026-05-14T07:11:35.195905377Z
+  modified_at: 2026-05-14T07:11:35.195905377Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:14:17.436956470Z
