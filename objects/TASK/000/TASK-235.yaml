@@ -1,0 +1,75 @@
+id: 019e26e5-ee9a-7a83-a4fe-8e844d4c9dbb
+spec_id: TASK-235
+agreed_id: TASK-235
+title: 'Backlog: verify ''covers no specs'' on auto-queued reviewer story after BUG-85 fix + cluster-mode-drain stabilizes'
+description: |-
+  Observation 2026-05-14: implementer drained 6 specs in one cluster-mode session (PR-26), session ended cleanly, auto-queue fired and filed STORY-124 → reviewer queue. Output said:
+
+    ✓ filed STORY-124 (covers no specs) → reviewer queue (PR #26)
+
+  The 'covers no specs' label is wrong — the implementer worktree shipped 6 specs (STORY-122, TASK-220, TASK-232, TASK-231, TASK-0396, TASK-229) all referenced in PR-26's commit subject AND each with status flipped Done by aida queue done. Auto-queue should have recognized them as 'covers 6 specs.'
+
+  ## Why this is backlog, not urgent
+
+  Could be any of:
+  1. A timing race in the session-end → auto-queue cross-reference logic (session manifest finalized after auto-queue fires)
+  2. Cluster-mode-drain pattern not fully handled by auto-queue (each item's queue done resets manifest state; final state has nothing left to cross-reference)
+  3. STORY-66/STORY-90 (auto-queue infrastructure) intermittent bug not yet captured
+  4. Related to BUG-85 ('covers N specs' over-counts — the over-count fix may have introduced an under-count in cluster-mode case)
+  5. Self-resolving once cluster-mode-drain settles operationally
+
+  Several pending changes could plausibly resolve this without direct intervention:
+  - BUG-85 (over-count fix): may incidentally tighten the count logic
+  - STORY-119 fully shipping (it's a stuck review story now): unrelated but tangent
+  - TASK-226 (aida db reconcile-status): may add the cross-reference capability auto-queue currently lacks
+  - TASK-234 (Done section grouped + next-action): exercises the same PR→specs cross-reference; if it works there, auto-queue's gap is more isolated
+
+  ## Verification protocol
+
+  After all of:
+  - BUG-85 ships
+  - TASK-226 ships
+  - TASK-234 ships
+  - At least 3 cluster-mode-drain PRs land cleanly
+
+  Re-test the cluster-mode-drain → session end → auto-queue → 'covers N specs' path. If still wrong, this becomes a real BUG worth investigating directly. If correct by then, mark this Completed with the observation that one of the upstream fixes addressed it.
+
+  ## How to verify
+
+  1. Set up a cluster-mode batch (~3 specs queued for implementer, all approved, all under a parent)
+  2. Run aida queue work PARENT (cluster drain)
+  3. Let implementer ship + open PR
+  4. End implementer session (no --skip-ci)
+  5. Check the auto-queue output line: 'covers N specs' should match the actual count
+
+  ## Composes with
+
+  - BUG-85 (auto-queue 'covers N' over-count) — sibling concern, opposite direction
+  - STORY-66 / STORY-90 (auto-queue infrastructure) — fix lives here
+  - TASK-234 (Done section grouping) — uses the same PR-to-specs cross-reference; co-evolves
+  - TASK-218 (aida queue rework — shipped) — cluster-mode-drain matures with rework verb in place
+
+  ## Acceptance
+
+  - [ ] After listed prerequisites ship, re-run the cluster-mode-drain → session-end flow
+  - [ ] If 'covers N specs' is now correct: mark Completed with 'resolved upstream by <ID>' note
+  - [ ] If still incorrect: convert this TASK to a BUG with concrete repro + filed against STORY-66/90
+  - [ ] Either outcome documented in the comment thread
+
+  ## Discovered via
+
+  2026-05-14 — overnight wrap: PR-26 batch drain → 'filed STORY-124 (covers no specs) → reviewer queue (PR #26)'. User flagged it as 'minor UX nit' worth a backlog check after other fixes settle.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T14:31:03.578198534Z
+modified_at: 2026-05-14T14:31:03.578198534Z
+req_type: Task
+tags:
+- auto-queue
+- backlog
+- covers
+- reviewer
+- session-end
+- verify-later
