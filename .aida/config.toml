@@ -12,3 +12,6 @@ branch = "aida-store"
 #   blocks-only          — error if no block is allocated for the type
 [id_format]
 policy = "blocks-then-fallback"
+
+[hints]
+workflow_hints = true
