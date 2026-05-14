@@ -1,0 +1,95 @@
+id: 019e2524-4592-7250-95fc-07656cb3e0a1
+spec_id: STORY-121
+agreed_id: STORY-121
+title: 'Ping-pong implementer↔reviewer: implementer session blocks waiting for reviewer verdict (v1)'
+description: |-
+  Workflow improvement: implementer session stays alive (paused/blocked) between opening a PR and the reviewer's verdict. When verdict arrives, implementer resumes in the SAME Claude context — instant fixup-or-merge with zero cold-start tax.
+
+  ## Why this matters
+
+  Today's implementer→reviewer→fixup loop pays a cold-start tax on every fixup cycle. Even with TASK-112 (resume claude session) shipped, the re-read of files / re-orientation costs 5-15 minutes per fixup. For tight cycles (minutes between PR open and review verdict), that's most of the elapsed time.
+
+  Ping-pong eliminates the cold-start for tight cycles by NEVER ending the implementer session — just pausing it.
+
+  ## Compose with role-pure sessions
+
+  This does NOT violate the role-pure principle documented in docs/session-lifecycle.md:
+
+  - Reviewer is STILL a separate Claude session with separate context (independent eyes preserved)
+  - Implementer is PAUSED, not reviewing — it's not switching roles
+  - When implementer resumes, it receives the reviewer's verdict AS NEW TOOL-RESULT DATA — same channel as cold-resume reading PR comments
+
+  The implementer's preserved context is implementer-context, not reviewer-context. No bias contamination.
+
+  ## Shape
+
+  aida session block --until <signal>  - implementer enters blocked state
+    --until review-complete PR-N    - wait for /aida-review verdict on PR-N
+    --until pr-merged N             - wait for PR-N to merge
+    --until manual                  - wait for explicit aida session unblock
+    --timeout 4h                    - fallback timeout to prevent zombie waits
+
+  aida session unblock <id>           - manually signal a blocked session to resume
+
+  ## Signaling mechanism
+
+  When /aida-review completes its verdict on PR-N, it broadcasts a signal that wakes any blocked implementer session waiting on review-complete-PR-N. Implementation options (decide in implementation):
+
+  1. Polling: blocked implementer schedules wakeups every 30-60s, checks signal each wake. Simple, works with today's primitives.
+  2. Filesystem signal: reviewer writes a sentinel file on completion (.aida/signals/review-complete-N), implementer polls for its presence with short TTL.
+  3. Native Claude Code suspend primitive (if/when CC supports it) — implementer truly suspends, no polling cost.
+
+  V1 lean: polling with a short heartbeat. Simple, no new infrastructure.
+
+  ## Implementer behavior on unblock
+
+  When the signal fires:
+  1. Implementer reads reviewer verdict (gh pr view N --comments or aida review show N)
+  2. If verdict is APPROVED: mark spec done, run aida queue done, end session, exit
+  3. If verdict is CHANGES_REQUESTED: read the changes inline, fix in same context, push new commits to same PR, re-enter blocked state
+  4. If verdict is CLOSED_WITHOUT_MERGE: end session, exit (review story flips to rejected or completed-without-merge)
+  5. Loop until merge or abort
+
+  ## Costs to acknowledge
+
+  - Pinned lease: implementer's session keeps its lease while blocked. Other sessions can't pick up the same scope until merge.
+  - Resource billing: polling loop costs Claude tokens per wake. Smaller than cold-resume cost over many fixup cycles, but non-zero.
+  - Timeout fallback: required to prevent zombie blocked sessions. Default 4h, configurable.
+
+  ## Composes with
+
+  - TASK-111 (CI-aware session end): same polling primitive (gh pr view, signal detection); shared helper
+  - TASK-112 (resume claude session): alternative for cold cycles; this TASK is the hot-pause counterpart
+  - TASK-228 (cancellable fallback wakeups): blocked session uses wakeups; cancellation needed when PR merges/closes
+  - TASK-110 (next-steps ordering): /aida-pr next-steps should mention 'block-and-wait' as an option (default end? default block? config)
+  - docs/session-lifecycle.md: extend with the ping-pong pattern as the hot-cycle variant of phase 4-6
+
+  ## Acceptance
+
+  - [ ] aida session block --until SIGNAL implemented (review-complete, pr-merged, manual)
+  - [ ] aida session unblock ID implemented
+  - [ ] --timeout flag enforces a fallback unblock to prevent zombie sessions
+  - [ ] /aida-review on completion broadcasts the appropriate signal
+  - [ ] Implementer's verdict-handling logic: approved → done/exit; changes-requested → fix in context; closed → exit
+  - [ ] Tests cover: clean approve cycle, changes-requested cycle (multi-round), timeout fallback, manual unblock
+  - [ ] docs/session-lifecycle.md updated with ping-pong as the hot-cycle pattern (alongside TASK-112's cold-resume)
+  - [ ] CLAUDE.md / AIDA.md mention when to choose ping-pong vs cold-resume
+
+  ## Discovered via
+
+  2026-05-13 — user asked 'how about a kind of ping-pong between the implementer session and the reviewer session, with a mechanism to block the implementer session pending completion of the reviewer?' The pattern resolves the cold-start tax in tight cycles cleanly, and respects the role-pure principle by keeping the reviewer's context separate.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T06:19:54.642684973Z
+modified_at: 2026-05-14T06:19:54.642684973Z
+req_type: Story
+tags:
+- block
+- implementer
+- ping-pong
+- reviewer
+- session
+- signal
+- workflow
