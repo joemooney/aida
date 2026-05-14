@@ -16999,6 +16999,158 @@ hostname = "h"
 }
 
 #[cfg(test)]
+mod bug_87_queue_filter_tests {
+    use super::*;
+
+    /// BUG-87: full composition matrix. `--for X` always wins over `--all`;
+    /// `--for any` selects unrouted; `--all` only suppresses the
+    /// active-session-role default. trace:BUG-87 | ai:claude
+    #[test]
+    fn resolve_role_filter_composition_matrix() {
+        // (role, all, session_role) -> (role_filter, only_unrouted)
+        let cases: &[(Option<&str>, bool, Option<&str>, Option<&str>, bool)] = &[
+            // --for X (X != "any") wins over --all and session.
+            (
+                Some("reviewer"),
+                true,
+                Some("implementer"),
+                Some("reviewer"),
+                false,
+            ),
+            (
+                Some("reviewer"),
+                false,
+                Some("implementer"),
+                Some("reviewer"),
+                false,
+            ),
+            (Some("reviewer"), true, None, Some("reviewer"), false),
+            (Some("reviewer"), false, None, Some("reviewer"), false),
+            // --for any → only_unrouted=true, regardless of --all/session.
+            (Some("any"), true, Some("implementer"), None, true),
+            (Some("any"), false, Some("implementer"), None, true),
+            (Some("any"), false, None, None, true),
+            // --for any is case-insensitive.
+            (Some("ANY"), false, Some("implementer"), None, true),
+            // --all alone: no filter (override session default).
+            (None, true, Some("implementer"), None, false),
+            (None, true, None, None, false),
+            // No flags: inherit session role.
+            (None, false, Some("implementer"), Some("implementer"), false),
+            // No flags, no session: no filter.
+            (None, false, None, None, false),
+            // Empty session var treated as "no session role".
+            (None, false, Some(""), None, false),
+        ];
+        for (role, all, session, want_role, want_unrouted) in cases {
+            let (got_role, got_unrouted) = resolve_queue_role_filter(*role, *all, *session);
+            assert_eq!(
+                (got_role.as_deref(), got_unrouted),
+                (*want_role, *want_unrouted),
+                "case role={:?} all={} session={:?}",
+                role,
+                all,
+                session
+            );
+        }
+    }
+
+    /// BUG-87: predicate honors only_unrouted before falling through
+    /// to the role-equality check. trace:BUG-87 | ai:claude
+    #[test]
+    fn entry_matches_filter_branches() {
+        // only_unrouted: only entries with for_role==None pass.
+        assert!(entry_matches_role_filter(None, None, true));
+        assert!(!entry_matches_role_filter(Some("reviewer"), None, true));
+        assert!(!entry_matches_role_filter(Some("implementer"), None, true));
+
+        // Routed filter: exact match required.
+        assert!(entry_matches_role_filter(
+            Some("reviewer"),
+            Some("reviewer"),
+            false
+        ));
+        assert!(!entry_matches_role_filter(
+            Some("implementer"),
+            Some("reviewer"),
+            false
+        ));
+        assert!(!entry_matches_role_filter(None, Some("reviewer"), false));
+
+        // No filter, no unrouted-only: everything passes.
+        assert!(entry_matches_role_filter(None, None, false));
+        assert!(entry_matches_role_filter(Some("anything"), None, false));
+    }
+
+    /// BUG-87: the original incident. `--all --for reviewer` against a
+    /// queue of mixed-role items returns ONLY reviewer-routed items.
+    /// trace:BUG-87 | ai:claude
+    #[test]
+    fn all_and_for_reviewer_returns_only_reviewer_routed() {
+        let entries: Vec<Option<&str>> = vec![
+            Some("implementer"),
+            Some("reviewer"),
+            Some("implementer"),
+            None,
+            Some("reviewer"),
+            Some("triage"),
+        ];
+        // Simulate `aida queue list --all --for reviewer` from an
+        // implementer session.
+        let (role_filter, only_unrouted) =
+            resolve_queue_role_filter(Some("reviewer"), true, Some("implementer"));
+        let kept: Vec<Option<&str>> = entries
+            .iter()
+            .copied()
+            .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
+            .collect();
+        assert_eq!(kept, vec![Some("reviewer"), Some("reviewer")]);
+    }
+
+    /// BUG-87: `--all --for any` returns ONLY unrouted items.
+    /// trace:BUG-87 | ai:claude
+    #[test]
+    fn all_and_for_any_returns_only_unrouted() {
+        let entries: Vec<Option<&str>> = vec![
+            Some("implementer"),
+            None,
+            Some("reviewer"),
+            None,
+            Some("triage"),
+        ];
+        let (role_filter, only_unrouted) =
+            resolve_queue_role_filter(Some("any"), true, Some("implementer"));
+        let kept: Vec<Option<&str>> = entries
+            .iter()
+            .copied()
+            .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
+            .collect();
+        assert_eq!(kept, vec![None, None]);
+    }
+
+    /// BUG-87: no regression — bare `aida queue list` in an implementer
+    /// session still filters to implementer-routed items.
+    /// trace:BUG-87 | ai:claude
+    #[test]
+    fn default_session_role_filter_preserved() {
+        let entries: Vec<Option<&str>> = vec![
+            Some("implementer"),
+            Some("reviewer"),
+            None,
+            Some("implementer"),
+        ];
+        let (role_filter, only_unrouted) =
+            resolve_queue_role_filter(None, false, Some("implementer"));
+        let kept: Vec<Option<&str>> = entries
+            .iter()
+            .copied()
+            .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
+            .collect();
+        assert_eq!(kept, vec![Some("implementer"), Some("implementer")]);
+    }
+}
+
+#[cfg(test)]
 mod lease_enforcement_tests {
     use super::*;
     use aida_core::models::Relationship;
@@ -28265,6 +28417,47 @@ fn current_user_id(user_override: Option<&str>) -> String {
     })
 }
 
+/// Resolve `--for <role>` / `--all` / active-session-role into the
+/// effective queue role filter. Returns `(role_filter, only_unrouted)`:
+/// `only_unrouted=true` means filter to entries with no `for_role`
+/// (driven by `--for any`); otherwise `role_filter` is `Some(role)` to
+/// match `for_role == Some(role)`, or `None` for no role filter.
+///
+/// `--for X` (non-"any") takes precedence over `--all` — that flag only
+/// suppresses the *default* active-role filter, not an explicit override.
+/// trace:BUG-87 | ai:claude
+fn resolve_queue_role_filter(
+    role: Option<&str>,
+    all: bool,
+    session_role: Option<&str>,
+) -> (Option<String>, bool) {
+    match role {
+        Some(r) if r.eq_ignore_ascii_case("any") => (None, true),
+        Some(r) => (Some(r.to_string()), false),
+        None if all => (None, false),
+        None => match session_role {
+            Some(s) if !s.is_empty() => (Some(s.to_string()), false),
+            _ => (None, false),
+        },
+    }
+}
+
+/// Predicate: does a queue entry pass the resolved role filter?
+/// trace:BUG-87 | ai:claude
+fn entry_matches_role_filter(
+    for_role: Option<&str>,
+    role_filter: Option<&str>,
+    only_unrouted: bool,
+) -> bool {
+    if only_unrouted {
+        return for_role.is_none();
+    }
+    match role_filter {
+        Some(r) => for_role == Some(r),
+        None => true,
+    }
+}
+
 // trace:STORY-0368 | ai:claude
 /// Handle queue commands
 fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
@@ -28294,24 +28487,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
             let store = storage.load()?;
 
-            // Determine effective role filter:
-            //   --all       → no filter (override active-role default)
-            //   --role X    → filter to for_role==X (or X="any" → no filter)
-            //   neither     → if AIDA_SESSION_ROLE set, filter to that
-            //                 else no filter
-            let role_filter: Option<String> = if *all {
-                None
-            } else if let Some(r) = role {
-                if r == "any" {
-                    None
-                } else {
-                    Some(r.clone())
-                }
-            } else {
-                std::env::var("AIDA_SESSION_ROLE")
-                    .ok()
-                    .filter(|s| !s.is_empty())
-            };
+            // Determine effective role filter. BUG-87: `--for X` is
+            // explicit user intent and takes precedence over `--all`,
+            // which only suppresses the *default* active-role filter.
+            // See `resolve_queue_role_filter` for the truth table.
+            // trace:BUG-87 | ai:claude
+            let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+            let (role_filter, only_unrouted) =
+                resolve_queue_role_filter(role.as_deref(), *all, session_role.as_deref());
 
             // Phase 3 scope: AND the active role's scope_tags / scope_status
             // on top of the role-routing filter. --all and --no-scope both
@@ -28382,9 +28565,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             });
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
-                .filter(|e| match &role_filter {
-                    Some(r) => e.for_role.as_deref() == Some(r.as_str()),
-                    None => true,
+                .filter(|e| {
+                    entry_matches_role_filter(
+                        e.for_role.as_deref(),
+                        role_filter.as_deref(),
+                        only_unrouted,
+                    )
                 })
                 .filter(|e| entry_scope_session_match(e, self_lease_for_routing.as_ref(), *all))
                 .filter(|e| {
@@ -28460,8 +28646,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             // Load global entries for the active role unless --local was passed.
             // The global queue is role-scoped (one file per role) — it only
-            // makes sense when there's a role filter in effect. trace:FR-1-012
-            let global_entries: Vec<global_queue::GlobalQueueEntry> = if *local {
+            // makes sense when there's a routed-role filter in effect.
+            // `--for any` (only_unrouted) targets entries with no role,
+            // which are not stored in the per-role global queue.
+            // trace:FR-1-012 BUG-87
+            let global_entries: Vec<global_queue::GlobalQueueEntry> = if *local || only_unrouted {
                 Vec::new()
             } else if let Some(role_name) = &role_filter {
                 global_queue::load(role_name).unwrap_or_default()
@@ -28470,11 +28659,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
 
             if entries.is_empty() && global_entries.is_empty() {
-                if let Some(r) = &role_filter {
+                // BUG-87: when --all is already passed, don't suggest
+                // "pass --all" — the user just did. Drop the hint.
+                let hint = if *all {
+                    ""
+                } else {
+                    "; pass --all to see your full queue"
+                };
+                if only_unrouted {
+                    println!("{} (no unrouted items{})", "Your queue".dimmed(), hint,);
+                } else if let Some(r) = &role_filter {
                     println!(
-                        "{} (no items routed to role {}; pass --all to see your full queue)",
+                        "{} (no items routed to role {}{})",
                         "Your queue".dimmed(),
-                        r.cyan()
+                        r.cyan(),
+                        hint,
                     );
                 } else {
                     println!("{}", "Your queue is empty.".dimmed());
@@ -28498,18 +28697,26 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
 
             let total = entries.len() + global_entries.len();
-            let title = match &role_filter {
-                Some(r) => format!(
-                    "My Queue · role:{} ({} item{})",
-                    r,
+            let title = if only_unrouted {
+                format!(
+                    "My Queue · unrouted ({} item{})",
                     total,
                     if total == 1 { "" } else { "s" }
-                ),
-                None => format!(
-                    "My Queue ({} item{})",
-                    total,
-                    if total == 1 { "" } else { "s" }
-                ),
+                )
+            } else {
+                match &role_filter {
+                    Some(r) => format!(
+                        "My Queue · role:{} ({} item{})",
+                        r,
+                        total,
+                        if total == 1 { "" } else { "s" }
+                    ),
+                    None => format!(
+                        "My Queue ({} item{})",
+                        total,
+                        if total == 1 { "" } else { "s" }
+                    ),
+                }
             };
             println!("{}", title.bold());
             println!("{}", "─".repeat(80));
@@ -29272,22 +29479,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
             let store = storage.load()?;
 
-            // Same role-filter logic as queue list: --all overrides; --role X
-            // explicit; otherwise inherit from active role; fall through to
-            // "no filter" if nothing's set.
-            let role_filter: Option<String> = if *all {
-                None
-            } else if let Some(r) = role {
-                if r == "any" {
-                    None
-                } else {
-                    Some(r.clone())
-                }
-            } else {
-                std::env::var("AIDA_SESSION_ROLE")
-                    .ok()
-                    .filter(|s| !s.is_empty())
-            };
+            // Same role-filter logic as queue list (BUG-87).
+            // `--for X` takes precedence over `--all`. trace:BUG-87 | ai:claude
+            let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+            let (role_filter, only_unrouted) =
+                resolve_queue_role_filter(role.as_deref(), *all, session_role.as_deref());
 
             // Phase 3 scope filter (see queue list).
             // trace:TASK-1-021 | ai:claude
@@ -29329,9 +29525,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             let next_entry = raw_entries
                 .iter()
-                .filter(|e| match &role_filter {
-                    Some(r) => e.for_role.as_deref() == Some(r.as_str()),
-                    None => true,
+                .filter(|e| {
+                    entry_matches_role_filter(
+                        e.for_role.as_deref(),
+                        role_filter.as_deref(),
+                        only_unrouted,
+                    )
                 })
                 .filter(|e| {
                     // STORY-57: scope/session routing — only show items
@@ -29404,9 +29603,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             // Local wins on tiebreak — the FR specifies that local-context
             // work takes precedence. Only fall through to global when local
-            // is empty (or --global was passed). trace:FR-1-012
+            // is empty (or --global was passed). `--for any` (only_unrouted)
+            // never falls through — global queues are per-role.
+            // trace:FR-1-012 BUG-87
             let global_next: Option<global_queue::GlobalQueueEntry> =
-                if *local || next_entry.is_some() {
+                if *local || only_unrouted || next_entry.is_some() {
                     None
                 } else if let Some(role_name) = &role_filter {
                     let entries = global_queue::load(role_name).unwrap_or_default();
@@ -29480,9 +29681,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     }
                 }
 
-                let scope = match &role_filter {
-                    Some(r) => format!(" for role {}", r.cyan()),
-                    None => String::new(),
+                let scope = if only_unrouted {
+                    format!(" for {}", "unrouted items".cyan())
+                } else {
+                    match &role_filter {
+                        Some(r) => format!(" for role {}", r.cyan()),
+                        None => String::new(),
+                    }
                 };
                 println!("{} Queue is empty{}.", "Nothing to do —".dimmed(), scope);
                 // STORY-48: if the queue would have had items but they were
