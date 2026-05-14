@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:23:13.837377870Z
-modified_at: 2026-05-13T06:24:19.329733551Z
+modified_at: 2026-05-14T06:42:30.126773246Z
 req_type: Task
 tags:
 - claude
@@ -81,3 +81,56 @@ comments:
   content: 'Documented in docs/session-lifecycle.md (added 2026-05-13). See section ''Transition 4→5→6: Resume preserves Claude context'' — names the two-session-layer split (AIDA vs Claude Code) that makes resume possible.'
   created_at: 2026-05-13T06:24:19.329733551Z
   modified_at: 2026-05-13T06:24:19.329733551Z
+- id: 019e2538-f46e-7892-9a6c-c817897264b0
+  author: joe
+  content: |-
+    Analysis after picking this up 2026-05-13 (drain of EPIC-23 manifest):
+
+    The acceptance criteria are deliverable but the central engineering decision is non-obvious. Worth thinking through before shipping rather than coding into a corner.
+
+    ## The core constraint
+
+    Claude Code stores per-session JSONLs at `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`. The encoding is keyed off the **current working directory at launch time**. `claude --resume <id>` then looks for the JSONL under the encoded-cwd of the launching shell. Confirmed via the existing session_end TASK-70 path which already warns: "once the cwd vanishes, the jsonls are stranded — `claude --resume <id>` may fail or behave unexpectedly" (aida-cli/src/main.rs:12799).
+
+    This means `claude --resume <id>` in a NEW worktree (different cwd) won't find a JSONL stored under the OLD worktree's encoded-cwd. The flag is cwd-bound, not session-id-global.
+
+    ## Three possible designs
+
+    **A) Reuse the prior worktree** — `aida queue work --resume STORY-86` skips creating a new worktree and just re-attaches a lease + launches claude in the prior path. Requires:
+    - Manifest schema: record `worktree_path` + `branch` per prior session
+    - Lease creation: refuse to create a new lease when the old worktree still exists with a (now-released) lease history; just create a new lease pointing at the same path
+    - Doesn't work when `aida session end` removed the worktree
+
+    **B) Recreate the worktree, then move the JSONL** — atomic three-step:
+    1. `git worktree add <new-path> <prior-branch>` (path can match prior path if it's gone)
+    2. Copy/symlink the JSONL from `~/.claude/projects/<old-encoded>/<id>.jsonl` into `~/.claude/projects/<new-encoded>/<id>.jsonl`
+    3. Launch `claude --resume <id>` from new-path
+    - Works when prior worktree was cleaned up
+    - Requires manifest to record both branch + cwd-encoding (or compute the encoding from worktree_path)
+    - JSONL move is a hack but stable per current claude behavior
+
+    **C) Pivot — don't resume the CC session; persist the conversation summary AIDA-side** — at `aida session end`, extract a structured summary of the conversation (decisions, files touched, open questions) and stash it in the manifest. On --resume, surface the summary at the new session's start. Loses raw conversation history but is provider-agnostic and survives JSONL pruning.
+
+    ## Trade-offs
+
+    - **(A)** is the smallest change but limits when --resume can fire ("only if old worktree exists"). Useful for "fixup after CI red" path where the session was probably ended seconds ago and worktree still exists. Not useful for "resume tomorrow morning" path where session_end --purge-cc cleared everything.
+    - **(B)** is the most faithful to the task spec ("CI fails → resume to fix without losing context"). Hack-shaped but contained. Risk: future claude releases change the JSONL encoding or storage location.
+    - **(C)** is the most durable design but doesn't deliver what the task title says ("relaunch claude with prior session's conversation history"). It's a different feature wearing the same name.
+
+    ## Recommendation
+
+    Ship (A) first as the MVP — it handles the "fixup after CI red" loop which is the highest-frequency use case AND the one TASK-111's red-CI message explicitly nudges toward ("keep this session alive"). Defer (B) to a follow-up when there's a concrete "wanted to resume but worktree was gone" report. Don't do (C) under this task; it's a different feature.
+
+    ## Deferred for now
+
+    Rather than commit to one design without user input, I'm deferring this task and leaving the placeholder in `aida queue rework --resume` and the disabled flag in queue rework as-is. The decision needs the user's eye on the trade-off.
+
+    ## Composes with
+
+    - TASK-111 (just shipped) — its red-CI message says "keep this session alive and push fixups." Once TASK-112 ships (Design A), it can additionally say "or end and resume later via `aida queue rework STORY-X --work --resume`."
+    - TASK-70 (worktree removal warns about stranded JSONLs) — Design A respects this by refusing to start when the worktree is gone; Design B would actively repair the stranding.
+    - session_manifest schema — both Design A and B need new fields (worktree_path / branch / claude_session_id at minimum).
+
+    Status reverted to Approved. Re-pickup when design is chosen.
+  created_at: 2026-05-14T06:42:30.126773246Z
+  modified_at: 2026-05-14T06:42:30.126773246Z
