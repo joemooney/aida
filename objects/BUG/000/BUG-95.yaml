@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:01.699959803Z
-modified_at: 2026-05-14T15:13:37.934151774Z
+modified_at: 2026-05-14T15:13:46.040524310Z
 req_type: Bug
 tags:
 - auto-bump
@@ -44,6 +44,12 @@ relationships:
 - rel_type: Child
   target_id: 019e134a-57d3-70e0-a15c-006dea10310d
   created_at: 2026-05-13T06:56:03.907384002Z
+comments:
+- id: 019e270d-0838-7250-87c3-1035b1b3ed14
+  author: joe
+  content: 'Resolved by adding regression-test coverage (no code change needed). Verified end-to-end against handle_pull_command: the auto-bump sits inside the !store_only block (code-pull leg) at main.rs:22233, which fires for both default AND --code-only modes. The bug-as-filed misread the conditional — the actual block is gated by !store_only (skip code pull when store-only requested), not !code_only. Tests pull_code_only_triggers_auto_bump and pull_store_only_does_not_run_auto_bump lock the correct behavior. trace:BUG-95 | ai:claude'
+  created_at: 2026-05-14T15:13:46.040524310Z
+  modified_at: 2026-05-14T15:13:46.040524310Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:13:37.934151774Z
