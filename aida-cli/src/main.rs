@@ -13130,17 +13130,31 @@ fn try_auto_queue_pr_review(
     }
 
     // Pull the commit-range spec ids using the existing helpers from STORY-67.
+    // BUG-85: split into "delivered" (subject `(REQ-ID)` parens) and
+    // "referenced" (body content / trace comments). Only delivered IDs count
+    // toward "covers N specs" or get an `implements` relation — referenced
+    // IDs are informational (spot-check for regressions).
     let (base, head) = pr_base_head(project_root, ReviewForge::GitHub, pr.number)
         .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
     let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
     let mut spec_ids: Vec<String> = Vec::new();
+    let mut referenced_ids: Vec<String> = Vec::new();
     for msg in &messages {
         for id in extract_spec_ids_from_commit(msg) {
             if !spec_ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
                 spec_ids.push(id);
             }
         }
+        for id in extract_referenced_spec_ids_from_commit(msg) {
+            if !referenced_ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                referenced_ids.push(id);
+            }
+        }
     }
+    // A referenced ID delivered by ANOTHER commit in the same range is
+    // still delivered overall — drop it from references to keep the lists
+    // disjoint across the range. trace:BUG-85 | ai:claude
+    referenced_ids.retain(|r| !spec_ids.iter().any(|d| d.eq_ignore_ascii_case(r)));
 
     let session_short: &str = &session_id[..session_id.len().min(8)];
     let mut desc = String::new();
@@ -13159,6 +13173,16 @@ fn try_auto_queue_pr_review(
     } else {
         desc.push_str("## Covers\n\n");
         for id in &spec_ids {
+            desc.push_str(&format!("- {}\n", id));
+        }
+        desc.push('\n');
+    }
+    if !referenced_ids.is_empty() {
+        desc.push_str("## References (not delivered)\n\n");
+        desc.push_str(
+            "Spec IDs mentioned in commit bodies or trace comments — touched but not delivered by this PR. Spot-check for regressions.\n\n",
+        );
+        for id in &referenced_ids {
             desc.push_str(&format!("- {}\n", id));
         }
         desc.push('\n');
@@ -16338,6 +16362,79 @@ mod statusline_tests {
         // Mixed prose + ID still rejects (so release notes don't false-match).
         let msg = "release: stuff (foo BUG-23)\n";
         assert!(extract_spec_ids_from_commit(msg).is_empty());
+
+        // BUG-85: body content that ends in `(SPEC-ID)` must NOT pollute the
+        // delivered list. Only the subject's `(REQ-ID)` parens-suffix counts.
+        let msg = "[AI:claude] fix(scope): description (BUG-83)\n\n\
+            - aida role enter \"Queued for this role\" section (TASK-48)\n\
+            - aida role enter \"Last touched\" section (TASK-49)\n\
+            - aida session show --plan manifest table (STORY-98)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-83".to_string()]
+        );
+    }
+
+    /// BUG-85: end-to-end shape of the PR-14 over-counting incident. The
+    /// auto-queue extractor walked a multi-commit range and incorrectly
+    /// added body-referenced spec IDs to the "covers" list. After this fix,
+    /// delivered = subject parens-suffix only; referenced = body content,
+    /// disjoint. trace:BUG-85 | ai:claude
+    #[test]
+    fn bug_85_delivered_vs_referenced_disjoint() {
+        // Simulated 6-commit PR + 1 commit with body refs to non-delivered specs.
+        let messages = [
+            "[AI:claude] fix(queue,session,role): prefer agreed_id (BUG-83)\n\n\
+                Several render paths that share the same data weren't part of that sweep:\n\
+                - aida role enter \"Queued for this role\" section (TASK-48)\n\
+                - aida role enter \"Last touched\" section (TASK-49)\n\
+                - aida session show --plan manifest table (STORY-98)\n",
+            "[AI:claude] feat(db): aida db check --collisions audit (TASK-80)\n",
+            "[AI:claude] fix(hooks): commit-msg accepts comma-separated scopes (BUG-84)\n",
+            "[AI:claude] fix(release): non-interactive --yes support (TASK-79)\n",
+            "[AI:claude] feat(scaffold): pre-allow aida-family bash (TASK-82)\n",
+            "[AI:claude] docs(session,queue): surface 'auto' permission mode (TASK-83)\n",
+        ];
+        let mut delivered: Vec<String> = Vec::new();
+        let mut referenced: Vec<String> = Vec::new();
+        for msg in &messages {
+            for id in extract_spec_ids_from_commit(msg) {
+                if !delivered.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                    delivered.push(id);
+                }
+            }
+            for id in extract_referenced_spec_ids_from_commit(msg) {
+                if !referenced.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                    referenced.push(id);
+                }
+            }
+        }
+        referenced.retain(|r| !delivered.iter().any(|d| d.eq_ignore_ascii_case(r)));
+
+        assert_eq!(
+            delivered,
+            vec!["BUG-83", "TASK-80", "BUG-84", "TASK-79", "TASK-82", "TASK-83"]
+        );
+        assert_eq!(referenced, vec!["TASK-48", "TASK-49", "STORY-98"]);
+    }
+
+    /// BUG-85: referenced extractor excludes IDs already delivered in the
+    /// same commit's subject. trace:BUG-85 | ai:claude
+    #[test]
+    fn referenced_specs_disjoint_from_delivered_within_one_commit() {
+        // BUG-83 appears in BOTH the subject paren and the body; it's
+        // delivered, so it must NOT appear in referenced.
+        let msg = "fix(scope): description (BUG-83)\n\n\
+            - cleanup pass on (BUG-83)\n\
+            - touches the same area as (TASK-48)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-83".to_string()]
+        );
+        assert_eq!(
+            extract_referenced_spec_ids_from_commit(msg),
+            vec!["TASK-48".to_string()]
+        );
     }
 
     /// STORY-67: looks_like_spec_id validates the alpha-DASH-digits
@@ -25917,70 +26014,101 @@ fn extract_acceptance_section(description: &str) -> Option<String> {
     }
 }
 
-/// Pull `(REQ-ID)` trailers from a single commit message body. AIDA's
+/// Pull `(REQ-ID)` trailers from a commit message **subject** only. AIDA's
 /// commit format wraps the requirement id in parens at end-of-subject:
 /// `[AI:tool] feat(scope): description (REQ-ID)`. Also tolerates the
 /// shorter form without `[AI:tool]` (chores/docs).
+///
+/// Body content is ignored — those IDs are "referenced" (trace comments,
+/// prose, sub-commit lines in squash bodies) and are returned by
+/// [`extract_referenced_spec_ids_from_commit`] instead. trace:BUG-85 | ai:claude
 /// trace:STORY-67 | ai:claude
 fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
+    let subject = message.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
     let mut out = Vec::new();
-    for line in message.lines() {
-        let trimmed = line.trim();
-        // Walk the trailing `(...)` group(s) on the subject line. Squash
-        // commits land with a `(#N)` PR-number suffix — strip those first
-        // so the REQ-ID paren before it gets walked. BUG-78 | ai:claude
-        let mut tail: &str = trimmed;
-        while tail.ends_with(')') {
-            let Some(open_at) = tail.rfind('(') else {
-                break;
-            };
-            let inner = &tail[open_at + 1..tail.len() - 1];
-            // Is this an `(#N)` PR suffix? Skip past it and try the next group.
-            if inner.starts_with('#')
-                && inner.len() > 1
-                && inner[1..].chars().all(|c| c.is_ascii_digit())
-            {
-                tail = tail[..open_at].trim_end();
-                continue;
-            }
-            tail = &tail[..open_at + inner.len() + 2]; // include the close paren
-            break;
-        }
-        let Some(open_at) = tail.rfind('(') else {
-            continue;
-        };
-        if !tail.ends_with(')') {
+    push_paren_spec_ids_from_line(subject, &mut out);
+    out
+}
+
+/// Pull spec-id-shaped `(REQ-ID)` parens from BODY lines of a commit message
+/// (i.e. everything after the subject). These are informational
+/// "referenced" specs — the commit's code touches their areas but doesn't
+/// deliver them per AIDA's "one (REQ-ID) trailer in the subject" convention.
+/// IDs already present in the subject are excluded so the two lists are
+/// disjoint. trace:BUG-85 | ai:claude
+fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<String> {
+    let delivered = extract_spec_ids_from_commit(message);
+    let mut lines = message.lines();
+    // Skip blank prefix + subject line.
+    let _subject = lines.by_ref().find(|l| !l.trim().is_empty());
+    let mut raw: Vec<String> = Vec::new();
+    for line in lines {
+        push_paren_spec_ids_from_line(line, &mut raw);
+    }
+    let mut out: Vec<String> = Vec::new();
+    for id in raw {
+        if delivered.iter().any(|d| d.eq_ignore_ascii_case(&id)) {
             continue;
         }
-        let close_at = tail.len() - 1;
-        let inner = &tail[open_at + 1..close_at];
-        // BUG-78: accept comma / whitespace separated multi-spec parens
-        // like `(STORY-98 STORY-90 BUG-74)` or `(STORY-A, STORY-B)`.
-        // Single-spec parens fall through the same path (one token, one ID).
-        let line_start = out.len();
-        let mut all_ids = true;
-        let mut tok_count = 0;
-        for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
-            let tok = tok.trim();
-            if tok.is_empty() {
-                continue;
-            }
-            tok_count += 1;
-            if looks_like_spec_id(tok) {
-                out.push(tok.to_string());
-            } else {
-                all_ids = false;
-                break;
-            }
+        if out.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+            continue;
         }
-        // If any token wasn't spec-id-shaped this wasn't a multi-spec paren
-        // at all (release notes, commit prose). Drop what we collected for
-        // this line so version-like parens like `(1.2.3)` still don't match.
-        if !all_ids || tok_count == 0 {
-            out.truncate(line_start);
-        }
+        out.push(id);
     }
     out
+}
+
+/// Walk one commit-message line for a trailing `(REQ-ID[, REQ-ID...])`
+/// group and push the spec-id-shaped tokens into `out`. Strips an optional
+/// `(#N)` PR-number suffix first (squash commits). Drops the line's
+/// contribution entirely if any token isn't spec-id-shaped (so prose-y
+/// parens like `(1.2.3)` or `(foo BUG-23)` don't false-match).
+/// trace:BUG-78 BUG-85 | ai:claude
+fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
+    let trimmed = line.trim();
+    let mut tail: &str = trimmed;
+    while tail.ends_with(')') {
+        let Some(open_at) = tail.rfind('(') else {
+            break;
+        };
+        let inner = &tail[open_at + 1..tail.len() - 1];
+        if inner.starts_with('#')
+            && inner.len() > 1
+            && inner[1..].chars().all(|c| c.is_ascii_digit())
+        {
+            tail = tail[..open_at].trim_end();
+            continue;
+        }
+        tail = &tail[..open_at + inner.len() + 2];
+        break;
+    }
+    let Some(open_at) = tail.rfind('(') else {
+        return;
+    };
+    if !tail.ends_with(')') {
+        return;
+    }
+    let close_at = tail.len() - 1;
+    let inner = &tail[open_at + 1..close_at];
+    let line_start = out.len();
+    let mut all_ids = true;
+    let mut tok_count = 0;
+    for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
+        let tok = tok.trim();
+        if tok.is_empty() {
+            continue;
+        }
+        tok_count += 1;
+        if looks_like_spec_id(tok) {
+            out.push(tok.to_string());
+        } else {
+            all_ids = false;
+            break;
+        }
+    }
+    if !all_ids || tok_count == 0 {
+        out.truncate(line_start);
+    }
 }
 
 fn looks_like_spec_id(s: &str) -> bool {
