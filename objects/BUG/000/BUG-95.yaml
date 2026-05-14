@@ -27,12 +27,12 @@ description: |-
   ## Discovered via
 
   PR-20 /aida-review deep-pass 2026-05-13.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:01.699959803Z
-modified_at: 2026-05-14T14:54:19.102362097Z
+modified_at: 2026-05-14T15:11:25.423100542Z
 req_type: Bug
 tags:
 - auto-bump
