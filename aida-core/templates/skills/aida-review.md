@@ -256,12 +256,20 @@ aida queue done <review-story-id> --yes
 
 Never silently leave a review story in In Progress when the PR was closed without merge — the next session would see it as still-active work. (BUG-34)
 
-### 11. Hand off + Next steps — trace:TASK-87
+### 11. Hand off + Next steps — trace:TASK-87 trace:TASK-110
 
 After the merge lands, surface a structured `Next steps (recommended order):`
 block so the post-merge moment is self-guiding instead of relying on
 improvised "want to cut a release?" prompts. Don't auto-execute — the user
 picks.
+
+**Ordering rationale (TASK-110):** end-reviewer comes FIRST — the merge has
+landed, the review-story scope is closed, and the lease on it is now stale.
+Holding the lease while starting the next batch (new implementer session) or
+cutting a release would conflict with anything else that wants the same
+scope, and the statusline still shows `role:reviewer` even though there's
+no reviewer work to do. Release the lease, then make the next move from a
+clean shell outside the worktree.
 
 **Detect state first:**
 
@@ -279,7 +287,9 @@ aida queue list --role implementer 2>/dev/null | head -5             # is there 
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
 `/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
 `🚪` = stop/exit. Recommendations must be CONCRETE — name the next cluster,
-the release script, the session ID.
+the release script, the session ID. In this block the three rows are
+sequential steps to perform in order (▶ first, then ⏵, then 🚪), not
+alternatives — "recommended order" is literal.
 
 **Templates:**
 
@@ -289,9 +299,9 @@ the release script, the session ID.
 ✓ PR-<N> merged, <M> specs marked Completed. Review story <STORY-X> closed.
 
 Next steps (recommended order):
-  1. ▶ Sync + decide next batch → `cd <project-root>` then `aida pull && cargo build --release` then `aida queue work <EPIC-M>`
-  2. ⏵ Cut a patch release first → `make release-patch YES=1`
-  3. 🚪 End reviewer session, stop → Ctrl+D + `aida session end <session-id>` from parent shell
+  1. ▶ End reviewer session → Ctrl+D + `aida session end <session-id>` from parent shell (releases the PR-<N>/STORY-<X> lease — merge is done, lease is stale)
+  2. ⏵ Sync + decide next batch (from parent shell) → `aida pull && cargo build --release && aida queue work <EPIC-M>`
+  3. 🚪 Stop here, pick up later → just end the session; the merge is done, next batch can wait
 ```
 
 *Release-ready path (>5 commits since last tag, or PR carried a major feature):*
@@ -299,10 +309,10 @@ Next steps (recommended order):
 ```
 ✓ PR-<N> merged. ⚠ <K> commits since v<X.Y.Z> — release-ready.
 
-Next steps:
-  1. ▶ Cut release → `make release-patch YES=1` (or `release-minor` for new features)
-  2. ⏵ Keep merging the queue first → `aida queue work <EPIC-M>`
-  3. 🚪 End reviewer session → Ctrl+D + `aida session end <session-id>` from parent shell
+Next steps (recommended order):
+  1. ▶ End reviewer session → Ctrl+D + `aida session end <session-id>` from parent shell
+  2. ⏵ Cut release (from parent shell, after end) → `make release-patch YES=1` (or `release-minor` for new features)
+  3. 🚪 Stop here, cut release later → end the session now; the merge is done, the tag can wait until you're ready
 ```
 
 Print exactly one block — don't dump both templates.
