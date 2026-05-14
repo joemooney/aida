@@ -16948,6 +16948,56 @@ mod statusline_tests {
         );
     }
 
+    /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
+    /// suffix so the auto-bump pass can match review stories filed against
+    /// that PR. trace:BUG-102 | ai:claude
+    #[test]
+    fn extract_pr_number_from_commit_subject_shapes() {
+        // Plain squash-merge subject from `gh pr merge --squash`.
+        let s = "EPIC-23 batch 6: observability — queue progress, status (#26)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), Some(26));
+        // Conventional + spec ids + `(#N)` (the canonical AIDA shape).
+        let s = "[AI:claude] feat(queue): rework verb (TASK-218) (#24)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), Some(24));
+        // Multi-spec + (#N).
+        let s = "[AI:claude] feat(session): polish (STORY-98 STORY-90 BUG-74) (#10)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), Some(10));
+        // No (#N) trailer — non-PR commit or pushed-to-main commit.
+        let s = "[AI:claude] feat(api): endpoint (FR-1-042)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), None);
+        // `(#N)` only valid when it's the literal trailing group.
+        let s = "release (#23) v1.2.3";
+        assert_eq!(extract_pr_number_from_commit_subject(s), None);
+        // Not a digit-only group.
+        let s = "chore: (#foo)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), None);
+        // Empty parens.
+        let s = "chore: ()";
+        assert_eq!(extract_pr_number_from_commit_subject(s), None);
+        // Multi-line input — only subject (first non-blank line) is scanned.
+        let s = "subject (#7)\n\nbody mentions (#9)\n";
+        assert_eq!(extract_pr_number_from_commit_subject(s), Some(7));
+    }
+
+    /// BUG-102: title-to-PR parser used to match Done review stories
+    /// against just-merged PR numbers. trace:BUG-102 | ai:claude
+    #[test]
+    fn parse_review_story_pr_number_shapes() {
+        let t = "Review PR-26: EPIC-23 batch 6: observability — 6 specs";
+        assert_eq!(parse_review_story_pr_number(t), Some(26));
+        let t = "Review PR-1: small";
+        assert_eq!(parse_review_story_pr_number(t), Some(1));
+        // Non-review-story titles return None.
+        assert_eq!(parse_review_story_pr_number("Add OAuth provider"), None);
+        // Prefix-but-no-colon must NOT match (avoids prose like "Review PR-26 mention").
+        assert_eq!(
+            parse_review_story_pr_number("Review PR-26 mention in docs"),
+            None
+        );
+        // Non-numeric.
+        assert_eq!(parse_review_story_pr_number("Review PR-abc: x"), None);
+    }
+
     /// BUG-85: end-to-end shape of the PR-14 over-counting incident. The
     /// auto-queue extractor walked a multi-commit range and incorrectly
     /// added body-referenced spec IDs to the "covers" list. After this fix,
@@ -18767,6 +18817,115 @@ mod auto_bump_done_tests {
         assert!(
             matches!(req.status, RequirementStatus::Done),
             "unrelated commit should leave the spec at Done"
+        );
+    }
+
+    /// Seed a Story-typed review-story at status=Done with the given
+    /// `Review PR-<n>: <suffix>` title and spec_id. Mirrors
+    /// `seed_done_spec` but stamps the title that BUG-102's matcher keys
+    /// off of. trace:BUG-102 | ai:claude
+    fn seed_done_review_story(
+        store_path: &std::path::Path,
+        spec_id: &str,
+        pr_number: u64,
+        suffix: &str,
+    ) -> String {
+        let storage = Storage::new(store_path.to_path_buf());
+        let mut store = storage.load().unwrap_or_default();
+        let mut req = aida_core::Requirement::new(
+            format!("Review PR-{}: {}", pr_number, suffix),
+            String::new(),
+        );
+        req.spec_id = Some(spec_id.to_string());
+        req.req_type = aida_core::RequirementType::Story;
+        req.set_status_from_str("Done");
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        spec_id.to_string()
+    }
+
+    /// BUG-102: a merge commit with `(#N)` squash-suffix flips any Done
+    /// review story whose title encodes PR-N — even when that review
+    /// story's spec ID is NOT in any commit subject. This is the gap
+    /// before the fix: review stories filed by /aida-pr's auto-queue
+    /// were stuck at Done forever. trace:BUG-102 | ai:claude
+    #[test]
+    fn auto_bump_flips_review_story_via_pr_number_match() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let review_id =
+            seed_done_review_story(&store_path, "STORY-9101", 42, "EPIC-23 batch X: small wrap");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        // Squash-merge subject: subject contains code-spec parens AND the
+        // (#N) suffix. The review story's spec ID is intentionally absent
+        // from the subject — that's the whole point of the bug.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                "EPIC-23 batch X: small wrap (BUG-9101 TASK-9101) (#42)",
+            ],
+        );
+        let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+
+        assert!(
+            flips.iter().any(|(id, _)| id == &review_id),
+            "review story should flip via PR-number match, got: {:?}",
+            flips
+        );
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "review story should be Completed, was {:?}",
+            req.status
+        );
+        let info = req.implementation_info.as_ref().expect("info populated");
+        assert_eq!(
+            info.completion_sha.as_deref(),
+            Some(merge_sha.as_str()),
+            "completion_sha should match the merge commit"
+        );
+    }
+
+    /// BUG-102: when no `(#N)` suffix is present in any subject, review
+    /// stories stay untouched (no false-positives from PR-numbered titles
+    /// that happen to match an unrelated number elsewhere in the repo).
+    /// trace:BUG-102 | ai:claude
+    #[test]
+    fn auto_bump_leaves_review_story_alone_without_pr_suffix() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let review_id =
+            seed_done_review_story(&store_path, "STORY-9102", 99, "nothing should fire");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        // Subject has spec parens but no (#N) trailer (e.g. direct push,
+        // not a squash-merge). Review story must NOT flip.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", "chore: direct push (TASK-1)"],
+        );
+
+        let storage = Storage::new(store_path.clone());
+        let _ = auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+            .unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "review story should still be Done, was {:?}",
+            req.status
         );
     }
 }
@@ -22279,6 +22438,11 @@ fn auto_bump_done_to_completed(
     // the same spec are follow-up edits, not the original landing).
     let mut candidates: std::collections::BTreeMap<String, String> =
         std::collections::BTreeMap::new();
+    // BUG-102: pr_number → first-seen commit_sha for `(#N)` squash-merge
+    // suffixes. Used after the store loads to match review stories filed
+    // by /aida-pr's auto-queue (their spec IDs are NEVER in commit
+    // subjects, so the `candidates` scan above can't see them).
+    let mut pr_to_sha: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
     for line in log_str.lines() {
         let mut parts = line.splitn(2, '\t');
         let sha = parts.next().unwrap_or("").trim();
@@ -22289,9 +22453,12 @@ fn auto_bump_done_to_completed(
         for spec_id in extract_spec_ids_from_commit(subject) {
             candidates.entry(spec_id).or_insert_with(|| sha.to_string());
         }
+        if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
+            pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
+        }
     }
 
-    if candidates.is_empty() {
+    if candidates.is_empty() && pr_to_sha.is_empty() {
         return Ok(Vec::new());
     }
 
@@ -22306,6 +22473,30 @@ fn auto_bump_done_to_completed(
             continue;
         }
         flips.push((spec_id.clone(), sha.clone()));
+    }
+    // BUG-102: also scan the store for Done-status review stories whose
+    // title encodes a PR number that just merged. Composes the two
+    // designs (STORY-66/90 auto-queue review story, STORY-86 auto-bump
+    // by commit-subject scan) that previously didn't talk to each other.
+    if !pr_to_sha.is_empty() {
+        for req in &store.requirements {
+            if !matches!(req.status, RequirementStatus::Done) {
+                continue;
+            }
+            let Some(pr_n) = parse_review_story_pr_number(&req.title) else {
+                continue;
+            };
+            let Some(sha) = pr_to_sha.get(&pr_n) else {
+                continue;
+            };
+            let Some(spec_id) = req.spec_id.as_deref() else {
+                continue;
+            };
+            if flips.iter().any(|(id, _)| id == spec_id) {
+                continue;
+            }
+            flips.push((spec_id.to_string(), sha.clone()));
+        }
     }
     if flips.is_empty() {
         return Ok(Vec::new());
@@ -28569,6 +28760,34 @@ fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     let mut out = Vec::new();
     push_paren_spec_ids_from_line(subject, &mut out);
     out
+}
+
+/// Extract a trailing `(#N)` PR-number suffix from a commit subject (the
+/// shape `gh` writes when squash-merging a PR). Returns None when the
+/// subject doesn't end with `(#<digits>)`. trace:BUG-102 | ai:claude
+fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64> {
+    let subject = message.lines().find(|l| !l.trim().is_empty())?;
+    let trimmed = subject.trim();
+    if !trimmed.ends_with(')') {
+        return None;
+    }
+    let open_at = trimmed.rfind('(')?;
+    let inner = &trimmed[open_at + 1..trimmed.len() - 1];
+    let digits = inner.strip_prefix('#')?;
+    if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u64>().ok()
+}
+
+/// Parse the PR number out of a review-story title. Titles are filed by
+/// /aida-pr's auto-queue as `Review PR-<n>: <pr-title>` (see
+/// `aida_subcmd_add_review_story` callsite); anything not matching that
+/// shape returns None. trace:BUG-102 | ai:claude
+fn parse_review_story_pr_number(title: &str) -> Option<u64> {
+    let rest = title.strip_prefix("Review PR-")?;
+    let (num, _) = rest.split_once(':')?;
+    num.trim().parse::<u64>().ok()
 }
 
 /// Pull spec-id-shaped `(REQ-ID)` parens from BODY lines of a commit message
