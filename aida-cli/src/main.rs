@@ -18976,6 +18976,206 @@ mod auto_bump_done_tests {
     }
 }
 
+/// BUG-95: regression coverage for the claim that `aida pull --code-only`
+/// skips the Done → Completed auto-bump. The bug-as-filed asserted the
+/// conditional was nested in the wrong branch; the current structure has
+/// the auto-bump correctly inside the code-pull block (gated by
+/// `!store_only`), so `--code-only` (code_only=true, store_only=false)
+/// reaches it. This test exercises that path end-to-end via
+/// `handle_pull_command` and verifies the bump fires.
+/// trace:BUG-95 | ai:claude
+#[cfg(test)]
+mod handle_pull_command_tests {
+    use super::*;
+
+    fn run_git_in(repo: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .expect("git binary on PATH");
+        if !out.status.success() {
+            panic!(
+                "git {:?} (in {:?}) failed: stdout={} stderr={}",
+                args,
+                repo,
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Build a bare "remote" repo that already has one initial commit so
+    /// `--ff-only` has a valid base, plus a "clone" project repo
+    /// configured with `origin` pointing at it. Returns the temp guards
+    /// plus the bare-repo path and the project path.
+    fn make_remote_and_clone() -> (
+        tempfile::TempDir,
+        tempfile::TempDir,
+        std::path::PathBuf,
+        std::path::PathBuf,
+    ) {
+        let bare_tmp = tempfile::TempDir::new().unwrap();
+        let bare = bare_tmp.path().to_path_buf();
+        run_git_in(
+            &bare,
+            &["init", "--bare", "--initial-branch=main", "--quiet"],
+        );
+
+        // Seed the bare repo via a temp clone, then drop it; the project
+        // clone below will fetch this initial commit.
+        let seed_tmp = tempfile::TempDir::new().unwrap();
+        let seed = seed_tmp.path().to_path_buf();
+        run_git_in(
+            &seed,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                seed.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&seed, &["config", "user.email", "test@example.com"]);
+        run_git_in(&seed, &["config", "user.name", "Test"]);
+        std::fs::write(seed.join("README.md"), "init\n").unwrap();
+        run_git_in(&seed, &["add", "README.md"]);
+        run_git_in(&seed, &["commit", "-m", "chore: init"]);
+        run_git_in(&seed, &["push", "origin", "main", "--quiet"]);
+
+        // Now make the actual project clone the test will operate on.
+        let proj_tmp = tempfile::TempDir::new().unwrap();
+        let proj = proj_tmp.path().to_path_buf();
+        run_git_in(
+            &proj,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                proj.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&proj, &["config", "user.email", "test@example.com"]);
+        run_git_in(&proj, &["config", "user.name", "Test"]);
+
+        (bare_tmp, proj_tmp, bare, proj)
+    }
+
+    /// Push a new commit referencing `spec_id` to the bare remote so a
+    /// subsequent `git pull --ff-only` from the project clone fast-forwards
+    /// to it. Done via a fresh temp clone to avoid touching the project
+    /// repo under test.
+    fn push_remote_commit_referencing(bare: &std::path::Path, spec_id: &str) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let work = tmp.path().to_path_buf();
+        run_git_in(
+            &work,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                work.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&work, &["config", "user.email", "test@example.com"]);
+        run_git_in(&work, &["config", "user.name", "Test"]);
+        std::fs::write(work.join("landed.txt"), "x\n").unwrap();
+        run_git_in(&work, &["add", "landed.txt"]);
+        run_git_in(
+            &work,
+            &[
+                "commit",
+                "-m",
+                &format!("feat: teammate work ({})", spec_id),
+            ],
+        );
+        run_git_in(&work, &["push", "origin", "main", "--quiet"]);
+    }
+
+    fn seed_done_spec_at(store_path: &std::path::Path, spec_id: &str) {
+        let storage = Storage::new(store_path.to_path_buf());
+        let mut store = storage.load().unwrap_or_default();
+        let mut req = aida_core::Requirement::new(format!("test-{}", spec_id), String::new());
+        req.spec_id = Some(spec_id.to_string());
+        req.set_status_from_str("Done");
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+    }
+
+    /// BUG-95: `aida pull --code-only` (code_only=true, store_only=false)
+    /// must trigger the auto-bump on the just-pulled commits. Regression
+    /// guard against the bug-as-filed (claimed the conditional was in the
+    /// wrong block). trace:BUG-95 | ai:claude
+    #[test]
+    fn pull_code_only_triggers_auto_bump() {
+        let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        let storage = Storage::new(store_path.clone());
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        let spec_id = "STORY-9501".to_string();
+        seed_done_spec_at(&store_path, &spec_id);
+
+        // Remote gets the merge; our local doesn't have it yet.
+        push_remote_commit_referencing(&bare, &spec_id);
+
+        // The actual call under test: code_only=true skips the store
+        // leg entirely, but the code leg + auto-bump must still run.
+        handle_pull_command(&store_path, true, false, true, true).unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "BUG-95: --code-only should have auto-bumped {} to Completed, was {:?}",
+            spec_id,
+            req.status
+        );
+    }
+
+    /// BUG-95 mirror: `aida pull --store-only` should NOT touch the code
+    /// branch (no code pull happens), so the auto-bump correctly does
+    /// not fire — even if there's a Done spec that a separate code pull
+    /// would have bumped. Defensive guard against an over-broad fix.
+    /// trace:BUG-95 | ai:claude
+    #[test]
+    fn pull_store_only_does_not_run_auto_bump() {
+        let (_bare_tmp, _proj_tmp, _bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        let storage = Storage::new(store_path.clone());
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        // Lay down a local code commit that references the Done spec
+        // (simulating a state where the code is already at the merge —
+        // but `--store-only` shouldn't scan it).
+        let spec_id = "STORY-9502".to_string();
+        seed_done_spec_at(&store_path, &spec_id);
+        std::fs::write(project_root.join("local.txt"), "x\n").unwrap();
+        run_git_in(&project_root, &["add", "local.txt"]);
+        run_git_in(
+            &project_root,
+            &["commit", "-m", &format!("feat: x ({})", spec_id)],
+        );
+
+        // store_only=true; no orphan store configured → store-pull branch
+        // prints a note + returns Ok(()). Code leg is skipped → no auto-bump.
+        handle_pull_command(&store_path, false, true, true, true).unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "--store-only should NOT have auto-bumped, status was {:?}",
+            req.status
+        );
+    }
+}
+
 #[cfg(test)]
 mod derive_parent_epic_label_tests {
     use super::*;
