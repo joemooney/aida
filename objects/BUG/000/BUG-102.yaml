@@ -75,11 +75,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:45:22.472590028Z
-modified_at: 2026-05-14T14:45:22.472590028Z
+modified_at: 2026-05-14T14:54:14.891931331Z
 req_type: Bug
 tags:
 - auto-bump
 - auto-queue
+- batch:friction-fixes
 - review-story
 - story-66
 - story-90
