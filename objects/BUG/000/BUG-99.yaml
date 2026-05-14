@@ -1,0 +1,60 @@
+id: 019e2421-21bb-7643-838e-f55f01736650
+spec_id: BUG-99
+agreed_id: BUG-99
+title: aida CLI panics on SIGPIPE when stdout is closed by a downstream pipe (head, less, etc.)
+description: |-
+  Rust's default stdio doesn't restore SIGPIPE handling the way classic Unix tools do. As a result any aida command piped to head / less / grep / etc. that closes its read end early will trigger a panic from aida:
+
+    thread 'main' (NNN) panicked at library/std/src/io/stdio.rs:1165:9:
+    failed printing to stdout: Broken pipe (os error 32)
+    note: run with RUST_BACKTRACE=1 environment variable to display a backtrace
+
+  The output is still emitted correctly before the panic — this is purely cosmetic noise after the useful data. But it pollutes terminals, makes log-scraping fragile, and looks broken to first-time users.
+
+  ## Repro
+
+    aida show STORY-86 | head -8
+    aida list | head -3
+    aida search anything | head -1
+
+  Any aida ... | head -N reliably reproduces.
+
+  ## Fix
+
+  Standard Rust pattern: install a SIGPIPE handler that converts to a clean exit. One approach:
+
+    use libc;
+    unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL); }
+
+  Place in main() before any output. Alternatively use the SignalKind crate or rely on tokio's SIGPIPE handling if aida is async.
+
+  This is a well-known Rust gotcha — there's a tracking issue on rust-lang/rust about making this the default behavior. Until then, every CLI has to opt in.
+
+  ## Composes with
+
+  - All output-emitting subcommands: aida show, aida list, aida search, aida history, aida queue list, aida cache status, aida rel list, etc.
+  - The fix is one place in main.rs, applies to all commands.
+
+  ## Acceptance
+
+  - [ ] SIGPIPE handler installed at main() start
+  - [ ] aida show X | head -1 exits cleanly (no panic, exit 0 or 141 — pick the convention)
+  - [ ] Test covers: pipe to a process that closes read end immediately
+  - [ ] No regression on commands that genuinely need to emit large output (aida history, aida list --all)
+
+  ## Discovered via
+
+  2026-05-13 — user ran aida show STORY-86 | head -8 to keep output bounded; got the panic trailer twice in a row while debugging STORY-86 recovery.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T01:36:51.643356042Z
+modified_at: 2026-05-14T01:36:51.643356042Z
+req_type: Bug
+tags:
+- panic
+- rust-defaults
+- sigpipe
+- stdio
+- ux
