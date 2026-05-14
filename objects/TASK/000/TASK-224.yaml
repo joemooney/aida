@@ -1,0 +1,29 @@
+id: 019e23fe-31a3-78a3-8054-05684dec4293
+spec_id: TASK-224
+agreed_id: TASK-224
+title: Add aida-web-react build (tsc -b + vite build) to CI
+description: |-
+  Discovered during STORY-86 review (PR-21): `.github/workflows/ci.yml`
+  builds only the Rust workspace. The React app `aida-web-react/`
+  broke during the STORY-86 regen (`npm run check` produced 7
+  TypeScript errors), but CI stayed green because no workflow runs
+  `npm run check` / `npm run build`.
+
+  Acceptance:
+  - ci.yml adds a job that runs `npm ci` + `npm run check` + `npm run build`
+    in `aida-web-react/`.
+  - Job runs on push to main + PRs touching `aida-web-react/**`,
+    `shared/types.ts`, or the proto/generate-types pipeline.
+  - Caches node_modules between runs.
+
+  Out of scope: e2e tests; that's a separate task.
+
+  Originating context: PR-21 fix-forward commit (`[AI:claude] fix(ui):
+  restore React build broken by Done-status regen`).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T00:58:41.955732157Z
+modified_at: 2026-05-14T00:58:41.955732157Z
+req_type: Task
