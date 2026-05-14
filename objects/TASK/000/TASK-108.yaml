@@ -37,9 +37,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:07:46.578737046Z
-modified_at: 2026-05-13T06:07:46.578737046Z
+modified_at: 2026-05-14T14:54:26.851851512Z
 req_type: Task
 tags:
+- batch:verb-surface
 - dry-run
 - inspection
 - pull
