@@ -247,6 +247,39 @@ pub fn list_objects(objects_root: &Path) -> Result<Vec<(String, PathBuf)>> {
     Ok(results)
 }
 
+/// BUG-97 / TASK-223: shared recovery-hint suffix for any "failed to load /
+/// failed to parse" surface. The first time a user sees a parse failure
+/// they spend ~30 minutes diagnosing; the hint compresses that to seconds
+/// by naming the most common cause (binary-version skew between the writer
+/// and the reader) and the recovery steps.
+///
+/// Returns a multi-line string suitable for `Warning:` or `Error:` chains.
+/// Callers typically combine it with the underlying parse error via
+/// `anyhow::Context::with_context` or a manual `format!`.
+///
+/// The hint is intentionally generic about WHICH variant is unknown or
+/// which field is missing — that information is already in the serde
+/// error chain attached by `read_object`'s `with_context`. The hint
+/// supplies the diagnostic + recovery narrative the serde error lacks.
+pub fn parse_failure_hint(path: Option<&Path>) -> String {
+    let mut hint = String::new();
+    if let Some(p) = path {
+        hint.push_str(&format!("  File: {}\n", p.display()));
+    }
+    hint.push_str(
+        "  Likely cause: binary version mismatch — the file may have been written by a newer\n  \
+                aida than the one reading it (a new enum variant, a renamed field, etc.).\n",
+    );
+    hint.push_str(
+        "  Check:     `aida --version`  (and compare to the worktree that wrote the file)\n",
+    );
+    hint.push_str("  Recovery:  rebuild aida from a branch with the missing variant, then\n");
+    hint.push_str("             `aida cache rebuild` to refresh the read projection.\n");
+    hint.push_str("             `aida dev activate` (TASK-221) prefers a SHA-matching binary —\n");
+    hint.push_str("             run it after rebuild to flip to the freshly-built binary.");
+    hint
+}
+
 /// Load all requirements from the object store into a Vec.
 #[cfg(feature = "native")]
 pub fn load_all_objects(objects_root: &Path) -> Result<Vec<Requirement>> {
@@ -257,7 +290,13 @@ pub fn load_all_objects(objects_root: &Path) -> Result<Vec<Requirement>> {
         match read_object_from_path(path) {
             Ok(req) => requirements.push(req),
             Err(e) => {
-                eprintln!("Warning: failed to load {}: {}", spec_id, e);
+                // BUG-97 / TASK-223: enrich the warning with the recovery
+                // hint so users see actionable next steps the first time
+                // a parse failure happens, not just "this thing broke."
+                // trace:BUG-97 TASK-223 | ai:claude
+                eprintln!("Warning: failed to load {} (parse error)", spec_id);
+                eprintln!("  Detail: {}", e);
+                eprintln!("{}", parse_failure_hint(Some(path)));
             }
         }
     }
@@ -471,5 +510,47 @@ mod tests {
         req_b.spec_id = Some("FR-1001".into());
         let path_b = write_object(&objects_root, &req_b).unwrap();
         assert!(path_b.to_str().unwrap().contains(&format!("{sep}001{sep}")));
+    }
+
+    // BUG-97 / TASK-223: parse_failure_hint formatter tests.
+
+    #[test]
+    fn parse_hint_with_path_names_the_file() {
+        let p = Path::new("/store/objects/STORY/000/STORY-86.yaml");
+        let h = parse_failure_hint(Some(p));
+        assert!(h.contains("File: /store/objects/STORY/000/STORY-86.yaml"));
+    }
+
+    #[test]
+    fn parse_hint_mentions_binary_version_mismatch() {
+        let h = parse_failure_hint(None);
+        assert!(h.contains("binary version mismatch"));
+        assert!(h.contains("newer aida") || h.contains("new enum variant"));
+    }
+
+    #[test]
+    fn parse_hint_mentions_aida_version_check() {
+        let h = parse_failure_hint(None);
+        assert!(h.contains("aida --version"));
+    }
+
+    #[test]
+    fn parse_hint_mentions_dev_activate_for_rebuild_flow() {
+        let h = parse_failure_hint(None);
+        assert!(h.contains("aida dev activate") || h.contains("TASK-221"));
+    }
+
+    #[test]
+    fn parse_hint_mentions_cache_rebuild() {
+        let h = parse_failure_hint(None);
+        assert!(h.contains("aida cache rebuild"));
+    }
+
+    #[test]
+    fn parse_hint_path_optional() {
+        let h = parse_failure_hint(None);
+        // No "File:" line when no path provided — still useful content.
+        assert!(!h.contains("File:"));
+        assert!(h.contains("Recovery:"));
     }
 }

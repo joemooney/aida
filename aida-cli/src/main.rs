@@ -74,7 +74,28 @@ fn get_default_author() -> String {
     }
 }
 
+/// BUG-99: restore SIGPIPE's default behavior so `aida ... | head -N` exits
+/// cleanly (status 141) instead of triggering Rust's "failed printing to
+/// stdout: Broken pipe" panic. Rust deliberately ignores SIGPIPE by default
+/// so library code can decide how to handle it, but for a Unix CLI we want
+/// the classic "downstream closed, terminate quietly" semantics. Windows
+/// has no SIGPIPE; this is a no-op there. trace:BUG-99 | ai:claude
+#[cfg(unix)]
+fn install_sigpipe_handler() {
+    // Safety: signal() with SIG_DFL is async-signal-safe and is the
+    // documented way to restore default disposition. Running here before
+    // any output happens means the default kicks in for every println!
+    // / eprintln! / write! in the binary.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn install_sigpipe_handler() {}
+
 fn main() {
+    install_sigpipe_handler();
     // TASK-69: render anyhow-propagated errors in red instead of anyhow's
     // default plain-text formatter. Centralizes the coloring so every
     // `bail!` / `?` / `anyhow!` site automatically gets the highlight
@@ -2133,8 +2154,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // hits one more YAML read per visited node, but for typical
             // EPIC trees (~50 nodes max) that's fine, and the user opts
             // in. trace:STORY-62 | ai:claude
+            // BUG-97: attach the parse-failure recovery hint to ANY error
+            // from the lookup. Previously the swallowed-error path returned
+            // None for both "file missing" AND "file failed to parse",
+            // sending the user down a wrong-spec-id chase. git_backend's
+            // get_requirement_by_spec_id now propagates parse errors;
+            // wrap them here with the actionable hint. trace:BUG-97
+            let lookup = backend.get_requirement_by_spec_id(id).map_err(|e| {
+                anyhow::anyhow!(
+                    "Parse failed: {}\n  Detail: {:#}\n{}",
+                    id,
+                    e,
+                    aida_core::object_store::parse_failure_hint(None),
+                )
+            });
             if *tree {
-                match backend.get_requirement_by_spec_id(id)? {
+                match lookup? {
                     Some(root) => {
                         record_role_activity(root.spec_id.as_deref().unwrap_or(id), "show");
                         render_tree(&backend, &root, *depth)?;
@@ -2145,7 +2180,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 return Ok(());
             }
-            match backend.get_requirement_by_spec_id(id)? {
+            match lookup? {
                 Some(req) => {
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                     println!("{}: {}", "ID".bold(), req.display_id());
@@ -9825,7 +9860,9 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             yes,
             force,
             purge_cc,
-        } => session_end(id.as_deref(), *yes, *force, *purge_cc),
+            wait_ci,
+            skip_ci,
+        } => session_end(id.as_deref(), *yes, *force, *purge_cc, *wait_ci, *skip_ci),
         SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
         SessionCommand::Prune {
@@ -11925,6 +11962,297 @@ fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
 ///      project, prompt y/N (or auto-accept with -y).
 ///   5. error: list active leases and ask for an explicit id.
 ///
+// ----------------------------------------------------------------------------
+// TASK-111: CI-aware `aida session end`.
+//
+// When a session has an associated PR (discovered via `gh pr list --head
+// <branch>`), `aida session end` probes the PR's CI conclusion and chooses
+// an action based on a small decision tree:
+//
+//   No PR / No gh         → Proceed silently (today's behavior preserved
+//                            for non-PR sessions; gh-missing is graceful)
+//   PR exists, no CI runs → Info: "PR opened, CI hasn't started" + proceed
+//   PR exists, CI running → Prompt (default) / Wait (--wait-ci) / Cancel
+//   PR exists, CI green   → Info: "✓ CI green" + proceed
+//   PR exists, CI red     → Warn + prompt to keep session for fixups
+//
+// Both `--skip-ci` and `--force` bypass the probe entirely. With `--yes`
+// (non-interactive), running-CI defaults to proceed (you opted out of
+// prompts; we don't strand the script). Red-CI with `--yes` still
+// proceeds but the warning is loud.
+//
+// trace:TASK-111 | ai:claude
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CiProbe {
+    /// No gh on PATH, or no PR for this branch, or gh call failed in a way
+    /// we don't want to surface (network blip, auth issue) — degrade
+    /// silently to today's behavior. The reason is included for the
+    /// info-line when logging.
+    NoSignal(String),
+    /// PR exists but CI hasn't started (no workflow runs yet).
+    PrNoChecks { pr_number: u32 },
+    /// CI is in progress on the latest commit.
+    InProgress { pr_number: u32 },
+    /// All checks passed.
+    Green { pr_number: u32 },
+    /// At least one check failed.
+    Red {
+        pr_number: u32,
+        failed_summary: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CiAction {
+    /// Run the rest of session_end as today.
+    Proceed,
+    /// Block on a poll loop until CI reaches a terminal state, then
+    /// re-decide.
+    Wait,
+    /// Refuse to end the session; the message includes the reason for
+    /// the user.
+    Cancel(String),
+}
+
+/// Pure decision function: given a probe result + flags, decide what to
+/// do. Pure so the unit tests can pin every branch without spawning gh.
+/// trace:TASK-111 | ai:claude
+pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiAction {
+    match probe {
+        CiProbe::NoSignal(reason) => {
+            // Stay quiet for the common "no PR yet" case; only surface
+            // info when something interesting (gh missing, lookup failed)
+            // would help the user notice.
+            if !reason.is_empty() && !reason.contains("no open PR") {
+                eprintln!(
+                    "  {} {}",
+                    "(ci-probe:".dimmed(),
+                    format!("{})", reason).dimmed()
+                );
+            }
+            CiAction::Proceed
+        }
+        CiProbe::PrNoChecks { pr_number } => {
+            eprintln!(
+                "  {} PR-{} opened, CI hasn't started yet — ending anyway.",
+                "ⓘ".cyan(),
+                pr_number,
+            );
+            CiAction::Proceed
+        }
+        CiProbe::Green { pr_number } => {
+            eprintln!("  {} CI green on PR-{}.", "✓".green(), pr_number);
+            CiAction::Proceed
+        }
+        CiProbe::InProgress { pr_number } => {
+            if wait_ci {
+                eprintln!(
+                    "  {} CI in progress on PR-{} (--wait-ci will block).",
+                    "◐".yellow(),
+                    pr_number,
+                );
+                CiAction::Wait
+            } else if yes {
+                eprintln!(
+                    "  {} CI in progress on PR-{} (proceeding — --yes set; pass --wait-ci to block).",
+                    "◐".yellow(),
+                    pr_number,
+                );
+                CiAction::Proceed
+            } else {
+                CiAction::Cancel(format!(
+                    "  {} CI is still in progress on PR-{}.\n  Options:\n    --wait-ci   block until CI completes\n    --skip-ci   release lease now (you'll have to push fixups in a new session if CI goes red)\n    --force     release lease unconditionally",
+                    "◐".yellow(),
+                    pr_number,
+                ))
+            }
+        }
+        CiProbe::Red {
+            pr_number,
+            failed_summary,
+        } => {
+            if yes {
+                eprintln!(
+                    "  {} CI RED on PR-{}: {}\n  ({} set — ending anyway. Push fixups in a new session via `aida queue rework`.)",
+                    "✗".red(),
+                    pr_number,
+                    failed_summary.dimmed(),
+                    "--yes".dimmed(),
+                );
+                CiAction::Proceed
+            } else {
+                CiAction::Cancel(format!(
+                    "  {} CI RED on PR-{}: {}\n  Recommended: keep this session alive and push fixups (the implementer's lease lets you commit without re-claiming).\n  To end anyway: pass --force or --yes.",
+                    "✗".red(),
+                    pr_number,
+                    failed_summary,
+                ))
+            }
+        }
+    }
+}
+
+/// Side-effecting probe: shell out to gh and parse the result. Returns a
+/// `CiProbe::NoSignal` for any failure path so callers don't have to
+/// distinguish between "no PR" and "gh broken" — both degrade to "proceed
+/// silently." trace:TASK-111 | ai:claude
+pub(crate) fn probe_ci_state_for_branch(branch: &str) -> CiProbe {
+    let gh = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return CiProbe::NoSignal("gh not on PATH".to_string()),
+    };
+    // `gh pr list --head <branch> --state all --json number,statusCheckRollup`
+    // is the one call that gives us both the PR number and the check
+    // rollup. `--state all` covers Open + Merged (we still probe a
+    // recently-merged PR for "did CI finish before the merge?", though
+    // in practice the user has already merged so we just degrade).
+    let output = std::process::Command::new(&gh)
+        .args([
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "open",
+            "--json",
+            "number,statusCheckRollup",
+            "--limit",
+            "1",
+        ])
+        .output();
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        Ok(o) => {
+            return CiProbe::NoSignal(format!(
+                "gh pr list failed: {}",
+                String::from_utf8_lossy(&o.stderr).trim()
+            ));
+        }
+        Err(e) => return CiProbe::NoSignal(format!("gh spawn error: {e}")),
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_ci_probe(&stdout)
+}
+
+/// Pure JSON-to-CiProbe parser. Extracted so we can unit-test it without
+/// running gh. The input shape is `[{"number": N, "statusCheckRollup": [...]}]`
+/// (a JSON array of PR objects from gh; we only ever look at the first).
+/// trace:TASK-111 | ai:claude
+pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() || trimmed == "[]" {
+        return CiProbe::NoSignal("no open PR for branch".to_string());
+    }
+    let parsed: serde_json::Value = match serde_json::from_str(trimmed) {
+        Ok(v) => v,
+        Err(e) => return CiProbe::NoSignal(format!("gh json parse: {e}")),
+    };
+    let pr = match parsed.get(0).cloned() {
+        Some(v) => v,
+        None => return CiProbe::NoSignal("gh returned empty array".to_string()),
+    };
+    let pr_number = pr.get("number").and_then(|n| n.as_u64()).map(|n| n as u32);
+    let pr_number = match pr_number {
+        Some(n) => n,
+        None => return CiProbe::NoSignal("gh json missing PR number".to_string()),
+    };
+    let rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());
+    let rollup = match rollup {
+        Some(r) if !r.is_empty() => r,
+        _ => return CiProbe::PrNoChecks { pr_number },
+    };
+    // Tally check states. statusCheckRollup entries can be from
+    // CheckRun (status=COMPLETED|IN_PROGRESS|QUEUED, conclusion=SUCCESS|FAILURE|...)
+    // or StatusContext (state=SUCCESS|FAILURE|PENDING|ERROR). Handle both.
+    let mut any_in_progress = false;
+    let mut failed: Vec<String> = Vec::new();
+    for check in rollup {
+        // CheckRun shape
+        if let Some(status) = check.get("status").and_then(|v| v.as_str()) {
+            let conclusion = check
+                .get("conclusion")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            match status {
+                "IN_PROGRESS" | "QUEUED" | "PENDING" | "WAITING" => any_in_progress = true,
+                "COMPLETED" => {
+                    if matches!(
+                        conclusion,
+                        "FAILURE" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" | "STALE"
+                    ) {
+                        let name = check
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("check");
+                        failed.push(name.to_string());
+                    }
+                }
+                _ => {}
+            }
+        } else if let Some(state) = check.get("state").and_then(|v| v.as_str()) {
+            // StatusContext shape
+            match state {
+                "PENDING" | "EXPECTED" => any_in_progress = true,
+                "FAILURE" | "ERROR" => {
+                    let name = check
+                        .get("context")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("status");
+                    failed.push(name.to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+    if !failed.is_empty() {
+        let summary = if failed.len() <= 3 {
+            failed.join(", ")
+        } else {
+            format!("{} and {} more", failed[..3].join(", "), failed.len() - 3)
+        };
+        return CiProbe::Red {
+            pr_number,
+            failed_summary: summary,
+        };
+    }
+    if any_in_progress {
+        return CiProbe::InProgress { pr_number };
+    }
+    CiProbe::Green { pr_number }
+}
+
+/// Block until the branch's CI run reaches a terminal state. Polls every
+/// 30s; gives up after 30 minutes (60 polls) and returns NoSignal so the
+/// caller proceeds rather than hanging. Ctrl+C interrupts cleanly.
+/// trace:TASK-111 | ai:claude
+fn wait_for_ci_terminal(branch: &str) -> CiProbe {
+    const POLL_INTERVAL_SECS: u64 = 30;
+    const MAX_POLLS: u32 = 60;
+    let started = std::time::Instant::now();
+    for poll in 0..MAX_POLLS {
+        std::thread::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
+        let probe = probe_ci_state_for_branch(branch);
+        let elapsed = started.elapsed().as_secs();
+        match &probe {
+            CiProbe::InProgress { pr_number } => {
+                eprintln!(
+                    "  {} CI still running on PR-{} ({}m {}s elapsed, poll {}/{})",
+                    "◐".yellow(),
+                    pr_number,
+                    elapsed / 60,
+                    elapsed % 60,
+                    poll + 1,
+                    MAX_POLLS,
+                );
+            }
+            _ => return probe,
+        }
+    }
+    CiProbe::NoSignal("--wait-ci gave up after 30m".to_string())
+}
+
 /// trace:STORY-73 | ai:claude
 fn resolve_session_to_end(
     id_query: Option<&str>,
@@ -12184,7 +12512,14 @@ fn shell_single_quote(s: &str) -> String {
     out
 }
 
-fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -> Result<()> {
+fn session_end(
+    id_query: Option<&str>,
+    yes: bool,
+    force: bool,
+    purge_cc: bool,
+    wait_ci: bool,
+    skip_ci: bool,
+) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -12193,6 +12528,39 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -
     }
 
     let target = resolve_session_to_end(id_query, &leases, yes)?;
+
+    // TASK-111: CI awareness. Probe the branch for an open PR's CI state
+    // and surface info / prompt / warn based on the state. --skip-ci and
+    // --force both bypass the probe (force already gets a noisy override
+    // path; --skip-ci is the quieter explicit "don't bother"). Probe
+    // happens BEFORE the BUG-61 live-claude check so the user can decide
+    // whether to bail-and-keep-fixing without first wading through the
+    // claude-process disclosure. trace:TASK-111 | ai:claude
+    if !skip_ci && !force {
+        let probe = probe_ci_state_for_branch(&target.branch);
+        match decide_ci_action(&probe, wait_ci, yes) {
+            CiAction::Proceed => {}
+            CiAction::Wait => {
+                eprintln!(
+                    "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
+                    "→".cyan()
+                );
+                let final_probe = wait_for_ci_terminal(&target.branch);
+                match decide_ci_action(&final_probe, false, yes) {
+                    CiAction::Proceed => {}
+                    CiAction::Wait => {} // can't loop on Wait again
+                    CiAction::Cancel(msg) => {
+                        eprintln!("{}", msg);
+                        return Ok(());
+                    }
+                }
+            }
+            CiAction::Cancel(msg) => {
+                eprintln!("{}", msg);
+                return Ok(());
+            }
+        }
+    }
 
     // BUG-61: detect live `claude` processes whose cwd is under the
     // worktree we're about to remove. If we don't, `git worktree remove`
@@ -19787,15 +20155,34 @@ fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
     Ok(canonical)
 }
 
+/// TASK-221: how the binary was picked, for the activate-time banner.
+/// Surfaced verbatim so `aida dev status` can show "why this binary."
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BinarySelectionReason {
+    /// User passed `--release` / `--debug` / a positional / the env pin.
+    Explicit,
+    /// Binary's embedded SHA matches current branch HEAD exactly.
+    ShaExactMatch,
+    /// Binary's embedded SHA is an ancestor of current branch HEAD
+    /// (current is ahead of build — likely fine; would be more so if rebuilt).
+    ShaAncestorMatch,
+    /// No SHA-matching binary found; fell back to most-recently-built
+    /// with a warning printed at activate time.
+    RecencyFallback,
+    /// Only one binary exists (no choice to make).
+    OnlyOne,
+}
+
 /// Pick the build directory + profile name for activation, honoring an
-/// explicit profile request (debug / release) when given, else falling
-/// back to whichever of `target/release/aida` vs `target/debug/aida` has
-/// the more recent mtime. Errors when the requested profile isn't built,
-/// or when neither exists at all.
+/// explicit profile request (debug / release) when given, else preferring
+/// the binary whose embedded git SHA matches (or is an ancestor of)
+/// current branch HEAD (TASK-221). Recency is the fallback when neither
+/// binary's SHA is recognizable on the current branch. Errors when the
+/// requested profile isn't built, or when neither exists at all.
 fn pick_dev_binary_dir(
     repo: &std::path::Path,
     requested: Option<&str>,
-) -> Result<(std::path::PathBuf, &'static str)> {
+) -> Result<(std::path::PathBuf, &'static str, BinarySelectionReason)> {
     let release = repo.join("target/release/aida");
     let debug = repo.join("target/debug/aida");
     let release_mtime = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
@@ -19810,7 +20197,11 @@ fn pick_dev_binary_dir(
                         debug.display()
                     );
                 }
-                Ok((repo.join("target/debug"), "debug"))
+                Ok((
+                    repo.join("target/debug"),
+                    "debug",
+                    BinarySelectionReason::Explicit,
+                ))
             }
             "release" => {
                 if release_mtime.is_none() {
@@ -19819,28 +20210,199 @@ fn pick_dev_binary_dir(
                         release.display()
                     );
                 }
-                Ok((repo.join("target/release"), "release"))
+                Ok((
+                    repo.join("target/release"),
+                    "release",
+                    BinarySelectionReason::Explicit,
+                ))
             }
             other => anyhow::bail!("unknown profile '{}': expected debug or release", other),
         };
     }
 
-    match (release_mtime, debug_mtime) {
-        (Some(rm), Some(dm)) => {
-            if rm >= dm {
-                Ok((repo.join("target/release"), "release"))
-            } else {
-                Ok((repo.join("target/debug"), "debug"))
+    let head_sha = current_branch_head_sha(repo);
+    let release_sha = release_mtime
+        .is_some()
+        .then(|| binary_embedded_sha(&release))
+        .flatten();
+    let debug_sha = debug_mtime
+        .is_some()
+        .then(|| binary_embedded_sha(&debug))
+        .flatten();
+
+    // Classify each candidate against current HEAD.
+    let release_match = head_sha
+        .as_ref()
+        .zip(release_sha.as_ref())
+        .map(|(h, s)| classify_sha_match(repo, s, h))
+        .unwrap_or(ShaMatch::Unknown);
+    let debug_match = head_sha
+        .as_ref()
+        .zip(debug_sha.as_ref())
+        .map(|(h, s)| classify_sha_match(repo, s, h))
+        .unwrap_or(ShaMatch::Unknown);
+
+    // Selection precedence:
+    //   1. exact SHA match — release tiebreaker
+    //   2. ancestor SHA match — release tiebreaker
+    //   3. recency fallback (today's behavior) with a warning
+    //   4. only-one if only one binary exists
+    match (release_mtime.is_some(), debug_mtime.is_some()) {
+        (true, true) => {
+            match (release_match, debug_match) {
+                (ShaMatch::Exact, _) => Ok((
+                    repo.join("target/release"),
+                    "release",
+                    BinarySelectionReason::ShaExactMatch,
+                )),
+                (_, ShaMatch::Exact) => Ok((
+                    repo.join("target/debug"),
+                    "debug",
+                    BinarySelectionReason::ShaExactMatch,
+                )),
+                (ShaMatch::Ancestor, _) => Ok((
+                    repo.join("target/release"),
+                    "release",
+                    BinarySelectionReason::ShaAncestorMatch,
+                )),
+                (_, ShaMatch::Ancestor) => Ok((
+                    repo.join("target/debug"),
+                    "debug",
+                    BinarySelectionReason::ShaAncestorMatch,
+                )),
+                _ => {
+                    // recency fallback — same as pre-TASK-221 behavior
+                    let (rm, dm) = (release_mtime.unwrap(), debug_mtime.unwrap());
+                    if rm >= dm {
+                        Ok((
+                            repo.join("target/release"),
+                            "release",
+                            BinarySelectionReason::RecencyFallback,
+                        ))
+                    } else {
+                        Ok((
+                            repo.join("target/debug"),
+                            "debug",
+                            BinarySelectionReason::RecencyFallback,
+                        ))
+                    }
+                }
             }
         }
-        (Some(_), None) => Ok((repo.join("target/release"), "release")),
-        (None, Some(_)) => Ok((repo.join("target/debug"), "debug")),
-        (None, None) => anyhow::bail!(
+        (true, false) => Ok((
+            repo.join("target/release"),
+            "release",
+            BinarySelectionReason::OnlyOne,
+        )),
+        (false, true) => Ok((
+            repo.join("target/debug"),
+            "debug",
+            BinarySelectionReason::OnlyOne,
+        )),
+        (false, false) => anyhow::bail!(
             "No aida binary found at {} or {}.\n\
              Run `cargo build --release` (or just `cargo build`) first.",
             release.display(),
             debug.display()
         ),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShaMatch {
+    Exact,
+    Ancestor,
+    Unrelated,
+    Unknown,
+}
+
+/// TASK-221: shell out to `git rev-parse HEAD` inside the repo. Returns
+/// the full 40-char SHA, or None if git is unavailable or HEAD missing.
+pub(crate) fn current_branch_head_sha(repo: &std::path::Path) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+/// TASK-221: extract the SHA embedded by build.rs from a binary's
+/// --version output. The banner shape is:
+///   "aida X.Y.Z (built TIMESTAMP, sha SHA[+dirty])"
+/// Returns None if the binary is missing, refuses to run, or the banner
+/// shape changed.
+pub(crate) fn binary_embedded_sha(binary: &std::path::Path) -> Option<String> {
+    let output = std::process::Command::new(binary)
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout);
+    parse_embedded_sha(&s)
+}
+
+/// Pure parser for the --version banner SHA. Split out so the unit tests
+/// don't need a real binary. trace:TASK-221 | ai:claude
+pub(crate) fn parse_embedded_sha(banner: &str) -> Option<String> {
+    // Match "sha <HEX>" — accept 7+ hex chars; trim trailing "+dirty" or
+    // ")" or whitespace.
+    let lower = banner.to_ascii_lowercase();
+    let idx = lower.find("sha ")?;
+    let after = &banner[idx + 4..];
+    let mut end = 0;
+    for (i, c) in after.char_indices() {
+        if c.is_ascii_hexdigit() {
+            end = i + c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if end < 7 {
+        return None;
+    }
+    Some(after[..end].to_string())
+}
+
+/// TASK-221: classify a binary's embedded SHA against current HEAD.
+/// - Exact when the SHAs match (treating the binary's SHA as a prefix of
+///   HEAD, since build.rs may stamp a short SHA).
+/// - Ancestor when `git merge-base --is-ancestor <binary-sha> HEAD` says
+///   so — current branch is ahead of the build, but they're related.
+/// - Unrelated otherwise (likely a different branch's build).
+/// - Unknown when git isn't available (graceful fallback).
+pub(crate) fn classify_sha_match(
+    repo: &std::path::Path,
+    binary_sha: &str,
+    head_sha: &str,
+) -> ShaMatch {
+    let bin_lower = binary_sha.to_ascii_lowercase();
+    let head_lower = head_sha.to_ascii_lowercase();
+    if head_lower.starts_with(&bin_lower) || bin_lower.starts_with(&head_lower) {
+        return ShaMatch::Exact;
+    }
+    // git merge-base --is-ancestor returns exit 0 when the first commit
+    // is an ancestor of the second.
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["merge-base", "--is-ancestor", binary_sha, head_sha])
+        .status();
+    match status {
+        Ok(s) if s.success() => ShaMatch::Ancestor,
+        Ok(_) => ShaMatch::Unrelated,
+        Err(_) => ShaMatch::Unknown,
     }
 }
 
@@ -19894,21 +20456,47 @@ fn handle_dev_activate(
         env_pin.as_deref().filter(|s| !s.is_empty())
     };
 
-    let (bin_dir, profile) = pick_dev_binary_dir(&repo, effective_request)?;
+    let (bin_dir, profile, reason) = pick_dev_binary_dir(&repo, effective_request)?;
     let stale = alternate_build_is_newer(&repo, profile);
     let ps1_marker = if stale { "*" } else { "" };
 
+    // TASK-221: when the chosen binary doesn't match current HEAD by SHA,
+    // surface a warning so the user knows in advance that aida commands
+    // may behave as the binary's compile-time source, not the source on
+    // disk. Print to stderr so the eval-friendly stdout shell code is
+    // untouched. trace:TASK-221 | ai:claude
+    if reason == BinarySelectionReason::RecencyFallback {
+        let head = current_branch_head_sha(&repo);
+        let bin_sha = binary_embedded_sha(&bin_dir.join("aida"));
+        eprintln!(
+            "{} active aida binary SHA {} does not match current HEAD {}; \
+             expect parse failures or stale behavior if source diverged.",
+            "Warning:".yellow().bold(),
+            bin_sha.as_deref().unwrap_or("?"),
+            head.as_deref().unwrap_or("?"),
+        );
+        eprintln!("  Recommended: `cargo build --release` (or `cargo build`) to refresh.",);
+    }
+
     // Quote-safety: paths shouldn't contain double-quotes in practice;
     // single-quote everything we emit so shell evaluation is safe.
+    let reason_chip = match reason {
+        BinarySelectionReason::Explicit => " (explicit)",
+        BinarySelectionReason::ShaExactMatch => " (SHA matches HEAD)",
+        BinarySelectionReason::ShaAncestorMatch => " (SHA is HEAD ancestor)",
+        BinarySelectionReason::RecencyFallback => " (recency fallback)",
+        BinarySelectionReason::OnlyOne => "",
+    };
     println!(
-        "# aida dev activate — using {} build at {}{}",
+        "# aida dev activate — using {} build at {}{}{}",
         profile,
         bin_dir.display(),
         if stale {
             "  (alternate build is newer)"
         } else {
             ""
-        }
+        },
+        reason_chip,
     );
     println!("export AIDA_DEV_REPO='{}'", repo.display());
     println!("export AIDA_DEV_BIN='{}'", bin_dir.display());
@@ -20033,6 +20621,43 @@ fn handle_dev_status() -> Result<()> {
         }
         if let Ok(p) = std::env::var("AIDA_DEV_PROFILE") {
             println!("Build profile: {}", p);
+        }
+        // TASK-221: compare active binary's embedded SHA to current HEAD.
+        // Surfaces the same classification `dev activate` used; reads as
+        // "is this binary in sync with the source tree right now?"
+        // trace:TASK-221 | ai:claude
+        if let (Ok(bin_dir), Ok(repo)) = (
+            std::env::var("AIDA_DEV_BIN"),
+            std::env::var("AIDA_DEV_REPO"),
+        ) {
+            let aida_path = std::path::PathBuf::from(&bin_dir).join("aida");
+            let repo_path = std::path::PathBuf::from(&repo);
+            let head = current_branch_head_sha(&repo_path);
+            let bin_sha = binary_embedded_sha(&aida_path);
+            match (head.as_deref(), bin_sha.as_deref()) {
+                (Some(h), Some(b)) => {
+                    let kind = classify_sha_match(&repo_path, b, h);
+                    let label = match kind {
+                        ShaMatch::Exact => "exact match".green().to_string(),
+                        ShaMatch::Ancestor => "ancestor of HEAD".cyan().to_string(),
+                        ShaMatch::Unrelated => "DIVERGED from HEAD".red().bold().to_string(),
+                        ShaMatch::Unknown => "(git unavailable)".dimmed().to_string(),
+                    };
+                    let bin_short = b.get(..b.len().min(8)).unwrap_or(b);
+                    let head_short = h.get(..h.len().min(8)).unwrap_or(h);
+                    println!(
+                        "Binary SHA:   {} → HEAD {}  [{}]",
+                        bin_short, head_short, label
+                    );
+                    if matches!(kind, ShaMatch::Unrelated) {
+                        println!(
+                            "      {}: rebuild with `cargo build --release` (or `cargo build`)",
+                            "Recommended".yellow().bold()
+                        );
+                    }
+                }
+                _ => {}
+            }
         }
         match std::env::var("AIDA_DEV_PROFILE_PIN") {
             Ok(pin) if !pin.is_empty() => {
@@ -22425,6 +23050,133 @@ mod queue_work_tests {
         assert!(read_behavior_permission_mode(&tmp).is_none());
         let _ = std::fs::remove_dir_all(&tmp);
     }
+
+    // --- TASK-217: status-aware not-queued error message ---
+
+    fn make_req_status(
+        spec: &str,
+        t: RequirementType,
+        s: RequirementStatus,
+    ) -> aida_core::Requirement {
+        let mut r = req(spec, Some(spec), t);
+        r.status = s;
+        r
+    }
+
+    #[test]
+    fn not_queued_approved_suggests_add_and_work() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Approved,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("isn't queued"), "msg: {msg}");
+        assert!(msg.contains("Approved"), "msg: {msg}");
+        assert!(
+            msg.contains("aida queue add STORY-86 --for implementer"),
+            "msg: {msg}"
+        );
+        assert!(msg.contains("aida queue work STORY-86"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_planned_suggests_promote_to_approved() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Planned,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("Planned"), "msg: {msg}");
+        assert!(
+            msg.contains("aida edit STORY-86 --status approved"),
+            "msg: {msg}"
+        );
+        assert!(msg.contains("aida queue add STORY-86"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_in_progress_warns_lease_lost() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::InProgress,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("In Progress"), "msg: {msg}");
+        assert!(msg.contains("lease may have been lost"), "msg: {msg}");
+        assert!(msg.contains("aida queue list --all"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_done_suggests_rework_verb() {
+        let r = make_req_status("STORY-86", RequirementType::Story, RequirementStatus::Done);
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("Done"), "msg: {msg}");
+        assert!(
+            msg.contains("aida queue rework STORY-86 --work --resume"),
+            "msg: {msg}"
+        );
+        assert!(msg.contains("auto-bump"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_completed_suggests_force_reopen() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Completed,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("Completed"), "msg: {msg}");
+        assert!(msg.contains("already shipped"), "msg: {msg}");
+        assert!(
+            msg.contains("aida edit STORY-86 --status in-progress --force"),
+            "msg: {msg}"
+        );
+    }
+
+    #[test]
+    fn not_queued_rejected_suggests_force_reopen() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Rejected,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("Rejected"), "msg: {msg}");
+        assert!(
+            msg.contains("aida edit STORY-86 --status approved --force"),
+            "msg: {msg}"
+        );
+    }
+
+    #[test]
+    fn not_queued_container_uses_cluster_message() {
+        let r = make_req_status(
+            "EPIC-23",
+            RequirementType::Epic,
+            RequirementStatus::InProgress,
+        );
+        let msg = format_queue_work_not_queued_error("EPIC-23", &r, Some("implementer"));
+        // Containers get a different shape — focus on inspecting + adding
+        // children rather than the leaf status-aware recovery.
+        assert!(msg.contains("no queued children"), "msg: {msg}");
+        assert!(msg.contains("aida queue list --tree"), "msg: {msg}");
+        assert!(msg.contains("aida list --parent EPIC-23"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_falls_back_when_role_unknown() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Approved,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, None);
+        assert!(msg.contains("--for <role>"), "msg: {msg}");
+    }
 }
 
 #[cfg(test)]
@@ -22526,6 +23278,286 @@ mod queue_rework_tests {
             // Just confirm the function doesn't panic on any variant.
             let _ = rework_smart_target(s);
         }
+    }
+}
+
+#[cfg(test)]
+mod binary_selection_tests {
+    //! TASK-221: pin the pure parts of `aida dev activate`'s binary
+    //! selection. `pick_dev_binary_dir` itself touches the filesystem
+    //! and spawns subprocesses; this mod covers `parse_embedded_sha` and
+    //! the `ShaMatch::Exact` shortcut path of `classify_sha_match` which
+    //! is logic, not git. trace:TASK-221 | ai:claude
+    use super::*;
+
+    #[test]
+    fn parse_embedded_sha_short_form() {
+        let banner = "aida 0.5.2 (built 2026-05-13 23:00:00 PDT, sha 866b050)";
+        assert_eq!(parse_embedded_sha(banner).as_deref(), Some("866b050"));
+    }
+
+    #[test]
+    fn parse_embedded_sha_with_dirty_marker() {
+        let banner = "aida 0.5.2 (built 2026-05-13 23:00:00 PDT, sha 866b050+dirty)";
+        // We only want the hex part — "+dirty" terminates extraction.
+        assert_eq!(parse_embedded_sha(banner).as_deref(), Some("866b050"));
+    }
+
+    #[test]
+    fn parse_embedded_sha_full_form() {
+        let banner = "aida 0.5.2 (built 2026-05-13, sha 866b050aabbccddeeff1122334455)";
+        match parse_embedded_sha(banner) {
+            Some(s) => assert!(s.starts_with("866b050"), "got: {s}"),
+            None => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn parse_embedded_sha_unknown() {
+        let banner = "aida 0.5.2 (built 2026-05-13, sha unknown)";
+        // 'unknown' starts with 'u' which isn't hex; the parser should
+        // return None rather than a non-hex string. trace:TASK-221
+        assert!(parse_embedded_sha(banner).is_none());
+    }
+
+    #[test]
+    fn parse_embedded_sha_missing_marker() {
+        let banner = "aida 0.5.2 (built 2026-05-13)";
+        assert!(parse_embedded_sha(banner).is_none());
+    }
+
+    #[test]
+    fn parse_embedded_sha_too_short() {
+        // 6 hex chars is below the 7-char threshold (matches git's default
+        // --short prefix length).
+        let banner = "aida 0.5.2 (built 2026-05-13, sha abc123)";
+        assert!(parse_embedded_sha(banner).is_none());
+    }
+
+    #[test]
+    fn classify_sha_exact_when_prefix() {
+        // Binary stamped a 7-char prefix; HEAD is the full 40. Exact match.
+        let m = classify_sha_match(
+            std::path::Path::new("/nonexistent-repo-path"),
+            "866b050",
+            "866b050aabbccddeeff1122334455667788990011",
+        );
+        assert_eq!(m, ShaMatch::Exact);
+    }
+
+    #[test]
+    fn classify_sha_exact_case_insensitive() {
+        let m = classify_sha_match(
+            std::path::Path::new("/nonexistent-repo-path"),
+            "866B050",
+            "866b050aabbccddeeff1122334455667788990011",
+        );
+        assert_eq!(m, ShaMatch::Exact);
+    }
+
+    #[test]
+    fn classify_sha_unknown_when_git_unavailable() {
+        // With a /nonexistent path, the SHAs don't prefix-match, and git
+        // exec for `merge-base --is-ancestor` will fail (Err) → Unknown
+        // (matches the documented graceful-fallback contract).
+        let m = classify_sha_match(
+            std::path::Path::new("/nonexistent-repo-path-xyz"),
+            "deadbeef",
+            "cafebabe1122334455667788990011",
+        );
+        // The classify implementation returns Unknown when git's process
+        // fails to spawn, and Unrelated when git ran but returned non-zero.
+        // On hosts where /nonexistent fails-to-spawn, we'd get Unknown;
+        // on hosts where git starts but bails on the bad cwd, Unrelated.
+        // Both are acceptable here — the point is "not Exact, not
+        // Ancestor."
+        assert!(
+            matches!(m, ShaMatch::Unknown | ShaMatch::Unrelated),
+            "got: {:?}",
+            m
+        );
+    }
+}
+
+#[cfg(test)]
+mod ci_action_tests {
+    //! TASK-111: pin the `aida session end` CI decision tree. The probe
+    //! itself shells out to gh, but `decide_ci_action` and `parse_ci_probe`
+    //! are pure — tests cover every probe state × yes/wait_ci combo so
+    //! lifecycle changes don't silently corrupt the handoff.
+    //! trace:TASK-111 | ai:claude
+    use super::*;
+
+    #[test]
+    fn no_signal_proceeds_silently() {
+        let probe = CiProbe::NoSignal("no open PR for branch".to_string());
+        assert_eq!(decide_ci_action(&probe, false, false), CiAction::Proceed);
+        assert_eq!(decide_ci_action(&probe, true, false), CiAction::Proceed);
+        assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
+    }
+
+    #[test]
+    fn green_always_proceeds() {
+        let probe = CiProbe::Green { pr_number: 7 };
+        assert_eq!(decide_ci_action(&probe, false, false), CiAction::Proceed);
+        assert_eq!(decide_ci_action(&probe, true, false), CiAction::Proceed);
+        assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
+    }
+
+    #[test]
+    fn pr_no_checks_proceeds_with_info() {
+        let probe = CiProbe::PrNoChecks { pr_number: 7 };
+        assert_eq!(decide_ci_action(&probe, false, false), CiAction::Proceed);
+    }
+
+    #[test]
+    fn in_progress_prompts_when_interactive() {
+        let probe = CiProbe::InProgress { pr_number: 7 };
+        match decide_ci_action(&probe, false, false) {
+            CiAction::Cancel(msg) => assert!(msg.contains("PR-7"), "msg: {msg}"),
+            other => panic!("expected Cancel, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn in_progress_waits_with_flag() {
+        let probe = CiProbe::InProgress { pr_number: 7 };
+        assert_eq!(decide_ci_action(&probe, true, false), CiAction::Wait);
+    }
+
+    #[test]
+    fn in_progress_proceeds_with_yes() {
+        let probe = CiProbe::InProgress { pr_number: 7 };
+        assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
+    }
+
+    #[test]
+    fn red_cancels_interactively() {
+        let probe = CiProbe::Red {
+            pr_number: 7,
+            failed_summary: "build".to_string(),
+        };
+        match decide_ci_action(&probe, false, false) {
+            CiAction::Cancel(msg) => {
+                assert!(msg.contains("PR-7"), "msg: {msg}");
+                assert!(msg.contains("RED"), "msg: {msg}");
+                assert!(msg.contains("fixups"), "msg: {msg}");
+            }
+            other => panic!("expected Cancel, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn red_proceeds_with_yes_but_warns() {
+        let probe = CiProbe::Red {
+            pr_number: 7,
+            failed_summary: "build".to_string(),
+        };
+        // --yes acknowledges the user is non-interactive; we still
+        // print the warning but don't block.
+        assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
+    }
+
+    // --- parse_ci_probe ---
+
+    #[test]
+    fn parse_empty_array_is_no_signal() {
+        let probe = parse_ci_probe("[]");
+        assert!(matches!(probe, CiProbe::NoSignal(_)));
+    }
+
+    #[test]
+    fn parse_pr_no_checks() {
+        let json = r#"[{"number": 42, "statusCheckRollup": []}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::PrNoChecks { pr_number } => assert_eq!(pr_number, 42),
+            other => panic!("expected PrNoChecks, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_pr_no_rollup_field() {
+        let json = r#"[{"number": 42}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::PrNoChecks { pr_number } => assert_eq!(pr_number, 42),
+            other => panic!("expected PrNoChecks, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_all_green_checkruns() {
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"name": "build", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "test",  "status": "COMPLETED", "conclusion": "SUCCESS"}
+        ]}]"#;
+        assert_eq!(parse_ci_probe(json), CiProbe::Green { pr_number: 7 });
+    }
+
+    #[test]
+    fn parse_one_in_progress_is_in_progress() {
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"name": "build", "status": "COMPLETED",   "conclusion": "SUCCESS"},
+            {"name": "test",  "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+        assert_eq!(parse_ci_probe(json), CiProbe::InProgress { pr_number: 7 });
+    }
+
+    #[test]
+    fn parse_any_failure_is_red() {
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"name": "build", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "lint",  "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::Red {
+                pr_number,
+                failed_summary,
+            } => {
+                assert_eq!(pr_number, 7);
+                assert!(failed_summary.contains("lint"), "summary: {failed_summary}");
+            }
+            other => panic!("expected Red, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_status_context_shape() {
+        // Older / classic status-API checks come back as
+        // {state: SUCCESS|FAILURE|PENDING, context: ...} instead of
+        // {status, conclusion, name}. We support both.
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"context": "ci/circleci", "state": "FAILURE"}
+        ]}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::Red { pr_number, .. } => assert_eq!(pr_number, 7),
+            other => panic!("expected Red, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_red_summary_truncates_when_many_failed() {
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"name": "a", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "b", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "c", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "d", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "e", "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::Red { failed_summary, .. } => {
+                assert!(
+                    failed_summary.contains("and 2 more"),
+                    "summary: {failed_summary}"
+                );
+            }
+            other => panic!("expected Red, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_malformed_is_no_signal() {
+        assert!(matches!(parse_ci_probe("not json"), CiProbe::NoSignal(_)));
+        assert!(matches!(parse_ci_probe(""), CiProbe::NoSignal(_)));
     }
 }
 
@@ -28811,6 +29843,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             include_terminal,
             scope: scope_filter,
             tree,
+            no_in_flight,
+            in_flight_only,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
@@ -28991,7 +30025,30 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 Vec::new()
             };
 
-            if entries.is_empty() && global_entries.is_empty() {
+            // TASK-222: compute in-flight (Done) specs once, up front, so
+            // the empty-queue branch can decide whether to keep showing the
+            // "Your queue is empty" line or fall through to the in-flight
+            // section when there's still work awaiting merge.
+            // trace:TASK-222 | ai:claude
+            let in_flight_specs: Vec<&aida_core::Requirement> = if *no_in_flight {
+                Vec::new()
+            } else {
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| r.status == RequirementStatus::Done)
+                    .collect()
+            };
+
+            let pending_empty = entries.is_empty() && global_entries.is_empty();
+
+            // Branch matrix:
+            //   in_flight_only=true   → skip the regular queue render entirely
+            //   pending_empty + no_in_flight=true (or no in-flight)
+            //                         → classic empty-queue early return
+            //   pending_empty + in-flight has items
+            //                         → muted empty hint + fall through to in-flight
+            if !*in_flight_only && pending_empty {
                 // BUG-87: when --all is already passed, don't suggest
                 // "pass --all" — the user just did. Drop the hint.
                 let hint = if *all {
@@ -29026,190 +30083,359 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         }
                     );
                 }
-                return Ok(());
+                if in_flight_specs.is_empty() {
+                    return Ok(());
+                }
+                // fall through to in-flight section
             }
 
-            let total = entries.len() + global_entries.len();
-            let title = if only_unrouted {
-                format!(
-                    "My Queue · unrouted ({} item{})",
-                    total,
-                    if total == 1 { "" } else { "s" }
-                )
-            } else {
-                match &role_filter {
-                    Some(r) => format!(
-                        "My Queue · role:{} ({} item{})",
-                        r,
+            // TASK-222: skip the regular-queue render entirely when only
+            // the in-flight section was asked for, or when the pending list
+            // was empty and we already printed the muted-empty hint above.
+            // trace:TASK-222 | ai:claude
+            let skip_regular_render = *in_flight_only || pending_empty;
+
+            if !skip_regular_render {
+                let total = entries.len() + global_entries.len();
+                let title = if only_unrouted {
+                    format!(
+                        "My Queue · unrouted ({} item{})",
                         total,
                         if total == 1 { "" } else { "s" }
-                    ),
-                    None => format!(
-                        "My Queue ({} item{})",
-                        total,
-                        if total == 1 { "" } else { "s" }
-                    ),
-                }
-            };
-            println!("{}", title.bold());
-            println!("{}", "─".repeat(80));
-
-            // Local-project name for tagging local entries when global is also
-            // shown (so the user can tell at a glance which is which).
-            let local_project_name =
-                global_queue::project_name_for(storage.path().parent().unwrap_or(storage.path()));
-
-            // TASK-33: --tree groups local entries by their derived parent
-            // EPIC so a multi-cluster queue reads as discrete sub-batches
-            // instead of one long interleaved list. Globals stay flat
-            // after — we don't have foreign stores loaded to derive their
-            // parents. trace:TASK-33 | ai:claude
-            if *tree {
-                use std::collections::BTreeMap;
-                let mut groups: BTreeMap<String, Vec<&aida_core::QueueEntry>> = BTreeMap::new();
-                let unscoped_key = "~unscoped".to_string();
-                for entry in &entries {
-                    let Some(req) = store
-                        .requirements
-                        .iter()
-                        .find(|r| r.id == entry.requirement_id)
-                    else {
-                        groups.entry(unscoped_key.clone()).or_default().push(entry);
-                        continue;
-                    };
-                    let key = entry
-                        .for_scope
-                        .clone()
-                        .or_else(|| derive_parent_epic_label(req, &store))
-                        .unwrap_or_else(|| unscoped_key.clone());
-                    groups.entry(key).or_default().push(entry);
-                }
-                // Sort groups: real EPICs by count desc then name; unscoped last.
-                let mut ordered: Vec<(String, Vec<&aida_core::QueueEntry>)> =
-                    groups.into_iter().collect();
-                ordered.sort_by(|a, b| {
-                    let a_unscoped = a.0 == unscoped_key;
-                    let b_unscoped = b.0 == unscoped_key;
-                    match (a_unscoped, b_unscoped) {
-                        (true, false) => std::cmp::Ordering::Greater,
-                        (false, true) => std::cmp::Ordering::Less,
-                        _ => b.1.len().cmp(&a.1.len()).then_with(|| a.0.cmp(&b.0)),
+                    )
+                } else {
+                    match &role_filter {
+                        Some(r) => format!(
+                            "My Queue · role:{} ({} item{})",
+                            r,
+                            total,
+                            if total == 1 { "" } else { "s" }
+                        ),
+                        None => format!(
+                            "My Queue ({} item{})",
+                            total,
+                            if total == 1 { "" } else { "s" }
+                        ),
                     }
-                });
+                };
+                println!("{}", title.bold());
+                println!("{}", "─".repeat(80));
 
-                let render_entry_inline =
-                    |entry: &aida_core::QueueEntry, is_last: bool, id_col_width: usize| {
-                        let req = store
+                // Local-project name for tagging local entries when global is also
+                // shown (so the user can tell at a glance which is which).
+                let local_project_name = global_queue::project_name_for(
+                    storage.path().parent().unwrap_or(storage.path()),
+                );
+
+                // TASK-33: --tree groups local entries by their derived parent
+                // EPIC so a multi-cluster queue reads as discrete sub-batches
+                // instead of one long interleaved list. Globals stay flat
+                // after — we don't have foreign stores loaded to derive their
+                // parents. trace:TASK-33 | ai:claude
+                if *tree {
+                    use std::collections::BTreeMap;
+                    let mut groups: BTreeMap<String, Vec<&aida_core::QueueEntry>> = BTreeMap::new();
+                    let unscoped_key = "~unscoped".to_string();
+                    for entry in &entries {
+                        let Some(req) = store
                             .requirements
                             .iter()
-                            .find(|r| r.id == entry.requirement_id);
-                        let display_id = req
-                            .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
-                            .unwrap_or("???");
-                        let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
-                        // TASK-91: PR-N (STORY-NNN) for auto-queued review
-                        // stories. trace:TASK-91 | ai:claude
-                        let (display_id_owned, title_owned) =
-                            format_review_story_display(display_id, title)
-                                .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
-                        let status = req
-                            .map(|r| format!("{}", r.status))
-                            .unwrap_or_else(|| "Unknown".to_string());
-                        let status_colored = match status.as_str() {
-                            "Draft" => status.dimmed(),
-                            "Approved" => status.blue(),
-                            "Planned" => status.cyan(),
-                            "In Progress" => status.yellow(),
-                            // trace:STORY-86 | ai:claude — bold bright-green
-                            // distinguishes "done on branch" from
-                            // "merged to main" (plain green).
-                            "Done" => status.bright_green().bold(),
-                            "Completed" => status.green(),
-                            "Rejected" => status.red(),
-                            _ => status.normal(),
+                            .find(|r| r.id == entry.requirement_id)
+                        else {
+                            groups.entry(unscoped_key.clone()).or_default().push(entry);
+                            continue;
                         };
-                        let glyph = if is_last { "└─" } else { "├─" };
-                        let pad = " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
-                        println!(
-                            "  {} {}{}  {}  [{}]",
-                            glyph.dimmed(),
-                            display_id_owned.bold(),
-                            pad,
-                            title_owned,
-                            status_colored,
-                        );
-                    };
+                        let key = entry
+                            .for_scope
+                            .clone()
+                            .or_else(|| derive_parent_epic_label(req, &store))
+                            .unwrap_or_else(|| unscoped_key.clone());
+                        groups.entry(key).or_default().push(entry);
+                    }
+                    // Sort groups: real EPICs by count desc then name; unscoped last.
+                    let mut ordered: Vec<(String, Vec<&aida_core::QueueEntry>)> =
+                        groups.into_iter().collect();
+                    ordered.sort_by(|a, b| {
+                        let a_unscoped = a.0 == unscoped_key;
+                        let b_unscoped = b.0 == unscoped_key;
+                        match (a_unscoped, b_unscoped) {
+                            (true, false) => std::cmp::Ordering::Greater,
+                            (false, true) => std::cmp::Ordering::Less,
+                            _ => b.1.len().cmp(&a.1.len()).then_with(|| a.0.cmp(&b.0)),
+                        }
+                    });
 
-                for (key, group) in &ordered {
-                    let header = if key == &unscoped_key {
-                        "Unscoped".to_string()
-                    } else {
-                        key.clone()
-                    };
-                    println!();
-                    println!(
-                        "{} ({} item{})",
-                        header.cyan().bold(),
-                        group.len(),
-                        if group.len() == 1 { "" } else { "s" }
-                    );
-                    // TASK-91: width must account for the PR-N (STORY-NNN)
-                    // expansion so the column lines up after the transform.
-                    // trace:TASK-91 | ai:claude
-                    let id_col_width = group
-                        .iter()
-                        .map(|e| {
-                            let req = store.requirements.iter().find(|r| r.id == e.requirement_id);
-                            let raw_id = req
+                    let render_entry_inline =
+                        |entry: &aida_core::QueueEntry, is_last: bool, id_col_width: usize| {
+                            let req = store
+                                .requirements
+                                .iter()
+                                .find(|r| r.id == entry.requirement_id);
+                            let display_id = req
                                 .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
                                 .unwrap_or("???");
-                            let raw_title = req.map(|r| r.title.as_str()).unwrap_or("");
-                            match format_review_story_display(raw_id, raw_title) {
-                                Some((expanded, _)) => expanded.len(),
-                                None => raw_id.len(),
-                            }
-                        })
-                        .max()
-                        .unwrap_or(0);
-                    for (i, entry) in group.iter().enumerate() {
-                        let is_last = i + 1 == group.len();
-                        render_entry_inline(entry, is_last, id_col_width);
-                    }
-                }
-
-                if !global_entries.is_empty() {
-                    println!();
-                    println!(
-                        "{} ({} item{})",
-                        "Global queue".cyan().bold(),
-                        global_entries.len(),
-                        if global_entries.len() == 1 { "" } else { "s" }
-                    );
-                    for (i, entry) in global_entries.iter().enumerate() {
-                        let glyph = if i + 1 == global_entries.len() {
-                            "└─"
-                        } else {
-                            "├─"
+                            let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                            // TASK-91: PR-N (STORY-NNN) for auto-queued review
+                            // stories. trace:TASK-91 | ai:claude
+                            let (display_id_owned, title_owned) =
+                                format_review_story_display(display_id, title)
+                                    .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
+                            let status = req
+                                .map(|r| format!("{}", r.status))
+                                .unwrap_or_else(|| "Unknown".to_string());
+                            let status_colored = match status.as_str() {
+                                "Draft" => status.dimmed(),
+                                "Approved" => status.blue(),
+                                "Planned" => status.cyan(),
+                                "In Progress" => status.yellow(),
+                                // trace:STORY-86 | ai:claude — bold bright-green
+                                // distinguishes "done on branch" from
+                                // "merged to main" (plain green).
+                                "Done" => status.bright_green().bold(),
+                                "Completed" => status.green(),
+                                "Rejected" => status.red(),
+                                _ => status.normal(),
+                            };
+                            let glyph = if is_last { "└─" } else { "├─" };
+                            let pad =
+                                " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
+                            println!(
+                                "  {} {}{}  {}  [{}]",
+                                glyph.dimmed(),
+                                display_id_owned.bold(),
+                                pad,
+                                title_owned,
+                                status_colored,
+                            );
                         };
-                        // BUG-83: prefer cached agreed_id over spec_id to
-                        // stay consistent with `aida list` / local queue
-                        // after `aida db merge-gate`. trace:BUG-83 | ai:claude
-                        let display_id = entry
-                            .agreed_id
-                            .as_deref()
-                            .or(entry.spec_id.as_deref())
-                            .unwrap_or("???");
-                        let title = entry.title.as_deref().unwrap_or("(no cached title)");
+
+                    for (key, group) in &ordered {
+                        let header = if key == &unscoped_key {
+                            "Unscoped".to_string()
+                        } else {
+                            key.clone()
+                        };
+                        println!();
                         println!(
-                            "  {} {}  {}  {}",
-                            glyph.dimmed(),
-                            display_id.bold(),
-                            title,
-                            format!("[origin:{}]", entry.project_name).dimmed(),
+                            "{} ({} item{})",
+                            header.cyan().bold(),
+                            group.len(),
+                            if group.len() == 1 { "" } else { "s" }
+                        );
+                        // TASK-91: width must account for the PR-N (STORY-NNN)
+                        // expansion so the column lines up after the transform.
+                        // trace:TASK-91 | ai:claude
+                        let id_col_width = group
+                            .iter()
+                            .map(|e| {
+                                let req =
+                                    store.requirements.iter().find(|r| r.id == e.requirement_id);
+                                let raw_id = req
+                                    .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
+                                    .unwrap_or("???");
+                                let raw_title = req.map(|r| r.title.as_str()).unwrap_or("");
+                                match format_review_story_display(raw_id, raw_title) {
+                                    Some((expanded, _)) => expanded.len(),
+                                    None => raw_id.len(),
+                                }
+                            })
+                            .max()
+                            .unwrap_or(0);
+                        for (i, entry) in group.iter().enumerate() {
+                            let is_last = i + 1 == group.len();
+                            render_entry_inline(entry, is_last, id_col_width);
+                        }
+                    }
+
+                    if !global_entries.is_empty() {
+                        println!();
+                        println!(
+                            "{} ({} item{})",
+                            "Global queue".cyan().bold(),
+                            global_entries.len(),
+                            if global_entries.len() == 1 { "" } else { "s" }
+                        );
+                        for (i, entry) in global_entries.iter().enumerate() {
+                            let glyph = if i + 1 == global_entries.len() {
+                                "└─"
+                            } else {
+                                "├─"
+                            };
+                            // BUG-83: prefer cached agreed_id over spec_id to
+                            // stay consistent with `aida list` / local queue
+                            // after `aida db merge-gate`. trace:BUG-83 | ai:claude
+                            let display_id = entry
+                                .agreed_id
+                                .as_deref()
+                                .or(entry.spec_id.as_deref())
+                                .unwrap_or("???");
+                            let title = entry.title.as_deref().unwrap_or("(no cached title)");
+                            println!(
+                                "  {} {}  {}  {}",
+                                glyph.dimmed(),
+                                display_id.bold(),
+                                title,
+                                format!("[origin:{}]", entry.project_name).dimmed(),
+                            );
+                        }
+                    }
+
+                    if hidden_terminal_count > 0 {
+                        println!();
+                        println!(
+                            "{} ({} pass --include-terminal to show)",
+                            format!(
+                                "{} terminal-status entr{} hidden",
+                                hidden_terminal_count,
+                                if hidden_terminal_count == 1 {
+                                    "y"
+                                } else {
+                                    "ies"
+                                }
+                            )
+                            .dimmed(),
+                            "Completed/Rejected;".dimmed()
                         );
                     }
+                    return Ok(());
                 }
 
+                for (i, entry) in entries.iter().enumerate() {
+                    let req = store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == entry.requirement_id);
+                    // BUG-81: prefer agreed_id (short form) when assigned;
+                    // fall back to spec_id. Mirrors `aida list` / `aida show` /
+                    // `aida search` so the queue stops drifting after
+                    // `aida db merge-gate`. trace:BUG-81 | ai:claude
+                    let display_id = req
+                        .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
+                        .unwrap_or("???");
+                    let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                    // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
+                    // trace:TASK-91 | ai:claude
+                    let (display_id_owned, title_owned) =
+                        format_review_story_display(display_id, title)
+                            .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
+                    let status = req
+                        .map(|r| format!("{}", r.status))
+                        .unwrap_or_else(|| "Unknown".to_string());
+
+                    let status_colored = match status.as_str() {
+                        "Draft" => status.dimmed(),
+                        "Approved" => status.blue(),
+                        "Planned" => status.cyan(),
+                        "In Progress" => status.yellow(),
+                        // trace:STORY-86 | ai:claude
+                        "Done" => status.bright_green().bold(),
+                        "Completed" => status.green(),
+                        "Rejected" => status.red(),
+                        _ => status.normal(),
+                    };
+
+                    print!(
+                        "  {}. {} {}",
+                        (i + 1).to_string().dimmed(),
+                        display_id_owned.bold(),
+                        title_owned
+                    );
+                    print!("  [{}]", status_colored);
+                    if entry.added_by != user_id {
+                        print!("  {}", format!("(from @{})", entry.added_by).dimmed());
+                    }
+                    // STORY-57: inline routing tags. Show for: only when the
+                    // user isn't already filtering on a specific role (avoids
+                    // repeating "for:implementer" on every line in the
+                    // role-filtered view). Always show scope/session — those
+                    // are session-axis filters that don't get hoisted into
+                    // the title bar.
+                    if role_filter.is_none() {
+                        if let Some(ref r) = entry.for_role {
+                            print!("  {}", format!("[for:{}]", r).cyan());
+                        }
+                    }
+                    if let Some(ref s) = entry.for_scope {
+                        print!("  {}", format!("[@{}]", s).cyan());
+                    } else if let Some(req) = req {
+                        // TASK-44: auto-derive the parent-EPIC chip when
+                        // no explicit `--scope` was set. Dimmed + `*`
+                        // suffix to distinguish from explicit routing.
+                        // trace:TASK-44 | ai:claude
+                        if let Some(epic) = derive_parent_epic_label(req, &store) {
+                            print!("  {}", format!("[@{}*]", epic).dimmed());
+                        }
+                    }
+                    if let Some(ref s) = entry.for_session {
+                        let short = &s[..s.len().min(8)];
+                        print!("  {}", format!("[session:{}]", short).cyan());
+                    }
+                    // STORY-98: if another session's manifest plans this spec,
+                    // surface a `[planned:by-<short>]` chip so concurrent
+                    // sessions can see the soft claim. The viewer's own
+                    // session is skipped (the chip would be redundant — the
+                    // user already knows what their own /aida-pickup queued).
+                    // trace:STORY-98 | ai:claude
+                    if let Some(req) = req {
+                        if let Some(spec_id) = req.spec_id.as_deref() {
+                            if let Some(other) = session_manifest::planned_by_other(
+                                &all_manifests,
+                                spec_id,
+                                &viewer_session_id,
+                            ) {
+                                let short = &other[..other.len().min(8)];
+                                print!("  {}", format!("[planned:by-{}]", short).magenta());
+                            }
+                        }
+                    }
+                    // When the global queue is also being shown, tag local entries
+                    // with their origin so the merge view is unambiguous.
+                    if !global_entries.is_empty() {
+                        print!("  {}", format!("[origin:{}]", local_project_name).dimmed());
+                    }
+                    if let Some(ref note) = entry.note {
+                        print!("  {}", format!("\"{}\"", note).dimmed().italic());
+                    }
+                    println!();
+                }
+
+                // Global entries follow the locals, numbered continuously.
+                // We can't apply scope_tags / scope_status filters since we don't
+                // have the foreign requirement loaded — surface them all and rely
+                // on the cached spec_id/title in the entry. trace:FR-1-012
+                for (idx, entry) in global_entries.iter().enumerate() {
+                    let i = entries.len() + idx;
+                    // BUG-83: prefer cached agreed_id; falls back to spec_id.
+                    // trace:BUG-83 | ai:claude
+                    let display_id = entry
+                        .agreed_id
+                        .as_deref()
+                        .or(entry.spec_id.as_deref())
+                        .unwrap_or("???");
+                    let title = entry.title.as_deref().unwrap_or("(no cached title)");
+
+                    print!(
+                        "  {}. {} {}",
+                        (i + 1).to_string().dimmed(),
+                        display_id.bold(),
+                        title
+                    );
+                    if entry.added_by != user_id {
+                        print!("  {}", format!("(from @{})", entry.added_by).dimmed());
+                    }
+                    if role_filter.is_none() {
+                        print!("  {}", format!("[for:{}]", entry.for_role).cyan());
+                    }
+                    print!("  {}", format!("[origin:{}]", entry.project_name).dimmed());
+                    if let Some(ref note) = entry.note {
+                        print!("  {}", format!("\"{}\"", note).dimmed().italic());
+                    }
+                    println!();
+                }
+                // TASK-46: footer hint when the default filter hid some
+                // terminal-status entries. Stays silent when nothing was
+                // hidden so it doesn't add noise to the common case.
+                // trace:TASK-46 | ai:claude
                 if hidden_terminal_count > 0 {
                     println!();
                     println!(
@@ -29227,161 +30453,95 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         "Completed/Rejected;".dimmed()
                     );
                 }
-                return Ok(());
-            }
+            } // end of `if !skip_regular_render { ... }` — trace:TASK-222
 
-            for (i, entry) in entries.iter().enumerate() {
-                let req = store
-                    .requirements
-                    .iter()
-                    .find(|r| r.id == entry.requirement_id);
-                // BUG-81: prefer agreed_id (short form) when assigned;
-                // fall back to spec_id. Mirrors `aida list` / `aida show` /
-                // `aida search` so the queue stops drifting after
-                // `aida db merge-gate`. trace:BUG-81 | ai:claude
-                let display_id = req
-                    .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
-                    .unwrap_or("???");
-                let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
-                // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
-                // trace:TASK-91 | ai:claude
-                let (display_id_owned, title_owned) =
-                    format_review_story_display(display_id, title)
-                        .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
-                let status = req
-                    .map(|r| format!("{}", r.status))
-                    .unwrap_or_else(|| "Unknown".to_string());
-
-                let status_colored = match status.as_str() {
-                    "Draft" => status.dimmed(),
-                    "Approved" => status.blue(),
-                    "Planned" => status.cyan(),
-                    "In Progress" => status.yellow(),
-                    // trace:STORY-86 | ai:claude
-                    "Done" => status.bright_green().bold(),
-                    "Completed" => status.green(),
-                    "Rejected" => status.red(),
-                    _ => status.normal(),
-                };
-
-                print!(
-                    "  {}. {} {}",
-                    (i + 1).to_string().dimmed(),
-                    display_id_owned.bold(),
-                    title_owned
+            // TASK-222: in-flight section. Done specs are work-in-flight
+            // (branch finished, not yet merged to main). They aren't in
+            // the queue anymore (queue done removed them), but they're
+            // still active work — so show them in a separate section so
+            // the natural "what am I waiting on" view is complete.
+            // trace:TASK-222 | ai:claude
+            if !in_flight_specs.is_empty() {
+                if !skip_regular_render {
+                    println!();
+                }
+                println!(
+                    "{} ({} item{})",
+                    "Done — awaiting merge".bright_green().bold(),
+                    in_flight_specs.len(),
+                    if in_flight_specs.len() == 1 { "" } else { "s" }
                 );
-                print!("  [{}]", status_colored);
-                if entry.added_by != user_id {
-                    print!("  {}", format!("(from @{})", entry.added_by).dimmed());
-                }
-                // STORY-57: inline routing tags. Show for: only when the
-                // user isn't already filtering on a specific role (avoids
-                // repeating "for:implementer" on every line in the
-                // role-filtered view). Always show scope/session — those
-                // are session-axis filters that don't get hoisted into
-                // the title bar.
-                if role_filter.is_none() {
-                    if let Some(ref r) = entry.for_role {
-                        print!("  {}", format!("[for:{}]", r).cyan());
+                println!("{}", "─".repeat(80));
+                // Stable order: most-recently-implemented first so the
+                // freshly-shipped work surfaces at the top. Falls back to
+                // spec_id when timestamps are missing.
+                let mut sorted: Vec<&aida_core::Requirement> = in_flight_specs.clone();
+                sorted.sort_by(|a, b| {
+                    let a_ts = a
+                        .implementation_info
+                        .as_ref()
+                        .and_then(|i| i.implemented_at);
+                    let b_ts = b
+                        .implementation_info
+                        .as_ref()
+                        .and_then(|i| i.implemented_at);
+                    match (a_ts, b_ts) {
+                        (Some(a), Some(b)) => b.cmp(&a),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a
+                            .agreed_id
+                            .as_deref()
+                            .unwrap_or("")
+                            .cmp(b.agreed_id.as_deref().unwrap_or("")),
                     }
+                });
+                for req in &sorted {
+                    let display_id = req
+                        .agreed_id
+                        .as_deref()
+                        .or(req.spec_id.as_deref())
+                        .unwrap_or("???");
+                    let ago = req
+                        .implementation_info
+                        .as_ref()
+                        .and_then(|i| i.implemented_at)
+                        .map(|t| {
+                            let elapsed = chrono::Utc::now().signed_duration_since(t);
+                            if elapsed.num_minutes() < 1 {
+                                "just now".to_string()
+                            } else if elapsed.num_hours() < 1 {
+                                format!("{}m ago", elapsed.num_minutes())
+                            } else if elapsed.num_days() < 1 {
+                                format!("{}h ago", elapsed.num_hours())
+                            } else {
+                                format!("{}d ago", elapsed.num_days())
+                            }
+                        })
+                        .unwrap_or_else(|| "awaiting merge".to_string());
+                    println!(
+                        "  {} {}  {}  [{}]",
+                        "◐".bright_green(),
+                        display_id.bold(),
+                        req.title,
+                        ago.dimmed(),
+                    );
                 }
-                if let Some(ref s) = entry.for_scope {
-                    print!("  {}", format!("[@{}]", s).cyan());
-                } else if let Some(req) = req {
-                    // TASK-44: auto-derive the parent-EPIC chip when
-                    // no explicit `--scope` was set. Dimmed + `*`
-                    // suffix to distinguish from explicit routing.
-                    // trace:TASK-44 | ai:claude
-                    if let Some(epic) = derive_parent_epic_label(req, &store) {
-                        print!("  {}", format!("[@{}*]", epic).dimmed());
-                    }
-                }
-                if let Some(ref s) = entry.for_session {
-                    let short = &s[..s.len().min(8)];
-                    print!("  {}", format!("[session:{}]", short).cyan());
-                }
-                // STORY-98: if another session's manifest plans this spec,
-                // surface a `[planned:by-<short>]` chip so concurrent
-                // sessions can see the soft claim. The viewer's own
-                // session is skipped (the chip would be redundant — the
-                // user already knows what their own /aida-pickup queued).
-                // trace:STORY-98 | ai:claude
-                if let Some(req) = req {
-                    if let Some(spec_id) = req.spec_id.as_deref() {
-                        if let Some(other) = session_manifest::planned_by_other(
-                            &all_manifests,
-                            spec_id,
-                            &viewer_session_id,
-                        ) {
-                            let short = &other[..other.len().min(8)];
-                            print!("  {}", format!("[planned:by-{}]", short).magenta());
-                        }
-                    }
-                }
-                // When the global queue is also being shown, tag local entries
-                // with their origin so the merge view is unambiguous.
-                if !global_entries.is_empty() {
-                    print!("  {}", format!("[origin:{}]", local_project_name).dimmed());
-                }
-                if let Some(ref note) = entry.note {
-                    print!("  {}", format!("\"{}\"", note).dimmed().italic());
-                }
-                println!();
-            }
-
-            // Global entries follow the locals, numbered continuously.
-            // We can't apply scope_tags / scope_status filters since we don't
-            // have the foreign requirement loaded — surface them all and rely
-            // on the cached spec_id/title in the entry. trace:FR-1-012
-            for (idx, entry) in global_entries.iter().enumerate() {
-                let i = entries.len() + idx;
-                // BUG-83: prefer cached agreed_id; falls back to spec_id.
-                // trace:BUG-83 | ai:claude
-                let display_id = entry
-                    .agreed_id
-                    .as_deref()
-                    .or(entry.spec_id.as_deref())
-                    .unwrap_or("???");
-                let title = entry.title.as_deref().unwrap_or("(no cached title)");
-
-                print!(
-                    "  {}. {} {}",
-                    (i + 1).to_string().dimmed(),
-                    display_id.bold(),
-                    title
-                );
-                if entry.added_by != user_id {
-                    print!("  {}", format!("(from @{})", entry.added_by).dimmed());
-                }
-                if role_filter.is_none() {
-                    print!("  {}", format!("[for:{}]", entry.for_role).cyan());
-                }
-                print!("  {}", format!("[origin:{}]", entry.project_name).dimmed());
-                if let Some(ref note) = entry.note {
-                    print!("  {}", format!("\"{}\"", note).dimmed().italic());
-                }
-                println!();
-            }
-            // TASK-46: footer hint when the default filter hid some
-            // terminal-status entries. Stays silent when nothing was
-            // hidden so it doesn't add noise to the common case.
-            // trace:TASK-46 | ai:claude
-            if hidden_terminal_count > 0 {
                 println!();
                 println!(
-                    "{} ({} pass --include-terminal to show)",
-                    format!(
-                        "{} terminal-status entr{} hidden",
-                        hidden_terminal_count,
-                        if hidden_terminal_count == 1 {
-                            "y"
-                        } else {
-                            "ies"
-                        }
-                    )
-                    .dimmed(),
-                    "Completed/Rejected;".dimmed()
+                    "{}",
+                    "  (auto-bump to Completed fires when a commit referencing the spec lands on the default branch — `aida pull`)"
+                        .dimmed()
                 );
+                if !*in_flight_only {
+                    println!(
+                        "{}",
+                        "  (suppress this section with `--no-in-flight`; show only this section with `--in-flight-only`)"
+                            .dimmed()
+                    );
+                }
+            } else if *in_flight_only {
+                println!("{}", "No in-flight (Done-status) specs.".dimmed());
             }
         }
         QueueCommand::Add {
@@ -30909,11 +32069,26 @@ fn resolve_queue_work_plan(
         .collect();
 
     if cluster.is_empty() {
-        anyhow::bail!(
-            "`{}` resolves to {} but no queued children match (try `aida queue list --tree` or pass a queued id directly)",
-            arg,
-            anchor_id_upper
-        );
+        // TASK-217: status-aware recovery hint. The user typed an id that
+        // resolves to a known spec but isn't queued (and has no queued
+        // children). Branch on the anchor's current status to suggest the
+        // recovery the user most likely wants — re-queueing after a
+        // Done→rework cycle, promoting Planned to Approved, etc. — instead
+        // of the previous opaque "no queued children match" hint.
+        // trace:TASK-217 | ai:claude
+        let role = std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.is_empty());
+        let display_id = anchor_req
+            .agreed_id
+            .as_deref()
+            .or(anchor_req.spec_id.as_deref())
+            .unwrap_or(&anchor_id_upper);
+        anyhow::bail!(format_queue_work_not_queued_error(
+            display_id,
+            anchor_req,
+            role.as_deref(),
+        ));
     }
 
     // Sort cluster by queue position so the manifest reflects intent.
@@ -30963,6 +32138,56 @@ fn build_resolved_entry(
         queue,
         spec_id,
         status_at_plan,
+    }
+}
+
+/// TASK-217: build a status-aware recovery hint when `aida queue work <id>`
+/// resolves a spec but finds no queue entry. The current status of the
+/// resolved spec tells us which recovery path the user most likely wants.
+/// trace:TASK-217 | ai:claude
+fn format_queue_work_not_queued_error(
+    display_id: &str,
+    anchor_req: &aida_core::Requirement,
+    role: Option<&str>,
+) -> String {
+    use RequirementType::*;
+    let role_display = role.unwrap_or("<role>");
+    let is_container = matches!(anchor_req.req_type, Epic | Folder | Sprint);
+    if is_container {
+        return format!(
+            "`{display_id}` has no queued children. (Status: {status})\n  \
+             Inspect the cluster: `aida queue list --tree` or `aida list --parent {display_id}`\n  \
+             To queue more work under {display_id}: `aida queue add <child-id> --for {role_display}`",
+            status = anchor_req.status,
+        );
+    }
+    match anchor_req.status {
+        RequirementStatus::Draft | RequirementStatus::Approved => format!(
+            "`{display_id}` isn't queued. Status is {status}.\n  \
+             To queue and start: `aida queue add {display_id} --for {role_display}` then `aida queue work {display_id}`",
+            status = anchor_req.status,
+        ),
+        RequirementStatus::Planned => format!(
+            "`{display_id}` isn't queued. Status is Planned (still in planning).\n  \
+             To work it: `aida edit {display_id} --status approved` then `aida queue add {display_id} --for {role_display}`"
+        ),
+        RequirementStatus::InProgress => format!(
+            "`{display_id}` isn't queued, but status is In Progress.\n  \
+             The lease may have been lost. Inspect with `aida queue list --all`.\n  \
+             To re-queue: `aida queue add {display_id} --for {role_display}`"
+        ),
+        RequirementStatus::Done => format!(
+            "`{display_id}` isn't queued. Status is Done (work finished on a branch).\n  \
+             If review found issues and more commits are needed: `aida queue rework {display_id} --work --resume`\n  \
+             If just waiting for merge: nothing to do — auto-bump fires when the PR merges."
+        ),
+        RequirementStatus::Completed => format!(
+            "`{display_id}` is Completed (already shipped). Nothing to work on.\n  \
+             To re-open: `aida edit {display_id} --status in-progress --force`"
+        ),
+        RequirementStatus::Rejected => format!(
+            "`{display_id}` is Rejected. Pick a different spec, or re-open with `aida edit {display_id} --status approved --force`."
+        ),
     }
 }
 
@@ -31275,6 +32500,12 @@ fn handle_queue_work(
                 /* yes */ true,
                 /* force */ false,
                 /* purge_cc */ false,
+                /* wait_ci */ false,
+                // --steal is a recovery path for stuck leases; skip the
+                // CI probe so we don't ask the user to wait on CI for a
+                // session they're actively stealing. trace:TASK-111
+                /* skip_ci */
+                true,
             )
             .with_context(|| {
                 format!(

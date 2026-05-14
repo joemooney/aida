@@ -556,6 +556,20 @@ pub enum SessionCommand {
         /// trace:TASK-70 | ai:claude
         #[clap(long = "purge-cc")]
         purge_cc: bool,
+
+        /// Block until the PR's CI run reaches a terminal state (green
+        /// or red) before releasing the lease. Polls every 30s via
+        /// `gh run watch`-equivalent. No-op when the session has no
+        /// associated PR or `gh` isn't on PATH. trace:TASK-111 | ai:claude
+        #[clap(long, conflicts_with = "skip_ci")]
+        wait_ci: bool,
+
+        /// Skip CI awareness entirely — restore pre-TASK-111 behavior
+        /// (release the lease without probing the PR's CI run). Use when
+        /// CI is broken, when you're not the one who'll merge, or when
+        /// the probe would be slow + you don't care. trace:TASK-111
+        #[clap(long)]
+        skip_ci: bool,
     },
 
     /// List active session leases (separately from the historical list
@@ -2026,6 +2040,19 @@ pub enum QueueCommand {
         /// position order is preserved. trace:TASK-33 | ai:claude
         #[clap(long)]
         tree: bool,
+        /// Suppress the "Done — awaiting merge" in-flight section. By
+        /// default `aida queue list` appends Done specs (work finished
+        /// on a branch, not yet merged to main) so the natural "what am
+        /// I waiting on" view stays complete. Pass this to get only the
+        /// queued (Pending/Approved/Planned/InProgress) view.
+        /// trace:TASK-222 | ai:claude
+        #[clap(long)]
+        no_in_flight: bool,
+        /// Show only the "Done — awaiting merge" in-flight section,
+        /// suppressing the regular queue entries. Useful for "what am I
+        /// waiting on a PR for" snapshots. trace:TASK-222 | ai:claude
+        #[clap(long, conflicts_with = "no_in_flight")]
+        in_flight_only: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -2179,7 +2206,13 @@ pub enum QueueCommand {
     /// With `id` matching a queued entry, that single item is the pickup
     /// target. With `id` resolving to an EPIC/STORY whose children are
     /// queued, drains the cluster — pre-populates the session manifest
-    /// and routes the right skill. trace:STORY-42 | ai:claude
+    /// and routes the right skill.
+    ///
+    /// When `id` resolves to a known spec that ISN'T queued (and has no
+    /// queued children), the error is status-aware (TASK-217): the recovery
+    /// hint depends on the spec's current status — Done → `aida queue
+    /// rework`; Planned → promote to Approved first; Completed/Rejected →
+    /// re-open with `--force`. trace:STORY-42, TASK-217 | ai:claude
     Work {
         /// Queued requirement ID (UUID, SPEC-ID, or agreed-id) for item
         /// pickup, OR an EPIC/STORY id with queued children for cluster

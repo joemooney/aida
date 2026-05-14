@@ -42,6 +42,7 @@ dependencies = [
  "dirs",
  "hostname",
  "inquire",
+ "libc",
  "prost",
  "regex",
  "rusqlite",

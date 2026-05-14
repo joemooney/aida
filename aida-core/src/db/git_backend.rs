@@ -422,11 +422,24 @@ impl DatabaseBackend for GitBackend {
 
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
         let spec_id = object_store::canonical_spec_id(spec_id);
-        // Try direct lookup by spec_id (file name)
-        if let Ok(req) = object_store::read_object(&self.objects_root, &spec_id) {
+        // BUG-97: distinguish "file doesn't exist" (legitimate not-found,
+        // fall through to agreed_id scan and ultimately Ok(None)) from
+        // "file exists but failed to parse" (propagate the parse error so
+        // the caller surfaces the real cause instead of a misleading
+        // "Requirement not found"). Without this split, both cases ended
+        // up at the agreed_id scan, then Ok(None), then the caller's
+        // "Requirement not found" hint — sending the user down a
+        // wrong-spec-id investigation when the YAML was actually fine,
+        // just incompatible with the binary's enums.
+        // trace:BUG-97 | ai:claude
+        if object_store::object_exists(&self.objects_root, &spec_id)? {
+            // File exists; any error from read_object now is a parse
+            // failure worth propagating (with the file path + serde
+            // detail already attached by read_object's `with_context`).
+            let req = object_store::read_object(&self.objects_root, &spec_id)?;
             return Ok(Some(req));
         }
-        // Fall back to scanning for agreed_id match
+        // File doesn't exist by spec_id — try agreed_id scan.
         let files = object_store::list_objects(&self.objects_root)?;
         for (_name, path) in &files {
             if let Ok(req) = object_store::read_object_from_path(path) {
