@@ -12026,7 +12026,11 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
             // info when something interesting (gh missing, lookup failed)
             // would help the user notice.
             if !reason.is_empty() && !reason.contains("no open PR") {
-                eprintln!("  {} {}", "(ci-probe:".dimmed(), format!("{})", reason).dimmed());
+                eprintln!(
+                    "  {} {}",
+                    "(ci-probe:".dimmed(),
+                    format!("{})", reason).dimmed()
+                );
             }
             CiAction::Proceed
         }
@@ -12149,10 +12153,7 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
         Some(v) => v,
         None => return CiProbe::NoSignal("gh returned empty array".to_string()),
     };
-    let pr_number = pr
-        .get("number")
-        .and_then(|n| n.as_u64())
-        .map(|n| n as u32);
+    let pr_number = pr.get("number").and_then(|n| n.as_u64()).map(|n| n as u32);
     let pr_number = match pr_number {
         Some(n) => n,
         None => return CiProbe::NoSignal("gh json missing PR number".to_string()),
@@ -20196,7 +20197,11 @@ fn pick_dev_binary_dir(
                         debug.display()
                     );
                 }
-                Ok((repo.join("target/debug"), "debug", BinarySelectionReason::Explicit))
+                Ok((
+                    repo.join("target/debug"),
+                    "debug",
+                    BinarySelectionReason::Explicit,
+                ))
             }
             "release" => {
                 if release_mtime.is_none() {
@@ -20205,15 +20210,25 @@ fn pick_dev_binary_dir(
                         release.display()
                     );
                 }
-                Ok((repo.join("target/release"), "release", BinarySelectionReason::Explicit))
+                Ok((
+                    repo.join("target/release"),
+                    "release",
+                    BinarySelectionReason::Explicit,
+                ))
             }
             other => anyhow::bail!("unknown profile '{}': expected debug or release", other),
         };
     }
 
     let head_sha = current_branch_head_sha(repo);
-    let release_sha = release_mtime.is_some().then(|| binary_embedded_sha(&release)).flatten();
-    let debug_sha = debug_mtime.is_some().then(|| binary_embedded_sha(&debug)).flatten();
+    let release_sha = release_mtime
+        .is_some()
+        .then(|| binary_embedded_sha(&release))
+        .flatten();
+    let debug_sha = debug_mtime
+        .is_some()
+        .then(|| binary_embedded_sha(&debug))
+        .flatten();
 
     // Classify each candidate against current HEAD.
     let release_match = head_sha
@@ -20314,7 +20329,11 @@ pub(crate) fn current_branch_head_sha(repo: &std::path::Path) -> Option<String> 
         return None;
     }
     let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 /// TASK-221: extract the SHA embedded by build.rs from a binary's
@@ -20456,9 +20475,7 @@ fn handle_dev_activate(
             bin_sha.as_deref().unwrap_or("?"),
             head.as_deref().unwrap_or("?"),
         );
-        eprintln!(
-            "  Recommended: `cargo build --release` (or `cargo build`) to refresh.",
-        );
+        eprintln!("  Recommended: `cargo build --release` (or `cargo build`) to refresh.",);
     }
 
     // Quote-safety: paths shouldn't contain double-quotes in practice;
@@ -20628,7 +20645,10 @@ fn handle_dev_status() -> Result<()> {
                     };
                     let bin_short = b.get(..b.len().min(8)).unwrap_or(b);
                     let head_short = h.get(..h.len().min(8)).unwrap_or(h);
-                    println!("Binary SHA:   {} → HEAD {}  [{}]", bin_short, head_short, label);
+                    println!(
+                        "Binary SHA:   {} → HEAD {}  [{}]",
+                        bin_short, head_short, label
+                    );
                     if matches!(kind, ShaMatch::Unrelated) {
                         println!(
                             "      {}: rebuild with `cargo build --release` (or `cargo build`)",
@@ -23045,7 +23065,11 @@ mod queue_work_tests {
 
     #[test]
     fn not_queued_approved_suggests_add_and_work() {
-        let r = make_req_status("STORY-86", RequirementType::Story, RequirementStatus::Approved);
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Approved,
+        );
         let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
         assert!(msg.contains("isn't queued"), "msg: {msg}");
         assert!(msg.contains("Approved"), "msg: {msg}");
@@ -23058,7 +23082,11 @@ mod queue_work_tests {
 
     #[test]
     fn not_queued_planned_suggests_promote_to_approved() {
-        let r = make_req_status("STORY-86", RequirementType::Story, RequirementStatus::Planned);
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Planned,
+        );
         let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
         assert!(msg.contains("Planned"), "msg: {msg}");
         assert!(
@@ -23141,7 +23169,11 @@ mod queue_work_tests {
 
     #[test]
     fn not_queued_falls_back_when_role_unknown() {
-        let r = make_req_status("STORY-86", RequirementType::Story, RequirementStatus::Approved);
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Approved,
+        );
         let msg = format_queue_work_not_queued_error("STORY-86", &r, None);
         assert!(msg.contains("--for <role>"), "msg: {msg}");
     }
@@ -23513,7 +23545,10 @@ mod ci_action_tests {
         ]}]"#;
         match parse_ci_probe(json) {
             CiProbe::Red { failed_summary, .. } => {
-                assert!(failed_summary.contains("and 2 more"), "summary: {failed_summary}");
+                assert!(
+                    failed_summary.contains("and 2 more"),
+                    "summary: {failed_summary}"
+                );
             }
             other => panic!("expected Red, got {:?}", other),
         }
@@ -30061,188 +30096,346 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let skip_regular_render = *in_flight_only || pending_empty;
 
             if !skip_regular_render {
-
-            let total = entries.len() + global_entries.len();
-            let title = if only_unrouted {
-                format!(
-                    "My Queue · unrouted ({} item{})",
-                    total,
-                    if total == 1 { "" } else { "s" }
-                )
-            } else {
-                match &role_filter {
-                    Some(r) => format!(
-                        "My Queue · role:{} ({} item{})",
-                        r,
+                let total = entries.len() + global_entries.len();
+                let title = if only_unrouted {
+                    format!(
+                        "My Queue · unrouted ({} item{})",
                         total,
                         if total == 1 { "" } else { "s" }
-                    ),
-                    None => format!(
-                        "My Queue ({} item{})",
-                        total,
-                        if total == 1 { "" } else { "s" }
-                    ),
-                }
-            };
-            println!("{}", title.bold());
-            println!("{}", "─".repeat(80));
-
-            // Local-project name for tagging local entries when global is also
-            // shown (so the user can tell at a glance which is which).
-            let local_project_name =
-                global_queue::project_name_for(storage.path().parent().unwrap_or(storage.path()));
-
-            // TASK-33: --tree groups local entries by their derived parent
-            // EPIC so a multi-cluster queue reads as discrete sub-batches
-            // instead of one long interleaved list. Globals stay flat
-            // after — we don't have foreign stores loaded to derive their
-            // parents. trace:TASK-33 | ai:claude
-            if *tree {
-                use std::collections::BTreeMap;
-                let mut groups: BTreeMap<String, Vec<&aida_core::QueueEntry>> = BTreeMap::new();
-                let unscoped_key = "~unscoped".to_string();
-                for entry in &entries {
-                    let Some(req) = store
-                        .requirements
-                        .iter()
-                        .find(|r| r.id == entry.requirement_id)
-                    else {
-                        groups.entry(unscoped_key.clone()).or_default().push(entry);
-                        continue;
-                    };
-                    let key = entry
-                        .for_scope
-                        .clone()
-                        .or_else(|| derive_parent_epic_label(req, &store))
-                        .unwrap_or_else(|| unscoped_key.clone());
-                    groups.entry(key).or_default().push(entry);
-                }
-                // Sort groups: real EPICs by count desc then name; unscoped last.
-                let mut ordered: Vec<(String, Vec<&aida_core::QueueEntry>)> =
-                    groups.into_iter().collect();
-                ordered.sort_by(|a, b| {
-                    let a_unscoped = a.0 == unscoped_key;
-                    let b_unscoped = b.0 == unscoped_key;
-                    match (a_unscoped, b_unscoped) {
-                        (true, false) => std::cmp::Ordering::Greater,
-                        (false, true) => std::cmp::Ordering::Less,
-                        _ => b.1.len().cmp(&a.1.len()).then_with(|| a.0.cmp(&b.0)),
+                    )
+                } else {
+                    match &role_filter {
+                        Some(r) => format!(
+                            "My Queue · role:{} ({} item{})",
+                            r,
+                            total,
+                            if total == 1 { "" } else { "s" }
+                        ),
+                        None => format!(
+                            "My Queue ({} item{})",
+                            total,
+                            if total == 1 { "" } else { "s" }
+                        ),
                     }
-                });
+                };
+                println!("{}", title.bold());
+                println!("{}", "─".repeat(80));
 
-                let render_entry_inline =
-                    |entry: &aida_core::QueueEntry, is_last: bool, id_col_width: usize| {
-                        let req = store
+                // Local-project name for tagging local entries when global is also
+                // shown (so the user can tell at a glance which is which).
+                let local_project_name = global_queue::project_name_for(
+                    storage.path().parent().unwrap_or(storage.path()),
+                );
+
+                // TASK-33: --tree groups local entries by their derived parent
+                // EPIC so a multi-cluster queue reads as discrete sub-batches
+                // instead of one long interleaved list. Globals stay flat
+                // after — we don't have foreign stores loaded to derive their
+                // parents. trace:TASK-33 | ai:claude
+                if *tree {
+                    use std::collections::BTreeMap;
+                    let mut groups: BTreeMap<String, Vec<&aida_core::QueueEntry>> = BTreeMap::new();
+                    let unscoped_key = "~unscoped".to_string();
+                    for entry in &entries {
+                        let Some(req) = store
                             .requirements
                             .iter()
-                            .find(|r| r.id == entry.requirement_id);
-                        let display_id = req
-                            .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
-                            .unwrap_or("???");
-                        let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
-                        // TASK-91: PR-N (STORY-NNN) for auto-queued review
-                        // stories. trace:TASK-91 | ai:claude
-                        let (display_id_owned, title_owned) =
-                            format_review_story_display(display_id, title)
-                                .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
-                        let status = req
-                            .map(|r| format!("{}", r.status))
-                            .unwrap_or_else(|| "Unknown".to_string());
-                        let status_colored = match status.as_str() {
-                            "Draft" => status.dimmed(),
-                            "Approved" => status.blue(),
-                            "Planned" => status.cyan(),
-                            "In Progress" => status.yellow(),
-                            // trace:STORY-86 | ai:claude — bold bright-green
-                            // distinguishes "done on branch" from
-                            // "merged to main" (plain green).
-                            "Done" => status.bright_green().bold(),
-                            "Completed" => status.green(),
-                            "Rejected" => status.red(),
-                            _ => status.normal(),
+                            .find(|r| r.id == entry.requirement_id)
+                        else {
+                            groups.entry(unscoped_key.clone()).or_default().push(entry);
+                            continue;
                         };
-                        let glyph = if is_last { "└─" } else { "├─" };
-                        let pad = " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
-                        println!(
-                            "  {} {}{}  {}  [{}]",
-                            glyph.dimmed(),
-                            display_id_owned.bold(),
-                            pad,
-                            title_owned,
-                            status_colored,
-                        );
-                    };
+                        let key = entry
+                            .for_scope
+                            .clone()
+                            .or_else(|| derive_parent_epic_label(req, &store))
+                            .unwrap_or_else(|| unscoped_key.clone());
+                        groups.entry(key).or_default().push(entry);
+                    }
+                    // Sort groups: real EPICs by count desc then name; unscoped last.
+                    let mut ordered: Vec<(String, Vec<&aida_core::QueueEntry>)> =
+                        groups.into_iter().collect();
+                    ordered.sort_by(|a, b| {
+                        let a_unscoped = a.0 == unscoped_key;
+                        let b_unscoped = b.0 == unscoped_key;
+                        match (a_unscoped, b_unscoped) {
+                            (true, false) => std::cmp::Ordering::Greater,
+                            (false, true) => std::cmp::Ordering::Less,
+                            _ => b.1.len().cmp(&a.1.len()).then_with(|| a.0.cmp(&b.0)),
+                        }
+                    });
 
-                for (key, group) in &ordered {
-                    let header = if key == &unscoped_key {
-                        "Unscoped".to_string()
-                    } else {
-                        key.clone()
-                    };
-                    println!();
-                    println!(
-                        "{} ({} item{})",
-                        header.cyan().bold(),
-                        group.len(),
-                        if group.len() == 1 { "" } else { "s" }
-                    );
-                    // TASK-91: width must account for the PR-N (STORY-NNN)
-                    // expansion so the column lines up after the transform.
-                    // trace:TASK-91 | ai:claude
-                    let id_col_width = group
-                        .iter()
-                        .map(|e| {
-                            let req = store.requirements.iter().find(|r| r.id == e.requirement_id);
-                            let raw_id = req
+                    let render_entry_inline =
+                        |entry: &aida_core::QueueEntry, is_last: bool, id_col_width: usize| {
+                            let req = store
+                                .requirements
+                                .iter()
+                                .find(|r| r.id == entry.requirement_id);
+                            let display_id = req
                                 .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
                                 .unwrap_or("???");
-                            let raw_title = req.map(|r| r.title.as_str()).unwrap_or("");
-                            match format_review_story_display(raw_id, raw_title) {
-                                Some((expanded, _)) => expanded.len(),
-                                None => raw_id.len(),
-                            }
-                        })
-                        .max()
-                        .unwrap_or(0);
-                    for (i, entry) in group.iter().enumerate() {
-                        let is_last = i + 1 == group.len();
-                        render_entry_inline(entry, is_last, id_col_width);
-                    }
-                }
-
-                if !global_entries.is_empty() {
-                    println!();
-                    println!(
-                        "{} ({} item{})",
-                        "Global queue".cyan().bold(),
-                        global_entries.len(),
-                        if global_entries.len() == 1 { "" } else { "s" }
-                    );
-                    for (i, entry) in global_entries.iter().enumerate() {
-                        let glyph = if i + 1 == global_entries.len() {
-                            "└─"
-                        } else {
-                            "├─"
+                            let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                            // TASK-91: PR-N (STORY-NNN) for auto-queued review
+                            // stories. trace:TASK-91 | ai:claude
+                            let (display_id_owned, title_owned) =
+                                format_review_story_display(display_id, title)
+                                    .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
+                            let status = req
+                                .map(|r| format!("{}", r.status))
+                                .unwrap_or_else(|| "Unknown".to_string());
+                            let status_colored = match status.as_str() {
+                                "Draft" => status.dimmed(),
+                                "Approved" => status.blue(),
+                                "Planned" => status.cyan(),
+                                "In Progress" => status.yellow(),
+                                // trace:STORY-86 | ai:claude — bold bright-green
+                                // distinguishes "done on branch" from
+                                // "merged to main" (plain green).
+                                "Done" => status.bright_green().bold(),
+                                "Completed" => status.green(),
+                                "Rejected" => status.red(),
+                                _ => status.normal(),
+                            };
+                            let glyph = if is_last { "└─" } else { "├─" };
+                            let pad =
+                                " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
+                            println!(
+                                "  {} {}{}  {}  [{}]",
+                                glyph.dimmed(),
+                                display_id_owned.bold(),
+                                pad,
+                                title_owned,
+                                status_colored,
+                            );
                         };
-                        // BUG-83: prefer cached agreed_id over spec_id to
-                        // stay consistent with `aida list` / local queue
-                        // after `aida db merge-gate`. trace:BUG-83 | ai:claude
-                        let display_id = entry
-                            .agreed_id
-                            .as_deref()
-                            .or(entry.spec_id.as_deref())
-                            .unwrap_or("???");
-                        let title = entry.title.as_deref().unwrap_or("(no cached title)");
+
+                    for (key, group) in &ordered {
+                        let header = if key == &unscoped_key {
+                            "Unscoped".to_string()
+                        } else {
+                            key.clone()
+                        };
+                        println!();
                         println!(
-                            "  {} {}  {}  {}",
-                            glyph.dimmed(),
-                            display_id.bold(),
-                            title,
-                            format!("[origin:{}]", entry.project_name).dimmed(),
+                            "{} ({} item{})",
+                            header.cyan().bold(),
+                            group.len(),
+                            if group.len() == 1 { "" } else { "s" }
+                        );
+                        // TASK-91: width must account for the PR-N (STORY-NNN)
+                        // expansion so the column lines up after the transform.
+                        // trace:TASK-91 | ai:claude
+                        let id_col_width = group
+                            .iter()
+                            .map(|e| {
+                                let req =
+                                    store.requirements.iter().find(|r| r.id == e.requirement_id);
+                                let raw_id = req
+                                    .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
+                                    .unwrap_or("???");
+                                let raw_title = req.map(|r| r.title.as_str()).unwrap_or("");
+                                match format_review_story_display(raw_id, raw_title) {
+                                    Some((expanded, _)) => expanded.len(),
+                                    None => raw_id.len(),
+                                }
+                            })
+                            .max()
+                            .unwrap_or(0);
+                        for (i, entry) in group.iter().enumerate() {
+                            let is_last = i + 1 == group.len();
+                            render_entry_inline(entry, is_last, id_col_width);
+                        }
+                    }
+
+                    if !global_entries.is_empty() {
+                        println!();
+                        println!(
+                            "{} ({} item{})",
+                            "Global queue".cyan().bold(),
+                            global_entries.len(),
+                            if global_entries.len() == 1 { "" } else { "s" }
+                        );
+                        for (i, entry) in global_entries.iter().enumerate() {
+                            let glyph = if i + 1 == global_entries.len() {
+                                "└─"
+                            } else {
+                                "├─"
+                            };
+                            // BUG-83: prefer cached agreed_id over spec_id to
+                            // stay consistent with `aida list` / local queue
+                            // after `aida db merge-gate`. trace:BUG-83 | ai:claude
+                            let display_id = entry
+                                .agreed_id
+                                .as_deref()
+                                .or(entry.spec_id.as_deref())
+                                .unwrap_or("???");
+                            let title = entry.title.as_deref().unwrap_or("(no cached title)");
+                            println!(
+                                "  {} {}  {}  {}",
+                                glyph.dimmed(),
+                                display_id.bold(),
+                                title,
+                                format!("[origin:{}]", entry.project_name).dimmed(),
+                            );
+                        }
+                    }
+
+                    if hidden_terminal_count > 0 {
+                        println!();
+                        println!(
+                            "{} ({} pass --include-terminal to show)",
+                            format!(
+                                "{} terminal-status entr{} hidden",
+                                hidden_terminal_count,
+                                if hidden_terminal_count == 1 {
+                                    "y"
+                                } else {
+                                    "ies"
+                                }
+                            )
+                            .dimmed(),
+                            "Completed/Rejected;".dimmed()
                         );
                     }
+                    return Ok(());
                 }
 
+                for (i, entry) in entries.iter().enumerate() {
+                    let req = store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == entry.requirement_id);
+                    // BUG-81: prefer agreed_id (short form) when assigned;
+                    // fall back to spec_id. Mirrors `aida list` / `aida show` /
+                    // `aida search` so the queue stops drifting after
+                    // `aida db merge-gate`. trace:BUG-81 | ai:claude
+                    let display_id = req
+                        .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
+                        .unwrap_or("???");
+                    let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                    // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
+                    // trace:TASK-91 | ai:claude
+                    let (display_id_owned, title_owned) =
+                        format_review_story_display(display_id, title)
+                            .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
+                    let status = req
+                        .map(|r| format!("{}", r.status))
+                        .unwrap_or_else(|| "Unknown".to_string());
+
+                    let status_colored = match status.as_str() {
+                        "Draft" => status.dimmed(),
+                        "Approved" => status.blue(),
+                        "Planned" => status.cyan(),
+                        "In Progress" => status.yellow(),
+                        // trace:STORY-86 | ai:claude
+                        "Done" => status.bright_green().bold(),
+                        "Completed" => status.green(),
+                        "Rejected" => status.red(),
+                        _ => status.normal(),
+                    };
+
+                    print!(
+                        "  {}. {} {}",
+                        (i + 1).to_string().dimmed(),
+                        display_id_owned.bold(),
+                        title_owned
+                    );
+                    print!("  [{}]", status_colored);
+                    if entry.added_by != user_id {
+                        print!("  {}", format!("(from @{})", entry.added_by).dimmed());
+                    }
+                    // STORY-57: inline routing tags. Show for: only when the
+                    // user isn't already filtering on a specific role (avoids
+                    // repeating "for:implementer" on every line in the
+                    // role-filtered view). Always show scope/session — those
+                    // are session-axis filters that don't get hoisted into
+                    // the title bar.
+                    if role_filter.is_none() {
+                        if let Some(ref r) = entry.for_role {
+                            print!("  {}", format!("[for:{}]", r).cyan());
+                        }
+                    }
+                    if let Some(ref s) = entry.for_scope {
+                        print!("  {}", format!("[@{}]", s).cyan());
+                    } else if let Some(req) = req {
+                        // TASK-44: auto-derive the parent-EPIC chip when
+                        // no explicit `--scope` was set. Dimmed + `*`
+                        // suffix to distinguish from explicit routing.
+                        // trace:TASK-44 | ai:claude
+                        if let Some(epic) = derive_parent_epic_label(req, &store) {
+                            print!("  {}", format!("[@{}*]", epic).dimmed());
+                        }
+                    }
+                    if let Some(ref s) = entry.for_session {
+                        let short = &s[..s.len().min(8)];
+                        print!("  {}", format!("[session:{}]", short).cyan());
+                    }
+                    // STORY-98: if another session's manifest plans this spec,
+                    // surface a `[planned:by-<short>]` chip so concurrent
+                    // sessions can see the soft claim. The viewer's own
+                    // session is skipped (the chip would be redundant — the
+                    // user already knows what their own /aida-pickup queued).
+                    // trace:STORY-98 | ai:claude
+                    if let Some(req) = req {
+                        if let Some(spec_id) = req.spec_id.as_deref() {
+                            if let Some(other) = session_manifest::planned_by_other(
+                                &all_manifests,
+                                spec_id,
+                                &viewer_session_id,
+                            ) {
+                                let short = &other[..other.len().min(8)];
+                                print!("  {}", format!("[planned:by-{}]", short).magenta());
+                            }
+                        }
+                    }
+                    // When the global queue is also being shown, tag local entries
+                    // with their origin so the merge view is unambiguous.
+                    if !global_entries.is_empty() {
+                        print!("  {}", format!("[origin:{}]", local_project_name).dimmed());
+                    }
+                    if let Some(ref note) = entry.note {
+                        print!("  {}", format!("\"{}\"", note).dimmed().italic());
+                    }
+                    println!();
+                }
+
+                // Global entries follow the locals, numbered continuously.
+                // We can't apply scope_tags / scope_status filters since we don't
+                // have the foreign requirement loaded — surface them all and rely
+                // on the cached spec_id/title in the entry. trace:FR-1-012
+                for (idx, entry) in global_entries.iter().enumerate() {
+                    let i = entries.len() + idx;
+                    // BUG-83: prefer cached agreed_id; falls back to spec_id.
+                    // trace:BUG-83 | ai:claude
+                    let display_id = entry
+                        .agreed_id
+                        .as_deref()
+                        .or(entry.spec_id.as_deref())
+                        .unwrap_or("???");
+                    let title = entry.title.as_deref().unwrap_or("(no cached title)");
+
+                    print!(
+                        "  {}. {} {}",
+                        (i + 1).to_string().dimmed(),
+                        display_id.bold(),
+                        title
+                    );
+                    if entry.added_by != user_id {
+                        print!("  {}", format!("(from @{})", entry.added_by).dimmed());
+                    }
+                    if role_filter.is_none() {
+                        print!("  {}", format!("[for:{}]", entry.for_role).cyan());
+                    }
+                    print!("  {}", format!("[origin:{}]", entry.project_name).dimmed());
+                    if let Some(ref note) = entry.note {
+                        print!("  {}", format!("\"{}\"", note).dimmed().italic());
+                    }
+                    println!();
+                }
+                // TASK-46: footer hint when the default filter hid some
+                // terminal-status entries. Stays silent when nothing was
+                // hidden so it doesn't add noise to the common case.
+                // trace:TASK-46 | ai:claude
                 if hidden_terminal_count > 0 {
                     println!();
                     println!(
@@ -30260,163 +30453,6 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         "Completed/Rejected;".dimmed()
                     );
                 }
-                return Ok(());
-            }
-
-            for (i, entry) in entries.iter().enumerate() {
-                let req = store
-                    .requirements
-                    .iter()
-                    .find(|r| r.id == entry.requirement_id);
-                // BUG-81: prefer agreed_id (short form) when assigned;
-                // fall back to spec_id. Mirrors `aida list` / `aida show` /
-                // `aida search` so the queue stops drifting after
-                // `aida db merge-gate`. trace:BUG-81 | ai:claude
-                let display_id = req
-                    .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
-                    .unwrap_or("???");
-                let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
-                // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
-                // trace:TASK-91 | ai:claude
-                let (display_id_owned, title_owned) =
-                    format_review_story_display(display_id, title)
-                        .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
-                let status = req
-                    .map(|r| format!("{}", r.status))
-                    .unwrap_or_else(|| "Unknown".to_string());
-
-                let status_colored = match status.as_str() {
-                    "Draft" => status.dimmed(),
-                    "Approved" => status.blue(),
-                    "Planned" => status.cyan(),
-                    "In Progress" => status.yellow(),
-                    // trace:STORY-86 | ai:claude
-                    "Done" => status.bright_green().bold(),
-                    "Completed" => status.green(),
-                    "Rejected" => status.red(),
-                    _ => status.normal(),
-                };
-
-                print!(
-                    "  {}. {} {}",
-                    (i + 1).to_string().dimmed(),
-                    display_id_owned.bold(),
-                    title_owned
-                );
-                print!("  [{}]", status_colored);
-                if entry.added_by != user_id {
-                    print!("  {}", format!("(from @{})", entry.added_by).dimmed());
-                }
-                // STORY-57: inline routing tags. Show for: only when the
-                // user isn't already filtering on a specific role (avoids
-                // repeating "for:implementer" on every line in the
-                // role-filtered view). Always show scope/session — those
-                // are session-axis filters that don't get hoisted into
-                // the title bar.
-                if role_filter.is_none() {
-                    if let Some(ref r) = entry.for_role {
-                        print!("  {}", format!("[for:{}]", r).cyan());
-                    }
-                }
-                if let Some(ref s) = entry.for_scope {
-                    print!("  {}", format!("[@{}]", s).cyan());
-                } else if let Some(req) = req {
-                    // TASK-44: auto-derive the parent-EPIC chip when
-                    // no explicit `--scope` was set. Dimmed + `*`
-                    // suffix to distinguish from explicit routing.
-                    // trace:TASK-44 | ai:claude
-                    if let Some(epic) = derive_parent_epic_label(req, &store) {
-                        print!("  {}", format!("[@{}*]", epic).dimmed());
-                    }
-                }
-                if let Some(ref s) = entry.for_session {
-                    let short = &s[..s.len().min(8)];
-                    print!("  {}", format!("[session:{}]", short).cyan());
-                }
-                // STORY-98: if another session's manifest plans this spec,
-                // surface a `[planned:by-<short>]` chip so concurrent
-                // sessions can see the soft claim. The viewer's own
-                // session is skipped (the chip would be redundant — the
-                // user already knows what their own /aida-pickup queued).
-                // trace:STORY-98 | ai:claude
-                if let Some(req) = req {
-                    if let Some(spec_id) = req.spec_id.as_deref() {
-                        if let Some(other) = session_manifest::planned_by_other(
-                            &all_manifests,
-                            spec_id,
-                            &viewer_session_id,
-                        ) {
-                            let short = &other[..other.len().min(8)];
-                            print!("  {}", format!("[planned:by-{}]", short).magenta());
-                        }
-                    }
-                }
-                // When the global queue is also being shown, tag local entries
-                // with their origin so the merge view is unambiguous.
-                if !global_entries.is_empty() {
-                    print!("  {}", format!("[origin:{}]", local_project_name).dimmed());
-                }
-                if let Some(ref note) = entry.note {
-                    print!("  {}", format!("\"{}\"", note).dimmed().italic());
-                }
-                println!();
-            }
-
-            // Global entries follow the locals, numbered continuously.
-            // We can't apply scope_tags / scope_status filters since we don't
-            // have the foreign requirement loaded — surface them all and rely
-            // on the cached spec_id/title in the entry. trace:FR-1-012
-            for (idx, entry) in global_entries.iter().enumerate() {
-                let i = entries.len() + idx;
-                // BUG-83: prefer cached agreed_id; falls back to spec_id.
-                // trace:BUG-83 | ai:claude
-                let display_id = entry
-                    .agreed_id
-                    .as_deref()
-                    .or(entry.spec_id.as_deref())
-                    .unwrap_or("???");
-                let title = entry.title.as_deref().unwrap_or("(no cached title)");
-
-                print!(
-                    "  {}. {} {}",
-                    (i + 1).to_string().dimmed(),
-                    display_id.bold(),
-                    title
-                );
-                if entry.added_by != user_id {
-                    print!("  {}", format!("(from @{})", entry.added_by).dimmed());
-                }
-                if role_filter.is_none() {
-                    print!("  {}", format!("[for:{}]", entry.for_role).cyan());
-                }
-                print!("  {}", format!("[origin:{}]", entry.project_name).dimmed());
-                if let Some(ref note) = entry.note {
-                    print!("  {}", format!("\"{}\"", note).dimmed().italic());
-                }
-                println!();
-            }
-            // TASK-46: footer hint when the default filter hid some
-            // terminal-status entries. Stays silent when nothing was
-            // hidden so it doesn't add noise to the common case.
-            // trace:TASK-46 | ai:claude
-            if hidden_terminal_count > 0 {
-                println!();
-                println!(
-                    "{} ({} pass --include-terminal to show)",
-                    format!(
-                        "{} terminal-status entr{} hidden",
-                        hidden_terminal_count,
-                        if hidden_terminal_count == 1 {
-                            "y"
-                        } else {
-                            "ies"
-                        }
-                    )
-                    .dimmed(),
-                    "Completed/Rejected;".dimmed()
-                );
-            }
-
             } // end of `if !skip_regular_render { ... }` — trace:TASK-222
 
             // TASK-222: in-flight section. Done specs are work-in-flight
@@ -32468,7 +32504,8 @@ fn handle_queue_work(
                 // --steal is a recovery path for stuck leases; skip the
                 // CI probe so we don't ask the user to wait on CI for a
                 // session they're actively stealing. trace:TASK-111
-                /* skip_ci */ true,
+                /* skip_ci */
+                true,
             )
             .with_context(|| {
                 format!(

@@ -270,7 +270,9 @@ pub fn parse_failure_hint(path: Option<&Path>) -> String {
         "  Likely cause: binary version mismatch — the file may have been written by a newer\n  \
                 aida than the one reading it (a new enum variant, a renamed field, etc.).\n",
     );
-    hint.push_str("  Check:     `aida --version`  (and compare to the worktree that wrote the file)\n");
+    hint.push_str(
+        "  Check:     `aida --version`  (and compare to the worktree that wrote the file)\n",
+    );
     hint.push_str("  Recovery:  rebuild aida from a branch with the missing variant, then\n");
     hint.push_str("             `aida cache rebuild` to refresh the read projection.\n");
     hint.push_str("             `aida dev activate` (TASK-221) prefers a SHA-matching binary —\n");
