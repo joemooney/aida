@@ -1,0 +1,44 @@
+id: 019e26ed-7da4-7eb2-b844-bc5763eb88d8
+spec_id: BUG-100
+agreed_id: BUG-100
+title: parse_since_arg/parse_days_arg panic on multi-byte unicode unit char
+description: |-
+  Both parse_since_arg (aida-cli/src/main.rs:31604) and parse_days_arg (aida-cli/src/main.rs:21520) peel off the trailing unit byte via:
+
+      trimmed.split_at(trimmed.len().saturating_sub(1))
+
+  split_at panics if the byte index is not on a UTF-8 char boundary. So inputs whose trailing character is multi-byte (e.g. `--since 2日`, `--since 3秒`) panic the process instead of returning a clean error.
+
+  ## Repro
+
+      aida queue progress --since '2日'
+      aida usage --since '3秒'
+
+  ## Fix
+
+  Use char-boundary-safe peeling:
+
+      let last_char = trimmed.chars().last().ok_or_else(|| anyhow!("empty"))?;
+      let num_str = trimmed.strip_suffix(last_char).unwrap_or(trimmed);
+
+  Or, equivalently, walk char_indices().last() to get the right byte boundary.
+
+  ## Discovered
+
+  PR-26 reviewer adversarial deep-pass (STORY-109 Probe 2 — format-spec edge cases). Severity is low: the input is clearly garbage and shouldn't be entered in normal use. But a panic on user-facing CLI args is worse than a clean bail.
+
+  trace:STORY-122 trace:TASK-232 | ai:claude
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T14:39:18.948594093Z
+modified_at: 2026-05-14T14:39:18.948594093Z
+req_type: Bug
+tags:
+- follow-up:pr-26
+- papercut
+- queue-progress
+- telemetry
+- unicode
+- usage
