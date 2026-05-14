@@ -1,0 +1,67 @@
+id: 019e2529-361c-73a1-8964-1efa29a1c592
+spec_id: TASK-231
+agreed_id: TASK-231
+title: 'docs/session-lifecycle.md: add 5-pattern workflow taxonomy table (cold-resume / ping-pong / pipelined / cluster / head-pickup)'
+description: |-
+  Capture the workflow-pattern taxonomy that emerged from 2026-05-13's session-lifecycle work. Today the patterns are documented across multiple sibling TASKs; the comparison view doesn't exist in any single doc surface, leaving future agents to re-derive it.
+
+  ## Proposed table
+
+  Add a new section in docs/session-lifecycle.md near 'Why roles don't share Claude sessions' — same intellectual neighborhood (workflow-shape design).
+
+  The 5 patterns:
+
+  1. Cold-resume — implementer ends session, claude conversation persists on disk, resumed later via aida queue work --resume. Best for LONG cycles (days between implementer and reviewer). Backed by TASK-112.
+
+  2. Ping-pong block — implementer session stays alive, blocks waiting for reviewer verdict, resumes in same context when verdict arrives. Best for TIGHT cycles (minutes to hours). Backed by STORY-121.
+
+  3. Pipelined ping-pong — while blocked on PR-N, optionally pick up next queue item in secondary worktree. Doubles throughput. Best for SATURATED implementer. Backed by TASK-230.
+
+  4. Cluster-mode drain — one PR per cluster (multiple items, one session, one branch). Best for TIGHTLY-COUPLED item batches. Backed by STORY-42 (shipped) and extended by TASK-229.
+
+  5. Head-pickup loop — one PR per item, one session per item, one branch per item. Best for LOOSELY-COUPLED item batches. Today's default.
+
+  ## Comparison axes
+
+  The taxonomy table compares the patterns along:
+  - Context preservation cost
+  - Failure isolation
+  - Reviewer parallelism
+  - Resource consumption
+  - Best-fit use case
+
+  Plus a decision-tree section: 'Which pattern should I pick?' with concrete signals (cycle time, coupling tightness, throughput need).
+
+  ## Composes with
+
+  - TASK-112, STORY-121, TASK-230, STORY-42, TASK-229: all referenced in the table
+  - docs/session-lifecycle.md existing 'Role-pure sessions' section: same theme
+  - Future TUI vision (mentioned in session-lifecycle.md): the TUI's home view would naturally surface 'which pattern is active in each session'
+
+  ## Why low priority
+
+  The patterns themselves are filed and discoverable via aida search 'session' / 'workflow'. The doc gap is just the comparison view — present but harder to find than a single section in the lifecycle doc would make it. Quality-of-life, not blocking.
+
+  ## Acceptance
+
+  - [ ] docs/session-lifecycle.md gains a new section: 'Workflow patterns: which to pick'
+  - [ ] 5-pattern table with 5 columns (Pattern, When, Backed by TASK, Trade-off summary, Failure mode)
+  - [ ] Decision-tree section walks the reader through 'cycle time? coupling? throughput needs?'
+  - [ ] Cross-references to the 5 underlying TASKs
+  - [ ] Commit traces this TASK + cross-references TASK-112, STORY-121, TASK-230, STORY-42, TASK-229
+
+  ## Discovered via
+
+  2026-05-13 — during /aida-capture at session end, the user agreed the 5-pattern taxonomy from the ping-pong filing discussion deserves a permanent home in the lifecycle docs. Currently only exists in the chat log.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T06:25:18.364688239Z
+modified_at: 2026-05-14T06:25:18.364688239Z
+req_type: Task
+tags:
+- docs
+- session-lifecycle
+- taxonomy
+- workflow-patterns
