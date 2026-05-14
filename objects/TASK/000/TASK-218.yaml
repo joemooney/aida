@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:03:31.556415989Z
-modified_at: 2026-05-14T05:01:34.995093705Z
+modified_at: 2026-05-14T05:06:22.915387210Z
 req_type: Task
 tags:
 - lifecycle
@@ -99,6 +99,19 @@ comments:
   content: Commit f38a41d4 references this requirement
   created_at: 2026-05-14T05:01:26.128103281Z
   modified_at: 2026-05-14T05:01:26.128103281Z
+- id: 019e24e0-f443-7291-a1a4-32172c662f5e
+  author: joe
+  content: |-
+    Implemented via commit f38a41d4 (PR will revise to URL once `gh pr create` returns):
+
+    - Added `aida queue rework SPEC` subcommand and top-level `aida rework SPEC` alias with 10 flags (`--work`, `--for`, `--status`, `--reason`, `--resume`, `--force`, `--steal`, `--permission-mode`, `--no-pull`, `--user`)
+    - Pure decision helper `rework_smart_target` encodes the 7-case status transition table (Approved/Planned/InProgress/Done/Completed/Rejected/Draft), exhaustively unit-tested
+    - `--reason TEXT` captures an audit-trail comment on the spec via the same `aida comment add` path; `--work` chains `aida queue work` (passing `--permission-mode`/`--no-pull`/`--steal` through); `--resume` errors with a TASK-112 hint until that ships
+    - Updated `/aida-pr`, `/aida-review`, and `docs/session-lifecycle.md` phase 6 to point at the one-verb recovery instead of the manual three-command sequence
+
+    Test status: 298/298 tests green (`cargo test -p aida-cli`)
+  created_at: 2026-05-14T05:06:22.915387210Z
+  modified_at: 2026-05-14T05:06:22.915387210Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T05:01:34.995093705Z
