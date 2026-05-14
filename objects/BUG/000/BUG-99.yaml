@@ -50,7 +50,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T01:36:51.643356042Z
-modified_at: 2026-05-14T06:45:10.550257511Z
+modified_at: 2026-05-14T07:12:21.909573483Z
 req_type: Bug
 tags:
 - panic
@@ -68,6 +68,18 @@ comments:
   content: Commit e923a359 references this requirement
   created_at: 2026-05-14T06:45:05.085467273Z
   modified_at: 2026-05-14T06:45:05.085467273Z
+- id: 019e2554-4b95-74e1-9fdb-9e1a9464a58d
+  author: joe
+  content: |-
+    Implemented via epic-23-5 (commit e923a359):
+
+    - `install_sigpipe_handler()` installs `signal(SIGPIPE, SIG_DFL)` at main() start (Unix only — Windows has no SIGPIPE; no-op there).
+    - Process now terminates with status 141 (128 + SIGPIPE) on broken-pipe write, matching classic Unix tools (sort, awk, jq).
+    - Added `libc = "0.2"` as a Unix-only target dep (single syscall, well-trodden path).
+
+    Test status: smoke-tested with the three repros from the bug — `aida show STORY-86 | head -2`, `aida list | head -1`, `aida search anything | head -1` all exit cleanly with no panic. No unit test — the fix is one syscall whose effect is invisible to in-process asserts; the well-known Rust CLI pattern + smoke verification is the right coverage. 332/332 cargo tests green.
+  created_at: 2026-05-14T07:12:21.909573483Z
+  modified_at: 2026-05-14T07:12:21.909573483Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:45:10.550257511Z
