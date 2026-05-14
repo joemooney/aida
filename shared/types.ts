@@ -1115,3 +1115,20 @@ export type ImproveDescriptionResponse = { improved_description: string, changes
 export type GeneratedChild = { title: string, description: string, type: string, rationale: string, };
 
 export type GenerateChildrenResponse = { suggested_children: Array<GeneratedChild>, };
+
+// Queue entry type (STORY-0369). Manually-maintained: the REST/gRPC
+// queue payload is not derived by aida-generate-types, so this block
+// needs to be re-appended whenever shared/types.ts is regenerated.
+// trace:STORY-0369 STORY-86 | ai:claude
+export type QueueEntry = {
+    requirementId: string;
+    specId: string | null;
+    title: string;
+    status: string;
+    priority: string;
+    reqType: string;
+    position: number;
+    addedBy: string;
+    note: string | null;
+    addedAt: string;
+};

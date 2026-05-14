@@ -37,6 +37,12 @@ export const TYPE_CONFIG: Record<RequirementType, { color: string; bg: string; l
   Sprint:        { color: 'text-pink-300',    bg: 'bg-pink-500/10',    label: 'Sprint' },
   Folder:        { color: 'text-gray-300',    bg: 'bg-gray-500/10',    label: 'Folder' },
   Meta:          { color: 'text-fuchsia-300', bg: 'bg-fuchsia-500/10', label: 'Meta' },
+  Principle:     { color: 'text-sky-300',     bg: 'bg-sky-500/10',     label: 'Principle' },
+  Vision:        { color: 'text-violet-300',  bg: 'bg-violet-500/10',  label: 'Vision' },
+  Constraint:    { color: 'text-rose-300',    bg: 'bg-rose-500/10',    label: 'Constraint' },
+  Decision:      { color: 'text-emerald-300', bg: 'bg-emerald-500/10', label: 'Decision' },
+  Term:          { color: 'text-zinc-300',    bg: 'bg-zinc-500/10',    label: 'Term' },
+  Doc:           { color: 'text-stone-300',   bg: 'bg-stone-500/10',   label: 'Doc' },
 };
 
 export const AVATAR_COLORS = [
