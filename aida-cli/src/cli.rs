@@ -2179,7 +2179,13 @@ pub enum QueueCommand {
     /// With `id` matching a queued entry, that single item is the pickup
     /// target. With `id` resolving to an EPIC/STORY whose children are
     /// queued, drains the cluster — pre-populates the session manifest
-    /// and routes the right skill. trace:STORY-42 | ai:claude
+    /// and routes the right skill.
+    ///
+    /// When `id` resolves to a known spec that ISN'T queued (and has no
+    /// queued children), the error is status-aware (TASK-217): the recovery
+    /// hint depends on the spec's current status — Done → `aida queue
+    /// rework`; Planned → promote to Approved first; Completed/Rejected →
+    /// re-open with `--force`. trace:STORY-42, TASK-217 | ai:claude
     Work {
         /// Queued requirement ID (UUID, SPEC-ID, or agreed-id) for item
         /// pickup, OR an EPIC/STORY id with queued children for cluster

@@ -22425,6 +22425,121 @@ mod queue_work_tests {
         assert!(read_behavior_permission_mode(&tmp).is_none());
         let _ = std::fs::remove_dir_all(&tmp);
     }
+
+    // --- TASK-217: status-aware not-queued error message ---
+
+    fn make_req_status(
+        spec: &str,
+        t: RequirementType,
+        s: RequirementStatus,
+    ) -> aida_core::Requirement {
+        let mut r = req(spec, Some(spec), t);
+        r.status = s;
+        r
+    }
+
+    #[test]
+    fn not_queued_approved_suggests_add_and_work() {
+        let r = make_req_status("STORY-86", RequirementType::Story, RequirementStatus::Approved);
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("isn't queued"), "msg: {msg}");
+        assert!(msg.contains("Approved"), "msg: {msg}");
+        assert!(
+            msg.contains("aida queue add STORY-86 --for implementer"),
+            "msg: {msg}"
+        );
+        assert!(msg.contains("aida queue work STORY-86"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_planned_suggests_promote_to_approved() {
+        let r = make_req_status("STORY-86", RequirementType::Story, RequirementStatus::Planned);
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("Planned"), "msg: {msg}");
+        assert!(
+            msg.contains("aida edit STORY-86 --status approved"),
+            "msg: {msg}"
+        );
+        assert!(msg.contains("aida queue add STORY-86"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_in_progress_warns_lease_lost() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::InProgress,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("In Progress"), "msg: {msg}");
+        assert!(msg.contains("lease may have been lost"), "msg: {msg}");
+        assert!(msg.contains("aida queue list --all"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_done_suggests_rework_verb() {
+        let r = make_req_status("STORY-86", RequirementType::Story, RequirementStatus::Done);
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("Done"), "msg: {msg}");
+        assert!(
+            msg.contains("aida queue rework STORY-86 --work --resume"),
+            "msg: {msg}"
+        );
+        assert!(msg.contains("auto-bump"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_completed_suggests_force_reopen() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Completed,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("Completed"), "msg: {msg}");
+        assert!(msg.contains("already shipped"), "msg: {msg}");
+        assert!(
+            msg.contains("aida edit STORY-86 --status in-progress --force"),
+            "msg: {msg}"
+        );
+    }
+
+    #[test]
+    fn not_queued_rejected_suggests_force_reopen() {
+        let r = make_req_status(
+            "STORY-86",
+            RequirementType::Story,
+            RequirementStatus::Rejected,
+        );
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
+        assert!(msg.contains("Rejected"), "msg: {msg}");
+        assert!(
+            msg.contains("aida edit STORY-86 --status approved --force"),
+            "msg: {msg}"
+        );
+    }
+
+    #[test]
+    fn not_queued_container_uses_cluster_message() {
+        let r = make_req_status(
+            "EPIC-23",
+            RequirementType::Epic,
+            RequirementStatus::InProgress,
+        );
+        let msg = format_queue_work_not_queued_error("EPIC-23", &r, Some("implementer"));
+        // Containers get a different shape — focus on inspecting + adding
+        // children rather than the leaf status-aware recovery.
+        assert!(msg.contains("no queued children"), "msg: {msg}");
+        assert!(msg.contains("aida queue list --tree"), "msg: {msg}");
+        assert!(msg.contains("aida list --parent EPIC-23"), "msg: {msg}");
+    }
+
+    #[test]
+    fn not_queued_falls_back_when_role_unknown() {
+        let r = make_req_status("STORY-86", RequirementType::Story, RequirementStatus::Approved);
+        let msg = format_queue_work_not_queued_error("STORY-86", &r, None);
+        assert!(msg.contains("--for <role>"), "msg: {msg}");
+    }
 }
 
 #[cfg(test)]
@@ -30909,11 +31024,26 @@ fn resolve_queue_work_plan(
         .collect();
 
     if cluster.is_empty() {
-        anyhow::bail!(
-            "`{}` resolves to {} but no queued children match (try `aida queue list --tree` or pass a queued id directly)",
-            arg,
-            anchor_id_upper
-        );
+        // TASK-217: status-aware recovery hint. The user typed an id that
+        // resolves to a known spec but isn't queued (and has no queued
+        // children). Branch on the anchor's current status to suggest the
+        // recovery the user most likely wants — re-queueing after a
+        // Done→rework cycle, promoting Planned to Approved, etc. — instead
+        // of the previous opaque "no queued children match" hint.
+        // trace:TASK-217 | ai:claude
+        let role = std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.is_empty());
+        let display_id = anchor_req
+            .agreed_id
+            .as_deref()
+            .or(anchor_req.spec_id.as_deref())
+            .unwrap_or(&anchor_id_upper);
+        anyhow::bail!(format_queue_work_not_queued_error(
+            display_id,
+            anchor_req,
+            role.as_deref(),
+        ));
     }
 
     // Sort cluster by queue position so the manifest reflects intent.
@@ -30963,6 +31093,56 @@ fn build_resolved_entry(
         queue,
         spec_id,
         status_at_plan,
+    }
+}
+
+/// TASK-217: build a status-aware recovery hint when `aida queue work <id>`
+/// resolves a spec but finds no queue entry. The current status of the
+/// resolved spec tells us which recovery path the user most likely wants.
+/// trace:TASK-217 | ai:claude
+fn format_queue_work_not_queued_error(
+    display_id: &str,
+    anchor_req: &aida_core::Requirement,
+    role: Option<&str>,
+) -> String {
+    use RequirementType::*;
+    let role_display = role.unwrap_or("<role>");
+    let is_container = matches!(anchor_req.req_type, Epic | Folder | Sprint);
+    if is_container {
+        return format!(
+            "`{display_id}` has no queued children. (Status: {status})\n  \
+             Inspect the cluster: `aida queue list --tree` or `aida list --parent {display_id}`\n  \
+             To queue more work under {display_id}: `aida queue add <child-id> --for {role_display}`",
+            status = anchor_req.status,
+        );
+    }
+    match anchor_req.status {
+        RequirementStatus::Draft | RequirementStatus::Approved => format!(
+            "`{display_id}` isn't queued. Status is {status}.\n  \
+             To queue and start: `aida queue add {display_id} --for {role_display}` then `aida queue work {display_id}`",
+            status = anchor_req.status,
+        ),
+        RequirementStatus::Planned => format!(
+            "`{display_id}` isn't queued. Status is Planned (still in planning).\n  \
+             To work it: `aida edit {display_id} --status approved` then `aida queue add {display_id} --for {role_display}`"
+        ),
+        RequirementStatus::InProgress => format!(
+            "`{display_id}` isn't queued, but status is In Progress.\n  \
+             The lease may have been lost. Inspect with `aida queue list --all`.\n  \
+             To re-queue: `aida queue add {display_id} --for {role_display}`"
+        ),
+        RequirementStatus::Done => format!(
+            "`{display_id}` isn't queued. Status is Done (work finished on a branch).\n  \
+             If review found issues and more commits are needed: `aida queue rework {display_id} --work --resume`\n  \
+             If just waiting for merge: nothing to do — auto-bump fires when the PR merges."
+        ),
+        RequirementStatus::Completed => format!(
+            "`{display_id}` is Completed (already shipped). Nothing to work on.\n  \
+             To re-open: `aida edit {display_id} --status in-progress --force`"
+        ),
+        RequirementStatus::Rejected => format!(
+            "`{display_id}` is Rejected. Pick a different spec, or re-open with `aida edit {display_id} --status approved --force`."
+        ),
     }
 }
 
