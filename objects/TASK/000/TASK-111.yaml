@@ -54,12 +54,12 @@ description: |-
   - [ ] aida session end takes no noticeable longer for sessions without an associated PR (no-PR path stays fast)
   - [ ] TASK-110 description updated to note this supersedes Wait-CI as a manual step
   - [ ] Tests cover the 5 CI states + the 4 flag combinations + the fallback paths
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:21:43.573099151Z
-modified_at: 2026-05-13T06:24:18.154834289Z
+modified_at: 2026-05-14T06:34:46.879697683Z
 req_type: Task
 tags:
 - automation
