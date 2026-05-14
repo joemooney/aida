@@ -10,6 +10,7 @@ mod process_probe;
 mod prompts;
 mod session;
 mod session_manifest;
+mod usage;
 mod workflow_hints;
 
 use anyhow::{Context, Result};
@@ -96,13 +97,21 @@ fn install_sigpipe_handler() {}
 
 fn main() {
     install_sigpipe_handler();
+    // STORY-122: per-invocation telemetry. Wraps run() so every CLI
+    // entry point gets recorded with cmd shape + duration + exit code.
+    // Local-only; opt-out via `[telemetry] enabled = false` or
+    // `AIDA_TELEMETRY=0`. Recording is best-effort and never aborts the
+    // foreground command. trace:STORY-122 | ai:claude
+    let argv: Vec<String> = std::env::args().collect();
+    let started = std::time::Instant::now();
+
     // TASK-69: render anyhow-propagated errors in red instead of anyhow's
     // default plain-text formatter. Centralizes the coloring so every
     // `bail!` / `?` / `anyhow!` site automatically gets the highlight
     // without per-site refactoring. Exit code 1 on error, 0 on success.
     // trace:TASK-69 | ai:claude
-    match run() {
-        Ok(()) => {}
+    let exit_code: i32 = match run() {
+        Ok(()) => 0,
         Err(err) => {
             let msg = format!("{:?}", err);
             // Anyhow's Debug format prints the chain as
@@ -118,8 +127,52 @@ fn main() {
             for rest in lines {
                 eprintln!("{}", rest.dimmed());
             }
-            std::process::exit(1);
+            1
         }
+    };
+
+    // STORY-122: append the usage record after the command completed
+    // so we capture exit_code / duration_ms. Read the env-side opt-out
+    // first; checking the project's `.aida/config.toml` requires a
+    // project root, which not every invocation has, so fall back to
+    // "no project context" gracefully.
+    let project_root = find_main_worktree_root().ok();
+    if usage::is_enabled(project_root.as_deref()) {
+        let ev = usage::UsageEvent {
+            ts: chrono::Utc::now().to_rfc3339(),
+            cmd: usage::derive_cmd_shape(&argv),
+            args_count: usage::count_args(&argv),
+            exit_code,
+            duration_ms: started.elapsed().as_millis() as u64,
+            binary_sha: build_sha_short(),
+            role: std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            scope: std::env::var("AIDA_SESSION_SCOPE")
+                .ok()
+                .filter(|s| !s.is_empty()),
+        };
+        usage::append_event(&ev);
+    }
+
+    if exit_code != 0 {
+        std::process::exit(exit_code);
+    }
+}
+
+/// Short build SHA for telemetry tagging. Reads the same banner that
+/// `--version` prints (set by build.rs). Returns None if the banner
+/// helper isn't available. Cheap — just substring extraction.
+fn build_sha_short() -> Option<String> {
+    let banner = build_banner();
+    // build_banner format: "<version> (built <ts>, sha <sha>[+dirty])"
+    let sha = banner.split("sha ").nth(1)?;
+    let sha = sha.split(|c: char| c == ')' || c == '+').next()?;
+    let trimmed = sha.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
     }
 }
 
@@ -478,8 +531,24 @@ fn run() -> Result<()> {
                  Run `aida init` (defaults to distributed) first."
             );
         }
-        Command::Status { no_dev_context } => {
+        Command::Status {
+            no_dev_context,
+            short: _,
+            json: _,
+            queue: _,
+            ci: _,
+            no_ci: _,
+        } => {
             handle_status_command(*no_dev_context, None, &storage)?;
+        }
+        Command::Usage {
+            since,
+            unused,
+            errors,
+            json,
+            limit,
+        } => {
+            handle_usage_command(since, unused.as_deref(), *errors, *json, *limit)?;
         }
         Command::Push { .. } => {
             anyhow::bail!(
@@ -1426,8 +1495,33 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let store = backend.load()?;
             return handle_docs_with_store(docs_cmd, &store);
         }
-        Command::Status { no_dev_context } => {
-            return handle_status_command_distributed(*no_dev_context, store_path, &backend);
+        Command::Status {
+            no_dev_context,
+            short,
+            json,
+            queue,
+            ci,
+            no_ci,
+        } => {
+            return handle_status_command_distributed(
+                *no_dev_context,
+                *short,
+                *json,
+                *queue,
+                *ci,
+                *no_ci,
+                store_path,
+                &backend,
+            );
+        }
+        Command::Usage {
+            since,
+            unused,
+            errors,
+            json,
+            limit,
+        } => {
+            return handle_usage_command(since, unused.as_deref(), *errors, *json, *limit);
         }
         Command::Push {
             code_only,
@@ -21425,6 +21519,254 @@ fn locate_aida_server_binary(cwd: &std::path::Path) -> Result<std::path::PathBuf
 }
 
 // ----------------------------------------------------------------------------
+// `aida usage` — inspect locally-recorded CLI invocation telemetry.
+// trace:STORY-122 | ai:claude
+// ----------------------------------------------------------------------------
+
+/// Parse `Nd` / `Nh` / `Nm` into seconds. Mirrors the parser used by
+/// `aida queue progress --since`. Returns an error on malformed input.
+fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("--since cannot be empty");
+    }
+    let (num, unit) = trimmed.split_at(trimmed.len().saturating_sub(1));
+    let n: i64 = num
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid duration `{}` — try `30d`, `7d`, `12h`", raw))?;
+    Ok(match unit {
+        "d" => chrono::Duration::days(n),
+        "h" => chrono::Duration::hours(n),
+        "m" => chrono::Duration::minutes(n),
+        _ => anyhow::bail!("invalid duration unit `{}` — use d/h/m", unit),
+    })
+}
+
+#[derive(Debug, Clone)]
+struct UsageRow {
+    cmd: String,
+    count: u32,
+    errors: u32,
+    total_ms: u64,
+}
+
+impl UsageRow {
+    fn avg_ms(&self) -> u64 {
+        if self.count == 0 {
+            0
+        } else {
+            self.total_ms / u64::from(self.count)
+        }
+    }
+    fn error_rate(&self) -> f64 {
+        if self.count == 0 {
+            0.0
+        } else {
+            f64::from(self.errors) / f64::from(self.count)
+        }
+    }
+}
+
+fn aggregate_events(
+    events: &[usage::UsageEvent],
+    since: chrono::DateTime<chrono::Utc>,
+) -> std::collections::HashMap<String, UsageRow> {
+    let mut by_cmd: std::collections::HashMap<String, UsageRow> = std::collections::HashMap::new();
+    for ev in events {
+        let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) else {
+            continue;
+        };
+        if ts.with_timezone(&chrono::Utc) < since {
+            continue;
+        }
+        let row = by_cmd.entry(ev.cmd.clone()).or_insert_with(|| UsageRow {
+            cmd: ev.cmd.clone(),
+            count: 0,
+            errors: 0,
+            total_ms: 0,
+        });
+        row.count = row.count.saturating_add(1);
+        if ev.exit_code != 0 {
+            row.errors = row.errors.saturating_add(1);
+        }
+        row.total_ms = row.total_ms.saturating_add(ev.duration_ms);
+    }
+    by_cmd
+}
+
+fn handle_usage_command(
+    since_raw: &str,
+    unused_raw: Option<&str>,
+    errors_only: bool,
+    json_out: bool,
+    limit: usize,
+) -> Result<()> {
+    let now = chrono::Utc::now();
+    let since_window = parse_days_arg(since_raw)?;
+    let since = now - since_window;
+
+    let events = usage::read_events();
+    if events.is_empty() {
+        if json_out {
+            println!("{}", "[]");
+        } else {
+            println!(
+                "{} (no events yet; the log fills as `aida ...` commands run)",
+                "Usage:".bold()
+            );
+            println!(
+                "  {} {}",
+                "log:".dimmed(),
+                usage::log_path()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| "<home dir unavailable>".to_string())
+                    .dimmed()
+            );
+        }
+        return Ok(());
+    }
+
+    // --unused: show commands present in `events` but with no record
+    // since the cutoff. (A "command not in events at all" is invisible
+    // here — we can only report what we've seen.)
+    if let Some(raw) = unused_raw {
+        let cutoff_window = parse_days_arg(raw)?;
+        let cutoff = now - cutoff_window;
+        let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
+            std::collections::HashMap::new();
+        for ev in &events {
+            if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) {
+                let ts = ts.with_timezone(&chrono::Utc);
+                let cur = last_seen.entry(ev.cmd.clone()).or_insert(ts);
+                if *cur < ts {
+                    *cur = ts;
+                }
+            }
+        }
+        let mut stale: Vec<(String, chrono::DateTime<chrono::Utc>)> = last_seen
+            .into_iter()
+            .filter(|(_, ts)| *ts < cutoff)
+            .collect();
+        stale.sort_by_key(|(_, ts)| *ts);
+        if json_out {
+            let arr: Vec<serde_json::Value> = stale
+                .iter()
+                .map(|(cmd, ts)| {
+                    serde_json::json!({
+                        "cmd": cmd,
+                        "last_seen": ts.to_rfc3339(),
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&arr)?);
+        } else {
+            println!(
+                "{} commands NOT used in the last {} (deprecation candidates):",
+                "Usage:".bold(),
+                raw.cyan()
+            );
+            if stale.is_empty() {
+                println!("  (none — everything we've seen has been used recently)");
+            } else {
+                for (cmd, ts) in stale.iter().take(limit) {
+                    let age = humanize_relative(*ts);
+                    println!("  {:<24} {}", cmd.bold(), format!("last {}", age).dimmed());
+                }
+                if stale.len() > limit {
+                    println!(
+                        "  {} {} more (pass --limit N to expand)",
+                        "…".dimmed(),
+                        (stale.len() - limit).to_string().dimmed()
+                    );
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    let by_cmd = aggregate_events(&events, since);
+    let mut rows: Vec<UsageRow> = by_cmd.into_values().collect();
+    if errors_only {
+        rows.retain(|r| r.errors > 0);
+        rows.sort_by(|a, b| {
+            b.error_rate()
+                .partial_cmp(&a.error_rate())
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.count.cmp(&a.count))
+        });
+    } else {
+        rows.sort_by(|a, b| b.count.cmp(&a.count));
+    }
+
+    if json_out {
+        let arr: Vec<serde_json::Value> = rows
+            .iter()
+            .take(limit)
+            .map(|r| {
+                serde_json::json!({
+                    "cmd": r.cmd,
+                    "count": r.count,
+                    "errors": r.errors,
+                    "avg_ms": r.avg_ms(),
+                    "error_rate": r.error_rate(),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&arr)?);
+        return Ok(());
+    }
+
+    let header = if errors_only {
+        format!(
+            "{} commands with errors in the last {}",
+            "Usage:".bold(),
+            since_raw.cyan()
+        )
+    } else {
+        format!(
+            "{} top commands in the last {}",
+            "Usage:".bold(),
+            since_raw.cyan()
+        )
+    };
+    println!("{}", header);
+    println!(
+        "  {:<24} {:>6} {:>6} {:>8}",
+        "cmd".dimmed(),
+        "count".dimmed(),
+        "errs".dimmed(),
+        "avg_ms".dimmed()
+    );
+    if rows.is_empty() {
+        println!("  (no qualifying events in the window — try `--since 90d` or run more commands)");
+        return Ok(());
+    }
+    for row in rows.iter().take(limit) {
+        let err_cell = if row.errors == 0 {
+            "0".dimmed().to_string()
+        } else {
+            row.errors.to_string().yellow().to_string()
+        };
+        println!(
+            "  {:<24} {:>6} {:>6} {:>8}",
+            row.cmd.bold(),
+            row.count,
+            err_cell,
+            row.avg_ms()
+        );
+    }
+    if rows.len() > limit {
+        println!(
+            "  {} {} more (pass --limit N to expand)",
+            "…".dimmed(),
+            (rows.len() - limit).to_string().dimmed()
+        );
+    }
+
+    Ok(())
+}
+
+// ----------------------------------------------------------------------------
 // `aida push` — push code AND the orphan store in one shot.
 // trace:FR-264 | ai:claude
 // ----------------------------------------------------------------------------
@@ -23569,8 +23911,656 @@ mod ci_action_tests {
 
 /// Distributed-mode status: read from CachedGitBackend so we get cache-backed
 /// counts, sync state, and recent activity.
+/// TASK-220: gathered facts for the unified `aida status` view. Each
+/// optional field's `None` means "section absent" (no session covering
+/// cwd, no PR open, gh missing) — call sites graceful-degrade per
+/// section without bailing on the whole command. trace:TASK-220
+#[derive(Debug)]
+struct UserStatusContext {
+    session: Option<SessionLease>,
+    role: Option<String>,
+    branch: Option<BranchFacts>,
+    pr: Option<PrFacts>,
+    queue_head: Vec<QueueRow>,
+    queue_total: usize,
+}
+
+#[derive(Debug, Clone)]
+struct BranchFacts {
+    name: String,
+    dirty: bool,
+    ahead_main: Option<u32>,
+    behind_main: Option<u32>,
+    ahead_upstream: Option<u32>,
+    behind_upstream: Option<u32>,
+    has_upstream: bool,
+}
+
+#[derive(Debug, Clone)]
+struct PrFacts {
+    number: u64,
+    title: String,
+    url: String,
+    state: String,
+    ci_rollup: Option<String>,
+    gh_status: GhStatus,
+}
+
+#[derive(Debug, Clone)]
+enum GhStatus {
+    Ok,
+    Missing,
+    Failed(String),
+    Skipped,
+}
+
+#[derive(Debug, Clone)]
+struct QueueRow {
+    spec_id: String,
+    title: String,
+    status: String,
+    for_role: Option<String>,
+}
+
+fn collect_user_context(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    backend: &aida_core::CachedGitBackend,
+    no_ci: bool,
+) -> UserStatusContext {
+    let leases = list_leases(project_root);
+    let session = std::env::current_dir().ok().and_then(|cwd| {
+        let canon = cwd.canonicalize().unwrap_or(cwd);
+        leases
+            .iter()
+            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+            .cloned()
+    });
+    let role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| session.as_ref().and_then(|l| l.role.clone()));
+
+    let branch = collect_branch_facts(project_root);
+
+    let pr = if no_ci {
+        Some(PrFacts {
+            number: 0,
+            title: String::new(),
+            url: String::new(),
+            state: String::new(),
+            ci_rollup: None,
+            gh_status: GhStatus::Skipped,
+        })
+    } else {
+        branch
+            .as_ref()
+            .map(|b| collect_pr_facts(project_root, &b.name))
+    };
+
+    let (queue_head, queue_total) = collect_queue_snapshot(backend, store, role.as_deref());
+
+    UserStatusContext {
+        session,
+        role,
+        branch,
+        pr,
+        queue_head,
+        queue_total,
+    }
+}
+
+fn collect_branch_facts(project_root: &std::path::Path) -> Option<BranchFacts> {
+    let name = current_branch_at(project_root)?;
+    let dirty = !working_tree_clean(project_root).unwrap_or(true);
+    let (ahead_main, behind_main) = ahead_behind_vs_ref(project_root, &name, "origin/main")
+        .or_else(|| ahead_behind_vs_ref(project_root, &name, "main"))
+        .map(|(a, b)| (Some(a), Some(b)))
+        .unwrap_or((None, None));
+    let upstream = upstream_ref_for(project_root, &name);
+    let (ahead_upstream, behind_upstream, has_upstream) = match upstream {
+        Some(u) => {
+            let (a, b) = ahead_behind_vs_ref(project_root, &name, &u).unwrap_or((0, 0));
+            (Some(a), Some(b), true)
+        }
+        None => (None, None, false),
+    };
+    Some(BranchFacts {
+        name,
+        dirty,
+        ahead_main,
+        behind_main,
+        ahead_upstream,
+        behind_upstream,
+        has_upstream,
+    })
+}
+
+fn working_tree_clean(project_root: &std::path::Path) -> Option<bool> {
+    let o = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["status", "--porcelain"])
+        .output()
+        .ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    Some(o.stdout.iter().all(|b| b.is_ascii_whitespace()))
+}
+
+fn ahead_behind_vs_ref(
+    project_root: &std::path::Path,
+    branch: &str,
+    target: &str,
+) -> Option<(u32, u32)> {
+    let exists = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--verify", "--quiet", target])
+        .output()
+        .ok()?
+        .status
+        .success();
+    if !exists {
+        return None;
+    }
+    let o = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-list",
+            "--left-right",
+            "--count",
+            &format!("{}...{}", branch, target),
+        ])
+        .output()
+        .ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&o.stdout);
+    let mut parts = s.split_whitespace();
+    let a: u32 = parts.next()?.parse().ok()?;
+    let b: u32 = parts.next()?.parse().ok()?;
+    Some((a, b))
+}
+
+fn upstream_ref_for(project_root: &std::path::Path, _branch: &str) -> Option<String> {
+    let o = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+        .output()
+        .ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+fn collect_pr_facts(project_root: &std::path::Path, branch: &str) -> PrFacts {
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => {
+            return PrFacts {
+                number: 0,
+                title: String::new(),
+                url: String::new(),
+                state: String::new(),
+                ci_rollup: None,
+                gh_status: GhStatus::Missing,
+            };
+        }
+    };
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "view",
+            branch,
+            "--json",
+            "number,title,url,state,statusCheckRollup",
+            "-q",
+            r#"[(.number|tostring), .title, .url, .state, ([.statusCheckRollup[]?.conclusion] | unique | join(","))] | @tsv"#,
+        ])
+        .output();
+    let out = match out {
+        Ok(o) => o,
+        Err(e) => {
+            return PrFacts {
+                number: 0,
+                title: String::new(),
+                url: String::new(),
+                state: String::new(),
+                ci_rollup: None,
+                gh_status: GhStatus::Failed(format!("{}", e)),
+            };
+        }
+    };
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        // "no pull requests found" is the common no-PR-for-this-branch
+        // path; treat it as a clean "no PR" rather than a failure.
+        if stderr.contains("no pull requests found") || stderr.contains("no PRs found") {
+            return PrFacts {
+                number: 0,
+                title: String::new(),
+                url: String::new(),
+                state: "none".to_string(),
+                ci_rollup: None,
+                gh_status: GhStatus::Ok,
+            };
+        }
+        return PrFacts {
+            number: 0,
+            title: String::new(),
+            url: String::new(),
+            state: String::new(),
+            ci_rollup: None,
+            gh_status: GhStatus::Failed(stderr),
+        };
+    }
+    let raw = String::from_utf8_lossy(&out.stdout);
+    let line = raw.lines().next().unwrap_or("").trim();
+    if line.is_empty() {
+        return PrFacts {
+            number: 0,
+            title: String::new(),
+            url: String::new(),
+            state: "none".to_string(),
+            ci_rollup: None,
+            gh_status: GhStatus::Ok,
+        };
+    }
+    let mut fields = line.split('\t');
+    let number: u64 = fields.next().unwrap_or("0").parse().unwrap_or(0);
+    let title = fields.next().unwrap_or("").to_string();
+    let url = fields.next().unwrap_or("").to_string();
+    let state = fields.next().unwrap_or("").to_string();
+    let rollup = fields.next().unwrap_or("").to_string();
+    let ci_rollup = if rollup.is_empty() {
+        None
+    } else {
+        Some(rollup)
+    };
+    PrFacts {
+        number,
+        title,
+        url,
+        state,
+        ci_rollup,
+        gh_status: GhStatus::Ok,
+    }
+}
+
+fn collect_queue_snapshot(
+    backend: &aida_core::CachedGitBackend,
+    store: &aida_core::models::RequirementsStore,
+    role: Option<&str>,
+) -> (Vec<QueueRow>, usize) {
+    use aida_core::DatabaseBackend;
+    let user_id = current_user_id(None);
+    let entries = backend.queue_list(&user_id, false).unwrap_or_default();
+
+    let mut rows: Vec<QueueRow> = Vec::new();
+    let mut total: usize = 0;
+    for entry in entries {
+        // Filter by role when one is active.
+        if let Some(r) = role {
+            let mismatch = entry
+                .for_role
+                .as_deref()
+                .map(|er: &str| !er.eq_ignore_ascii_case(r))
+                .unwrap_or(false);
+            if mismatch {
+                continue;
+            }
+        }
+        let Some(req) = store
+            .requirements
+            .iter()
+            .find(|rq| rq.id == entry.requirement_id)
+        else {
+            continue;
+        };
+        // Hide terminal status to match `aida queue list` defaults.
+        if matches!(
+            req.status,
+            aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
+        ) {
+            continue;
+        }
+        total += 1;
+        if rows.len() < 5 {
+            rows.push(QueueRow {
+                spec_id: req.display_id(),
+                title: req.title.clone(),
+                status: format!("{}", req.status),
+                for_role: entry.for_role.clone(),
+            });
+        }
+    }
+    (rows, total)
+}
+
+fn print_status_session_section(ctx: &UserStatusContext) {
+    println!("{}", "─── Session ───".bold());
+    match &ctx.session {
+        Some(l) => {
+            let short_id = &l.id[..l.id.len().min(8)];
+            println!(
+                "  {} {}  · scope: {}",
+                "id:".dimmed(),
+                short_id.yellow(),
+                l.scope.cyan()
+            );
+            println!("  {} {}", "branch:".dimmed(), l.branch.cyan());
+            println!(
+                "  {} {}",
+                "worktree:".dimmed(),
+                l.worktree_path.display().to_string().dimmed()
+            );
+            if let Some(role) = &l.role {
+                println!("  {} {}", "role:".dimmed(), role.cyan());
+            }
+            println!(
+                "  {} {}",
+                "age:".dimmed(),
+                humanize_relative(l.started_at).dimmed()
+            );
+        }
+        None => {
+            let extra = match &ctx.role {
+                Some(r) => format!(" (active shell role: {})", r.cyan()),
+                None => String::new(),
+            };
+            println!("  (no lease covers cwd){}", extra);
+        }
+    }
+    println!();
+}
+
+fn print_status_branch_section(ctx: &UserStatusContext) {
+    println!("{}", "─── Branch ───".bold());
+    match &ctx.branch {
+        Some(b) => {
+            let dirty_chip = if b.dirty {
+                " (dirty)".yellow().to_string()
+            } else {
+                " (clean)".green().to_string()
+            };
+            println!("  {} {}{}", "name:".dimmed(), b.name.cyan(), dirty_chip);
+            if let (Some(a), Some(beh)) = (b.ahead_main, b.behind_main) {
+                println!(
+                    "  {} {} ahead, {} behind {}",
+                    "vs main:".dimmed(),
+                    a.to_string().green(),
+                    if beh > 0 {
+                        beh.to_string().yellow()
+                    } else {
+                        beh.to_string().normal()
+                    },
+                    "origin/main".dimmed()
+                );
+            }
+            if b.has_upstream {
+                if let (Some(a), Some(beh)) = (b.ahead_upstream, b.behind_upstream) {
+                    println!(
+                        "  {} {} ahead, {} behind",
+                        "vs upstream:".dimmed(),
+                        a.to_string().green(),
+                        if beh > 0 {
+                            beh.to_string().yellow()
+                        } else {
+                            beh.to_string().normal()
+                        }
+                    );
+                }
+            } else {
+                println!("  {} (no upstream tracked)", "vs upstream:".dimmed());
+            }
+        }
+        None => println!("  (not in a git repository)"),
+    }
+    println!();
+}
+
+fn print_status_pr_section(ctx: &UserStatusContext, focused: bool) {
+    println!("{}", "─── PR / CI ───".bold());
+    let Some(pr) = &ctx.pr else {
+        println!("  (no branch context — can't query gh)");
+        if focused {
+            println!();
+        }
+        return;
+    };
+    match &pr.gh_status {
+        GhStatus::Missing => {
+            println!(
+                "  (gh unavailable — install + auth `gh` to see CI status; \
+                 `aida status --no-ci` to suppress this section)"
+            );
+        }
+        GhStatus::Failed(reason) => {
+            println!("  (gh failed: {})", reason.dimmed());
+        }
+        GhStatus::Skipped => {
+            println!("  (skipped via --no-ci)");
+        }
+        GhStatus::Ok if pr.state == "none" || pr.number == 0 => {
+            println!("  (no open PR for this branch)");
+        }
+        GhStatus::Ok => {
+            println!(
+                "  {} {} {} {}",
+                "PR:".dimmed(),
+                format!("#{}", pr.number).cyan(),
+                pr.state.dimmed(),
+                pr.title
+            );
+            println!("  {} {}", "url:".dimmed(), pr.url.dimmed());
+            match pr.ci_rollup.as_deref() {
+                None => println!("  {} (no checks reported)", "ci:".dimmed()),
+                Some(r) if r == "SUCCESS" => {
+                    println!("  {} {}", "ci:".dimmed(), "✓ SUCCESS".green())
+                }
+                Some(r) if r.contains("FAILURE") || r.contains("CANCELLED") => {
+                    println!("  {} {}", "ci:".dimmed(), format!("✗ {}", r).red())
+                }
+                Some(r) if r.contains("PENDING") || r.contains("IN_PROGRESS") => {
+                    println!("  {} {}", "ci:".dimmed(), format!("⏱ {}", r).yellow())
+                }
+                Some(r) => println!("  {} {}", "ci:".dimmed(), r),
+            }
+        }
+    }
+    println!();
+}
+
+fn print_status_queue_section(ctx: &UserStatusContext, focused: bool) {
+    println!("{}", "─── Queue ───".bold());
+    let role_label = ctx.role.as_deref().unwrap_or("(no active role)");
+    if ctx.queue_total == 0 {
+        println!("  (empty for role:{})", role_label.cyan());
+    } else {
+        println!(
+            "  {} routed to role:{}",
+            format!("{} item(s)", ctx.queue_total).cyan(),
+            role_label.cyan()
+        );
+        for (i, row) in ctx.queue_head.iter().enumerate() {
+            println!(
+                "  {:>2}. {} [{}] {}",
+                i + 1,
+                row.spec_id.bold(),
+                row.status.dimmed(),
+                row.title
+            );
+        }
+        if ctx.queue_total > ctx.queue_head.len() {
+            println!(
+                "    {} {} more (run `aida queue list`)",
+                "…".dimmed(),
+                (ctx.queue_total - ctx.queue_head.len())
+                    .to_string()
+                    .dimmed()
+            );
+        }
+    }
+    if focused {
+        println!();
+    } else {
+        println!();
+    }
+}
+
+fn print_status_short(ctx: &UserStatusContext) {
+    let role = ctx.role.as_deref().unwrap_or("-");
+    let scope = ctx
+        .session
+        .as_ref()
+        .map(|l| l.scope.as_str())
+        .unwrap_or("-");
+    let branch = ctx.branch.as_ref().map(|b| b.name.as_str()).unwrap_or("-");
+    let dirty = ctx
+        .branch
+        .as_ref()
+        .map(|b| if b.dirty { "*" } else { "" })
+        .unwrap_or("");
+    let queue = ctx.queue_total;
+    let pr_chip = match &ctx.pr {
+        Some(p) if matches!(p.gh_status, GhStatus::Ok) && p.number > 0 => {
+            let ci = p
+                .ci_rollup
+                .as_deref()
+                .map(|r| {
+                    if r == "SUCCESS" {
+                        "ci✓"
+                    } else if r.contains("FAIL") || r.contains("CANCEL") {
+                        "ci✗"
+                    } else if r.contains("PENDING") || r.contains("IN_PROGRESS") {
+                        "ci⏱"
+                    } else {
+                        "ci?"
+                    }
+                })
+                .unwrap_or("ci?");
+            format!(" PR#{} {}", p.number, ci)
+        }
+        _ => String::new(),
+    };
+    println!(
+        "role:{} scope:{} branch:{}{} queue:{}{}",
+        role, scope, branch, dirty, queue, pr_chip
+    );
+}
+
+fn print_status_json(
+    ctx: &UserStatusContext,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    queue_only: bool,
+    ci_only: bool,
+) -> Result<()> {
+    use serde_json::json;
+
+    let session = ctx.session.as_ref().map(|l| {
+        json!({
+            "id": l.id,
+            "scope": l.scope,
+            "branch": l.branch,
+            "worktree": l.worktree_path.display().to_string(),
+            "role": l.role,
+            "started_at": l.started_at.to_rfc3339(),
+        })
+    });
+    let branch = ctx.branch.as_ref().map(|b| {
+        json!({
+            "name": b.name,
+            "dirty": b.dirty,
+            "ahead_main": b.ahead_main,
+            "behind_main": b.behind_main,
+            "ahead_upstream": b.ahead_upstream,
+            "behind_upstream": b.behind_upstream,
+            "has_upstream": b.has_upstream,
+        })
+    });
+    let pr = ctx.pr.as_ref().and_then(|p| match &p.gh_status {
+        GhStatus::Ok if p.number > 0 => Some(json!({
+            "number": p.number,
+            "title": p.title,
+            "url": p.url,
+            "state": p.state,
+            "ci_rollup": p.ci_rollup,
+        })),
+        GhStatus::Ok => Some(json!({ "state": "none" })),
+        GhStatus::Missing => Some(json!({ "error": "gh-missing" })),
+        GhStatus::Failed(r) => Some(json!({ "error": "gh-failed", "reason": r })),
+        GhStatus::Skipped => Some(json!({ "skipped": true })),
+    });
+    let queue = json!({
+        "role": ctx.role,
+        "total": ctx.queue_total,
+        "head": ctx.queue_head.iter().map(|r| json!({
+            "spec_id": r.spec_id,
+            "title": r.title,
+            "status": r.status,
+            "for_role": r.for_role,
+        })).collect::<Vec<_>>(),
+    });
+
+    let mut out = serde_json::Map::new();
+    if !queue_only && !ci_only {
+        out.insert(
+            "session".to_string(),
+            session.unwrap_or(serde_json::Value::Null),
+        );
+        out.insert(
+            "role".to_string(),
+            serde_json::Value::from(ctx.role.clone()),
+        );
+        out.insert(
+            "branch".to_string(),
+            branch.unwrap_or(serde_json::Value::Null),
+        );
+    }
+    if !queue_only {
+        out.insert("pr".to_string(), pr.unwrap_or(serde_json::Value::Null));
+    }
+    if !ci_only {
+        out.insert("queue".to_string(), queue);
+    }
+    if !queue_only && !ci_only {
+        let cache = backend.cache();
+        let recorded = cache.source_head_sha().ok().flatten().unwrap_or_default();
+        let actual = aida_core::git_ops::head_sha(store_path).unwrap_or_default();
+        let stale = recorded != actual || recorded.is_empty();
+        out.insert(
+            "cache".to_string(),
+            json!({
+                "fresh": !stale || actual.is_empty(),
+                "rows": cache.requirement_count().unwrap_or(0),
+            }),
+        );
+    }
+    println!("{}", serde_json::to_string_pretty(&out)?);
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
 fn handle_status_command_distributed(
     no_dev_context: bool,
+    short: bool,
+    json: bool,
+    queue_only: bool,
+    ci_only: bool,
+    no_ci: bool,
     store_path: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
@@ -23578,6 +24568,40 @@ fn handle_status_command_distributed(
 
     let store = backend.load()?;
     let project_root = std::env::current_dir()?;
+
+    // TASK-220: gather the unified-view facts once. Each section
+    // graceful-degrades on its own data — missing PR or missing session
+    // is not an error, it's just an absent section.
+    let user_ctx = collect_user_context(&project_root, &store, backend, no_ci);
+
+    if json {
+        return print_status_json(&user_ctx, backend, store_path, queue_only, ci_only);
+    }
+
+    if short {
+        print_status_short(&user_ctx);
+        return Ok(());
+    }
+
+    if queue_only {
+        print_status_queue_section(&user_ctx, true);
+        return Ok(());
+    }
+
+    if ci_only {
+        print_status_pr_section(&user_ctx, true);
+        return Ok(());
+    }
+
+    // Default: print every section. Lead with the user-context blocks
+    // (session/role/branch/PR/queue) so the eye lands on "where am I"
+    // before the project-wide accounting. trace:TASK-220 | ai:claude
+    print_status_session_section(&user_ctx);
+    print_status_branch_section(&user_ctx);
+    if !no_ci {
+        print_status_pr_section(&user_ctx, false);
+    }
+    print_status_queue_section(&user_ctx, false);
 
     println!("{}", "─── Project ───".bold());
     let name = if store.name.is_empty() {
@@ -29845,6 +30869,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             tree,
             no_in_flight,
             in_flight_only,
+            batch: batch_filter,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
@@ -30009,6 +31034,20 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     }
                     true
                 })
+                .filter(|e| {
+                    // TASK-229: --batch NAME filter. Match entries whose
+                    // requirement carries the `batch:NAME` tag.
+                    // Case-insensitive match. trace:TASK-229 | ai:claude
+                    let Some(name) = batch_filter.as_deref() else {
+                        return true;
+                    };
+                    let want = format!("batch:{}", name);
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    else {
+                        return false;
+                    };
+                    req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want))
+                })
                 .collect();
 
             // Load global entries for the active role unless --local was passed.
@@ -30033,10 +31072,20 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let in_flight_specs: Vec<&aida_core::Requirement> = if *no_in_flight {
                 Vec::new()
             } else {
+                let batch_want = batch_filter.as_deref().map(|n| format!("batch:{}", n));
                 store
                     .requirements
                     .iter()
                     .filter(|r| r.status == RequirementStatus::Done)
+                    .filter(|r| {
+                        // TASK-229: when --batch NAME is in effect, also
+                        // gate the in-flight section to the same batch
+                        // members so the view stays focused.
+                        let Some(want) = &batch_want else {
+                            return true;
+                        };
+                        r.tags.iter().any(|t| t.eq_ignore_ascii_case(want))
+                    })
                     .collect()
             };
 
@@ -31478,13 +32527,112 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             branch,
             path,
             steal,
+            batch,
+            dry_run,
             user,
         } => {
             let user_id = get_user(user);
+            // TASK-229: --batch NAME picks the head of the items tagged
+            // `batch:NAME`. --dry-run lists the batch instead of acting.
+            // The standard handle_queue_work path takes a spec id; we
+            // resolve the batch head here and pass it through. Each
+            // invocation drains one item (head-pickup loop semantics —
+            // re-run after each session exits to advance).
+            // trace:TASK-229 | ai:claude
+            let resolved_id: Option<String> = if let Some(name) = batch {
+                let store_for_batch = storage.load()?;
+                let user_id_for_batch = user_id.clone();
+                let entries = storage.queue_list(&user_id_for_batch, false)?;
+                let want = format!("batch:{}", name);
+                let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+                let (role_filter, _only_unrouted) =
+                    resolve_queue_role_filter(role.as_deref(), false, session_role.as_deref());
+                let mut members: Vec<(
+                    aida_core::QueueEntry,
+                    String,
+                    String,
+                    aida_core::RequirementStatus,
+                )> = Vec::new();
+                for entry in entries {
+                    if !entry_matches_role_filter(
+                        entry.for_role.as_deref(),
+                        role_filter.as_deref(),
+                        false,
+                    ) {
+                        continue;
+                    }
+                    let Some(req) = store_for_batch
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == entry.requirement_id)
+                    else {
+                        continue;
+                    };
+                    if !req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want)) {
+                        continue;
+                    }
+                    // Skip terminal items (Completed/Rejected); they're
+                    // already shipped and don't need draining.
+                    if is_terminal_status(&req.status) {
+                        continue;
+                    }
+                    members.push((
+                        entry,
+                        req.display_id(),
+                        req.title.clone(),
+                        req.status.clone(),
+                    ));
+                }
+                if *dry_run {
+                    if members.is_empty() {
+                        println!(
+                            "(no queued items tagged `{}` — add the tag via `aida edit <id> --tags {}`)",
+                            want.cyan(),
+                            want
+                        );
+                    } else {
+                        println!(
+                            "{} `{}` ({} item{}, pickup order):",
+                            "Batch".bold(),
+                            want.cyan(),
+                            members.len(),
+                            if members.len() == 1 { "" } else { "s" }
+                        );
+                        for (i, (_, display_id, title, status)) in members.iter().enumerate() {
+                            println!(
+                                "  {:>2}. {} [{}] {}",
+                                i + 1,
+                                display_id.bold(),
+                                format!("{}", status).dimmed(),
+                                title
+                            );
+                        }
+                        println!();
+                        println!(
+                            "  {}",
+                            format!("(run `aida queue work --batch {}` to pick up the head; repeat per item)", name).dimmed()
+                        );
+                    }
+                    return Ok(());
+                }
+                let Some(head) = members.into_iter().next() else {
+                    anyhow::bail!(
+                        "no queued items tagged `{}` — tag members via `aida edit <id> --tags {}` first",
+                        want,
+                        want
+                    );
+                };
+                Some(head.1)
+            } else {
+                if *dry_run {
+                    anyhow::bail!("--dry-run currently only applies with --batch");
+                }
+                id.clone()
+            };
             handle_queue_work(
                 storage,
                 &user_id,
-                id.as_deref(),
+                resolved_id.as_deref().or(id.as_deref()),
                 permission_mode.as_deref(),
                 *no_launch,
                 role.as_deref(),
@@ -31493,6 +32641,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 branch.as_deref(),
                 path.as_deref(),
                 *steal,
+            )?;
+        }
+        // TASK-232: progress view across the buckets a draining session
+        // moves items through (Shipped / In flight / Working now /
+        // Remaining). trace:TASK-232 | ai:claude
+        QueueCommand::Progress {
+            session,
+            batch,
+            since,
+            verbose,
+        } => {
+            handle_queue_progress(
+                storage,
+                session.as_deref(),
+                batch.as_deref(),
+                since.as_deref(),
+                *verbose,
             )?;
         }
         // TASK-218: encapsulate the implementer → reviewer → fixup
@@ -31557,6 +32722,441 @@ fn rework_smart_target(current: &RequirementStatus) -> Option<RequirementStatus>
         RequirementStatus::Done => Some(RequirementStatus::InProgress),
         RequirementStatus::Completed => Some(RequirementStatus::InProgress),
         RequirementStatus::Rejected => Some(RequirementStatus::Approved),
+    }
+}
+
+/// TASK-232: `aida queue progress` — show what a session has shipped so
+/// far alongside what remains, bucketed into Shipped / In flight /
+/// Working now / Remaining. Resolves the spec set from a session manifest
+/// (default or `--session ID`), a `batch:NAME` tag (`--batch`), or a
+/// modified-since timestamp (`--since`). Status comes from the live
+/// store; manifest timestamps are used only to compute the source set,
+/// not to classify status (which avoids drift — see
+/// `session_manifest::classify_item` for the precedent).
+/// trace:TASK-232 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProgressBucket {
+    Shipped,
+    InFlight,
+    WorkingNow,
+    Remaining,
+}
+
+fn classify_progress_bucket(status: &aida_core::RequirementStatus) -> ProgressBucket {
+    use aida_core::RequirementStatus;
+    match status {
+        RequirementStatus::Completed | RequirementStatus::Rejected => ProgressBucket::Shipped,
+        RequirementStatus::Done => ProgressBucket::InFlight,
+        RequirementStatus::InProgress => ProgressBucket::WorkingNow,
+        _ => ProgressBucket::Remaining,
+    }
+}
+
+/// Parse a `--since` value as either an RFC3339 timestamp or a relative
+/// `<N>{d,h,m}` expression (e.g. `2d`, `12h`, `45m`). Returns the
+/// resulting absolute UTC timestamp.
+fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("--since cannot be empty");
+    }
+    // Try RFC3339 first.
+    if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(trimmed) {
+        return Ok(ts.with_timezone(&chrono::Utc));
+    }
+    // Relative form: <number><unit>, unit ∈ {d,h,m}
+    let (num_str, unit) = trimmed.split_at(trimmed.len().saturating_sub(1));
+    let n: i64 = num_str.parse().map_err(|_| {
+        anyhow::anyhow!(
+            "invalid --since value `{}` (try `2d`, `12h`, or RFC3339)",
+            raw
+        )
+    })?;
+    let now = chrono::Utc::now();
+    let delta = match unit {
+        "d" => chrono::Duration::days(n),
+        "h" => chrono::Duration::hours(n),
+        "m" => chrono::Duration::minutes(n),
+        _ => anyhow::bail!("invalid --since unit `{}` — use d/h/m or RFC3339", unit),
+    };
+    Ok(now - delta)
+}
+
+fn handle_queue_progress(
+    storage: &Storage,
+    session: Option<&str>,
+    batch: Option<&str>,
+    since: Option<&str>,
+    verbose: bool,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store = storage.load()?;
+
+    // Resolve the spec set. Exactly one of {session, batch, since} drives
+    // the source; default is "manifest of the cwd / most-recent lease".
+    enum Source {
+        Manifest {
+            session_id: String,
+            scope: Option<String>,
+            specs: Vec<String>,
+        },
+        Batch {
+            name: String,
+            specs: Vec<String>,
+        },
+        Since {
+            cutoff: chrono::DateTime<chrono::Utc>,
+            specs: Vec<String>,
+        },
+    }
+
+    let source: Source = if let Some(name) = batch {
+        let tag = format!("batch:{}", name);
+        let specs: Vec<String> = store
+            .requirements
+            .iter()
+            .filter(|r| r.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)))
+            .map(|r| r.display_id())
+            .collect();
+        if specs.is_empty() {
+            println!(
+                "{} (no requirements tagged `batch:{}` — tag members via `aida edit --tags`)",
+                "Batch progress:".bold(),
+                name.cyan()
+            );
+            return Ok(());
+        }
+        Source::Batch {
+            name: name.to_string(),
+            specs,
+        }
+    } else if let Some(raw) = since {
+        let cutoff = parse_since_arg(raw)?;
+        let specs: Vec<String> = store
+            .requirements
+            .iter()
+            .filter(|r| r.modified_at >= cutoff)
+            .map(|r| r.display_id())
+            .collect();
+        if specs.is_empty() {
+            println!(
+                "{} (no requirements modified since {})",
+                "Progress:".bold(),
+                cutoff
+                    .with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M %Z")
+            );
+            return Ok(());
+        }
+        Source::Since { cutoff, specs }
+    } else {
+        // Manifest-driven: explicit --session, else cwd-lease, else most-recent.
+        let leases = list_leases(&project_root);
+        let lease = if let Some(q) = session {
+            Some(find_lease_by_id_prefix(q, &leases)?)
+        } else {
+            std::env::current_dir()
+                .ok()
+                .and_then(|cwd| {
+                    let canon = cwd.canonicalize().unwrap_or(cwd);
+                    leases
+                        .iter()
+                        .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+                        .cloned()
+                })
+                .or_else(|| leases.last().cloned())
+        };
+        let Some(lease) = lease else {
+            println!(
+                "{} (no active sessions; pass --batch NAME or --since 2d for a non-session view)",
+                "Progress:".bold()
+            );
+            return Ok(());
+        };
+        let manifest_path = session_manifest::manifest_path(&project_root, &lease.id);
+        if !manifest_path.exists() {
+            println!(
+                "{} session {} ({}) has no planned-cluster manifest yet.",
+                "Progress:".bold(),
+                (&lease.id[..lease.id.len().min(8)]).yellow(),
+                lease.scope.cyan(),
+            );
+            println!(
+                "  {} {}",
+                "tip:".dimmed(),
+                "manifests are written by `/aida-pickup` when it confirms a multi-item cluster"
+                    .dimmed()
+            );
+            return Ok(());
+        }
+        let manifest = session_manifest::load(&manifest_path)?;
+        let specs: Vec<String> = manifest.items.iter().map(|it| it.spec_id.clone()).collect();
+        Source::Manifest {
+            session_id: lease.id.clone(),
+            scope: Some(lease.scope.clone()),
+            specs,
+        }
+    };
+
+    // Resolve each spec_id (or agreed_id) to its live requirement.
+    let (specs_in_source, header_lines): (&Vec<String>, Vec<String>) = match &source {
+        Source::Manifest {
+            session_id,
+            scope,
+            specs,
+        } => {
+            let short = &session_id[..session_id.len().min(8)];
+            let mut lines = vec![format!(
+                "{} session {}{}",
+                "Progress:".bold(),
+                short.yellow(),
+                match scope {
+                    Some(s) => format!(" · {}", s.cyan()),
+                    None => String::new(),
+                }
+            )];
+            lines.push(format!(
+                "  {} {} spec{} from manifest",
+                "source:".dimmed(),
+                specs.len(),
+                if specs.len() == 1 { "" } else { "s" }
+            ));
+            (specs, lines)
+        }
+        Source::Batch { name, specs } => {
+            let mut lines = vec![format!("{} batch:{}", "Progress:".bold(), name.cyan())];
+            lines.push(format!(
+                "  {} {} tagged spec{}",
+                "source:".dimmed(),
+                specs.len(),
+                if specs.len() == 1 { "" } else { "s" }
+            ));
+            (specs, lines)
+        }
+        Source::Since { cutoff, specs } => {
+            let mut lines = vec![format!(
+                "{} since {}",
+                "Progress:".bold(),
+                cutoff
+                    .with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M %Z")
+                    .to_string()
+                    .cyan()
+            )];
+            lines.push(format!(
+                "  {} {} modified spec{}",
+                "source:".dimmed(),
+                specs.len(),
+                if specs.len() == 1 { "" } else { "s" }
+            ));
+            (specs, lines)
+        }
+    };
+
+    for line in &header_lines {
+        println!("{}", line);
+    }
+    println!();
+
+    // Bucket each spec by its current status.
+    let mut buckets: std::collections::BTreeMap<&str, Vec<(String, String)>> =
+        std::collections::BTreeMap::new();
+    // Insert bucket keys in display order via a Vec.
+    let bucket_order = [
+        ("Shipped", ProgressBucket::Shipped),
+        ("In flight", ProgressBucket::InFlight),
+        ("Working now", ProgressBucket::WorkingNow),
+        ("Remaining", ProgressBucket::Remaining),
+    ];
+    for (label, _) in &bucket_order {
+        buckets.insert(*label, Vec::new());
+    }
+
+    let mut unresolved: Vec<String> = Vec::new();
+    for spec in specs_in_source {
+        // Match by spec_id, agreed_id, or both. We accept agreed_id-form
+        // ids when the manifest was written before merge-gate ran.
+        let req = store.requirements.iter().find(|r| r.matches_id(spec));
+        let Some(req) = req else {
+            unresolved.push(spec.clone());
+            continue;
+        };
+        let bucket = classify_progress_bucket(&req.status);
+        let display_id = req.display_id();
+        let label = bucket_order
+            .iter()
+            .find(|(_, b)| *b == bucket)
+            .map(|(l, _)| *l)
+            .unwrap_or("Remaining");
+        buckets
+            .get_mut(label)
+            .expect("bucket initialized")
+            .push((display_id, req.title.clone()));
+    }
+
+    let bucket_count = |label: &str| -> usize { buckets.get(label).map(|v| v.len()).unwrap_or(0) };
+
+    let bucket_color = |label: &str, n: usize| -> colored::ColoredString {
+        match label {
+            "Shipped" => n.to_string().green().bold(),
+            "In flight" => n.to_string().bright_yellow().bold(),
+            "Working now" => n.to_string().cyan().bold(),
+            "Remaining" => n.to_string().dimmed(),
+            _ => n.to_string().normal(),
+        }
+    };
+
+    for (label, _) in &bucket_order {
+        let items = &buckets[label];
+        if items.is_empty() {
+            continue;
+        }
+        let suffix = match *label {
+            "In flight" => " — Done, awaiting merge",
+            "Working now" => " — InProgress",
+            "Remaining" => " — queued",
+            _ => "",
+        };
+        println!(
+            "{} ({} item{}{})",
+            label.bold(),
+            bucket_color(label, items.len()),
+            if items.len() == 1 { "" } else { "s" },
+            suffix.dimmed()
+        );
+        let limit = if verbose || *label != "Remaining" {
+            items.len()
+        } else {
+            items.len().min(8)
+        };
+        for (display_id, title) in items.iter().take(limit) {
+            println!("  {}  {}", display_id.bold(), title);
+        }
+        if limit < items.len() {
+            println!(
+                "  {} {} more (pass --verbose to expand)",
+                "…".dimmed(),
+                (items.len() - limit).to_string().dimmed()
+            );
+        }
+        println!();
+    }
+
+    // Net summary.
+    let shipped = bucket_count("Shipped");
+    let in_flight = bucket_count("In flight");
+    let working = bucket_count("Working now");
+    let remaining = bucket_count("Remaining");
+    let total = shipped + in_flight + working + remaining + unresolved.len();
+    let terminal = shipped; // only Completed/Rejected count as "reached terminal status"
+    println!(
+        "{} {} of {} reached terminal; {} in flight; {} working; {} remaining{}.",
+        "Net:".bold(),
+        terminal,
+        total,
+        in_flight,
+        working,
+        remaining,
+        if unresolved.is_empty() {
+            String::new()
+        } else {
+            format!(" ({} unresolved)", unresolved.len())
+        }
+    );
+
+    if !unresolved.is_empty() && verbose {
+        println!();
+        println!(
+            "{} (manifest references that don't resolve in the live store):",
+            "Unresolved".dimmed()
+        );
+        for spec in &unresolved {
+            println!("  {}", spec.dimmed());
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod queue_progress_tests {
+    use super::*;
+    use aida_core::RequirementStatus;
+
+    #[test]
+    fn bucket_classification_covers_every_terminal_axis() {
+        // trace:TASK-232 | ai:claude
+        assert_eq!(
+            classify_progress_bucket(&RequirementStatus::Completed),
+            ProgressBucket::Shipped
+        );
+        assert_eq!(
+            classify_progress_bucket(&RequirementStatus::Rejected),
+            ProgressBucket::Shipped
+        );
+        assert_eq!(
+            classify_progress_bucket(&RequirementStatus::Done),
+            ProgressBucket::InFlight
+        );
+        assert_eq!(
+            classify_progress_bucket(&RequirementStatus::InProgress),
+            ProgressBucket::WorkingNow
+        );
+        assert_eq!(
+            classify_progress_bucket(&RequirementStatus::Approved),
+            ProgressBucket::Remaining
+        );
+        assert_eq!(
+            classify_progress_bucket(&RequirementStatus::Draft),
+            ProgressBucket::Remaining
+        );
+        assert_eq!(
+            classify_progress_bucket(&RequirementStatus::Planned),
+            ProgressBucket::Remaining
+        );
+    }
+
+    #[test]
+    fn parse_since_accepts_relative_d_h_m() {
+        // trace:TASK-232 | ai:claude
+        let now = chrono::Utc::now();
+        let two_days = parse_since_arg("2d").unwrap();
+        assert!((now - two_days).num_hours() >= 47);
+        assert!((now - two_days).num_hours() <= 49);
+
+        let twelve_hours = parse_since_arg("12h").unwrap();
+        assert!((now - twelve_hours).num_minutes() >= 11 * 60);
+
+        let forty_five_min = parse_since_arg("45m").unwrap();
+        assert!((now - forty_five_min).num_minutes() >= 44);
+    }
+
+    #[test]
+    fn parse_since_accepts_rfc3339() {
+        // trace:TASK-232 | ai:claude
+        let ts = parse_since_arg("2026-05-01T00:00:00Z").unwrap();
+        assert_eq!(ts.format("%Y-%m-%d").to_string(), "2026-05-01");
+    }
+
+    #[test]
+    fn parse_since_rejects_garbage() {
+        // trace:TASK-232 | ai:claude
+        assert!(parse_since_arg("").is_err());
+        assert!(parse_since_arg("xyz").is_err());
+        assert!(parse_since_arg("3z").is_err());
+    }
+
+    #[test]
+    fn batch_tag_matches_case_insensitively() {
+        // trace:TASK-229 | ai:claude
+        let mut tags = std::collections::HashSet::new();
+        tags.insert("batch:Observability".to_string());
+        tags.insert("queue".to_string());
+        let want = "batch:observability";
+        assert!(tags.iter().any(|t| t.eq_ignore_ascii_case(want)));
+
+        let want_miss = "batch:elsewhere";
+        assert!(!tags.iter().any(|t| t.eq_ignore_ascii_case(want_miss)));
     }
 }
 

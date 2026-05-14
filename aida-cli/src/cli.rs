@@ -2053,6 +2053,12 @@ pub enum QueueCommand {
         /// waiting on a PR for" snapshots. trace:TASK-222 | ai:claude
         #[clap(long, conflicts_with = "no_in_flight")]
         in_flight_only: bool,
+        /// Filter to queued items tagged `batch:NAME`. Composes with
+        /// `aida queue work --batch NAME` (TASK-229) — the same tag
+        /// drives both the audit view and the per-item drain.
+        /// trace:TASK-229 | ai:claude
+        #[clap(long, value_name = "NAME")]
+        batch: Option<String>,
     },
     /// Add a requirement to your queue
     Add {
@@ -2276,9 +2282,64 @@ pub enum QueueCommand {
         /// trace:TASK-81 | ai:claude
         #[clap(long)]
         steal: bool,
+        /// Tag-driven batch pickup: instead of resolving from `id`, pick
+        /// the head queued item tagged `batch:<NAME>`. Repeat the
+        /// invocation to drain the batch one session per item (each
+        /// session exits independently; the next pickup picks the new
+        /// head). Mutually exclusive with positional `id` and
+        /// `--type`. `--dry-run --batch NAME` lists members in pickup
+        /// order without acting. trace:TASK-229 | ai:claude
+        #[clap(long, value_name = "NAME", conflicts_with_all = ["id", "type_filter"])]
+        batch: Option<String>,
+        /// With `--batch`: print the matching queue entries in pickup
+        /// order and exit without starting a session. Useful for
+        /// auditing the batch before draining.
+        /// trace:TASK-229 | ai:claude
+        #[clap(long)]
+        dry_run: bool,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
+    },
+    /// Show what an active session has shipped so far alongside what
+    /// remains. Bucketed view (Shipped / In flight / Working now /
+    /// Remaining) with a net summary line. Default resolves to the
+    /// most-recent active session; `--session ID` targets a specific
+    /// lease; `--batch NAME` reads members of a `batch:NAME` tag instead
+    /// of a session manifest.
+    ///
+    /// Buckets:
+    ///   Shipped     — status Completed/Rejected (merged to default branch)
+    ///   In flight   — status Done (work finished on a branch; PR open)
+    ///   Working now — status InProgress
+    ///   Remaining   — Approved/Planned/Draft (still queued)
+    ///
+    /// trace:TASK-232 | ai:claude
+    Progress {
+        /// Specific session id (8+ char prefix) to read the manifest of.
+        /// Default: the lease covering cwd, else the most-recent active
+        /// lease. trace:TASK-232 | ai:claude
+        #[clap(long, value_name = "SESSION_ID")]
+        session: Option<String>,
+        /// Resolve items from a `batch:NAME` tag instead of a session
+        /// manifest. Composes with TASK-229's batch-drain convention:
+        /// items tagged `batch:NAME` (set via `aida add --tags` or
+        /// `aida edit --tags`) are members of the batch.
+        /// Mutually exclusive with `--session`.
+        /// trace:TASK-232, TASK-229 | ai:claude
+        #[clap(long, value_name = "NAME", conflicts_with = "session")]
+        batch: Option<String>,
+        /// Filter items to those modified after this timestamp
+        /// (RFC3339 or `<N>{d,h,m}` ago, e.g. `2d`, `12h`). Useful for
+        /// "what changed since yesterday" snapshots when no manifest
+        /// or batch tag applies. trace:TASK-232 | ai:claude
+        #[clap(long, value_name = "TS")]
+        since: Option<String>,
+        /// Show every member by id under each bucket, not just the
+        /// first few. Default truncates Remaining at 8 items with a
+        /// `…and N more` tail. trace:TASK-232 | ai:claude
+        #[clap(long)]
+        verbose: bool,
     },
     /// Flip a spec's status, route it to a role's queue, and (optionally)
     /// launch a session — encapsulates the recurring implementer →
@@ -2598,14 +2659,84 @@ pub enum Command {
     #[clap(subcommand)]
     Node(NodeCommand),
 
-    /// Show this project's status — storage mode, requirement counts,
-    /// cache state, sync state, recent activity. When run inside the AIDA
-    /// repo itself, also shows release-readiness diagnostics.
+    /// Show "where am I right now" — unified view of session, branch,
+    /// PR/CI, queue, cache, and project state. Spiritual cousin of
+    /// `git status`: one screen, no flag-guessing.
+    ///
+    /// Default sections (each graceful-degrades when its data isn't
+    /// available):
+    ///   Session  — active lease covering cwd: id, scope, role, worktree, age
+    ///   Branch   — current branch, dirty state, ahead/behind origin
+    ///   PR / CI  — open PR for the branch + check rollup (via `gh`)
+    ///   Queue    — top items routed to the active role + total count
+    ///   Cache    — orphan-store cache freshness
+    ///   Project  — storage mode, requirement counts (existing view)
+    ///
+    /// trace:TASK-220 | ai:claude
     Status {
         /// Suppress the AIDA-development-context section even when running
         /// inside the aida repo
         #[clap(long)]
         no_dev_context: bool,
+        /// One-line summary (spiritual cousin of `aida statusline`).
+        /// Suppresses every section except a compact role/scope/branch
+        /// readout. trace:TASK-220 | ai:claude
+        #[clap(long)]
+        short: bool,
+        /// Machine-readable JSON output. Sections that fail
+        /// (gh unavailable, no session, etc.) appear as `null` so
+        /// consumers can detect "section absent" without parsing prose.
+        /// trace:TASK-220 | ai:claude
+        #[clap(long)]
+        json: bool,
+        /// Focus on the queue section only — skip everything else.
+        /// trace:TASK-220 | ai:claude
+        #[clap(long, conflicts_with_all = ["ci", "short"])]
+        queue: bool,
+        /// Focus on the PR / CI section only — skip everything else.
+        /// trace:TASK-220 | ai:claude
+        #[clap(long, conflicts_with_all = ["queue", "short"])]
+        ci: bool,
+        /// Skip the gh-backed PR / CI lookup (offline / fast path).
+        /// The PR/CI section is omitted from text output and reported
+        /// as `null` in `--json`. trace:TASK-220 | ai:claude
+        #[clap(long)]
+        no_ci: bool,
+    },
+
+    /// Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl`
+    /// (written one line per `aida ...` invocation when telemetry is
+    /// enabled — opt out via `[telemetry] enabled = false` or
+    /// `AIDA_TELEMETRY=0`). Default: top-20 most-used commands over the
+    /// last 30 days.
+    ///
+    /// Privacy: only command shapes are logged (e.g. "queue list",
+    /// "show", "rel add") — never arg values, paths, or req content.
+    ///
+    /// trace:STORY-122 | ai:claude
+    Usage {
+        /// Show commands used within the last N days. Default 30.
+        /// trace:STORY-122 | ai:claude
+        #[clap(long, value_name = "Nd", default_value = "30d")]
+        since: String,
+        /// Show commands NOT used in the last N days (deprecation
+        /// candidates). Mutually exclusive with --errors.
+        /// trace:STORY-122 | ai:claude
+        #[clap(long, value_name = "Nd", conflicts_with = "errors")]
+        unused: Option<String>,
+        /// Show commands with the highest error rate (`exit_code != 0`
+        /// over total invocations). UX-gap candidates.
+        /// trace:STORY-122 | ai:claude
+        #[clap(long)]
+        errors: bool,
+        /// JSON output (commands as an array of {cmd, count, errors,
+        /// avg_ms} objects). trace:STORY-122 | ai:claude
+        #[clap(long)]
+        json: bool,
+        /// Limit the number of rows returned. Default 20.
+        /// trace:STORY-122 | ai:claude
+        #[clap(long, default_value = "20")]
+        limit: usize,
     },
 
     /// Push code AND the AIDA orphan store in one shot. Equivalent to
