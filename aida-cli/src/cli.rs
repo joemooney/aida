@@ -2026,6 +2026,19 @@ pub enum QueueCommand {
         /// position order is preserved. trace:TASK-33 | ai:claude
         #[clap(long)]
         tree: bool,
+        /// Suppress the "Done — awaiting merge" in-flight section. By
+        /// default `aida queue list` appends Done specs (work finished
+        /// on a branch, not yet merged to main) so the natural "what am
+        /// I waiting on" view stays complete. Pass this to get only the
+        /// queued (Pending/Approved/Planned/InProgress) view.
+        /// trace:TASK-222 | ai:claude
+        #[clap(long)]
+        no_in_flight: bool,
+        /// Show only the "Done — awaiting merge" in-flight section,
+        /// suppressing the regular queue entries. Useful for "what am I
+        /// waiting on a PR for" snapshots. trace:TASK-222 | ai:claude
+        #[clap(long, conflicts_with = "no_in_flight")]
+        in_flight_only: bool,
     },
     /// Add a requirement to your queue
     Add {

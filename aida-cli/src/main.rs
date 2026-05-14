@@ -28926,6 +28926,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             include_terminal,
             scope: scope_filter,
             tree,
+            no_in_flight,
+            in_flight_only,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
@@ -29106,7 +29108,30 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 Vec::new()
             };
 
-            if entries.is_empty() && global_entries.is_empty() {
+            // TASK-222: compute in-flight (Done) specs once, up front, so
+            // the empty-queue branch can decide whether to keep showing the
+            // "Your queue is empty" line or fall through to the in-flight
+            // section when there's still work awaiting merge.
+            // trace:TASK-222 | ai:claude
+            let in_flight_specs: Vec<&aida_core::Requirement> = if *no_in_flight {
+                Vec::new()
+            } else {
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| r.status == RequirementStatus::Done)
+                    .collect()
+            };
+
+            let pending_empty = entries.is_empty() && global_entries.is_empty();
+
+            // Branch matrix:
+            //   in_flight_only=true   → skip the regular queue render entirely
+            //   pending_empty + no_in_flight=true (or no in-flight)
+            //                         → classic empty-queue early return
+            //   pending_empty + in-flight has items
+            //                         → muted empty hint + fall through to in-flight
+            if !*in_flight_only && pending_empty {
                 // BUG-87: when --all is already passed, don't suggest
                 // "pass --all" — the user just did. Drop the hint.
                 let hint = if *all {
@@ -29141,8 +29166,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         }
                     );
                 }
-                return Ok(());
+                if in_flight_specs.is_empty() {
+                    return Ok(());
+                }
+                // fall through to in-flight section
             }
+
+            // TASK-222: skip the regular-queue render entirely when only
+            // the in-flight section was asked for, or when the pending list
+            // was empty and we already printed the muted-empty hint above.
+            // trace:TASK-222 | ai:claude
+            let skip_regular_render = *in_flight_only || pending_empty;
+
+            if !skip_regular_render {
 
             let total = entries.len() + global_entries.len();
             let title = if only_unrouted {
@@ -29497,6 +29533,97 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .dimmed(),
                     "Completed/Rejected;".dimmed()
                 );
+            }
+
+            } // end of `if !skip_regular_render { ... }` — trace:TASK-222
+
+            // TASK-222: in-flight section. Done specs are work-in-flight
+            // (branch finished, not yet merged to main). They aren't in
+            // the queue anymore (queue done removed them), but they're
+            // still active work — so show them in a separate section so
+            // the natural "what am I waiting on" view is complete.
+            // trace:TASK-222 | ai:claude
+            if !in_flight_specs.is_empty() {
+                if !skip_regular_render {
+                    println!();
+                }
+                println!(
+                    "{} ({} item{})",
+                    "Done — awaiting merge".bright_green().bold(),
+                    in_flight_specs.len(),
+                    if in_flight_specs.len() == 1 { "" } else { "s" }
+                );
+                println!("{}", "─".repeat(80));
+                // Stable order: most-recently-implemented first so the
+                // freshly-shipped work surfaces at the top. Falls back to
+                // spec_id when timestamps are missing.
+                let mut sorted: Vec<&aida_core::Requirement> = in_flight_specs.clone();
+                sorted.sort_by(|a, b| {
+                    let a_ts = a
+                        .implementation_info
+                        .as_ref()
+                        .and_then(|i| i.implemented_at);
+                    let b_ts = b
+                        .implementation_info
+                        .as_ref()
+                        .and_then(|i| i.implemented_at);
+                    match (a_ts, b_ts) {
+                        (Some(a), Some(b)) => b.cmp(&a),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a
+                            .agreed_id
+                            .as_deref()
+                            .unwrap_or("")
+                            .cmp(b.agreed_id.as_deref().unwrap_or("")),
+                    }
+                });
+                for req in &sorted {
+                    let display_id = req
+                        .agreed_id
+                        .as_deref()
+                        .or(req.spec_id.as_deref())
+                        .unwrap_or("???");
+                    let ago = req
+                        .implementation_info
+                        .as_ref()
+                        .and_then(|i| i.implemented_at)
+                        .map(|t| {
+                            let elapsed = chrono::Utc::now().signed_duration_since(t);
+                            if elapsed.num_minutes() < 1 {
+                                "just now".to_string()
+                            } else if elapsed.num_hours() < 1 {
+                                format!("{}m ago", elapsed.num_minutes())
+                            } else if elapsed.num_days() < 1 {
+                                format!("{}h ago", elapsed.num_hours())
+                            } else {
+                                format!("{}d ago", elapsed.num_days())
+                            }
+                        })
+                        .unwrap_or_else(|| "awaiting merge".to_string());
+                    println!(
+                        "  {} {}  {}  [{}]",
+                        "◐".bright_green(),
+                        display_id.bold(),
+                        req.title,
+                        ago.dimmed(),
+                    );
+                }
+                println!();
+                println!(
+                    "{}",
+                    "  (auto-bump to Completed fires when a commit referencing the spec lands on the default branch — `aida pull`)"
+                        .dimmed()
+                );
+                if !*in_flight_only {
+                    println!(
+                        "{}",
+                        "  (suppress this section with `--no-in-flight`; show only this section with `--in-flight-only`)"
+                            .dimmed()
+                    );
+                }
+            } else if *in_flight_only {
+                println!("{}", "No in-flight (Done-status) specs.".dimmed());
             }
         }
         QueueCommand::Add {
