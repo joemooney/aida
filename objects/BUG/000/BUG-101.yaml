@@ -63,11 +63,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:42:13.417792965Z
-modified_at: 2026-05-14T14:42:13.417792965Z
+modified_at: 2026-05-14T14:54:15.904731870Z
 req_type: Bug
 tags:
 - aida-pull
 - aida-review
+- batch:friction-fixes
 - missing-step
 - next-steps
 - sync
