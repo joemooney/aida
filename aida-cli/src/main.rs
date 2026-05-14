@@ -21935,7 +21935,10 @@ fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
     if trimmed.is_empty() {
         anyhow::bail!("--since cannot be empty");
     }
-    let (num, unit) = trimmed.split_at(trimmed.len().saturating_sub(1));
+    // BUG-100: peel the last CHAR (not the last byte). `split_at` panics
+    // on a non-char-boundary byte index, so a multi-byte trailing unit
+    // like `2日` would crash the process.
+    let (num, unit) = split_last_char(trimmed);
     let n: i64 = num
         .parse()
         .map_err(|_| anyhow::anyhow!("invalid duration `{}` — try `30d`, `7d`, `12h`", raw))?;
@@ -21945,6 +21948,18 @@ fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
         "m" => chrono::Duration::minutes(n),
         _ => anyhow::bail!("invalid duration unit `{}` — use d/h/m", unit),
     })
+}
+
+/// Split a non-empty string into `(prefix, last_char_str)` on a valid
+/// UTF-8 char boundary. Cheaper than `chars().last()` for the parsing
+/// path because it avoids an extra allocation. The empty-string case is
+/// already guarded at every call site, so this returns `("", "")` for
+/// empty input rather than panicking. trace:BUG-100 | ai:claude
+fn split_last_char(s: &str) -> (&str, &str) {
+    match s.char_indices().next_back() {
+        Some((idx, _)) => s.split_at(idx),
+        None => ("", ""),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -33238,7 +33253,9 @@ fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
         return Ok(ts.with_timezone(&chrono::Utc));
     }
     // Relative form: <number><unit>, unit ∈ {d,h,m}
-    let (num_str, unit) = trimmed.split_at(trimmed.len().saturating_sub(1));
+    // BUG-100: peel the last CHAR rather than the last BYTE so multi-byte
+    // trailing units don't crash the process.
+    let (num_str, unit) = split_last_char(trimmed);
     let n: i64 = num_str.parse().map_err(|_| {
         anyhow::anyhow!(
             "invalid --since value `{}` (try `2d`, `12h`, or RFC3339)",
@@ -33617,6 +33634,41 @@ mod queue_progress_tests {
         assert!(parse_since_arg("").is_err());
         assert!(parse_since_arg("xyz").is_err());
         assert!(parse_since_arg("3z").is_err());
+    }
+
+    /// BUG-100: a multi-byte trailing char (e.g. `2日`) used to crash
+    /// the process via `split_at` on a non-char-boundary byte. After the
+    /// fix it returns a clean Err. trace:BUG-100 | ai:claude
+    #[test]
+    fn parse_since_does_not_panic_on_multibyte_unit() {
+        // Inputs from the bug repro section.
+        assert!(parse_since_arg("2日").is_err());
+        assert!(parse_since_arg("3秒").is_err());
+        // Pure multi-byte string (no digits to parse, last char is the
+        // only char): still a clean error.
+        assert!(parse_since_arg("日").is_err());
+        // Multi-char multi-byte trailer: also bails cleanly.
+        assert!(parse_since_arg("3日間").is_err());
+    }
+
+    /// BUG-100: mirror coverage for parse_days_arg, which uses the same
+    /// split-last-char path. trace:BUG-100 | ai:claude
+    #[test]
+    fn parse_days_does_not_panic_on_multibyte_unit() {
+        assert!(parse_days_arg("2日").is_err());
+        assert!(parse_days_arg("3秒").is_err());
+        assert!(parse_days_arg("日").is_err());
+    }
+
+    /// BUG-100: the helper itself stays char-boundary-safe for both
+    /// ASCII and multi-byte trailers. trace:BUG-100 | ai:claude
+    #[test]
+    fn split_last_char_is_char_boundary_safe() {
+        assert_eq!(split_last_char("2d"), ("2", "d"));
+        assert_eq!(split_last_char("12h"), ("12", "h"));
+        assert_eq!(split_last_char("2日"), ("2", "日"));
+        assert_eq!(split_last_char("日"), ("", "日"));
+        assert_eq!(split_last_char(""), ("", ""));
     }
 
     #[test]
