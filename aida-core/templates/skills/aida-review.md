@@ -362,9 +362,13 @@ Next steps (recommended order):
 
 Next steps (recommended order):
   1. ▶ End reviewer session → Ctrl+D + `aida session end <session-id>` from parent shell
-  2. ⏵ Cut release (from parent shell, after end) → `make release-patch YES=1` (or `release-minor` for new features)
-  3. 🚪 Stop here, cut release later → end the session now; the merge is done, the tag can wait until you're ready
+  2. ▶ Sync local main (from parent shell, after end) → `aida pull` (fast-forwards local main to the merge commit AND auto-bumps any Done specs the merge referenced — without this, `make release-patch` would tag the wrong HEAD)
+  3. ⏵ Verify auto-bump fired → `aida show <one-of-the-merged-specs>` (expect Completed; if still Done, run `aida db reconcile-status` once it ships per TASK-226, or `aida edit <id> --status completed` as a manual recovery)
+  4. ⏵ Cut release (from parent shell) → `make release-patch YES=1` (or `release-minor` for new features)
+  5. 🚪 Stop here, cut release later → the merge is done, the tag can wait until you're ready
 ```
+
+Don't skip step 2 — local main is behind origin/main immediately after the merge, and `make release-patch` would tag the pre-merge HEAD. trace:BUG-101 | ai:claude
 
 Print exactly one block — don't dump both templates.
 
