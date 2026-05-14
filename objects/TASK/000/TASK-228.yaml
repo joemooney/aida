@@ -1,0 +1,59 @@
+id: 019e24ce-ba5b-7b71-9c50-32c495a55cb0
+spec_id: TASK-228
+agreed_id: TASK-228
+title: 'Cancellable fallback wakeups: cancel scheduled re-entries when the protected event completes'
+description: |-
+  Today agents schedule wakeups as insurance against long-running events hanging (e.g. CI watchers, build polls). When the protected event completes cleanly, the wakeup isn't cancelled — it just fires later as a harmless no-op (assuming the skill it re-enters does the right early-check).
+
+  ## Concrete repro 2026-05-13
+
+  Implementer session for PR-23 (BUG-85/87/88 cluster):
+
+  1. Agent ran 'gh run watch' to block on CI
+  2. Agent also scheduled a wakeup at +N minutes to re-enter /aida-review --pr 23 in case CI hung
+  3. CI finished cleanly; agent merged the PR cleanly
+  4. Wakeup fired ~3 minutes later, re-entered /aida-review --pr 23 against an already-merged PR
+  5. Agent correctly detected merged state and no-op'd (companion TASK on /aida-review early-exit handles this)
+
+  Even though the no-op is correct, the unnecessary re-entry produces noise — tool calls, log output, sometimes user-visible 'Background work is running' prompts asking whether to wait for the zombie fire.
+
+  ## Proposed mechanism
+
+  When scheduling a fallback wakeup, return a cancellation token. When the protected event completes, cancel via the token:
+
+    let wakeup = schedule_wakeup(duration=10min, prompt='/aida-review --pr 23')
+    ... do work ...
+    if work_completed_cleanly: wakeup.cancel()
+
+  The ScheduleWakeup tool (or equivalent) would need to support a cancel operation. The cancellation could be:
+
+  1. A handle returned by ScheduleWakeup that the agent stores
+  2. A tag/ID supplied at schedule-time + a CancelWakeup tool keyed by that tag
+  3. Auto-cancellation by content match (any pending wakeup whose prompt matches X gets cancelled when Y signal fires) — fragile, prefer explicit
+
+  ## Composes with
+
+  - TASK-111 (CI-aware session end): session end could surface 'there are N pending wakeups for this session — cancel them?' on the way out
+  - TASK-220 (aida status): could surface pending wakeups for the current session
+  - Companion TASK on /aida-review --pr early-exit: the early-exit handles the SYMPTOM (zombie re-fire produces no-op); cancellation handles the CAUSE (the wakeup fires at all)
+
+  ## Why low priority
+
+  Today's zombie fires are harmless thanks to skill-level early-exits (when they exist). The annoyance is cosmetic: user-facing 'Background work is running' prompts, log noise, slight quota consumption. Worth fixing eventually but no real correctness impact.
+
+  ## Discovered via
+
+  2026-05-13 — scheduled wakeup at 21:43 PT fired /aida-review --pr 23 four minutes after PR-23 was merged. User saw 'Background work is running' prompt asking whether to wait or exit. The wakeup had no purpose; it should have been cancelled when CI completed.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T04:46:28.443236212Z
+modified_at: 2026-05-14T04:46:28.443236212Z
+req_type: Task
+tags:
+- cancellation
+- fallback
+- scheduling
+- wakeup
+- zombie-fires
