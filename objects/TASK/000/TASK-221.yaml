@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:18:32.164336313Z
-modified_at: 2026-05-14T06:50:34.515601974Z
+modified_at: 2026-05-14T06:59:13.151752847Z
 req_type: Task
 tags:
 - activate
@@ -70,6 +70,11 @@ comments:
     Concrete data point supporting TASK-221's priority.
   created_at: 2026-05-14T06:25:01.556573560Z
   modified_at: 2026-05-14T06:25:01.556573560Z
+- id: 019e2548-427f-7513-a4e0-dd6c87e8ed6e
+  author: joe
+  content: Commit 556802b9 references this requirement
+  created_at: 2026-05-14T06:59:13.151752847Z
+  modified_at: 2026-05-14T06:59:13.151752847Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:50:34.515601974Z
