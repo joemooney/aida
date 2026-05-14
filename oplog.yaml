@@ -4235,5 +4235,53 @@ operations:
   timestamp: 2026-05-14T06:05:51.409813553Z
   kind: !SetStatus
     status: Completed
-clock: 506
+- id: 019e2518-a012-7490-82ad-242772d8f0e2
+  target_id: 019e202a-ced0-7660-8b77-efaa3f0ebf50
+  author: aida
+  node_id: '1'
+  lamport: 507
+  timestamp: 2026-05-14T06:07:11.378896698Z
+  kind: !SetTitle
+    title: 'Cluster/batch grouping + composes-with relationship: superseded by TASK-229 for tag-drain; this story now scopes to composes-with edges only'
+- id: 019e2518-a04c-72d1-a74e-8c4f1047392d
+  target_id: 019e202a-ced0-7660-8b77-efaa3f0ebf50
+  author: aida
+  node_id: '1'
+  lamport: 508
+  timestamp: 2026-05-14T06:07:11.436431184Z
+  kind: !SetDescription
+    description: |-
+      Originally captured both cluster/batch grouping AND composes-with pairwise relationships in one TASK. Splitting per design discussion 2026-05-13:
+
+      - **TASK-229** (just filed) — operational tag-based batch drain (aida queue work --batch NAME). Naming convention chosen: 'batch' (matches existing PR-title convention 'EPIC-N batch M', operational/intent-oriented). This is the immediately-useful piece.
+
+      - **This TASK (now scoped narrower)** — composes-with relationship type + queue-pickup surfacing of related items.
+
+      ## Remaining scope of this TASK
+
+      A. **composes-with relationship type** — pairwise edge, mutual semantics. Means: shipping both together has multiplicative value; shipping one alone leaves the other suboptimal. Example: TASK-218 (rework verb) composes-with TASK-217 (status-aware error) — TASK-217's recovery messages literally shorten once TASK-218 ships.
+
+        aida rel add A B --type composes-with
+        aida show enumerates composes-with edges inline
+
+      B. **Queue-pickup surfacing of composes-with neighbors** — when aida queue work TASK-X runs, check composes-with edges to other queued tasks. If any, surface 'this task composes with TASK-Y / TASK-Z, also queued. Batch them?' (offers same drain as TASK-229's --batch but driven by graph edges rather than tags).
+
+      C. **Backfill** — this session's TASK comments contain ~15 'Composes with: TASK-X' references that should become real edges once the type exists.
+
+      ## Naming note
+
+      Originally drafted with 'cluster' terminology. Renamed to 'batch' for consistency with PR-title convention and to match TASK-229. If composes-with surfacing batches related items, the language can be 'these compose into a batch.'
+
+      ## Composes with (intentional eat-your-own-dogfood example)
+
+      This TASK composes-with TASK-229: TASK-229 ships the operational drain (tag-based), this TASK adds the graph-edge variant. Together they cover both intent-driven (tag) and structural-affinity (composes-with) batching.
+
+      ## Acceptance
+
+      - [ ] composes-with relationship type accepted via aida rel add
+      - [ ] aida show enumerates composes-with edges inline (compose with TASK-102)
+      - [ ] aida queue work TASK-X surfaces composes-with neighbors and offers batch pickup
+      - [ ] Backfill: convert this session's 'Composes with: ...' comments into real composes-with edges
+      - [ ] Documentation in docs/session-lifecycle.md (or new docs/clusters-and-batches.md) names the distinction between tag-based batches (TASK-229) and edge-based composition (this TASK)
+clock: 508
 node_id: '1'

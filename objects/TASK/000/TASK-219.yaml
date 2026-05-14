@@ -1,64 +1,46 @@
 id: 019e202a-ced0-7660-8b77-efaa3f0ebf50
 spec_id: TASK-219
 agreed_id: TASK-219
-title: 'Cluster grouping + composes-with relationship: batch-pickup machinery beyond parent/child'
+title: 'Cluster/batch grouping + composes-with relationship: superseded by TASK-229 for tag-drain; this story now scopes to composes-with edges only'
 description: |-
-  Captures a design surface that emerged 2026-05-13 around 'how do related tasks get batch-picked-up by an implementer.' Today AIDA's batch-pickup (STORY-42's aida queue work cluster mode) only works on parent/child edges. Many related TASKs in this session compose without parent/child relationships.
+  Originally captured both cluster/batch grouping AND composes-with pairwise relationships in one TASK. Splitting per design discussion 2026-05-13:
 
-  ## Two complementary mechanisms
+  - **TASK-229** (just filed) — operational tag-based batch drain (aida queue work --batch NAME). Naming convention chosen: 'batch' (matches existing PR-title convention 'EPIC-N batch M', operational/intent-oriented). This is the immediately-useful piece.
 
-  A. **composes-with relationship type** — pairwise edge, mutual. Means: shipping both together has multiplicative value; shipping one alone leaves the other suboptimal. Example: TASK-218 (rework verb) composes-with TASK-217 (status-aware error) — TASK-217's recovery messages literally shorten once TASK-218 ships.
+  - **This TASK (now scoped narrower)** — composes-with relationship type + queue-pickup surfacing of related items.
 
-  B. **cluster grouping (tag-based)** — flat membership in a named group. Means: these tasks form a coherent batch; consider working any of them together. Example: cluster:plan-tooling spans TASK-92/93/94/95/96/113/114/217 across multiple parent-child branches.
+  ## Remaining scope of this TASK
 
-  Both fill the granularity gap between EPIC (too broad) and parent/child (too rigid).
+  A. **composes-with relationship type** — pairwise edge, mutual semantics. Means: shipping both together has multiplicative value; shipping one alone leaves the other suboptimal. Example: TASK-218 (rework verb) composes-with TASK-217 (status-aware error) — TASK-217's recovery messages literally shorten once TASK-218 ships.
 
-  ## Sketch — lean v1
+    aida rel add A B --type composes-with
+    aida show enumerates composes-with edges inline
 
-  For composes-with: add as custom relationship type. aida rel add A B --type composes-with. aida show enumerates composes-with edges inline (composes with TASK-102 expansion).
+  B. **Queue-pickup surfacing of composes-with neighbors** — when aida queue work TASK-X runs, check composes-with edges to other queued tasks. If any, surface 'this task composes with TASK-Y / TASK-Z, also queued. Batch them?' (offers same drain as TASK-229's --batch but driven by graph edges rather than tags).
 
-  For cluster: structured tag convention. aida add ... --tags 'cluster:plan-tooling, ...'. Then aida cluster list / aida cluster show NAME / aida cluster members NAME enumerate.
+  C. **Backfill** — this session's TASK comments contain ~15 'Composes with: TASK-X' references that should become real edges once the type exists.
 
-  For queue work surfacing: extend STORY-42's cluster-pickup logic. When aida queue work TASK-X runs, check (a) composes-with edges to other queued tasks, (b) cluster:* tags shared with other queued tasks. If either, offer batch pickup.
+  ## Naming note
 
-  ## Pragmatic notes for the future implementer
+  Originally drafted with 'cluster' terminology. Renamed to 'batch' for consistency with PR-title convention and to match TASK-229. If composes-with surfacing batches related items, the language can be 'these compose into a batch.'
 
-  - DON'T over-decompose. This TASK is one unit, not pre-split into 4 TASKs, because the design choices interact and shouldn't be locked in upfront. Whoever picks it up should design holistically.
-  - DON'T promote cluster to a new req type unless tag-based proves inadequate. Tags are cheap, types are heavy.
-  - DO consider: should composes-with be directional or mutual? Mutual is simpler; directional (e.g. 'A benefits-from B') is more expressive. Lean mutual for v1.
-  - DO consider: should clusters have status/owner metadata? If yes, they probably want to be a type, not a tag. If no, stay tags. Lean tag-only for v1.
-  - DO backfill: this session's TASK comments contain ~15 'Composes with: TASK-X' references that should become real edges once the type exists.
+  ## Composes with (intentional eat-your-own-dogfood example)
 
-  ## Composes with (illustrative, real edges to add when this ships)
+  This TASK composes-with TASK-229: TASK-229 ships the operational drain (tag-based), this TASK adds the graph-edge variant. Together they cover both intent-driven (tag) and structural-affinity (composes-with) batching.
 
-  - TASK-218 composes-with TASK-217 (rework verb shortens error messages)
-  - TASK-218 composes-with TASK-112 (rework + resume = full fixup loop)
-  - TASK-217 composes-with TASK-112 (Done-case error could offer --resume)
-  - TASK-99 composes-with TASK-107 (queue work pulls code USES aida fetch)
-  - TASK-93 composes-with TASK-94 (verify uses helper derivation)
-  - TASK-95 composes-with TASK-113 + TASK-114 (the ultraplan integration pipeline)
-  - TASK-103 + TASK-104 + TASK-105 (rebase trio under STORY-114)
-  - TASK-106 + TASK-107 + TASK-108 + TASK-109 (verb-surface quartet under STORY-115)
+  ## Acceptance
 
-  These are clusters too — cluster:rebase-verb, cluster:verb-surface, etc.
-
-  ## Discovered via
-
-  2026-05-13 session — observed that ~15 'Composes with: TASK-X' comments had accumulated in TASK descriptions, all unsurfaced at pickup time. User asked: 'should there be some linkage/relationship/comment that when you pick up one of the tasks that it should also work the others that are recommended' and then 'maybe we have a cluster concept?'
-
-  ## Acceptance (intentionally high-level — design holistically)
-
-  - [ ] composes-with relationship type works (aida rel add ... --type composes-with)
-  - [ ] Some cluster mechanism exists (tag-based or otherwise) for flat batch grouping
-  - [ ] aida queue work surfaces both composes-with neighbors and cluster siblings at pickup
-  - [ ] Backfill: convert 'Composes with: TASK-X' comments accumulated this session into real edges
-  - [ ] Document in docs/session-lifecycle.md or a sibling doc — name the distinction between composes-with and cluster
+  - [ ] composes-with relationship type accepted via aida rel add
+  - [ ] aida show enumerates composes-with edges inline (compose with TASK-102)
+  - [ ] aida queue work TASK-X surfaces composes-with neighbors and offers batch pickup
+  - [ ] Backfill: convert this session's 'Composes with: ...' comments into real composes-with edges
+  - [ ] Documentation in docs/session-lifecycle.md (or new docs/clusters-and-batches.md) names the distinction between tag-based batches (TASK-229) and edge-based composition (this TASK)
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:08:56.912838543Z
-modified_at: 2026-05-13T07:08:56.912838543Z
+modified_at: 2026-05-14T06:07:11.354171892Z
 req_type: Task
 tags:
 - cluster
