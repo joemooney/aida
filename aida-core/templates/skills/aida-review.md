@@ -254,10 +254,39 @@ EOF
 
 Show the verdict table. Ask explicitly: "All green — `gh pr merge <N> --squash`?" The user can:
 - **Accept** (proceed to step 9)
-- **Request changes** (post a `gh pr review --request-changes` instead; STOP)
+- **Request changes** (see "Request-changes path" below — comment-only mode is the default; STOP)
 - **Cancel** (no merge call)
 
 Never auto-merge — the reviewer's `aida-review` is a workflow accelerant, not a YOLO switch.
+
+**Request-changes path** — trace:TASK-216 | ai:claude
+
+Before calling `gh pr review --request-changes`, check whether the reviewer is the PR author. GitHub blocks `addPullRequestReview` with `REQUEST_CHANGES` on your own pull request — the error `Can not request changes on your own pull request` is guaranteed in solo-developer / author-is-reviewer scenarios, and surfacing the failure is just noise. The consolidated review comment posted in step 7 already serves the request-changes signal for humans; the formal GitHub review type only matters when branch protection requires a non-author approval (which by definition can't be the author anyway).
+
+Detect own-PR cheaply:
+
+```bash
+PR_AUTHOR=$(gh pr view <N> --json author --jq '.author.login' 2>/dev/null)
+ME=$(gh api user --jq '.login' 2>/dev/null)
+```
+
+Then:
+
+- **If `$PR_AUTHOR` == `$ME` (own PR)**: SKIP `gh pr review --request-changes`. The consolidated comment from step 7 is the request-changes signal. Surface a one-line note so the user understands the skip:
+
+  ```
+  ℹ Own-PR: skipped `gh pr review --request-changes` (GitHub blocks it on author-reviewed PRs). The consolidated review comment above is the signal.
+  ```
+
+- **If `$PR_AUTHOR` != `$ME` (cross-author PR)**: post the formal review:
+
+  ```bash
+  gh pr review <N> --request-changes --body "See the consolidated review comment posted above for the per-spec verdicts."
+  ```
+
+- **If `gh` isn't on PATH or either lookup fails**: degrade to comment-only with a note: "ℹ `gh` user lookup unavailable — formal request-changes review skipped; the comment above is the signal." Don't block the workflow on metadata lookups.
+
+In all three paths the consolidated comment from step 7 has already been posted, so the reviewer signal is delivered regardless of which branch runs.
 
 ### 9. Merge
 
