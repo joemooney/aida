@@ -1,0 +1,90 @@
+id: 019e2555-5a78-7811-a012-47f3b542b9fd
+spec_id: STORY-122
+agreed_id: STORY-122
+title: 'aida usage: track CLI + slash-command usage locally to inform keep/merge/deprecate decisions'
+description: |-
+  AIDA scaffolds ~28 /aida-* skills and dozens of CLI subcommands. Without usage data, we have no honest signal on which ones are load-bearing vs cruft. Need lightweight, opt-in, local-first telemetry to inform deprecation and prioritization decisions.
+
+  ## Why this matters
+
+  - **Deprecate dead surfaces**: a skill nobody invokes in 90 days is probably noise — either remove or merge with a sibling
+  - **Prioritize maintenance**: heavily-used surfaces deserve the most polish (TASK-110's next-steps ordering hit /aida-pr because /aida-pr is hot; less-used skills get less return per fix)
+  - **Identify documentation gaps**: commands that frequently error (non-zero exit) signal UX problems
+  - **Self-reflective design discipline**: prevents skill-set bloat by making 'do we need this?' answerable with data
+
+  ## V1 scope (this STORY)
+
+  A focused TASK: instrument CLI subcommand entry points (Rust code in aida-cli/src/main.rs) to append a line to ~/.aida/usage.jsonl per invocation. Plus a query command: aida usage.
+
+  ### Schema (one JSONL line per invocation)
+
+    {
+      'ts': '2026-05-14T01:23:45Z',
+      'cmd': 'queue work',
+      'args_count': 1,
+      'exit_code': 0,
+      'duration_ms': 234,
+      'binary_sha': '724aafb8',
+      'role': 'implementer',
+      'scope': 'STORY-86'
+    }
+
+  NOT logged: actual arg values (privacy), file paths, requirement content. Just command-shape + outcome.
+
+  ### aida usage query
+
+    aida usage                     - top-20 most-used commands in the last 30 days
+    aida usage --since 90d          - over a longer window
+    aida usage --unused 30d         - commands NOT used in N days (deprecation candidates)
+    aida usage --errors             - commands with high error rates (UX gap candidates)
+    aida usage --json               - machine-readable
+
+  ### Opt-out
+
+  [telemetry] enabled = true|false in .aida/config.toml. Default 'enabled = true' (local-only, never phoned home). If user sets enabled = false, no usage.jsonl writes happen. AIDA never uploads or shares this data.
+
+  ## V2 (backlog, separate TASK when v1 lands)
+
+  Slash-command tracking: extend the skill-template convention so each /aida-* skill records its invocation via aida usage record /aida-NAME at start. Slash-command usage is currently invisible because skills are Claude Code's concern, not AIDA's.
+
+  ## V3 (backlog, requires consent UX)
+
+  Opt-in cross-clone aggregation: if a user opts in, aida usage syncs anonymized counts to a shared aggregation point. Lets the AIDA project see real-world usage across users, informing scaffolding/template decisions. Heavy consent UX required.
+
+  ## Composes with
+
+  - aida history (existing): some lifecycle activity is already logged via record_role_activity; usage is a different surface (CLI-invocation-level) but they could share infrastructure
+  - TASK-220 (aida status): could surface 'most-used commands this session' as a section
+  - BUG-99 (SIGPIPE panic): high-error commands surface via aida usage --errors — provides empirical priority signal
+  - /aida-capture skill: at session end, could review which commands fired most + suggest skill consolidation
+
+  ## Why this matters now
+
+  Today's session demonstrates the problem: I've casually said 'most-used' or 'load-bearing' about various skills (/aida-pr, /aida-pickup, /aida-review) but had no actual data. The whole 'cluster vs head-pickup' analysis was qualitative. With usage data, we'd KNOW which patterns are real.
+
+  ## Acceptance for v1
+
+  - [ ] Usage logger at every aida CLI entry point (~30 subcommands)
+  - [ ] JSONL append to ~/.aida/usage.jsonl with the documented schema
+  - [ ] [telemetry] enabled config (default true, local-only)
+  - [ ] aida usage query subcommand with --since / --unused / --errors / --json flags
+  - [ ] Privacy: NO arg values logged, NO file paths, NO requirement content
+  - [ ] Tests cover: telemetry disabled (no writes), JSONL append concurrency, query aggregation correctness, --unused excludes commands used since cutoff
+  - [ ] docs/observability.md (new) explains what's logged and why
+
+  ## Discovered via
+
+  2026-05-14 (overnight) — user observed: 'there are a lot of /aida-* commands. If we don't use them or the agent doesn't use them we should reconsider. Perhaps we store metrics on aida command usage?' Excellent self-reflective design discipline — prevents bloat by making the 'should this exist' question answerable with data.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T07:13:31.256915529Z
+modified_at: 2026-05-14T07:13:31.256915529Z
+req_type: Story
+tags:
+- deprecation
+- observability
+- skill-hygiene
+- telemetry
+- usage-metrics
