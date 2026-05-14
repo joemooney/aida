@@ -249,11 +249,23 @@ The exit code is non-zero on this path. STOP — do not pretend the hand-off suc
 
 Step 11's "Next steps" template branches on whether step 10 succeeded — the *auto-queue skipped/failed* variant is for the by-design and needs-attention paths.
 
-### 11. Output the URL + Next steps — trace:TASK-87
+### 11. Output the URL + Next steps — trace:TASK-87 trace:TASK-110
 
 Print the URL `gh` returned. Then surface a structured
 `Next steps (recommended order):` block so the implementer→reviewer hand-off
 is explicit rather than improvised. Don't auto-execute — the user picks.
+
+**Ordering rationale (TASK-110 + TASK-111):** end-implementer comes BEFORE
+start-reviewer. The implementer's lease owns the PR/STORY scope; a reviewer
+session on the same scope while the implementer lease is held would
+conflict (or require `--steal`, which is for stuck-lease recovery, not
+normal handoffs). Since TASK-111 shipped, `aida session end` now probes
+the PR's CI state and prompts (or waits with `--wait-ci`, skips with
+`--skip-ci`) before releasing the lease, so the user no longer has to
+sequence `gh run watch` manually — the right move is now just **End
+implementer (CI-aware) → Start reviewer**. If CI is red, the End session
+refuses by default so fixup commits land in the implementer session
+without a lease re-claim.
 
 **Detect state first:**
 
@@ -268,7 +280,9 @@ Combine with step 10's auto-queue outcome (✓ filed / ⓘ already exists /
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
 `/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
 `🚪` = stop/exit. Recommendations must be CONCRETE — name the PR, the
-review story, the session ID.
+review story, the session ID. In this block the three rows are sequential
+steps to perform in order (▶ first, then ⏵, then 🚪), not alternatives —
+"recommended order" is literal.
 
 **Templates:**
 
@@ -279,9 +293,8 @@ PR-<N> opened: <url>
 <STORY-X> filed as review story; reviewer queue has it at head.
 
 Next steps (recommended order):
-  1. ▶ Start review session → `aida queue work <STORY-X>` (or `aida queue work PR-<N>`)
-  2. ⏵ Wait for CI to settle first → `gh run watch` (block until green, then start review)
-  3. 🚪 End implementer session, take a break → Ctrl+D + `aida session end <session-id>` from parent shell
+  1. ▶ End implementer session (CI-aware) → Ctrl+D + `aida session end <session-id>` from parent shell — auto-probes CI; refuses if red so you can push fixups without re-claiming the lease; pass `--wait-ci` to block until green, `--skip-ci` to release immediately
+  2. ⏵ Start review session → from parent shell: `aida queue work <STORY-X>` (or `aida queue work PR-<N>`)
 ```
 
 *Auto-queue skipped/failed (⚠ outcome from step 10):*
@@ -290,10 +303,9 @@ Next steps (recommended order):
 PR-<N> opened: <url>
 ⚠ Auto-queue review didn't fire (gh unauthenticated or PATH-broken).
 
-Next steps:
-  1. ▶ Open a reviewer session manually → `eval "$(aida role enter reviewer --owns PR-<N>)"` then `/aida-review --pr <N>`
-  2. ⏵ Just wait for CI + merge inline → `gh run watch` then `gh pr merge <N> --squash`
-  3. 🚪 End implementer session → Ctrl+D + `aida session end <session-id>` from parent shell
+Next steps (recommended order):
+  1. ▶ End implementer session (CI-aware) → Ctrl+D + `aida session end <session-id>` from parent shell (probes CI; pass `--wait-ci`/`--skip-ci` as needed)
+  2. ⏵ Open reviewer manually (or merge inline) → from parent shell: `eval "$(aida role enter reviewer --owns PR-<N>)"` + `/aida-review --pr <N>`, or just `gh pr merge <N> --squash` if you're the sole reviewer
 ```
 
 Print exactly one block — don't dump both templates.

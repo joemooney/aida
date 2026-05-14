@@ -1,11 +1,15 @@
 //! Rich "requirement not found" errors that surface what store was queried
-//! and how to point at a different one.
+//! and how to point at a different one. Also (BUG-97 / TASK-223) a shared
+//! formatter for parse-failure warnings, so the "what do I do next" hint
+//! is consistent across `aida show`, `aida queue list`, `aida cache rebuild`,
+//! etc.
 //!
 //! Replaces a chorus of bare `anyhow::anyhow!("Requirement not found: {}", id)`
 //! call sites that gave the user no clue why the lookup failed when run from
-//! the wrong directory.
+//! the wrong directory, plus the equally-bare `Failed to parse <path>` lines
+//! that pointed at the file without saying what to do.
 //!
-//! trace:FR-1-011 | ai:claude
+//! trace:FR-1-011 BUG-97 TASK-223 | ai:claude
 
 use std::path::{Path, PathBuf};
 
@@ -96,6 +100,10 @@ pub fn requirement_not_found(id: &str, store_path: Option<&Path>) -> anyhow::Err
     anyhow::anyhow!(msg)
 }
 
+// BUG-97 / TASK-223: the shared parse-failure hint lives in
+// aida_core::object_store::parse_failure_hint so both aida-cli and
+// aida-core can use it. Import it directly from there.
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,4 +173,7 @@ mod tests {
         let s = format!("{}", err);
         assert!(s.contains("legacy SQLite"));
     }
+
+    // BUG-97 / TASK-223: parse_failure_hint tests moved to
+    // aida-core/src/object_store.rs alongside the function's new home.
 }
