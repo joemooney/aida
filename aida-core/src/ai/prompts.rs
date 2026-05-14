@@ -33,7 +33,16 @@ pub fn build_project_context(store: &RequirementsStore) -> String {
 - Project Name: {}
 - Total Requirements: {} ({} active, {} archived)
 - Features: {}
-- Requirement Types: {}"#,
+- Requirement Types: {}
+
+## Lifecycle Vocabulary
+
+AIDA's status lifecycle is: Draft → Approved → Planned → In Progress → Done → Completed (with Rejected as a separate terminal state for work that won't ship). Two states are commonly confused:
+
+- **Done**: work finished on a branch but NOT yet merged to the default branch. Set by `aida queue done <id>` when the implementer finishes coding. PRs that are open or awaiting review sit at Done.
+- **Completed**: merged to the default branch. Reached via the auto-bump scan in `aida pull` when a commit referencing the spec lands on main, OR manually via `aida edit <id> --status completed`.
+
+When suggesting status transitions or generating child specs, prefer `Done` over `Completed` for "finished but not yet shipped" work, and only call something `Completed` when it has actually merged. trace:STORY-86, TASK-215 | ai:claude"#,
         if store.title.is_empty() {
             &store.name
         } else {
@@ -614,5 +623,53 @@ mod tests {
 
         assert!(prompt.contains("duplicate"));
         assert!(prompt.contains("similarity"));
+    }
+
+    /// TASK-215: every prompt that includes `{project_context}` should
+    /// surface the AIDA Done lifecycle vocabulary so AI agents know the
+    /// difference between Done (work finished on a branch) and Completed
+    /// (merged to main). Spot-check via the evaluate prompt — the
+    /// project-context helper is shared across all five META prompts so
+    /// covering one is sufficient. trace:TASK-215 | ai:claude
+    #[test]
+    fn project_context_mentions_done_lifecycle() {
+        let store = create_test_store();
+        let ctx = build_project_context(&store);
+        assert!(
+            ctx.contains("Lifecycle Vocabulary"),
+            "project context missing lifecycle section:\n{}",
+            ctx
+        );
+        // Both states named explicitly so AI can disambiguate.
+        assert!(ctx.contains("Done"), "lifecycle missing Done: {}", ctx);
+        assert!(
+            ctx.contains("Completed"),
+            "lifecycle missing Completed: {}",
+            ctx
+        );
+        // The key distinguishing phrase should be present so the AI
+        // doesn't confuse the two terminals.
+        assert!(
+            ctx.contains("merged to the default branch"),
+            "lifecycle missing the Completed = 'merged to main' phrasing"
+        );
+    }
+
+    /// TASK-215: the generate-children template explicitly mentions Done
+    /// as the pre-merge state for child specs so generated children land
+    /// with sensible status guidance. trace:TASK-215 | ai:claude
+    #[test]
+    fn generate_children_prompt_mentions_done() {
+        let template = crate::meta::DEFAULT_GENERATE_CHILDREN_PROMPT;
+        assert!(
+            template.contains("Done"),
+            "generate-children prompt missing Done state mention"
+        );
+        assert!(
+            template.contains("aida queue done")
+                || template.contains("`aida queue done`")
+                || template.contains("when the work is finished on a branch"),
+            "generate-children prompt should name the Done set-point"
+        );
     }
 }

@@ -186,6 +186,8 @@ Break down this requirement into specific, actionable child requirements that to
 4. Suggest appropriate requirement types for each child
 5. Avoid duplicating existing children
 
+Children start at `Approved` (or `Draft` if more discussion is needed). They flip to `In Progress` when an implementer picks them up, to `Done` when the work is finished on a branch (set by `aida queue done`), and to `Completed` only after the merge to the default branch — see the Lifecycle Vocabulary section above. trace:TASK-215 | ai:claude
+
 ## Response Format
 Respond ONLY with valid JSON in this exact format:
 ```json
