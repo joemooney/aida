@@ -44,3 +44,11 @@
   added_by: joe
   added_at: 2026-05-14T14:54:12.900187211Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e271e-7437-7ca2-9b40-eb63f45d5026
+  position: 36000
+  added_by: joe
+  note: 'PR-27: 9 friction-fixes specs including BUG-102 (auto-bump matches review stories by PR number — the very fix that lets THIS story auto-bump cleanly when PR merges)'
+  added_at: 2026-05-14T15:32:56.752846295Z
+  for_role: reviewer
+  for_scope: EPIC-23
