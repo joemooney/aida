@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:20:03.365833533Z
-modified_at: 2026-05-14T06:14:17.436956470Z
+modified_at: 2026-05-14T06:39:37.655068672Z
 req_type: Task
 tags:
 - aida-pr
@@ -86,6 +86,11 @@ comments:
   content: '/aida-review has the same next-steps ordering bug — observed in PR-20 reviewer session 2026-05-13. The reviewer''s emitted Next steps listed ''End reviewer session'' as step 3 (cleanup) when it should be step 1 (release lease before doing anything else). Scope this TASK to cover both /aida-pr and /aida-review (and any other skill with a Next-steps block); grep aida-core/templates/skills/ for ''Next steps'' to find all of them. Already filed: /aida-pickup, /aida-pr, /aida-review per earlier grep.'
   created_at: 2026-05-13T06:56:38.060694152Z
   modified_at: 2026-05-13T06:56:38.060694152Z
+- id: 019e2536-52b7-7520-acb0-f31974f1ded4
+  author: joe
+  content: TASK-111 shipped 2026-05-13 —  now probes CI internally. Updated /aida-pr templates to collapse the 3-step Wait-CI/End/Start block to 2 steps (End → Start), as anticipated. Conservative-path Wait-CI moved into session end itself with --wait-ci / --skip-ci flags.
+  created_at: 2026-05-14T06:39:37.655068672Z
+  modified_at: 2026-05-14T06:39:37.655068672Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:14:17.436956470Z
