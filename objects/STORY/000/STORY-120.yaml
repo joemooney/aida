@@ -1,0 +1,26 @@
+id: 019e24e2-7186-7fe2-89fc-bea21388735a
+spec_id: STORY-120
+agreed_id: STORY-120
+title: 'Review PR-24: EPIC-23 batch 4: `aida queue rework` verb for status-flip + requeue recovery (TASK-218)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e24d0`) for branch `epic-23-4`.
+
+  - PR: <https://github.com/joemooney/aida/pull/24>
+  - Branch: `epic-23-4` → `main`
+
+  ## Covers
+
+  - TASK-218
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 24` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T05:08:00.518894797Z
+modified_at: 2026-05-14T05:08:00.518894797Z
+req_type: Story
