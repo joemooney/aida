@@ -71,12 +71,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 session — PR-20 review came back with changes; implementer fixup required the manual 3-command sequence (aida edit + aida queue add + aida queue work). User asked: 'did the series of commands you gave me correspond to say an aida rework or aida queue rework command?' — naming the missing primitive that's been hiding in plain sight all session.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:03:31.556415989Z
-modified_at: 2026-05-14T05:01:26.128103281Z
+modified_at: 2026-05-14T05:01:34.995093705Z
 req_type: Task
 tags:
 - lifecycle
@@ -99,3 +99,7 @@ comments:
   content: Commit f38a41d4 references this requirement
   created_at: 2026-05-14T05:01:26.128103281Z
   modified_at: 2026-05-14T05:01:26.128103281Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-14T05:01:34.995093705Z
+  implemented_by: joe
