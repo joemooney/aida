@@ -20140,15 +20140,34 @@ fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
     Ok(canonical)
 }
 
+/// TASK-221: how the binary was picked, for the activate-time banner.
+/// Surfaced verbatim so `aida dev status` can show "why this binary."
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BinarySelectionReason {
+    /// User passed `--release` / `--debug` / a positional / the env pin.
+    Explicit,
+    /// Binary's embedded SHA matches current branch HEAD exactly.
+    ShaExactMatch,
+    /// Binary's embedded SHA is an ancestor of current branch HEAD
+    /// (current is ahead of build — likely fine; would be more so if rebuilt).
+    ShaAncestorMatch,
+    /// No SHA-matching binary found; fell back to most-recently-built
+    /// with a warning printed at activate time.
+    RecencyFallback,
+    /// Only one binary exists (no choice to make).
+    OnlyOne,
+}
+
 /// Pick the build directory + profile name for activation, honoring an
-/// explicit profile request (debug / release) when given, else falling
-/// back to whichever of `target/release/aida` vs `target/debug/aida` has
-/// the more recent mtime. Errors when the requested profile isn't built,
-/// or when neither exists at all.
+/// explicit profile request (debug / release) when given, else preferring
+/// the binary whose embedded git SHA matches (or is an ancestor of)
+/// current branch HEAD (TASK-221). Recency is the fallback when neither
+/// binary's SHA is recognizable on the current branch. Errors when the
+/// requested profile isn't built, or when neither exists at all.
 fn pick_dev_binary_dir(
     repo: &std::path::Path,
     requested: Option<&str>,
-) -> Result<(std::path::PathBuf, &'static str)> {
+) -> Result<(std::path::PathBuf, &'static str, BinarySelectionReason)> {
     let release = repo.join("target/release/aida");
     let debug = repo.join("target/debug/aida");
     let release_mtime = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
@@ -20163,7 +20182,7 @@ fn pick_dev_binary_dir(
                         debug.display()
                     );
                 }
-                Ok((repo.join("target/debug"), "debug"))
+                Ok((repo.join("target/debug"), "debug", BinarySelectionReason::Explicit))
             }
             "release" => {
                 if release_mtime.is_none() {
@@ -20172,28 +20191,185 @@ fn pick_dev_binary_dir(
                         release.display()
                     );
                 }
-                Ok((repo.join("target/release"), "release"))
+                Ok((repo.join("target/release"), "release", BinarySelectionReason::Explicit))
             }
             other => anyhow::bail!("unknown profile '{}': expected debug or release", other),
         };
     }
 
-    match (release_mtime, debug_mtime) {
-        (Some(rm), Some(dm)) => {
-            if rm >= dm {
-                Ok((repo.join("target/release"), "release"))
-            } else {
-                Ok((repo.join("target/debug"), "debug"))
+    let head_sha = current_branch_head_sha(repo);
+    let release_sha = release_mtime.is_some().then(|| binary_embedded_sha(&release)).flatten();
+    let debug_sha = debug_mtime.is_some().then(|| binary_embedded_sha(&debug)).flatten();
+
+    // Classify each candidate against current HEAD.
+    let release_match = head_sha
+        .as_ref()
+        .zip(release_sha.as_ref())
+        .map(|(h, s)| classify_sha_match(repo, s, h))
+        .unwrap_or(ShaMatch::Unknown);
+    let debug_match = head_sha
+        .as_ref()
+        .zip(debug_sha.as_ref())
+        .map(|(h, s)| classify_sha_match(repo, s, h))
+        .unwrap_or(ShaMatch::Unknown);
+
+    // Selection precedence:
+    //   1. exact SHA match — release tiebreaker
+    //   2. ancestor SHA match — release tiebreaker
+    //   3. recency fallback (today's behavior) with a warning
+    //   4. only-one if only one binary exists
+    match (release_mtime.is_some(), debug_mtime.is_some()) {
+        (true, true) => {
+            match (release_match, debug_match) {
+                (ShaMatch::Exact, _) => Ok((
+                    repo.join("target/release"),
+                    "release",
+                    BinarySelectionReason::ShaExactMatch,
+                )),
+                (_, ShaMatch::Exact) => Ok((
+                    repo.join("target/debug"),
+                    "debug",
+                    BinarySelectionReason::ShaExactMatch,
+                )),
+                (ShaMatch::Ancestor, _) => Ok((
+                    repo.join("target/release"),
+                    "release",
+                    BinarySelectionReason::ShaAncestorMatch,
+                )),
+                (_, ShaMatch::Ancestor) => Ok((
+                    repo.join("target/debug"),
+                    "debug",
+                    BinarySelectionReason::ShaAncestorMatch,
+                )),
+                _ => {
+                    // recency fallback — same as pre-TASK-221 behavior
+                    let (rm, dm) = (release_mtime.unwrap(), debug_mtime.unwrap());
+                    if rm >= dm {
+                        Ok((
+                            repo.join("target/release"),
+                            "release",
+                            BinarySelectionReason::RecencyFallback,
+                        ))
+                    } else {
+                        Ok((
+                            repo.join("target/debug"),
+                            "debug",
+                            BinarySelectionReason::RecencyFallback,
+                        ))
+                    }
+                }
             }
         }
-        (Some(_), None) => Ok((repo.join("target/release"), "release")),
-        (None, Some(_)) => Ok((repo.join("target/debug"), "debug")),
-        (None, None) => anyhow::bail!(
+        (true, false) => Ok((
+            repo.join("target/release"),
+            "release",
+            BinarySelectionReason::OnlyOne,
+        )),
+        (false, true) => Ok((
+            repo.join("target/debug"),
+            "debug",
+            BinarySelectionReason::OnlyOne,
+        )),
+        (false, false) => anyhow::bail!(
             "No aida binary found at {} or {}.\n\
              Run `cargo build --release` (or just `cargo build`) first.",
             release.display(),
             debug.display()
         ),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShaMatch {
+    Exact,
+    Ancestor,
+    Unrelated,
+    Unknown,
+}
+
+/// TASK-221: shell out to `git rev-parse HEAD` inside the repo. Returns
+/// the full 40-char SHA, or None if git is unavailable or HEAD missing.
+pub(crate) fn current_branch_head_sha(repo: &std::path::Path) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if s.is_empty() { None } else { Some(s) }
+}
+
+/// TASK-221: extract the SHA embedded by build.rs from a binary's
+/// --version output. The banner shape is:
+///   "aida X.Y.Z (built TIMESTAMP, sha SHA[+dirty])"
+/// Returns None if the binary is missing, refuses to run, or the banner
+/// shape changed.
+pub(crate) fn binary_embedded_sha(binary: &std::path::Path) -> Option<String> {
+    let output = std::process::Command::new(binary)
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout);
+    parse_embedded_sha(&s)
+}
+
+/// Pure parser for the --version banner SHA. Split out so the unit tests
+/// don't need a real binary. trace:TASK-221 | ai:claude
+pub(crate) fn parse_embedded_sha(banner: &str) -> Option<String> {
+    // Match "sha <HEX>" — accept 7+ hex chars; trim trailing "+dirty" or
+    // ")" or whitespace.
+    let lower = banner.to_ascii_lowercase();
+    let idx = lower.find("sha ")?;
+    let after = &banner[idx + 4..];
+    let mut end = 0;
+    for (i, c) in after.char_indices() {
+        if c.is_ascii_hexdigit() {
+            end = i + c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if end < 7 {
+        return None;
+    }
+    Some(after[..end].to_string())
+}
+
+/// TASK-221: classify a binary's embedded SHA against current HEAD.
+/// - Exact when the SHAs match (treating the binary's SHA as a prefix of
+///   HEAD, since build.rs may stamp a short SHA).
+/// - Ancestor when `git merge-base --is-ancestor <binary-sha> HEAD` says
+///   so — current branch is ahead of the build, but they're related.
+/// - Unrelated otherwise (likely a different branch's build).
+/// - Unknown when git isn't available (graceful fallback).
+pub(crate) fn classify_sha_match(
+    repo: &std::path::Path,
+    binary_sha: &str,
+    head_sha: &str,
+) -> ShaMatch {
+    let bin_lower = binary_sha.to_ascii_lowercase();
+    let head_lower = head_sha.to_ascii_lowercase();
+    if head_lower.starts_with(&bin_lower) || bin_lower.starts_with(&head_lower) {
+        return ShaMatch::Exact;
+    }
+    // git merge-base --is-ancestor returns exit 0 when the first commit
+    // is an ancestor of the second.
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["merge-base", "--is-ancestor", binary_sha, head_sha])
+        .status();
+    match status {
+        Ok(s) if s.success() => ShaMatch::Ancestor,
+        Ok(_) => ShaMatch::Unrelated,
+        Err(_) => ShaMatch::Unknown,
     }
 }
 
@@ -20247,21 +20423,49 @@ fn handle_dev_activate(
         env_pin.as_deref().filter(|s| !s.is_empty())
     };
 
-    let (bin_dir, profile) = pick_dev_binary_dir(&repo, effective_request)?;
+    let (bin_dir, profile, reason) = pick_dev_binary_dir(&repo, effective_request)?;
     let stale = alternate_build_is_newer(&repo, profile);
     let ps1_marker = if stale { "*" } else { "" };
 
+    // TASK-221: when the chosen binary doesn't match current HEAD by SHA,
+    // surface a warning so the user knows in advance that aida commands
+    // may behave as the binary's compile-time source, not the source on
+    // disk. Print to stderr so the eval-friendly stdout shell code is
+    // untouched. trace:TASK-221 | ai:claude
+    if reason == BinarySelectionReason::RecencyFallback {
+        let head = current_branch_head_sha(&repo);
+        let bin_sha = binary_embedded_sha(&bin_dir.join("aida"));
+        eprintln!(
+            "{} active aida binary SHA {} does not match current HEAD {}; \
+             expect parse failures or stale behavior if source diverged.",
+            "Warning:".yellow().bold(),
+            bin_sha.as_deref().unwrap_or("?"),
+            head.as_deref().unwrap_or("?"),
+        );
+        eprintln!(
+            "  Recommended: `cargo build --release` (or `cargo build`) to refresh.",
+        );
+    }
+
     // Quote-safety: paths shouldn't contain double-quotes in practice;
     // single-quote everything we emit so shell evaluation is safe.
+    let reason_chip = match reason {
+        BinarySelectionReason::Explicit => " (explicit)",
+        BinarySelectionReason::ShaExactMatch => " (SHA matches HEAD)",
+        BinarySelectionReason::ShaAncestorMatch => " (SHA is HEAD ancestor)",
+        BinarySelectionReason::RecencyFallback => " (recency fallback)",
+        BinarySelectionReason::OnlyOne => "",
+    };
     println!(
-        "# aida dev activate — using {} build at {}{}",
+        "# aida dev activate — using {} build at {}{}{}",
         profile,
         bin_dir.display(),
         if stale {
             "  (alternate build is newer)"
         } else {
             ""
-        }
+        },
+        reason_chip,
     );
     println!("export AIDA_DEV_REPO='{}'", repo.display());
     println!("export AIDA_DEV_BIN='{}'", bin_dir.display());
@@ -20386,6 +20590,40 @@ fn handle_dev_status() -> Result<()> {
         }
         if let Ok(p) = std::env::var("AIDA_DEV_PROFILE") {
             println!("Build profile: {}", p);
+        }
+        // TASK-221: compare active binary's embedded SHA to current HEAD.
+        // Surfaces the same classification `dev activate` used; reads as
+        // "is this binary in sync with the source tree right now?"
+        // trace:TASK-221 | ai:claude
+        if let (Ok(bin_dir), Ok(repo)) = (
+            std::env::var("AIDA_DEV_BIN"),
+            std::env::var("AIDA_DEV_REPO"),
+        ) {
+            let aida_path = std::path::PathBuf::from(&bin_dir).join("aida");
+            let repo_path = std::path::PathBuf::from(&repo);
+            let head = current_branch_head_sha(&repo_path);
+            let bin_sha = binary_embedded_sha(&aida_path);
+            match (head.as_deref(), bin_sha.as_deref()) {
+                (Some(h), Some(b)) => {
+                    let kind = classify_sha_match(&repo_path, b, h);
+                    let label = match kind {
+                        ShaMatch::Exact => "exact match".green().to_string(),
+                        ShaMatch::Ancestor => "ancestor of HEAD".cyan().to_string(),
+                        ShaMatch::Unrelated => "DIVERGED from HEAD".red().bold().to_string(),
+                        ShaMatch::Unknown => "(git unavailable)".dimmed().to_string(),
+                    };
+                    let bin_short = b.get(..b.len().min(8)).unwrap_or(b);
+                    let head_short = h.get(..h.len().min(8)).unwrap_or(h);
+                    println!("Binary SHA:   {} → HEAD {}  [{}]", bin_short, head_short, label);
+                    if matches!(kind, ShaMatch::Unrelated) {
+                        println!(
+                            "      {}: rebuild with `cargo build --release` (or `cargo build`)",
+                            "Recommended".yellow().bold()
+                        );
+                    }
+                }
+                _ => {}
+            }
         }
         match std::env::var("AIDA_DEV_PROFILE_PIN") {
             Ok(pin) if !pin.is_empty() => {
@@ -22994,6 +23232,104 @@ mod queue_rework_tests {
             // Just confirm the function doesn't panic on any variant.
             let _ = rework_smart_target(s);
         }
+    }
+}
+
+#[cfg(test)]
+mod binary_selection_tests {
+    //! TASK-221: pin the pure parts of `aida dev activate`'s binary
+    //! selection. `pick_dev_binary_dir` itself touches the filesystem
+    //! and spawns subprocesses; this mod covers `parse_embedded_sha` and
+    //! the `ShaMatch::Exact` shortcut path of `classify_sha_match` which
+    //! is logic, not git. trace:TASK-221 | ai:claude
+    use super::*;
+
+    #[test]
+    fn parse_embedded_sha_short_form() {
+        let banner = "aida 0.5.2 (built 2026-05-13 23:00:00 PDT, sha 866b050)";
+        assert_eq!(parse_embedded_sha(banner).as_deref(), Some("866b050"));
+    }
+
+    #[test]
+    fn parse_embedded_sha_with_dirty_marker() {
+        let banner = "aida 0.5.2 (built 2026-05-13 23:00:00 PDT, sha 866b050+dirty)";
+        // We only want the hex part — "+dirty" terminates extraction.
+        assert_eq!(parse_embedded_sha(banner).as_deref(), Some("866b050"));
+    }
+
+    #[test]
+    fn parse_embedded_sha_full_form() {
+        let banner = "aida 0.5.2 (built 2026-05-13, sha 866b050aabbccddeeff1122334455)";
+        match parse_embedded_sha(banner) {
+            Some(s) => assert!(s.starts_with("866b050"), "got: {s}"),
+            None => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn parse_embedded_sha_unknown() {
+        let banner = "aida 0.5.2 (built 2026-05-13, sha unknown)";
+        // 'unknown' starts with 'u' which isn't hex; the parser should
+        // return None rather than a non-hex string. trace:TASK-221
+        assert!(parse_embedded_sha(banner).is_none());
+    }
+
+    #[test]
+    fn parse_embedded_sha_missing_marker() {
+        let banner = "aida 0.5.2 (built 2026-05-13)";
+        assert!(parse_embedded_sha(banner).is_none());
+    }
+
+    #[test]
+    fn parse_embedded_sha_too_short() {
+        // 6 hex chars is below the 7-char threshold (matches git's default
+        // --short prefix length).
+        let banner = "aida 0.5.2 (built 2026-05-13, sha abc123)";
+        assert!(parse_embedded_sha(banner).is_none());
+    }
+
+    #[test]
+    fn classify_sha_exact_when_prefix() {
+        // Binary stamped a 7-char prefix; HEAD is the full 40. Exact match.
+        let m = classify_sha_match(
+            std::path::Path::new("/nonexistent-repo-path"),
+            "866b050",
+            "866b050aabbccddeeff1122334455667788990011",
+        );
+        assert_eq!(m, ShaMatch::Exact);
+    }
+
+    #[test]
+    fn classify_sha_exact_case_insensitive() {
+        let m = classify_sha_match(
+            std::path::Path::new("/nonexistent-repo-path"),
+            "866B050",
+            "866b050aabbccddeeff1122334455667788990011",
+        );
+        assert_eq!(m, ShaMatch::Exact);
+    }
+
+    #[test]
+    fn classify_sha_unknown_when_git_unavailable() {
+        // With a /nonexistent path, the SHAs don't prefix-match, and git
+        // exec for `merge-base --is-ancestor` will fail (Err) → Unknown
+        // (matches the documented graceful-fallback contract).
+        let m = classify_sha_match(
+            std::path::Path::new("/nonexistent-repo-path-xyz"),
+            "deadbeef",
+            "cafebabe1122334455667788990011",
+        );
+        // The classify implementation returns Unknown when git's process
+        // fails to spawn, and Unrelated when git ran but returned non-zero.
+        // On hosts where /nonexistent fails-to-spawn, we'd get Unknown;
+        // on hosts where git starts but bails on the bad cwd, Unrelated.
+        // Both are acceptable here — the point is "not Exact, not
+        // Ancestor."
+        assert!(
+            matches!(m, ShaMatch::Unknown | ShaMatch::Unrelated),
+            "got: {:?}",
+            m
+        );
     }
 }
 
