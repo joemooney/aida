@@ -64,8 +64,10 @@ A typical implementer→reviewer→merge run looks like:
   │    merge or request changes                                          │
   │                                                                      │
   │ 6. FIXUP (if needed)                                                 │
-  │    aida queue work STORY-86 --resume (TASK-112) — relaunch the       │
-  │      implementer's prior claude session with full context            │
+  │    aida queue rework STORY-86 --work --resume (TASK-218 + TASK-112)  │
+  │      — one verb: flip Done → InProgress, re-queue for implementer,   │
+  │      and relaunch the prior claude session with full context.        │
+  │      Replaces the manual edit + queue add + queue work sequence.     │
   │    fix → re-PR or push fixup commits to same PR                      │
   │    loop back to phase 4                                              │
   └──────────────────────────────────────────────────────────────────────┘
@@ -117,7 +119,7 @@ Once TASK-111 ships, this collapses further (CI handling moves *into* `aida sess
 | PR exists, CI not started | Info: PR opened, CI hasn't started. End anyway? |
 | PR exists, CI in-progress | Prompt: Wait / End anyway / Cancel |
 | PR exists, CI green | Info: ✓ CI green. Proceeds. |
-| PR exists, CI red | Warn: ⚠ CI failed. Keep session for fixups? — surfaces `aida queue work STORY-86 --resume` as the recovery |
+| PR exists, CI red | Warn: ⚠ CI failed. Keep session for fixups? — surfaces `aida queue rework STORY-86 --work --resume` (TASK-218) as the one-command recovery |
 
 Flags: `--wait-ci` (block until green), `--skip-ci` (today's behavior), `--force` (end regardless).
 
@@ -127,9 +129,14 @@ The CI-red case is where the **resume capability** earns its keep — the warnin
 
 ## Transition 4→5→6: Resume preserves Claude context
 
-When CI fails (or reviewer asks for fixups, or you just want to revisit tomorrow), the implementer Claude session's conversation history is the most valuable artifact on disk. TASK-112 makes it reachable:
+When CI fails (or reviewer asks for fixups, or you just want to revisit tomorrow), the implementer Claude session's conversation history is the most valuable artifact on disk. TASK-112 makes it reachable, and TASK-218 wraps the full recovery in a single verb:
 
 ```
+aida queue rework STORY-86 --work --resume   # one command: flip status, re-queue,
+                                             # relaunch claude with prior context
+aida rework STORY-86 --work --resume         # top-level alias (TASK-218)
+
+# Sub-pieces (when you want them separate — what /aida-rework wraps):
 aida queue work STORY-86 --resume        # use most recent recorded claude session for this scope
 aida queue work STORY-86 --resume <id>   # use specific session ID
 aida queue work STORY-86 --fresh         # today's behavior (cold launch)
@@ -137,9 +144,9 @@ aida queue work STORY-86                 # prompts if previous claude session ex
 aida queue work --list-sessions STORY-86 # enumerate prior claude sessions for scope
 ```
 
-Mechanism: AIDA session manifest records the `claude_session_id` at launch; resume looks up the most recent for the scope; `claude --resume <id>` brings back the full conversation while AIDA recreates the worktree (same branch).
+Mechanism: `aida queue rework` flips the spec's status (Done → InProgress per the smart-transition table — see `aida queue rework --help`), re-queues it for the active role, and chains `aida queue work` when `--work` is passed. AIDA's session manifest records the `claude_session_id` at launch; `--resume` looks up the most recent for the scope; `claude --resume <id>` brings back the full conversation while AIDA recreates the worktree (same branch).
 
-This is what makes the **fixup loop cheap.** Without resume, every fixup pays the cold-launch tax (re-read files, re-orient, re-derive decisions). With resume, the model picks up exactly where it left off.
+This is what makes the **fixup loop cheap.** Without resume, every fixup pays the cold-launch tax (re-read files, re-orient, re-derive decisions). With resume, the model picks up exactly where it left off. Without the rework verb (TASK-218), the implementer had to remember and chain three separate commands in order; the verb collapses that to one mental unit.
 
 ---
 

@@ -309,6 +309,6 @@ Print exactly one block — don't dump both templates.
 
 - **No base divergence**: `git log <base>..HEAD` is empty. Either you're on `main` or no commits have landed yet — report and exit.
 - **Stale local branch**: remote has commits we don't. Surface a `git pull --rebase` prompt before pushing.
-- **Half-shipped batch**: one of the REQ-IDs is still `In Progress`. Report which commit references it and ask the user to either `aida edit <id> --status completed` first or drop the commit.
+- **Half-shipped batch**: one of the REQ-IDs is still `In Progress`. Report which commit references it and ask the user to either `aida edit <id> --status completed` first or drop the commit. If the spec needs another round of work (reviewer found gaps, CI red, etc.), `aida queue rework <id> --work --resume` (TASK-218) is the one-verb recovery — flips status back to InProgress, re-queues for implementer, and chains the session relaunch.
 - **REQ-ID typo**: `aida show` returns "not found". Report the commit SHA and the bad ID; ask the user to amend the commit or file the missing requirement.
 - **`cargo fmt --all --check` drift (TASK-61)**: refuse the PR and walk the user through `cargo fmt --all` + commit. Don't push the drifted code so CI doesn't have to catch it.
