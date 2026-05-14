@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:18:32.164336313Z
-modified_at: 2026-05-13T15:18:32.164336313Z
+modified_at: 2026-05-14T06:25:01.556573560Z
 req_type: Task
 tags:
 - activate
@@ -53,3 +53,20 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T15:18:34.464420932Z
+comments:
+- id: 019e2528-f474-7331-ab44-edb5fc4c20a3
+  author: joe
+  content: |-
+    Confirmed 2026-05-13: real-world evidence of the failure mode this TASK prevents.
+
+    User reported a 'node_id = JM rejected with expected u32' error from /home/joe/ai/aida-chat against the current binary. Investigation found:
+
+    1. STORY-41 (Node id is String, not u32) is properly shipped — both NodeConfig and IdMode::Distributed have node_id: String with backwards-compat custom deserializers that accept both string and numeric forms
+    2. The bug did NOT reproduce against the current binary (sha 724aafb8+dirty) — aida list from /home/joe/ai/aida-chat with the unchanged node.toml worked cleanly
+    3. The error must have fired against a DIFFERENT (older) binary briefly active during today's multi-branch rebuild churn
+
+    This is the exact failure mode TASK-221 prevents: aida dev activate's most-recently-built heuristic can pick a binary that doesn't match the current branch's HEAD, leading to behaviors that depend on which binary was built last rather than which one matches the source tree. The user spent ~10 minutes diagnosing what turned out to be a transient binary-selection issue that would have been caught immediately by 'SHA mismatch — current binary built from <other-SHA>, branch HEAD is <X>; rebuild?' warning.
+
+    Concrete data point supporting TASK-221's priority.
+  created_at: 2026-05-14T06:25:01.556573560Z
+  modified_at: 2026-05-14T06:25:01.556573560Z
