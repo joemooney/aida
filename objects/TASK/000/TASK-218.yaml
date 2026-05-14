@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:03:31.556415989Z
-modified_at: 2026-05-14T04:48:31.959571126Z
+modified_at: 2026-05-14T04:57:15.488865048Z
 req_type: Task
 tags:
 - lifecycle
@@ -88,3 +88,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T07:03:38.183375890Z
+comments:
+- id: 019e24d8-98d7-79d0-9d2b-99362909e0a2
+  author: joe
+  content: smoke test from implementer session — verify --reason captures a comment
+  created_at: 2026-05-14T04:57:15.223504830Z
+  modified_at: 2026-05-14T04:57:15.223504830Z
