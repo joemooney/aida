@@ -36,12 +36,12 @@ description: |-
   - [ ] aida dev status shows which binary is selected and why (matched-SHA vs recency-fallback)
   - [ ] Tests cover: SHA-match wins over recency; recency fallback emits warning; ancestor-SHA also matches (current branch is ahead of build SHA)
   - [ ] CLAUDE.md AIDA-developer workflow section updated to describe the new heuristic
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:18:32.164336313Z
-modified_at: 2026-05-14T06:25:01.556573560Z
+modified_at: 2026-05-14T06:45:20.923146274Z
 req_type: Task
 tags:
 - activate
