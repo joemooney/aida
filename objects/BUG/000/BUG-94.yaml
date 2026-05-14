@@ -23,12 +23,12 @@ description: |-
   ## Discovered via
 
   PR-20 /aida-review deep-pass 2026-05-13. See PR comment at https://github.com/joemooney/aida/pull/20#issuecomment-4438122221
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:55:55.312738078Z
-modified_at: 2026-05-14T15:06:36.676134683Z
+modified_at: 2026-05-14T15:11:13.429663079Z
 req_type: Bug
 tags:
 - auto-bump
@@ -40,3 +40,7 @@ relationships:
 - rel_type: Child
   target_id: 019e134a-57d3-70e0-a15c-006dea10310d
   created_at: 2026-05-13T06:55:57.565761918Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-14T15:11:13.429663079Z
+  implemented_by: joe
