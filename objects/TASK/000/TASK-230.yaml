@@ -1,0 +1,65 @@
+id: 019e2524-80f8-7c23-bdc3-ad9d2ba6a938
+spec_id: TASK-230
+agreed_id: TASK-230
+title: 'Pipelined ping-pong v2: while blocked on PR-N review, optionally pick up next queue item in secondary worktree'
+description: |-
+  Builds on the ping-pong v1 STORY. While the implementer is blocked waiting for the reviewer's verdict on PR-N, the agent CAN start working the next queue item in a secondary worktree. When PR-N's signal fires, agent finishes any in-flight work in the secondary worktree (or marks it interruptible), then returns to PR-N to address verdict.
+
+  Effectively a two-slot CPU: one slot pinned to PR-N (waiting), one slot working anything else. Doubles throughput in best case.
+
+  ## Why backlog (not v1)
+
+  Pipelined ping-pong is a substantial complexity bump over single-slot block. v1 ships first to prove the pattern works; v2 adds throughput optimization once the foundation is solid.
+
+  ## Shape (v2)
+
+  aida session block --until SIGNAL --interleave    - enters blocked state for PR-N AND opens a secondary slot for queue work
+                                                      - secondary work happens in a separate worktree on a separate branch
+                                                      - claude in the primary blocked session manages both
+
+  aida session block --interleave-policy POLICY     - how to handle the signal while secondary work is in-flight:
+                                                      - park-secondary: complete current commit on secondary, then suspend secondary, switch to primary
+                                                      - finish-secondary: complete the secondary item fully (open its PR), then switch to primary
+                                                      - abort-secondary: drop secondary work immediately, switch to primary (lose progress)
+
+  ## Open design questions
+
+  1. Single Claude session managing two worktrees: feasible? Or requires forking?
+  2. Concurrency safety: writes to shared orphan store from both 'slots' — needs careful locking
+  3. UX: how does the user/agent know which slot is 'active'? Statusline indicator?
+  4. Failure modes: secondary work fails while primary is blocked — what happens?
+
+  These need design work before implementation. The v1 STORY ships first; v2 picks up after experience with v1 informs the design.
+
+  ## Composes with
+
+  - TASK-229 (aida queue work --batch): batch drain might naturally pipeline by interleaving review/implement cycles
+  - v1 ping-pong STORY: prerequisite — v2 builds on v1's block primitive
+  - TASK-112 (resume): could compose if the secondary slot uses cold-resume for items in the queue
+
+  ## Acceptance (high-level — design TBD)
+
+  - [ ] aida session block --interleave creates a secondary slot for queue work while primary is blocked
+  - [ ] Three interleave policies (park-secondary / finish-secondary / abort-secondary) implemented
+  - [ ] Concurrency safe: writes to orphan store don't corrupt across slots
+  - [ ] Statusline / aida session show indicates which slot is active
+  - [ ] Failure isolation: secondary failure doesn't lose primary state
+  - [ ] Tests cover happy-path interleave + each failure mode
+
+  ## Discovered via
+
+  2026-05-13 — user proposed in same conversation as the ping-pong v1 idea: 'optionally pick up the next item in the queue in a second worktree (interleaving)'. Flagged for backlog because v1 ships first, v2 needs more design after v1 experience.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T06:20:09.848488114Z
+modified_at: 2026-05-14T06:20:09.848488114Z
+req_type: Task
+tags:
+- interleave
+- ping-pong
+- pipelining
+- throughput
+- v2
+- worktree
