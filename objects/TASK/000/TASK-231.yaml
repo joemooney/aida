@@ -1,9 +1,13 @@
 id: 019e2529-361c-73a1-8964-1efa29a1c592
 spec_id: TASK-231
 agreed_id: TASK-231
-title: 'docs/session-lifecycle.md: add 5-pattern workflow taxonomy table (cold-resume / ping-pong / pipelined / cluster / head-pickup)'
+title: 'docs/session-lifecycle.md: add 5-pattern workflow taxonomy table (cold-resume / ping-pong / pipelined / batch-drain / head-pickup)'
 description: |-
   Capture the workflow-pattern taxonomy that emerged from 2026-05-13's session-lifecycle work. Today the patterns are documented across multiple sibling TASKs; the comparison view doesn't exist in any single doc surface, leaving future agents to re-derive it.
+
+  ## Naming convention
+
+  The taxonomy uses 'batch' (not 'cluster') consistently — matches the AIDA-wide naming convention established in TASK-229's filing discussion. Earlier drafts used 'cluster'; corrected to 'batch' throughout.
 
   ## Proposed table
 
@@ -17,9 +21,9 @@ description: |-
 
   3. Pipelined ping-pong — while blocked on PR-N, optionally pick up next queue item in secondary worktree. Doubles throughput. Best for SATURATED implementer. Backed by TASK-230.
 
-  4. Cluster-mode drain — one PR per cluster (multiple items, one session, one branch). Best for TIGHTLY-COUPLED item batches. Backed by STORY-42 (shipped) and extended by TASK-229.
+  4. Batch-drain — one PR per batch (multiple items, one session, one branch). Best for TIGHTLY-COUPLED item batches. Backed by STORY-42 (shipped: aida queue work PARENT cluster pickup) and extended by TASK-229 (aida queue work --batch NAME tag-driven drain).
 
-  5. Head-pickup loop — one PR per item, one session per item, one branch per item. Best for LOOSELY-COUPLED item batches. Today's default.
+  5. Head-pickup loop — one PR per item, one session per item, one branch per item. Best for LOOSELY-COUPLED item batches. Today's default behavior of aida queue work with no args.
 
   ## Comparison axes
 
@@ -47,6 +51,7 @@ description: |-
   - [ ] docs/session-lifecycle.md gains a new section: 'Workflow patterns: which to pick'
   - [ ] 5-pattern table with 5 columns (Pattern, When, Backed by TASK, Trade-off summary, Failure mode)
   - [ ] Decision-tree section walks the reader through 'cycle time? coupling? throughput needs?'
+  - [ ] 'Batch' (not 'cluster') used consistently — matches TASK-229 and project convention
   - [ ] Cross-references to the 5 underlying TASKs
   - [ ] Commit traces this TASK + cross-references TASK-112, STORY-121, TASK-230, STORY-42, TASK-229
 
@@ -58,7 +63,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T06:25:18.364688239Z
-modified_at: 2026-05-14T06:25:18.364688239Z
+modified_at: 2026-05-14T06:25:44.011928431Z
 req_type: Task
 tags:
 - docs
