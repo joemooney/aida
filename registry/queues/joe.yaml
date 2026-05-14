@@ -28,7 +28,7 @@
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e2025-d7e4-7ad0-8bfb-9f00c9c31017
-  position: 26000
+  position: 24000
   added_by: joe
-  added_at: 2026-05-13T15:38:11.079262308Z
+  added_at: 2026-05-14T04:57:03.714576612Z
   for_role: implementer
