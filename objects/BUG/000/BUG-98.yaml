@@ -56,12 +56,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 — user with 3 active leases ran session list, saw 1 old result, thought workspace was clean, then was surprised by leases command output.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T16:02:36.663781955Z
-modified_at: 2026-05-14T15:16:22.825190029Z
+modified_at: 2026-05-14T15:20:43.000582756Z
 req_type: Bug
 tags:
 - batch:friction-fixes
@@ -74,3 +74,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T16:02:37.894397054Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-14T15:20:43.000582756Z
+  implemented_by: joe
