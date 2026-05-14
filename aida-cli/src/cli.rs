@@ -556,6 +556,20 @@ pub enum SessionCommand {
         /// trace:TASK-70 | ai:claude
         #[clap(long = "purge-cc")]
         purge_cc: bool,
+
+        /// Block until the PR's CI run reaches a terminal state (green
+        /// or red) before releasing the lease. Polls every 30s via
+        /// `gh run watch`-equivalent. No-op when the session has no
+        /// associated PR or `gh` isn't on PATH. trace:TASK-111 | ai:claude
+        #[clap(long, conflicts_with = "skip_ci")]
+        wait_ci: bool,
+
+        /// Skip CI awareness entirely — restore pre-TASK-111 behavior
+        /// (release the lease without probing the PR's CI run). Use when
+        /// CI is broken, when you're not the one who'll merge, or when
+        /// the probe would be slow + you don't care. trace:TASK-111
+        #[clap(long)]
+        skip_ci: bool,
     },
 
     /// List active session leases (separately from the historical list

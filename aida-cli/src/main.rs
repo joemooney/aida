@@ -9825,7 +9825,9 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             yes,
             force,
             purge_cc,
-        } => session_end(id.as_deref(), *yes, *force, *purge_cc),
+            wait_ci,
+            skip_ci,
+        } => session_end(id.as_deref(), *yes, *force, *purge_cc, *wait_ci, *skip_ci),
         SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
         SessionCommand::Prune {
@@ -11925,6 +11927,296 @@ fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
 ///      project, prompt y/N (or auto-accept with -y).
 ///   5. error: list active leases and ask for an explicit id.
 ///
+// ----------------------------------------------------------------------------
+// TASK-111: CI-aware `aida session end`.
+//
+// When a session has an associated PR (discovered via `gh pr list --head
+// <branch>`), `aida session end` probes the PR's CI conclusion and chooses
+// an action based on a small decision tree:
+//
+//   No PR / No gh         → Proceed silently (today's behavior preserved
+//                            for non-PR sessions; gh-missing is graceful)
+//   PR exists, no CI runs → Info: "PR opened, CI hasn't started" + proceed
+//   PR exists, CI running → Prompt (default) / Wait (--wait-ci) / Cancel
+//   PR exists, CI green   → Info: "✓ CI green" + proceed
+//   PR exists, CI red     → Warn + prompt to keep session for fixups
+//
+// Both `--skip-ci` and `--force` bypass the probe entirely. With `--yes`
+// (non-interactive), running-CI defaults to proceed (you opted out of
+// prompts; we don't strand the script). Red-CI with `--yes` still
+// proceeds but the warning is loud.
+//
+// trace:TASK-111 | ai:claude
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CiProbe {
+    /// No gh on PATH, or no PR for this branch, or gh call failed in a way
+    /// we don't want to surface (network blip, auth issue) — degrade
+    /// silently to today's behavior. The reason is included for the
+    /// info-line when logging.
+    NoSignal(String),
+    /// PR exists but CI hasn't started (no workflow runs yet).
+    PrNoChecks { pr_number: u32 },
+    /// CI is in progress on the latest commit.
+    InProgress { pr_number: u32 },
+    /// All checks passed.
+    Green { pr_number: u32 },
+    /// At least one check failed.
+    Red {
+        pr_number: u32,
+        failed_summary: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CiAction {
+    /// Run the rest of session_end as today.
+    Proceed,
+    /// Block on a poll loop until CI reaches a terminal state, then
+    /// re-decide.
+    Wait,
+    /// Refuse to end the session; the message includes the reason for
+    /// the user.
+    Cancel(String),
+}
+
+/// Pure decision function: given a probe result + flags, decide what to
+/// do. Pure so the unit tests can pin every branch without spawning gh.
+/// trace:TASK-111 | ai:claude
+pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiAction {
+    match probe {
+        CiProbe::NoSignal(reason) => {
+            // Stay quiet for the common "no PR yet" case; only surface
+            // info when something interesting (gh missing, lookup failed)
+            // would help the user notice.
+            if !reason.is_empty() && !reason.contains("no open PR") {
+                eprintln!("  {} {}", "(ci-probe:".dimmed(), format!("{})", reason).dimmed());
+            }
+            CiAction::Proceed
+        }
+        CiProbe::PrNoChecks { pr_number } => {
+            eprintln!(
+                "  {} PR-{} opened, CI hasn't started yet — ending anyway.",
+                "ⓘ".cyan(),
+                pr_number,
+            );
+            CiAction::Proceed
+        }
+        CiProbe::Green { pr_number } => {
+            eprintln!("  {} CI green on PR-{}.", "✓".green(), pr_number);
+            CiAction::Proceed
+        }
+        CiProbe::InProgress { pr_number } => {
+            if wait_ci {
+                eprintln!(
+                    "  {} CI in progress on PR-{} (--wait-ci will block).",
+                    "◐".yellow(),
+                    pr_number,
+                );
+                CiAction::Wait
+            } else if yes {
+                eprintln!(
+                    "  {} CI in progress on PR-{} (proceeding — --yes set; pass --wait-ci to block).",
+                    "◐".yellow(),
+                    pr_number,
+                );
+                CiAction::Proceed
+            } else {
+                CiAction::Cancel(format!(
+                    "  {} CI is still in progress on PR-{}.\n  Options:\n    --wait-ci   block until CI completes\n    --skip-ci   release lease now (you'll have to push fixups in a new session if CI goes red)\n    --force     release lease unconditionally",
+                    "◐".yellow(),
+                    pr_number,
+                ))
+            }
+        }
+        CiProbe::Red {
+            pr_number,
+            failed_summary,
+        } => {
+            if yes {
+                eprintln!(
+                    "  {} CI RED on PR-{}: {}\n  ({} set — ending anyway. Push fixups in a new session via `aida queue rework`.)",
+                    "✗".red(),
+                    pr_number,
+                    failed_summary.dimmed(),
+                    "--yes".dimmed(),
+                );
+                CiAction::Proceed
+            } else {
+                CiAction::Cancel(format!(
+                    "  {} CI RED on PR-{}: {}\n  Recommended: keep this session alive and push fixups (the implementer's lease lets you commit without re-claiming).\n  To end anyway: pass --force or --yes.",
+                    "✗".red(),
+                    pr_number,
+                    failed_summary,
+                ))
+            }
+        }
+    }
+}
+
+/// Side-effecting probe: shell out to gh and parse the result. Returns a
+/// `CiProbe::NoSignal` for any failure path so callers don't have to
+/// distinguish between "no PR" and "gh broken" — both degrade to "proceed
+/// silently." trace:TASK-111 | ai:claude
+pub(crate) fn probe_ci_state_for_branch(branch: &str) -> CiProbe {
+    let gh = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return CiProbe::NoSignal("gh not on PATH".to_string()),
+    };
+    // `gh pr list --head <branch> --state all --json number,statusCheckRollup`
+    // is the one call that gives us both the PR number and the check
+    // rollup. `--state all` covers Open + Merged (we still probe a
+    // recently-merged PR for "did CI finish before the merge?", though
+    // in practice the user has already merged so we just degrade).
+    let output = std::process::Command::new(&gh)
+        .args([
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "open",
+            "--json",
+            "number,statusCheckRollup",
+            "--limit",
+            "1",
+        ])
+        .output();
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        Ok(o) => {
+            return CiProbe::NoSignal(format!(
+                "gh pr list failed: {}",
+                String::from_utf8_lossy(&o.stderr).trim()
+            ));
+        }
+        Err(e) => return CiProbe::NoSignal(format!("gh spawn error: {e}")),
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_ci_probe(&stdout)
+}
+
+/// Pure JSON-to-CiProbe parser. Extracted so we can unit-test it without
+/// running gh. The input shape is `[{"number": N, "statusCheckRollup": [...]}]`
+/// (a JSON array of PR objects from gh; we only ever look at the first).
+/// trace:TASK-111 | ai:claude
+pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() || trimmed == "[]" {
+        return CiProbe::NoSignal("no open PR for branch".to_string());
+    }
+    let parsed: serde_json::Value = match serde_json::from_str(trimmed) {
+        Ok(v) => v,
+        Err(e) => return CiProbe::NoSignal(format!("gh json parse: {e}")),
+    };
+    let pr = match parsed.get(0).cloned() {
+        Some(v) => v,
+        None => return CiProbe::NoSignal("gh returned empty array".to_string()),
+    };
+    let pr_number = pr
+        .get("number")
+        .and_then(|n| n.as_u64())
+        .map(|n| n as u32);
+    let pr_number = match pr_number {
+        Some(n) => n,
+        None => return CiProbe::NoSignal("gh json missing PR number".to_string()),
+    };
+    let rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());
+    let rollup = match rollup {
+        Some(r) if !r.is_empty() => r,
+        _ => return CiProbe::PrNoChecks { pr_number },
+    };
+    // Tally check states. statusCheckRollup entries can be from
+    // CheckRun (status=COMPLETED|IN_PROGRESS|QUEUED, conclusion=SUCCESS|FAILURE|...)
+    // or StatusContext (state=SUCCESS|FAILURE|PENDING|ERROR). Handle both.
+    let mut any_in_progress = false;
+    let mut failed: Vec<String> = Vec::new();
+    for check in rollup {
+        // CheckRun shape
+        if let Some(status) = check.get("status").and_then(|v| v.as_str()) {
+            let conclusion = check
+                .get("conclusion")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            match status {
+                "IN_PROGRESS" | "QUEUED" | "PENDING" | "WAITING" => any_in_progress = true,
+                "COMPLETED" => {
+                    if matches!(
+                        conclusion,
+                        "FAILURE" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" | "STALE"
+                    ) {
+                        let name = check
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("check");
+                        failed.push(name.to_string());
+                    }
+                }
+                _ => {}
+            }
+        } else if let Some(state) = check.get("state").and_then(|v| v.as_str()) {
+            // StatusContext shape
+            match state {
+                "PENDING" | "EXPECTED" => any_in_progress = true,
+                "FAILURE" | "ERROR" => {
+                    let name = check
+                        .get("context")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("status");
+                    failed.push(name.to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+    if !failed.is_empty() {
+        let summary = if failed.len() <= 3 {
+            failed.join(", ")
+        } else {
+            format!("{} and {} more", failed[..3].join(", "), failed.len() - 3)
+        };
+        return CiProbe::Red {
+            pr_number,
+            failed_summary: summary,
+        };
+    }
+    if any_in_progress {
+        return CiProbe::InProgress { pr_number };
+    }
+    CiProbe::Green { pr_number }
+}
+
+/// Block until the branch's CI run reaches a terminal state. Polls every
+/// 30s; gives up after 30 minutes (60 polls) and returns NoSignal so the
+/// caller proceeds rather than hanging. Ctrl+C interrupts cleanly.
+/// trace:TASK-111 | ai:claude
+fn wait_for_ci_terminal(branch: &str) -> CiProbe {
+    const POLL_INTERVAL_SECS: u64 = 30;
+    const MAX_POLLS: u32 = 60;
+    let started = std::time::Instant::now();
+    for poll in 0..MAX_POLLS {
+        std::thread::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
+        let probe = probe_ci_state_for_branch(branch);
+        let elapsed = started.elapsed().as_secs();
+        match &probe {
+            CiProbe::InProgress { pr_number } => {
+                eprintln!(
+                    "  {} CI still running on PR-{} ({}m {}s elapsed, poll {}/{})",
+                    "◐".yellow(),
+                    pr_number,
+                    elapsed / 60,
+                    elapsed % 60,
+                    poll + 1,
+                    MAX_POLLS,
+                );
+            }
+            _ => return probe,
+        }
+    }
+    CiProbe::NoSignal("--wait-ci gave up after 30m".to_string())
+}
+
 /// trace:STORY-73 | ai:claude
 fn resolve_session_to_end(
     id_query: Option<&str>,
@@ -12184,7 +12476,14 @@ fn shell_single_quote(s: &str) -> String {
     out
 }
 
-fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -> Result<()> {
+fn session_end(
+    id_query: Option<&str>,
+    yes: bool,
+    force: bool,
+    purge_cc: bool,
+    wait_ci: bool,
+    skip_ci: bool,
+) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -12193,6 +12492,39 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -
     }
 
     let target = resolve_session_to_end(id_query, &leases, yes)?;
+
+    // TASK-111: CI awareness. Probe the branch for an open PR's CI state
+    // and surface info / prompt / warn based on the state. --skip-ci and
+    // --force both bypass the probe (force already gets a noisy override
+    // path; --skip-ci is the quieter explicit "don't bother"). Probe
+    // happens BEFORE the BUG-61 live-claude check so the user can decide
+    // whether to bail-and-keep-fixing without first wading through the
+    // claude-process disclosure. trace:TASK-111 | ai:claude
+    if !skip_ci && !force {
+        let probe = probe_ci_state_for_branch(&target.branch);
+        match decide_ci_action(&probe, wait_ci, yes) {
+            CiAction::Proceed => {}
+            CiAction::Wait => {
+                eprintln!(
+                    "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
+                    "→".cyan()
+                );
+                let final_probe = wait_for_ci_terminal(&target.branch);
+                match decide_ci_action(&final_probe, false, yes) {
+                    CiAction::Proceed => {}
+                    CiAction::Wait => {} // can't loop on Wait again
+                    CiAction::Cancel(msg) => {
+                        eprintln!("{}", msg);
+                        return Ok(());
+                    }
+                }
+            }
+            CiAction::Cancel(msg) => {
+                eprintln!("{}", msg);
+                return Ok(());
+            }
+        }
+    }
 
     // BUG-61: detect live `claude` processes whose cwd is under the
     // worktree we're about to remove. If we don't, `git worktree remove`
@@ -22644,6 +22976,185 @@ mod queue_rework_tests {
     }
 }
 
+#[cfg(test)]
+mod ci_action_tests {
+    //! TASK-111: pin the `aida session end` CI decision tree. The probe
+    //! itself shells out to gh, but `decide_ci_action` and `parse_ci_probe`
+    //! are pure — tests cover every probe state × yes/wait_ci combo so
+    //! lifecycle changes don't silently corrupt the handoff.
+    //! trace:TASK-111 | ai:claude
+    use super::*;
+
+    #[test]
+    fn no_signal_proceeds_silently() {
+        let probe = CiProbe::NoSignal("no open PR for branch".to_string());
+        assert_eq!(decide_ci_action(&probe, false, false), CiAction::Proceed);
+        assert_eq!(decide_ci_action(&probe, true, false), CiAction::Proceed);
+        assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
+    }
+
+    #[test]
+    fn green_always_proceeds() {
+        let probe = CiProbe::Green { pr_number: 7 };
+        assert_eq!(decide_ci_action(&probe, false, false), CiAction::Proceed);
+        assert_eq!(decide_ci_action(&probe, true, false), CiAction::Proceed);
+        assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
+    }
+
+    #[test]
+    fn pr_no_checks_proceeds_with_info() {
+        let probe = CiProbe::PrNoChecks { pr_number: 7 };
+        assert_eq!(decide_ci_action(&probe, false, false), CiAction::Proceed);
+    }
+
+    #[test]
+    fn in_progress_prompts_when_interactive() {
+        let probe = CiProbe::InProgress { pr_number: 7 };
+        match decide_ci_action(&probe, false, false) {
+            CiAction::Cancel(msg) => assert!(msg.contains("PR-7"), "msg: {msg}"),
+            other => panic!("expected Cancel, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn in_progress_waits_with_flag() {
+        let probe = CiProbe::InProgress { pr_number: 7 };
+        assert_eq!(decide_ci_action(&probe, true, false), CiAction::Wait);
+    }
+
+    #[test]
+    fn in_progress_proceeds_with_yes() {
+        let probe = CiProbe::InProgress { pr_number: 7 };
+        assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
+    }
+
+    #[test]
+    fn red_cancels_interactively() {
+        let probe = CiProbe::Red {
+            pr_number: 7,
+            failed_summary: "build".to_string(),
+        };
+        match decide_ci_action(&probe, false, false) {
+            CiAction::Cancel(msg) => {
+                assert!(msg.contains("PR-7"), "msg: {msg}");
+                assert!(msg.contains("RED"), "msg: {msg}");
+                assert!(msg.contains("fixups"), "msg: {msg}");
+            }
+            other => panic!("expected Cancel, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn red_proceeds_with_yes_but_warns() {
+        let probe = CiProbe::Red {
+            pr_number: 7,
+            failed_summary: "build".to_string(),
+        };
+        // --yes acknowledges the user is non-interactive; we still
+        // print the warning but don't block.
+        assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
+    }
+
+    // --- parse_ci_probe ---
+
+    #[test]
+    fn parse_empty_array_is_no_signal() {
+        let probe = parse_ci_probe("[]");
+        assert!(matches!(probe, CiProbe::NoSignal(_)));
+    }
+
+    #[test]
+    fn parse_pr_no_checks() {
+        let json = r#"[{"number": 42, "statusCheckRollup": []}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::PrNoChecks { pr_number } => assert_eq!(pr_number, 42),
+            other => panic!("expected PrNoChecks, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_pr_no_rollup_field() {
+        let json = r#"[{"number": 42}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::PrNoChecks { pr_number } => assert_eq!(pr_number, 42),
+            other => panic!("expected PrNoChecks, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_all_green_checkruns() {
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"name": "build", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "test",  "status": "COMPLETED", "conclusion": "SUCCESS"}
+        ]}]"#;
+        assert_eq!(parse_ci_probe(json), CiProbe::Green { pr_number: 7 });
+    }
+
+    #[test]
+    fn parse_one_in_progress_is_in_progress() {
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"name": "build", "status": "COMPLETED",   "conclusion": "SUCCESS"},
+            {"name": "test",  "status": "IN_PROGRESS", "conclusion": ""}
+        ]}]"#;
+        assert_eq!(parse_ci_probe(json), CiProbe::InProgress { pr_number: 7 });
+    }
+
+    #[test]
+    fn parse_any_failure_is_red() {
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"name": "build", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "lint",  "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::Red {
+                pr_number,
+                failed_summary,
+            } => {
+                assert_eq!(pr_number, 7);
+                assert!(failed_summary.contains("lint"), "summary: {failed_summary}");
+            }
+            other => panic!("expected Red, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_status_context_shape() {
+        // Older / classic status-API checks come back as
+        // {state: SUCCESS|FAILURE|PENDING, context: ...} instead of
+        // {status, conclusion, name}. We support both.
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"context": "ci/circleci", "state": "FAILURE"}
+        ]}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::Red { pr_number, .. } => assert_eq!(pr_number, 7),
+            other => panic!("expected Red, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_red_summary_truncates_when_many_failed() {
+        let json = r#"[{"number": 7, "statusCheckRollup": [
+            {"name": "a", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "b", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "c", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "d", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "e", "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]}]"#;
+        match parse_ci_probe(json) {
+            CiProbe::Red { failed_summary, .. } => {
+                assert!(failed_summary.contains("and 2 more"), "summary: {failed_summary}");
+            }
+            other => panic!("expected Red, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_malformed_is_no_signal() {
+        assert!(matches!(parse_ci_probe("not json"), CiProbe::NoSignal(_)));
+        assert!(matches!(parse_ci_probe(""), CiProbe::NoSignal(_)));
+    }
+}
+
 // ----------------------------------------------------------------------------
 // `aida status` — comprehensive project overview, with extra sections when
 // the current project is the aida repo itself.
@@ -31582,6 +32093,11 @@ fn handle_queue_work(
                 /* yes */ true,
                 /* force */ false,
                 /* purge_cc */ false,
+                /* wait_ci */ false,
+                // --steal is a recovery path for stuck leases; skip the
+                // CI probe so we don't ask the user to wait on CI for a
+                // session they're actively stealing. trace:TASK-111
+                /* skip_ci */ true,
             )
             .with_context(|| {
                 format!(
