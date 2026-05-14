@@ -59,6 +59,8 @@ aida cache status                      # Compare cache HEAD vs git HEAD
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
 
+**Batch tag convention** (TASK-229): items sharing a `batch:NAME` tag (set via `aida edit <id> --tags batch:NAME`) compose with two commands. `aida queue list --batch NAME` filters both the queued and in-flight sections to that batch. `aida queue work --batch NAME` picks the head queued member of that batch (head-pickup loop — re-run after each session exits to drain the next one); `--dry-run --batch NAME` lists the pickup order without acting. `aida queue progress --batch NAME` (TASK-232) shows the bucketed view of the batch's lifecycle (Shipped / In flight / Working now / Remaining).
+
 ### Queue identity (BUG-89)
 
 The queue's `user_id` is the **shell's** user identity — not the node identity from `~/.aida/node.toml`, not the email in `[node]`, not the role's stored `user_id`. Every queue path (`add`, `list`, `next`, `done`, `remove`, `move`, the role-show queue head, the statusline depth) routes through `current_user_id()` in `aida-cli`, which resolves in order: `--user <id>` flag → `AIDA_USER` env → `USER` env → `USERNAME` env (Windows) → `"default"`. If `aida queue list` ever returns nothing where you expect items, check `echo $USER` and `echo $AIDA_USER` first — the queue is keyed off whichever the shell sees.
@@ -98,6 +100,10 @@ aida-off                               # alias for: eval "$(aida dev deactivate)
 `aida dev activate` prepends `target/{release,debug}/` to PATH — prefers the binary whose embedded git SHA matches (or is an ancestor of) the current branch HEAD (TASK-221), so switching branches between builds doesn't silently leave you on a binary built from the other branch's source. Falls back to most-recently-built with a `Warning:` when neither binary matches the current HEAD. `aida dev status` shows the active binary's SHA, current HEAD, and the match verdict (`exact match` / `ancestor of HEAD` / `DIVERGED from HEAD`). Prefixes the shell prompt with `(aida-debug)` or `(aida-release)` so the active build is visible at a glance. `aida dev deactivate` undoes both.
 
 For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the workspace version, generates tag notes from `git log <prev>..HEAD`, commits, tags, and pushes (which triggers `.github/workflows/release.yml` to build and publish binary tarballs).
+
+**Cross-worktree cargo cache gotcha** (TASK-0396): cargo's `target/.fingerprint/` references absolute paths from the build that produced each artifact. If `aida session end` removes a worktree, subsequent `cargo build` from a sibling worktree can fail with errors pointing at the deleted worktree's paths. Recovery: `cargo clean -p <crate>` for the affected workspace members, or `cargo clean` for a full reset. See `docs/session-lifecycle.md` for the full recipe.
+
+**Usage telemetry** (STORY-122): every `aida` invocation appends a single JSONL line at `~/.aida/usage.jsonl` with the command shape (e.g. `queue list`), `args_count`, `exit_code`, and `duration_ms`. Privacy floor: no argument values, no file paths, no requirement content. Opt out with `AIDA_TELEMETRY=0` or `[telemetry] enabled = false` in `.aida/config.toml`. Query with `aida usage` (top-20 in last 30d), `aida usage --unused 30d` (deprecation candidates), `aida usage --errors` (high error-rate commands), or `aida usage --json` for machine consumers. The log is local-only and never phoned home.
 
 ### Divergent-branch recovery
 
