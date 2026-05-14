@@ -28,12 +28,12 @@ description: |-
   PR-26 reviewer adversarial deep-pass (STORY-109 Probe 2 — format-spec edge cases). Severity is low: the input is clearly garbage and shouldn't be entered in normal use. But a panic on user-facing CLI args is worse than a clean bail.
 
   trace:STORY-122 trace:TASK-232 | ai:claude
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:39:18.948594093Z
-modified_at: 2026-05-14T14:54:17.113674179Z
+modified_at: 2026-05-14T15:13:56.946139117Z
 req_type: Bug
 tags:
 - batch:friction-fixes
