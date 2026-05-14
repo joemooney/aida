@@ -1,0 +1,123 @@
+id: 019e26ea-2e0d-7102-8349-2afc3a7c0917
+spec_id: STORY-125
+agreed_id: STORY-125
+title: 'AIDA integration framework: project config + smart recommendations for complementary tools (/ultraplan, /ultrareview, etc.)'
+description: |-
+  AIDA positions itself as the agent-collaboration layer that COMPOSES with — not replaces — complementary tools like Anthropic's /ultra* family. Today that composition is informal: positioning docs mention tools, individual integration TASKs exist for specific pieces (TASK-113 /ultraplan prompt builder, TASK-114 /aida-import-plan), but there's no unified framework. Users still have to know which tools exist, when each is appropriate, how to invoke them, and how to bring results back into AIDA.
+
+  Goal: a project-level configuration that enables/disables specific integrations, and a recommendation system that surfaces 'consider tool X for this situation' at appropriate moments in AIDA's workflow.
+
+  ## Why this matters
+
+  Today's tax on workflow decisions is knowledge: every implementer/reviewer/user has to mentally maintain the catalog of complementary tools + when each helps + how to compose them with AIDA. A configured integration framework lets the project SAY 'in this project, /ultraplan is enabled for complex plans' — then AIDA's core skills (/aida-plan, /aida-review) detect 'complex plan' situations and surface the recommendation inline.
+
+  Not blocking, not invasive: the user/agent always has the choice. Just removes the knowledge tax.
+
+  ## Configuration shape
+
+  .aida/config.toml gains an [integrations.*] section:
+
+    [integrations.ultraplan]
+    enabled = true
+    trigger = 'complex'  # auto | manual | complex | always | never
+    threshold_files = 10
+
+    [integrations.ultrareview]
+    enabled = true
+    trigger = 'blast-radius'
+    threshold_blast = 8
+
+    [integrations.loop]
+    enabled = false
+
+  Per-integration settings (subset):
+  - enabled: bool — on/off switch
+  - trigger: when to recommend (never, manual, on-condition, always)
+  - threshold_*: numeric conditions for 'on-condition' triggers
+  - cost_note: optional reminder about subscription/quota implications
+
+  ## Recommendation pattern
+
+  When an AIDA skill hits a condition matching a configured trigger:
+
+    You're about to plan an implementation touching 15 files.
+    /ultraplan is enabled in this project — strong fit for plans this complex.
+
+    Recommend: run /ultraplan first, then /aida-import-plan to bring
+    the saved output into the AIDA workflow.
+    (See docs/positioning/vs-ultraplan.md for the full pattern.)
+
+    Continue with /aida-plan? Or switch to /ultraplan?
+
+  The recommendation:
+  - Cites the relevant positioning doc
+  - Names concrete next-action commands
+  - Defers decision to the human/agent
+  - Has a clear cost note when applicable (90-min approval window, free-tier limits, etc.)
+
+  ## v1 integrations to support
+
+  | Tool | Project trigger | AIDA-side integration |
+  |---|---|---|
+  | /ultraplan | complex plans (>N files in scope) | TASK-113 (prompt builder), TASK-114 (import-plan), vs-ultraplan.md |
+  | /ultrareview | high-blast-radius PRs | vs-ultrareview.md (TASK to file: ultrareview prompt assembly) |
+  | /loop (autonomous) | (probably off by default) | autonomous-style work |
+  | /research | (probably off by default) | spec investigation |
+  | Future Anthropic tools | configurable | template for adding new entries |
+
+  ## Composes with
+
+  - TASK-113 (aida ultraplan SPEC) — the /ultraplan integration's prompt-side
+  - TASK-114 (/aida-import-plan) — the /ultraplan integration's import-side
+  - docs/positioning/vs-ultraplan.md (shipped) — already discusses the integration pattern
+  - docs/positioning/vs-ultrareview.md (shipped) — sister doc
+  - TASK-220 (aida status) — could show 'integrations enabled: /ultraplan' as a section
+  - STORY-122 (aida usage telemetry) — track recommendation acceptance rates: '/ultraplan recommended 23x, accepted 17x' is gold for tuning thresholds
+
+  ## What this is NOT
+
+  - NOT replacing AIDA's /aida-plan, /aida-review, etc. These remain default workflow.
+  - NOT requiring any Anthropic subscription. Integrations are opt-in.
+  - NOT a wrapper that 'calls' /ultraplan programmatically (no API exists). Integration is recommendation + workflow guidance, not remote control.
+  - NOT cluttering AIDA's docs with every conceivable tool. Curated list of high-value composes-with tools only.
+
+  ## Children TASKs to file under this STORY
+
+  T1: [integrations] config schema + scaffolding (defaults to disabled per integration)
+  T2: /ultraplan integration (composes with TASK-113, TASK-114, vs-ultraplan.md)
+  T3: /ultrareview integration + prompt assembly (new sibling of TASK-113)
+  T4: Documentation pattern in docs/integrations/ for adding future integrations
+  T5: Recommendation hook in /aida-plan skill (detects 'complex plan' condition)
+  T6: Recommendation hook in /aida-review skill (detects 'high-blast-radius PR' condition)
+
+  Don't pre-decompose — implementer picking this up may design the children differently. The 6 children above are a sketch, not a contract.
+
+  ## Acceptance
+
+  - [ ] .aida/config.toml [integrations.*] schema documented
+  - [ ] aida scaffold upgrade adds the section to existing projects (defaults: all disabled)
+  - [ ] aida init scaffolds with sensible per-project-type defaults
+  - [ ] At least 2 reference integrations shipped (/ultraplan and /ultrareview)
+  - [ ] Core skills surface recommendations at appropriate moments (/aida-plan and /aida-review at minimum)
+  - [ ] Recommendation messages cite positioning docs + name concrete next-action commands
+  - [ ] STORY-122 (telemetry) tracks recommendation acceptance when shipped — informs threshold tuning
+  - [ ] docs/integrations/README.md explains how to add a new integration
+
+  ## Discovered via
+
+  2026-05-14 — user articulated the vision: 'the ultra* commands that anthropic provides should be in our bag of tricks. Really, whatever we think is an excellent complement to aida should be at least optionally bolted on to aida so that they more naturally fit together. I am thinking that there may be a project configuration that you enable/disable that specifies when to avail/recommend the use of these capabilities.' This STORY lifts the informal pattern (already implicit in vs-ultraplan.md + TASK-113/114) into a framework so adding the Nth integration is mechanical.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T14:35:41.965231513Z
+modified_at: 2026-05-14T14:35:41.965231513Z
+req_type: Story
+tags:
+- composition
+- config
+- framework
+- integrations
+- recommendations
+- ultraplan
+- ultrareview
