@@ -13,29 +13,38 @@ description: |-
 
   ## Proposed early-check (~3 lines into skill body)
 
-    state=
-    if [  = MERGED ]; then
-      echo 'PR-<N> already merged at <mergedAt> — no review needed; exiting clean.'
-      exit 0
-    fi
+  At the top of the skill workflow:
 
-  Place at the very top of the skill workflow, before any aida queries or spec resolution.
+  1. Run gh pr view (the PR number) with --json state --jq .state to extract state.
+  2. If state equals MERGED, log a clear message that PR-N is already merged and exit 0.
+  3. Otherwise proceed with the normal review flow.
+
+  The check should run BEFORE any aida queries or spec resolution. Composes with the existing BUG-74 gh-detection helper (reuse for the gh pr view call).
 
   ## Other states worth recognizing
 
-  - CLOSED (without merge): also no-op, but with different message ('PR-N closed without merge — review story can be marked completed/rejected as appropriate')
-  - DRAFT: warn 'PR-N is a draft, deep review may be premature' but proceed
-  - OPEN: normal flow
+  - CLOSED (without merge): also no-op, but with different message — 'PR closed without merge — review story can be marked completed/rejected as appropriate'.
+  - DRAFT: warn 'PR is a draft, deep review may be premature' but proceed.
+  - OPEN: normal flow.
 
   ## Composes with
 
-  - BUG-74 (gh detection PATH-walk) — reuse the helper for the gh pr view call
-  - TASK-216 (/aida-review own-PR detection) — both are pre-flight checks; could share the same prelude
-  - TASK-110 (next-steps ordering in skills) — the early-exit message should also follow the End-first ordering convention
+  - BUG-74 (gh detection PATH-walk) — reuse the helper for the gh pr view call.
+  - TASK-216 (/aida-review own-PR detection) — both are pre-flight checks; could share the same prelude.
+  - TASK-110 (next-steps ordering in skills) — the early-exit message should also follow the End-first ordering convention.
 
   ## Why low priority
 
   The current behavior is correct — the agent will see the merged state in its scan and produce a sensible verdict ('already merged, no findings'). The early-exit just makes that explicit AT START rather than as a fallout from the scan. Saves a few seconds + several lines of output per zombie fire. Quality-of-life, not blocking.
+
+  ## Acceptance
+
+  - [ ] /aida-review --pr skill runs gh pr view state check before any spec resolution
+  - [ ] MERGED state triggers immediate exit 0 with clear log line
+  - [ ] CLOSED-without-merge triggers immediate exit 0 with different message
+  - [ ] DRAFT triggers a warning but proceeds to review
+  - [ ] OPEN proceeds normally (no regression)
+  - [ ] Tests cover all 4 states + the gh-missing fallback
 
   ## Discovered via
 
@@ -45,7 +54,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T04:46:14.325679969Z
-modified_at: 2026-05-14T04:46:14.325679969Z
+modified_at: 2026-05-14T04:46:58.456453467Z
 req_type: Task
 tags:
 - aida-review
