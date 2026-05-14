@@ -51,7 +51,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T16:01:29.947354479Z
-modified_at: 2026-05-14T01:58:56.648201331Z
+modified_at: 2026-05-14T04:14:10.907120189Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -63,6 +63,19 @@ comments:
   content: Commit 064fa594 references this requirement
   created_at: 2026-05-14T01:58:48.738523759Z
   modified_at: 2026-05-14T01:58:48.738523759Z
+- id: 019e24b1-29db-7df0-a3d2-3f69522132c5
+  author: joe
+  content: |-
+    Implemented via commit 064fa594 (PR to follow):
+
+    - Reversed precedence so `--for X` always wins over `--all`; `--all` only suppresses the default active-role filter, not an explicit override.
+    - Aligned `--for any` semantics with the write side: list/next now filter to entries with `for_role==None` (was "no filter / show all"). Reach the old "show all" behavior with `--all` alone.
+    - Extracted `resolve_queue_role_filter` + `entry_matches_role_filter` helpers used by both `queue list` and `queue next` — composition truth table is now unit-testable in isolation.
+    - Polished the empty-queue hint to skip "pass --all" when --all is already on the command line.
+
+    Test status: 285/285 aida-cli tests green (5 new BUG-87 cases); `cargo fmt --all -- --check` clean.
+  created_at: 2026-05-14T04:14:10.907120189Z
+  modified_at: 2026-05-14T04:14:10.907120189Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T01:58:56.648201331Z
