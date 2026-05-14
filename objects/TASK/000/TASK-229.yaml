@@ -64,12 +64,12 @@ description: |-
   - [ ] Failure handling: pause batch on non-Done session-end, surface options
   - [ ] Tag convention 'batch:NAME' documented in CLAUDE.md / AIDA.md
   - [ ] Tests cover: single-item batch, multi-item batch, mixed-status batch (some already Done), no-match batch (empty), parallel mode race
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T06:06:58.486745509Z
-modified_at: 2026-05-14T06:06:58.486745509Z
+modified_at: 2026-05-14T08:03:41.974332779Z
 req_type: Task
 tags:
 - batch
@@ -81,3 +81,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T06:07:00.763838008Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-14T08:03:41.974332779Z
+  implemented_by: joe
