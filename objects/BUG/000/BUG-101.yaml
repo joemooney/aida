@@ -1,0 +1,74 @@
+id: 019e26f0-2729-7e01-92be-ee8c2c550efe
+spec_id: BUG-101
+agreed_id: BUG-101
+title: '/aida-review post-merge next-steps: missing ''aida pull'' between session-end and cut-release'
+description: |-
+  After /aida-review merges a PR and updates spec statuses in the orphan store, the generated 'Next steps' block jumps from 'end reviewer session' to 'cut release' — but local main is now behind origin/main (the merge commit is only on origin until you pull).
+
+  Running 'make release-patch YES=1' from a stale local main would tag the wrong commit. The missing intermediate step is 'aida pull' (which pulls both code + orphan store, then runs the auto-bump scan).
+
+  ## Observed 2026-05-14
+
+  After PR-26 merge, /aida-review's next-steps output:
+
+    Next steps (recommended order):
+    1. End reviewer session — aida session end 019e26e2
+    2. Cut release (from parent shell, after end) — make release-patch YES=1
+    3. Stop here, cut release later
+
+  Step 2 assumes local main matches origin/main. It doesn't — the merge just happened on origin. The user would run make release-patch against the wrong HEAD and get a confused release.
+
+  ## Correct sequence
+
+    1. End reviewer session — aida session end <id>
+    2. Sync local main — aida pull (gets the merge commit + auto-bumps any Done specs the merge referenced)
+    3. Verify spec auto-bumps fired — aida show <one-of-the-merged-specs> (expect Completed)
+    4. Cut release — make release-patch YES=1 OR make release-minor YES=1
+
+  ## Composes with
+
+  - TASK-110 (next-steps ordering in /aida-pr): sibling — different skill (/aida-review here, /aida-pr there), similar class of bug (next-steps misses important steps)
+  - TASK-111 (CI-aware session end): the aida pull step would have its own decision points (what if pull surfaces a conflict? what if auto-bump fires for unexpected specs?) that interact with session-end semantics
+  - BUG-97 (aida show parse error UX): if 'verify spec auto-bumps' returns 'not found' due to parse error, user falls into the same diagnosis trap we hit earlier today
+
+  ## Fix sketch
+
+  In aida-core/templates/skills/aida-review.md (or wherever /aida-review's post-merge next-steps template lives), add the aida pull step:
+
+  Template before:
+    1. End reviewer session
+    2. Cut release
+    3. Stop here
+
+  Template after:
+    1. End reviewer session
+    2. Sync local main — aida pull (auto-bumps any Done specs the merge referenced)
+    3. Verify auto-bump fired — aida show <ID> (expect Completed)
+    4. Cut release
+    5. Stop here
+
+  ## Acceptance
+
+  - [ ] /aida-review post-merge next-steps includes 'aida pull' between session-end and release
+  - [ ] Include a 'verify auto-bump fired' check step
+  - [ ] If pull surfaces stuck specs (auto-bump missed), include suggestion to run aida db reconcile-status (TASK-226) when shipped
+  - [ ] Documented in CLAUDE.md or AIDA.md alongside the existing post-merge convention
+  - [ ] Tests cover the next-steps generation for clean-merge, stuck-spec-aftermath, and pre-release-pending scenarios
+
+  ## Discovered via
+
+  2026-05-14 — user noticed: 'this does not mention aida pull as a step' after reading PR-26's merge next-steps output. Without the aida pull, the subsequent make release-patch would tag the wrong commit.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T14:42:13.417792965Z
+modified_at: 2026-05-14T14:42:13.417792965Z
+req_type: Bug
+tags:
+- aida-pull
+- aida-review
+- missing-step
+- next-steps
+- sync
+- ux
