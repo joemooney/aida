@@ -577,6 +577,37 @@ fn run() -> Result<()> {
         Command::Queue(queue_cmd) => {
             handle_queue_command(queue_cmd, &storage)?;
         }
+        // TASK-218: top-level alias in the legacy SQLite dispatch path —
+        // forwards to the same handler as `aida queue rework SPEC`.
+        // trace:TASK-218 | ai:claude
+        Command::Rework {
+            id,
+            work,
+            r#for,
+            status,
+            reason,
+            resume,
+            force,
+            steal,
+            permission_mode,
+            no_pull,
+            user,
+        } => {
+            handle_queue_rework(
+                &storage,
+                id,
+                *work,
+                r#for.as_deref(),
+                status.as_deref(),
+                reason.as_deref(),
+                *resume,
+                *force,
+                *steal,
+                permission_mode.as_deref(),
+                *no_pull,
+                user.as_deref(),
+            )?;
+        }
         Command::Search {
             query,
             case_sensitive,
@@ -3111,6 +3142,37 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // Wrap our backend in a Storage façade pointing at the store path.
             let storage = Storage::new(store_path);
             handle_queue_command(queue_cmd, &storage)?;
+        }
+        // TASK-218: top-level `aida rework SPEC` → forwards to the same
+        // handler as `aida queue rework SPEC`. trace:TASK-218 | ai:claude
+        Command::Rework {
+            id,
+            work,
+            r#for,
+            status,
+            reason,
+            resume,
+            force,
+            steal,
+            permission_mode,
+            no_pull,
+            user,
+        } => {
+            let storage = Storage::new(store_path);
+            handle_queue_rework(
+                &storage,
+                id,
+                *work,
+                r#for.as_deref(),
+                status.as_deref(),
+                reason.as_deref(),
+                *resume,
+                *force,
+                *steal,
+                permission_mode.as_deref(),
+                *no_pull,
+                user.as_deref(),
+            )?;
         }
         Command::Review(review_cmd) => {
             // STORY-67: review-prompt generation reads requirements via the
@@ -22365,6 +22427,108 @@ mod queue_work_tests {
     }
 }
 
+#[cfg(test)]
+mod queue_rework_tests {
+    //! TASK-218: pin the smart status-transition table for `aida queue
+    //! rework`. The handler itself does I/O against the store, so we
+    //! test the pure decision function exhaustively here and rely on
+    //! integration-test smoke (built-binary + temp store) for the
+    //! side-effecting glue.
+    //! trace:TASK-218 | ai:claude
+    use super::*;
+
+    /// Approved → no flip. The spec is ready to be queued as-is, so
+    /// rework just queues it.
+    #[test]
+    fn approved_does_not_flip() {
+        assert_eq!(rework_smart_target(&RequirementStatus::Approved), None);
+    }
+
+    /// Planned → InProgress. Rework on a Planned spec means "start
+    /// working it now," so the queue add is paired with the status flip.
+    #[test]
+    fn planned_flips_to_in_progress() {
+        assert_eq!(
+            rework_smart_target(&RequirementStatus::Planned),
+            Some(RequirementStatus::InProgress)
+        );
+    }
+
+    /// InProgress → no flip. Already at the right status; caller surfaces
+    /// the "already in progress" warning and re-queues without --force.
+    #[test]
+    fn in_progress_does_not_flip() {
+        assert_eq!(rework_smart_target(&RequirementStatus::InProgress), None);
+    }
+
+    /// Done → InProgress. The canonical PR-review-found-issues case —
+    /// implementer marked it done on a branch, reviewer sent it back.
+    #[test]
+    fn done_flips_to_in_progress() {
+        assert_eq!(
+            rework_smart_target(&RequirementStatus::Done),
+            Some(RequirementStatus::InProgress)
+        );
+    }
+
+    /// Completed → InProgress (with --force at the caller). The handler
+    /// itself adds the --force guard; the smart table just records the
+    /// target.
+    #[test]
+    fn completed_flips_to_in_progress() {
+        assert_eq!(
+            rework_smart_target(&RequirementStatus::Completed),
+            Some(RequirementStatus::InProgress)
+        );
+    }
+
+    /// Rejected → Approved (with --force). The spec is being reconsidered,
+    /// not re-implemented yet — Approved is the natural landing.
+    #[test]
+    fn rejected_flips_to_approved() {
+        assert_eq!(
+            rework_smart_target(&RequirementStatus::Rejected),
+            Some(RequirementStatus::Approved)
+        );
+    }
+
+    /// Draft → no flip. Rework on a Draft is unusual; preserve the
+    /// status and let the queue add proceed.
+    #[test]
+    fn draft_does_not_flip() {
+        assert_eq!(rework_smart_target(&RequirementStatus::Draft), None);
+    }
+
+    /// Sanity check: smart_target is idempotent on its own output. After
+    /// flipping (e.g. Done → InProgress) re-running smart_target on
+    /// InProgress is a no-op, so chained reworks don't oscillate.
+    #[test]
+    fn smart_target_is_idempotent_on_its_own_output() {
+        let after_done = rework_smart_target(&RequirementStatus::Done).unwrap();
+        assert_eq!(after_done, RequirementStatus::InProgress);
+        assert_eq!(rework_smart_target(&after_done), None);
+
+        let after_rejected = rework_smart_target(&RequirementStatus::Rejected).unwrap();
+        assert_eq!(after_rejected, RequirementStatus::Approved);
+        assert_eq!(rework_smart_target(&after_rejected), None);
+    }
+
+    /// All status variants are covered — exhaustive match in
+    /// `rework_smart_target` means adding a new variant won't silently
+    /// fall through. This test exists so a future variant addition (e.g.
+    /// "Blocked") trips the compiler check, not a silent None default.
+    #[test]
+    fn covers_every_status_variant() {
+        use RequirementStatus::*;
+        for s in &[
+            Draft, Approved, Planned, InProgress, Done, Completed, Rejected,
+        ] {
+            // Just confirm the function doesn't panic on any variant.
+            let _ = rework_smart_target(s);
+        }
+    }
+}
+
 // ----------------------------------------------------------------------------
 // `aida status` — comprehensive project overview, with extra sections when
 // the current project is the aida repo itself.
@@ -30171,7 +30335,269 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 *steal,
             )?;
         }
+        // TASK-218: encapsulate the implementer → reviewer → fixup
+        // three-command recovery sequence (`aida edit --status` +
+        // `aida queue add` + optional `aida queue work`) behind a single
+        // verb. Smart status table flips per the current status; `--work`
+        // chains the session launch. trace:TASK-218 | ai:claude
+        QueueCommand::Rework {
+            id,
+            work,
+            r#for,
+            status,
+            reason,
+            resume,
+            force,
+            steal,
+            permission_mode,
+            no_pull,
+            user,
+        } => {
+            handle_queue_rework(
+                storage,
+                id,
+                *work,
+                r#for.as_deref(),
+                status.as_deref(),
+                reason.as_deref(),
+                *resume,
+                *force,
+                *steal,
+                permission_mode.as_deref(),
+                *no_pull,
+                user.as_deref(),
+            )?;
+        }
     }
+    Ok(())
+}
+
+/// TASK-218: smart status-transition table for `aida queue rework`.
+/// Returns `Some(target)` when the spec's current status maps to a flip
+/// per the table below, or `None` when the status is already in a
+/// reasonable rework state (just queue-add it, don't flip).
+///
+///   Draft      → None         (unusual; preserve)
+///   Approved   → None         (ready to queue as-is)
+///   Planned    → InProgress
+///   InProgress → None         (already there; caller warns unless --force)
+///   Done       → InProgress   (typical PR-review-found-issues case)
+///   Completed  → InProgress   (requires --force at caller)
+///   Rejected   → Approved     (requires --force at caller)
+///
+/// Pure function — separated from `handle_queue_rework` so the table
+/// can be unit-tested without spinning up a storage backend.
+/// trace:TASK-218 | ai:claude
+fn rework_smart_target(current: &RequirementStatus) -> Option<RequirementStatus> {
+    match current {
+        RequirementStatus::Draft => None,
+        RequirementStatus::Approved => None,
+        RequirementStatus::Planned => Some(RequirementStatus::InProgress),
+        RequirementStatus::InProgress => None,
+        RequirementStatus::Done => Some(RequirementStatus::InProgress),
+        RequirementStatus::Completed => Some(RequirementStatus::InProgress),
+        RequirementStatus::Rejected => Some(RequirementStatus::Approved),
+    }
+}
+
+/// TASK-218: shared implementation backing both `aida queue rework SPEC`
+/// and the top-level `aida rework SPEC` alias. Encapsulates the three-
+/// command rework sequence (status flip + queue add + optional session
+/// launch) so the implementer → reviewer → fixup loop is one verb.
+/// trace:TASK-218 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_queue_rework(
+    storage: &Storage,
+    id: &str,
+    work: bool,
+    for_role: Option<&str>,
+    status_override: Option<&str>,
+    reason: Option<&str>,
+    resume: bool,
+    force: bool,
+    steal: bool,
+    permission_mode: Option<&str>,
+    no_pull: bool,
+    user: Option<&str>,
+) -> Result<()> {
+    // TASK-112's "resume claude session" feature has not yet shipped.
+    // Refuse `--resume` until it does so the flag is documented +
+    // discoverable, but doesn't silently no-op.
+    if resume && !work {
+        // --resume implies --work in the spec; allow the implicit chain
+        // rather than error.
+    }
+    if resume {
+        anyhow::bail!(
+            "--resume requires TASK-112 (`aida queue work --resume`) to be \
+             shipped; that feature is not yet available. Re-run without \
+             --resume, or track TASK-112 for status."
+        );
+    }
+
+    let user_id = current_user_id(user);
+    let store = storage.load()?;
+
+    // Resolve the requirement (UUID first, then SPEC-ID).
+    let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_by_spec_id(id)
+    }
+    .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
+
+    let req_id = req.id;
+    let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
+    let display_id = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| "???".to_string());
+    let title = req.title.clone();
+    let current_status = req.status.clone();
+
+    // Smart target-status resolution. `--status` always wins; otherwise
+    // pick per the table in TASK-218's spec. See `rework_smart_target`.
+    let smart_target = rework_smart_target(&current_status);
+    let target_status: Option<RequirementStatus> = match status_override {
+        Some(s) => Some(parse_status(s)?),
+        None => smart_target,
+    };
+
+    // Guards. Terminal status (Completed/Rejected) + already-InProgress
+    // both require --force. We surface the spec id in the error so the
+    // user can copy the exact `--force` invocation.
+    if matches!(
+        current_status,
+        RequirementStatus::Completed | RequirementStatus::Rejected
+    ) && !force
+    {
+        anyhow::bail!(
+            "{} is {} — re-opening closed work is usually a mistake.\n  \
+             Pass `--force` if you really mean to rework it, or file a new \
+             requirement that supersedes {}.",
+            display_id,
+            current_status,
+            display_id
+        );
+    }
+    if matches!(current_status, RequirementStatus::InProgress) && !force {
+        eprintln!(
+            "  {} {} is already In Progress — re-queueing without status \
+             flip. Pass `--force` to silence this warning.",
+            "⚠".yellow().bold(),
+            display_id
+        );
+    }
+
+    // Status flip (if any). update_atomically works for both SQLite and
+    // git-canonical paths; queue done uses the same approach.
+    if let Some(ref new_status) = target_status {
+        if new_status != &current_status {
+            let new_status = new_status.clone();
+            let now = chrono::Utc::now();
+            storage.update_atomically(|s| {
+                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                    r.set_status_from_str(&format!("{:?}", new_status));
+                    r.modified_at = now;
+                }
+            })?;
+            record_role_activity(&spec_id, "rework");
+            update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
+            println!(
+                "{} {} status: {} → {}",
+                "✓".green(),
+                display_id.bold(),
+                current_status.to_string().dimmed(),
+                new_status.to_string().cyan(),
+            );
+        }
+    }
+
+    // Optional audit comment. Mirrors `aida comment add` path so the
+    // entry shows up in `aida show <spec>` history.
+    if let Some(reason_text) = reason {
+        let author = get_default_author();
+        let comment = aida_core::Comment::new(author, reason_text.to_string());
+        storage.update_atomically(|s| {
+            if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                r.add_comment(comment);
+            }
+        })?;
+        println!(
+            "  {} reason captured as comment ({} chars)",
+            "·".dimmed(),
+            reason_text.chars().count()
+        );
+    }
+
+    // Route resolution: --for wins, else the active role, else error if
+    // queueing requires a role (we let the queue_add path stay unrouted
+    // — that's a legitimate state too, matching `aida queue add` default
+    // when no role is active).
+    let for_role_resolved: Option<String> = match for_role {
+        Some("any") => None,
+        Some(role) => Some(role.to_string()),
+        None => std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.is_empty()),
+    };
+
+    // Queue add. queue_add upserts by requirement_id (replaces same-spec
+    // entries), so re-running rework is idempotent on the queue side.
+    let entry = aida_core::QueueEntry {
+        user_id: user_id.clone(),
+        requirement_id: req_id,
+        position: i64::MAX, // backend resolves to existing_max + 1000
+        added_by: user_id.clone(),
+        note: reason.map(|r| r.to_string()),
+        added_at: chrono::Utc::now(),
+        for_role: for_role_resolved.clone(),
+        for_scope: None,
+        for_session: None,
+    };
+    storage.queue_add(entry)?;
+    record_role_activity(&spec_id, "queue-add");
+    let routing = match &for_role_resolved {
+        Some(r) => format!(" [for:{}]", r).cyan().to_string(),
+        None => String::new(),
+    };
+    println!(
+        "{} Queued {} ({}){}",
+        "✓".green(),
+        display_id.bold(),
+        title,
+        routing
+    );
+
+    // Optional --work chain. We don't run this in a sub-process — call
+    // `handle_queue_work` directly with the same storage handle so any
+    // failure surfaces here. trace:TASK-218 | ai:claude
+    if work {
+        handle_queue_work(
+            storage,
+            &user_id,
+            Some(&spec_id),
+            permission_mode,
+            /* no_launch */ false,
+            for_role_resolved.as_deref(),
+            no_pull,
+            /* type_filter */ None,
+            /* branch_override */ None,
+            /* path_override */ None,
+            steal,
+        )?;
+    } else {
+        println!(
+            "  ({})",
+            format!(
+                "run `aida queue work {}` to start a session for this spec",
+                display_id
+            )
+            .dimmed()
+        );
+    }
+
     Ok(())
 }
 
