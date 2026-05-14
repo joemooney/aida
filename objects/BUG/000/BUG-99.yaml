@@ -45,12 +45,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 — user ran aida show STORY-86 | head -8 to keep output bounded; got the panic trailer twice in a row while debugging STORY-86 recovery.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T01:36:51.643356042Z
-modified_at: 2026-05-14T01:36:51.643356042Z
+modified_at: 2026-05-14T06:42:46.206049341Z
 req_type: Bug
 tags:
 - panic
