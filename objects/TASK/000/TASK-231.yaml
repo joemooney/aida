@@ -58,12 +58,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 — during /aida-capture at session end, the user agreed the 5-pattern taxonomy from the ping-pong filing discussion deserves a permanent home in the lifecycle docs. Currently only exists in the chat log.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T06:25:18.364688239Z
-modified_at: 2026-05-14T07:35:18.531577516Z
+modified_at: 2026-05-14T14:39:07.331674066Z
 req_type: Task
 tags:
 - batch:observability
