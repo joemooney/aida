@@ -74,7 +74,28 @@ fn get_default_author() -> String {
     }
 }
 
+/// BUG-99: restore SIGPIPE's default behavior so `aida ... | head -N` exits
+/// cleanly (status 141) instead of triggering Rust's "failed printing to
+/// stdout: Broken pipe" panic. Rust deliberately ignores SIGPIPE by default
+/// so library code can decide how to handle it, but for a Unix CLI we want
+/// the classic "downstream closed, terminate quietly" semantics. Windows
+/// has no SIGPIPE; this is a no-op there. trace:BUG-99 | ai:claude
+#[cfg(unix)]
+fn install_sigpipe_handler() {
+    // Safety: signal() with SIG_DFL is async-signal-safe and is the
+    // documented way to restore default disposition. Running here before
+    // any output happens means the default kicks in for every println!
+    // / eprintln! / write! in the binary.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn install_sigpipe_handler() {}
+
 fn main() {
+    install_sigpipe_handler();
     // TASK-69: render anyhow-propagated errors in red instead of anyhow's
     // default plain-text formatter. Centralizes the coloring so every
     // `bail!` / `?` / `anyhow!` site automatically gets the highlight

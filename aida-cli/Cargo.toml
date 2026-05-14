@@ -47,6 +47,12 @@ sysinfo = "0.30"
 tonic = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
 
+# Unix-only — restore default SIGPIPE handling so `aida ... | head -N` exits
+# cleanly instead of triggering Rust's "failed printing to stdout" panic.
+# trace:BUG-99 | ai:claude
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [features]
 default = []
 remote = ["tonic", "prost", "tonic-build"]
