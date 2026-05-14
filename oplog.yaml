@@ -4315,5 +4315,76 @@ operations:
   timestamp: 2026-05-14T06:25:08.557284353Z
   kind: !SetStatus
     status: In Progress
-clock: 512
+- id: 019e2529-9a64-7801-a2ec-aae462c83448
+  target_id: 019e2529-361c-73a1-8964-1efa29a1c592
+  author: aida
+  node_id: '1'
+  lamport: 513
+  timestamp: 2026-05-14T06:25:44.037000121Z
+  kind: !SetTitle
+    title: 'docs/session-lifecycle.md: add 5-pattern workflow taxonomy table (cold-resume / ping-pong / pipelined / batch-drain / head-pickup)'
+- id: 019e2529-9a9f-7942-81bf-dc0afced997e
+  target_id: 019e2529-361c-73a1-8964-1efa29a1c592
+  author: aida
+  node_id: '1'
+  lamport: 514
+  timestamp: 2026-05-14T06:25:44.095642358Z
+  kind: !SetDescription
+    description: |-
+      Capture the workflow-pattern taxonomy that emerged from 2026-05-13's session-lifecycle work. Today the patterns are documented across multiple sibling TASKs; the comparison view doesn't exist in any single doc surface, leaving future agents to re-derive it.
+
+      ## Naming convention
+
+      The taxonomy uses 'batch' (not 'cluster') consistently — matches the AIDA-wide naming convention established in TASK-229's filing discussion. Earlier drafts used 'cluster'; corrected to 'batch' throughout.
+
+      ## Proposed table
+
+      Add a new section in docs/session-lifecycle.md near 'Why roles don't share Claude sessions' — same intellectual neighborhood (workflow-shape design).
+
+      The 5 patterns:
+
+      1. Cold-resume — implementer ends session, claude conversation persists on disk, resumed later via aida queue work --resume. Best for LONG cycles (days between implementer and reviewer). Backed by TASK-112.
+
+      2. Ping-pong block — implementer session stays alive, blocks waiting for reviewer verdict, resumes in same context when verdict arrives. Best for TIGHT cycles (minutes to hours). Backed by STORY-121.
+
+      3. Pipelined ping-pong — while blocked on PR-N, optionally pick up next queue item in secondary worktree. Doubles throughput. Best for SATURATED implementer. Backed by TASK-230.
+
+      4. Batch-drain — one PR per batch (multiple items, one session, one branch). Best for TIGHTLY-COUPLED item batches. Backed by STORY-42 (shipped: aida queue work PARENT cluster pickup) and extended by TASK-229 (aida queue work --batch NAME tag-driven drain).
+
+      5. Head-pickup loop — one PR per item, one session per item, one branch per item. Best for LOOSELY-COUPLED item batches. Today's default behavior of aida queue work with no args.
+
+      ## Comparison axes
+
+      The taxonomy table compares the patterns along:
+      - Context preservation cost
+      - Failure isolation
+      - Reviewer parallelism
+      - Resource consumption
+      - Best-fit use case
+
+      Plus a decision-tree section: 'Which pattern should I pick?' with concrete signals (cycle time, coupling tightness, throughput need).
+
+      ## Composes with
+
+      - TASK-112, STORY-121, TASK-230, STORY-42, TASK-229: all referenced in the table
+      - docs/session-lifecycle.md existing 'Role-pure sessions' section: same theme
+      - Future TUI vision (mentioned in session-lifecycle.md): the TUI's home view would naturally surface 'which pattern is active in each session'
+
+      ## Why low priority
+
+      The patterns themselves are filed and discoverable via aida search 'session' / 'workflow'. The doc gap is just the comparison view — present but harder to find than a single section in the lifecycle doc would make it. Quality-of-life, not blocking.
+
+      ## Acceptance
+
+      - [ ] docs/session-lifecycle.md gains a new section: 'Workflow patterns: which to pick'
+      - [ ] 5-pattern table with 5 columns (Pattern, When, Backed by TASK, Trade-off summary, Failure mode)
+      - [ ] Decision-tree section walks the reader through 'cycle time? coupling? throughput needs?'
+      - [ ] 'Batch' (not 'cluster') used consistently — matches TASK-229 and project convention
+      - [ ] Cross-references to the 5 underlying TASKs
+      - [ ] Commit traces this TASK + cross-references TASK-112, STORY-121, TASK-230, STORY-42, TASK-229
+
+      ## Discovered via
+
+      2026-05-13 — during /aida-capture at session end, the user agreed the 5-pattern taxonomy from the ping-pong filing discussion deserves a permanent home in the lifecycle docs. Currently only exists in the chat log.
+clock: 514
 node_id: '1'
