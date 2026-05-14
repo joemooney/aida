@@ -63,9 +63,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T06:25:18.364688239Z
-modified_at: 2026-05-14T06:25:44.011928431Z
+modified_at: 2026-05-14T07:30:20.548174295Z
 req_type: Task
 tags:
+- batch:observability
 - docs
 - session-lifecycle
 - taxonomy
