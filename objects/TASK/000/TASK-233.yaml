@@ -52,12 +52,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user observed 'aida session end --wait-ci' blocking silently with no feedback during PR-26's CI wait. Asked: 'perhaps we could add an option --watch-ci which is a wait/watch'.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:24:21.036579876Z
-modified_at: 2026-05-15T14:39:36.534851168Z
+modified_at: 2026-05-15T15:47:47.051635951Z
 req_type: Task
 tags:
 - batch:ux-polish
