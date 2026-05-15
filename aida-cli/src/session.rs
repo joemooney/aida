@@ -108,6 +108,8 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     }
     fill_branches(&mut here);
     fill_branches(&mut parent);
+    normalize_specs(&mut here);
+    normalize_specs(&mut parent);
 
     // STORY-58: when there's nothing to merge, render the classic single
     // table — keep the existing one-group output untouched. Only switch
@@ -141,6 +143,17 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
             .dimmed()
         );
     }
+    // TASK-236: Claude Code fixes the session title at conversation
+    // start and never updates it — for a long-running session the
+    // INITIAL TOPIC column drifts far from current work. Tell the
+    // reader so they identify a session by SPEC + AGE, not the title.
+    // trace:TASK-236 | ai:claude
+    eprintln!(
+        "{}",
+        "(INITIAL TOPIC is set once at session start; long sessions evolve beyond it — \
+         identify a session by SPEC + AGE)"
+            .dimmed()
+    );
     print_leases_hint();
     Ok(())
 }
@@ -189,6 +202,39 @@ fn print_group_header(label: &str) {
 /// STORY-59: resolve `branch` per session by running `git -C <cwd>
 /// branch --show-current` once per unique cwd. Cheap (one fork/exec per
 /// distinct worktree), and the result is cached across sessions sharing
+/// TASK-237: rewrite each session's stored SPEC value to its agreed-id
+/// (short form) when the spec resolves to a requirement that carries
+/// one. Sessions recorded before `aida db merge-gate` ran keep the
+/// long-form node-aware id (`FR-1-042`); this normalizes the column to
+/// the short form (`FR-42`) so it matches how `aida list` / `aida show`
+/// / `aida history` render specs. A spec that no longer resolves to a
+/// requirement is left as-is with an `(unresolved)` suffix.
+/// trace:TASK-237 | ai:claude
+fn normalize_specs(sessions: &mut [SessionMeta]) {
+    if sessions.iter().all(|s| s.spec.is_none()) {
+        return;
+    }
+    let Ok(root) = crate::find_project_root() else {
+        return;
+    };
+    let Some(store) = crate::load_store_for_lookup(&root) else {
+        return;
+    };
+    for s in sessions.iter_mut() {
+        let Some(spec) = s.spec.as_deref() else {
+            continue;
+        };
+        match store.get_requirement_by_spec_id(spec) {
+            Some(req) => {
+                if let Some(agreed) = req.agreed_id.as_deref() {
+                    s.spec = Some(agreed.to_string());
+                }
+            }
+            None => s.spec = Some(format!("{} (unresolved)", spec)),
+        }
+    }
+}
+
 /// the same cwd.
 /// trace:STORY-59 | ai:claude
 fn fill_branches(sessions: &mut [SessionMeta]) {
@@ -826,7 +872,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             "ROLE",
             "SPEC",
             "WORKTREE",
-            "TITLE",
+            "INITIAL TOPIC",
             id_w = w.id_w,
             age_w = w.age_w,
             role_w = w.role_w,

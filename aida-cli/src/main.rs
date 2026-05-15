@@ -10721,7 +10721,7 @@ fn slugify(s: &str) -> String {
 /// Walk up from cwd looking for a .git directory — the project root. We
 /// don't use git_ops::is_git_repo here because we need the *path*, not
 /// just a yes/no.
-fn find_project_root() -> Result<std::path::PathBuf> {
+pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
     let mut cur = std::env::current_dir()?;
     loop {
         if cur.join(".git").exists() {
@@ -15655,7 +15655,9 @@ fn build_display_id_lookup(
 /// to the legacy YAML/SQLite path. Returns None on any error — caller
 /// renders with "(not found)" placeholders so missing data degrades
 /// gracefully. trace:STORY-98 | ai:claude
-fn load_store_for_lookup(project_root: &std::path::Path) -> Option<aida_core::RequirementsStore> {
+pub(crate) fn load_store_for_lookup(
+    project_root: &std::path::Path,
+) -> Option<aida_core::RequirementsStore> {
     // Git-canonical: walk up from project_root looking for an .aida/config.toml.
     if let Some(store_path) = detect_distributed_store_from(project_root) {
         if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
