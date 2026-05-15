@@ -10056,6 +10056,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             owns,
             branch,
             base,
+            reuse_branch,
             path,
             forge,
             branch_style,
@@ -10068,6 +10069,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             owns,
             branch.as_deref(),
             base.as_deref(),
+            *reuse_branch,
             path.as_deref(),
             forge.as_deref(),
             branch_style,
@@ -11124,6 +11126,47 @@ fn branch_exists_anywhere(project_root: &std::path::Path, branch: &str) -> bool 
     aida_core::git_ops::remote_branch_exists(project_root, "origin", branch)
 }
 
+/// TASK-245: decide whether `aida session start` should check out an
+/// existing branch instead of forking a new one. True when
+/// `--reuse-branch` was passed, or when an explicitly-named `--branch`
+/// already exists (auto-reuse). An auto-derived branch name
+/// (`branch_explicit == false`) never reuses — `resolve_session_branch`
+/// already picked a name free locally and on origin.
+/// trace:TASK-245 | ai:claude
+fn should_reuse_branch(reuse_flag: bool, branch_explicit: bool, branch_preexists: bool) -> bool {
+    reuse_flag || (branch_explicit && branch_preexists)
+}
+
+#[cfg(test)]
+mod session_start_reuse_tests {
+    use super::should_reuse_branch;
+
+    #[test]
+    fn explicit_reuse_flag_always_reuses() {
+        // --reuse-branch wins even for an auto-derived / absent branch.
+        assert!(should_reuse_branch(true, false, false));
+        assert!(should_reuse_branch(true, true, true));
+    }
+
+    #[test]
+    fn explicit_branch_that_exists_auto_reuses() {
+        assert!(should_reuse_branch(false, true, true));
+    }
+
+    #[test]
+    fn explicit_branch_that_is_new_forks() {
+        assert!(!should_reuse_branch(false, true, false));
+    }
+
+    #[test]
+    fn auto_derived_branch_never_reuses() {
+        // branch_explicit == false → always fork, even on a (spurious)
+        // preexists signal.
+        assert!(!should_reuse_branch(false, false, true));
+        assert!(!should_reuse_branch(false, false, false));
+    }
+}
+
 /// Walk a candidate list of branch names and return the first that's free
 /// locally and on origin. STORY-65: auto for slug → slug-2..-10 →
 /// slug-YYYY-MM-DD → slug-YYYY-MM-DD-2..-10; date for slug-YYYY-MM-DD
@@ -11192,6 +11235,7 @@ fn session_start(
     owns: &str,
     branch: Option<&str>,
     base: Option<&str>,
+    reuse_branch: bool,
     explicit_path: Option<&str>,
     forge_override: Option<&str>,
     branch_style: &str,
@@ -11313,6 +11357,16 @@ fn session_start(
     // can display head/base SHAs without a round-trip to the forge.
     // trace:STORY-71 | ai:claude
     let mut pr_metadata: PrMetadata = PrMetadata::default();
+
+    // TASK-245: decide whether to fork a new branch or check out an
+    // existing one. `--reuse-branch` is the explicit opt-in (the
+    // fixup-on-an-existing-PR-branch flow); an explicitly-named
+    // `--branch` that already exists is auto-reused so the cryptic
+    // `git worktree add -b` collision error never surfaces. An
+    // auto-derived branch name is never reused — resolve_session_branch
+    // already dodged collisions. trace:TASK-245 | ai:claude
+    let branch_preexists = branch_exists_anywhere(&project_root, &branch_name);
+    let reuse_existing = should_reuse_branch(reuse_branch, branch.is_some(), branch_preexists);
 
     if let Some((forge, n)) = review_target {
         // TASK-76: pre-flight check — if PR-N's source branch is held by
@@ -11473,6 +11527,56 @@ fn session_start(
                     format!("skipped PR metadata capture: {}", reason).dimmed()
                 );
             }
+        }
+    } else if reuse_existing {
+        // TASK-245: check out an EXISTING branch instead of forking.
+        // trace:TASK-245 | ai:claude
+        if reuse_branch && !branch_preexists {
+            anyhow::bail!(
+                "--reuse-branch given but branch `{}` exists neither locally \
+                 nor on origin — drop --reuse-branch to fork a fresh branch, \
+                 or check the --branch name",
+                branch_name
+            );
+        }
+        if base.is_some() {
+            eprintln!(
+                "{} --base is ignored when checking out the existing branch `{}`",
+                "ⓘ".cyan(),
+                branch_name
+            );
+        }
+        if !reuse_branch {
+            // Auto-reuse path — make the non-forking behavior visible.
+            eprintln!(
+                "{} branch `{}` already exists — checking it out \
+                 (pass a different --branch to fork a new one)",
+                "ⓘ".cyan(),
+                branch_name
+            );
+        }
+        // `git worktree add <path> <branch>` checks out an existing
+        // local branch, or DWIM-creates a local tracking branch from a
+        // unique `origin/<branch>` — no `-b`, no base.
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args([
+                "worktree",
+                "add",
+                worktree_path.to_str().unwrap(),
+                branch_name.as_str(),
+            ])
+            .output()?;
+        use std::io::Write;
+        let _ = std::io::stderr().write_all(&res.stdout);
+        let _ = std::io::stderr().write_all(&res.stderr);
+        if !res.status.success() {
+            anyhow::bail!(
+                "`git worktree add` (reuse existing branch `{}`) failed — \
+                 the branch may already be checked out in another worktree",
+                branch_name
+            );
         }
     } else {
         // Default flow: create worktree on a NEW branch (the original
@@ -39595,6 +39699,7 @@ fn handle_queue_work(
         &plan.scope,
         branch_override,
         /* base */ None,
+        /* reuse_branch */ false,
         path_override,
         /* forge_override */ None,
         /* branch_style */ "auto",

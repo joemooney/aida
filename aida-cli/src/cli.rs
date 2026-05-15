@@ -454,6 +454,17 @@ pub enum SessionCommand {
         #[clap(long)]
         base: Option<String>,
 
+        /// Check out the existing `--branch` instead of forking a new
+        /// one — the fixup-on-an-existing-PR-branch flow (e.g.
+        /// `aida session start --owns PR-30-fixup --branch <impl-branch>
+        /// --reuse-branch`). Errors if the branch exists nowhere.
+        /// Without this flag, an explicitly-named `--branch` that
+        /// already exists is reused automatically (with a hint), and an
+        /// auto-derived name always forks fresh. `--base` is ignored
+        /// when reusing. trace:TASK-245 | ai:claude
+        #[clap(long)]
+        reuse_branch: bool,
+
         /// Worktree directory (default: sibling of project root,
         /// `<repo-parent>/<repo-name>-<scope-slug>/`).
         #[clap(long, value_name = "PATH")]
