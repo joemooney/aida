@@ -44,12 +44,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user observed 'FR-1-042' in aida session list output and asked 'what is going on'. The long form was unfamiliar; user expected the short agreed-id consistent with other aida surfaces. Filed as session-list display polish.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:16:31.841526860Z
-modified_at: 2026-05-15T07:43:35.848235882Z
+modified_at: 2026-05-15T07:47:16.968686447Z
 req_type: Task
 tags:
 - agreed-id
@@ -63,3 +63,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T01:16:33.809928081Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T07:47:16.968686447Z
+  implemented_by: joe
