@@ -53,3 +53,7 @@ tags:
 - plan-file
 - queue-work
 - session-manifest
+relationships:
+- rel_type: Child
+  target_id: 019e1f98-72d0-7d02-9c08-7b3d52001a22
+  created_at: 2026-05-15T06:15:56.007537358Z
