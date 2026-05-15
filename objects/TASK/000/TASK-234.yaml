@@ -67,12 +67,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — direct user feedback during overnight wrap-up: 'It is not obvious how I got in this situation and what I can do to resolve it.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:24:37.543192216Z
-modified_at: 2026-05-15T13:21:45.114926596Z
+modified_at: 2026-05-15T14:32:21.246410962Z
 req_type: Task
 tags:
 - awaiting-merge
