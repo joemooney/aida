@@ -95,7 +95,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T03:37:04.274286254Z
-modified_at: 2026-05-15T16:34:25.046345002Z
+modified_at: 2026-05-15T17:38:03.009922670Z
 req_type: Epic
 tags:
 - claude-code
@@ -205,3 +205,8 @@ comments:
     These three are the highest-leverage TUI-adjacent backlog items. Worth shipping in the next implementer batch before TUI implementation kicks off.
   created_at: 2026-05-15T16:34:25.046345002Z
   modified_at: 2026-05-15T16:34:25.046345002Z
+- id: 019e2cb7-7c81-73f2-a4c8-8ddde55d2299
+  author: joe
+  content: 'Implementation plan: docs/plans/2026-05-15-epic-26-tui.md (assembled via /ultraplan, 2026-05-15). 11-section plan — resolves all 8 design forks (PTY-host via portable-pty, session-as-tab, poll-based sync, new aida-tui crate, /goal composed via ''aida goal''). First vertical = STORY-1 + STORY-2. Builds on TASK-112/220/242/245.'
+  created_at: 2026-05-15T17:38:03.009922670Z
+  modified_at: 2026-05-15T17:38:03.009922670Z
