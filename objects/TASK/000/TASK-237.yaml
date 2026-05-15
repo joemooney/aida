@@ -49,10 +49,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:16:31.841526860Z
-modified_at: 2026-05-15T01:16:31.841526860Z
+modified_at: 2026-05-15T06:41:44.485294757Z
 req_type: Task
 tags:
 - agreed-id
+- batch:display-polish
 - display
 - long-form
 - session-list
