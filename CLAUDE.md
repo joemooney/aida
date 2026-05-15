@@ -64,6 +64,9 @@ aida plan verify docs/plans/<file>.md  # Lint a plan: drifted refs, missing file
 aida plan verify <file> --fix          # Rewrite drifted path:line refs in place
 aida plan helpers <spec>               # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
 aida plan helpers <spec> --append <file>  # Append the derived section to a plan file
+aida ultraplan <spec>                  # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
+aida ultraplan <spec> --stdout         # Print the assembled prompt instead of copying
+aida ultraplan <spec> --json           # Emit prompt + warnings + token estimate as JSON
 ```
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
@@ -97,6 +100,8 @@ Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Us
 **The plan rides into the session.** `aida queue work <spec>` discovers any plan that owns the spec and pre-populates the session manifest with a *plan brief* — the `## Critical Files`, `## Followups`, and `## Verification` sections. `aida session show --plan` renders it, and `/aida-pickup` leads its first message with it so the implementer gets the blast radius and definition of done without grepping for the plan. Graceful no-op when no plan file exists. trace:TASK-95
 
 **Reusable helpers come from the trace graph.** `aida plan helpers <spec>` derives a `## Reusable helpers` section by walking the requirement graph — sibling specs (same parent), tag-mates, and (when discriminating) same-feature specs — and harvesting their `// trace:` comments for the files + symbols they already touch. It ranks siblings and tag-mates above the coarse same-feature set and only surfaces specs that name a helper, so the output stays a focused "don't reimplement this" brief. `--append <plan-file>` writes the section straight into a plan. trace:TASK-94
+
+**Hand `/ultraplan` a fully-contextualised prompt.** `aida ultraplan <spec>` assembles a structured planning prompt — the spec's description, extracted `## Acceptance` criteria, parent/child/sibling context, the AIDA 11-section plan structure, and the trace-graph reusable helpers — and copies it to the clipboard (`--stdout` / `--json` for piping). It turns a terse ask into a brief `/ultraplan`'s explorers can anchor on, and the inlined plan structure means the returned plan already matches `docs/plans/_TEMPLATE.md`. trace:TASK-113
 
 ## AIDA-developer workflow (only when working on AIDA itself)
 

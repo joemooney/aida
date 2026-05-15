@@ -3326,6 +3326,28 @@ pub enum Command {
     #[clap(subcommand)]
     Plan(PlanCommand),
 
+    /// Assemble a rich, structured planning prompt for a SPEC and hand it
+    /// to `/ultraplan`. Pulls the spec's description, acceptance criteria,
+    /// related-spec context, the AIDA plan-template structure, and the
+    /// trace-graph reusable helpers into one prompt — turning a terse
+    /// ask into a fully-contextualised brief. Copies to the clipboard by
+    /// default. trace:TASK-113 | ai:claude
+    Ultraplan {
+        /// SPEC-ID (or UUID) to assemble the planning prompt for.
+        spec: String,
+
+        /// Print the assembled prompt to stdout instead of copying it to
+        /// the clipboard. Also the headless fallback when no clipboard
+        /// tool is available.
+        #[clap(long, conflicts_with = "json")]
+        stdout: bool,
+
+        /// Emit the prompt + metadata (warnings, token estimate) as JSON
+        /// for scripting.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// List all commands (including the less-common ones hidden from
     /// `aida --help`), grouped by topic.
     HelpAll,

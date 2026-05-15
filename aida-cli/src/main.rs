@@ -294,6 +294,12 @@ fn run() -> Result<()> {
         return handle_plan_command(plan_cmd);
     }
 
+    // `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
+    // trace:TASK-113 | ai:claude
+    if let Command::Ultraplan { spec, stdout, json } = &cli.command {
+        return handle_ultraplan_command(spec, *stdout, *json);
+    }
+
     // Roles + statusline dispatch before storage init — roles are TOML
     // files at .aida/roles/, statusline reads the cache directly.
     if let Command::Role(role_cmd) = &cli.command {
@@ -583,6 +589,7 @@ fn run() -> Result<()> {
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
+        Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
@@ -1589,6 +1596,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
+        Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
@@ -17657,6 +17665,86 @@ cargo test -p aida-cli
         );
     }
 
+    /// TASK-113: the ultraplan prompt assembler handles a spec with no
+    /// acceptance criteria (edge case 1) and no trace-graph helpers (edge
+    /// case 3) — placeholder text in the prompt, warnings surfaced — and
+    /// the happy path with both present.
+    #[test]
+    fn ultraplan_prompt_assembly() {
+        use aida_core::{Requirement, RequirementsStore};
+
+        // No `## Acceptance`, no helpers section.
+        let mut store = RequirementsStore::new();
+        let mut bare = Requirement::new("do the thing".into(), "Some context.".into());
+        bare.spec_id = Some("TASK-1".into());
+        store.requirements.push(bare);
+        let (prompt, warnings) = assemble_ultraplan_prompt(&store, &store.requirements[0], None);
+        assert!(prompt.contains("Plan the implementation of TASK-1: do the thing."));
+        assert!(prompt.contains("## Plan structure"));
+        assert!(prompt.contains("(none specified"));
+        assert!(warnings.iter().any(|w| w.contains("`## Acceptance`")));
+        assert!(warnings.iter().any(|w| w.contains("reusable helpers")));
+
+        // With acceptance + a helpers section → no warnings.
+        let mut store2 = RequirementsStore::new();
+        let mut ok = Requirement::new(
+            "t2".into(),
+            "Intro.\n\n## Acceptance\n\n- [ ] alpha\n- [ ] beta\n".into(),
+        );
+        ok.spec_id = Some("TASK-2".into());
+        store2.requirements.push(ok);
+        let (prompt2, warnings2) = assemble_ultraplan_prompt(
+            &store2,
+            &store2.requirements[0],
+            Some("## Reusable helpers\n\n- x\n"),
+        );
+        assert!(prompt2.contains("- [ ] alpha"));
+        assert!(prompt2.contains("## Reusable helpers"));
+        assert!(warnings2.is_empty());
+    }
+
+    /// TASK-113 edge case 2: a spec with many siblings — the prompt caps
+    /// the list and notes how many were omitted.
+    #[test]
+    fn ultraplan_prompt_sibling_truncation() {
+        use aida_core::models::Relationship;
+        use aida_core::{RelationshipType, Requirement, RequirementsStore};
+
+        let child_rel = |parent: uuid::Uuid| Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: parent,
+            created_at: None,
+            created_by: None,
+        };
+        let mut store = RequirementsStore::new();
+        let mut parent = Requirement::new("epic".into(), String::new());
+        parent.spec_id = Some("EPIC-1".into());
+        let parent_id = parent.id;
+        store.requirements.push(parent);
+
+        let mut target = Requirement::new("target".into(), "## Acceptance\n\n- x\n".into());
+        target.spec_id = Some("TASK-1".into());
+        target.relationships.push(child_rel(parent_id));
+        store.requirements.push(target);
+
+        for i in 0..14 {
+            let mut sib = Requirement::new(format!("sib {i}"), String::new());
+            sib.spec_id = Some(format!("TASK-{}", 100 + i));
+            sib.relationships.push(child_rel(parent_id));
+            store.requirements.push(sib);
+        }
+
+        let target = store
+            .requirements
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some("TASK-1"))
+            .unwrap();
+        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None);
+        assert!(prompt.contains("Siblings (share a parent — 14 total)"));
+        assert!(prompt.contains("more siblings omitted"));
+        assert!(prompt.contains("Parent: EPIC-1"));
+    }
+
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
     /// suffix so the auto-bump pass can match review stories filed against
     /// that PR. trace:BUG-102 | ai:claude
@@ -22256,7 +22344,50 @@ fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> 
         store.get_requirement_by_spec_id(spec_arg)
     }
     .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
+    let target_display = target.display_id();
 
+    let Some(mut md) = build_reusable_helpers_section(&store, &project_root, target) else {
+        println!(
+            "No reusable helpers derived for {target_display} — no related spec (sibling / \
+             tag-mate / same-feature) carries a `trace:` comment that names a helper."
+        );
+        return Ok(());
+    };
+    md.push_str(&format!(
+        "\n_Generated by `aida plan helpers {target_display}` — verify before relying on it._\n"
+    ));
+
+    if let Some(path) = append {
+        let mut existing = std::fs::read_to_string(path)
+            .with_context(|| format!("could not read plan file {}", path.display()))?;
+        if !existing.ends_with('\n') {
+            existing.push('\n');
+        }
+        existing.push('\n');
+        existing.push_str(&md);
+        std::fs::write(path, existing)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        println!(
+            "{} appended Reusable helpers section to {}",
+            "✓".green(),
+            path.display()
+        );
+    } else {
+        print!("{md}");
+    }
+    Ok(())
+}
+
+/// Build the `## Reusable helpers` markdown section for `target` by walking
+/// the requirement graph (siblings / tag-mates / same-feature specs) and
+/// harvesting their `trace:` comments. Returns `None` when no related spec
+/// contributes a named helper. Shared by `aida plan helpers` and the
+/// `aida ultraplan` prompt assembler. trace:TASK-94 TASK-113 | ai:claude
+fn build_reusable_helpers_section(
+    store: &aida_core::RequirementsStore,
+    project_root: &std::path::Path,
+    target: &aida_core::models::Requirement,
+) -> Option<String> {
     // ── Related-spec discovery ── first reason wins (sibling beats
     // feature beats tag) so each spec appears once with its strongest tie.
     let parent_uuids: Vec<uuid::Uuid> = target
@@ -22321,11 +22452,7 @@ fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> 
 
     let target_display = target.display_id();
     if related.is_empty() {
-        anyhow::bail!(
-            "no related specs found for {} — needs a parent (for siblings), a feature, or tags. \
-             Nothing to derive helpers from.",
-            target_display
-        );
+        return None;
     }
 
     // Every id-string a trace comment might use (canonical spec_id or the
@@ -22389,6 +22516,11 @@ fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> 
     let truncated = ranked.len().saturating_sub(HELPERS_SPEC_CAP);
     ranked.truncate(HELPERS_SPEC_CAP);
 
+    // No related spec names a helper → nothing worth a section.
+    if ranked.is_empty() {
+        return None;
+    }
+
     // ── Render the section ──
     let mut md = String::new();
     md.push_str("## Reusable helpers (do not reimplement)\n\n");
@@ -22397,13 +22529,6 @@ fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> 
          touch this area. Call these rather than re-implementing.\n\n"
     ));
 
-    if ranked.is_empty() {
-        md.push_str(&format!(
-            "_{} related spec(s) found, but none carry `trace:` comments that name a \
-             helper yet._\n",
-            related.len()
-        ));
-    }
     for (idx, _, _) in &ranked {
         let (req, reason) = related[*idx];
         let by_file = &per_spec[*idx].1;
@@ -22441,27 +22566,305 @@ fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> 
              `aida list`._\n"
         ));
     }
-    md.push_str(&format!(
-        "\n_Generated by `aida plan helpers {target_display}` — verify before relying on it._\n"
+    Some(md)
+}
+
+// ============================================================================
+// TASK-113 — `aida ultraplan <SPEC>`. Assemble a rich, structured planning
+// prompt from a spec's full context (description, acceptance, related specs,
+// the AIDA plan template, trace-graph reusable helpers) so `/ultraplan`'s
+// explorers anchor on concrete requirements instead of a terse user prompt.
+// trace:TASK-113 | ai:claude
+// ============================================================================
+
+/// Copy `text` to the system clipboard, trying the platform tools in turn.
+/// Returns false when none is available (caller falls back to stdout).
+fn copy_to_clipboard(text: &str) -> bool {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    // Linux (Wayland then X11), macOS, Windows.
+    let tools: &[(&str, &[&str])] = &[
+        ("wl-copy", &[]),
+        ("xclip", &["-selection", "clipboard"]),
+        ("xsel", &["--clipboard", "--input"]),
+        ("pbcopy", &[]),
+        ("clip", &[]),
+    ];
+    for (cmd, args) in tools {
+        let Ok(mut child) = Command::new(cmd)
+            .args(*args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            continue;
+        };
+        let write_ok = match child.stdin.take() {
+            Some(mut stdin) => stdin.write_all(text.as_bytes()).is_ok(),
+            None => false,
+        };
+        // stdin dropped above → EOF; now wait for the tool to finish.
+        match child.wait() {
+            Ok(status) if write_ok && status.success() => return true,
+            _ => continue,
+        }
+    }
+    false
+}
+
+/// The AIDA plan-template section list, inlined into the ultraplan prompt
+/// so `/ultraplan`'s output already matches `docs/plans/_TEMPLATE.md`
+/// (TASK-92) and `aida plan verify` (TASK-93) passes on the saved plan.
+const ULTRAPLAN_STRUCTURE: &str = "\
+Produce the plan in AIDA's structured format — a header line with Date / \
+Specs / Status / Complexity, then these sections in order:
+
+1. **Approach** — one-paragraph executive summary, plus an ASCII diagram \
+where a state machine or control flow would compress prose.
+2. **Decisions** — each significant choice resolved, with rationale (not an \
+open-questions list).
+3. **Files (in build-order)** — symbol-anchored edits per file, ordered so \
+each commit builds clean.
+4. **Critical Files** — flat list of every must-touch path.
+5. **Reusable helpers** — existing helpers to call rather than re-invent \
+(seeded below).
+6. **Risks + gotchas** — numbered, each with a mitigation.
+7. **Tests** — named test functions, not \"add tests\".
+8. **Verification** — an executable bash smoke test (positive + negative).
+9. **Followups** — out-of-scope items to file as TASKs at completion time.
+10. **Related** — builds-on / blocks / see-also links.";
+
+/// One-line summary of a related requirement for the prompt's context block.
+fn ultraplan_spec_line(req: &aida_core::models::Requirement) -> String {
+    format!("{} — {} [{}]", req.display_id(), req.title, req.status)
+}
+
+/// Assemble the `/ultraplan` prompt for `target`. `helpers_section` is the
+/// pre-built trace-graph reusable-helpers markdown (None when there is
+/// none — see TASK-94). Returns the prompt and any warnings to surface.
+/// Pure over its inputs so it is unit-testable. trace:TASK-113 | ai:claude
+fn assemble_ultraplan_prompt(
+    store: &aida_core::RequirementsStore,
+    target: &aida_core::models::Requirement,
+    helpers_section: Option<&str>,
+) -> (String, Vec<String>) {
+    const DESC_CHAR_CAP: usize = 1800;
+    const SIBLING_CAP: usize = 12;
+    let mut warnings: Vec<String> = Vec::new();
+    let display = target.display_id();
+    let resolve = |id: &uuid::Uuid| store.requirements.iter().find(|r| &r.id == id);
+
+    let mut p = String::new();
+    p.push_str(&format!(
+        "Plan the implementation of {display}: {}.\n\n",
+        target.title
     ));
 
-    if let Some(path) = append {
-        let mut existing = std::fs::read_to_string(path)
-            .with_context(|| format!("could not read plan file {}", path.display()))?;
-        if !existing.ends_with('\n') {
-            existing.push('\n');
+    // ── Requirement body ──
+    p.push_str("## Requirement\n\n");
+    let desc = target.description.trim();
+    if desc.is_empty() {
+        p.push_str("_(no description on the spec)_\n\n");
+        warnings.push("spec has no description — the plan will be weakly grounded".to_string());
+    } else if desc.chars().count() > DESC_CHAR_CAP {
+        let truncated: String = desc.chars().take(DESC_CHAR_CAP).collect();
+        p.push_str(&truncated);
+        p.push_str("\n\n_(description truncated to fit the prompt budget)_\n\n");
+    } else {
+        p.push_str(desc);
+        p.push_str("\n\n");
+    }
+
+    // ── Acceptance criteria ──
+    p.push_str("## Acceptance criteria\n\n");
+    match extract_acceptance_section(&target.description) {
+        Some(acc) if !acc.trim().is_empty() => {
+            p.push_str(acc.trim());
+            p.push('\n');
         }
-        existing.push('\n');
-        existing.push_str(&md);
-        std::fs::write(path, existing)
-            .with_context(|| format!("could not write {}", path.display()))?;
+        _ => {
+            p.push_str(
+                "_(none specified — add a `## Acceptance` section to the spec for a sharper plan)_\n",
+            );
+            warnings.push(
+                "spec has no `## Acceptance` section — the plan will be weaker without \
+                 explicit acceptance criteria"
+                    .to_string(),
+            );
+        }
+    }
+    p.push('\n');
+
+    // ── Related-spec context ──
+    let parents: Vec<&aida_core::models::Requirement> = target
+        .relationships
+        .iter()
+        .filter(|r| r.rel_type == aida_core::RelationshipType::Child)
+        .filter_map(|r| resolve(&r.target_id))
+        .collect();
+    let children: Vec<&aida_core::models::Requirement> = target
+        .relationships
+        .iter()
+        .filter(|r| r.rel_type == aida_core::RelationshipType::Parent)
+        .filter_map(|r| resolve(&r.target_id))
+        .collect();
+    // Other typed relationships (verifies / references / custom) — the
+    // "composes / depends-on" signal the prompt should anchor on.
+    let other_rels: Vec<(String, &aida_core::models::Requirement)> = target
+        .relationships
+        .iter()
+        .filter(|r| {
+            !matches!(
+                r.rel_type,
+                aida_core::RelationshipType::Parent | aida_core::RelationshipType::Child
+            )
+        })
+        .filter_map(|r| resolve(&r.target_id).map(|req| (r.rel_type.to_string(), req)))
+        .collect();
+    let parent_ids: HashSet<uuid::Uuid> = parents.iter().map(|r| r.id).collect();
+    let siblings: Vec<&aida_core::models::Requirement> = if parent_ids.is_empty() {
+        Vec::new()
+    } else {
+        store
+            .requirements
+            .iter()
+            .filter(|r| {
+                r.id != target.id
+                    && r.relationships.iter().any(|rel| {
+                        rel.rel_type == aida_core::RelationshipType::Child
+                            && parent_ids.contains(&rel.target_id)
+                    })
+            })
+            .collect()
+    };
+
+    if !parents.is_empty() || !children.is_empty() || !siblings.is_empty() || !other_rels.is_empty()
+    {
+        p.push_str("## Related specs\n\n");
+        for parent in &parents {
+            p.push_str(&format!("- Parent: {}\n", ultraplan_spec_line(parent)));
+        }
+        for (rel, req) in &other_rels {
+            p.push_str(&format!("- {}: {}\n", rel, ultraplan_spec_line(req)));
+        }
+        if !children.is_empty() {
+            p.push_str("- Children:\n");
+            for child in &children {
+                p.push_str(&format!("  - {}\n", ultraplan_spec_line(child)));
+            }
+        }
+        if !siblings.is_empty() {
+            p.push_str(&format!(
+                "- Siblings (share a parent — {} total):\n",
+                siblings.len()
+            ));
+            for sib in siblings.iter().take(SIBLING_CAP) {
+                p.push_str(&format!("  - {}\n", ultraplan_spec_line(sib)));
+            }
+            if siblings.len() > SIBLING_CAP {
+                p.push_str(&format!(
+                    "  - _(+{} more siblings omitted to fit the prompt budget)_\n",
+                    siblings.len() - SIBLING_CAP
+                ));
+            }
+        }
+        p.push('\n');
+    }
+
+    // ── Plan structure ──
+    p.push_str("## Plan structure\n\n");
+    p.push_str(ULTRAPLAN_STRUCTURE);
+    p.push_str("\n\n");
+
+    // ── Reusable helpers (trace-graph derived) ──
+    match helpers_section {
+        Some(section) => {
+            p.push_str(section);
+            if !section.ends_with('\n') {
+                p.push('\n');
+            }
+            p.push('\n');
+        }
+        None => {
+            warnings.push(
+                "no trace-graph reusable helpers found — Reusable helpers section omitted"
+                    .to_string(),
+            );
+        }
+    }
+
+    // ── Style notes ──
+    p.push_str("## Style notes\n\n");
+    p.push_str(
+        "- Prefer symbol refs (`fn handle_pull_command`) over line refs (`main.rs:19713`) — \
+         line refs drift fast.\n\
+         - Order the Files section so each commit builds clean.\n\
+         - The Verification section must be an executable bash smoke test.\n\
+         - Keep the Followups section to one TASK-title-sized line per item.\n",
+    );
+
+    (p, warnings)
+}
+
+/// `aida ultraplan <SPEC>` — assemble + deliver the planning prompt.
+fn handle_ultraplan_command(spec_arg: &str, stdout: bool, json: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+    let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_by_spec_id(spec_arg)
+    }
+    .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
+
+    let helpers = build_reusable_helpers_section(&store, &project_root, target);
+    let (prompt, warnings) = assemble_ultraplan_prompt(&store, target, helpers.as_deref());
+    let token_estimate = prompt.chars().count() / 4;
+    let display = target.display_id();
+
+    if json {
+        let out = serde_json::json!({
+            "spec_id": display,
+            "title": target.title,
+            "prompt": prompt,
+            "token_estimate": token_estimate,
+            "warnings": warnings,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+
+    if stdout {
+        print!("{prompt}");
+        for w in &warnings {
+            eprintln!("{} {}", "Warning:".yellow().bold(), w);
+        }
+        return Ok(());
+    }
+
+    // Default: copy to clipboard, falling back to stdout when no tool exists.
+    if copy_to_clipboard(&prompt) {
         println!(
-            "{} appended Reusable helpers section to {}",
+            "{} assembled /ultraplan prompt for {} (~{} tokens) — copied to clipboard",
             "✓".green(),
-            path.display()
+            display.bold(),
+            token_estimate
+        );
+        println!(
+            "  {}",
+            "paste it into a Claude Code session, prefixed with /ultraplan".dimmed()
         );
     } else {
-        print!("{md}");
+        eprintln!(
+            "{} no clipboard tool found (wl-copy/xclip/xsel/pbcopy/clip) — printing instead",
+            "Note:".bold()
+        );
+        print!("{prompt}");
+    }
+    for w in &warnings {
+        eprintln!("{} {}", "Warning:".yellow().bold(), w);
     }
     Ok(())
 }
@@ -22494,6 +22897,10 @@ fn print_help_all() {
                 ("upgrade", "Upgrade aida to the latest release"),
                 ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
                 ("plan", "Verify plans + derive reusable-helper sections"),
+                (
+                    "ultraplan",
+                    "Assemble a rich /ultraplan prompt from a spec's context",
+                ),
             ],
         ),
         (

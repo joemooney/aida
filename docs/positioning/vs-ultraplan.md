@@ -152,17 +152,17 @@ If your work needs AIDA's lifecycle tracking, **always teleport back**. If your 
 
 ### Direction A — AIDA → `/ultraplan`: rich prompt assembly
 
-Today the user types a free-form prompt. AIDA has rich context for any SPEC: description + acceptance criteria + comments (including design seeds) + parent/child/sibling reqs + trace-comment graph + plan-template scaffolding. A new command (planned, see related TASKs) could assemble all of this into a structured prompt that gives `/ultraplan`'s three explorers something concrete to anchor on — turning a 100-word user prompt into a 2000-word prompt with the full requirement graph behind it.
+Today the user types a free-form prompt. AIDA has rich context for any SPEC: description + acceptance criteria + comments (including design seeds) + parent/child/sibling reqs + trace-comment graph + plan-template scaffolding. `aida ultraplan <SPEC>` (TASK-113, shipped) assembles all of this into a structured prompt that gives `/ultraplan`'s three explorers something concrete to anchor on — turning a 100-word user prompt into a ~2000-token prompt with the full requirement graph behind it.
 
-Pseudo-shape:
+Shape:
 
 ```
 aida ultraplan <SPEC>           # assemble rich prompt, copy to clipboard
-aida ultraplan <SPEC> --browser # open /ultraplan launch URL
-aida ultraplan <SPEC> --stdout  # print for inspection
+aida ultraplan <SPEC> --stdout  # print for inspection / piping
+aida ultraplan <SPEC> --json    # prompt + warnings + token estimate, for scripting
 ```
 
-The assembled prompt includes: target SPEC's acceptance criteria, parent/sibling spec summaries, the AIDA 11-section plan template (from TASK-92), known reusable helpers (from TASK-94's trace-graph derivation), and a "symbol refs preferred" style note.
+The assembled prompt includes: the target SPEC's description and extracted `## Acceptance` criteria, parent/child/sibling spec summaries (siblings capped to fit the token budget), the AIDA 11-section plan structure (from TASK-92) inlined so the returned plan matches `docs/plans/_TEMPLATE.md`, the trace-graph reusable helpers (from TASK-94's `build_reusable_helpers_section`), and a "symbol refs preferred" style note. It copies to the clipboard by default and falls back to stdout when no clipboard tool is available. There is no `--browser` mode: `/ultraplan` is an in-session Claude Code trigger, not a URL-launched surface.
 
 ### Direction B — `/ultraplan` → AIDA: auto-import saved plan
 
