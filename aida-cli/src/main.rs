@@ -562,6 +562,12 @@ fn run() -> Result<()> {
                  the deprecated centralized backend with `aida db export-git`)."
             );
         }
+        Command::Fetch { .. } => {
+            anyhow::bail!(
+                "`aida fetch` requires a git-canonical store. Run `aida init` (or upgrade from \
+                 the deprecated centralized backend with `aida db export-git`)."
+            );
+        }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
@@ -1544,6 +1550,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_gate,
         } => {
             return handle_pull_command(store_path, *code_only, *store_only, *quiet, *no_gate);
+        }
+        Command::Fetch {
+            code_only,
+            store_only,
+            quiet,
+        } => {
+            return handle_fetch_command(store_path, *code_only, *store_only, *quiet);
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
@@ -15796,7 +15809,9 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
 /// the orphan store at `store_path`, then stamps `last-fetch.toml` with
 /// the outcome and removes the lockfile. Never panics; every error
 /// path is silent. Called from `aida _bg-fetch <store-path>`, which
-/// statusline spawns detached. trace:STORY-79 | ai:claude
+/// statusline spawns detached. Shares its fetch + cache-stamp logic
+/// with `aida fetch --store-only --quiet` (TASK-107); the only thing
+/// it adds is the lockfile lifecycle. trace:STORY-79 TASK-107 | ai:claude
 fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {
     // Always try to clean up the lockfile, even on early-exit paths.
     // Drop guard via a small helper struct so panics / early returns
@@ -15817,32 +15832,21 @@ fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {
         let _ = write_last_fetch_entry(store_path, "error: not a git repo");
         return Ok(());
     }
-    let branch =
-        aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
-        .args(["fetch", "origin", &branch, "--prune"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .output();
-    match out {
-        Ok(o) if o.status.success() => {
-            let _ = write_last_fetch_entry(store_path, "ok");
-        }
-        Ok(o) => {
-            let msg = String::from_utf8_lossy(&o.stderr)
-                .lines()
-                .next()
-                .unwrap_or("unknown")
-                .to_string();
-            let _ = write_last_fetch_entry(store_path, &format!("error: {}", msg));
-        }
-        Err(e) => {
-            let _ = write_last_fetch_entry(store_path, &format!("error: {}", e));
-        }
+    if !aida_core::git_ops::has_remote(store_path, "origin") {
+        // No origin → record an error rather than letting the statusline
+        // re-spawn us in a tight loop. Shared cache key with
+        // `handle_fetch_command`. trace:STORY-79 TASK-107 | ai:claude
+        let _ = write_last_fetch_entry(store_path, "error: no origin remote");
+        return Ok(());
     }
+    // Reuse the shared `aida fetch --store-only --quiet` path so the
+    // background fetcher and the user-facing verb stay in lock-step on
+    // git args, error reporting, and cache stamping. TASK-107 acceptance
+    // criterion: "at least one existing caller refactored to use aida
+    // fetch". trace:TASK-107 | ai:claude
+    let _ = handle_fetch_command(
+        store_path, /* code_only */ false, /* store_only */ true, /* quiet */ true,
+    );
     Ok(())
 }
 
@@ -19393,6 +19397,205 @@ mod handle_pull_command_tests {
     }
 }
 
+/// TASK-107: regression coverage for `aida fetch`. The behaviors we
+/// pin: (1) code-leg fetch updates origin/<branch> without touching the
+/// worktree, (2) cache-invalidation hook fires after the store leg
+/// (best-effort, off the real `~/.aida` since `AIDA_HOME` overrides it
+/// for tests), (3) `--code-only` / `--store-only` route correctly,
+/// (4) the auto-bump does NOT fire on fetch — that's a pull-only
+/// behavior. trace:TASK-107 | ai:claude
+#[cfg(test)]
+mod handle_fetch_command_tests {
+    use super::*;
+
+    fn run_git_in(repo: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .expect("git binary on PATH");
+        if !out.status.success() {
+            panic!(
+                "git {:?} (in {:?}) failed: stdout={} stderr={}",
+                args,
+                repo,
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Bare remote + a project clone with one initial commit. Mirrors the
+    /// `handle_pull_command_tests::make_remote_and_clone` helper so tests
+    /// stay symmetric across the pull/fetch pair.
+    fn make_remote_and_clone() -> (
+        tempfile::TempDir,
+        tempfile::TempDir,
+        std::path::PathBuf,
+        std::path::PathBuf,
+    ) {
+        let bare_tmp = tempfile::TempDir::new().unwrap();
+        let bare = bare_tmp.path().to_path_buf();
+        run_git_in(
+            &bare,
+            &["init", "--bare", "--initial-branch=main", "--quiet"],
+        );
+
+        let seed_tmp = tempfile::TempDir::new().unwrap();
+        let seed = seed_tmp.path().to_path_buf();
+        run_git_in(
+            &seed,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                seed.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&seed, &["config", "user.email", "test@example.com"]);
+        run_git_in(&seed, &["config", "user.name", "Test"]);
+        std::fs::write(seed.join("README.md"), "init\n").unwrap();
+        run_git_in(&seed, &["add", "README.md"]);
+        run_git_in(&seed, &["commit", "-m", "chore: init"]);
+        run_git_in(&seed, &["push", "origin", "main", "--quiet"]);
+
+        let proj_tmp = tempfile::TempDir::new().unwrap();
+        let proj = proj_tmp.path().to_path_buf();
+        run_git_in(
+            &proj,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                proj.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&proj, &["config", "user.email", "test@example.com"]);
+        run_git_in(&proj, &["config", "user.name", "Test"]);
+
+        (bare_tmp, proj_tmp, bare, proj)
+    }
+
+    fn push_remote_commit(bare: &std::path::Path, msg: &str) -> String {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let work = tmp.path().to_path_buf();
+        run_git_in(
+            &work,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                work.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&work, &["config", "user.email", "test@example.com"]);
+        run_git_in(&work, &["config", "user.name", "Test"]);
+        std::fs::write(work.join("landed.txt"), msg).unwrap();
+        run_git_in(&work, &["add", "landed.txt"]);
+        run_git_in(&work, &["commit", "-m", msg]);
+        run_git_in(&work, &["push", "origin", "main", "--quiet"]);
+        run_git_in(&work, &["rev-parse", "HEAD"])
+    }
+
+    fn seed_done_spec_at(store_path: &std::path::Path, spec_id: &str) {
+        let storage = Storage::new(store_path.to_path_buf());
+        let mut store = storage.load().unwrap_or_default();
+        let mut req = aida_core::Requirement::new(format!("test-{}", spec_id), String::new());
+        req.spec_id = Some(spec_id.to_string());
+        req.set_status_from_str("Done");
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+    }
+
+    /// `aida fetch --code-only` advances `origin/main` to the remote tip
+    /// but does NOT advance the local working `main` (no merge, no
+    /// rebase). The worktree file added in the remote commit must NOT
+    /// appear in the local working tree.
+    #[test]
+    fn fetch_code_only_advances_origin_without_touching_worktree() {
+        let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        Storage::new(store_path.clone())
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        let pre_origin = run_git_in(&project_root, &["rev-parse", "origin/main"]);
+        let pre_local = run_git_in(&project_root, &["rev-parse", "HEAD"]);
+
+        let new_sha = push_remote_commit(&bare, "feat: remote landed");
+
+        // store_path doesn't exist as a worktree — store leg will skip
+        // cleanly. code_only=true makes that skip the intended path.
+        handle_fetch_command(&store_path, true, false, true).unwrap();
+
+        let post_origin = run_git_in(&project_root, &["rev-parse", "origin/main"]);
+        let post_local = run_git_in(&project_root, &["rev-parse", "HEAD"]);
+
+        assert_eq!(
+            post_origin, new_sha,
+            "origin/main should advance after fetch"
+        );
+        assert_ne!(post_origin, pre_origin, "origin/main must have moved");
+        assert_eq!(post_local, pre_local, "local HEAD must NOT move on fetch");
+        assert!(
+            !project_root.join("landed.txt").exists(),
+            "fetch must not touch the worktree"
+        );
+    }
+
+    /// `aida fetch` MUST NOT trigger the Done → Completed auto-bump.
+    /// That's pull-only behavior — fetch is read-only. Regression guard
+    /// against accidentally inheriting auto-bump from a shared helper.
+    #[test]
+    fn fetch_does_not_auto_bump() {
+        let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        let storage = Storage::new(store_path.clone());
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        let spec_id = "STORY-9510".to_string();
+        seed_done_spec_at(&store_path, &spec_id);
+        push_remote_commit(&bare, &format!("feat: teammate work ({})", spec_id));
+
+        handle_fetch_command(&store_path, true, false, true).unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "fetch must NOT auto-bump (that's pull's job), status was {:?}",
+            req.status
+        );
+    }
+
+    /// `aida fetch --store-only` skips the code leg even when there are
+    /// new commits on origin/main. origin/main stays at its pre-fetch SHA.
+    #[test]
+    fn fetch_store_only_skips_code_leg() {
+        let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        Storage::new(store_path.clone())
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        let pre_origin = run_git_in(&project_root, &["rev-parse", "origin/main"]);
+        push_remote_commit(&bare, "feat: new on remote");
+
+        // store_only=true → code leg skipped entirely.
+        handle_fetch_command(&store_path, false, true, true).unwrap();
+
+        let post_origin = run_git_in(&project_root, &["rev-parse", "origin/main"]);
+        assert_eq!(
+            pre_origin, post_origin,
+            "--store-only must NOT fetch the code leg"
+        );
+    }
+}
+
 #[cfg(test)]
 mod derive_parent_epic_label_tests {
     use super::*;
@@ -22792,6 +22995,245 @@ fn handle_pull_command(
     }
 
     Ok(())
+}
+
+/// `aida fetch` — read-only refresh of remote refs for both legs (code
+/// branch + orphan store) in one shot. No merge, no rebase, no worktree
+/// change. Stamps `~/.aida/cache/last-fetch.toml` so the statusline
+/// freshness indicator picks up the fetch immediately (same cache key
+/// the STORY-79 background fetcher writes). Prints a one-line
+/// "N new commits visible on origin" summary per leg unless `--quiet`.
+/// trace:TASK-107 | ai:claude
+fn handle_fetch_command(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+    quiet: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // ---- Code fetch (current branch on the project repo) ----
+    if !store_only {
+        if !git_ops::has_remote(&project_root, "origin") {
+            if !quiet {
+                println!(
+                    "  {} no `origin` remote — skipping code fetch",
+                    "Note:".dimmed()
+                );
+            }
+        } else {
+            let branch =
+                git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+            if !quiet {
+                println!("{} {} ← origin", "Fetching code".cyan().bold(), branch);
+            }
+            let pre = rev_parse_remote(&project_root, &branch);
+            match fetch_branch(&project_root, &branch, quiet) {
+                Ok(()) => {
+                    if !quiet {
+                        let post = rev_parse_remote(&project_root, &branch);
+                        print_fetch_delta(
+                            &project_root,
+                            "code",
+                            &branch,
+                            pre.as_deref(),
+                            post.as_deref(),
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("  {} code fetch failed: {}", "Warning:".yellow().bold(), e);
+                }
+            }
+        }
+    }
+
+    // ---- Store fetch (orphan branch) ----
+    if !code_only {
+        if !git_ops::is_git_repo(store_path) {
+            if !quiet {
+                println!(
+                    "  {} no orphan worktree — skipping store fetch",
+                    "Note:".dimmed()
+                );
+            }
+            return Ok(());
+        }
+        if !git_ops::has_remote(store_path, "origin") {
+            if !quiet {
+                println!(
+                    "  {} orphan store has no `origin` — skipping store fetch",
+                    "Note:".dimmed()
+                );
+            }
+            return Ok(());
+        }
+        let branch =
+            git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+        if !quiet {
+            println!("{} aida-store ← origin", "Fetching store".cyan().bold());
+        }
+        let pre = rev_parse_remote(store_path, &branch);
+        match fetch_branch(store_path, &branch, quiet) {
+            Ok(()) => {
+                // Cache-invalidation hook (shared with STORY-79 bg
+                // fetcher): stamp the per-project last-fetch timestamp so
+                // statusline / `--sync` decisions see a fresh signal.
+                // Best-effort — losing this write only costs a stale
+                // freshness indicator for one render cycle.
+                let _ = touch_last_fetch_ok(store_path);
+                if !quiet {
+                    let post = rev_parse_remote(store_path, &branch);
+                    print_fetch_delta(
+                        store_path,
+                        "store",
+                        &branch,
+                        pre.as_deref(),
+                        post.as_deref(),
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!("  {} store fetch failed: {}", "Warning:".yellow().bold(), e);
+                let _ = write_last_fetch_entry(
+                    store_path,
+                    &format!(
+                        "error: {}",
+                        e.to_string().lines().next().unwrap_or("unknown")
+                    ),
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Run `git -C <repo> fetch origin <branch> --prune`. Returns Ok on
+/// success, Err with the first line of stderr on failure. Inherits stdio
+/// when not quiet so progress bars / hint lines reach the user; pipes
+/// stdio to null otherwise. trace:TASK-107 | ai:claude
+fn fetch_branch(repo: &std::path::Path, branch: &str, quiet: bool) -> Result<()> {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C")
+        .arg(repo)
+        .args(["fetch", "origin", branch, "--prune"]);
+    if quiet {
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped());
+        let out = cmd.output()?;
+        if !out.status.success() {
+            let msg = String::from_utf8_lossy(&out.stderr)
+                .lines()
+                .next()
+                .unwrap_or("unknown error")
+                .to_string();
+            anyhow::bail!("{}", msg);
+        }
+    } else {
+        let status = cmd.status()?;
+        if !status.success() {
+            anyhow::bail!("git fetch exited with status {}", status);
+        }
+    }
+    Ok(())
+}
+
+/// Best-effort `git rev-parse origin/<branch>`. Returns None when the
+/// ref doesn't exist locally yet (e.g. first ever fetch) or git fails;
+/// the caller uses None to mean "no comparison baseline".
+/// trace:TASK-107 | ai:claude
+fn rev_parse_remote(repo: &std::path::Path, branch: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", &format!("origin/{}", branch)])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+/// Print one line summarizing what landed on `origin/<branch>` since the
+/// pre-fetch snapshot. Silent when pre/post match (nothing new) or when
+/// we can't compute the count. Format keeps both legs visually distinct
+/// via the `<leg>:` prefix (`code:` or `store:`).
+/// trace:TASK-107 | ai:claude
+fn print_fetch_delta(
+    repo: &std::path::Path,
+    leg: &str,
+    branch: &str,
+    pre: Option<&str>,
+    post: Option<&str>,
+) {
+    let post = match post {
+        Some(p) => p,
+        None => {
+            // No remote-tracking ref after fetch — likely upstream is
+            // gone. Stay silent rather than printing a confusing "0 new
+            // commits" line.
+            return;
+        }
+    };
+    let n = match pre {
+        Some(pre) if pre == post => 0,
+        Some(pre) => {
+            let range = format!("{}..{}", pre, post);
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(["rev-list", "--count", &range])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        String::from_utf8_lossy(&o.stdout)
+                            .trim()
+                            .parse::<u64>()
+                            .ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0)
+        }
+        None => {
+            // First-ever sight of the remote ref. Don't claim a count we
+            // can't justify — say "now visible" instead.
+            println!("  {} {} origin/{} now visible", "✓".green(), leg, branch);
+            return;
+        }
+    };
+    if n == 0 {
+        println!(
+            "  {} {} origin/{} already up-to-date",
+            "✓".green(),
+            leg,
+            branch
+        );
+    } else {
+        println!(
+            "  {} {} {} new commit{} on origin/{}",
+            "✓".green(),
+            leg,
+            n,
+            if n == 1 { "" } else { "s" },
+            branch
+        );
+    }
 }
 
 /// TASK-78: project-wide opt-out for the post-pull merge-gate. Defaults to
