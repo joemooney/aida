@@ -111,7 +111,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:35:41.965231513Z
-modified_at: 2026-05-15T06:13:47.880615542Z
+modified_at: 2026-05-15T06:28:01.801249602Z
 req_type: Story
 tags:
 - composition
@@ -201,3 +201,48 @@ comments:
     2026-05-14 — user asked: 'is /goal a command? do an internet search I think it is a newly released anthropic command'. Confirmed: Claude Code 2.1.139, released 2026-05-12. Documented in https://code.claude.com/docs/en/goal.
   created_at: 2026-05-15T06:13:47.880615542Z
   modified_at: 2026-05-15T06:13:47.880615542Z
+- id: 019e2a52-1089-7902-b767-7020e15e6afb
+  author: joe
+  content: |-
+    Update 2026-05-14 — community signals about /goal + adjacent commands surface the broader Anthropic autonomous-agent stack:
+
+    ## The stack, not just /goal
+
+    /goal does NOT exist in isolation. It's part of a layered autonomous-agent capability:
+
+    | Layer | Anthropic primitive | Purpose |
+    | Cadence | /schedule | Nightly tests, morning triage, weekly cleanup |
+    | Loop until done | /goal | Completion condition + autonomous loop |
+    | Permission posture | Auto mode (Shift+Tab in CLI / mode selector) | No human-in-the-loop interruptions during the run |
+    | Observability | Agent view | Monitor progress visually, step in if it goes sideways |
+    | Foundation | Claude Code (terminal + cloud + MCP) | Substrate |
+
+    AIDA's integration framework (this STORY) should treat /goal as one entry in a coordinated stack, not as a standalone integration.
+
+    ## The load-bearing insight for AIDA
+
+    Community comment captures it sharply: 'Vague goals like make the tests pass will loop on a flaky suite forever. The real discipline shifts to writing machine-checkable completion criteria upfront.'
+
+    This is EXACTLY what AIDA's structured graph enables. Compare:
+
+      Vague (loops forever): /goal make the queue empty
+      AIDA-derived precise (terminates): /goal all queued specs for role:implementer are status Completed AND no specs with status Done remain for >24h
+
+      Vague: /goal ship the plan-tooling work
+      AIDA-derived: /goal all specs tagged batch:plan-tooling are status Completed AND PR is merged AND v0.7.0 tag exists
+
+    AIDA's metadata (status, tags, types, relationships, parent/child, batch labels) gives users a vocabulary of machine-checkable conditions they otherwise have to write from scratch. This is the integration angle that differentiates AIDA + /goal from naive /goal usage.
+
+    ## Risk noted by the community
+
+    'cleaner, also riskier without manual checkpoints' — the autonomous loop without manual checkpoints can drift or run amok. AIDA's session-end CI-aware path (TASK-111, shipped) is one form of checkpoint. The trajectory of stuck specs (BUG-102, TASK-226) is another. AIDA's checkpoint primitives compose well with auto-mode-driven /goal runs — the implementer agent can run autonomously but AIDA's lifecycle hooks still gate real-world state changes.
+
+    ## Concrete deliverable
+
+    Filing a child TASK: 'aida goal-helper' — derives machine-checkable completion conditions from AIDA metadata. Composes with /goal directly. See the new TASK for details.
+
+    ## Ralph plugin context
+
+    Anthropic's earlier in-session loop primitive (Ralph plugin) suffered context rot — each iteration accumulated context in the same conversation. Bash wrappers were the manual workaround. /goal is the native, context-rot-free version: each loop iteration is a fresh model turn, evaluator runs as a separate model. This matches the same anti-anchoring principle as /ultraplan's 3-explorers + 1-critic (vs-ultraplan.md documents this principle).
+  created_at: 2026-05-15T06:28:01.801249602Z
+  modified_at: 2026-05-15T06:28:01.801249602Z
