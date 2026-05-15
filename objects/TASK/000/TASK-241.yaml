@@ -1,0 +1,118 @@
+id: 019e29dd-b401-7622-a570-8e173b95d4b1
+spec_id: TASK-241
+agreed_id: TASK-241
+title: 'aida show: surface git linkage (commits, files, branch, worktree, diff summary) for in-flight and shipped specs'
+description: |-
+  Today aida show SPEC tells you what was promised (description, acceptance) and who/when finished it (implemented_by, implemented_at). It does NOT surface the git data that actually shows what was done: commits that touched the spec, files with trace comments, branch/worktree where work lived, summary diff.
+
+  For an observer (or returning agent) asking 'what was actually done for this spec?' the missing data forces three separate commands:
+  - git log --grep SPEC-ID — to find commits
+  - grep -r 'trace:SPEC-ID' --include='*.rs' — to find trace comments
+  - aida session list --all — to find the worktree/branch
+
+  aida show should surface all of these in one place. This is Trojan-horse depth: platform observability surfacing through an existing CLI surface, not a new tool.
+
+  ## Proposed output (aida show extends with optional sections)
+
+    ID: TASK-96
+    UUID: ...
+    Title: aida queue done: extract Followups section from plan file
+    Type: Task
+    Status: Done
+    Priority: Low
+    Tags: automation, queue, plan, followup, batch:plan-tooling
+
+    Implementation:
+      Completed: 2026-05-14 21:01 -07:00
+      By:        joe
+      Branch:    epic-24-2 (worktree: /home/joe/ai/aida-epic-24)
+      PR:        not yet opened (last commit: 4b2dfcae '...')
+
+    Commits (3, on branch epic-24-2):
+      4b2dfcae feat(cli): aida queue done extracts Followups section (TASK-96)
+      a18f3882 ... (earlier in cluster batch)
+      ...
+
+    Files traced to this spec (2):
+      aida-cli/src/main.rs:14123 — fn extract_followups
+      aida-core/templates/skills/aida-pickup.md:67 — # Reference to plan-followups behavior
+
+    Description: ...
+
+    Relations: ...
+
+  ## Detection logic
+
+  For commits:
+  - git log --all --grep '(SPEC-ID)' --pretty=oneline (the AIDA commit format)
+  - Filter by branches that are 'in flight' (not yet merged into default)
+  - Show last N=5 with --verbose / --commits flag to expand
+
+  For files traced:
+  - grep -rn 'trace:SPEC-ID' across the codebase (excluding target/ .aida-store/ etc.)
+  - Show file:line + symbol/context if extractable
+
+  For branch / worktree:
+  - Cross-reference session manifests (.aida/sessions/*.toml) to find which session worked this spec
+  - Show active worktree path if session is alive; 'closed' if session ended
+
+  For PR:
+  - If session manifest has pr_number recorded (per BUG-102's About: PR-N convention), show PR state via gh
+
+  ## Flags for verbosity control
+
+  aida show SPEC              — default (current output + brief git linkage)
+  aida show SPEC --verbose    — full diff stats per commit
+  aida show SPEC --no-git     — skip git linkage (fast path for read-only contexts)
+  aida show SPEC --files-only — just the files-traced section
+  aida show SPEC --commits    — just commits section
+
+  ## Why Trojan-horse aligned
+
+  OVERVIEW.md 'Public face' section: TUI is the visible product; platform depth surfaces through use. Observability of git linkage per spec is exactly the kind of 'oh, that's nice' moment when a new user clicks through specs after install and discovers AIDA isn't just 'a todo list' but is genuinely aware of what was done in the code.
+
+  This composes with EPIC-26's TUI vision: TUI's spec-detail panel would render this view natively. CLI users get the same data via aida show.
+
+  ## Composes with
+
+  - TASK-102 (aida show enumerate relationships inline) — sibling display-polish; both extend aida show
+  - TASK-238 (queue list show tags) — same theme of 'display surfaces under-render data they have'
+  - TASK-220 (aida status) — could surface 'in-flight specs by branch' as a section
+  - TASK-234 (Done section grouping) — uses similar PR-state detection
+  - BUG-74 (gh detection helper) — reuse for PR-state queries
+  - EPIC-26 (TUI) — TUI's spec-detail panel renders this natively
+
+  ## Performance
+
+  The git scans are cheap per-spec but expensive in aggregate. Cache per session OR per --since. Default render shows recent N commits + first N files; --verbose unlocks the rest.
+
+  ## Acceptance
+
+  - [ ] aida show output includes git-linkage sections by default (commits + files + branch + worktree + PR state)
+  - [ ] --verbose expands; --no-git skips (for performance)
+  - [ ] Branch / worktree detection reads from session manifests
+  - [ ] PR state via gh + manifest cross-reference
+  - [ ] Graceful degrade when gh missing OR when no commits reference the spec
+  - [ ] Tests cover: in-flight spec (commits exist, PR not yet opened), shipped spec (PR merged), never-touched spec (no commits)
+  - [ ] CLAUDE.md / AIDA.md daily-commands section mentions the new sections
+
+  ## Discovered via
+
+  2026-05-14 — user observing the cluster-mode-drain state (TASK-92/93/96 at Done, in-flight on epic-24-2, no PR yet): 'I guess as an observer I may want git related information on any task like the commits or the files changed or the diff or the branch/worktree?' Yes — that's exactly the kind of observability gap that surfacing in aida show closes.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T04:20:55.937732251Z
+modified_at: 2026-05-15T04:20:55.937732251Z
+req_type: Task
+tags:
+- aida-show
+- branch
+- commits
+- diff
+- git
+- observability
+- traceability
+- trojan-horse-depth
+- worktree
