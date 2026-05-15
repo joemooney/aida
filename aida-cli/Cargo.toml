@@ -47,6 +47,11 @@ sysinfo = "0.30"
 tonic = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
 
+# TUI shell (EPIC-26) — optional, behind the `tui` feature. Default-off
+# through development so partial work never ships in a release binary;
+# STORY-6 flips this to `default = ["tui"]`.
+aida-tui = { version = "0.7", path = "../aida-tui", optional = true }
+
 # Unix-only — restore default SIGPIPE handling so `aida ... | head -N` exits
 # cleanly instead of triggering Rust's "failed printing to stdout" panic.
 # trace:BUG-99 | ai:claude
@@ -56,6 +61,9 @@ libc = "0.2"
 [features]
 default = []
 remote = ["tonic", "prost", "tonic-build"]
+# EPIC-26 TUI shell. Default-off until STORY-6 lands the docs + flips
+# this into `default`.
+tui = ["aida-tui"]
 
 [dev-dependencies]
 tempfile = "3.8"

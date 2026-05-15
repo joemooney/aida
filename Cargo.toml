@@ -6,6 +6,7 @@ members = [
     "aida-crate",
     "aida-server",
     "aida-generate-types",
+    "aida-tui",
 ]
 
 [workspace.package]
@@ -38,6 +39,12 @@ clap = { version = "4.4", features = ["derive"] }
 inquire = { version = "0.9.1", features = ["editor"] }
 colored = "2.0"
 regex = "1.10"
+
+# TUI dependencies (EPIC-26 — aida-tui crate)
+ratatui = "0.30"
+crossterm = "0.29"
+portable-pty = "0.9"
+vt100 = "0.16"
 
 # gRPC/Protocol Buffers dependencies
 tonic = "0.12"
