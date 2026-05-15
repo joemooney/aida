@@ -67,12 +67,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — direct user feedback during overnight wrap-up: 'It is not obvious how I got in this situation and what I can do to resolve it.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:24:37.543192216Z
-modified_at: 2026-05-15T07:33:44.970337190Z
+modified_at: 2026-05-15T07:37:25.350654817Z
 req_type: Task
 tags:
 - awaiting-merge
@@ -86,3 +86,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T14:24:39.845074791Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T07:37:25.350654817Z
+  implemented_by: joe
