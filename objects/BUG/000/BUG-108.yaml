@@ -54,12 +54,12 @@ description: |-
   ## Origin
 
   User flagged 2026-05-15: *\"note that when we end the session (in another terminal) it put ~/ai/aida-epic-26 in a funky state again — 'Your queue is empty.'\"*
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T20:22:22.918845671Z
-modified_at: 2026-05-15T20:22:22.918845671Z
+modified_at: 2026-05-15T22:16:58.346684435Z
 req_type: Bug
 tags:
 - cwd
@@ -68,3 +68,7 @@ tags:
 - queue
 - session-end
 - worktree
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T22:16:58.346684435Z
+  implemented_by: joe
