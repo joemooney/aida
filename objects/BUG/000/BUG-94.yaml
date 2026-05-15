@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:55:55.312738078Z
-modified_at: 2026-05-14T15:11:13.429663079Z
+modified_at: 2026-05-15T00:32:53.242707578Z
 req_type: Bug
 tags:
 - auto-bump
@@ -40,6 +40,19 @@ relationships:
 - rel_type: Child
   target_id: 019e134a-57d3-70e0-a15c-006dea10310d
   created_at: 2026-05-13T06:55:57.565761918Z
+comments:
+- id: 019e290c-ebfa-7c02-a51d-3074a7dc7652
+  author: joe
+  content: |-
+    Implemented via PR-27 (commit 9050f4b): https://github.com/joemooney/aida/pull/27
+
+    - Switched the auto-bump fallback range from `HEAD~50..HEAD` to `git log --max-count=50 HEAD` so `git rev-parse` no longer exits 128 on repos with fewer than 50 commits
+    - The `status == Done` guard inside step 4 keeps over-broad windows from double-firing
+    - Integration test added: with `pre_sha = None`, a single new merge commit on the default branch flips a Done spec to Completed via the fallback range. The test failed before the fix and passes after.
+
+    Test status: 609/609 workspace tests green (1 new integration test)
+  created_at: 2026-05-15T00:32:53.242707578Z
+  modified_at: 2026-05-15T00:32:53.242707578Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:11:13.429663079Z
