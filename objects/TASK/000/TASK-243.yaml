@@ -50,12 +50,12 @@ description: |-
   ## Discovered via
 
   2026-05-15 — user observed: 'which does not seem like the session I just exited. What is the correlation between 019e2bd3 and f82f45c1-9978-4fad-8bb7-974103803afe? Can we/should we print the role of the active session?' The correlation question revealed the two-ID system (Claude session vs AIDA session) is not surfaced anywhere; the role question is the immediate UX improvement.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T13:34:35.165058127Z
-modified_at: 2026-05-15T14:39:32.328250393Z
+modified_at: 2026-05-15T15:30:49.171200321Z
 req_type: Task
 tags:
 - ambiguity
