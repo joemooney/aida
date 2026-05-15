@@ -21,6 +21,7 @@ mod app;
 mod config;
 mod event;
 mod overlay;
+mod picker;
 mod pty;
 mod statusbar;
 mod tab;

@@ -16,6 +16,7 @@ use crate::actions::{self, ActivityEntry, QuickAction};
 use crate::config::TuiConfig;
 use crate::event::TuiEvent;
 use crate::overlay::{self, OverlayModel};
+use crate::picker::{self, PickerState};
 use crate::pty::PtyHost;
 use crate::statusbar;
 use crate::tab::{SessionTab, TabManager};
@@ -33,7 +34,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 /// dropped once the log grows past this (the overlay only shows a tail).
 const ACTIVITY_LOG_CAP: usize = 200;
 
-/// Input-routing mode — the Focused → Command → Overlay state machine.
+/// Input-routing mode — the Focused → Command → {Overlay, Picker} state
+/// machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     /// Keystrokes pass straight through to the focused child.
@@ -45,6 +47,11 @@ pub enum Mode {
     /// and the child's PTY output is buffered (not blitted) until the
     /// overlay closes. trace:STORY-133 | ai:claude
     Overlay,
+    /// The `prefix n` new-session picker is open — keystrokes drive the
+    /// picker (select / open / cancel). Like `Overlay`, the focused
+    /// child's PTY output is buffered until the picker closes.
+    /// trace:STORY-134 | ai:claude
+    Picker,
 }
 
 /// The outcome of routing one keystroke through [`App::route_key`].
@@ -78,6 +85,24 @@ pub enum Routing {
     /// `enter` on a quick action with no pending confirm, or `y` once a
     /// confirm is armed — run the action as a captured subprocess.
     RunAction(QuickAction),
+    /// `prefix n` — open the new-session picker (STORY-134).
+    OpenPicker,
+    /// `esc` / `q` from the picker — close it, repaint the focused tab.
+    ClosePicker,
+    /// A picker keystroke that only moved the selection — repaint it.
+    PickerRedraw,
+    /// `enter` in the picker — spawn the selected session in a new tab.
+    SpawnSelected,
+}
+
+/// How a new tab's hosted `aida queue work` child should launch.
+/// trace:STORY-134 | ai:claude
+enum TabLaunch {
+    /// Cold launch with a fresh, caller-minted `--session-id` UUID — the
+    /// TUI tracks the conversation deterministically.
+    Fresh,
+    /// Resume a recorded conversation via `--resume <session-id>`.
+    Resume(String),
 }
 
 /// Supervisor state for one `aida tui` run.
@@ -106,11 +131,16 @@ pub struct App {
     /// Quick-action results, oldest first — the overlay's activity log.
     /// Survives overlay open/close within one `aida tui` run.
     activity: Vec<ActivityEntry>,
-    /// `ratatui` terminal, created lazily on the first overlay open and
-    /// reused for every subsequent draw. The supervisor's passthrough
-    /// rendering writes raw bytes; this is only ever used while the
-    /// overlay owns the screen. trace:STORY-133 | ai:claude
-    overlay_term: Option<Terminal<CrosstermBackend<Stdout>>>,
+    /// State for the `prefix n` new-session picker (STORY-134).
+    picker: PickerState,
+    /// The scope the TUI was launched with, if any — the picker offers
+    /// resumable conversations for it. trace:STORY-134 | ai:claude
+    launch_scope: Option<String>,
+    /// `ratatui` terminal, created lazily on the first modal open and
+    /// reused for every subsequent draw of the overlay or picker. The
+    /// supervisor's passthrough rendering writes raw bytes; this is only
+    /// ever used while a modal owns the screen. trace:STORY-133 STORY-134
+    ratatui_term: Option<Terminal<CrosstermBackend<Stdout>>>,
 }
 
 /// State for the status overlay — what `App` carries while [`Mode::Over
@@ -170,7 +200,9 @@ impl App {
             exit_sessions: Vec::new(),
             overlay: OverlayState::new(),
             activity: Vec::new(),
-            overlay_term: None,
+            picker: PickerState::empty(),
+            launch_scope: None,
+            ratatui_term: None,
         }
     }
 
@@ -209,6 +241,10 @@ impl App {
                         self.mode = Mode::Overlay;
                         Routing::OpenOverlay
                     }
+                    KeyCode::Char('n') => {
+                        self.mode = Mode::Picker;
+                        Routing::OpenPicker
+                    }
                     KeyCode::Char('[') => Routing::PrevTab,
                     KeyCode::Char(']') => Routing::NextTab,
                     KeyCode::Char(c @ '1'..='9') => Routing::SwitchTab(c as usize - '1' as usize),
@@ -216,6 +252,7 @@ impl App {
                 }
             }
             Mode::Overlay => self.route_overlay_key(key),
+            Mode::Picker => self.route_picker_key(key),
         }
     }
 
@@ -259,15 +296,40 @@ impl App {
         }
     }
 
+    /// Route a keystroke while the new-session picker is open: arrows /
+    /// `j` / `k` move the selection, Enter opens the highlighted session
+    /// in a new tab, and Esc / `q` / `n` close the picker.
+    /// trace:STORY-134 | ai:claude
+    fn route_picker_key(&mut self, key: KeyEvent) -> Routing {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('n') => {
+                self.mode = Mode::Focused;
+                Routing::ClosePicker
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.picker.select_prev();
+                Routing::PickerRedraw
+            }
+            KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => {
+                self.picker.select_next();
+                Routing::PickerRedraw
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => Routing::SpawnSelected,
+            // Any other key is a no-op; an idempotent redraw is harmless.
+            _ => Routing::PickerRedraw,
+        }
+    }
+
     /// Run the supervisor loop until the user quits or detaches. Hosts
     /// the optional `scope` in the first tab; with `None`, opens an empty
-    /// shell the user can exit cleanly (STORY-3 adds the new-tab picker).
+    /// shell — `prefix n` then populates it from the picker (STORY-134).
     pub fn run(&mut self, scope: Option<String>) -> Result<ExitKind> {
         self.term_size = terminal::size().unwrap_or((80, 24));
+        self.launch_scope = scope.clone();
         let (tx, rx) = mpsc::channel::<TuiEvent>();
 
         if let Some(scope) = scope {
-            self.spawn_tab(&scope, tx.clone())
+            self.spawn_tab(&scope, TabLaunch::Fresh, tx.clone())
                 .with_context(|| format!("failed to host session for `{}`", scope))?;
         }
 
@@ -332,18 +394,15 @@ impl App {
                     }
                     // `ratatui` autoresizes on its next draw; the focused
                     // tab is repainted from its `vt100` snapshot.
-                    if self.mode == Mode::Overlay {
-                        self.draw_overlay()?;
-                    } else {
-                        self.full_repaint(out)?;
-                    }
+                    self.repaint(out)?;
                 }
                 TuiEvent::Input(_) => {}
                 TuiEvent::PtyOutput { tab, bytes } => {
-                    // The overlay owns the screen — buffer the focused
-                    // child's output (the `vt100` mirror is still fed in
-                    // the reader thread) and blit it on overlay close.
-                    if self.mode != Mode::Overlay && self.is_focused_tab(tab) {
+                    // A modal (overlay / picker) owns the screen — buffer
+                    // the focused child's output (its `vt100` mirror is
+                    // still fed in the reader thread) and blit it when the
+                    // modal closes.
+                    if !self.is_modal() && self.is_focused_tab(tab) {
                         out.write_all(&bytes)?;
                         out.flush()?;
                     }
@@ -358,11 +417,7 @@ impl App {
                     if self.had_tabs && self.tabs.is_empty() {
                         return Ok(ExitKind::SessionEnded);
                     }
-                    if self.mode == Mode::Overlay {
-                        self.draw_overlay()?;
-                    } else {
-                        self.full_repaint(out)?;
-                    }
+                    self.repaint(out)?;
                 }
                 TuiEvent::OverlayRefresh(model) => {
                     // The `gh`-backed refresh landed — repaint only if the
@@ -439,8 +494,93 @@ impl App {
             Routing::RunAction(action) => {
                 self.run_quick_action(action)?;
             }
+            Routing::OpenPicker => self.open_picker()?,
+            Routing::ClosePicker => self.full_repaint(out)?,
+            Routing::PickerRedraw => self.draw_picker()?,
+            Routing::SpawnSelected => self.spawn_from_picker(tx.clone(), out)?,
         }
         Ok(None)
+    }
+
+    /// Whether a full-screen modal (overlay or picker) currently owns the
+    /// screen — when true, hosted children's PTY output is buffered.
+    fn is_modal(&self) -> bool {
+        matches!(self.mode, Mode::Overlay | Mode::Picker)
+    }
+
+    /// Repaint whatever owns the screen for the current mode — the active
+    /// modal, or the focused tab.
+    fn repaint(&mut self, out: &mut Stdout) -> Result<()> {
+        match self.mode {
+            Mode::Overlay => self.draw_overlay(),
+            Mode::Picker => self.draw_picker(),
+            Mode::Focused | Mode::Command => self.full_repaint(out),
+        }
+    }
+
+    /// Open the new-session picker: gather queued specs + resumable
+    /// conversations for the launch scope, then draw it. trace:STORY-134
+    fn open_picker(&mut self) -> Result<()> {
+        let open_ids: Vec<String> = self.tabs.iter().map(|t| t.session_id.clone()).collect();
+        self.picker = picker::fetch(self.launch_scope.as_deref(), &open_ids);
+        self.ensure_ratatui_term()?;
+        if let Some(term) = self.ratatui_term.as_mut() {
+            term.clear()?;
+            term.hide_cursor()?;
+        }
+        self.draw_picker()
+    }
+
+    /// Draw the picker into the `ratatui` terminal. Disjoint-field
+    /// borrows, same as [`App::draw_overlay`].
+    fn draw_picker(&mut self) -> Result<()> {
+        self.ensure_ratatui_term()?;
+        let state = &self.picker;
+        let at_cap = self.tabs.len() >= self.config.max_tabs;
+        let term = self
+            .ratatui_term
+            .as_mut()
+            .expect("ratatui terminal initialized above");
+        term.draw(|frame| picker::render(frame, state, at_cap))?;
+        Ok(())
+    }
+
+    /// Spawn the picker's highlighted session in a new tab, then close
+    /// the picker. A full tab manager keeps the picker open with a note
+    /// instead — the user must free a slot first. trace:STORY-134
+    fn spawn_from_picker(&mut self, tx: Sender<TuiEvent>, out: &mut Stdout) -> Result<()> {
+        let Some(entry) = self.picker.selected_entry().cloned() else {
+            // Empty picker — nothing to spawn; just close it.
+            self.mode = Mode::Focused;
+            return self.full_repaint(out);
+        };
+        if self.tabs.len() >= self.config.max_tabs {
+            // Stay in the picker; the cap note is rendered by the picker.
+            return self.draw_picker();
+        }
+        let launch = match &entry {
+            picker::PickerEntry::Fresh { .. } => TabLaunch::Fresh,
+            picker::PickerEntry::Resume { session_id, .. } => TabLaunch::Resume(session_id.clone()),
+        };
+        match self.spawn_tab(entry.scope(), launch, tx) {
+            Ok(()) => {
+                self.mode = Mode::Focused;
+                self.full_repaint(out)
+            }
+            Err(e) => {
+                // Surface the failure in the picker rather than crashing.
+                self.picker.note = Some(format!("could not open session: {e}"));
+                self.draw_picker()
+            }
+        }
+    }
+
+    /// Build the `ratatui` terminal on first use (overlay or picker).
+    fn ensure_ratatui_term(&mut self) -> Result<()> {
+        if self.ratatui_term.is_none() {
+            self.ratatui_term = Some(Terminal::new(CrosstermBackend::new(std::io::stdout()))?);
+        }
+        Ok(())
     }
 
     /// Open the status overlay: paint immediately from a cache-only
@@ -463,10 +603,8 @@ impl App {
 
         // Lazily build the `ratatui` terminal; `clear()` forces a full
         // redraw over whatever the hosted child left on screen.
-        if self.overlay_term.is_none() {
-            self.overlay_term = Some(Terminal::new(CrosstermBackend::new(std::io::stdout()))?);
-        }
-        if let Some(term) = self.overlay_term.as_mut() {
+        self.ensure_ratatui_term()?;
+        if let Some(term) = self.ratatui_term.as_mut() {
             term.clear()?;
             term.hide_cursor()?;
         }
@@ -474,22 +612,20 @@ impl App {
     }
 
     /// Draw the overlay into the `ratatui` terminal. Disjoint-field
-    /// borrows: the panel inputs are borrowed before `overlay_term` is
+    /// borrows: the panel inputs are borrowed before `ratatui_term` is
     /// borrowed mutably, so the draw closure and the terminal don't
     /// alias.
     fn draw_overlay(&mut self) -> Result<()> {
-        if self.overlay_term.is_none() {
-            self.overlay_term = Some(Terminal::new(CrosstermBackend::new(std::io::stdout()))?);
-        }
+        self.ensure_ratatui_term()?;
         let model = &self.overlay.model;
         let activity = &self.activity;
         let selected = self.overlay.selected;
         let confirm = self.overlay.confirm;
         let refreshing = self.overlay.refreshing;
         let term = self
-            .overlay_term
+            .ratatui_term
             .as_mut()
-            .expect("overlay terminal initialized above");
+            .expect("ratatui terminal initialized above");
         term.draw(|frame| overlay::render(frame, model, activity, selected, confirm, refreshing))?;
         Ok(())
     }
@@ -516,22 +652,35 @@ impl App {
     }
 
     /// Spawn a hosted session for `scope` in a fresh tab. The child is
-    /// `aida queue work <scope> --session-id <uuid>` (never `claude`
-    /// directly — all lease / worktree / manifest logic is inherited).
-    fn spawn_tab(&mut self, scope: &str, tx: Sender<TuiEvent>) -> Result<()> {
-        let session_id = uuid::Uuid::now_v7().to_string();
+    /// always `aida queue work` (never `claude` directly — all lease /
+    /// worktree / manifest logic is inherited); `launch` selects between
+    /// a fresh `--session-id` conversation and a `--resume` of a recorded
+    /// one. trace:STORY-132 STORY-134 | ai:claude
+    fn spawn_tab(&mut self, scope: &str, launch: TabLaunch, tx: Sender<TuiEvent>) -> Result<()> {
         let tab_id = self.next_tab_id;
         self.next_tab_id += 1;
 
-        let (cols, rows) = self.term_size;
-        let argv = vec![
+        let mut argv = vec![
             aida_exe().to_string_lossy().into_owned(),
             "queue".to_string(),
             "work".to_string(),
             scope.to_string(),
-            "--session-id".to_string(),
-            session_id.clone(),
         ];
+        let session_id = match launch {
+            TabLaunch::Fresh => {
+                let sid = uuid::Uuid::now_v7().to_string();
+                argv.push("--session-id".to_string());
+                argv.push(sid.clone());
+                sid
+            }
+            TabLaunch::Resume(sid) => {
+                argv.push("--resume".to_string());
+                argv.push(sid.clone());
+                sid
+            }
+        };
+
+        let (cols, rows) = self.term_size;
         let pty = PtyHost::spawn(&argv, pty_rows(rows), cols, tab_id, tx)?;
 
         let tab = SessionTab {
@@ -586,11 +735,12 @@ impl App {
         let chips: Vec<String> = self.tabs.iter().map(|t| t.title.clone()).collect();
         let hint = match self.mode {
             Mode::Focused => format!("{} = command", describe_key(self.config.prefix_key)),
-            Mode::Command => "command: o overlay · q quit · d detach · [ ] tab".to_string(),
-            // The overlay paints its own full-screen chrome; the strip is
-            // only ever drawn in Focused / Command, but the arm is needed
-            // for the match to stay exhaustive.
+            Mode::Command => "command: o overlay · n new · q quit · d detach · [ ] tab".to_string(),
+            // The overlay and picker paint their own full-screen chrome;
+            // the strip is only ever drawn in Focused / Command, but the
+            // arms are needed for the match to stay exhaustive.
             Mode::Overlay => "overlay open".to_string(),
+            Mode::Picker => "picker open".to_string(),
         };
         statusbar::render(
             out,
@@ -889,6 +1039,55 @@ mod tests {
         assert!(matches!(app.route_key(plain('n')), Routing::OverlayRedraw));
         assert!(app.overlay.confirm.is_none());
         assert_eq!(app.mode, Mode::Overlay);
+    }
+
+    #[test]
+    fn prefix_n_opens_picker_and_esc_closes_it() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+
+        // `prefix n` enters Picker mode.
+        app.route_key(prefix);
+        assert!(matches!(app.route_key(plain('n')), Routing::OpenPicker));
+        assert_eq!(app.mode, Mode::Picker);
+
+        // `esc` closes back to Focused.
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(matches!(app.route_key(esc), Routing::ClosePicker));
+        assert_eq!(app.mode, Mode::Focused);
+    }
+
+    #[test]
+    fn picker_navigates_and_enter_spawns_selection() {
+        use crate::picker::{PickerEntry, PickerState};
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('n'));
+
+        // Populate two candidates so navigation is observable.
+        app.picker = PickerState::new(vec![
+            PickerEntry::Fresh {
+                spec_id: "STORY-1".into(),
+                title: "first".into(),
+                status: "Approved".into(),
+            },
+            PickerEntry::Fresh {
+                spec_id: "STORY-2".into(),
+                title: "second".into(),
+                status: "Approved".into(),
+            },
+        ]);
+        assert_eq!(app.picker.selected, 0);
+
+        // `j` / Down moves the selection; the picker stays open.
+        assert!(matches!(app.route_key(plain('j')), Routing::PickerRedraw));
+        assert_eq!(app.picker.selected, 1);
+        assert_eq!(app.mode, Mode::Picker);
+
+        // Enter routes a spawn of the highlighted entry.
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(matches!(app.route_key(enter), Routing::SpawnSelected));
     }
 
     #[test]
