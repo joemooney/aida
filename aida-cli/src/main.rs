@@ -1567,6 +1567,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             store_only,
             message,
             no_rebase_check,
+            dry_run,
+            json,
         } => {
             // TASK-106: AIDA_PUSH_DEFAULT lets a user flip the default
             // scope when neither flag is passed explicitly.
@@ -1575,6 +1577,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *store_only,
                 std::env::var("AIDA_PUSH_DEFAULT").ok().as_deref(),
             );
+            // TASK-108: --dry-run (or --json, which implies it) prints
+            // the plan and exits without touching origin.
+            if *dry_run || *json {
+                return handle_push_dry_run(store_path, code_only, store_only, *json);
+            }
             return handle_push_command(
                 store_path,
                 code_only,
@@ -1588,7 +1595,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             store_only,
             quiet,
             no_gate,
+            dry_run,
+            json,
         } => {
+            // TASK-108: --dry-run fetches, reports, and exits.
+            if *dry_run || *json {
+                return handle_pull_dry_run(store_path, *code_only, *store_only, *json);
+            }
             return handle_pull_command(store_path, *code_only, *store_only, *quiet, *no_gate);
         }
         Command::Fetch {
@@ -20298,6 +20311,41 @@ mod push_pull_scope_tests {
         ));
         assert!(Cli::try_parse_from(["aida", "pull", "--code-only", "--store-only"]).is_err());
     }
+
+    /// TASK-108: --dry-run and --json parse for both verbs and compose
+    /// with the scope flags.
+    #[test]
+    fn dry_run_flags_parse() {
+        let cli = Cli::try_parse_from(["aida", "push", "--dry-run"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                dry_run: true,
+                json: false,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "push", "--json", "--code-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                json: true,
+                code_only: true,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "pull", "--dry-run", "--store-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Pull {
+                dry_run: true,
+                store_only: true,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "pull", "--json"]).unwrap();
+        assert!(matches!(cli.command, Command::Pull { json: true, .. }));
+    }
 }
 
 /// TASK-107: regression coverage for `aida fetch`. The behaviors we
@@ -24910,6 +24958,331 @@ fn confirm_push_plan(legs: &[LegStatus], no_rebase_check: bool) -> bool {
     } else {
         true
     }
+}
+
+/// TASK-108: count commits matching a git rev-list spec. 0 on failure.
+/// trace:TASK-108 | ai:claude
+fn commit_count(repo: &std::path::Path, spec: &[&str]) -> usize {
+    let mut args = vec!["rev-list", "--count"];
+    args.extend_from_slice(spec);
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(&args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// TASK-108: list "shorthash subject" lines for a git rev-list spec,
+/// capped at `limit`. Empty on any git failure. trace:TASK-108 | ai:claude
+fn commit_subjects(repo: &std::path::Path, spec: &[&str], limit: usize) -> Vec<String> {
+    let limit_arg = format!("-n{}", limit);
+    let mut args = vec!["log", "--format=%h %s", limit_arg.as_str()];
+    args.extend_from_slice(spec);
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(&args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|l| l.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// TASK-108: one leg of a `--dry-run` report.
+struct DryRunLeg {
+    label: &'static str,
+    summary: String,
+    count: usize,
+    subjects: Vec<String>,
+}
+
+/// TASK-108: render the dry-run plan — human-readable by default, JSON
+/// with `--json`. trace:TASK-108 | ai:claude
+fn emit_dry_run(verb: &str, legs: &[DryRunLeg], json: bool) {
+    if json {
+        let arr: Vec<serde_json::Value> = legs
+            .iter()
+            .map(|l| {
+                serde_json::json!({
+                    "leg": l.label,
+                    "summary": l.summary,
+                    "count": l.count,
+                    "commits": l.subjects,
+                })
+            })
+            .collect();
+        let obj = serde_json::json!({ "verb": verb, "dry_run": true, "legs": arr });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&obj).unwrap_or_else(|_| "{}".to_string())
+        );
+        return;
+    }
+    println!(
+        "{} {}",
+        format!("aida {} --dry-run", verb).bold(),
+        "(no changes made)".dimmed()
+    );
+    for leg in legs {
+        println!("  {} {}", leg.label.cyan().bold(), leg.summary);
+        for s in &leg.subjects {
+            println!("      {}", s.dimmed());
+        }
+        if leg.count > leg.subjects.len() {
+            println!(
+                "      {}",
+                format!("… and {} more", leg.count - leg.subjects.len()).dimmed()
+            );
+        }
+    }
+}
+
+/// TASK-108: `aida push --dry-run` — report what each in-scope leg would
+/// push without touching origin. trace:TASK-108 | ai:claude
+fn handle_push_dry_run(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+    json: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+    const LIMIT: usize = 10;
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    let mut legs: Vec<DryRunLeg> = Vec::new();
+
+    if !store_only {
+        let leg = if !git_ops::has_remote(&project_root, "origin") {
+            DryRunLeg {
+                label: "code",
+                summary: "no `origin` remote — nothing to push".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else {
+            let branch =
+                git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+            let origin_ref = format!("origin/{}", branch);
+            match ahead_behind_vs_ref(&project_root, &branch, &origin_ref) {
+                Some((ahead, behind)) => {
+                    let range = format!("{}..HEAD", origin_ref);
+                    let subjects = commit_subjects(&project_root, &[range.as_str()], LIMIT);
+                    let mut summary = format!(
+                        "{} → origin/{}: {} commit{} to push",
+                        branch,
+                        branch,
+                        ahead,
+                        if ahead == 1 { "" } else { "s" }
+                    );
+                    if behind > 0 {
+                        summary += &format!(
+                            " (DIVERGED — {} commit{} behind; rebase before pushing)",
+                            behind,
+                            if behind == 1 { "" } else { "s" }
+                        );
+                    }
+                    DryRunLeg {
+                        label: "code",
+                        summary,
+                        count: ahead as usize,
+                        subjects,
+                    }
+                }
+                // No origin/<branch> ref — first push of a new branch.
+                None => {
+                    let spec = ["HEAD", "--not", "--remotes"];
+                    let count = commit_count(&project_root, &spec);
+                    let subjects = commit_subjects(&project_root, &spec, LIMIT);
+                    DryRunLeg {
+                        label: "code",
+                        summary: format!(
+                            "{} → origin (new branch — would publish {} commit{})",
+                            branch,
+                            count,
+                            if count == 1 { "" } else { "s" }
+                        ),
+                        count,
+                        subjects,
+                    }
+                }
+            }
+        };
+        legs.push(leg);
+    }
+
+    if !code_only {
+        let leg = if !git_ops::is_git_repo(store_path) {
+            DryRunLeg {
+                label: "store",
+                summary: "no orphan worktree — nothing to push".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else if !git_ops::has_remote(store_path, "origin") {
+            DryRunLeg {
+                label: "store",
+                summary: "orphan store has no `origin` — nothing to push".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else {
+            let ahead = orphan_branch_sync_state(store_path)
+                .map(|(a, _)| a)
+                .unwrap_or(0);
+            let subjects = commit_subjects(store_path, &["origin/aida-store..HEAD"], LIMIT);
+            let mut summary = format!(
+                "aida-store → origin: {} commit{} to push",
+                ahead,
+                if ahead == 1 { "" } else { "s" }
+            );
+            if git_ops::has_changes(store_path).unwrap_or(false) {
+                summary += " (+ uncommitted changes that would be bundled)";
+            }
+            DryRunLeg {
+                label: "store",
+                summary,
+                count: ahead,
+                subjects,
+            }
+        };
+        legs.push(leg);
+    }
+
+    emit_dry_run("push", &legs, json);
+    Ok(())
+}
+
+/// TASK-108: `aida pull --dry-run` — fetch both in-scope legs, then
+/// report what each would pull without merging. trace:TASK-108 | ai:claude
+fn handle_pull_dry_run(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+    json: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+    const LIMIT: usize = 10;
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // Refresh origin refs first so the behind-counts reflect reality.
+    let _ = handle_fetch_command(store_path, code_only, store_only, true);
+
+    let mut legs: Vec<DryRunLeg> = Vec::new();
+
+    if !store_only {
+        let leg = if !git_ops::has_remote(&project_root, "origin") {
+            DryRunLeg {
+                label: "code",
+                summary: "no `origin` remote — nothing to pull".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else {
+            let branch =
+                git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+            let origin_ref = format!("origin/{}", branch);
+            match ahead_behind_vs_ref(&project_root, &branch, &origin_ref) {
+                Some((ahead, behind)) => {
+                    let range = format!("HEAD..{}", origin_ref);
+                    let subjects = commit_subjects(&project_root, &[range.as_str()], LIMIT);
+                    let how = if behind == 0 {
+                        "up to date".to_string()
+                    } else if ahead == 0 {
+                        format!(
+                            "{} commit{} to pull (fast-forward)",
+                            behind,
+                            if behind == 1 { "" } else { "s" }
+                        )
+                    } else {
+                        format!(
+                            "{} commit{} to pull ({} local commit{} → rebase/merge needed)",
+                            behind,
+                            if behind == 1 { "" } else { "s" },
+                            ahead,
+                            if ahead == 1 { "" } else { "s" }
+                        )
+                    };
+                    DryRunLeg {
+                        label: "code",
+                        summary: format!("{} ← origin/{}: {}", branch, branch, how),
+                        count: behind as usize,
+                        subjects,
+                    }
+                }
+                None => DryRunLeg {
+                    label: "code",
+                    summary: format!("no origin/{} ref — nothing to pull", branch),
+                    count: 0,
+                    subjects: Vec::new(),
+                },
+            }
+        };
+        legs.push(leg);
+    }
+
+    if !code_only {
+        let leg = if !git_ops::is_git_repo(store_path) {
+            DryRunLeg {
+                label: "store",
+                summary: "no orphan worktree — nothing to pull".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else if !git_ops::has_remote(store_path, "origin") {
+            DryRunLeg {
+                label: "store",
+                summary: "orphan store has no `origin` — nothing to pull".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else {
+            let (ahead, behind) = orphan_branch_sync_state(store_path).unwrap_or((0, 0));
+            let subjects = commit_subjects(store_path, &["HEAD..origin/aida-store"], LIMIT);
+            let how = if behind == 0 {
+                "up to date".to_string()
+            } else if ahead == 0 {
+                format!(
+                    "{} commit{} to pull (fast-forward)",
+                    behind,
+                    if behind == 1 { "" } else { "s" }
+                )
+            } else {
+                format!(
+                    "{} commit{} to pull ({} local commit{} → rebase)",
+                    behind,
+                    if behind == 1 { "" } else { "s" },
+                    ahead,
+                    if ahead == 1 { "" } else { "s" }
+                )
+            };
+            DryRunLeg {
+                label: "store",
+                summary: format!("aida-store ← origin: {}", how),
+                count: behind,
+                subjects,
+            }
+        };
+        legs.push(leg);
+    }
+
+    emit_dry_run("pull", &legs, json);
+    Ok(())
 }
 
 fn handle_push_command(

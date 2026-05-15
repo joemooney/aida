@@ -2804,6 +2804,15 @@ pub enum Command {
         /// on stdin. trace:TASK-54 BUG-88 | ai:claude
         #[clap(long)]
         no_rebase_check: bool,
+        /// Show what each in-scope leg would push (commit count +
+        /// subjects) and exit 0 without pushing anything. Honors
+        /// --code-only / --store-only. trace:TASK-108 | ai:claude
+        #[clap(long)]
+        dry_run: bool,
+        /// Emit the dry-run plan as JSON instead of text. Implies
+        /// --dry-run. trace:TASK-108 | ai:claude
+        #[clap(long)]
+        json: bool,
     },
 
     /// Fetch remote refs for both legs (code + orphan store) without
@@ -2855,6 +2864,15 @@ pub enum Command {
         /// trace:TASK-78 | ai:claude
         #[clap(long)]
         no_gate: bool,
+        /// Fetch both in-scope legs, then show what each would pull
+        /// (commit count + subjects) and exit 0 without merging.
+        /// Honors --code-only / --store-only. trace:TASK-108 | ai:claude
+        #[clap(long)]
+        dry_run: bool,
+        /// Emit the dry-run plan as JSON instead of text. Implies
+        /// --dry-run. trace:TASK-108 | ai:claude
+        #[clap(long)]
+        json: bool,
     },
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
