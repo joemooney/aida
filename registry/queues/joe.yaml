@@ -33,3 +33,9 @@
   note: auto-queued by `aida pr` ((no-sess); covers 10 specs
   added_at: 2026-05-15T13:21:15.999623276Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e2cb7-a2cd-7782-a503-f0daf2b8df82
+  position: 25000
+  added_by: joe
+  added_at: 2026-05-15T17:42:01.887332940Z
+  for_role: implementer
