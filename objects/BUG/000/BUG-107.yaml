@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T19:29:04.230402571Z
-modified_at: 2026-05-15T22:57:40.144065547Z
+modified_at: 2026-05-15T22:58:34.326337680Z
 req_type: Bug
 tags:
 - auto-queue
@@ -72,6 +72,12 @@ relationships:
   target_id: 019e2ddb-d51d-7210-a7fa-0363a9b4862b
   created_at: 2026-05-15T22:57:40.144055894Z
   created_by: joe
+comments:
+- id: 019e2ddc-eed6-7a73-8ec3-b8fc6def514b
+  author: joe
+  content: 'Implemented via PR #43 (commit aa5c9121): auto-queue gh spawn routed through a surviving project dir — fixes the removed-worktree ENOENT mis-blamed on the gh binary. Tests: 737/737 workspace green; cargo fmt + clippy clean.'
+  created_at: 2026-05-15T22:58:34.326337680Z
+  modified_at: 2026-05-15T22:58:34.326337680Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T22:12:51.920331198Z
