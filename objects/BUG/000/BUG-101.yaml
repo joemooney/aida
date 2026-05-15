@@ -58,12 +58,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user noticed: 'this does not mention aida pull as a step' after reading PR-26's merge next-steps output. Without the aida pull, the subsequent make release-patch would tag the wrong commit.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:42:13.417792965Z
-modified_at: 2026-05-15T00:33:22.489501004Z
+modified_at: 2026-05-15T00:59:08.555850659Z
 req_type: Bug
 tags:
 - aida-pull
