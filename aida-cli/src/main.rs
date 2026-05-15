@@ -12619,6 +12619,73 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
 }
 
 /// trace:STORY-73 | ai:claude
+/// TASK-243: format the `Claude session: <id>… (last active …)` line for
+/// `aida session end`'s ambiguity prompt. Pure — `age_secs` is resolved
+/// by the caller. trace:TASK-243 | ai:claude
+fn format_claude_session_line(claude_id: &str, age_secs: Option<u64>) -> String {
+    let short: String = claude_id.chars().take(8).collect();
+    match age_secs {
+        Some(s) => format!(
+            "Claude session: {}… (last active {} ago)",
+            short,
+            humanize_age_secs(s)
+        ),
+        None => format!("Claude session: {}…", short),
+    }
+}
+
+/// TASK-243: one-line ambiguity-resolution summary for `aida session
+/// end` — `(headline, optional Claude-session line)`. Pure formatter so
+/// the role / Claude-id surfacing is unit-testable independent of the
+/// interactive prompt. trace:TASK-243 | ai:claude
+fn format_session_end_summary(
+    id: &str,
+    role: Option<&str>,
+    scope: &str,
+    branch: &str,
+    claude_id: Option<&str>,
+    age_secs: Option<u64>,
+) -> (String, Option<String>) {
+    let headline = format!(
+        "{} (role:{}, scope {}, branch {})",
+        &id[..id.len().min(8)],
+        role.unwrap_or("unset"),
+        scope,
+        branch
+    );
+    let claude_line = claude_id.map(|cid| format_claude_session_line(cid, age_secs));
+    (headline, claude_line)
+}
+
+/// TASK-243: resolve the Claude conversation linked to a lease — the
+/// `claude_session_id` recorded in the session manifest (TASK-112) plus
+/// a best-effort "last active" age from the conversation JSONL's mtime.
+/// Returns `(None, None)` when there's no manifest or no recorded id.
+/// trace:TASK-243 | ai:claude
+fn resolve_lease_claude_session(lease: &SessionLease) -> (Option<String>, Option<u64>) {
+    let project_root = find_main_worktree_root()
+        .ok()
+        .or_else(|| lease.parent_project_root.clone());
+    let Some(root) = project_root else {
+        return (None, None);
+    };
+    let manifest_path = session_manifest::manifest_path(&root, &lease.id);
+    let Some(claude_id) = session_manifest::load(&manifest_path)
+        .ok()
+        .and_then(|m| m.claude_session_id)
+    else {
+        return (None, None);
+    };
+    let age_secs = session::claude_project_dir(&lease.worktree_path)
+        .ok()
+        .map(|dir| dir.join(format!("{}.jsonl", claude_id)))
+        .and_then(|p| std::fs::metadata(p).ok())
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.elapsed().ok())
+        .map(|d| d.as_secs());
+    (Some(claude_id), age_secs)
+}
+
 fn resolve_session_to_end(
     id_query: Option<&str>,
     leases: &[SessionLease],
@@ -12686,20 +12753,30 @@ fn resolve_session_to_end(
     // 4. single-active fallback
     if leases.len() == 1 {
         let only = &leases[0];
+        // TASK-243: surface role + the linked Claude session so the
+        // user can tell which session they're about to end without a
+        // separate `aida session leases` cross-reference.
+        let (claude_id, age_secs) = resolve_lease_claude_session(only);
+        let (headline, claude_line) = format_session_end_summary(
+            &only.id,
+            only.role.as_deref(),
+            &only.scope,
+            &only.branch,
+            claude_id.as_deref(),
+            age_secs,
+        );
         if yes {
             eprintln!(
                 "{} only one active session ({}); -y given, ending it",
                 "→".dimmed(),
-                only.id[..8].yellow()
+                headline
             );
             return Ok(only.clone());
         }
-        eprintln!(
-            "Only one active session: {} (scope {}, branch {})",
-            only.id[..8].yellow(),
-            only.scope,
-            only.branch
-        );
+        eprintln!("Only one active session: {}", headline);
+        if let Some(line) = &claude_line {
+            eprintln!("  {}", line.dimmed());
+        }
         eprint!("End it? [y/N] ");
         use std::io::Write;
         let _ = std::io::stderr().flush();
@@ -12716,14 +12793,81 @@ fn resolve_session_to_end(
         "no active session resolvable from this shell — pass an id or `aida session leases`\n\nActive sessions:",
     );
     for l in leases {
+        // TASK-243: include role here too so the multi-session listing
+        // is consistent with the single-active prompt and `aida session
+        // leases`. trace:TASK-243 | ai:claude
         msg.push_str(&format!(
-            "\n  {} {} ({})",
+            "\n  {} role:{} {} ({})",
             &l.id[..8],
+            l.role.as_deref().unwrap_or("unset"),
             l.scope,
             l.worktree_path.display()
         ));
     }
     anyhow::bail!(msg)
+}
+
+#[cfg(test)]
+mod session_end_summary_tests {
+    use super::{format_claude_session_line, format_session_end_summary};
+
+    #[test]
+    fn summary_includes_role_for_implementer() {
+        let (head, claude) = format_session_end_summary(
+            "019e2bd3abcd",
+            Some("implementer"),
+            "TASK-9",
+            "task-9",
+            None,
+            None,
+        );
+        assert!(head.contains("role:implementer"), "got: {}", head);
+        assert!(head.contains("scope TASK-9"));
+        assert!(head.contains("branch task-9"));
+        assert!(claude.is_none(), "no claude id → no claude line");
+    }
+
+    #[test]
+    fn summary_includes_role_for_reviewer() {
+        let (head, _) = format_session_end_summary(
+            "019e2bd3abcd",
+            Some("reviewer"),
+            "PR-30",
+            "pr-30",
+            None,
+            None,
+        );
+        assert!(head.contains("role:reviewer"), "got: {}", head);
+    }
+
+    #[test]
+    fn summary_role_falls_back_to_unset_when_missing() {
+        // manifest-missing / role-unset case.
+        let (head, _) = format_session_end_summary("abcd1234", None, "x", "y", None, None);
+        assert!(head.contains("role:unset"), "got: {}", head);
+    }
+
+    #[test]
+    fn summary_surfaces_claude_session_when_present() {
+        let (_, claude) = format_session_end_summary(
+            "abcd1234",
+            Some("reviewer"),
+            "PR-30",
+            "pr-30",
+            Some("f82f45c1-9978-4fad-8bb7-974103803afe"),
+            Some(12),
+        );
+        let line = claude.expect("claude line present when manifest has the id");
+        assert!(line.contains("f82f45c1"), "got: {}", line);
+        assert!(line.contains("last active"), "got: {}", line);
+    }
+
+    #[test]
+    fn claude_line_omits_age_when_jsonl_unstattable() {
+        let line = format_claude_session_line("abcdefghijklmnop", None);
+        assert!(line.contains("abcdefgh"), "got: {}", line);
+        assert!(!line.contains("last active"), "got: {}", line);
+    }
 }
 
 /// Look up a lease by id prefix (case-insensitive). Errors on no-match
