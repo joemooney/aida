@@ -197,6 +197,12 @@ fn run() -> Result<()> {
         cli.server = std::env::var("AIDA_SERVER").ok();
     }
 
+    // BUG-108: a shell whose worktree was removed by `aida session end`
+    // (in this or another terminal) has a dangling cwd — flag it before
+    // any project-root lookup silently degrades to empty state and makes
+    // `aida queue list` print "Your queue is empty". trace:BUG-108
+    warn_if_cwd_removed();
+
     // Handle init before path resolution (no DB exists yet)
     if let Command::Init {
         no_skills,
@@ -296,8 +302,14 @@ fn run() -> Result<()> {
 
     // `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
     // trace:TASK-113 | ai:claude
-    if let Command::Ultraplan { spec, stdout, json } = &cli.command {
-        return handle_ultraplan_command(spec, *stdout, *json);
+    if let Command::Ultraplan {
+        spec,
+        stdout,
+        json,
+        no_comments,
+    } = &cli.command
+    {
+        return handle_ultraplan_command(spec, *stdout, *json, *no_comments);
     }
 
     // `aida goal` is a pure condition generator — no store needed.
@@ -10781,6 +10793,45 @@ pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
+/// Render the BUG-108 dangling-cwd warning, given the result of a
+/// `getcwd()` probe. Pure, so the removed-worktree state is regression-
+/// testable without a process-global `chdir`: a worktree that `aida
+/// session end` removed makes `std::env::current_dir()` return
+/// `Err(ENOENT)`, which is exactly the `Err` input here. `None` means
+/// the cwd is healthy and nothing should be printed.
+/// trace:BUG-108 | ai:claude
+fn cwd_removed_warning(cwd: &std::io::Result<std::path::PathBuf>) -> Option<String> {
+    if cwd.is_ok() {
+        return None;
+    }
+    Some(format!(
+        "{} this directory no longer exists — its worktree was probably \
+         removed by `aida session end`.\n  AIDA can't resolve a project \
+         from a deleted directory, so any queue / list output below is an \
+         empty fallback, not the real state.\n  {} cd to the main repo and \
+         retry (e.g. `cd ~/ai/<project>`).",
+        "⚠".yellow().bold(),
+        "→".cyan(),
+    ))
+}
+
+/// BUG-108: warn — once, up front — when the shell's working directory
+/// was removed out from under it, typically a worktree that `aida
+/// session end` deleted in another terminal. Without this, every
+/// project-root walk silently falls back to empty state and `aida queue
+/// list` prints "Your queue is empty" indistinguishably from a genuinely
+/// empty queue. Returns true when the warning fired.
+/// trace:BUG-108 | ai:claude
+fn warn_if_cwd_removed() -> bool {
+    match cwd_removed_warning(&std::env::current_dir()) {
+        Some(msg) => {
+            eprintln!("{msg}");
+            true
+        }
+        None => false,
+    }
+}
+
 /// Resolve the MAIN worktree path given a starting checkout (which may
 /// itself be a linked worktree). When the caller is inside a linked
 /// worktree (created via `git worktree add`), `find_project_root()`
@@ -13480,12 +13531,30 @@ fn session_end(
     // `try_auto_queue_pr_review` (Review PR-N story already exists) means
     // both firing the same PR is safe; the second one renders as
     // `AlreadyExists`. trace:STORY-90 | ai:claude
-    let outcome = try_auto_queue_pr_review(
-        &project_root,
-        &target.branch,
-        &target.id,
-        AutoQueueOrigin::SessionEnd,
-    );
+    // BUG-107: the auto-queue side-effect shells out to `gh`, `git`, and
+    // `aida`, all of which need a working directory that still exists.
+    // When `aida session end` is run from inside the worktree it just
+    // removed, `project_root` (resolved from cwd at entry) now points at
+    // a deleted directory and every spawn fails with a misleading
+    // ENOENT blamed on the gh binary. Prefer the lease's recorded parent
+    // project root — the main worktree, which `session end` never
+    // removes. trace:BUG-107 | ai:claude
+    let outcome = match auto_queue_working_dir(target.parent_project_root.as_deref(), &project_root)
+    {
+        Some(root) => try_auto_queue_pr_review(
+            &root,
+            &target.branch,
+            &target.id,
+            AutoQueueOrigin::SessionEnd,
+        ),
+        None => AutoQueueOutcome::skipped_needs_attention(format!(
+            "auto-queue: no surviving project directory to query `gh` from \
+                 (worktree removed, parent project root unrecorded) — reviewer \
+                 story for branch `{}` not filed; run `aida pr auto-queue-review \
+                 --branch {}` from the main repo",
+            target.branch, target.branch
+        )),
+    };
     render_auto_queue_outcome(&outcome);
 
     // STORY-106: workflow hint when a review story is now queued for this
@@ -13731,6 +13800,31 @@ fn is_executable(path: &std::path::Path) -> bool {
     }
 }
 
+/// Format a `gh` spawn failure for a `PrLookup::GhFailed`. The OS reports
+/// ENOENT against the *binary* when the spawn's working directory has been
+/// removed — even though the binary is perfectly fine. `aida session end`
+/// removes the session worktree, so this case is common; say so plainly
+/// rather than letting the message read as "gh is missing".
+/// trace:BUG-107 | ai:claude
+fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::Error) -> String {
+    if !cwd.is_dir() {
+        format!(
+            "working directory `{}` no longer exists — the `{}` binary is fine \
+             (os reports the missing cwd as ENOENT on the spawn): {}",
+            cwd.display(),
+            gh_bin.display(),
+            e
+        )
+    } else {
+        format!(
+            "spawn `{}` (cwd `{}`): {}",
+            gh_bin.display(),
+            cwd.display(),
+            e
+        )
+    }
+}
+
 /// fails session_end. The richer return shape lets the caller print an
 /// honest skip reason instead of pretending nothing happened.
 ///
@@ -13767,10 +13861,12 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Pr
         .output();
     let out = match spawned {
         Ok(o) => o,
-        // We resolved the binary path above, so NotFound here is a race
-        // (binary deleted between resolve and spawn). Treat as a failure
-        // not a "gh missing" — the user almost certainly still has gh.
-        Err(e) => return PrLookup::GhFailed(format!("spawn {:?}: {}", gh_bin.display(), e)),
+        // We resolved the binary path above, so NotFound here is either a
+        // race (binary deleted between resolve and spawn) or — far more
+        // commonly — a removed working directory (BUG-107). Treat it as a
+        // failure not a "gh missing"; the user almost certainly still has
+        // gh, and `gh_spawn_error` names the real culprit.
+        Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -13813,7 +13909,7 @@ fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> 
         .output();
     let out = match spawned {
         Ok(o) => o,
-        Err(e) => return PrLookup::GhFailed(format!("spawn {:?}: {}", gh_bin.display(), e)),
+        Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -14553,6 +14649,26 @@ impl AutoQueueOrigin {
 /// doesn't leave the reviewer unaware. Returns an outcome describing what
 /// happened — see `AutoQueueStatus` for the categories.
 /// trace:STORY-66 STORY-90 BUG-72 | ai:claude
+/// Pick a working directory the end-of-session auto-queue can safely
+/// shell out from. It runs `gh` / `git` / `aida` subprocesses, every one
+/// of which fails with a misleading ENOENT (blamed on the binary, not the
+/// cwd) if its working directory was removed. `aida session end` removes
+/// the session worktree, so when that worktree was the invocation dir we
+/// fall back to the lease's recorded parent project root — the main
+/// worktree, which is never removed. Returns the first candidate that is
+/// still a real directory, or `None` when both are gone.
+/// trace:BUG-107 | ai:claude
+fn auto_queue_working_dir(
+    parent_project_root: Option<&std::path::Path>,
+    invocation_root: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    [parent_project_root, Some(invocation_root)]
+        .into_iter()
+        .flatten()
+        .find(|p| p.is_dir())
+        .map(|p| p.to_path_buf())
+}
+
 fn try_auto_queue_pr_review(
     project_root: &std::path::Path,
     branch: &str,
@@ -17833,6 +17949,77 @@ mod statusline_tests {
         }
     }
 
+    /// BUG-107: `aida session end` removes the session worktree, then runs
+    /// the auto-queue, which shells out to `gh`. If the auto-queue uses the
+    /// removed worktree as its cwd, every spawn fails with a misleading
+    /// ENOENT. `auto_queue_working_dir` must pick a directory that still
+    /// exists — preferring the lease's recorded parent project root.
+    /// trace:BUG-107 | ai:claude
+    #[test]
+    fn auto_queue_working_dir_skips_removed_worktree() {
+        let real = std::env::temp_dir(); // always exists
+        let gone = real.join("aida-bug107-removed-worktree-does-not-exist");
+        let gone2 = real.join("aida-bug107-parent-also-gone");
+        assert!(
+            !gone.exists(),
+            "test precondition: phantom path must not exist"
+        );
+
+        // Worktree (invocation dir) removed → fall back to the parent.
+        assert_eq!(
+            auto_queue_working_dir(Some(real.as_path()), &gone),
+            Some(real.clone())
+        );
+        // Parent recorded but itself gone → fall through to a live cwd.
+        assert_eq!(
+            auto_queue_working_dir(Some(gone2.as_path()), &real),
+            Some(real.clone())
+        );
+        // No parent recorded (pre-STORY-58 lease) + live cwd → use the cwd.
+        assert_eq!(auto_queue_working_dir(None, &real), Some(real.clone()));
+        // Both gone → no safe directory; caller must skip, not spawn.
+        assert_eq!(auto_queue_working_dir(Some(gone2.as_path()), &gone), None);
+    }
+
+    /// BUG-107: a spawn failure whose real cause is a removed working
+    /// directory must not read as "gh is missing" — `gh_spawn_error`
+    /// names the cwd as the culprit and absolves the binary.
+    /// trace:BUG-107 | ai:claude
+    #[test]
+    fn gh_spawn_error_blames_the_missing_cwd_not_the_binary() {
+        let gh = std::path::Path::new("/usr/bin/gh");
+        let gone = std::env::temp_dir().join("aida-bug107-no-such-cwd");
+        let enoent = std::io::Error::from(std::io::ErrorKind::NotFound);
+
+        let removed = gh_spawn_error(gh, &gone, &enoent);
+        assert!(removed.contains("no longer exists"));
+        assert!(removed.contains("binary is fine"));
+
+        // A live cwd → the plain message, no false "missing cwd" claim.
+        let live = gh_spawn_error(gh, &std::env::temp_dir(), &enoent);
+        assert!(!live.contains("no longer exists"));
+    }
+
+    /// BUG-108: a worktree removed by `aida session end` leaves any shell
+    /// still inside it with a dangling cwd — `getcwd()` returns ENOENT.
+    /// The warning must fire for that `Err` and stay silent for a healthy
+    /// `Ok` cwd, so a genuinely-empty queue is never mislabeled.
+    /// trace:BUG-108 | ai:claude
+    #[test]
+    fn cwd_removed_warning_fires_only_for_a_dangling_cwd() {
+        // Healthy cwd → no warning.
+        let healthy: std::io::Result<std::path::PathBuf> = Ok(std::env::temp_dir());
+        assert!(cwd_removed_warning(&healthy).is_none());
+
+        // Removed worktree → getcwd() yields ENOENT → warning fires and
+        // names the cause so the user can tell it from an empty queue.
+        let dangling: std::io::Result<std::path::PathBuf> =
+            Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+        let msg = cwd_removed_warning(&dangling).expect("warning for a dangling cwd");
+        assert!(msg.contains("no longer exists"));
+        assert!(msg.contains("session end"));
+    }
+
     /// TASK-74: branch-shape heuristic for "this is a reviewer session;
     /// don't expect a PR from it". Covers the four branch prefixes the
     /// `aida session start --owns PR-N` / `MR-N` etc. flows produce, and
@@ -18448,7 +18635,8 @@ cargo test -p aida-cli
         let mut bare = Requirement::new("do the thing".into(), "Some context.".into());
         bare.spec_id = Some("TASK-1".into());
         store.requirements.push(bare);
-        let (prompt, warnings) = assemble_ultraplan_prompt(&store, &store.requirements[0], None);
+        let (prompt, warnings) =
+            assemble_ultraplan_prompt(&store, &store.requirements[0], None, true);
         assert!(prompt.contains("Plan the implementation of TASK-1: do the thing."));
         assert!(prompt.contains("## Plan structure"));
         assert!(prompt.contains("(none specified"));
@@ -18467,6 +18655,7 @@ cargo test -p aida-cli
             &store2,
             &store2.requirements[0],
             Some("## Reusable helpers\n\n- x\n"),
+            true,
         );
         assert!(prompt2.contains("- [ ] alpha"));
         assert!(prompt2.contains("## Reusable helpers"));
@@ -18509,10 +18698,52 @@ cargo test -p aida-cli
             .iter()
             .find(|r| r.spec_id.as_deref() == Some("TASK-1"))
             .unwrap();
-        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None);
+        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None, true);
         assert!(prompt.contains("Siblings (share a parent — 14 total)"));
         assert!(prompt.contains("more siblings omitted"));
         assert!(prompt.contains("Parent: EPIC-1"));
+    }
+
+    /// TASK-247: the ultraplan prompt pulls the spec's enrichment
+    /// comments into a `## Comments` section (most recent first), and
+    /// `--no-comments` (`include_comments = false`) omits it.
+    /// trace:TASK-247 | ai:claude
+    #[test]
+    fn ultraplan_prompt_includes_comments() {
+        use aida_core::models::Comment;
+        use aida_core::{Requirement, RequirementsStore};
+
+        let mut store = RequirementsStore::new();
+        let mut req = Requirement::new("build it".into(), "## Acceptance\n\n- x\n".into());
+        req.spec_id = Some("EPIC-9".into());
+        let mut old = Comment::new("joe".into(), "first thought".into());
+        old.created_at = chrono::Utc::now() - chrono::Duration::hours(2);
+        let recent = Comment::new("joe".into(), "design fork: pick approach B".into());
+        req.comments.push(old);
+        req.comments.push(recent);
+        store.requirements.push(req);
+        let target = &store.requirements[0];
+
+        // Default: comments included, most recent first.
+        let (with, _) = assemble_ultraplan_prompt(&store, target, None, true);
+        assert!(with.contains("## Comments"));
+        assert!(with.contains("design fork: pick approach B"));
+        assert!(with.contains("first thought"));
+        let recent_at = with.find("design fork").unwrap();
+        let old_at = with.find("first thought").unwrap();
+        assert!(recent_at < old_at, "comments render most-recent-first");
+
+        // `--no-comments` → the section is omitted entirely.
+        let (without, _) = assemble_ultraplan_prompt(&store, target, None, false);
+        assert!(!without.contains("## Comments"));
+        assert!(!without.contains("design fork"));
+    }
+
+    /// TASK-247: an empty comment list produces no `## Comments` section
+    /// (and no stray heading). trace:TASK-247 | ai:claude
+    #[test]
+    fn ultraplan_comments_section_empty_is_none() {
+        assert!(ultraplan_comments_section(&[]).is_none());
     }
 
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
@@ -25081,9 +25312,9 @@ fn build_goal_clauses(
 }
 
 /// EPIC-26: launch the AIDA TUI shell. Gated behind the `tui` feature
-/// (default-off until STORY-6) — the `aida tui` subcommand stays visible
+/// (default-on as of STORY-137) — the `aida tui` subcommand stays visible
 /// in `--help` either way, but a binary built without the feature errors
-/// clearly instead of half-running. trace:STORY-132 | ai:claude
+/// clearly instead of half-running. trace:STORY-132 STORY-137 | ai:claude
 #[cfg(feature = "tui")]
 fn handle_tui_command(scope: Option<String>, no_recover: bool) -> Result<()> {
     aida_tui::run(aida_tui::TuiOptions { scope, no_recover })
@@ -25095,7 +25326,8 @@ fn handle_tui_command(scope: Option<String>, no_recover: bool) -> Result<()> {
 fn handle_tui_command(_scope: Option<String>, _no_recover: bool) -> Result<()> {
     anyhow::bail!(
         "the `aida tui` shell is not compiled into this binary — rebuild \
-         aida-cli with `--features tui` (EPIC-26 is default-off until STORY-6)"
+         aida-cli with the default features (the `tui` feature ships \
+         default-on as of STORY-137; a --no-default-features build omits it)"
     )
 }
 
@@ -25248,16 +25480,86 @@ fn ultraplan_spec_line(req: &aida_core::models::Requirement) -> String {
     format!("{} — {} [{}]", req.display_id(), req.title, req.status)
 }
 
+/// Build the `## Comments` section for the ultraplan prompt — the spec's
+/// enrichment comments, most recent first. `None` when the spec has no
+/// non-empty comments. Caps both the comment count and the total
+/// characters so a spec with a long discussion thread can't blow the
+/// prompt budget; the richest planning context (long enrichment
+/// comments) is exactly what TASK-247 exists to surface, so the budget
+/// is deliberately generous. trace:TASK-247 | ai:claude
+fn ultraplan_comments_section(comments: &[aida_core::models::Comment]) -> Option<String> {
+    const COMMENT_COUNT_CAP: usize = 20;
+    const COMMENTS_CHAR_CAP: usize = 16_000;
+
+    let non_empty = comments
+        .iter()
+        .filter(|c| !c.content.trim().is_empty())
+        .count();
+    if non_empty == 0 {
+        return None;
+    }
+
+    let mut s = String::from(
+        "## Comments\n\nPlanning context captured on the spec as comments, most recent first.\n\n",
+    );
+    let mut used = 0usize;
+    let mut shown = 0usize;
+    for c in comments.iter().rev() {
+        let content = c.content.trim();
+        if content.is_empty() {
+            continue;
+        }
+        if shown >= COMMENT_COUNT_CAP || used >= COMMENTS_CHAR_CAP {
+            break;
+        }
+        let reply_note = match c.replies.len() {
+            0 => String::new(),
+            n => format!(" · {n} repl{}", if n == 1 { "y" } else { "ies" }),
+        };
+        s.push_str(&format!(
+            "### {} · {}{}\n\n",
+            c.author,
+            c.created_at.format("%Y-%m-%d"),
+            reply_note
+        ));
+        let budget = COMMENTS_CHAR_CAP - used;
+        if content.chars().count() > budget {
+            let trimmed: String = content.chars().take(budget).collect();
+            s.push_str(&trimmed);
+            s.push_str("\n\n_(comment truncated to fit the prompt budget)_\n\n");
+            used = COMMENTS_CHAR_CAP;
+        } else {
+            s.push_str(content);
+            s.push_str("\n\n");
+            used += content.chars().count();
+        }
+        shown += 1;
+    }
+    if shown < non_empty {
+        s.push_str(&format!(
+            "_(+{} older comment(s) omitted to fit the prompt budget)_\n\n",
+            non_empty - shown
+        ));
+    }
+    Some(s)
+}
+
 /// Assemble the `/ultraplan` prompt for `target`. `helpers_section` is the
 /// pre-built trace-graph reusable-helpers markdown (None when there is
-/// none — see TASK-94). Returns the prompt and any warnings to surface.
-/// Pure over its inputs so it is unit-testable. trace:TASK-113 | ai:claude
+/// none — see TASK-94). `include_comments` pulls the spec's enrichment
+/// comments into a `## Comments` section (TASK-247). Returns the prompt
+/// and any warnings to surface. Pure over its inputs so it is
+/// unit-testable. trace:TASK-113 TASK-247 | ai:claude
 fn assemble_ultraplan_prompt(
     store: &aida_core::RequirementsStore,
     target: &aida_core::models::Requirement,
     helpers_section: Option<&str>,
+    include_comments: bool,
 ) -> (String, Vec<String>) {
-    const DESC_CHAR_CAP: usize = 1800;
+    // TASK-247: raised from 1800 — a truncated description dropped the
+    // densest planning context. Comments now carry the long-form
+    // enrichment, but the description still deserves real room.
+    const DESC_CHAR_CAP: usize = 16_000;
     const SIBLING_CAP: usize = 12;
     let mut warnings: Vec<String> = Vec::new();
     let display = target.display_id();
@@ -25303,6 +25605,16 @@ fn assemble_ultraplan_prompt(
         }
     }
     p.push('\n');
+
+    // ── Comments (enrichment context) ──
+    // TASK-247: a spec's comments accumulate the densest planning
+    // context (anti-patterns, design forks, reusable helpers). Pull them
+    // in unless the caller opted out with `--no-comments`.
+    if include_comments {
+        if let Some(section) = ultraplan_comments_section(&target.comments) {
+            p.push_str(&section);
+        }
+    }
 
     // ── Related-spec context ──
     let parents: Vec<&aida_core::models::Requirement> = target
@@ -25416,7 +25728,12 @@ fn assemble_ultraplan_prompt(
 }
 
 /// `aida ultraplan <SPEC>` — assemble + deliver the planning prompt.
-fn handle_ultraplan_command(spec_arg: &str, stdout: bool, json: bool) -> Result<()> {
+fn handle_ultraplan_command(
+    spec_arg: &str,
+    stdout: bool,
+    json: bool,
+    no_comments: bool,
+) -> Result<()> {
     let project_root = find_project_root()?;
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
@@ -25428,7 +25745,8 @@ fn handle_ultraplan_command(spec_arg: &str, stdout: bool, json: bool) -> Result<
     .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
 
     let helpers = build_reusable_helpers_section(&store, &project_root, target);
-    let (prompt, warnings) = assemble_ultraplan_prompt(&store, target, helpers.as_deref());
+    let (prompt, warnings) =
+        assemble_ultraplan_prompt(&store, target, helpers.as_deref(), !no_comments);
     let token_estimate = prompt.chars().count() / 4;
     let display = target.display_id();
 

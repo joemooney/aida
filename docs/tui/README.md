@@ -1,0 +1,143 @@
+# AIDA TUI (`aida tui`)
+
+The AIDA TUI is a thin **process-supervisor shell that hosts Claude Code
+sessions** (EPIC-26). It owns the terminal, reserves a one-row status
+strip at the bottom, and runs each Claude session as a PTY child. You
+drop out of a live conversation to a status overlay, take a
+one-keystroke action, and drop back into the *same* conversation — "tmux
+for AIDA workflows," not a dashboard.
+
+It is intentionally shallow on first sight. The depth — the requirement
+graph, queue routing, lifecycle, `/goal` composition — surfaces through
+use. See `OVERVIEW.md` → "Public face: the TUI is the product."
+
+## Launching
+
+```bash
+aida tui                 # empty shell — populate it with the prefix-n picker
+aida tui EPIC-26         # host a session working EPIC-26 in the first tab
+aida tui --no-recover    # skip crash-recovery re-attach (see below)
+```
+
+The TUI must run inside an AIDA project (a git repo with `.aida/`). The
+hosted child is always `aida queue work`, never `claude` directly — so
+all lease / worktree / manifest / permission-mode logic is inherited.
+
+## Hosting model
+
+- The supervisor is synchronous and thread-per-source: an input thread
+  and one reader thread per PTY feed a single event channel.
+- A **focused** tab blits its PTY output straight to your terminal —
+  Claude renders natively, zero parser cost. A `vt100` parser is fed in
+  the background so the screen can be repainted on tab-switch or
+  overlay-close.
+- The bottom row is a status strip: the tab list, a notification badge,
+  and the current key hint.
+
+## Keybindings
+
+All commands go through a **prefix key** — `Ctrl-a` by default
+(configurable, see below). Press the prefix, then a command key. Plain
+keystrokes pass straight through to the focused Claude session.
+
+| Keys | Action |
+|------|--------|
+| `prefix` `o` | open the **status overlay** |
+| `prefix` `n` | open the **new-session picker** |
+| `prefix` `[` / `]` | focus the previous / next tab |
+| `prefix` `1`…`9` | focus tab N |
+| `prefix` `d` | **detach** — quit the TUI; conversations persist and are re-attached next launch |
+| `prefix` `q` | **quit** — confirms first when sessions are live |
+| `prefix` `prefix` | send one literal prefix byte to the focused child |
+
+## Tabs (multi-session)
+
+N Claude sessions are hosted at once, one focused. `prefix n` opens the
+new-session picker:
+
+- **start** a queued spec fresh — `aida queue work <spec> --session-id
+  <uuid>`;
+- **resume** a recorded conversation for the launch scope — `aida queue
+  work <scope> --resume <id>` (sessions already on a tab are filtered
+  out).
+
+`↑/↓` (or `j/k`) select, `Enter` opens the session in a new focused tab,
+`Esc` cancels. A soft cap (`MAX_TABS`, default 4) bounds concurrent
+Claude children — N sessions is N× CPU / tokens / API.
+
+## Status overlay (`prefix o`)
+
+A read-only `ratatui` view built from `aida status --json`. The first
+paint is cache-only (`--no-ci`, sub-millisecond); a background
+`gh`-backed refresh repaints when it lands, so a slow `gh` never stalls
+the overlay opening.
+
+Panels: **Session lease**, **Branch · PR · CI**, **Queue**, **Activity
+log**, **Actions**. `←/→` (or `h/l`) select an action, `Enter` runs it,
+`Esc` / `q` close.
+
+### Quick actions
+
+| Button | What it does |
+|--------|--------------|
+| Next in queue | `aida queue next` — preview the queue head |
+| End session | `aida session end --yes` — confirmed |
+| View PR | `gh pr view` — the branch's PR |
+| Drain → review | start an autonomous drain, reviewer in the loop |
+| Drain → merge | start an autonomous drain, autonomous-merge each PR |
+
+The first three run as captured subprocesses — their output lands in the
+Activity log panel. State-changing actions arm a `y`/cancel confirm.
+
+## Autonomous drains & `/goal` composition
+
+The two **Drain** buttons start an autonomous queue drain. They never
+hand-write `/goal` text — selecting one types `/aida-drain-queue --mode
+review` (or `--mode merge`) into the focused Claude session and closes
+the overlay so it runs there.
+
+`/aida-drain-queue` (the skill) assembles the `/goal` prompt with real
+command flags and the mechanism clause that matches the mode — the
+structural fix for the `/goal` phrasing trap (a hand-rolled `aida queue
+work --next` is a non-existent flag; a hand-picked mechanism clause
+silently chooses the workflow). `review` keeps the reviewer in the loop
+via `aida session end`; `merge` autonomously merges each PR.
+
+Watch progress by reopening the overlay — the Queue panel shows the
+queue draining.
+
+## Crash recovery
+
+A TUI crash kills its PTY children, but each Claude conversation is a
+durable `.jsonl` file. The TUI records the live tab set to
+`.aida/tui-state.json` on every spawn / close. On the next launch it
+re-attaches each recorded session via `aida queue work <scope> --resume
+<id>`.
+
+- `prefix q` (clean quit) clears the state file — nothing to recover.
+- `prefix d` (detach) and a hard crash leave it — the next launch
+  re-attaches.
+- `aida tui --no-recover` discards stale state and starts clean.
+
+## Configuration
+
+A `[tui]` block in `.aida/config.toml`:
+
+```toml
+[tui]
+prefix_key = "Ctrl-a"   # command-mode prefix (also: "ctrl+a", "C-a", "alt-b")
+max_tabs   = 4          # soft cap on concurrently hosted sessions
+```
+
+Missing file / section / keys fall back to the defaults — a config error
+never blocks launching the TUI.
+
+## Implementation
+
+The `aida-tui` workspace crate (`aida tui` dispatches into it before
+storage init). Modules: `term` (raw-mode + panic-safe teardown), `pty`
+(PTY host), `tab` (tab manager), `statusbar`, `app` (event loop +
+routing), `overlay`, `actions`, `picker`, `state` (crash recovery). The
+crate ships in release binaries as of STORY-137.
+
+Implementation plan: `docs/plans/2026-05-15-epic-26-tui.md`.

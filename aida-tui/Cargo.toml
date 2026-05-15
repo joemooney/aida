@@ -24,3 +24,5 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 dirs = { workspace = true }
+# Local wall-clock timestamps for the overlay's activity log (STORY-133).
+chrono = { workspace = true }
