@@ -3,12 +3,12 @@ spec_id: STORY-136
 agreed_id: STORY-136
 title: 'AIDA TUI autonomous-mode panel: /goal Drain-to-review / Drain-to-merge'
 description: 'Overlay panel for firing /goal autonomous drains. Two explicit buttons — ''Drain to review'' (mechanism: ''aida session end'' per item, routes handoffs to the reviewer queue) and ''Drain to merge'' (autonomous squash-merge). Each shells ''aida goal --invoke ...'' (TASK-242) to DERIVE the /goal line — never hand-writes /goal text — then injects it into the focused Claude PTY as input. This is the structural fix for the 2026-05-15 literal-phrasing trap (''aida queue work --next'' was a non-existent flag; the mechanism clause silently chose a workflow). A progress panel observes the drain. See docs/plans/2026-05-15-epic-26-tui.md (Files: aida-tui/src/actions.rs).'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:39:03.616661413Z
-modified_at: 2026-05-15T22:58:41.001979069Z
+modified_at: 2026-05-15T23:42:14.566473022Z
 req_type: Story
 tags:
 - tui
