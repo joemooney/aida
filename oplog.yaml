@@ -4762,5 +4762,79 @@ operations:
   timestamp: 2026-05-15T01:22:00.177726320Z
   kind: !SetStatus
     status: In Progress
-clock: 561
+- id: 019e2942-bfe7-7373-a2f8-30370b0d9a26
+  target_id: 019e2942-2d3e-7b63-8fe4-5047f4dee5aa
+  author: aida
+  node_id: '1'
+  lamport: 562
+  timestamp: 2026-05-15T01:31:40.903045776Z
+  kind: !SetDescription
+    description: |-
+      AIDA skill templates use unicode glyphs in next-steps blocks for visual hierarchy:
+
+        1. ▶ Primary action
+        2. ⏵ Alternative path
+        3. 🚪 Stop / exit
+
+      These render correctly in most terminals and add real visual value — the user explicitly likes them. The problem is NOT the emoji themselves; the problem is OTHER writers (notably Claude Code's recap banner) miscalculating cell width and interleaving bytes with AIDA's output, corrupting both.
+
+      The fix should KEEP emoji as default and make AIDA's output MORE robust against external interleave, not strip the emoji.
+
+      ## Observed 2026-05-14
+
+      After implementer shipped TASK-107, Claude Code's recap banner overlapped with the agent's Next-steps block. Output looked like:
+
+        TASK-107 shipped.1Build clean, a   367 tests pass, fetch tests cov r th   hree key invariants...
+        1. ▶ G  b nex  item → /aida-pickup
+        2.S⏵ Wrap up what's shipped as a PR3→7/aida-prass, fetch tests cover the three key invariants...
+
+      Characters scrambled mid-word ('Grab' → 'G  b'). The root cause is Claude Code's TUI rendering race with AIDA's output streams, not the glyphs themselves.
+
+      User preference (captured 2026-05-14): emoji are valuable for visual hierarchy; don't remove them in the default flow.
+
+      ## Proposed approach — keep emoji, add resilience
+
+      Three layered improvements:
+
+      1. **Width-correct rendering**: ensure AIDA's templates use explicit cell-width per glyph (per the unicode-width spec). When emoji are 2-cell, the surrounding text accounts for it. This eliminates AIDA's contribution to cell-width drift.
+
+      2. **Output discipline**: AIDA's CLI output uses line-flushed writes followed by explicit newline, never partial-line updates that other writers could overlap. Reduces the race-window.
+
+      3. **Opt-in ASCII fallback (not default)**: AIDA_NO_UNICODE=1 environment variable for users whose terminals genuinely can't handle the glyphs. Default behavior stays emoji-rich.
+
+      Not all three need ship in one TASK — could be a small STORY with three children. Or implement #1 + #2 first (the actual fix) and add #3 as opt-in escape hatch.
+
+      ## What this is NOT
+
+      - NOT removing emoji from skill templates
+      - NOT defaulting to ASCII output
+      - NOT changing the visual hierarchy users like
+
+      The emoji stay. AIDA just becomes more robust about how it renders them and how other writers can interleave.
+
+      ## Composes with
+
+      - TASK-110 (next-steps ordering fix): same templates touched; bundle width-correctness work
+      - STORY-127 (workflow state-aware guidance): both about skill output quality
+      - BUG-99 (SIGPIPE panic): same theme — CLI output robustness
+
+      ## Files affected
+
+      All skill templates in aida-core/templates/skills/ that emit Next-steps blocks:
+      - aida-pickup.md, aida-pr.md, aida-review.md (audit via grep)
+      - aida-cli's output renderer if width-correctness needs Rust changes
+
+      ## Acceptance
+
+      - [ ] Width-correct rendering for emoji glyphs in skill templates (use unicode-width or equivalent)
+      - [ ] Output discipline: line-flushed writes, explicit newlines, minimize partial-line update windows
+      - [ ] AIDA_NO_UNICODE env var as opt-in escape hatch (default: unicode/emoji ON)
+      - [ ] Tests cover: width-correct rendering, ASCII fallback when env set, default-emoji-on behavior
+      - [ ] CLAUDE.md / AIDA.md mention AIDA_NO_UNICODE only as opt-in workaround, NOT as recommended setting
+      - [ ] Default behavior preserves the visual hierarchy users find valuable
+
+      ## Discovered via
+
+      2026-05-14 — user saw output corruption from Claude Code recap interleaving with AIDA's next-steps. When asked about ASCII fallback, user said 'I like emoji though...they really help.' The fix needs to keep them while addressing the interleave.
+clock: 562
 node_id: '1'
