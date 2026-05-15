@@ -1,0 +1,15 @@
+id: 019e2cb8-7aa6-77c3-b4de-70d13f27c30e
+spec_id: STORY-137
+agreed_id: STORY-137
+title: AIDA TUI docs + flip default-on
+description: Final EPIC-26 STORY. Author docs/tui/README.md as the canonical reference (hosting model, keybindings, overlay, quick actions, /goal composition, crash recovery); cross-link from OVERVIEW.md and CLAUDE.md as the recommended interactive surface. Flip 'aida-cli' from the transitional 'tui' feature being default-off to 'default = ["tui"]' so the TUI ships in release binaries. Gated last so partial work never shipped ('hide if half-done'). See docs/plans/2026-05-15-epic-26-tui.md.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T17:39:08.070614834Z
+modified_at: 2026-05-15T17:39:08.070614834Z
+req_type: Story
+tags:
+- docs
+- tui
