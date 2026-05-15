@@ -92,6 +92,8 @@ Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Us
 
 **Followups get filed, not forgotten.** When a spec reaches Done (`aida queue done`) or Completed (the STORY-86 auto-bump on merge), AIDA parses the `## Followups` section of any plan that owns that spec and offers to file each bullet as a child TASK. `aida queue done` prompts per bullet (`[y/N/skip]`); `--yes` and the non-interactive auto-bump path file all. Idempotent — a `[aida:followups]` marker comment on the spec records what was filed and declined, so whichever path runs first wins and declines are never re-filed. Opt out with `AIDA_AUTO_FOLLOWUPS=false`. trace:TASK-96
 
+**The plan rides into the session.** `aida queue work <spec>` discovers any plan that owns the spec and pre-populates the session manifest with a *plan brief* — the `## Critical Files`, `## Followups`, and `## Verification` sections. `aida session show --plan` renders it, and `/aida-pickup` leads its first message with it so the implementer gets the blast radius and definition of done without grepping for the plan. Graceful no-op when no plan file exists. trace:TASK-95
+
 ## AIDA-developer workflow (only when working on AIDA itself)
 
 ```bash

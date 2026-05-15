@@ -19,7 +19,13 @@
 //! ```toml
 //! session_id = "019e15743920"
 //! planned_at = "2026-05-11T05:14:00Z"
-//! plan_source = "user prompt"   # or "auto"
+//! plan_source = "user prompt"   # or "auto" / "queue work"
+//!
+//! [plan]                        # TASK-95: optional, from a docs/plans/ file
+//! plan_file = "docs/plans/2026-05-11-bug-73.md"
+//! critical_files = ["aida-core/src/db/cache.rs"]
+//! followups = ["revert-handling cleanup"]
+//! verification = "cargo test -p aida-core"
 //!
 //! [[items]]
 //! spec_id = "BUG-73"
@@ -47,6 +53,26 @@ pub struct ManifestItem {
     pub note: Option<String>,
 }
 
+/// TASK-95: plan content extracted from a matching `docs/plans/` file when
+/// `aida queue work` set this session up. Lets /aida-pickup hand the
+/// implementer their brief (blast radius, definition of done, deferred
+/// work) without grepping for the plan. trace:TASK-95 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PlanContext {
+    /// Repo-relative path to the `docs/plans/` file this brief came from.
+    pub plan_file: String,
+    /// `## Critical Files` enumeration — the must-touch blast radius.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub critical_files: Vec<String>,
+    /// `## Followups` bullets — out-of-scope items the `aida queue done`
+    /// handler later offers to file as TASKs (TASK-96).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub followups: Vec<String>,
+    /// `## Verification` fenced script — the executable definition of done.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionManifest {
     pub session_id: String,
@@ -54,6 +80,12 @@ pub struct SessionManifest {
     /// "user prompt" when /aida-pickup confirmed a user-specified cluster;
     /// "auto" when the skill defaulted to the head item. Free-form.
     pub plan_source: String,
+    /// TASK-95: plan brief pre-populated from a matching `docs/plans/` file
+    /// at `aida queue work` time. `None` when no plan file was found.
+    /// Declared before `items` so TOML serialization emits the `[plan]`
+    /// table before the `[[items]]` array-of-tables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<PlanContext>,
     pub items: Vec<ManifestItem>,
 }
 
@@ -265,6 +297,7 @@ mod tests {
             session_id: id.to_string(),
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
+            plan: None,
             items: specs.iter().map(|(s, p)| item(s, *p)).collect(),
         }
     }
@@ -361,6 +394,7 @@ mod tests {
             session_id: "abc12345".to_string(),
             planned_at: chrono::Utc::now(),
             plan_source: "user prompt".to_string(),
+            plan: None,
             items: vec![item("STORY-1", 1), item("BUG-2", 2)],
         };
         save(&path, &m).unwrap();
@@ -378,6 +412,7 @@ mod tests {
             session_id: "s1".to_string(),
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
+            plan: None,
             items: vec![item("X", 1)],
         };
         save(&path, &m).unwrap();
@@ -406,6 +441,7 @@ mod tests {
             session_id: "s1".to_string(),
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
+            plan: None,
             items: vec![item("X", 1)],
         };
         save(&path, &m).unwrap();

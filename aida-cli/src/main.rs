@@ -13613,6 +13613,106 @@ fn parse_plan_followups(content: &str) -> Vec<String> {
     out
 }
 
+/// TASK-95: parse the `## Critical Files` section — the column-0 bullets'
+/// backtick-quoted paths. The flat must-touch blast radius.
+fn parse_plan_critical_files(content: &str) -> Vec<String> {
+    let path_re = regex::Regex::new(r"`([A-Za-z0-9_][A-Za-z0-9_./\-]*\.[A-Za-z0-9]+)`").unwrap();
+    let mut out: Vec<String> = Vec::new();
+    let mut in_section = false;
+    let mut in_fence = false;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        if let Some(h) = trimmed.strip_prefix("## ") {
+            in_section = h.to_ascii_lowercase().contains("critical files");
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        if line.starts_with("- ") || line.starts_with("* ") {
+            for cap in path_re.captures_iter(line) {
+                let p = cap[1].to_string();
+                if !out.contains(&p) {
+                    out.push(p);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// TASK-95: parse the `## Verification` section — the body of its first
+/// fenced code block, i.e. the executable definition of done.
+fn parse_plan_verification(content: &str) -> Option<String> {
+    let mut in_section = false;
+    let mut in_fence = false;
+    let mut body = String::new();
+    let mut captured = false;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if !in_section {
+            if let Some(h) = trimmed.strip_prefix("## ") {
+                in_section = h.to_ascii_lowercase().contains("verification");
+            }
+            continue;
+        }
+        if trimmed.starts_with("## ") {
+            break; // reached the next section without a closed fence
+        }
+        if trimmed.starts_with("```") {
+            if in_fence {
+                captured = true;
+                break;
+            }
+            in_fence = true;
+            continue;
+        }
+        if in_fence {
+            if !body.is_empty() {
+                body.push('\n');
+            }
+            body.push_str(line);
+        }
+    }
+    if captured && !body.trim().is_empty() {
+        Some(body)
+    } else {
+        None
+    }
+}
+
+/// TASK-95: build the plan brief for `spec_id` — locate the owning
+/// docs/plans/ file and extract its Critical Files, Followups, and
+/// Verification sections. Returns `None` when no plan file owns the spec
+/// (the graceful no-op `aida queue work` falls back to).
+fn discover_plan_context(
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Option<session_manifest::PlanContext> {
+    let plan_file = find_plan_files_for_spec(project_root, spec_id)
+        .into_iter()
+        .next()?;
+    let content = std::fs::read_to_string(&plan_file).ok()?;
+    let rel = plan_file
+        .strip_prefix(project_root)
+        .unwrap_or(&plan_file)
+        .display()
+        .to_string();
+    Some(session_manifest::PlanContext {
+        plan_file: rel,
+        critical_files: parse_plan_critical_files(&content),
+        followups: parse_plan_followups(&content),
+        verification: parse_plan_verification(&content),
+    })
+}
+
 /// Self-invoke `aida add` to file one followup as a child TASK of
 /// `parent_spec`. Always passes `--force-parent` — the parent is Done or
 /// Completed by the time we file, and we explicitly want the children
@@ -15339,6 +15439,37 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
         );
     }
 
+    // TASK-95: the plan brief — Critical Files / Followups / Verification
+    // pre-populated by `aida queue work` from the owning docs/plans/ file.
+    // This is what /aida-pickup surfaces so the implementer gets their
+    // blast radius and definition of done without grepping. trace:TASK-95
+    if let Some(ctx) = &manifest.plan {
+        println!();
+        println!("{} {}", "Plan brief:".bold(), ctx.plan_file.cyan());
+        if !ctx.critical_files.is_empty() {
+            println!(
+                "  {} ({})",
+                "Critical files".dimmed(),
+                ctx.critical_files.len()
+            );
+            for f in &ctx.critical_files {
+                println!("    {}", f);
+            }
+        }
+        if !ctx.followups.is_empty() {
+            println!("  {} ({})", "Followups".dimmed(), ctx.followups.len());
+            for f in &ctx.followups {
+                println!("    - {}", f);
+            }
+        }
+        if let Some(v) = &ctx.verification {
+            println!("  {}", "Definition of done".dimmed());
+            for l in v.lines() {
+                println!("    {}", l.dimmed());
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -15576,6 +15707,7 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
         session_id: lease.id.clone(),
         planned_at: now,
         plan_source: source.to_string(),
+        plan: None,
         items: manifest_items,
     };
 
@@ -17418,6 +17550,63 @@ mod statusline_tests {
             parse_plan_followups(fenced),
             vec!["real followup".to_string()]
         );
+    }
+
+    /// TASK-95: the Critical Files parser collects backtick paths from the
+    /// `## Critical Files` section's bullets and nowhere else.
+    #[test]
+    fn plan_critical_files_parse() {
+        let plan = "\
+# Plan: STORY-1
+
+## Files
+
+### `not-collected/here.rs` — this is the Files section
+
+## Critical Files
+
+- `aida-cli/src/main.rs`
+- `aida-core/src/models.rs` — with a trailing note
+- a bullet with no backtick path
+
+## Verification
+
+- `also-not-collected.rs`
+";
+        assert_eq!(
+            parse_plan_critical_files(plan),
+            vec![
+                "aida-cli/src/main.rs".to_string(),
+                "aida-core/src/models.rs".to_string(),
+            ]
+        );
+    }
+
+    /// TASK-95: the Verification parser returns the first fenced block of
+    /// the `## Verification` section, and None when there isn't one.
+    #[test]
+    fn plan_verification_parse() {
+        let plan = "\
+## Verification
+
+Some prose first.
+
+```bash
+cargo build --workspace
+cargo test -p aida-cli
+```
+
+## Followups
+";
+        assert_eq!(
+            parse_plan_verification(plan).as_deref(),
+            Some("cargo build --workspace\ncargo test -p aida-cli")
+        );
+        // No fenced block → None.
+        let no_fence = "## Verification\n\nJust prose, no script.\n\n## Related\n";
+        assert!(parse_plan_verification(no_fence).is_none());
+        // No Verification section at all → None.
+        assert!(parse_plan_verification("## Approach\n\ntext\n").is_none());
     }
 
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
@@ -36661,12 +36850,34 @@ fn handle_queue_work(
     // Cluster manifest: pre-populate items so /aida-pickup can walk
     // them top-down. Skip for head/item modes (single item → no plan
     // needed beyond the queue head). trace:STORY-98 | ai:claude
+    //
+    // TASK-95: discover the plan brief for the anchor spec from any
+    // owning docs/plans/ file. Cluster mode always writes a manifest, so
+    // it just gains the brief; head/item modes write a manifest only
+    // when a plan file exists (no plan file → today's no-op behavior).
+    // trace:TASK-95 | ai:claude
+    let plan_context = discover_plan_context(&project_root, &plan.anchor_display);
     if plan.mode == QueueWorkMode::Cluster {
-        write_queue_work_manifest(&project_root, &lease, &plan)?;
+        write_queue_work_manifest(&project_root, &lease, &plan, plan_context.clone())?;
         eprintln!(
             "  {} wrote manifest with {} planned item(s)",
             "✓".green(),
             plan.entries.len()
+        );
+        if let Some(ctx) = &plan_context {
+            eprintln!(
+                "  {} attached plan brief from {}",
+                "✓".green(),
+                ctx.plan_file.cyan()
+            );
+        }
+    } else if let Some(ctx) = plan_context {
+        let plan_file = ctx.plan_file.clone();
+        write_queue_work_manifest(&project_root, &lease, &plan, Some(ctx))?;
+        eprintln!(
+            "  {} attached plan brief from {}",
+            "✓".green(),
+            plan_file.cyan()
         );
     }
 
@@ -36870,6 +37081,7 @@ fn write_queue_work_manifest(
     project_root: &std::path::Path,
     lease: &SessionLease,
     plan: &QueueWorkPlan,
+    plan_context: Option<session_manifest::PlanContext>,
 ) -> Result<()> {
     use crate::session_manifest::{ManifestItem, SessionManifest};
 
@@ -36890,6 +37102,7 @@ fn write_queue_work_manifest(
         session_id: lease.id.clone(),
         planned_at: chrono::Utc::now(),
         plan_source: "queue work".to_string(),
+        plan: plan_context,
         items,
     };
     let path = session_manifest::manifest_path(project_root, &lease.id);

@@ -43,6 +43,10 @@ and pulls the next. Pairs with the `dialog` role on the producer side
 
 !`aida queue next 2>/dev/null || echo "(no items)"`
 
+## Plan brief
+
+!`aida session show --plan 2>/dev/null | sed -n '/Plan brief:/,$p' || true`
+
 ## Workflow
 
 ### Step 1: Check the queue
@@ -56,6 +60,14 @@ The output includes:
 
 If the queue is empty, surface that to the user and stop. Don't fabricate
 work — empty queue is a real signal.
+
+**If a Plan brief is shown above** (TASK-95) — `aida queue work`
+pre-populated it from a matching `docs/plans/` file — lead your first
+message with it: name the plan file, the Critical Files (the blast
+radius), and the Verification script (the definition of done). The
+implementer should not have to grep for the plan. The Followups list is
+informational here; the `aida queue done` handler offers to file those as
+TASKs at completion time (TASK-96).
 
 ### Step 2: Confirm pickup
 
