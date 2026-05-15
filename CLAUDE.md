@@ -82,7 +82,9 @@ If you work conversationally without explicit `/aida-req` calls, use `/aida-capt
 
 ### Plan archival
 
-Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Include `## Related Requirements` (AIDA spec IDs) and `## Status` (In Progress → Completed). The `docs/plans/` directory is part of the standard project structure scaffolded by `aida init`.
+Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Use `docs/plans/_TEMPLATE.md` (scaffolded by `aida init` from `aida-core/templates/plan-template.md`) as the starting structure — 11 sections cover Approach + diagram, Decisions, Files (in build-order), Critical Files, Reusable helpers, Risks + gotchas, Tests (named), Verification (executable), Followups, and Related. The header carries Date / Specs / Status / Complexity. trace:TASK-92
+
+**Symbol refs over line refs.** When citing code from a plan, prefer symbol refs (`fn handle_pull_command`, `struct ImplementationInfo`) over line refs (`main.rs:19713`). Symbol refs survive edits; line refs drift fast and are often stale within hours of generation. Worked example: `docs/plans/2026-05-13-story-86-done-status.md`.
 
 ## AIDA-developer workflow (only when working on AIDA itself)
 

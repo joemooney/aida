@@ -879,6 +879,7 @@ fn handle_init_command(
 
     // Create docs/plans/
     std::fs::create_dir_all("docs/plans")?;
+    ensure_plan_template_scaffold(std::path::Path::new("docs/plans"), force)?;
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let root = std::env::current_dir().unwrap_or_default();
@@ -893,6 +894,20 @@ fn handle_init_command(
         "Requirements database (SQLite)",
         verbose,
     )
+}
+
+/// Write `docs/plans/_TEMPLATE.md` from the embedded `plan-template.md`
+/// template. Idempotent: skips when the file already exists unless `force`
+/// is set. trace:TASK-92
+fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Result<()> {
+    let dest = plans_dir.join("_TEMPLATE.md");
+    if dest.exists() && !force {
+        return Ok(());
+    }
+    if let Some(content) = aida_core::templates::EMBEDDED_TEMPLATES.get("plan-template.md") {
+        std::fs::write(&dest, content)?;
+    }
+    Ok(())
 }
 
 /// Append AIDA's `.gitignore` entries if any are missing. Returns `true` if a
@@ -3898,6 +3913,7 @@ fn handle_init_distributed_worktree(
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
+    ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
@@ -4028,8 +4044,9 @@ fn handle_init_post_clone(
         ".aida/config.toml".white().bold()
     );
 
-    // docs/plans/ for plan archive
+    // docs/plans/ for plan archive (post-clone attach: never overwrite).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
+    ensure_plan_template_scaffold(&cwd.join("docs/plans"), false)?;
 
     // Run scaffolding (CLAUDE.md, .claude/, hooks, etc.)
     // Load the store via GitBackend just for scaffolding metadata.
@@ -4360,6 +4377,7 @@ fn handle_init_distributed_sibling(
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
+    ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(

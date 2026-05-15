@@ -105,7 +105,28 @@ aida comment add <SPEC-ID> "Files to modify:
 - src/tests/mod.rs: Add unit tests"
 ```
 
-### Step 5: Mark as Planned
+### Step 5: Archive the plan to docs/plans/
+
+For non-trivial work, write the full plan to `docs/plans/YYYY-MM-DD-<slug>.md`
+using the structure in `docs/plans/_TEMPLATE.md` (scaffolded by `aida init`).
+The template's 11 sections — Approach + diagram, Decisions, Files (in
+build-order), Critical Files, Reusable helpers, Risks + gotchas, Tests
+(named), Verification (executable), Followups, Related, plus a Date / Specs
+/ Status / Complexity header — are what distinguish a plan from a wishlist.
+
+Two conventions worth honoring:
+
+- **Symbol refs over line refs.** Cite `fn handle_pull_command` not
+  `main.rs:19713`. Symbol refs survive edits; line refs go stale fast.
+- **Reusable helpers section.** Enumerate the existing helpers the
+  implementer should call rather than re-invent (e.g.
+  `extract_spec_ids_from_commit`, `git_ops::head_sha`,
+  `Storage::update_atomically`). This is the highest-leverage section —
+  it prevents accidental reimplementation.
+
+Worked example: `docs/plans/2026-05-13-story-86-done-status.md`.
+
+### Step 6: Mark as Planned
 
 When planning is complete:
 
@@ -120,7 +141,7 @@ If child requirements were created, approve them:
 aida edit <CHILD-ID> --status approved
 ```
 
-### Step 6: Present Plan to User
+### Step 7: Present Plan to User
 
 Summarize for the user:
 1. Overview of implementation approach
