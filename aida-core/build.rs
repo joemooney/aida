@@ -35,6 +35,9 @@ fn main() {
     // Settings (Claude Code configuration)
     embed_file(&mut code, "templates/settings.json", "settings.json");
 
+    // Plan template (scaffolded into docs/plans/_TEMPLATE.md). trace:TASK-92
+    embed_file(&mut code, "templates/plan-template.md", "plan-template.md");
+
     code.push_str("    m\n");
     code.push_str("});\n");
 
@@ -47,6 +50,7 @@ fn main() {
     code.push_str("    (\"commands\", \"Slash Commands - Quick actions for common tasks\"),\n");
     code.push_str("    (\"hooks\", \"Hooks - Git and Claude Code integration hooks\"),\n");
     code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");
+    code.push_str("    (\"plan-template.md\", \"Plan template - scaffolded into docs/plans/_TEMPLATE.md\"),\n");
     code.push_str("];\n");
 
     fs::write(&dest_path, code).unwrap();

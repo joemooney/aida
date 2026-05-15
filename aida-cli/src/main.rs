@@ -57,9 +57,10 @@ use aida_core::{
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     DocCommand, DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand,
-    NodeCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
-    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
-    ServerCommand, SessionCommand, SessionManifestCommand, TraceCommand, TypeCommand,
+    NodeCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand,
+    ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
+    ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, TraceCommand,
+    TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -283,6 +284,20 @@ fn run() -> Result<()> {
     if let Command::HelpAll = &cli.command {
         print_help_all();
         return Ok(());
+    }
+
+    // Plan tooling is self-contained: `verify` reads a markdown file +
+    // source files; `helpers` loads the store itself via
+    // `load_store_for_lookup`. Neither needs the shared storage handle, so
+    // dispatch the whole group early. trace:TASK-93 TASK-94 | ai:claude
+    if let Command::Plan(plan_cmd) = &cli.command {
+        return handle_plan_command(plan_cmd);
+    }
+
+    // `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
+    // trace:TASK-113 | ai:claude
+    if let Command::Ultraplan { spec, stdout, json } = &cli.command {
+        return handle_ultraplan_command(spec, *stdout, *json);
     }
 
     // Roles + statusline dispatch before storage init — roles are TOML
@@ -573,6 +588,8 @@ fn run() -> Result<()> {
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
+        Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
@@ -879,6 +896,7 @@ fn handle_init_command(
 
     // Create docs/plans/
     std::fs::create_dir_all("docs/plans")?;
+    ensure_plan_template_scaffold(std::path::Path::new("docs/plans"), force)?;
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let root = std::env::current_dir().unwrap_or_default();
@@ -893,6 +911,20 @@ fn handle_init_command(
         "Requirements database (SQLite)",
         verbose,
     )
+}
+
+/// Write `docs/plans/_TEMPLATE.md` from the embedded `plan-template.md`
+/// template. Idempotent: skips when the file already exists unless `force`
+/// is set. trace:TASK-92
+fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Result<()> {
+    let dest = plans_dir.join("_TEMPLATE.md");
+    if dest.exists() && !force {
+        return Ok(());
+    }
+    if let Some(content) = aida_core::templates::EMBEDDED_TEMPLATES.get("plan-template.md") {
+        std::fs::write(&dest, content)?;
+    }
+    Ok(())
 }
 
 /// Append AIDA's `.gitignore` entries if any are missing. Returns `true` if a
@@ -1018,6 +1050,7 @@ fn complete_init_scaffolding(
         config.include_aida_sprint_skill = false;
         config.include_aida_search_skill = false;
         config.include_aida_standup_skill = false;
+        config.include_aida_import_plan_skill = false;
     }
     if no_hooks {
         config.generate_git_hooks = false;
@@ -1563,6 +1596,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
+        Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
@@ -3898,6 +3933,7 @@ fn handle_init_distributed_worktree(
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
+    ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
@@ -4028,8 +4064,9 @@ fn handle_init_post_clone(
         ".aida/config.toml".white().bold()
     );
 
-    // docs/plans/ for plan archive
+    // docs/plans/ for plan archive (post-clone attach: never overwrite).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
+    ensure_plan_template_scaffold(&cwd.join("docs/plans"), false)?;
 
     // Run scaffolding (CLAUDE.md, .claude/, hooks, etc.)
     // Load the store via GitBackend just for scaffolding metadata.
@@ -4360,6 +4397,7 @@ fn handle_init_distributed_sibling(
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
+    ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
@@ -13488,6 +13526,401 @@ fn parse_spec_id_from_add_output(stdout: &str) -> Option<String> {
     None
 }
 
+// ============================================================================
+// TASK-96 — plan Followups extraction. When a spec reaches Done (`aida queue
+// done`) or Completed (the STORY-86 auto-bump), parse the `## Followups`
+// section of any matching docs/plans/ file and offer to file each bullet as
+// a child TASK so out-of-scope items don't get forgotten.
+// ============================================================================
+
+/// Comment prefix written to a spec once its plan followups have been
+/// processed. Both extraction paths check for it first, so whichever runs
+/// first (`queue done` interactively, or the auto-bump non-interactively)
+/// wins and the other skips — declines are never silently re-filed.
+const FOLLOWUPS_MARKER: &str = "[aida:followups]";
+
+/// True when followup automation is disabled via `AIDA_AUTO_FOLLOWUPS`
+/// (mirrors the `AIDA_AUTO_BUMP` opt-out shape).
+fn auto_followups_disabled() -> bool {
+    matches!(
+        std::env::var("AIDA_AUTO_FOLLOWUPS")
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "false" | "0" | "no" | "off"
+    )
+}
+
+/// Find the docs/plans/ files that *belong to* `spec_id` — the id appears
+/// in the `# Plan:` title line or the `Specs:` header line. Cross-references
+/// in a `## Related` section don't count (that plan owns a different spec).
+fn find_plan_files_for_spec(
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Vec<std::path::PathBuf> {
+    let plans_dir = project_root.join("docs/plans");
+    let Ok(entries) = std::fs::read_dir(&plans_dir) else {
+        return Vec::new();
+    };
+    let needle = regex::Regex::new(&format!(r"\b{}\b", regex::escape(spec_id)));
+    let Ok(needle) = needle else {
+        return Vec::new();
+    };
+    let mut hits = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        // Only the header zone (title + `Specs:` line) confers ownership.
+        let owns = content
+            .lines()
+            .take(15)
+            .any(|l| (l.starts_with("# ") || l.starts_with("Specs:")) && needle.is_match(l));
+        if owns {
+            hits.push(path);
+        }
+    }
+    hits.sort();
+    hits
+}
+
+/// Parse the `## Followups` section of a plan: collect the column-0
+/// `- `/`* ` bullets until the next `##` header. Leading marker and a
+/// trailing period are stripped; placeholder/empty bullets are dropped.
+fn parse_plan_followups(content: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut in_section = false;
+    let mut in_fence = false;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        if let Some(h) = trimmed.strip_prefix("## ") {
+            in_section = h.to_ascii_lowercase().contains("followup");
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        // Column-0 bullets only — nested detail bullets are not followups.
+        let bullet = line.strip_prefix("- ").or_else(|| line.strip_prefix("* "));
+        if let Some(b) = bullet {
+            let text = b.trim().trim_end_matches('.').trim().to_string();
+            if text.is_empty() || text.contains("<") || text.starts_with("file as") {
+                continue;
+            }
+            out.push(text);
+        }
+    }
+    out
+}
+
+/// TASK-95: parse the `## Critical Files` section — the column-0 bullets'
+/// backtick-quoted paths. The flat must-touch blast radius.
+fn parse_plan_critical_files(content: &str) -> Vec<String> {
+    let path_re = regex::Regex::new(r"`([A-Za-z0-9_][A-Za-z0-9_./\-]*\.[A-Za-z0-9]+)`").unwrap();
+    let mut out: Vec<String> = Vec::new();
+    let mut in_section = false;
+    let mut in_fence = false;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        if let Some(h) = trimmed.strip_prefix("## ") {
+            in_section = h.to_ascii_lowercase().contains("critical files");
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        if line.starts_with("- ") || line.starts_with("* ") {
+            for cap in path_re.captures_iter(line) {
+                let p = cap[1].to_string();
+                if !out.contains(&p) {
+                    out.push(p);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// TASK-95: parse the `## Verification` section — the body of its first
+/// fenced code block, i.e. the executable definition of done.
+fn parse_plan_verification(content: &str) -> Option<String> {
+    let mut in_section = false;
+    let mut in_fence = false;
+    let mut body = String::new();
+    let mut captured = false;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if !in_section {
+            if let Some(h) = trimmed.strip_prefix("## ") {
+                in_section = h.to_ascii_lowercase().contains("verification");
+            }
+            continue;
+        }
+        if trimmed.starts_with("## ") {
+            break; // reached the next section without a closed fence
+        }
+        if trimmed.starts_with("```") {
+            if in_fence {
+                captured = true;
+                break;
+            }
+            in_fence = true;
+            continue;
+        }
+        if in_fence {
+            if !body.is_empty() {
+                body.push('\n');
+            }
+            body.push_str(line);
+        }
+    }
+    if captured && !body.trim().is_empty() {
+        Some(body)
+    } else {
+        None
+    }
+}
+
+/// TASK-95: build the plan brief for `spec_id` — locate the owning
+/// docs/plans/ file and extract its Critical Files, Followups, and
+/// Verification sections. Returns `None` when no plan file owns the spec
+/// (the graceful no-op `aida queue work` falls back to).
+fn discover_plan_context(
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Option<session_manifest::PlanContext> {
+    let plan_file = find_plan_files_for_spec(project_root, spec_id)
+        .into_iter()
+        .next()?;
+    let content = std::fs::read_to_string(&plan_file).ok()?;
+    let rel = plan_file
+        .strip_prefix(project_root)
+        .unwrap_or(&plan_file)
+        .display()
+        .to_string();
+    Some(session_manifest::PlanContext {
+        plan_file: rel,
+        critical_files: parse_plan_critical_files(&content),
+        followups: parse_plan_followups(&content),
+        verification: parse_plan_verification(&content),
+    })
+}
+
+/// Self-invoke `aida add` to file one followup as a child TASK of
+/// `parent_spec`. Always passes `--force-parent` — the parent is Done or
+/// Completed by the time we file, and we explicitly want the children
+/// regardless. Returns the new spec id on success.
+fn aida_subcmd_add_followup_task(
+    project_root: &std::path::Path,
+    parent_spec: &str,
+    title: &str,
+) -> Option<String> {
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let out = std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args([
+            "add",
+            "--type",
+            "task",
+            "--status",
+            "approved",
+            "--priority",
+            "low",
+            "--parent",
+            parent_spec,
+            "--force-parent",
+            "--title",
+            title,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        eprintln!(
+            "{} followup `aida add` failed: {}",
+            "Warning:".yellow().bold(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        return None;
+    }
+    parse_spec_id_from_add_output(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Extract the Followups section of any plan owned by `spec_id` and file
+/// the accepted bullets as child TASKs. Idempotent via [`FOLLOWUPS_MARKER`].
+///
+/// `interactive` drives a per-bullet `[y/N/skip]` prompt; when false (the
+/// auto-bump / `--yes` path) every bullet is filed. Best-effort throughout —
+/// any failure logs a warning and returns `Ok(())` so it never breaks the
+/// `queue done` / `aida pull` flow it hangs off. trace:TASK-96 | ai:claude
+fn extract_plan_followups(
+    storage: &Storage,
+    project_root: &std::path::Path,
+    spec_id: &str,
+    display_id: &str,
+    interactive: bool,
+) -> Result<()> {
+    if auto_followups_disabled() {
+        return Ok(());
+    }
+    let store = storage.load()?;
+    let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
+        return Ok(());
+    };
+    // Already processed — whichever path ran first owns the outcome.
+    if req
+        .comments
+        .iter()
+        .any(|c| c.content.starts_with(FOLLOWUPS_MARKER))
+    {
+        return Ok(());
+    }
+
+    let plan_files = find_plan_files_for_spec(project_root, spec_id);
+    if plan_files.is_empty() {
+        return Ok(());
+    }
+    // Collect + dedupe followup bullets across every owning plan file.
+    let mut followups: Vec<String> = Vec::new();
+    let mut sources: Vec<String> = Vec::new();
+    for path in &plan_files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let parsed = parse_plan_followups(&content);
+        if parsed.is_empty() {
+            continue;
+        }
+        let rel = path
+            .strip_prefix(project_root)
+            .unwrap_or(path)
+            .display()
+            .to_string();
+        sources.push(rel);
+        for f in parsed {
+            if !followups.contains(&f) {
+                followups.push(f);
+            }
+        }
+    }
+    if followups.is_empty() {
+        return Ok(());
+    }
+
+    println!();
+    println!(
+        "{} {} plan followup(s) found for {} ({})",
+        "→".cyan().bold(),
+        followups.len(),
+        display_id.bold(),
+        sources.join(", ").dimmed()
+    );
+
+    let mut filed: Vec<(String, String)> = Vec::new(); // (new_spec, title)
+    let mut declined: Vec<String> = Vec::new();
+    let mut skip_rest = false;
+
+    for followup in &followups {
+        let accept = if skip_rest {
+            false
+        } else if interactive {
+            eprint!("  File as TASK? [y/N/skip] {}\n  > ", followup.bold());
+            use std::io::Write;
+            let _ = std::io::stderr().flush();
+            let mut answer = String::new();
+            if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+                skip_rest = true;
+                false
+            } else {
+                match answer.trim().to_ascii_lowercase().as_str() {
+                    "y" | "yes" => true,
+                    "s" | "skip" => {
+                        skip_rest = true;
+                        false
+                    }
+                    _ => false,
+                }
+            }
+        } else {
+            true
+        };
+
+        if accept {
+            match aida_subcmd_add_followup_task(project_root, spec_id, followup) {
+                Some(new_id) => filed.push((new_id, followup.clone())),
+                None => declined.push(followup.clone()),
+            }
+        } else {
+            declined.push(followup.clone());
+        }
+    }
+
+    // Marker comment — records the outcome so re-runs and the other
+    // extraction path both skip, and the user can see what was declined.
+    let mut marker = format!("{} extracted from {}", FOLLOWUPS_MARKER, sources.join(", "));
+    if filed.is_empty() {
+        marker.push_str("\nfiled 0 task(s)");
+    } else {
+        let ids: Vec<&str> = filed.iter().map(|(id, _)| id.as_str()).collect();
+        marker.push_str(&format!(
+            "\nfiled {} task(s): {}",
+            filed.len(),
+            ids.join(", ")
+        ));
+    }
+    if !declined.is_empty() {
+        marker.push_str(&format!("\ndeclined {}:", declined.len()));
+        for d in &declined {
+            marker.push_str(&format!("\n  - {d}"));
+        }
+    }
+    let now = chrono::Utc::now();
+    let author = get_default_author();
+    let req_uuid = req.id;
+    let _ = storage.update_atomically(|s| {
+        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_uuid) {
+            r.comments
+                .push(Comment::new(author.clone(), marker.clone()));
+            r.modified_at = now;
+        }
+    });
+
+    if filed.is_empty() {
+        println!("  {} no followups filed", "·".dimmed());
+    } else {
+        for (id, title) in &filed {
+            println!("  {} {} {}", "✓".green(), id.bold(), title.dimmed());
+        }
+    }
+    if !declined.is_empty() {
+        println!(
+            "  {} {} followup(s) not filed — logged on {} for later review",
+            "·".dimmed(),
+            declined.len(),
+            display_id
+        );
+    }
+
+    Ok(())
+}
+
 /// Best-effort `aida rel add <from> <to> --type implements` (and the
 /// matching reverse `implemented-by` so `aida show <spec>` surfaces the
 /// review story). Custom relation types don't have an `inverse()` mapping
@@ -15017,6 +15450,37 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
         );
     }
 
+    // TASK-95: the plan brief — Critical Files / Followups / Verification
+    // pre-populated by `aida queue work` from the owning docs/plans/ file.
+    // This is what /aida-pickup surfaces so the implementer gets their
+    // blast radius and definition of done without grepping. trace:TASK-95
+    if let Some(ctx) = &manifest.plan {
+        println!();
+        println!("{} {}", "Plan brief:".bold(), ctx.plan_file.cyan());
+        if !ctx.critical_files.is_empty() {
+            println!(
+                "  {} ({})",
+                "Critical files".dimmed(),
+                ctx.critical_files.len()
+            );
+            for f in &ctx.critical_files {
+                println!("    {}", f);
+            }
+        }
+        if !ctx.followups.is_empty() {
+            println!("  {} ({})", "Followups".dimmed(), ctx.followups.len());
+            for f in &ctx.followups {
+                println!("    - {}", f);
+            }
+        }
+        if let Some(v) = &ctx.verification {
+            println!("  {}", "Definition of done".dimmed());
+            for l in v.lines() {
+                println!("    {}", l.dimmed());
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -15254,6 +15718,7 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
         session_id: lease.id.clone(),
         planned_at: now,
         plan_source: source.to_string(),
+        plan: None,
         items: manifest_items,
     };
 
@@ -16981,6 +17446,304 @@ mod statusline_tests {
             extract_spec_ids_from_commit(msg),
             vec!["BUG-83".to_string()]
         );
+    }
+
+    /// TASK-93: `locate_symbol_line` finds a definition's 1-based line and,
+    /// crucially, is NOT thrown off by a preceding blank line (the `^\s*`
+    /// vs `^[ \t]*` off-by-one).
+    #[test]
+    fn plan_verify_locate_symbol_line() {
+        let src = "// header\n\nfn first() {}\n\n\npub fn target(x: u32) -> u32 { x }\n";
+        // `fn first` is on line 3, `pub fn target` on line 6 — the two
+        // blank lines before `target` must not shift the result.
+        assert_eq!(locate_symbol_line(src, "first"), Some(3));
+        assert_eq!(locate_symbol_line(src, "target"), Some(6));
+        // Struct / enum / trait kinds + a `::`-qualified name.
+        let src2 = "struct Foo;\n\nenum Bar { A }\n";
+        assert_eq!(locate_symbol_line(src2, "Foo"), Some(1));
+        assert_eq!(locate_symbol_line(src2, "Bar"), Some(3));
+        assert_eq!(locate_symbol_line(src2, "mod_path::Foo"), Some(1));
+        // A symbol that isn't defined resolves to None.
+        assert_eq!(locate_symbol_line(src2, "Nonexistent"), None);
+        // A mention that is not a definition (a call site) must not match.
+        let src3 = "fn caller() {\n    target();\n}\n";
+        assert_eq!(locate_symbol_line(src3, "target"), None);
+    }
+
+    /// TASK-93: placeholder paths from the template (and globs) are not
+    /// treated as real files; source extensions are recognised.
+    #[test]
+    fn plan_verify_path_heuristics() {
+        assert!(is_plan_placeholder_path("path/to/file.rs"));
+        assert!(is_plan_placeholder_path("aida-core/templates/skills/*.md"));
+        assert!(is_plan_placeholder_path("<STORY-N>.md"));
+        assert!(is_plan_placeholder_path("main.rs:NNN"));
+        assert!(!is_plan_placeholder_path("aida-cli/src/main.rs"));
+
+        assert!(has_plan_source_ext("aida-cli/src/main.rs"));
+        assert!(has_plan_source_ext("constants.ts"));
+        assert!(has_plan_source_ext("Cargo.lock"));
+        assert!(!has_plan_source_ext("aida pull"));
+        assert!(!has_plan_source_ext("no_extension"));
+    }
+
+    /// TASK-93: symbol extraction strips item keywords and rejects prose,
+    /// paths, and commands so only real identifiers are verified.
+    #[test]
+    fn plan_verify_symbols_on_line() {
+        let syms = plan_symbols_on_line("- `fn handle_pull_command`: snapshot the SHA");
+        assert!(syms.contains(&"handle_pull_command".to_string()));
+        let syms = plan_symbols_on_line("call `Storage::update_atomically` here");
+        assert!(syms.contains(&"Storage::update_atomically".to_string()));
+        // A backtick path or shell command is not a symbol.
+        let syms = plan_symbols_on_line("run `aida pull` against `aida-cli/src/main.rs`");
+        assert!(syms.is_empty());
+        // Un-backticked `fn name` is still caught.
+        let syms = plan_symbols_on_line("the fn verify_plan entry point");
+        assert!(syms.contains(&"verify_plan".to_string()));
+    }
+
+    /// TASK-96: the Followups parser picks up column-0 bullets in the
+    /// `## Followups` section, strips a trailing period, and stops at the
+    /// next `##` header.
+    #[test]
+    fn plan_followups_parse_basic() {
+        let plan = "\
+# Plan: STORY-1
+
+## Risks + gotchas
+
+- This bullet is in Risks, not Followups.
+
+## Followups
+
+- Reverted-commit handling.
+- Statusline color for the new state
+  - a nested detail bullet that is not its own followup
+- Wire up the metrics dashboard.
+
+## Related
+
+- See also: nothing.
+";
+        let followups = parse_plan_followups(plan);
+        assert_eq!(
+            followups,
+            vec![
+                "Reverted-commit handling".to_string(),
+                "Statusline color for the new state".to_string(),
+                "Wire up the metrics dashboard".to_string(),
+            ]
+        );
+    }
+
+    /// TASK-96: a plan with no Followups section yields nothing, and a
+    /// fenced code block inside the section is not mined for bullets.
+    #[test]
+    fn plan_followups_parse_edges() {
+        // No Followups header at all.
+        let no_section = "# Plan: X\n\n## Approach\n\n- not a followup\n";
+        assert!(parse_plan_followups(no_section).is_empty());
+
+        // Fenced block inside the section contributes no bullets.
+        let fenced = "\
+## Followups
+
+- real followup
+
+```bash
+- this is shell output, not a followup
+```
+
+## Related
+";
+        assert_eq!(
+            parse_plan_followups(fenced),
+            vec!["real followup".to_string()]
+        );
+    }
+
+    /// TASK-95: the Critical Files parser collects backtick paths from the
+    /// `## Critical Files` section's bullets and nowhere else.
+    #[test]
+    fn plan_critical_files_parse() {
+        let plan = "\
+# Plan: STORY-1
+
+## Files
+
+### `not-collected/here.rs` — this is the Files section
+
+## Critical Files
+
+- `aida-cli/src/main.rs`
+- `aida-core/src/models.rs` — with a trailing note
+- a bullet with no backtick path
+
+## Verification
+
+- `also-not-collected.rs`
+";
+        assert_eq!(
+            parse_plan_critical_files(plan),
+            vec![
+                "aida-cli/src/main.rs".to_string(),
+                "aida-core/src/models.rs".to_string(),
+            ]
+        );
+    }
+
+    /// TASK-95: the Verification parser returns the first fenced block of
+    /// the `## Verification` section, and None when there isn't one.
+    #[test]
+    fn plan_verification_parse() {
+        let plan = "\
+## Verification
+
+Some prose first.
+
+```bash
+cargo build --workspace
+cargo test -p aida-cli
+```
+
+## Followups
+";
+        assert_eq!(
+            parse_plan_verification(plan).as_deref(),
+            Some("cargo build --workspace\ncargo test -p aida-cli")
+        );
+        // No fenced block → None.
+        let no_fence = "## Verification\n\nJust prose, no script.\n\n## Related\n";
+        assert!(parse_plan_verification(no_fence).is_none());
+        // No Verification section at all → None.
+        assert!(parse_plan_verification("## Approach\n\ntext\n").is_none());
+    }
+
+    /// TASK-94: the trace-graph scanner walks source files, captures the
+    /// full node-aware spec id, finds the symbol on or just below the
+    /// trace line, and skips build/vendor trees.
+    #[test]
+    fn plan_helpers_scan_trace_graph() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("sub");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            src.join("a.rs"),
+            "// trace:STORY-86 | ai:claude\nfn auto_bump() {}\n\n// trace:FR-1-042\nstruct Thing;\n",
+        )
+        .unwrap();
+        std::fs::write(src.join("b.rs"), "pub fn inline() {} // trace:TASK-50\n").unwrap();
+        // A file under target/ must be skipped.
+        let skip = dir.path().join("target");
+        std::fs::create_dir_all(&skip).unwrap();
+        std::fs::write(skip.join("c.rs"), "// trace:STORY-86\nfn ignored() {}\n").unwrap();
+
+        let wanted: HashSet<String> = ["STORY-86", "FR-1-042", "TASK-50"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let hits = scan_trace_graph(dir.path(), &wanted);
+
+        // STORY-86 → auto_bump in a.rs only (the target/ copy is skipped).
+        let s86 = hits.get("STORY-86").expect("STORY-86 hit");
+        assert_eq!(s86.len(), 1);
+        assert_eq!(s86[0].symbol.as_deref(), Some("auto_bump"));
+        // Node-aware id captured in full — never bucketed under `FR-1`.
+        assert!(hits.get("FR-1").is_none());
+        assert_eq!(
+            hits.get("FR-1-042").expect("FR-1-042 hit")[0]
+                .symbol
+                .as_deref(),
+            Some("Thing")
+        );
+        // An inline trailing trace comment resolves the symbol on its line.
+        assert_eq!(
+            hits.get("TASK-50").expect("TASK-50 hit")[0]
+                .symbol
+                .as_deref(),
+            Some("inline")
+        );
+    }
+
+    /// TASK-113: the ultraplan prompt assembler handles a spec with no
+    /// acceptance criteria (edge case 1) and no trace-graph helpers (edge
+    /// case 3) — placeholder text in the prompt, warnings surfaced — and
+    /// the happy path with both present.
+    #[test]
+    fn ultraplan_prompt_assembly() {
+        use aida_core::{Requirement, RequirementsStore};
+
+        // No `## Acceptance`, no helpers section.
+        let mut store = RequirementsStore::new();
+        let mut bare = Requirement::new("do the thing".into(), "Some context.".into());
+        bare.spec_id = Some("TASK-1".into());
+        store.requirements.push(bare);
+        let (prompt, warnings) = assemble_ultraplan_prompt(&store, &store.requirements[0], None);
+        assert!(prompt.contains("Plan the implementation of TASK-1: do the thing."));
+        assert!(prompt.contains("## Plan structure"));
+        assert!(prompt.contains("(none specified"));
+        assert!(warnings.iter().any(|w| w.contains("`## Acceptance`")));
+        assert!(warnings.iter().any(|w| w.contains("reusable helpers")));
+
+        // With acceptance + a helpers section → no warnings.
+        let mut store2 = RequirementsStore::new();
+        let mut ok = Requirement::new(
+            "t2".into(),
+            "Intro.\n\n## Acceptance\n\n- [ ] alpha\n- [ ] beta\n".into(),
+        );
+        ok.spec_id = Some("TASK-2".into());
+        store2.requirements.push(ok);
+        let (prompt2, warnings2) = assemble_ultraplan_prompt(
+            &store2,
+            &store2.requirements[0],
+            Some("## Reusable helpers\n\n- x\n"),
+        );
+        assert!(prompt2.contains("- [ ] alpha"));
+        assert!(prompt2.contains("## Reusable helpers"));
+        assert!(warnings2.is_empty());
+    }
+
+    /// TASK-113 edge case 2: a spec with many siblings — the prompt caps
+    /// the list and notes how many were omitted.
+    #[test]
+    fn ultraplan_prompt_sibling_truncation() {
+        use aida_core::models::Relationship;
+        use aida_core::{RelationshipType, Requirement, RequirementsStore};
+
+        let child_rel = |parent: uuid::Uuid| Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: parent,
+            created_at: None,
+            created_by: None,
+        };
+        let mut store = RequirementsStore::new();
+        let mut parent = Requirement::new("epic".into(), String::new());
+        parent.spec_id = Some("EPIC-1".into());
+        let parent_id = parent.id;
+        store.requirements.push(parent);
+
+        let mut target = Requirement::new("target".into(), "## Acceptance\n\n- x\n".into());
+        target.spec_id = Some("TASK-1".into());
+        target.relationships.push(child_rel(parent_id));
+        store.requirements.push(target);
+
+        for i in 0..14 {
+            let mut sib = Requirement::new(format!("sib {i}"), String::new());
+            sib.spec_id = Some(format!("TASK-{}", 100 + i));
+            sib.relationships.push(child_rel(parent_id));
+            store.requirements.push(sib);
+        }
+
+        let target = store
+            .requirements
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some("TASK-1"))
+            .unwrap();
+        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None);
+        assert!(prompt.contains("Siblings (share a parent — 14 total)"));
+        assert!(prompt.contains("more siblings omitted"));
+        assert!(prompt.contains("Parent: EPIC-1"));
     }
 
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
@@ -20863,6 +21626,1250 @@ fn sess_label_with_suffix(scope: &str, suffix: &str, max_total: usize) -> String
     format!("{}{}", scope_part, suffix)
 }
 
+// ============================================================================
+// `aida plan verify` — lint a docs/plans/ file against the structured
+// template (TASK-92). Reports drifted line refs, missing files, and absent
+// required sections; exits non-zero on any hard failure so it can run as a
+// pre-commit hook. trace:TASK-93 | ai:claude
+// ============================================================================
+
+/// One section the structured plan template expects. `hard` sections are
+/// errors when absent; the rest are warnings. Matched by case-insensitive
+/// substring against the plan's `##` headers.
+struct PlanSectionSpec {
+    keyword: &'static str,
+    /// If set, a header matching `keyword` is rejected when it also
+    /// contains this string (disambiguates "Files" from "Critical Files").
+    exclude: Option<&'static str>,
+    label: &'static str,
+    hard: bool,
+}
+
+const PLAN_SECTIONS: &[PlanSectionSpec] = &[
+    PlanSectionSpec {
+        keyword: "approach",
+        exclude: None,
+        label: "Approach",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "decision",
+        exclude: None,
+        label: "Decisions",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "files",
+        exclude: Some("critical"),
+        label: "Files",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "critical files",
+        exclude: None,
+        label: "Critical Files",
+        hard: true,
+    },
+    PlanSectionSpec {
+        keyword: "reusable helper",
+        exclude: None,
+        label: "Reusable helpers",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "risk",
+        exclude: None,
+        label: "Risks + gotchas",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "test",
+        exclude: None,
+        label: "Tests",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "verification",
+        exclude: None,
+        label: "Verification",
+        hard: true,
+    },
+    PlanSectionSpec {
+        keyword: "followup",
+        exclude: None,
+        label: "Followups",
+        hard: true,
+    },
+    PlanSectionSpec {
+        keyword: "related",
+        exclude: None,
+        label: "Related",
+        hard: false,
+    },
+];
+
+/// Source-file extensions a `path:line` ref or bare path is expected to use.
+/// Filters out commands (`aida pull`) and prose from the path heuristics.
+const PLAN_SOURCE_EXTS: &[&str] = &[
+    "rs", "ts", "tsx", "js", "jsx", "py", "toml", "md", "sh", "json", "yaml", "yml", "lock", "css",
+    "html",
+];
+
+#[derive(PartialEq)]
+enum PlanFindingLevel {
+    Ok,
+    Warn,
+    Error,
+}
+
+struct PlanFinding {
+    level: PlanFindingLevel,
+    msg: String,
+}
+
+/// A confirmed drifted line ref queued for `--fix` rewriting.
+struct PlanRefFix {
+    line_idx: usize,
+    old: String,
+    new: String,
+}
+
+fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
+    match cmd {
+        PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),
+        PlanCommand::Helpers { spec, append } => plan_helpers(spec, append.as_deref()),
+    }
+}
+
+/// Walk up from the plan file to the enclosing git repo root. Paths inside
+/// a plan are repo-relative, so this is what we resolve them against. Falls
+/// back to the current directory when no `.git` is found.
+fn plan_repo_root(plan_file: &std::path::Path) -> std::path::PathBuf {
+    let start = plan_file
+        .canonicalize()
+        .ok()
+        .and_then(|p| p.parent().map(std::path::Path::to_path_buf));
+    let mut dir = match start {
+        Some(d) => d,
+        None => return std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+    };
+    loop {
+        if dir.join(".git").exists() {
+            return dir;
+        }
+        match dir.parent() {
+            Some(p) => dir = p.to_path_buf(),
+            None => {
+                return std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+            }
+        }
+    }
+}
+
+/// True when `tok` looks like a placeholder rather than a real path:
+/// template stand-ins (`path/to/file.rs`, `<STORY-N>`) and globs (`*.md`).
+fn is_plan_placeholder_path(tok: &str) -> bool {
+    tok.contains('<')
+        || tok.contains('>')
+        || tok.contains('*')
+        || tok.starts_with("path/to/")
+        || tok.contains("...")
+        || tok.contains("NNN")
+}
+
+/// True when `tok` (already stripped of any `:line` suffix) has a known
+/// source-file extension.
+fn has_plan_source_ext(tok: &str) -> bool {
+    match tok.rsplit_once('.') {
+        Some((_, ext)) => PLAN_SOURCE_EXTS.contains(&ext.to_ascii_lowercase().as_str()),
+        None => false,
+    }
+}
+
+/// Locate the 1-based line where `symbol` is *defined* in `content`.
+/// Recognises Rust item kinds and the common TypeScript/JS forms. Returns
+/// the first definition found. A `::`-qualified name is reduced to its
+/// final segment before searching.
+fn locate_symbol_line(content: &str, symbol: &str) -> Option<usize> {
+    use regex::Regex;
+    let bare = symbol.rsplit("::").next().unwrap_or(symbol);
+    if bare.is_empty() || !bare.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    let esc = regex::escape(bare);
+    // Leading indent must be `[ \t]*`, never `\s*` — `\s` matches `\n`, so a
+    // greedy `^\s*` would start the match on the *preceding* blank line and
+    // throw the reported line number off by one.
+    let rust_item = format!(
+        r#"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:default[ \t]+)?(?:async[ \t]+)?(?:unsafe[ \t]+)?(?:extern[ \t]+(?:"[^"]*"[ \t]+)?)?(?:fn|struct|enum|trait|type|union|mod|const|static)[ \t]+{esc}\b"#
+    );
+    let pat = format!(
+        r"(?m){rust_item}|^[ \t]*macro_rules![ \t]+{esc}\b|^[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:abstract[ \t]+)?(?:async[ \t]+)?(?:function|class|interface)[ \t]+{esc}\b|^[ \t]*(?:export[ \t]+)?(?:const|let|var)[ \t]+{esc}\b"
+    );
+    let re = Regex::new(&pat).ok()?;
+    let m = re.find(content)?;
+    Some(content[..m.start()].bytes().filter(|&b| b == b'\n').count() + 1)
+}
+
+/// Pull backtick-quoted identifiers that look like code symbols off a line
+/// of plan prose: `` `fn foo` `` → `foo`, `` `Storage::update` `` → kept as
+/// `Storage::update` (the locator reduces it). Leading item keywords are
+/// stripped. Also catches an un-backticked `fn name`.
+fn plan_symbols_on_line(line: &str) -> Vec<String> {
+    use regex::Regex;
+    let mut out = Vec::new();
+    let backtick = Regex::new(r"`([^`]+)`").unwrap();
+    for cap in backtick.captures_iter(line) {
+        let span = cap[1].trim();
+        // Drop a leading item keyword: "fn foo" -> "foo".
+        let ident = span
+            .strip_prefix("fn ")
+            .or_else(|| span.strip_prefix("struct "))
+            .or_else(|| span.strip_prefix("enum "))
+            .or_else(|| span.strip_prefix("trait "))
+            .or_else(|| span.strip_prefix("impl "))
+            .or_else(|| span.strip_prefix("type "))
+            .or_else(|| span.strip_prefix("macro_rules! "))
+            .unwrap_or(span)
+            .trim();
+        // Keep plausible identifiers (optionally `::`-qualified). Reject
+        // paths, prose, commands.
+        let core = ident.split('(').next().unwrap_or(ident).trim();
+        if !core.is_empty()
+            && !core.contains(' ')
+            && !core.contains('/')
+            && !core.contains('.')
+            && core
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == ':')
+        {
+            out.push(core.to_string());
+        }
+    }
+    let unq = Regex::new(r"\bfn\s+([a-z_][A-Za-z0-9_]*)").unwrap();
+    for cap in unq.captures_iter(line) {
+        out.push(cap[1].to_string());
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()> {
+    use regex::Regex;
+    let content = std::fs::read_to_string(plan_file)
+        .with_context(|| format!("could not read plan file {}", plan_file.display()))?;
+    let root = plan_repo_root(plan_file);
+    let lines: Vec<&str> = content.lines().collect();
+
+    let mut section_findings: Vec<PlanFinding> = Vec::new();
+    let mut file_findings: Vec<PlanFinding> = Vec::new();
+    let mut ref_findings: Vec<PlanFinding> = Vec::new();
+    let mut fixes: Vec<PlanRefFix> = Vec::new();
+
+    // --- Section pass: collect `##` headers, track section membership. ---
+    let mut headers_lower: Vec<String> = Vec::new();
+    let mut files_section_paths: Vec<String> = Vec::new();
+    let mut critical_section_paths: HashSet<String> = HashSet::new();
+    let mut in_fence = false;
+    let mut in_html_comment = false;
+    let mut current_section = String::new();
+
+    let path_ref_re = Regex::new(r"([A-Za-z0-9_][A-Za-z0-9_./\-]*\.[A-Za-z0-9]+):(\d+)").unwrap();
+    let bare_path_re = Regex::new(r"`([A-Za-z0-9_][A-Za-z0-9_./\-]*\.[A-Za-z0-9]+)`").unwrap();
+    let sym_ref_re = Regex::new(r"\b([a-z_][A-Za-z0-9_]*):(\d+)\b").unwrap();
+
+    for line in &lines {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        // Skip `<!-- ... -->` regions — meta-commentary, not plan content
+        // (the template's own guidance cites an example bad ref there).
+        if in_html_comment {
+            if line.contains("-->") {
+                in_html_comment = false;
+            }
+            continue;
+        }
+        if let Some(pos) = line.find("<!--") {
+            if !line[pos..].contains("-->") {
+                in_html_comment = true;
+            }
+            continue;
+        }
+        if let Some(h) = trimmed.strip_prefix("## ") {
+            if !trimmed.starts_with("### ") {
+                current_section = h.trim().to_ascii_lowercase();
+                headers_lower.push(current_section.clone());
+            }
+        }
+        if let Some(h) = trimmed.strip_prefix("### ") {
+            // `### `path/to/file.rs` — purpose` names a build-order file.
+            if let Some(cap) = bare_path_re.captures(h) {
+                let p = cap[1].to_string();
+                if current_section.contains("files") && !current_section.contains("critical") {
+                    files_section_paths.push(p);
+                }
+            }
+        }
+        if current_section.contains("critical files") {
+            for cap in bare_path_re.captures_iter(line) {
+                critical_section_paths.insert(cap[1].to_string());
+            }
+        }
+    }
+
+    for spec in PLAN_SECTIONS {
+        let present = headers_lower
+            .iter()
+            .any(|h| h.contains(spec.keyword) && !spec.exclude.is_some_and(|ex| h.contains(ex)));
+        if present {
+            section_findings.push(PlanFinding {
+                level: PlanFindingLevel::Ok,
+                msg: format!("{} section present", spec.label),
+            });
+        } else if spec.hard {
+            section_findings.push(PlanFinding {
+                level: PlanFindingLevel::Error,
+                msg: format!("required section missing: {}", spec.label),
+            });
+        } else {
+            section_findings.push(PlanFinding {
+                level: PlanFindingLevel::Warn,
+                msg: format!("recommended section missing: {}", spec.label),
+            });
+        }
+    }
+
+    // Critical Files completeness: every build-order file should also be
+    // enumerated in the Critical Files section.
+    for p in &files_section_paths {
+        if !critical_section_paths.contains(p) {
+            section_findings.push(PlanFinding {
+                level: PlanFindingLevel::Warn,
+                msg: format!("`{p}` is in Files but not enumerated in Critical Files"),
+            });
+        }
+    }
+
+    // --- File existence + line-ref pass (prose only, skip code fences
+    // and HTML comment regions). ---
+    let mut checked_paths: HashSet<String> = HashSet::new();
+    let mut current_h3_file: Option<String> = None;
+    in_fence = false;
+    in_html_comment = false;
+
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        if in_html_comment {
+            if line.contains("-->") {
+                in_html_comment = false;
+            }
+            continue;
+        }
+        if let Some(pos) = line.find("<!--") {
+            if !line[pos..].contains("-->") {
+                in_html_comment = true;
+            }
+            continue;
+        }
+        if let Some(h) = trimmed.strip_prefix("### ") {
+            if let Some(cap) = bare_path_re.captures(h) {
+                current_h3_file = Some(cap[1].to_string());
+            }
+        }
+
+        let symbols = plan_symbols_on_line(line);
+
+        // Bare file paths in backticks — existence check. Only repo-relative
+        // paths (containing `/`) are checked; a slashless `foo.rs` is prose
+        // shorthand for a file fully named elsewhere, not a path claim.
+        for cap in bare_path_re.captures_iter(line) {
+            let tok = cap[1].to_string();
+            if is_plan_placeholder_path(&tok) || !has_plan_source_ext(&tok) || !tok.contains('/') {
+                continue;
+            }
+            if !checked_paths.insert(tok.clone()) {
+                continue;
+            }
+            if root.join(&tok).exists() {
+                file_findings.push(PlanFinding {
+                    level: PlanFindingLevel::Ok,
+                    msg: tok,
+                });
+            } else {
+                file_findings.push(PlanFinding {
+                    level: PlanFindingLevel::Error,
+                    msg: format!("{tok} — file not found (plan line {})", idx + 1),
+                });
+            }
+        }
+
+        // `path.ext:NNN` refs — existence + drift.
+        for cap in path_ref_re.captures_iter(line) {
+            let path = cap[1].to_string();
+            let claimed: usize = cap[2].parse().unwrap_or(0);
+            if is_plan_placeholder_path(&path) || !has_plan_source_ext(&path) {
+                continue;
+            }
+            let full = root.join(&path);
+            if !full.exists() {
+                // A slashless `main.rs:NNN` is shorthand — the file may exist
+                // under some directory; warn rather than fail the build. A
+                // path with a directory that doesn't resolve is a real break.
+                if path.contains('/') {
+                    ref_findings.push(PlanFinding {
+                        level: PlanFindingLevel::Error,
+                        msg: format!("{path}:{claimed} — file not found (plan line {})", idx + 1),
+                    });
+                } else {
+                    ref_findings.push(PlanFinding {
+                        level: PlanFindingLevel::Warn,
+                        msg: format!(
+                            "{path}:{claimed} — bare filename does not resolve; use a \
+                             repo-relative path (plan line {})",
+                            idx + 1
+                        ),
+                    });
+                }
+                continue;
+            }
+            let body = std::fs::read_to_string(&full).unwrap_or_default();
+            let mut resolved = false;
+            for sym in &symbols {
+                if let Some(actual) = locate_symbol_line(&body, sym) {
+                    resolved = true;
+                    if actual == claimed {
+                        ref_findings.push(PlanFinding {
+                            level: PlanFindingLevel::Ok,
+                            msg: format!("{path}:{claimed} — `{sym}` confirmed"),
+                        });
+                    } else {
+                        let delta = actual as i64 - claimed as i64;
+                        ref_findings.push(PlanFinding {
+                            level: PlanFindingLevel::Warn,
+                            msg: format!(
+                                "{path}:{claimed} — `{sym}` is at line {actual} (drift {delta:+}); \
+                                 prefer symbol form `{sym}` or update to {path}:{actual} (plan line {})",
+                                idx + 1
+                            ),
+                        });
+                        fixes.push(PlanRefFix {
+                            line_idx: idx,
+                            old: format!("{path}:{claimed}"),
+                            new: format!("{path}:{actual}"),
+                        });
+                    }
+                    break;
+                }
+            }
+            if !resolved {
+                ref_findings.push(PlanFinding {
+                    level: PlanFindingLevel::Warn,
+                    msg: format!(
+                        "{path}:{claimed} — no named symbol on this line to verify the \
+                         line number against (plan line {})",
+                        idx + 1
+                    ),
+                });
+            }
+        }
+
+        // `symbol:NNN` refs (no path) — resolve against the current
+        // build-order file header, if any.
+        for cap in sym_ref_re.captures_iter(line) {
+            let sym = cap[1].to_string();
+            let claimed: usize = cap[2].parse().unwrap_or(0);
+            // Skip if this match is the tail of a longer token (a
+            // `path.ext:line` ref or a `dir/seg:line` fragment) rather
+            // than a standalone `symbol:line` ref.
+            let mstart = cap.get(0).unwrap().start();
+            if mstart > 0 {
+                let prev = line.as_bytes()[mstart - 1];
+                if prev == b'.' || prev == b'/' || prev == b'-' || prev.is_ascii_alphanumeric() {
+                    continue;
+                }
+            }
+            let Some(file) = &current_h3_file else {
+                continue;
+            };
+            if is_plan_placeholder_path(file) {
+                continue;
+            }
+            let full = root.join(file);
+            let Ok(body) = std::fs::read_to_string(&full) else {
+                continue;
+            };
+            if let Some(actual) = locate_symbol_line(&body, &sym) {
+                if actual == claimed {
+                    ref_findings.push(PlanFinding {
+                        level: PlanFindingLevel::Ok,
+                        msg: format!("{sym}:{claimed} — confirmed in {file}"),
+                    });
+                } else {
+                    let delta = actual as i64 - claimed as i64;
+                    ref_findings.push(PlanFinding {
+                        level: PlanFindingLevel::Warn,
+                        msg: format!(
+                            "{sym}:{claimed} — `{sym}` is at line {actual} in {file} \
+                             (drift {delta:+}); prefer symbol form `{sym}` (plan line {})",
+                            idx + 1
+                        ),
+                    });
+                    fixes.push(PlanRefFix {
+                        line_idx: idx,
+                        old: format!("{sym}:{claimed}"),
+                        new: format!("{sym}:{actual}"),
+                    });
+                }
+            }
+        }
+    }
+
+    // --- Report. ---
+    let plan_label = plan_file.display();
+    println!("{} {}", "Verifying plan:".bold(), plan_label);
+    println!();
+
+    let print_group = |title: &str, findings: &[PlanFinding]| {
+        if findings.is_empty() {
+            return;
+        }
+        println!("{}", title.cyan().bold());
+        for f in findings {
+            if quiet && f.level == PlanFindingLevel::Ok {
+                continue;
+            }
+            let tag = match f.level {
+                PlanFindingLevel::Ok => "  OK   ".green(),
+                PlanFindingLevel::Warn => "  WARN ".yellow(),
+                PlanFindingLevel::Error => "  ERROR".red().bold(),
+            };
+            println!("{} {}", tag, f.msg);
+        }
+        println!();
+    };
+
+    print_group("Sections", &section_findings);
+    print_group("Files", &file_findings);
+    print_group("Line refs", &ref_findings);
+
+    let count = |findings: &[PlanFinding], level: &PlanFindingLevel| {
+        findings.iter().filter(|f| &f.level == level).count()
+    };
+    let errors = count(&section_findings, &PlanFindingLevel::Error)
+        + count(&file_findings, &PlanFindingLevel::Error)
+        + count(&ref_findings, &PlanFindingLevel::Error);
+    let warns = count(&section_findings, &PlanFindingLevel::Warn)
+        + count(&file_findings, &PlanFindingLevel::Warn)
+        + count(&ref_findings, &PlanFindingLevel::Warn);
+
+    if fix && !fixes.is_empty() {
+        let mut patched = lines.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let mut applied = 0;
+        for f in &fixes {
+            if let Some(line) = patched.get_mut(f.line_idx) {
+                if line.contains(&f.old) {
+                    *line = line.replacen(&f.old, &f.new, 1);
+                    applied += 1;
+                }
+            }
+        }
+        let trailing_nl = content.ends_with('\n');
+        let mut new_content = patched.join("\n");
+        if trailing_nl {
+            new_content.push('\n');
+        }
+        std::fs::write(plan_file, new_content)?;
+        println!(
+            "{} rewrote {} drifted ref(s) in place",
+            "fix:".green().bold(),
+            applied
+        );
+        println!();
+    } else if !fixes.is_empty() {
+        println!(
+            "{} re-run with {} to rewrite {} drifted ref(s) automatically",
+            "hint:".bold(),
+            "--fix".cyan(),
+            fixes.len()
+        );
+        println!();
+    }
+
+    let verdict = if errors > 0 {
+        format!("{} error(s), {} warning(s) — FAIL", errors, warns)
+            .red()
+            .bold()
+            .to_string()
+    } else if warns > 0 {
+        format!("0 errors, {warns} warning(s) — PASS")
+            .yellow()
+            .to_string()
+    } else {
+        "all checks passed — PASS".green().bold().to_string()
+    };
+    println!("{} {}", "Verdict:".bold(), verdict);
+
+    if errors > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+// ============================================================================
+// TASK-94 — `aida plan helpers <spec>`. Derive a "Reusable helpers" section
+// by walking the requirement graph (sibling / same-feature / same-tag specs)
+// and harvesting those specs' `// trace:` comments from the codebase, so the
+// implementer reuses existing helpers instead of re-inventing them.
+// trace:TASK-94 | ai:claude
+// ============================================================================
+
+/// One harvested trace comment: a related spec touches `file`, and (when a
+/// definition sits on or just below the comment) the named `symbol`.
+struct TraceHit {
+    file: String,
+    symbol: Option<String>,
+}
+
+/// Recursively collect source files under `dir`, skipping hidden dirs and
+/// the usual build/vendor trees.
+fn collect_source_files(dir: &std::path::Path, exts: &[&str], out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with('.')
+                || name == "target"
+                || name == "node_modules"
+                || name == "vendor"
+            {
+                continue;
+            }
+        }
+        if path.is_dir() {
+            collect_source_files(&path, exts, out);
+        } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if exts.contains(&ext) {
+                out.push(path);
+            }
+        }
+    }
+}
+
+/// Scan the codebase for `trace:<SPEC-ID>` comments whose id is in `wanted`,
+/// returning spec_id → the trace hits found. The symbol on each hit is the
+/// first definition on the trace line or the two lines below it (comment
+/// lines are skipped so the comment's own prose can't false-match).
+/// trace:TASK-94 | ai:claude
+fn scan_trace_graph(
+    project_root: &std::path::Path,
+    wanted: &HashSet<String>,
+) -> std::collections::HashMap<String, Vec<TraceHit>> {
+    use regex::Regex;
+    // Capture the full spec id — including the optional third segment of a
+    // node-aware id (`FR-1-042`), or `trace:FR-1-042` would bucket under a
+    // bogus `FR-1`.
+    let trace_re = Regex::new(r"\btrace:([A-Z]+-[0-9]+(?:-[0-9]+)?)").unwrap();
+    let sym_re = Regex::new(
+        r"\b(?:fn|struct|enum|trait|type|mod|const|static|function|class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",
+    )
+    .unwrap();
+    let exts = ["rs", "ts", "tsx", "js", "jsx", "py", "sh"];
+    let mut files = Vec::new();
+    collect_source_files(project_root, &exts, &mut files);
+
+    let mut out: std::collections::HashMap<String, Vec<TraceHit>> =
+        std::collections::HashMap::new();
+    for path in &files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let lines: Vec<&str> = content.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            for cap in trace_re.captures_iter(line) {
+                let id = cap[1].to_string();
+                if !wanted.contains(&id) {
+                    continue;
+                }
+                // Symbol: first definition on this line or the next two,
+                // skipping pure comment lines.
+                let mut symbol = None;
+                for probe in lines.iter().skip(i).take(3) {
+                    let t = probe.trim_start();
+                    if t.starts_with("//") || t.starts_with('#') || t.starts_with('*') {
+                        continue;
+                    }
+                    if let Some(m) = sym_re.captures(probe) {
+                        symbol = Some(m[1].to_string());
+                        break;
+                    }
+                }
+                let rel = path
+                    .strip_prefix(project_root)
+                    .unwrap_or(path)
+                    .display()
+                    .to_string();
+                out.entry(id)
+                    .or_default()
+                    .push(TraceHit { file: rel, symbol });
+            }
+        }
+    }
+    out
+}
+
+/// `aida plan helpers <spec>` — render a `## Reusable helpers` section
+/// derived from the trace graph. trace:TASK-94 | ai:claude
+fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+    let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_by_spec_id(spec_arg)
+    }
+    .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
+    let target_display = target.display_id();
+
+    let Some(mut md) = build_reusable_helpers_section(&store, &project_root, target) else {
+        println!(
+            "No reusable helpers derived for {target_display} — no related spec (sibling / \
+             tag-mate / same-feature) carries a `trace:` comment that names a helper."
+        );
+        return Ok(());
+    };
+    md.push_str(&format!(
+        "\n_Generated by `aida plan helpers {target_display}` — verify before relying on it._\n"
+    ));
+
+    if let Some(path) = append {
+        let mut existing = std::fs::read_to_string(path)
+            .with_context(|| format!("could not read plan file {}", path.display()))?;
+        if !existing.ends_with('\n') {
+            existing.push('\n');
+        }
+        existing.push('\n');
+        existing.push_str(&md);
+        std::fs::write(path, existing)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        println!(
+            "{} appended Reusable helpers section to {}",
+            "✓".green(),
+            path.display()
+        );
+    } else {
+        print!("{md}");
+    }
+    Ok(())
+}
+
+/// Build the `## Reusable helpers` markdown section for `target` by walking
+/// the requirement graph (siblings / tag-mates / same-feature specs) and
+/// harvesting their `trace:` comments. Returns `None` when no related spec
+/// contributes a named helper. Shared by `aida plan helpers` and the
+/// `aida ultraplan` prompt assembler. trace:TASK-94 TASK-113 | ai:claude
+fn build_reusable_helpers_section(
+    store: &aida_core::RequirementsStore,
+    project_root: &std::path::Path,
+    target: &aida_core::models::Requirement,
+) -> Option<String> {
+    // ── Related-spec discovery ── first reason wins (sibling beats
+    // feature beats tag) so each spec appears once with its strongest tie.
+    let parent_uuids: Vec<uuid::Uuid> = target
+        .relationships
+        .iter()
+        .filter(|r| r.rel_type == aida_core::RelationshipType::Child)
+        .map(|r| r.target_id)
+        .collect();
+    let target_feature = target.feature.trim().to_string();
+    let target_tags = target.tags.clone();
+
+    let mut related: Vec<(&aida_core::models::Requirement, &'static str)> = Vec::new();
+    let mut seen: HashSet<uuid::Uuid> = HashSet::new();
+    seen.insert(target.id);
+
+    if !parent_uuids.is_empty() {
+        for req in &store.requirements {
+            if seen.contains(&req.id) {
+                continue;
+            }
+            let is_sibling = req.relationships.iter().any(|r| {
+                r.rel_type == aida_core::RelationshipType::Child
+                    && parent_uuids.contains(&r.target_id)
+            });
+            if is_sibling {
+                seen.insert(req.id);
+                related.push((req, "sibling"));
+            }
+        }
+    }
+    // Shared tags before feature: a shared tag is a deliberate grouping
+    // (a `batch:`, a topic) and a stronger signal than `feature`, which
+    // is often a coarse project-wide bucket.
+    if !target_tags.is_empty() {
+        for req in &store.requirements {
+            if seen.contains(&req.id) {
+                continue;
+            }
+            if req.tags.iter().any(|t| target_tags.contains(t)) {
+                seen.insert(req.id);
+                related.push((req, "shared tag"));
+            }
+        }
+    }
+    if !target_feature.is_empty() {
+        let feature_matches: Vec<&aida_core::models::Requirement> = store
+            .requirements
+            .iter()
+            .filter(|r| !seen.contains(&r.id) && r.feature.trim() == target_feature)
+            .collect();
+        // A feature shared by dozens of specs is a project-wide bucket,
+        // not a meaningful relation — skip it rather than flood the
+        // section with weakly-related noise.
+        const FEATURE_DISCRIMINATION_CAP: usize = 25;
+        if feature_matches.len() <= FEATURE_DISCRIMINATION_CAP {
+            for req in feature_matches {
+                seen.insert(req.id);
+                related.push((req, "same feature"));
+            }
+        }
+    }
+
+    let target_display = target.display_id();
+    if related.is_empty() {
+        return None;
+    }
+
+    // Every id-string a trace comment might use (canonical spec_id or the
+    // agreed short id) → index into `related`.
+    let mut id_to_idx: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (idx, (req, _)) in related.iter().enumerate() {
+        if let Some(s) = &req.spec_id {
+            id_to_idx.insert(s.clone(), idx);
+        }
+        if let Some(a) = &req.agreed_id {
+            id_to_idx.insert(a.clone(), idx);
+        }
+    }
+    let wanted: HashSet<String> = id_to_idx.keys().cloned().collect();
+
+    let hits = scan_trace_graph(&project_root, &wanted);
+
+    // Fold hits onto each related spec, deduped by (file, symbol).
+    let mut per_spec: Vec<(usize, std::collections::BTreeMap<String, Vec<String>>)> = Vec::new();
+    for (idx, _) in related.iter().enumerate() {
+        per_spec.push((idx, std::collections::BTreeMap::new()));
+    }
+    for (id, id_hits) in &hits {
+        let Some(&idx) = id_to_idx.get(id) else {
+            continue;
+        };
+        let by_file = &mut per_spec[idx].1;
+        for hit in id_hits {
+            let syms = by_file.entry(hit.file.clone()).or_default();
+            if let Some(sym) = &hit.symbol {
+                if !syms.contains(sym) {
+                    syms.push(sym.clone());
+                }
+            }
+        }
+    }
+
+    // Keep only specs that introduce at least one *named* helper — the
+    // section is "reusable helpers", and a bare file-touched hit (every
+    // spec touches main.rs) carries no reuse signal. Rank by tier
+    // (siblings are the closest relatives, then tag-mates, then the
+    // coarse same-feature set) and within a tier by helper count, then
+    // cap so the section stays a focused brief.
+    const HELPERS_SPEC_CAP: usize = 12;
+    const HELPERS_PER_FILE_CAP: usize = 8;
+    let tier = |reason: &str| -> u8 {
+        match reason {
+            "sibling" => 0,
+            "shared tag" => 1,
+            _ => 2, // same feature — project-wide, weakest signal
+        }
+    };
+    let mut ranked: Vec<(usize, u8, usize)> = per_spec
+        .iter()
+        .filter_map(|(idx, by_file)| {
+            let symbols: usize = by_file.values().map(Vec::len).sum();
+            (symbols > 0).then_some((*idx, tier(related[*idx].1), symbols))
+        })
+        .collect();
+    ranked.sort_by(|a, b| a.1.cmp(&b.1).then(b.2.cmp(&a.2)).then(a.0.cmp(&b.0)));
+    let truncated = ranked.len().saturating_sub(HELPERS_SPEC_CAP);
+    ranked.truncate(HELPERS_SPEC_CAP);
+
+    // No related spec names a helper → nothing worth a section.
+    if ranked.is_empty() {
+        return None;
+    }
+
+    // ── Render the section ──
+    let mut md = String::new();
+    md.push_str("## Reusable helpers (do not reimplement)\n\n");
+    md.push_str(&format!(
+        "Derived from the trace graph for {target_display} — related specs that already \
+         touch this area. Call these rather than re-implementing.\n\n"
+    ));
+
+    for (idx, _, _) in &ranked {
+        let (req, reason) = related[*idx];
+        let by_file = &per_spec[*idx].1;
+        md.push_str(&format!(
+            "**{}** — {} · {} · {}\n\n",
+            req.display_id(),
+            req.title,
+            reason,
+            req.status
+        ));
+        for (file, syms) in by_file {
+            if syms.is_empty() {
+                md.push_str(&format!("- `{file}`\n"));
+            } else {
+                let mut sorted = syms.clone();
+                sorted.sort();
+                let extra = sorted.len().saturating_sub(HELPERS_PER_FILE_CAP);
+                sorted.truncate(HELPERS_PER_FILE_CAP);
+                let mut joined = sorted
+                    .iter()
+                    .map(|s| format!("`{s}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if extra > 0 {
+                    joined.push_str(&format!(", …+{extra}"));
+                }
+                md.push_str(&format!("- `{file}` — {joined}\n"));
+            }
+        }
+        md.push('\n');
+    }
+    if truncated > 0 {
+        md.push_str(&format!(
+            "_…and {truncated} more related spec(s) — narrow the scope or inspect with \
+             `aida list`._\n"
+        ));
+    }
+    Some(md)
+}
+
+// ============================================================================
+// TASK-113 — `aida ultraplan <SPEC>`. Assemble a rich, structured planning
+// prompt from a spec's full context (description, acceptance, related specs,
+// the AIDA plan template, trace-graph reusable helpers) so `/ultraplan`'s
+// explorers anchor on concrete requirements instead of a terse user prompt.
+// trace:TASK-113 | ai:claude
+// ============================================================================
+
+/// Copy `text` to the system clipboard, trying the platform tools in turn.
+/// Returns false when none is available (caller falls back to stdout).
+fn copy_to_clipboard(text: &str) -> bool {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    // Linux (Wayland then X11), macOS, Windows.
+    let tools: &[(&str, &[&str])] = &[
+        ("wl-copy", &[]),
+        ("xclip", &["-selection", "clipboard"]),
+        ("xsel", &["--clipboard", "--input"]),
+        ("pbcopy", &[]),
+        ("clip", &[]),
+    ];
+    for (cmd, args) in tools {
+        let Ok(mut child) = Command::new(cmd)
+            .args(*args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            continue;
+        };
+        let write_ok = match child.stdin.take() {
+            Some(mut stdin) => stdin.write_all(text.as_bytes()).is_ok(),
+            None => false,
+        };
+        // stdin dropped above → EOF; now wait for the tool to finish.
+        match child.wait() {
+            Ok(status) if write_ok && status.success() => return true,
+            _ => continue,
+        }
+    }
+    false
+}
+
+/// The AIDA plan-template section list, inlined into the ultraplan prompt
+/// so `/ultraplan`'s output already matches `docs/plans/_TEMPLATE.md`
+/// (TASK-92) and `aida plan verify` (TASK-93) passes on the saved plan.
+const ULTRAPLAN_STRUCTURE: &str = "\
+Produce the plan in AIDA's structured format — a header line with Date / \
+Specs / Status / Complexity, then these sections in order:
+
+1. **Approach** — one-paragraph executive summary, plus an ASCII diagram \
+where a state machine or control flow would compress prose.
+2. **Decisions** — each significant choice resolved, with rationale (not an \
+open-questions list).
+3. **Files (in build-order)** — symbol-anchored edits per file, ordered so \
+each commit builds clean.
+4. **Critical Files** — flat list of every must-touch path.
+5. **Reusable helpers** — existing helpers to call rather than re-invent \
+(seeded below).
+6. **Risks + gotchas** — numbered, each with a mitigation.
+7. **Tests** — named test functions, not \"add tests\".
+8. **Verification** — an executable bash smoke test (positive + negative).
+9. **Followups** — out-of-scope items to file as TASKs at completion time.
+10. **Related** — builds-on / blocks / see-also links.";
+
+/// One-line summary of a related requirement for the prompt's context block.
+fn ultraplan_spec_line(req: &aida_core::models::Requirement) -> String {
+    format!("{} — {} [{}]", req.display_id(), req.title, req.status)
+}
+
+/// Assemble the `/ultraplan` prompt for `target`. `helpers_section` is the
+/// pre-built trace-graph reusable-helpers markdown (None when there is
+/// none — see TASK-94). Returns the prompt and any warnings to surface.
+/// Pure over its inputs so it is unit-testable. trace:TASK-113 | ai:claude
+fn assemble_ultraplan_prompt(
+    store: &aida_core::RequirementsStore,
+    target: &aida_core::models::Requirement,
+    helpers_section: Option<&str>,
+) -> (String, Vec<String>) {
+    const DESC_CHAR_CAP: usize = 1800;
+    const SIBLING_CAP: usize = 12;
+    let mut warnings: Vec<String> = Vec::new();
+    let display = target.display_id();
+    let resolve = |id: &uuid::Uuid| store.requirements.iter().find(|r| &r.id == id);
+
+    let mut p = String::new();
+    p.push_str(&format!(
+        "Plan the implementation of {display}: {}.\n\n",
+        target.title
+    ));
+
+    // ── Requirement body ──
+    p.push_str("## Requirement\n\n");
+    let desc = target.description.trim();
+    if desc.is_empty() {
+        p.push_str("_(no description on the spec)_\n\n");
+        warnings.push("spec has no description — the plan will be weakly grounded".to_string());
+    } else if desc.chars().count() > DESC_CHAR_CAP {
+        let truncated: String = desc.chars().take(DESC_CHAR_CAP).collect();
+        p.push_str(&truncated);
+        p.push_str("\n\n_(description truncated to fit the prompt budget)_\n\n");
+    } else {
+        p.push_str(desc);
+        p.push_str("\n\n");
+    }
+
+    // ── Acceptance criteria ──
+    p.push_str("## Acceptance criteria\n\n");
+    match extract_acceptance_section(&target.description) {
+        Some(acc) if !acc.trim().is_empty() => {
+            p.push_str(acc.trim());
+            p.push('\n');
+        }
+        _ => {
+            p.push_str(
+                "_(none specified — add a `## Acceptance` section to the spec for a sharper plan)_\n",
+            );
+            warnings.push(
+                "spec has no `## Acceptance` section — the plan will be weaker without \
+                 explicit acceptance criteria"
+                    .to_string(),
+            );
+        }
+    }
+    p.push('\n');
+
+    // ── Related-spec context ──
+    let parents: Vec<&aida_core::models::Requirement> = target
+        .relationships
+        .iter()
+        .filter(|r| r.rel_type == aida_core::RelationshipType::Child)
+        .filter_map(|r| resolve(&r.target_id))
+        .collect();
+    let children: Vec<&aida_core::models::Requirement> = target
+        .relationships
+        .iter()
+        .filter(|r| r.rel_type == aida_core::RelationshipType::Parent)
+        .filter_map(|r| resolve(&r.target_id))
+        .collect();
+    // Other typed relationships (verifies / references / custom) — the
+    // "composes / depends-on" signal the prompt should anchor on.
+    let other_rels: Vec<(String, &aida_core::models::Requirement)> = target
+        .relationships
+        .iter()
+        .filter(|r| {
+            !matches!(
+                r.rel_type,
+                aida_core::RelationshipType::Parent | aida_core::RelationshipType::Child
+            )
+        })
+        .filter_map(|r| resolve(&r.target_id).map(|req| (r.rel_type.to_string(), req)))
+        .collect();
+    let parent_ids: HashSet<uuid::Uuid> = parents.iter().map(|r| r.id).collect();
+    let siblings: Vec<&aida_core::models::Requirement> = if parent_ids.is_empty() {
+        Vec::new()
+    } else {
+        store
+            .requirements
+            .iter()
+            .filter(|r| {
+                r.id != target.id
+                    && r.relationships.iter().any(|rel| {
+                        rel.rel_type == aida_core::RelationshipType::Child
+                            && parent_ids.contains(&rel.target_id)
+                    })
+            })
+            .collect()
+    };
+
+    if !parents.is_empty() || !children.is_empty() || !siblings.is_empty() || !other_rels.is_empty()
+    {
+        p.push_str("## Related specs\n\n");
+        for parent in &parents {
+            p.push_str(&format!("- Parent: {}\n", ultraplan_spec_line(parent)));
+        }
+        for (rel, req) in &other_rels {
+            p.push_str(&format!("- {}: {}\n", rel, ultraplan_spec_line(req)));
+        }
+        if !children.is_empty() {
+            p.push_str("- Children:\n");
+            for child in &children {
+                p.push_str(&format!("  - {}\n", ultraplan_spec_line(child)));
+            }
+        }
+        if !siblings.is_empty() {
+            p.push_str(&format!(
+                "- Siblings (share a parent — {} total):\n",
+                siblings.len()
+            ));
+            for sib in siblings.iter().take(SIBLING_CAP) {
+                p.push_str(&format!("  - {}\n", ultraplan_spec_line(sib)));
+            }
+            if siblings.len() > SIBLING_CAP {
+                p.push_str(&format!(
+                    "  - _(+{} more siblings omitted to fit the prompt budget)_\n",
+                    siblings.len() - SIBLING_CAP
+                ));
+            }
+        }
+        p.push('\n');
+    }
+
+    // ── Plan structure ──
+    p.push_str("## Plan structure\n\n");
+    p.push_str(ULTRAPLAN_STRUCTURE);
+    p.push_str("\n\n");
+
+    // ── Reusable helpers (trace-graph derived) ──
+    match helpers_section {
+        Some(section) => {
+            p.push_str(section);
+            if !section.ends_with('\n') {
+                p.push('\n');
+            }
+            p.push('\n');
+        }
+        None => {
+            warnings.push(
+                "no trace-graph reusable helpers found — Reusable helpers section omitted"
+                    .to_string(),
+            );
+        }
+    }
+
+    // ── Style notes ──
+    p.push_str("## Style notes\n\n");
+    p.push_str(
+        "- Prefer symbol refs (`fn handle_pull_command`) over line refs (`main.rs:19713`) — \
+         line refs drift fast.\n\
+         - Order the Files section so each commit builds clean.\n\
+         - The Verification section must be an executable bash smoke test.\n\
+         - Keep the Followups section to one TASK-title-sized line per item.\n",
+    );
+
+    (p, warnings)
+}
+
+/// `aida ultraplan <SPEC>` — assemble + deliver the planning prompt.
+fn handle_ultraplan_command(spec_arg: &str, stdout: bool, json: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+    let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_by_spec_id(spec_arg)
+    }
+    .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
+
+    let helpers = build_reusable_helpers_section(&store, &project_root, target);
+    let (prompt, warnings) = assemble_ultraplan_prompt(&store, target, helpers.as_deref());
+    let token_estimate = prompt.chars().count() / 4;
+    let display = target.display_id();
+
+    if json {
+        let out = serde_json::json!({
+            "spec_id": display,
+            "title": target.title,
+            "prompt": prompt,
+            "token_estimate": token_estimate,
+            "warnings": warnings,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+
+    if stdout {
+        print!("{prompt}");
+        for w in &warnings {
+            eprintln!("{} {}", "Warning:".yellow().bold(), w);
+        }
+        return Ok(());
+    }
+
+    // Default: copy to clipboard, falling back to stdout when no tool exists.
+    if copy_to_clipboard(&prompt) {
+        println!(
+            "{} assembled /ultraplan prompt for {} (~{} tokens) — copied to clipboard",
+            "✓".green(),
+            display.bold(),
+            token_estimate
+        );
+        println!(
+            "  {}",
+            "paste it into a Claude Code session, prefixed with /ultraplan".dimmed()
+        );
+    } else {
+        eprintln!(
+            "{} no clipboard tool found (wl-copy/xclip/xsel/pbcopy/clip) — printing instead",
+            "Note:".bold()
+        );
+        print!("{prompt}");
+    }
+    for w in &warnings {
+        eprintln!("{} {}", "Warning:".yellow().bold(), w);
+    }
+    Ok(())
+}
+
 fn print_help_all() {
     let groups: &[(&str, &[(&str, &str)])] = &[
         (
@@ -20890,6 +22897,11 @@ fn print_help_all() {
                 ("init", "Initialize AIDA in the current project"),
                 ("upgrade", "Upgrade aida to the latest release"),
                 ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
+                ("plan", "Verify plans + derive reusable-helper sections"),
+                (
+                    "ultraplan",
+                    "Assemble a rich /ultraplan prompt from a spec's context",
+                ),
             ],
         ),
         (
@@ -23475,6 +25487,15 @@ fn auto_bump_done_to_completed(
     // ── Step 6: activity log ──
     for (spec_id, _) in &confirmed {
         record_role_activity(spec_id, "auto-completed");
+    }
+
+    // ── Step 7: plan followups ── TASK-96: file followup TASKs for each
+    // just-merged spec. Non-interactive (this runs inside `aida pull`);
+    // idempotent via the followups marker, so specs already handled at
+    // `aida queue done` time are skipped. Best-effort.
+    // trace:TASK-96 | ai:claude
+    for (spec_id, _) in &confirmed {
+        let _ = extract_plan_followups(storage, project_root, spec_id, spec_id, false);
     }
 
     // Suppress unused-variable warning when the helper is called on a
@@ -33886,6 +35907,22 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 "run `aida queue next` to see what's next".dimmed()
             );
 
+            // TASK-96: offer to file the plan's Followups bullets as child
+            // TASKs. Interactive prompt unless `--yes` (then file all).
+            // Best-effort — a failure here never blocks `queue done`.
+            // trace:TASK-96 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                if let Err(e) =
+                    extract_plan_followups(storage, &project_root, spec_id, display_id, !yes)
+                {
+                    eprintln!(
+                        "{} followup extraction skipped: {}",
+                        "Warning:".yellow().bold(),
+                        e
+                    );
+                }
+            }
+
             // STORY-106: workflow hint when the queue is now empty for the
             // active role+scope. Best-effort: any state-detection failure
             // skips the hint silently rather than failing the command.
@@ -35596,12 +37633,34 @@ fn handle_queue_work(
     // Cluster manifest: pre-populate items so /aida-pickup can walk
     // them top-down. Skip for head/item modes (single item → no plan
     // needed beyond the queue head). trace:STORY-98 | ai:claude
+    //
+    // TASK-95: discover the plan brief for the anchor spec from any
+    // owning docs/plans/ file. Cluster mode always writes a manifest, so
+    // it just gains the brief; head/item modes write a manifest only
+    // when a plan file exists (no plan file → today's no-op behavior).
+    // trace:TASK-95 | ai:claude
+    let plan_context = discover_plan_context(&project_root, &plan.anchor_display);
     if plan.mode == QueueWorkMode::Cluster {
-        write_queue_work_manifest(&project_root, &lease, &plan)?;
+        write_queue_work_manifest(&project_root, &lease, &plan, plan_context.clone())?;
         eprintln!(
             "  {} wrote manifest with {} planned item(s)",
             "✓".green(),
             plan.entries.len()
+        );
+        if let Some(ctx) = &plan_context {
+            eprintln!(
+                "  {} attached plan brief from {}",
+                "✓".green(),
+                ctx.plan_file.cyan()
+            );
+        }
+    } else if let Some(ctx) = plan_context {
+        let plan_file = ctx.plan_file.clone();
+        write_queue_work_manifest(&project_root, &lease, &plan, Some(ctx))?;
+        eprintln!(
+            "  {} attached plan brief from {}",
+            "✓".green(),
+            plan_file.cyan()
         );
     }
 
@@ -35805,6 +37864,7 @@ fn write_queue_work_manifest(
     project_root: &std::path::Path,
     lease: &SessionLease,
     plan: &QueueWorkPlan,
+    plan_context: Option<session_manifest::PlanContext>,
 ) -> Result<()> {
     use crate::session_manifest::{ManifestItem, SessionManifest};
 
@@ -35825,6 +37885,7 @@ fn write_queue_work_manifest(
         session_id: lease.id.clone(),
         planned_at: chrono::Utc::now(),
         plan_source: "queue work".to_string(),
+        plan: plan_context,
         items,
     };
     let path = session_manifest::manifest_path(project_root, &lease.id);
