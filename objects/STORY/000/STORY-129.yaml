@@ -65,12 +65,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user reviewed PR-28, queue-done'd the review story, then asked 'why is there not any aida command, why gh pr merge 28 --squash? I didn't have to do that before, maybe I did? Is aida merge PR-28 something?' The reviewer agent USUALLY merges autonomously, but the CI-red interruption + rerun broke that flow today, leaving the user to merge manually. The friction surfaces the gap that aida merge would fill — both for the manual path (user types one command) and for the agent path (/aida-review calls aida merge cleanly).
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T02:52:31.262954456Z
-modified_at: 2026-05-15T02:52:31.262954456Z
+modified_at: 2026-05-15T02:57:20.505598239Z
 req_type: Story
 tags:
 - gh
