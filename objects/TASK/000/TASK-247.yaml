@@ -1,0 +1,40 @@
+id: 019e2c7e-bb4e-7630-b356-3404b1283a7e
+spec_id: TASK-247
+agreed_id: TASK-247
+title: 'aida ultraplan: include enrichment comments + larger description budget'
+description: |-
+  \`aida ultraplan <SPEC>\` (TASK-113) assembles a structured prompt but truncates the description to ~4000 chars AND does not pull comments. For specs that accumulate substantial planning context as comments (e.g. EPIC-26 received a comprehensive enrichment comment 2026-05-15 with anti-patterns, design forks, and reusable helpers), the most valuable context is excluded from the assembled prompt.
+
+  ## Acceptance
+
+  - [ ] \`aida ultraplan <SPEC>\` includes \`## Comments\` section pulling the spec's comments (most recent first, configurable cap)
+  - [ ] Description budget is raised (4000 → 16000 chars, or per-section budgets that prioritise comments over generic boilerplate)
+  - [ ] \`--no-comments\` flag opts out (for callers who want the lean prompt)
+  - [ ] Token estimate reflects the new total accurately
+
+  ## Observed (2026-05-15)
+
+  Enriched EPIC-26 with a long comment naming prereqs shipped, anti-patterns, 8 design forks for the planner. Ran \`aida ultraplan EPIC-26 --stdout\` — comment not included, description truncated. Had to manually assemble a richer prompt at /tmp/epic-26-ultraplan-prompt.md for /ultraplan to consume.
+
+  ## Why this matters
+
+  \`aida ultraplan\` is one of the headline AIDA + Claude Code integrations (per OVERVIEW.md's horizontal/vertical bet). The whole point is that AIDA's structured spec context produces a better /ultraplan prompt than a free-text ask. When the most context-dense source (comments) is excluded, the integration's value proposition is weaker than it should be.
+
+  ## Related
+
+  - TASK-113 (aida ultraplan original) — this extends it
+  - EPIC-24 (living docs / aida doc) — comments-as-doc-seeds composes with this
+  - feedback_capture_doc_seeds.md (memory) — comments are where doc seeds accumulate; ultraplan should harvest them
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T16:36:03.534701968Z
+modified_at: 2026-05-15T16:36:03.534701968Z
+req_type: Task
+tags:
+- ai-collaboration
+- comments
+- enrichment
+- prompt-budget
+- ultraplan
