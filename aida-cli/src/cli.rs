@@ -3315,8 +3315,8 @@ pub enum Command {
         /// Scope (an EPIC / STORY / … id) to host in the first tab.
         /// Omit to open an empty shell.
         scope: Option<String>,
-        /// Skip crash-recovery re-attach of orphaned sessions on launch.
-        /// (STORY-5 wires the behaviour; the flag is stable from now.)
+        /// Skip crash-recovery re-attach of orphaned sessions on launch
+        /// and discard any stale `.aida/tui-state.json` (STORY-135).
         #[clap(long)]
         no_recover: bool,
     },

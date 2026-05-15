@@ -25312,9 +25312,9 @@ fn build_goal_clauses(
 }
 
 /// EPIC-26: launch the AIDA TUI shell. Gated behind the `tui` feature
-/// (default-off until STORY-6) — the `aida tui` subcommand stays visible
+/// (default-on as of STORY-137) — the `aida tui` subcommand stays visible
 /// in `--help` either way, but a binary built without the feature errors
-/// clearly instead of half-running. trace:STORY-132 | ai:claude
+/// clearly instead of half-running. trace:STORY-132 STORY-137 | ai:claude
 #[cfg(feature = "tui")]
 fn handle_tui_command(scope: Option<String>, no_recover: bool) -> Result<()> {
     aida_tui::run(aida_tui::TuiOptions { scope, no_recover })
@@ -25326,7 +25326,8 @@ fn handle_tui_command(scope: Option<String>, no_recover: bool) -> Result<()> {
 fn handle_tui_command(_scope: Option<String>, _no_recover: bool) -> Result<()> {
     anyhow::bail!(
         "the `aida tui` shell is not compiled into this binary — rebuild \
-         aida-cli with `--features tui` (EPIC-26 is default-off until STORY-6)"
+         aida-cli with the default features (the `tui` feature ships \
+         default-on as of STORY-137; a --no-default-features build omits it)"
     )
 }
 
