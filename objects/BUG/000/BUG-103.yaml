@@ -42,12 +42,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — recurring failure pattern. PR-24 macos failed during TASK-218 review; PR-28 macos failed during TASK-107 (this current incident). Same error signature. Confidence: pure infrastructure, not AIDA code.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:40:42.094102793Z
-modified_at: 2026-05-15T15:51:16.363266077Z
+modified_at: 2026-05-15T15:51:59.302650916Z
 req_type: Bug
 tags:
 - batch:small-wins
@@ -66,3 +66,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:51:16.363266077Z
   implemented_by: joe
+  completed_at: 2026-05-15T15:51:59.302650916Z
+  completion_sha: 3c40c123b8b52b7d45b00f73042ebffd2a3467e0
