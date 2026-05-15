@@ -3,12 +3,12 @@ spec_id: TASK-248
 agreed_id: TASK-248
 title: TermGuard::enter() leaves raw mode on if alt-screen entry fails
 description: 'Deep-pass finding from PR-41 review (STORY-109). aida-tui/src/term.rs TermGuard::enter() calls enable_raw_mode() then EnterAlternateScreen; if the alt-screen step errors, enter() returns Err before Self is constructed, so Drop never runs and raw mode is left enabled. Near-unreachable window but a real seam in the plan''s risk-#1 RAII-guarantees-restore claim. Fix: construct the guard (active:true) before entering alt-screen, or restore_terminal() on the error path.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T19:40:01.583169557Z
-modified_at: 2026-05-15T19:40:01.583169557Z
+modified_at: 2026-05-15T19:57:05.253231815Z
 req_type: Task
 tags:
 - epic-26
