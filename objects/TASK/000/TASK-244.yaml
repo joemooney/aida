@@ -73,12 +73,12 @@ description: |-
   ## Discovered via
 
   2026-05-15 — user observed: 'I thought I just exited an implementer session, not a reviewer session, we finished that session by opening a pr.' The shell PS1 said implementer but the only active AIDA session was reviewer — three role signals were disagreeing simultaneously.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T13:38:58.343338812Z
-modified_at: 2026-05-15T14:39:33.654474259Z
+modified_at: 2026-05-15T15:35:46.106552761Z
 req_type: Task
 tags:
 - batch:ux-polish
