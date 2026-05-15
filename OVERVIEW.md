@@ -38,6 +38,81 @@ For the implementation track + child STORYs see EPIC-26 in the requirements DB (
 
 ---
 
+## AIDA in the Claude ecosystem: vertical depth on horizontal ground
+
+A newcomer evaluating AIDA in mid-2026 has reasonable confusion to resolve: *Anthropic ships a lot. Claude Code already has so many capabilities. Why does AIDA exist?* This section names the breadth, names the structural relationship, and names the bet AIDA is making.
+
+### The Claude ecosystem in 2026
+
+Anthropic has shipped a striking density of primitives in the last six months. As of 2026-05-14, an incomplete inventory:
+
+| Primitive | What it provides |
+|---|---|
+| **Claude Code** (CLI + web + IDE extensions) | The substrate — a coding agent that runs in your terminal, in the cloud, or in your editor |
+| **`/ultraplan`** (research preview) | Cloud-based multi-agent plan generation (3 explorers + 1 critic); browser review surface; teleport-back-to-terminal |
+| **`/ultrareview`** (3 free uses then quota) | Cloud-based multi-agent code review |
+| **`/goal`** (2.1.139, 2026-05-12) | Set completion condition; loop until met; small evaluator decides; exits when done |
+| **`/schedule`** | Cadence-driven Claude invocations (nightly, morning, weekly) |
+| **Auto mode** (Shift+Tab in CLI) | Permission posture for long-running autonomous work |
+| **Agent view** | Visual observability for autonomous runs |
+| **Remote Control** | Browser-driven control of local Claude Code |
+| **MCP (Model Context Protocol)** | Open protocol for exposing tools + resources to Claude |
+| **Claude Code on the Web** | Cloud-hosted Claude Code sessions, github-integrated |
+
+The cadence is real and the surface is genuinely useful. A reasonable first impression: *"Anthropic is shipping the platform; do I need anything else?"*
+
+### Horizontal vs vertical: where AIDA sits
+
+The Claude ecosystem's primitives are deliberately **horizontal** — generic, composable, workflow-agnostic. `/goal` works for "all tests pass" the same way it works for "all dependencies upgraded." `/schedule` runs whatever you point it at. MCP exposes any tool you can describe in a schema. The substrate accommodates many workflows by holding no opinion about any specific one.
+
+AIDA goes **vertical** — opinionated about *one* domain: agent-collaboration on project intent. Stable spec IDs, typed relationships, code-to-spec trace comments, an MCP server that exposes a requirement graph, a queue + role + session model for human-agent workflow, a lifecycle for shipping. The horizontal primitives are the ground AIDA stands on; the vertical depth is what AIDA contributes.
+
+The composition is symbiotic, not competitive:
+
+| Anthropic provides (horizontal) | AIDA provides (vertical) |
+|---|---|
+| `/goal` — autonomous completion loop | The **vocabulary** for machine-checkable conditions (`/goal all specs tagged batch:X are Completed` is precise; `/goal make the queue empty` is vague and loops forever) |
+| `/ultraplan` — dense plan generation | The **persistence + graph linkage** (plans live in `docs/plans/`, pinned to specs, surfaced in session manifests, verified by `aida plan verify`) |
+| `/ultrareview` — multi-agent review | The **lifecycle hooks** (`/aida-review` walks each linked spec's acceptance; queue done flips status; auto-bump fires on merge) |
+| MCP — tool/resource protocol | The **content** served over MCP (requirements, relationships, history, comments) |
+| Claude Code — agent runtime | The **shared workspace** the agent collaborates on (graph + IDs + traces) |
+
+### Why this composition is likely to remain stable
+
+AIDA's bet is that **Anthropic has structural reasons to stay horizontal**, leaving vertical territory for tools like AIDA. Three reinforcing forces:
+
+1. **Verticals shrink the market.** A "simple project tracker built into Claude Code" would lock users into Anthropic's specific opinions about how to track work. Many users have existing tools (Linear, Jira, GitHub Issues, Notion); a built-in vertical would compete with all of them, reducing Claude Code's appeal as a substrate that fits any workflow. Horizontal primitives compose with whatever the user already uses.
+
+2. **The reusable primitives compound; the verticals don't.** `/goal` works for coding, ops, content review, data work, research workflows. A "Claude requirements graph" would only matter to teams using requirements graphs. The horizontal investment has higher ROI per Anthropic engineer-hour.
+
+3. **Competing with integration partners is a known platform anti-pattern.** Anthropic benefits from a rich ecosystem of integrations. Going too vertical means competing with the people building the ecosystem — which historically leads to platform decline. Anthropic's published interest in MCP (an open protocol explicitly for external integrations) signals they understand this.
+
+The exceptions are interesting: `/ultraplan` and `/ultrareview` ARE semi-vertical (they're opinionated about phases of work). But they're opinionated about *universal* phases (planning, reviewing) — every project plans and reviews. They're not opinionated about *what* you track or *how* your team structures intent. That stays open.
+
+### What this means for AIDA's roadmap
+
+The strategic implication: AIDA should keep doing the vertical depth that the horizontal primitives can't reach. Concretely:
+
+- **Don't compete with `/goal`** — compose with it via `aida goal-helper` ([TASK-242](docs/plans/)), which derives machine-checkable conditions from the requirement graph
+- **Don't compete with `/ultraplan`** — compose with it via `aida ultraplan SPEC` ([TASK-113](docs/plans/)) for prompt assembly + `/aida-import-plan` ([TASK-114](docs/plans/)) for output persistence
+- **Don't compete with `/ultrareview`** — compose with it via `/aida-review`'s spec-walk + adversarial-pass discipline (STORY-109, shipped) that uses requirement metadata `/ultrareview` doesn't know about
+- **Don't compete with Claude Code's session model** — extend it via worktree-isolated implementer sessions, role-pure boundaries, queue routing, the (planned) TUI that hosts Claude Code itself ([EPIC-26](docs/positioning/))
+- **Compete vertically only where the platform structurally won't go** — the graph, the IDs, the trace network, the queue/role/session opinions, the requirement lifecycle
+
+### The risk + how AIDA mitigates
+
+Two risks worth naming explicitly:
+
+**Risk 1: Anthropic ships a vertical that overlaps AIDA's core (a built-in requirement graph, a `/track` command, etc.).** Mitigation: AIDA's core value is the *composition* of graph + IDs + traces + MCP + queue + lifecycle. A built-in graph alone wouldn't replicate the trace network or the lifecycle. A built-in lifecycle alone wouldn't have the graph. AIDA's moat is the multi-layer stack, not any one feature.
+
+**Risk 2: AIDA's CLI surface keeps growing as Anthropic adds primitives, leading to confused users.** Mitigation: the Trojan-horse TUI positioning ([EPIC-26](docs/positioning/)) collapses the surface back into one coherent visible product. *"You see a TUI wrapping Claude Code. The platform is what you discover."*
+
+### Summary
+
+AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the substrate; AIDA composes the substrate into a specific workflow domain (agent-collaboration on project intent). The bet stays sound as long as Anthropic stays horizontal, and Anthropic's structural incentives push them to stay horizontal. The TUI ([EPIC-26](docs/positioning/)) is the visible product; the platform is the vertical depth; the Claude ecosystem is the ground both stand on.
+
+---
+
 ## Architecture
 
 ### Storage (EPIC-1-001) — git-canonical by default
