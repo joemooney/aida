@@ -99,12 +99,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user observing the cluster-mode-drain state (TASK-92/93/96 at Done, in-flight on epic-24-2, no PR yet): 'I guess as an observer I may want git related information on any task like the commits or the files changed or the diff or the branch/worktree?' Yes — that's exactly the kind of observability gap that surfacing in aida show closes.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T04:20:55.937732251Z
-modified_at: 2026-05-15T07:24:49.831332360Z
+modified_at: 2026-05-15T07:33:32.051559268Z
 req_type: Task
 tags:
 - aida-show
@@ -121,3 +121,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T04:20:58.209106417Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T07:33:32.051559268Z
+  implemented_by: joe
