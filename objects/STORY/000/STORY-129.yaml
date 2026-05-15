@@ -1,0 +1,82 @@
+id: 019e298c-c29e-7633-9649-577faefb9ec6
+spec_id: STORY-129
+agreed_id: STORY-129
+title: 'aida merge PR-N: dedicated verb for merge + post-merge orchestration (supersedes earlier ''don''t add merge'' decision)'
+description: |-
+  Earlier in 2026-05-14 STORY-115's filing (git-mirror verb surface), I put 'aida merge' on the 'intentional non-mirror' list with the reasoning that AIDA reacts to PR merges via auto-bump, doesn't initiate them. User pushed back during overnight wrap-up: 'why is there not any aida command, why gh pr merge 28 --squash? Is aida merge PR-28 something?'
+
+  The earlier decision was wrong. aida merge has real value-add over raw gh pr merge:
+
+  ## What aida merge PR-N would do (single command)
+
+  1. Verify the PR's CI rollup is green; refuse with clear error if red (composes with TASK-111 CI-aware semantics)
+  2. Verify all linked specs (from commit subjects + 'About: PR-N' fields) are at Done status; warn if any are still InProgress
+  3. Run gh pr merge N --squash (configurable via aida.toml [merge] strategy = squash|rebase|merge)
+  4. After merge: run aida pull to trigger auto-bump
+  5. Verify auto-bump fired: query each linked spec, confirm Done → Completed transition
+  6. Surface clear next-steps: 'PR-N merged; X specs auto-bumped; review-story STORY-Y also auto-bumped; queue still has Z items'
+
+  vs raw gh pr merge which is just step 3. Six steps the user otherwise does manually become one.
+
+  ## Shape
+
+  aida merge PR-N                       — full pipeline (default squash)
+  aida merge PR-N --rebase              — use rebase strategy
+  aida merge PR-N --merge               — use merge commit strategy
+  aida merge PR-N --dry-run             — show what would happen
+  aida merge PR-N --no-pull             — skip the post-merge aida pull
+  aida merge PR-N --force               — bypass CI-green check (with prompt)
+  aida merge HEAD                       — infer PR from current branch (if any)
+
+  ## Why this is now a STORY not just a TASK
+
+  Composing the verb surface affects multiple existing TASKs:
+  - TASK-111 (CI-aware session end): aida merge reuses the CI-detection helper
+  - TASK-220 (aida status): could include 'mergeable PRs you own' as a section
+  - TASK-217 (status-aware error in aida queue work): Done case should suggest aida merge PR-N (not gh pr merge as I suggested in TASK-240)
+  - TASK-240 (TASK-217 followup, solo-dev merge guidance): supplanted by this STORY — if aida merge exists, the status-aware error can say 'run aida merge PR-N' instead of 'gh pr merge N --squash'
+  - BUG-101 (post-merge next-steps missing aida pull): supplanted — aida merge bakes the aida pull in
+
+  ## Composes with / supersedes
+
+  - STORY-115 (git-mirror verb surface): this STORY OVERTURNS STORY-115's 'merge on intentional non-mirror list' decision. Update STORY-115's description to reflect.
+  - TASK-240 (filed minutes ago): supplanted — if aida merge exists, status-aware error suggests it directly.
+  - BUG-101 (filed yesterday): partially supplanted — aida merge auto-runs aida pull, so the next-steps gap closes.
+  - /aida-review skill: should call aida merge PR-N when its verdict is approve + CI green (rather than calling gh pr merge directly).
+
+  ## What this is NOT
+
+  - NOT replacing gh pr merge — users always have the raw command available. aida merge wraps it with AIDA-aware extras.
+  - NOT requiring gh — graceful degrade when gh is missing (skip the gh-specific steps; do what's possible with aida-side).
+  - NOT auto-merging without user signal — aida merge is run on demand. Auto-merge behavior (e.g., if CI just turned green) lives in /aida-review skill, not in aida merge itself.
+
+  ## Acceptance
+
+  - [ ] aida merge PR-N subcommand implemented with the 6-step pipeline
+  - [ ] --rebase / --merge / --dry-run / --no-pull / --force flags
+  - [ ] CI-red refusal (composes with TASK-111 helper)
+  - [ ] Post-merge aida pull is included (composes with BUG-101's missing-step concern)
+  - [ ] auto-bump verification step surfaces specs that didn't bump (composes with TASK-226's reconcile-status as fallback)
+  - [ ] aida.toml [merge] strategy configurable; default squash
+  - [ ] /aida-review skill updated to call aida merge PR-N instead of gh pr merge directly
+  - [ ] TASK-240 marked superseded; status-aware error message updated to suggest aida merge
+  - [ ] STORY-115's description updated: aida merge MOVED from 'intentional non-mirror' list to 'shipped'
+
+  ## Discovered via
+
+  2026-05-14 — user reviewed PR-28, queue-done'd the review story, then asked 'why is there not any aida command, why gh pr merge 28 --squash? I didn't have to do that before, maybe I did? Is aida merge PR-28 something?' The reviewer agent USUALLY merges autonomously, but the CI-red interruption + rerun broke that flow today, leaving the user to merge manually. The friction surfaces the gap that aida merge would fill — both for the manual path (user types one command) and for the agent path (/aida-review calls aida merge cleanly).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T02:52:31.262954456Z
+modified_at: 2026-05-15T02:52:31.262954456Z
+req_type: Story
+tags:
+- gh
+- merge
+- pr
+- solo-dev
+- supersedes-story-115-decision
+- verb
+- workflow
