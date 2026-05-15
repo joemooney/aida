@@ -1,0 +1,60 @@
+id: 019e2934-e0e1-7c23-851f-54a7a04f74bf
+spec_id: TASK-237
+agreed_id: TASK-237
+title: 'aida session list: prefer agreed-id (short form) over long-form node-aware spec ID in SPEC column'
+description: |-
+  When aida session list displays the SPEC column for a session, it shows whatever spec ID was stored when the session was created. For sessions created BEFORE the spec went through aida db merge-gate (which assigns the short agreed-id), this is the long-form node-aware ID like FR-1-042.
+
+  After merge-gate runs, the same spec also has an agreed-id like FR-42. Both forms resolve to the same UUID. But aida session list keeps showing the long form because the session record was stored before merge-gate.
+
+  ## Observed 2026-05-14
+
+    aida session list --all
+     ID        AGE     ROLE         SPEC      WORKTREE      TITLE
+    ● 1bf450af  37s     implementer  FR-1-042  aida @ main   Clarify CLI command naming convention
+
+  The spec 'FR-1-042' is identical to its agreed-id (some short form like FR-42 after merge-gate) but display shows the long form, which is harder to scan + inconsistent with how other AIDA surfaces show specs (aida list, aida show, aida history all prefer the short agreed-id where one exists).
+
+  ## Proposed fix
+
+  When rendering the SPEC column in aida session list:
+  1. Try resolving the stored value to a Requirement
+  2. If found and the Requirement has both spec_id and agreed_id, display the agreed_id (short form)
+  3. If only spec_id exists (no agreed_id yet), display the spec_id (long form) — this is correct fallback
+  4. If the stored value doesn't resolve to a current Requirement (spec was deleted or never existed), display as-is with maybe a '(unresolved)' suffix
+
+  ## Composes with
+
+  - TASK-236 (session list title staleness) — sibling display-quality issue on the same command; both should be fixed in the same skill/CLI revision pass
+  - TASK-39 (case-insensitive SPEC-ID lookup) — already shipped; provides the resolution logic this TASK reuses
+  - aida history — already does this kind of resolution; reuse its display helper
+
+  ## Why low priority
+
+  The current display is correct (it's the spec ID as stored), just not normalized. Users can run aida show FR-1-042 to see both forms. Quality-of-life polish, not blocking.
+
+  ## Acceptance
+
+  - [ ] aida session list resolves stored SPEC values to current Requirements
+  - [ ] Renders agreed-id (short form) when available; falls back to spec_id (long form) otherwise
+  - [ ] Unresolvable spec values render with a clear suffix '(unresolved)' or similar
+  - [ ] aida session list --help notes the resolution behavior
+  - [ ] Tests cover: short-form-available, long-form-only (pre-merge-gate), unresolvable spec, and the legacy case where session was created with a now-deleted spec
+
+  ## Discovered via
+
+  2026-05-14 — user observed 'FR-1-042' in aida session list output and asked 'what is going on'. The long form was unfamiliar; user expected the short agreed-id consistent with other aida surfaces. Filed as session-list display polish.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T01:16:31.841526860Z
+modified_at: 2026-05-15T01:16:31.841526860Z
+req_type: Task
+tags:
+- agreed-id
+- display
+- long-form
+- session-list
+- spec-id
+- ux
