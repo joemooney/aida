@@ -90,6 +90,8 @@ Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Us
 
 **Verify before relying on a plan.** `aida plan verify docs/plans/<file>.md` (TASK-93) lints a plan against the template: it reports drifted `path:line` refs (with the corrected line, located by symbol name), missing files, and absent required sections (Critical Files, Verification, Followups are hard requirements). It exits non-zero on any missing file or section, so it works as a pre-commit hook on `docs/plans/`. `--fix` rewrites drifted refs in place; `--quiet` drops the per-check OK lines. Refs inside `<!-- -->` comments and fenced code blocks are skipped. trace:TASK-93
 
+**Followups get filed, not forgotten.** When a spec reaches Done (`aida queue done`) or Completed (the STORY-86 auto-bump on merge), AIDA parses the `## Followups` section of any plan that owns that spec and offers to file each bullet as a child TASK. `aida queue done` prompts per bullet (`[y/N/skip]`); `--yes` and the non-interactive auto-bump path file all. Idempotent — a `[aida:followups]` marker comment on the spec records what was filed and declined, so whichever path runs first wins and declines are never re-filed. Opt out with `AIDA_AUTO_FOLLOWUPS=false`. trace:TASK-96
+
 ## AIDA-developer workflow (only when working on AIDA itself)
 
 ```bash

@@ -13515,6 +13515,301 @@ fn parse_spec_id_from_add_output(stdout: &str) -> Option<String> {
     None
 }
 
+// ============================================================================
+// TASK-96 — plan Followups extraction. When a spec reaches Done (`aida queue
+// done`) or Completed (the STORY-86 auto-bump), parse the `## Followups`
+// section of any matching docs/plans/ file and offer to file each bullet as
+// a child TASK so out-of-scope items don't get forgotten.
+// ============================================================================
+
+/// Comment prefix written to a spec once its plan followups have been
+/// processed. Both extraction paths check for it first, so whichever runs
+/// first (`queue done` interactively, or the auto-bump non-interactively)
+/// wins and the other skips — declines are never silently re-filed.
+const FOLLOWUPS_MARKER: &str = "[aida:followups]";
+
+/// True when followup automation is disabled via `AIDA_AUTO_FOLLOWUPS`
+/// (mirrors the `AIDA_AUTO_BUMP` opt-out shape).
+fn auto_followups_disabled() -> bool {
+    matches!(
+        std::env::var("AIDA_AUTO_FOLLOWUPS")
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "false" | "0" | "no" | "off"
+    )
+}
+
+/// Find the docs/plans/ files that *belong to* `spec_id` — the id appears
+/// in the `# Plan:` title line or the `Specs:` header line. Cross-references
+/// in a `## Related` section don't count (that plan owns a different spec).
+fn find_plan_files_for_spec(
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Vec<std::path::PathBuf> {
+    let plans_dir = project_root.join("docs/plans");
+    let Ok(entries) = std::fs::read_dir(&plans_dir) else {
+        return Vec::new();
+    };
+    let needle = regex::Regex::new(&format!(r"\b{}\b", regex::escape(spec_id)));
+    let Ok(needle) = needle else {
+        return Vec::new();
+    };
+    let mut hits = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        // Only the header zone (title + `Specs:` line) confers ownership.
+        let owns = content
+            .lines()
+            .take(15)
+            .any(|l| (l.starts_with("# ") || l.starts_with("Specs:")) && needle.is_match(l));
+        if owns {
+            hits.push(path);
+        }
+    }
+    hits.sort();
+    hits
+}
+
+/// Parse the `## Followups` section of a plan: collect the column-0
+/// `- `/`* ` bullets until the next `##` header. Leading marker and a
+/// trailing period are stripped; placeholder/empty bullets are dropped.
+fn parse_plan_followups(content: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut in_section = false;
+    let mut in_fence = false;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        if let Some(h) = trimmed.strip_prefix("## ") {
+            in_section = h.to_ascii_lowercase().contains("followup");
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        // Column-0 bullets only — nested detail bullets are not followups.
+        let bullet = line.strip_prefix("- ").or_else(|| line.strip_prefix("* "));
+        if let Some(b) = bullet {
+            let text = b.trim().trim_end_matches('.').trim().to_string();
+            if text.is_empty() || text.contains("<") || text.starts_with("file as") {
+                continue;
+            }
+            out.push(text);
+        }
+    }
+    out
+}
+
+/// Self-invoke `aida add` to file one followup as a child TASK of
+/// `parent_spec`. Always passes `--force-parent` — the parent is Done or
+/// Completed by the time we file, and we explicitly want the children
+/// regardless. Returns the new spec id on success.
+fn aida_subcmd_add_followup_task(
+    project_root: &std::path::Path,
+    parent_spec: &str,
+    title: &str,
+) -> Option<String> {
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let out = std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args([
+            "add",
+            "--type",
+            "task",
+            "--status",
+            "approved",
+            "--priority",
+            "low",
+            "--parent",
+            parent_spec,
+            "--force-parent",
+            "--title",
+            title,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        eprintln!(
+            "{} followup `aida add` failed: {}",
+            "Warning:".yellow().bold(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        return None;
+    }
+    parse_spec_id_from_add_output(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Extract the Followups section of any plan owned by `spec_id` and file
+/// the accepted bullets as child TASKs. Idempotent via [`FOLLOWUPS_MARKER`].
+///
+/// `interactive` drives a per-bullet `[y/N/skip]` prompt; when false (the
+/// auto-bump / `--yes` path) every bullet is filed. Best-effort throughout —
+/// any failure logs a warning and returns `Ok(())` so it never breaks the
+/// `queue done` / `aida pull` flow it hangs off. trace:TASK-96 | ai:claude
+fn extract_plan_followups(
+    storage: &Storage,
+    project_root: &std::path::Path,
+    spec_id: &str,
+    display_id: &str,
+    interactive: bool,
+) -> Result<()> {
+    if auto_followups_disabled() {
+        return Ok(());
+    }
+    let store = storage.load()?;
+    let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
+        return Ok(());
+    };
+    // Already processed — whichever path ran first owns the outcome.
+    if req
+        .comments
+        .iter()
+        .any(|c| c.content.starts_with(FOLLOWUPS_MARKER))
+    {
+        return Ok(());
+    }
+
+    let plan_files = find_plan_files_for_spec(project_root, spec_id);
+    if plan_files.is_empty() {
+        return Ok(());
+    }
+    // Collect + dedupe followup bullets across every owning plan file.
+    let mut followups: Vec<String> = Vec::new();
+    let mut sources: Vec<String> = Vec::new();
+    for path in &plan_files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let parsed = parse_plan_followups(&content);
+        if parsed.is_empty() {
+            continue;
+        }
+        let rel = path
+            .strip_prefix(project_root)
+            .unwrap_or(path)
+            .display()
+            .to_string();
+        sources.push(rel);
+        for f in parsed {
+            if !followups.contains(&f) {
+                followups.push(f);
+            }
+        }
+    }
+    if followups.is_empty() {
+        return Ok(());
+    }
+
+    println!();
+    println!(
+        "{} {} plan followup(s) found for {} ({})",
+        "→".cyan().bold(),
+        followups.len(),
+        display_id.bold(),
+        sources.join(", ").dimmed()
+    );
+
+    let mut filed: Vec<(String, String)> = Vec::new(); // (new_spec, title)
+    let mut declined: Vec<String> = Vec::new();
+    let mut skip_rest = false;
+
+    for followup in &followups {
+        let accept = if skip_rest {
+            false
+        } else if interactive {
+            eprint!("  File as TASK? [y/N/skip] {}\n  > ", followup.bold());
+            use std::io::Write;
+            let _ = std::io::stderr().flush();
+            let mut answer = String::new();
+            if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+                skip_rest = true;
+                false
+            } else {
+                match answer.trim().to_ascii_lowercase().as_str() {
+                    "y" | "yes" => true,
+                    "s" | "skip" => {
+                        skip_rest = true;
+                        false
+                    }
+                    _ => false,
+                }
+            }
+        } else {
+            true
+        };
+
+        if accept {
+            match aida_subcmd_add_followup_task(project_root, spec_id, followup) {
+                Some(new_id) => filed.push((new_id, followup.clone())),
+                None => declined.push(followup.clone()),
+            }
+        } else {
+            declined.push(followup.clone());
+        }
+    }
+
+    // Marker comment — records the outcome so re-runs and the other
+    // extraction path both skip, and the user can see what was declined.
+    let mut marker = format!("{} extracted from {}", FOLLOWUPS_MARKER, sources.join(", "));
+    if filed.is_empty() {
+        marker.push_str("\nfiled 0 task(s)");
+    } else {
+        let ids: Vec<&str> = filed.iter().map(|(id, _)| id.as_str()).collect();
+        marker.push_str(&format!(
+            "\nfiled {} task(s): {}",
+            filed.len(),
+            ids.join(", ")
+        ));
+    }
+    if !declined.is_empty() {
+        marker.push_str(&format!("\ndeclined {}:", declined.len()));
+        for d in &declined {
+            marker.push_str(&format!("\n  - {d}"));
+        }
+    }
+    let now = chrono::Utc::now();
+    let author = get_default_author();
+    let req_uuid = req.id;
+    let _ = storage.update_atomically(|s| {
+        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_uuid) {
+            r.comments
+                .push(Comment::new(author.clone(), marker.clone()));
+            r.modified_at = now;
+        }
+    });
+
+    if filed.is_empty() {
+        println!("  {} no followups filed", "·".dimmed());
+    } else {
+        for (id, title) in &filed {
+            println!("  {} {} {}", "✓".green(), id.bold(), title.dimmed());
+        }
+    }
+    if !declined.is_empty() {
+        println!(
+            "  {} {} followup(s) not filed — logged on {} for later review",
+            "·".dimmed(),
+            declined.len(),
+            display_id
+        );
+    }
+
+    Ok(())
+}
+
 /// Best-effort `aida rel add <from> <to> --type implements` (and the
 /// matching reverse `implemented-by` so `aida show <spec>` surfaces the
 /// review story). Custom relation types don't have an `inverse()` mapping
@@ -17063,6 +17358,66 @@ mod statusline_tests {
         // Un-backticked `fn name` is still caught.
         let syms = plan_symbols_on_line("the fn verify_plan entry point");
         assert!(syms.contains(&"verify_plan".to_string()));
+    }
+
+    /// TASK-96: the Followups parser picks up column-0 bullets in the
+    /// `## Followups` section, strips a trailing period, and stops at the
+    /// next `##` header.
+    #[test]
+    fn plan_followups_parse_basic() {
+        let plan = "\
+# Plan: STORY-1
+
+## Risks + gotchas
+
+- This bullet is in Risks, not Followups.
+
+## Followups
+
+- Reverted-commit handling.
+- Statusline color for the new state
+  - a nested detail bullet that is not its own followup
+- Wire up the metrics dashboard.
+
+## Related
+
+- See also: nothing.
+";
+        let followups = parse_plan_followups(plan);
+        assert_eq!(
+            followups,
+            vec![
+                "Reverted-commit handling".to_string(),
+                "Statusline color for the new state".to_string(),
+                "Wire up the metrics dashboard".to_string(),
+            ]
+        );
+    }
+
+    /// TASK-96: a plan with no Followups section yields nothing, and a
+    /// fenced code block inside the section is not mined for bullets.
+    #[test]
+    fn plan_followups_parse_edges() {
+        // No Followups header at all.
+        let no_section = "# Plan: X\n\n## Approach\n\n- not a followup\n";
+        assert!(parse_plan_followups(no_section).is_empty());
+
+        // Fenced block inside the section contributes no bullets.
+        let fenced = "\
+## Followups
+
+- real followup
+
+```bash
+- this is shell output, not a followup
+```
+
+## Related
+";
+        assert_eq!(
+            parse_plan_followups(fenced),
+            vec!["real followup".to_string()]
+        );
     }
 
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
@@ -24160,6 +24515,15 @@ fn auto_bump_done_to_completed(
     // ── Step 6: activity log ──
     for (spec_id, _) in &confirmed {
         record_role_activity(spec_id, "auto-completed");
+    }
+
+    // ── Step 7: plan followups ── TASK-96: file followup TASKs for each
+    // just-merged spec. Non-interactive (this runs inside `aida pull`);
+    // idempotent via the followups marker, so specs already handled at
+    // `aida queue done` time are skipped. Best-effort.
+    // trace:TASK-96 | ai:claude
+    for (spec_id, _) in &confirmed {
+        let _ = extract_plan_followups(storage, project_root, spec_id, spec_id, false);
     }
 
     // Suppress unused-variable warning when the helper is called on a
@@ -34570,6 +34934,22 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 "  ({})",
                 "run `aida queue next` to see what's next".dimmed()
             );
+
+            // TASK-96: offer to file the plan's Followups bullets as child
+            // TASKs. Interactive prompt unless `--yes` (then file all).
+            // Best-effort — a failure here never blocks `queue done`.
+            // trace:TASK-96 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                if let Err(e) =
+                    extract_plan_followups(storage, &project_root, spec_id, display_id, !yes)
+                {
+                    eprintln!(
+                        "{} followup extraction skipped: {}",
+                        "Warning:".yellow().bold(),
+                        e
+                    );
+                }
+            }
 
             // STORY-106: workflow hint when the queue is now empty for the
             // active role+scope. Best-effort: any state-detection failure

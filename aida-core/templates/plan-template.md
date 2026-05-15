@@ -93,11 +93,13 @@ aida add --title "smoke" --type story --status approved
 aida show STORY-X | grep -i status     # expect: Completed
 ```
 
-## Followups (file as TASKs at completion time)
+## Followups
 
-Out-of-scope items the implementer should NOT do now but should file at
-queue-done time. Lighter than child requirements (which block) — these are
-post-merge cleanup.
+Out-of-scope items the implementer should NOT do now. Lighter than child
+requirements (which block) — these are post-merge cleanup. `aida queue done`
+parses this section and offers to file each bullet below as a child TASK
+(the auto-bump does the same on merge), so keep each bullet to one
+TASK-title-sized line.
 
 - Reverted-commit handling.
 - Statusline color for new state.
