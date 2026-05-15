@@ -3,12 +3,12 @@ spec_id: STORY-134
 agreed_id: STORY-134
 title: AIDA TUI multi-tab session management
 description: 'Session-as-tab: host N Claude sessions concurrently, one focused (soft cap MAX_TABS=4, config [tui] max_tabs). TabManager with add/remove/next/prev/switch_to and wrap/clamp index math; the status strip lists tabs. New tab via an ''aida queue work'' picker; resume a historical Claude conversation via TASK-112''s ''aida queue work --resume'' (session list from session::list_scope_sessions / format_session_line). See docs/plans/2026-05-15-epic-26-tui.md (Files: aida-tui/src/tab.rs, app.rs).'
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:38:41.853784850Z
-modified_at: 2026-05-15T17:38:41.853784850Z
+modified_at: 2026-05-15T22:27:10.779324742Z
 req_type: Story
 tags:
 - tui
@@ -16,3 +16,7 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-05-15T17:38:44.046313259Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T22:27:10.779324742Z
+  implemented_by: joe
