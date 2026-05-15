@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:39:08.070614834Z
-modified_at: 2026-05-15T22:57:25.332383692Z
+modified_at: 2026-05-15T22:58:42.178147761Z
 req_type: Story
 tags:
 - docs
@@ -21,6 +21,12 @@ relationships:
   target_id: 019e2ddb-d51d-7210-a7fa-0363a9b4862b
   created_at: 2026-05-15T22:57:25.332376953Z
   created_by: joe
+comments:
+- id: 019e2ddd-0d82-75e3-b981-ff5bfc888013
+  author: joe
+  content: 'Implemented via PR #43 (commit 82ebb8f9): docs/tui/README.md canonical reference + flipped aida-cli tui feature default-on; OVERVIEW/CLAUDE cross-links. Tests: 737/737 workspace green; cargo fmt + clippy clean.'
+  created_at: 2026-05-15T22:58:42.178147761Z
+  modified_at: 2026-05-15T22:58:42.178147761Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T22:51:19.384245229Z
