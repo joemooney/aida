@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T19:40:01.583169557Z
-modified_at: 2026-05-15T20:07:50.989556920Z
+modified_at: 2026-05-15T20:07:53.760849244Z
 req_type: Task
 tags:
 - epic-26
@@ -21,6 +21,17 @@ relationships:
   target_id: 019e2d40-9544-7b02-b4a6-23f34ac98d50
   created_at: 2026-05-15T20:07:50.989543650Z
   created_by: joe
+comments:
+- id: 019e2d40-aca0-7183-9ad3-b46161652da9
+  author: joe
+  content: |-
+    Implemented via PR #42 (commit c92ae6c4):
+
+    - TermGuard::enter() now constructs the guard (active: true) the instant raw mode is enabled, before the fallible EnterAlternateScreen call — an alt-screen failure unwinds through Drop and restore_terminal() disables raw mode.
+
+    Test status: 15/15 aida-tui tests green; build/clippy/fmt clean.
+  created_at: 2026-05-15T20:07:53.760849244Z
+  modified_at: 2026-05-15T20:07:53.760849244Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T19:57:38.296280203Z
