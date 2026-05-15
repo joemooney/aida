@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:28:23.693582217Z
-modified_at: 2026-05-15T06:28:23.693582217Z
+modified_at: 2026-05-15T06:44:07.988630745Z
 req_type: Task
 tags:
 - autonomous-agents
@@ -90,3 +90,54 @@ relationships:
 - rel_type: Child
   target_id: 019e26ea-2e0d-7102-8349-2afc3a7c0917
   created_at: 2026-05-15T06:28:25.703651662Z
+comments:
+- id: 019e2a60-ceb4-79f3-ae12-728368121f98
+  author: joe
+  content: |-
+    Refinements from the Anthropic /goal cheatsheet (Buildur, 2026-05-14):
+
+    ## Hard constraints to honor
+
+    1. **4,000-char condition limit** — generated conditions must stay under this. Buildur emphasizes 'plenty of room, write precise multi-part conditions with stated checks and constraints that matter.' So: be GENEROUS with verification specificity, not minimal.
+
+    2. **Evaluator only reads the transcript** — the Haiku evaluator does NOT have file-system access. It only sees the conversation transcript. So conditions must be verifiable by running a command whose output appears in the transcript. Bad: 'cache.db says all status=Completed.' Good: 'aida list --status -completed returns empty.'
+
+    3. **Turn/time bounds for safety** — '/goal ... or stop after 20 turns' is supported. AIDA's goal-helper should ALWAYS emit a turn bound by default (configurable). Defense against vague-condition infinite loops.
+
+    ## Good output shape (4-part condition)
+
+      /goal <multi-clause primary condition>
+        AND <verify command 1 returns expected output>
+        AND <verify command 2 returns expected output>
+        OR stop after <N> turns
+
+    Example for batch drain:
+
+      /goal all specs tagged batch:plan-tooling are status Completed
+        (verify: 'aida list --tag batch:plan-tooling --status approved' returns empty
+         AND 'aida db reconcile-status --dry-run' reports no eligible flips
+         AND 'aida queue list --batch plan-tooling' returns empty)
+        OR stop after 30 turns
+
+    ## Integration with headless invocation
+
+    The cheatsheet documents 'claude -p "/goal <condition>"' for non-interactive use — loops to completion in one invocation. aida goal-helper should support emitting in two formats:
+
+      aida goal --batch X                  → prints the condition for paste into /goal
+      aida goal --batch X --invoke         → prints 'claude -p "/goal CONDITION"' for direct shell exec
+      aida goal --batch X --invoke --schedule "0 4 * * *"  → wraps in /schedule for cadence
+
+    ## Gracefully degrade when /goal unavailable
+
+    /goal requires trusted workspace + disableAllHooks NOT in policy. aida goal-helper should detect via 'claude --version' or similar that /goal is available; if not, fall back to printing the condition + workflow guidance ('paste into an interactive Claude Code session in a trusted workspace').
+
+    ## Updated acceptance additions
+
+    - [ ] Generated conditions respect 4000-char limit (warn if approaching)
+    - [ ] Verification clauses always use commands whose output appears in transcript (no side-state references)
+    - [ ] Default turn bound (e.g. --max-turns 20) emitted unless user passes --no-bound
+    - [ ] --invoke flag emits 'claude -p ...' invocation
+    - [ ] --schedule CRON emits cron-compatible 'claude -p ...' line
+    - [ ] Graceful degradation when /goal unavailable (trust gate, hooks disabled, etc.)
+  created_at: 2026-05-15T06:44:07.988630745Z
+  modified_at: 2026-05-15T06:44:07.988630745Z
