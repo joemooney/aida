@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T02:52:31.262954456Z
-modified_at: 2026-05-15T02:57:20.505598239Z
+modified_at: 2026-05-15T02:57:21.577569502Z
 req_type: Story
 tags:
 - gh
@@ -84,3 +84,21 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T02:52:33.405029566Z
+comments:
+- id: 019e2991-30a9-7721-8f29-6d8ae9bddab8
+  author: joe
+  content: |-
+    Rejected 2026-05-14 based on stepped-back analysis: the autonomous merge flow was NOT actually broken. PR-28's autonomous merge DID fire (gh confirmed 'already merged' when user ran gh pr merge manually). User confusion was timing/visibility ('the autonomous merge happened but I didn't see it'), not a missing command.
+
+    Rejecting because:
+
+    1. Premised on autonomous flow being broken; verified it wasn't (gh pr merge 28 returned 'already merged')
+    2. Even if autonomous flow had been broken, the right fix would be narrower ('/aida-review CI-resume after rerun') not a new top-level verb
+    3. The 'different workflows' concerns are still valid: aida merge as a recommended verb assumes solo / trusted-author / self-merge patterns, which doesn't match auto-merge-label workflows, CODEOWNERS-required workflows, OSS-maintainer flows, GitOps promotion flows, etc.
+    4. The 6 'value-add' steps I claimed in the original description weren't all merge-related — verify CI = its own command, verify spec states = aida show, post-merge aida pull = already a verb, etc. Bundling them under aida merge is doing more than the verb says.
+
+    The earlier 'aida merge on intentional non-mirror list' decision in STORY-115 stands. AIDA composes with merge, doesn't initiate it. The agent-collaboration layer (graph, IDs, traces, MCP, queue) is the value; not wrapping every git command.
+
+    What MIGHT be worth filing instead (low priority): a visibility improvement so when the autonomous flow merges a PR while the user isn't watching, there's a clear surface that records 'PR-28 merged at SHA by reviewer session SID' in some session log the user can scan. But that's a different TASK and probably overkill given aida pull already surfaces the merge state on next sync.
+  created_at: 2026-05-15T02:57:21.577569502Z
+  modified_at: 2026-05-15T02:57:21.577569502Z
