@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:19.299218300Z
-modified_at: 2026-05-14T15:21:26.526962270Z
+modified_at: 2026-05-15T00:33:43.622499867Z
 req_type: Task
 tags:
 - aida-review
@@ -53,6 +53,21 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T06:56:21.576163493Z
+comments:
+- id: 019e290d-b0c6-7d41-9855-b05446ff3c90
+  author: joe
+  content: |-
+    Implemented via PR-27 (commit 5729f68): https://github.com/joemooney/aida/pull/27
+
+    - /aida-review step 8 (request-changes path) now detects own-PR via `gh pr view --json author` + `gh api user`
+    - When PR author == current gh user: skips `gh pr review --request-changes` (which GitHub blocks with `Can not request changes on your own pull request`) and surfaces a one-line info note
+    - When author ≠ current user: posts the formal review with a body pointing at the consolidated comment from step 7
+    - When gh isn't on PATH or lookup fails: degrades to comment-only with an info note (doesn't block the workflow)
+    - The consolidated review comment from step 7 is the actual signal in every branch, so the request-changes path stays effective regardless of which detection branch runs
+
+    Test status: 609/609 workspace tests green (skill template change; no code logic to test)
+  created_at: 2026-05-15T00:33:43.622499867Z
+  modified_at: 2026-05-15T00:33:43.622499867Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:21:26.526962270Z
