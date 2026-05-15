@@ -25,12 +25,12 @@ description: |-
   - TASK-113 (aida ultraplan original) — this extends it
   - EPIC-24 (living docs / aida doc) — comments-as-doc-seeds composes with this
   - feedback_capture_doc_seeds.md (memory) — comments are where doc seeds accumulate; ultraplan should harvest them
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T16:36:03.534701968Z
-modified_at: 2026-05-15T16:36:03.534701968Z
+modified_at: 2026-05-15T22:38:53.829537385Z
 req_type: Task
 tags:
 - ai-collaboration
@@ -42,3 +42,7 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-05-15T16:36:05.655179884Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T22:38:53.829537385Z
+  implemented_by: joe
