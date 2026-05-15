@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:38:41.853784850Z
-modified_at: 2026-05-15T22:57:35.822544483Z
+modified_at: 2026-05-15T22:58:36.540577040Z
 req_type: Story
 tags:
 - tui
@@ -20,6 +20,12 @@ relationships:
   target_id: 019e2ddb-d51d-7210-a7fa-0363a9b4862b
   created_at: 2026-05-15T22:57:35.822529141Z
   created_by: joe
+comments:
+- id: 019e2ddc-f77c-75c1-9822-731229f6b10c
+  author: joe
+  content: 'Implemented via PR #43 (commit 4285685d): prefix-n new-session picker — start queued specs fresh or resume recorded conversations in new tabs. Tests: 737/737 workspace green; cargo fmt + clippy clean.'
+  created_at: 2026-05-15T22:58:36.540577040Z
+  modified_at: 2026-05-15T22:58:36.540577040Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T22:27:10.779324742Z
