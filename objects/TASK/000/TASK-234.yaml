@@ -72,10 +72,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:24:37.543192216Z
-modified_at: 2026-05-14T14:24:37.543192216Z
+modified_at: 2026-05-15T06:41:41.204551161Z
 req_type: Task
 tags:
 - awaiting-merge
+- batch:display-polish
 - done
 - next-action
 - queue
