@@ -7,17 +7,22 @@
 //! out of a live session to a status overlay, takes one-keystroke
 //! actions, drops back into the *same* conversation.
 //!
-//! STORY-132 (this crate's first slice) delivers the shell: a PTY host, a
-//! bottom status strip, prefix-key routing, and a clean prefix-key exit.
-//! The status overlay (STORY-133), multi-tab management (STORY-3), and
-//! crash recovery (STORY-5) build on these primitives.
+//! STORY-132 (this crate's first slice) delivered the shell: a PTY host,
+//! a bottom status strip, prefix-key routing, and a clean prefix-key
+//! exit. STORY-133 added the `prefix o` status overlay; STORY-134 the
+//! `prefix n` multi-tab picker; STORY-135 crash recovery via
+//! `.aida/tui-state.json`.
 //!
 //! trace:STORY-132 | ai:claude
 
+mod actions;
 mod app;
 mod config;
 mod event;
+mod overlay;
+mod picker;
 mod pty;
+mod state;
 mod statusbar;
 mod tab;
 mod term;
@@ -26,17 +31,16 @@ pub use app::{App, ExitKind};
 pub use config::TuiConfig;
 
 use anyhow::{bail, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Options for one `aida tui` invocation.
 pub struct TuiOptions {
     /// Optional scope (an EPIC / STORY / … id) to host in the first tab.
-    /// `None` opens an empty shell — exit it cleanly, or (STORY-3)
-    /// populate it via the new-tab picker.
+    /// `None` opens an empty shell — exit it cleanly, or populate it via
+    /// the `prefix n` picker (STORY-134).
     pub scope: Option<String>,
-    /// Skip crash-recovery re-attach on launch. STORY-5 wires the
-    /// behaviour; STORY-132 only carries the flag so the surface is
-    /// stable for that story.
+    /// Skip crash-recovery re-attach on launch (STORY-135): start clean
+    /// and discard any stale `.aida/tui-state.json`.
     pub no_recover: bool,
 }
 
@@ -45,11 +49,7 @@ pub struct TuiOptions {
 /// mode.
 pub fn run(opts: TuiOptions) -> Result<()> {
     let cwd = std::env::current_dir()?;
-    ensure_project_context(&cwd)?;
-
-    // STORY-5 owns crash recovery; until then `--no-recover` is a no-op
-    // beyond being accepted, so the flag's presence is stable.
-    let _ = opts.no_recover;
+    let project_root = ensure_project_context(&cwd)?;
 
     let config = TuiConfig::load(&cwd);
     term::install_panic_hook();
@@ -57,7 +57,7 @@ pub fn run(opts: TuiOptions) -> Result<()> {
     let (exit, resume_hints) = {
         let _guard = term::TermGuard::enter()?;
         let mut app = App::new(config);
-        let exit = app.run(opts.scope)?;
+        let exit = app.run(project_root, opts.scope, opts.no_recover)?;
         (exit, app.exit_sessions().to_vec())
         // `_guard` drops here — cooked mode + main screen restored before
         // the notices below print.
@@ -73,15 +73,17 @@ pub fn run(opts: TuiOptions) -> Result<()> {
     Ok(())
 }
 
-/// Refuse to launch outside a git repository / AIDA project. The TUI
-/// hosts `aida queue work`, which needs a project to operate on — failing
-/// here gives a clear message instead of a confusing child error inside
-/// a PTY the user can barely see.
-fn ensure_project_context(cwd: &Path) -> Result<()> {
+/// Refuse to launch outside a git repository / AIDA project, returning
+/// the resolved project root (the nearest ancestor holding `.git` or
+/// `.aida/config.toml`) — crash-recovery state lives in its `.aida/`.
+/// The TUI hosts `aida queue work`, which needs a project to operate on;
+/// failing here gives a clear message instead of a confusing child error
+/// inside a PTY the user can barely see.
+fn ensure_project_context(cwd: &Path) -> Result<PathBuf> {
     let mut dir = Some(cwd);
     while let Some(d) = dir {
         if d.join(".git").exists() || d.join(".aida").join("config.toml").is_file() {
-            return Ok(());
+            return Ok(d.to_path_buf());
         }
         dir = d.parent();
     }

@@ -138,6 +138,7 @@ name = "aida-tui"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "crossterm",
  "dirs",
  "portable-pty",

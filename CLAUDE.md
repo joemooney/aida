@@ -8,9 +8,9 @@ AIDA = AI Design Assistant. The defensible niche is the **agent-collaboration la
 
 **Strategic positioning** (Trojan-horse, 2026-05-14): the visible product is intentionally simple — a TUI wrapping Claude Code sessions (EPIC-26). The *"so what? I could do this in 20 lines of bash"* reaction on first sight is the *intended* impression. The actual value — graph, IDs, traces, MCP, queue, lifecycle — surfaces through use, not the surface. When adding features or polish, the test is **"does this make the TUI's quiet depth stronger when someone digs in?"** Surface complexity in the TUI itself is anti-pattern. See `OVERVIEW.md` "Public face: the TUI is the product" section for the full framing.
 
-For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For the path-forward audit and current direction see `docs/plans/2026-05-02-git-canonical-storage.md`. For the *"should I use AIDA or X?"* question in any of its forms see `docs/positioning/` (one focused comparison per neighbor tool: `vs-ultrareview.md`, `vs-ultraplan.md`, `vs-karpathy-md.md`, `vs-saas-pm.md`).
+For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For the path-forward audit and current direction see `docs/plans/2026-05-02-git-canonical-storage.md`. For the *"should I use AIDA or X?"* question in any of its forms see `docs/positioning/` (one focused comparison per neighbor tool: `vs-ultrareview.md`, `vs-ultraplan.md`, `vs-karpathy-md.md`, `vs-saas-pm.md`). For the TUI — keybindings, status overlay, autonomous drains, crash recovery — see `docs/tui/README.md` (`aida tui`, shipped default-on since STORY-137).
 
-**Workspace** (5 crates): `aida-core` (engine), `aida-cli` (`aida` binary + MCP server), `aida-crate` (published `aida` crate metadata), `aida-server` (REST + gRPC, port 8080), `aida-generate-types` (Rust → TypeScript). React dashboard at `aida-web-react/` (port 5173 dev). Native desktop and WASM clients were extracted to a separate repo on 2026-05-02.
+**Workspace** (6 crates): `aida-core` (engine), `aida-cli` (`aida` binary + MCP server), `aida-crate` (published `aida` crate metadata), `aida-server` (REST + gRPC, port 8080), `aida-generate-types` (Rust → TypeScript), `aida-tui` (the `aida tui` terminal shell, EPIC-26). React dashboard at `aida-web-react/` (port 5173 dev). Native desktop and WASM clients were extracted to a separate repo on 2026-05-02.
 
 ## Storage model (EPIC-1-001)
 
@@ -195,7 +195,7 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 ## Claude Code skills
 
-`aida init` scaffolds 30 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-doc`, `/aida-search`, `/aida-plan`, `/aida-rebase`, `/aida-onboard`. The `/ultraplan` round-trip pair: `aida ultraplan <SPEC>` assembles the prompt, `/aida-import-plan <FILE>` lands the saved output back under `docs/plans/` (TASK-113/TASK-114). Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
+`aida init` scaffolds 31 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-doc`, `/aida-search`, `/aida-plan`, `/aida-rebase`, `/aida-onboard`, `/aida-drain-queue`. The `/ultraplan` round-trip pair: `aida ultraplan <SPEC>` assembles the prompt, `/aida-import-plan <FILE>` lands the saved output back under `docs/plans/` (TASK-113/TASK-114). Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
 
 ### MCP server
 
