@@ -3545,10 +3545,11 @@ pub enum Command {
 
     /// Assemble a rich, structured planning prompt for a SPEC and hand it
     /// to `/ultraplan`. Pulls the spec's description, acceptance criteria,
-    /// related-spec context, the AIDA plan-template structure, and the
-    /// trace-graph reusable helpers into one prompt — turning a terse
-    /// ask into a fully-contextualised brief. Copies to the clipboard by
-    /// default. trace:TASK-113 | ai:claude
+    /// related-spec context, the spec's enrichment comments, the AIDA
+    /// plan-template structure, and the trace-graph reusable helpers into
+    /// one prompt — turning a terse ask into a fully-contextualised
+    /// brief. Copies to the clipboard by default.
+    /// trace:TASK-113 TASK-247 | ai:claude
     Ultraplan {
         /// SPEC-ID (or UUID) to assemble the planning prompt for.
         spec: String,
@@ -3563,6 +3564,12 @@ pub enum Command {
         /// for scripting.
         #[clap(long)]
         json: bool,
+
+        /// Omit the `## Comments` section — the spec's enrichment
+        /// comments are pulled in by default (TASK-247); pass this for
+        /// the leaner pre-TASK-247 prompt. trace:TASK-247 | ai:claude
+        #[clap(long)]
+        no_comments: bool,
     },
 
     /// Derive a machine-checkable completion condition from AIDA

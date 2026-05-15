@@ -302,8 +302,14 @@ fn run() -> Result<()> {
 
     // `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
     // trace:TASK-113 | ai:claude
-    if let Command::Ultraplan { spec, stdout, json } = &cli.command {
-        return handle_ultraplan_command(spec, *stdout, *json);
+    if let Command::Ultraplan {
+        spec,
+        stdout,
+        json,
+        no_comments,
+    } = &cli.command
+    {
+        return handle_ultraplan_command(spec, *stdout, *json, *no_comments);
     }
 
     // `aida goal` is a pure condition generator — no store needed.
@@ -13533,22 +13539,22 @@ fn session_end(
     // ENOENT blamed on the gh binary. Prefer the lease's recorded parent
     // project root — the main worktree, which `session end` never
     // removes. trace:BUG-107 | ai:claude
-    let outcome =
-        match auto_queue_working_dir(target.parent_project_root.as_deref(), &project_root) {
-            Some(root) => try_auto_queue_pr_review(
-                &root,
-                &target.branch,
-                &target.id,
-                AutoQueueOrigin::SessionEnd,
-            ),
-            None => AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: no surviving project directory to query `gh` from \
+    let outcome = match auto_queue_working_dir(target.parent_project_root.as_deref(), &project_root)
+    {
+        Some(root) => try_auto_queue_pr_review(
+            &root,
+            &target.branch,
+            &target.id,
+            AutoQueueOrigin::SessionEnd,
+        ),
+        None => AutoQueueOutcome::skipped_needs_attention(format!(
+            "auto-queue: no surviving project directory to query `gh` from \
                  (worktree removed, parent project root unrecorded) — reviewer \
                  story for branch `{}` not filed; run `aida pr auto-queue-review \
                  --branch {}` from the main repo",
-                target.branch, target.branch
-            )),
-        };
+            target.branch, target.branch
+        )),
+    };
     render_auto_queue_outcome(&outcome);
 
     // STORY-106: workflow hint when a review story is now queued for this
@@ -13810,7 +13816,12 @@ fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::
             e
         )
     } else {
-        format!("spawn `{}` (cwd `{}`): {}", gh_bin.display(), cwd.display(), e)
+        format!(
+            "spawn `{}` (cwd `{}`): {}",
+            gh_bin.display(),
+            cwd.display(),
+            e
+        )
     }
 }
 
@@ -17949,7 +17960,10 @@ mod statusline_tests {
         let real = std::env::temp_dir(); // always exists
         let gone = real.join("aida-bug107-removed-worktree-does-not-exist");
         let gone2 = real.join("aida-bug107-parent-also-gone");
-        assert!(!gone.exists(), "test precondition: phantom path must not exist");
+        assert!(
+            !gone.exists(),
+            "test precondition: phantom path must not exist"
+        );
 
         // Worktree (invocation dir) removed → fall back to the parent.
         assert_eq!(
@@ -18621,7 +18635,8 @@ cargo test -p aida-cli
         let mut bare = Requirement::new("do the thing".into(), "Some context.".into());
         bare.spec_id = Some("TASK-1".into());
         store.requirements.push(bare);
-        let (prompt, warnings) = assemble_ultraplan_prompt(&store, &store.requirements[0], None);
+        let (prompt, warnings) =
+            assemble_ultraplan_prompt(&store, &store.requirements[0], None, true);
         assert!(prompt.contains("Plan the implementation of TASK-1: do the thing."));
         assert!(prompt.contains("## Plan structure"));
         assert!(prompt.contains("(none specified"));
@@ -18640,6 +18655,7 @@ cargo test -p aida-cli
             &store2,
             &store2.requirements[0],
             Some("## Reusable helpers\n\n- x\n"),
+            true,
         );
         assert!(prompt2.contains("- [ ] alpha"));
         assert!(prompt2.contains("## Reusable helpers"));
@@ -18682,10 +18698,52 @@ cargo test -p aida-cli
             .iter()
             .find(|r| r.spec_id.as_deref() == Some("TASK-1"))
             .unwrap();
-        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None);
+        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None, true);
         assert!(prompt.contains("Siblings (share a parent — 14 total)"));
         assert!(prompt.contains("more siblings omitted"));
         assert!(prompt.contains("Parent: EPIC-1"));
+    }
+
+    /// TASK-247: the ultraplan prompt pulls the spec's enrichment
+    /// comments into a `## Comments` section (most recent first), and
+    /// `--no-comments` (`include_comments = false`) omits it.
+    /// trace:TASK-247 | ai:claude
+    #[test]
+    fn ultraplan_prompt_includes_comments() {
+        use aida_core::models::Comment;
+        use aida_core::{Requirement, RequirementsStore};
+
+        let mut store = RequirementsStore::new();
+        let mut req = Requirement::new("build it".into(), "## Acceptance\n\n- x\n".into());
+        req.spec_id = Some("EPIC-9".into());
+        let mut old = Comment::new("joe".into(), "first thought".into());
+        old.created_at = chrono::Utc::now() - chrono::Duration::hours(2);
+        let recent = Comment::new("joe".into(), "design fork: pick approach B".into());
+        req.comments.push(old);
+        req.comments.push(recent);
+        store.requirements.push(req);
+        let target = &store.requirements[0];
+
+        // Default: comments included, most recent first.
+        let (with, _) = assemble_ultraplan_prompt(&store, target, None, true);
+        assert!(with.contains("## Comments"));
+        assert!(with.contains("design fork: pick approach B"));
+        assert!(with.contains("first thought"));
+        let recent_at = with.find("design fork").unwrap();
+        let old_at = with.find("first thought").unwrap();
+        assert!(recent_at < old_at, "comments render most-recent-first");
+
+        // `--no-comments` → the section is omitted entirely.
+        let (without, _) = assemble_ultraplan_prompt(&store, target, None, false);
+        assert!(!without.contains("## Comments"));
+        assert!(!without.contains("design fork"));
+    }
+
+    /// TASK-247: an empty comment list produces no `## Comments` section
+    /// (and no stray heading). trace:TASK-247 | ai:claude
+    #[test]
+    fn ultraplan_comments_section_empty_is_none() {
+        assert!(ultraplan_comments_section(&[]).is_none());
     }
 
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
@@ -25421,16 +25479,86 @@ fn ultraplan_spec_line(req: &aida_core::models::Requirement) -> String {
     format!("{} — {} [{}]", req.display_id(), req.title, req.status)
 }
 
+/// Build the `## Comments` section for the ultraplan prompt — the spec's
+/// enrichment comments, most recent first. `None` when the spec has no
+/// non-empty comments. Caps both the comment count and the total
+/// characters so a spec with a long discussion thread can't blow the
+/// prompt budget; the richest planning context (long enrichment
+/// comments) is exactly what TASK-247 exists to surface, so the budget
+/// is deliberately generous. trace:TASK-247 | ai:claude
+fn ultraplan_comments_section(comments: &[aida_core::models::Comment]) -> Option<String> {
+    const COMMENT_COUNT_CAP: usize = 20;
+    const COMMENTS_CHAR_CAP: usize = 16_000;
+
+    let non_empty = comments
+        .iter()
+        .filter(|c| !c.content.trim().is_empty())
+        .count();
+    if non_empty == 0 {
+        return None;
+    }
+
+    let mut s = String::from(
+        "## Comments\n\nPlanning context captured on the spec as comments, most recent first.\n\n",
+    );
+    let mut used = 0usize;
+    let mut shown = 0usize;
+    for c in comments.iter().rev() {
+        let content = c.content.trim();
+        if content.is_empty() {
+            continue;
+        }
+        if shown >= COMMENT_COUNT_CAP || used >= COMMENTS_CHAR_CAP {
+            break;
+        }
+        let reply_note = match c.replies.len() {
+            0 => String::new(),
+            n => format!(" · {n} repl{}", if n == 1 { "y" } else { "ies" }),
+        };
+        s.push_str(&format!(
+            "### {} · {}{}\n\n",
+            c.author,
+            c.created_at.format("%Y-%m-%d"),
+            reply_note
+        ));
+        let budget = COMMENTS_CHAR_CAP - used;
+        if content.chars().count() > budget {
+            let trimmed: String = content.chars().take(budget).collect();
+            s.push_str(&trimmed);
+            s.push_str("\n\n_(comment truncated to fit the prompt budget)_\n\n");
+            used = COMMENTS_CHAR_CAP;
+        } else {
+            s.push_str(content);
+            s.push_str("\n\n");
+            used += content.chars().count();
+        }
+        shown += 1;
+    }
+    if shown < non_empty {
+        s.push_str(&format!(
+            "_(+{} older comment(s) omitted to fit the prompt budget)_\n\n",
+            non_empty - shown
+        ));
+    }
+    Some(s)
+}
+
 /// Assemble the `/ultraplan` prompt for `target`. `helpers_section` is the
 /// pre-built trace-graph reusable-helpers markdown (None when there is
-/// none — see TASK-94). Returns the prompt and any warnings to surface.
-/// Pure over its inputs so it is unit-testable. trace:TASK-113 | ai:claude
+/// none — see TASK-94). `include_comments` pulls the spec's enrichment
+/// comments into a `## Comments` section (TASK-247). Returns the prompt
+/// and any warnings to surface. Pure over its inputs so it is
+/// unit-testable. trace:TASK-113 TASK-247 | ai:claude
 fn assemble_ultraplan_prompt(
     store: &aida_core::RequirementsStore,
     target: &aida_core::models::Requirement,
     helpers_section: Option<&str>,
+    include_comments: bool,
 ) -> (String, Vec<String>) {
-    const DESC_CHAR_CAP: usize = 1800;
+    // TASK-247: raised from 1800 — a truncated description dropped the
+    // densest planning context. Comments now carry the long-form
+    // enrichment, but the description still deserves real room.
+    const DESC_CHAR_CAP: usize = 16_000;
     const SIBLING_CAP: usize = 12;
     let mut warnings: Vec<String> = Vec::new();
     let display = target.display_id();
@@ -25476,6 +25604,16 @@ fn assemble_ultraplan_prompt(
         }
     }
     p.push('\n');
+
+    // ── Comments (enrichment context) ──
+    // TASK-247: a spec's comments accumulate the densest planning
+    // context (anti-patterns, design forks, reusable helpers). Pull them
+    // in unless the caller opted out with `--no-comments`.
+    if include_comments {
+        if let Some(section) = ultraplan_comments_section(&target.comments) {
+            p.push_str(&section);
+        }
+    }
 
     // ── Related-spec context ──
     let parents: Vec<&aida_core::models::Requirement> = target
@@ -25589,7 +25727,12 @@ fn assemble_ultraplan_prompt(
 }
 
 /// `aida ultraplan <SPEC>` — assemble + deliver the planning prompt.
-fn handle_ultraplan_command(spec_arg: &str, stdout: bool, json: bool) -> Result<()> {
+fn handle_ultraplan_command(
+    spec_arg: &str,
+    stdout: bool,
+    json: bool,
+    no_comments: bool,
+) -> Result<()> {
     let project_root = find_project_root()?;
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
@@ -25601,7 +25744,8 @@ fn handle_ultraplan_command(spec_arg: &str, stdout: bool, json: bool) -> Result<
     .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
 
     let helpers = build_reusable_helpers_section(&store, &project_root, target);
-    let (prompt, warnings) = assemble_ultraplan_prompt(&store, target, helpers.as_deref());
+    let (prompt, warnings) =
+        assemble_ultraplan_prompt(&store, target, helpers.as_deref(), !no_comments);
     let token_estimate = prompt.chars().count() / 4;
     let display = target.display_id();
 
