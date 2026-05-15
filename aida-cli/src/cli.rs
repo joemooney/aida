@@ -580,11 +580,23 @@ pub enum SessionCommand {
         purge_cc: bool,
 
         /// Block until the PR's CI run reaches a terminal state (green
-        /// or red) before releasing the lease. Polls every 30s via
-        /// `gh run watch`-equivalent. No-op when the session has no
-        /// associated PR or `gh` isn't on PATH. trace:TASK-111 | ai:claude
+        /// or red) before releasing the lease — the SILENT variant:
+        /// polls every 30s and prints only the poll ticks + final
+        /// result. Use it to tail a long/overnight build without prompt
+        /// noise. For live per-check progress instead, use `--watch-ci`.
+        /// No-op when the session has no associated PR or `gh` isn't on
+        /// PATH. trace:TASK-111 | ai:claude
         #[clap(long, conflicts_with = "skip_ci")]
         wait_ci: bool,
+
+        /// Block until CI reaches a terminal state — the LIVE variant:
+        /// streams `gh run watch` so each check resolves on screen as it
+        /// happens. Use it when you want interactive feedback; use the
+        /// quieter `--wait-ci` to tail a build without the live display.
+        /// Same end-session decision tree as `--wait-ci` once CI is
+        /// terminal (green proceeds, red prompts). trace:TASK-233 | ai:claude
+        #[clap(long, conflicts_with = "skip_ci")]
+        watch_ci: bool,
 
         /// Skip CI awareness entirely — restore pre-TASK-111 behavior
         /// (release the lease without probing the PR's CI run). Use when
