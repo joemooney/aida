@@ -199,3 +199,11 @@ blocks:
   range_end: 316
   next: 217
   allocated_at: 2026-05-15T14:31:52.484798410Z
+- node_id: '1'
+  owner: joe
+  hostname: imac
+  type_prefix: STORY
+  range_start: 241
+  range_end: 340
+  next: 241
+  allocated_at: 2026-05-15T23:49:01.499479806Z
