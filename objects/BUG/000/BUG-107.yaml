@@ -54,12 +54,12 @@ description: |-
 
   - TASK-111 (session end CI probing) — same lifecycle path
   - /aida-pr — the redundant filer; if the dedupe were perfect, this bug would be cosmetic only
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T19:29:04.230402571Z
-modified_at: 2026-05-15T22:58:34.326337680Z
+modified_at: 2026-05-15T23:42:21.567572199Z
 req_type: Bug
 tags:
 - auto-queue
