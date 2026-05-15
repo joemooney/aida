@@ -111,7 +111,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:35:41.965231513Z
-modified_at: 2026-05-14T14:35:41.965231513Z
+modified_at: 2026-05-15T06:13:47.880615542Z
 req_type: Story
 tags:
 - composition
@@ -125,3 +125,79 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T14:35:44.235069802Z
+comments:
+- id: 019e2a45-08e8-7db2-951f-55f8f187404b
+  author: joe
+  content: |-
+    Add /goal to v1 integration set (Claude Code 2.1.139, shipped 2026-05-12).
+
+    ## What /goal does
+
+    Sets a completion condition; Claude works autonomously across turns until the condition holds. After each turn, a fast evaluator model (Haiku-class) decides if the goal is met — if not, Claude takes another turn. The goal clears automatically once satisfied. Usage:
+
+      /goal all tests in test/auth pass and the lint step is clean
+
+    The architectural separation matters: the agent that works is decoupled from the agent that decides it's done. Same anti-anchoring principle as /ultraplan's 3-explorers + 1-critic. The evaluator has no investment in prior choices.
+
+    ## Industry context
+
+    Every major lab shipped this primitive in the last 6 weeks:
+    - Anthropic: /goal in Claude Code 2.1.139
+    - OpenAI: same shape in Codex CLI + desktop
+    - Nous Research: in Hermes
+
+    Naming consistency is deliberate — the industry is settling on a shared interface for 'autonomous agent loop until measurable end-state.' AIDA's integration framework should treat /goal as a first-class peer to /ultraplan and /ultrareview, not as a niche experimental feature.
+
+    ## How /goal composes with AIDA workflows
+
+    Today AIDA has implicit autonomy via:
+    - aida queue work --batch NAME (drains a batch serially, one PR per item)
+    - /aida-pickup loops (head-pickup successor)
+    - Cluster-mode drain (one PR per batch)
+
+    /goal is the EXPLICIT primitive these have been approximating. Concrete compositions:
+
+    1. Drive a batch to completion autonomously:
+       /goal all specs tagged batch:friction-fixes have status Completed AND no Done specs remain stuck
+
+    2. Drive a PR to merge:
+       /goal PR-N is merged AND its 7 linked specs are Completed
+
+    3. Drive a multi-day epic to completion:
+       /goal all children of EPIC-26 are Completed AND associated PRs are merged
+
+    4. Drive defensive cleanup:
+       /goal aida queue list --include-stuck is empty AND aida db reconcile-status reports no eligible flips
+
+    AIDA's value-add in this composition:
+    - Help users formulate good completion conditions from AIDA's structured graph (suggest goals based on queue/batch state)
+    - Surface active /goal sessions in the TUI status overlay (EPIC-26)
+    - Auto-name goals from AIDA context: /goal 'drain batch:X' becomes goal('all specs tagged batch:X are Completed')
+
+    ## Implication for STORY-125's v1 integration table
+
+    Update the v1 table to include /goal:
+
+    | Tool | Project trigger | AIDA-side integration |
+    | /ultraplan | complex plans | TASK-113 prompt builder, TASK-114 /aida-import-plan |
+    | /ultrareview | high blast radius | sibling positioning doc + prompt assembly TASK |
+    | /goal | (autonomous batch drain) | NEW: aida goal helper to formulate condition from queue/batch state |
+    | /loop | (probably off) | autonomous-style work |
+
+    The /goal integration is probably MORE important than /ultraplan in 2026's workflow — it's the autonomy primitive that makes long-running batch work tractable. AIDA's role: structure the goals (via the graph) AND surface their progress (via TUI panels and aida status).
+
+    ## Implication for STORY-92 (auto-spawn next-batch implementer)
+
+    STORY-92 was reaching for the autonomy primitive that /goal now provides natively. Worth a follow-up: rather than implementing AIDA-specific orchestration in STORY-92, defer to /goal as the runtime AND have AIDA SUPPLY the condition. Likely makes STORY-92 simpler — file a comment on STORY-92 to reconsider scope after /goal integration lands.
+
+    ## Composes with
+
+    - EPIC-26 (TUI): TUI's goals panel shows active /goal conditions per session — quiet observability of autonomous runs
+    - STORY-127 (workflow state-aware guidance): /goal IS the 'where am I going' answer once a goal is set
+    - TASK-229 (queue work --batch, shipped): natural pairing — /goal sets condition, --batch supplies the items
+
+    ## Discovered via
+
+    2026-05-14 — user asked: 'is /goal a command? do an internet search I think it is a newly released anthropic command'. Confirmed: Claude Code 2.1.139, released 2026-05-12. Documented in https://code.claude.com/docs/en/goal.
+  created_at: 2026-05-15T06:13:47.880615542Z
+  modified_at: 2026-05-15T06:13:47.880615542Z
