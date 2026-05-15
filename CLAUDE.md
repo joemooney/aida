@@ -60,6 +60,13 @@ aida db reconcile-status               # Replay Done→Completed bumps the pull 
 aida db reconcile-status --spec STORY-86  # Targeted replay for a single spec
 aida db reconcile-status --since v0.5.1 --dry-run  # Preview a bounded replay
 aida cache status                      # Compare cache HEAD vs git HEAD
+aida plan verify docs/plans/<file>.md  # Lint a plan: drifted refs, missing files/sections (TASK-93)
+aida plan verify <file> --fix          # Rewrite drifted path:line refs in place
+aida plan helpers <spec>               # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
+aida plan helpers <spec> --append <file>  # Append the derived section to a plan file
+aida ultraplan <spec>                  # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
+aida ultraplan <spec> --stdout         # Print the assembled prompt instead of copying
+aida ultraplan <spec> --json           # Emit prompt + warnings + token estimate as JSON
 ```
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
@@ -82,7 +89,19 @@ If you work conversationally without explicit `/aida-req` calls, use `/aida-capt
 
 ### Plan archival
 
-Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Include `## Related Requirements` (AIDA spec IDs) and `## Status` (In Progress → Completed). The `docs/plans/` directory is part of the standard project structure scaffolded by `aida init`.
+Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Use `docs/plans/_TEMPLATE.md` (scaffolded by `aida init` from `aida-core/templates/plan-template.md`) as the starting structure — 11 sections cover Approach + diagram, Decisions, Files (in build-order), Critical Files, Reusable helpers, Risks + gotchas, Tests (named), Verification (executable), Followups, and Related. The header carries Date / Specs / Status / Complexity. trace:TASK-92
+
+**Symbol refs over line refs.** When citing code from a plan, prefer symbol refs (`fn handle_pull_command`, `struct ImplementationInfo`) over line refs (`main.rs:19713`). Symbol refs survive edits; line refs drift fast and are often stale within hours of generation. Worked example: `docs/plans/2026-05-13-story-86-done-status.md`.
+
+**Verify before relying on a plan.** `aida plan verify docs/plans/<file>.md` (TASK-93) lints a plan against the template: it reports drifted `path:line` refs (with the corrected line, located by symbol name), missing files, and absent required sections (Critical Files, Verification, Followups are hard requirements). It exits non-zero on any missing file or section, so it works as a pre-commit hook on `docs/plans/`. `--fix` rewrites drifted refs in place; `--quiet` drops the per-check OK lines. Refs inside `<!-- -->` comments and fenced code blocks are skipped. trace:TASK-93
+
+**Followups get filed, not forgotten.** When a spec reaches Done (`aida queue done`) or Completed (the STORY-86 auto-bump on merge), AIDA parses the `## Followups` section of any plan that owns that spec and offers to file each bullet as a child TASK. `aida queue done` prompts per bullet (`[y/N/skip]`); `--yes` and the non-interactive auto-bump path file all. Idempotent — a `[aida:followups]` marker comment on the spec records what was filed and declined, so whichever path runs first wins and declines are never re-filed. Opt out with `AIDA_AUTO_FOLLOWUPS=false`. trace:TASK-96
+
+**The plan rides into the session.** `aida queue work <spec>` discovers any plan that owns the spec and pre-populates the session manifest with a *plan brief* — the `## Critical Files`, `## Followups`, and `## Verification` sections. `aida session show --plan` renders it, and `/aida-pickup` leads its first message with it so the implementer gets the blast radius and definition of done without grepping for the plan. Graceful no-op when no plan file exists. trace:TASK-95
+
+**Reusable helpers come from the trace graph.** `aida plan helpers <spec>` derives a `## Reusable helpers` section by walking the requirement graph — sibling specs (same parent), tag-mates, and (when discriminating) same-feature specs — and harvesting their `// trace:` comments for the files + symbols they already touch. It ranks siblings and tag-mates above the coarse same-feature set and only surfaces specs that name a helper, so the output stays a focused "don't reimplement this" brief. `--append <plan-file>` writes the section straight into a plan. trace:TASK-94
+
+**Hand `/ultraplan` a fully-contextualised prompt.** `aida ultraplan <spec>` assembles a structured planning prompt — the spec's description, extracted `## Acceptance` criteria, parent/child/sibling context, the AIDA 11-section plan structure, and the trace-graph reusable helpers — and copies it to the clipboard (`--stdout` / `--json` for piping). It turns a terse ask into a brief `/ultraplan`'s explorers can anchor on, and the inlined plan structure means the returned plan already matches `docs/plans/_TEMPLATE.md`. trace:TASK-113
 
 ## AIDA-developer workflow (only when working on AIDA itself)
 
@@ -170,7 +189,7 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 ## Claude Code skills
 
-`aida init` scaffolds 28 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-doc`, `/aida-search`, `/aida-plan`, `/aida-onboard`. Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
+`aida init` scaffolds 29 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-doc`, `/aida-search`, `/aida-plan`, `/aida-onboard`. The `/ultraplan` round-trip pair: `aida ultraplan <SPEC>` assembles the prompt, `/aida-import-plan <FILE>` lands the saved output back under `docs/plans/` (TASK-113/TASK-114). Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
 
 ### MCP server
 

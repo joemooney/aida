@@ -383,6 +383,21 @@ check-templates: ## Check if .claude/ templates are properly linked
 			errors=1; \
 		fi; \
 	done; \
+	master="aida-core/templates/plan-template.md"; \
+	target="docs/plans/_TEMPLATE.md"; \
+	if [ -L "$$target" ]; then \
+		echo "  OK: $$target (symlink)"; \
+	elif [ -f "$$target" ]; then \
+		echo "  WARNING: $$target is a regular file, not a symlink!"; \
+		if diff -q "$$master" "$$target" > /dev/null 2>&1; then \
+			echo "    Content matches master (but should be symlink)"; \
+		else \
+			echo "    CONTENT DIFFERS from master!"; errors=1; \
+		fi; \
+	else \
+		echo "  MISSING: $$target (run: ln -sf ../../aida-core/templates/plan-template.md docs/plans/_TEMPLATE.md)"; \
+		errors=1; \
+	fi; \
 	if [ $$errors -eq 1 ]; then \
 		echo ""; \
 		echo "Run 'make sync-templates' to fix issues"; \

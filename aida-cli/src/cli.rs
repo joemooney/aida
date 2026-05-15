@@ -3319,9 +3319,80 @@ pub enum Command {
         all: bool,
     },
 
+    /// Work with implementation plans archived under `docs/plans/`.
+    /// Today: `aida plan verify <file>` lints a plan against the
+    /// structured template — drifted line refs, missing files, absent
+    /// required sections. trace:TASK-93 | ai:claude
+    #[clap(subcommand)]
+    Plan(PlanCommand),
+
+    /// Assemble a rich, structured planning prompt for a SPEC and hand it
+    /// to `/ultraplan`. Pulls the spec's description, acceptance criteria,
+    /// related-spec context, the AIDA plan-template structure, and the
+    /// trace-graph reusable helpers into one prompt — turning a terse
+    /// ask into a fully-contextualised brief. Copies to the clipboard by
+    /// default. trace:TASK-113 | ai:claude
+    Ultraplan {
+        /// SPEC-ID (or UUID) to assemble the planning prompt for.
+        spec: String,
+
+        /// Print the assembled prompt to stdout instead of copying it to
+        /// the clipboard. Also the headless fallback when no clipboard
+        /// tool is available.
+        #[clap(long, conflicts_with = "json")]
+        stdout: bool,
+
+        /// Emit the prompt + metadata (warnings, token estimate) as JSON
+        /// for scripting.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// List all commands (including the less-common ones hidden from
     /// `aida --help`), grouped by topic.
     HelpAll,
+}
+
+/// Implementation-plan tooling. Plans live in `docs/plans/` and follow
+/// the structured template (`docs/plans/_TEMPLATE.md`, see TASK-92).
+#[derive(Subcommand, Debug)]
+pub enum PlanCommand {
+    /// Verify a plan file against the structured template: report
+    /// drifted `path:line` refs (with suggested corrections), missing
+    /// files, and absent required sections. Exits non-zero on any
+    /// failure so it can run as a pre-commit hook on `docs/plans/`.
+    /// trace:TASK-93 | ai:claude
+    Verify {
+        /// Path to the plan markdown file (e.g.
+        /// `docs/plans/2026-05-13-story-86-done-status.md`).
+        file: PathBuf,
+
+        /// Rewrite drifted `path:line` refs in place to corrected line
+        /// numbers (or symbol form where a symbol is named). Without
+        /// this flag, `verify` only reports.
+        #[clap(long)]
+        fix: bool,
+
+        /// Suppress the per-check OK lines; print only warnings, errors,
+        /// and the final verdict. Useful for pre-commit hooks.
+        #[clap(long, short = 'q')]
+        quiet: bool,
+    },
+
+    /// Derive a `## Reusable helpers` section for a spec from the trace
+    /// graph: walk sibling specs (same parent), same-feature specs, and
+    /// tag-sharing specs, harvest their `// trace:` comments, and report
+    /// the files + helpers they already touch so the implementer reuses
+    /// rather than re-invents. trace:TASK-94 | ai:claude
+    Helpers {
+        /// SPEC-ID of the requirement to derive reusable helpers for.
+        spec: String,
+
+        /// Append the generated section to this plan file instead of
+        /// printing it to stdout.
+        #[clap(long)]
+        append: Option<PathBuf>,
+    },
 }
 
 /// GitHub integration commands
