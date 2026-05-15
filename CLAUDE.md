@@ -54,6 +54,8 @@ aida edit <ID> --status completed
 aida comment add <ID> "..."
 aida db merge-gate                     # Assign agreed short IDs (FR-7-001 → FR-1)
 aida db sync --pull --push             # Sync orphan branch with remote
+aida fetch                             # Read-only two-leg refresh of remote refs (TASK-107)
+aida fetch --code-only --quiet         # Background-safe code-leg-only refresh
 aida db reconcile-status               # Replay Done→Completed bumps the pull missed (TASK-226)
 aida db reconcile-status --spec STORY-86  # Targeted replay for a single spec
 aida db reconcile-status --since v0.5.1 --dry-run  # Preview a bounded replay
