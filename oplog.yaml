@@ -5084,5 +5084,13 @@ operations:
   timestamp: 2026-05-15T07:47:14.501207864Z
   kind: !SetStatus
     status: In Progress
-clock: 593
+- id: 019e2be1-4aec-7fd0-ac5c-47986b90e061
+  target_id: 019e2000-f3ad-7a31-9c80-e73d4fe3a341
+  author: aida
+  node_id: '1'
+  lamport: 594
+  timestamp: 2026-05-15T13:44:05.612544263Z
+  kind: !SetPriority
+    priority: High
+clock: 594
 node_id: '1'
