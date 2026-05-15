@@ -1050,6 +1050,7 @@ fn complete_init_scaffolding(
         config.include_aida_sprint_skill = false;
         config.include_aida_search_skill = false;
         config.include_aida_standup_skill = false;
+        config.include_aida_import_plan_skill = false;
     }
     if no_hooks {
         config.generate_git_hooks = false;
