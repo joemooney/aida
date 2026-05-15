@@ -40,12 +40,12 @@ description: |-
   - [ ] Skill calls aida rebase --json --dry-run, parses classification, surfaces in agent-readable text
   - [ ] Cross-links in frontmatter description to /aida-commit, /aida-pickup, /aida-pr
   - [ ] Skill catalog in scaffolded AIDA.md mentions /aida-rebase as a daily driver
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:55:50.579251044Z
-modified_at: 2026-05-15T07:20:22.487481625Z
+modified_at: 2026-05-15T07:21:22.790997155Z
 req_type: Task
 tags:
 - batch:rebase-verb
@@ -57,3 +57,7 @@ relationships:
 - rel_type: Child
   target_id: 019e1fe7-0236-7913-9143-ccbdd4a4a22f
   created_at: 2026-05-13T05:55:55.491104501Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T07:21:22.790997155Z
+  implemented_by: joe
