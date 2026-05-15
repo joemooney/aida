@@ -2462,6 +2462,13 @@ pub enum QueueCommand {
         /// trace:TASK-112 | ai:claude
         #[clap(long)]
         list_sessions: bool,
+        /// Caller-minted Claude conversation id (a UUID) to launch with,
+        /// instead of the auto-generated one. The AIDA TUI passes this so
+        /// it can track + later resume the conversation deterministically
+        /// (EPIC-26). Implies a fresh launch — mutually exclusive with
+        /// `--resume`. trace:STORY-132 | ai:claude
+        #[clap(long, value_name = "UUID", conflicts_with = "resume")]
+        session_id: Option<String>,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
@@ -3293,6 +3300,26 @@ pub enum Command {
     /// Reads JSON-RPC 2.0 requests from stdin, writes responses to stdout.
     #[clap(hide = true)]
     McpServe,
+
+    /// Launch the AIDA TUI — a terminal-UI shell that PTY-hosts Claude
+    /// Code sessions (EPIC-26).
+    ///
+    /// The TUI becomes the outer shell: it owns the terminal, reserves a
+    /// bottom status strip, and hosts a Claude session as a PTY child
+    /// (`aida queue work <scope>`). A prefix key (Ctrl-a, configurable
+    /// via `[tui] prefix_key`) toggles command mode; `prefix q` quits and
+    /// `prefix d` detaches (conversations persist on disk).
+    ///
+    /// trace:STORY-132 | ai:claude
+    Tui {
+        /// Scope (an EPIC / STORY / … id) to host in the first tab.
+        /// Omit to open an empty shell.
+        scope: Option<String>,
+        /// Skip crash-recovery re-attach of orphaned sessions on launch.
+        /// (STORY-5 wires the behaviour; the flag is stable from now.)
+        #[clap(long)]
+        no_recover: bool,
+    },
 
     /// Project the requirements graph as a layered docs tree.
     /// Constitution, vision, constraints, decisions, quality, glossary —

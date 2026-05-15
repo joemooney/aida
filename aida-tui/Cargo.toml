@@ -1,0 +1,26 @@
+[package]
+name = "aida-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Terminal-UI shell that PTY-hosts Claude Code sessions for AIDA workflows (EPIC-26)"
+
+[lib]
+name = "aida_tui"
+path = "src/lib.rs"
+
+[dependencies]
+# Terminal + PTY hosting
+crossterm = { workspace = true }
+portable-pty = { workspace = true }
+vt100 = { workspace = true }
+# Declared now so a fetch failure surfaces in this story's first build;
+# the status overlay (STORY-133) is the first heavy consumer.
+ratatui = { workspace = true }
+
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+dirs = { workspace = true }
