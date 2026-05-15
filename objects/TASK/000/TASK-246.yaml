@@ -1,0 +1,78 @@
+id: 019e2c11-e416-7af2-87b3-f26dc784db44
+spec_id: TASK-246
+agreed_id: TASK-246
+title: Auto-complete review story when implementer fixes pass + user self-merges without re-review iteration
+description: |-
+  BUG-102 fixed the 'review story stuck at Done after PR merge' pattern via PR-N → review-story-N linkage in aida pull's auto-bump scan. This TASK addresses a DIFFERENT stuck pattern: review stories left at 'In Progress' when the user self-merges instead of running a fresh /aida-review iteration.
+
+  ## The stuck pattern
+
+  When a reviewer's first iteration finds issues:
+
+  1. Reviewer runs /aida-review → posts verdict requesting changes
+  2. Reviewer skill flips the review story (e.g., STORY-131) to In Progress, expecting fixup iteration
+  3. Implementer pushes fixups
+  4. CI goes green
+  5. User SELF-MERGES (gh pr merge --squash) without running /aida-review again
+  6. Review story stays at In Progress forever — neither auto-bump (which handles Done → Completed) nor the reviewer skill (which would flip it) ever runs
+
+  Observed 2026-05-15: STORY-131 stuck at In Progress after PR-30 merge. Required manual 'aida edit STORY-131 --status completed' to clean up.
+
+  ## Why BUG-102 doesn't catch this
+
+  BUG-102's auto-bump path triggers on Done → Completed transitions, scanning for PR-N → review-story-N linkages. STORY-131 was at In Progress, not Done, so the scan didn't consider it. The pattern is structurally different from BUG-102's fix.
+
+  ## Proposed fix
+
+  Two complementary mechanisms (either or both):
+
+  ### Path A: extend auto-bump scan to also catch In-Progress review stories
+
+  When aida pull's auto-bump path scans a merge commit (#N):
+  1. Existing BUG-102 path: look up review story for PR-N, if Done → bump to Completed
+  2. NEW path: also look up if review story is at In Progress AND no fresh review verdict comment exists post-merge — flip to Completed with a note 'auto-completed: PR merged without re-review iteration'
+
+  ### Path B: /aida-review skill detects 'PR already merged' on next invocation
+
+  When /aida-review is run against a merged PR:
+  1. Check PR state via gh pr view
+  2. If MERGED + the review story exists at In Progress → flip review story to Completed (no actual review work needed)
+  3. Exit cleanly
+
+  Path B composes with TASK-227 (filed earlier — /aida-review early-exit on merged PR). When TASK-227 ships, this is a natural extension of the same early-exit logic.
+
+  ## Composes with
+
+  - BUG-102 (shipped): same architectural path (PR-N → review-story-N linkage) extended to handle In-Progress state
+  - TASK-227 (queued): /aida-review early-exit on merged PR — natural place to extend with auto-complete logic
+  - BUG-106 (filed earlier today): same broader theme — auto-bump's scan needs to handle more lifecycle transitions
+
+  ## Why low priority
+
+  The manual workaround is one command (aida edit STORY-N --status completed). The friction is real but small per-occurrence. Worth fixing structurally but not blocking.
+
+  ## Acceptance
+
+  - [ ] aida pull's auto-bump extended to catch review stories at In Progress when their PR is merged
+  - [ ] OR /aida-review on a merged PR detects + completes the lingering review story
+  - [ ] Audit comment added to the auto-completed story: 'auto-completed because PR merged without re-review iteration'
+  - [ ] Tests cover: self-merge-without-rereview path (review story flips to Completed), normal-rereview-iteration path (existing behavior unchanged)
+  - [ ] BUG-102's existing logic untouched (Done → Completed still works)
+
+  ## Discovered via
+
+  2026-05-15 — PR-30 fixup iteration: reviewer found 7 partial specs, implementer pushed fixups, CI went green, user self-merged without re-review. STORY-131 stayed at In Progress until manual flip. Pattern is recurring enough to capture: every self-merge-without-re-review produces this stuck state.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T14:37:10.550678589Z
+modified_at: 2026-05-15T14:37:10.550678589Z
+req_type: Task
+tags:
+- aida-review
+- auto-complete
+- bug-102-followup
+- review-story
+- self-merge
+- stuck-in-progress
