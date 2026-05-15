@@ -63,7 +63,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:23:13.837377870Z
-modified_at: 2026-05-15T13:44:05.580978139Z
+modified_at: 2026-05-15T13:44:06.527817197Z
 req_type: Task
 tags:
 - claude
@@ -134,3 +134,15 @@ comments:
     Status reverted to Approved. Re-pickup when design is chosen.
   created_at: 2026-05-14T06:42:30.126773246Z
   modified_at: 2026-05-14T06:42:30.126773246Z
+- id: 019e2be1-4e7f-7da0-8dc9-8ac2781ef18b
+  author: joe
+  content: |-
+    2026-05-15 — first concrete real-world demand for this capability:
+
+    User shipped PR-30 (10 specs via the implementer queue drain), then asked: 'if there are issues raised by the PR then maybe that is the session I want... since the claude session is still there I just want to maybe resume that session maybe in the context of a new aida session.'
+
+    This is exactly the resume pattern TASK-112 was filed for: preserve implementer's full Claude conversation context (still on disk), wrap a fresh AIDA session around it (new lease + worktree on the implementer's branch), do fixups in seconds rather than paying the cold-restart tax.
+
+    Today's manual workaround requires 4-5 commands (gh pr view headRefName, aida session start --no-launch, cd, claude --resume). TASK-112 collapses to one verb. Bumping to High priority since the use case is now active and recurring.
+  created_at: 2026-05-15T13:44:06.527817197Z
+  modified_at: 2026-05-15T13:44:06.527817197Z
