@@ -39,12 +39,12 @@ description: |-
   - [ ] Cache invalidation hook fires after successful fetch
   - [ ] At least one existing caller (e.g. TASK-99's logic) refactored to use aida fetch
   - [ ] Help text + AIDA.md daily-commands section mention it
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:07:38.987173919Z
-modified_at: 2026-05-15T02:27:27.922112846Z
+modified_at: 2026-05-15T02:42:32.806251693Z
 req_type: Task
 tags:
 - batch:verb-surface
