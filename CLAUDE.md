@@ -50,7 +50,8 @@ aida init --force              # Overwrite existing files
 aida list                              # Cache-backed (sub-ms vs full-store load)
 aida list --status draft               # Filter by status
 aida search "<query>"                  # Cache-backed FTS5 search
-aida show <ID>                         # Show requirement details (FR-1-001 or FR-1)
+aida show <ID>                         # Show requirement details + git linkage (commits/files/branch/PR — TASK-241)
+aida show <ID> --no-git                # Skip the git-linkage section; --verbose expands it
 aida add --title "..." --type story --status draft --tags "tag1,tag2"
 aida edit <ID> --status completed
 aida comment add <ID> "..."

@@ -2322,6 +2322,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             tree,
             depth,
             sync,
+            no_git,
+            verbose,
         } => {
             // STORY-78: opt-in sync-pull before show. trace:STORY-78 | ai:claude
             if *sync {
@@ -2463,6 +2465,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         for c in &req.comments {
                             print_comment(c, 0);
                         }
+                    }
+                    // TASK-241: append the git-linkage section unless
+                    // --no-git. Grep against every id form the spec has
+                    // worn (canonical / agreed / origin) so commits and
+                    // trace comments survive id migration.
+                    if !*no_git {
+                        let mut ids: Vec<String> = vec![req.display_id()];
+                        if let Some(ref a) = req.agreed_id {
+                            if !ids.contains(&a.to_string()) {
+                                ids.push(a.to_string());
+                            }
+                        }
+                        if let Some(ref o) = req.spec_id {
+                            if !ids.contains(o) {
+                                ids.push(o.clone());
+                            }
+                        }
+                        let project_root = store_path
+                            .parent()
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                        print_git_linkage(&project_root, &ids, *verbose);
                     }
                 }
                 None => {
@@ -20684,6 +20708,43 @@ mod push_pull_scope_tests {
     }
 }
 
+/// TASK-241: coverage for the squash-merge PR-number parser that
+/// `aida show`'s git-linkage section uses to point shipped specs at
+/// their merged PR. trace:TASK-241 | ai:claude
+#[cfg(test)]
+mod git_linkage_tests {
+    use super::*;
+
+    #[test]
+    fn squash_merge_subject_yields_pr_number() {
+        assert_eq!(
+            parse_squash_pr_number("EPIC-24 batch:plan-tooling — plan lifecycle (7 specs) (#29)"),
+            Some(29)
+        );
+        assert_eq!(parse_squash_pr_number("feat: thing (#1234)"), Some(1234));
+        // Trailing whitespace is tolerated.
+        assert_eq!(parse_squash_pr_number("fix: y (#7)  "), Some(7));
+    }
+
+    #[test]
+    fn aida_format_subject_has_no_pr_number() {
+        // The `(SPEC-ID)` AIDA commit format must NOT be mistaken for a
+        // PR pointer — only `(#NN)` counts.
+        assert_eq!(
+            parse_squash_pr_number("[AI:claude] feat(cli): aida rebase (TASK-103)"),
+            None
+        );
+        assert_eq!(parse_squash_pr_number("chore: bump deps"), None);
+    }
+
+    #[test]
+    fn malformed_pr_suffix_is_rejected() {
+        assert_eq!(parse_squash_pr_number("feat: x (#notanumber)"), None);
+        assert_eq!(parse_squash_pr_number("feat: x (#12"), None);
+        assert_eq!(parse_squash_pr_number(""), None);
+    }
+}
+
 /// TASK-107: regression coverage for `aida fetch`. The behaviors we
 /// pin: (1) code-leg fetch updates origin/<branch> without touching the
 /// worktree, (2) cache-invalidation hook fires after the store leg
@@ -22855,6 +22916,250 @@ fn scan_trace_graph(
         }
     }
     out
+}
+
+/// TASK-241: extract the PR number from a GitHub squash-merge commit
+/// subject, which ends with `(#NN)`. Returns None when the subject has
+/// no such suffix. trace:TASK-241 | ai:claude
+fn parse_squash_pr_number(subject: &str) -> Option<u64> {
+    subject
+        .trim_end()
+        .rsplit_once("(#")
+        .and_then(|(_, tail)| tail.strip_suffix(')'))
+        .and_then(|n| n.parse::<u64>().ok())
+}
+
+/// TASK-241: surface git linkage for a spec inside `aida show` — the
+/// commits that reference it (AIDA commit format puts `(SPEC-ID)` in
+/// the message), the files carrying its `trace:` comments, the branch +
+/// worktree the work lives on, and PR state. Every sub-probe is
+/// best-effort: a missing `gh`, an absent `origin/main`, or zero
+/// matches degrades to a dim note rather than failing the show.
+/// `--no-git` skips the whole section; `--verbose` un-caps the commit
+/// list and adds per-commit diff stats. trace:TASK-241 | ai:claude
+fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bool) {
+    use std::process::Command as PCmd;
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+    };
+    let is_ancestor = |sha: &str, target: &str| -> bool {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["merge-base", "--is-ancestor", sha, target])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+
+    // ---- Commits referencing the spec (across all refs) ----
+    // Match the AIDA commit format `(SPEC-ID)` as a fixed string: the
+    // parens exclude the orphan `aida-store` branch's bookkeeping
+    // commits ("update TASK-92"), which mention the bare id.
+    let patterns: Vec<String> = ids.iter().map(|id| format!("({})", id)).collect();
+    let mut args: Vec<&str> = vec![
+        "log",
+        "--all",
+        "-F",
+        "--date-order",
+        "--pretty=format:%H\u{1f}%h\u{1f}%s",
+    ];
+    for p in &patterns {
+        args.push("--grep");
+        args.push(p.as_str());
+    }
+    let log = git(&args).unwrap_or_default();
+    // (full_sha, short_sha, subject), newest first.
+    let commits: Vec<(String, String, String)> = log
+        .lines()
+        .filter_map(|l| {
+            let mut p = l.splitn(3, '\u{1f}');
+            Some((
+                p.next()?.to_string(),
+                p.next()?.to_string(),
+                p.next()?.to_string(),
+            ))
+        })
+        .collect();
+
+    // ---- Files carrying trace comments for the spec ----
+    let wanted: HashSet<String> = ids.iter().cloned().collect();
+    let trace_hits = scan_trace_graph(project_root, &wanted);
+    let mut files: Vec<&TraceHit> = trace_hits.values().flatten().collect();
+    files.sort_by(|a, b| {
+        (a.file.as_str(), a.symbol.as_deref()).cmp(&(b.file.as_str(), b.symbol.as_deref()))
+    });
+    files.dedup_by(|a, b| a.file == b.file && a.symbol == b.symbol);
+
+    if commits.is_empty() && files.is_empty() {
+        println!(
+            "\n{}: {}",
+            "Git linkage".green().bold(),
+            "no commits or trace comments reference this spec yet".dimmed()
+        );
+        return;
+    }
+
+    println!("\n{}:", "Git linkage".green().bold());
+
+    // ---- Branch / worktree / PR (anchored on the newest commit) ----
+    if let Some((full, _, _)) = commits.first() {
+        let main_ref = if git(&["rev-parse", "--verify", "--quiet", "origin/main"]).is_some() {
+            "origin/main"
+        } else {
+            "main"
+        };
+        let shipped = is_ancestor(full, main_ref);
+
+        // Branches that contain the newest referencing commit; prefer a
+        // non-main branch (where in-flight work lives).
+        if shipped {
+            // The commit is an ancestor of main — the work shipped.
+            // Don't surface a feature branch (it's likely deleted, and
+            // the commit also being an ancestor of the current branch
+            // would otherwise misreport it as the home of the work).
+            let _ = main_ref;
+            println!("  {}     {}", "Branch".bold(), "merged to main".green());
+            // A squash-merge subject ends with `(#NN)` — the cheapest,
+            // most reliable PR pointer for shipped work.
+            if let Some(num) = commits
+                .iter()
+                .find_map(|(_, _, s)| parse_squash_pr_number(s))
+            {
+                println!("  {}         {}", "PR".bold(), format!("PR-{}", num).cyan());
+            }
+        } else {
+            // In flight: find the feature branch that holds the work.
+            let contains = git(&[
+                "branch",
+                "--all",
+                "--contains",
+                full,
+                "--format=%(refname:short)",
+            ])
+            .unwrap_or_default();
+            let branch = contains
+                .lines()
+                .map(|b| b.trim().trim_start_matches("origin/"))
+                .filter(|b| !b.is_empty() && *b != "HEAD" && *b != "main" && *b != "master")
+                .map(|b| b.to_string())
+                .next();
+
+            // Worktree path for that branch, if one is checked out.
+            let mut worktree: Option<String> = None;
+            if let (Some(b), Some(wt)) =
+                (branch.as_deref(), git(&["worktree", "list", "--porcelain"]))
+            {
+                let mut cur_path: Option<String> = None;
+                for line in wt.lines() {
+                    if let Some(p) = line.strip_prefix("worktree ") {
+                        cur_path = Some(p.to_string());
+                    } else if let Some(r) = line.strip_prefix("branch ") {
+                        if r.trim_start_matches("refs/heads/") == b {
+                            worktree = cur_path.clone();
+                        }
+                    }
+                }
+            }
+
+            match branch.as_deref() {
+                Some(b) => {
+                    let wt = worktree
+                        .map(|p| format!(" (worktree: {})", p))
+                        .unwrap_or_default();
+                    println!(
+                        "  {}     {}{} · {}",
+                        "Branch".bold(),
+                        b.cyan(),
+                        wt,
+                        "in flight".yellow()
+                    );
+                    match detect_open_pr_for_branch(project_root, b) {
+                        PrLookup::Found(pr) => println!(
+                            "  {}         {} {}",
+                            "PR".bold(),
+                            format!("PR-{}", pr.number).cyan(),
+                            pr.url.dimmed()
+                        ),
+                        PrLookup::NoOpenPr => {
+                            println!("  {}         {}", "PR".bold(), "no PR opened yet".dimmed())
+                        }
+                        PrLookup::GhMissing => println!(
+                            "  {}         {}",
+                            "PR".bold(),
+                            "gh not installed — PR state unknown".dimmed()
+                        ),
+                        PrLookup::GhFailed(_) => println!(
+                            "  {}         {}",
+                            "PR".bold(),
+                            "gh lookup failed — PR state unknown".dimmed()
+                        ),
+                    }
+                }
+                None => println!(
+                    "  {}     {}",
+                    "Branch".bold(),
+                    "work committed but branch not found locally".yellow()
+                ),
+            }
+        }
+    }
+
+    // ---- Commits list ----
+    if !commits.is_empty() {
+        let cap = if verbose {
+            commits.len()
+        } else {
+            5.min(commits.len())
+        };
+        println!(
+            "  {} ({}{})",
+            "Commits".bold(),
+            commits.len(),
+            if !verbose && commits.len() > cap {
+                format!(", showing {}", cap)
+            } else {
+                String::new()
+            }
+        );
+        for (full, short, subject) in commits.iter().take(cap) {
+            println!("    {} {}", short.yellow(), subject);
+            if verbose {
+                if let Some(stat) =
+                    git(&["show", "--shortstat", "--format=", full]).filter(|s| !s.is_empty())
+                {
+                    if let Some(last) = stat.lines().last() {
+                        println!("      {}", last.trim().dimmed());
+                    }
+                }
+            }
+        }
+        if !verbose && commits.len() > cap {
+            println!(
+                "    {}",
+                format!("… {} more (--verbose to expand)", commits.len() - cap).dimmed()
+            );
+        }
+    }
+
+    // ---- Files traced ----
+    if !files.is_empty() {
+        println!("  {} ({})", "Files traced".bold(), files.len());
+        for hit in &files {
+            match &hit.symbol {
+                Some(sym) => println!("    {} — {}", hit.file, sym.dimmed()),
+                None => println!("    {}", hit.file),
+            }
+        }
+    }
 }
 
 /// `aida plan helpers <spec>` — render a `## Reusable helpers` section

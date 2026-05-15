@@ -2609,6 +2609,18 @@ pub enum Command {
         /// See `aida list --sync`. trace:STORY-78 | ai:claude
         #[clap(long)]
         sync: bool,
+
+        /// Skip the git-linkage section (commits / files traced /
+        /// branch / PR). Faster for read-only contexts that only need
+        /// the requirement fields. trace:TASK-241 | ai:claude
+        #[clap(long)]
+        no_git: bool,
+
+        /// Expand the git-linkage section: every referencing commit
+        /// (not just the most recent 5) plus per-commit diff stats.
+        /// trace:TASK-241 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
     },
 
     /// Edit an existing requirement
