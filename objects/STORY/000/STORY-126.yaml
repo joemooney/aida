@@ -3,12 +3,12 @@ spec_id: STORY-126
 agreed_id: STORY-126
 title: 'Review PR-27: EPIC-23 batch 7: friction-fixes — auto-bump correctness + skill polish (9 specs)'
 description: 'Auto-filed by manual gh pr create (not /aida-pr) for PR-27. Covers the friction-fixes batch: BUG-102, BUG-94, BUG-95, BUG-100, BUG-101, BUG-98, TASK-216, TASK-215, TASK-226. See https://github.com/joemooney/aida/pull/27 for the full diff and per-spec breakdown.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T15:32:47.799493397Z
-modified_at: 2026-05-15T00:59:17.312363762Z
+modified_at: 2026-05-15T01:03:02.845213004Z
 req_type: Story
 relationships:
 - rel_type: Child
