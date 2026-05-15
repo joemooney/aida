@@ -70,6 +70,9 @@ aida plan helpers <spec> --append <file>  # Append the derived section to a plan
 aida ultraplan <spec>                  # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
 aida ultraplan <spec> --stdout         # Print the assembled prompt instead of copying
 aida ultraplan <spec> --json           # Emit prompt + warnings + token estimate as JSON
+aida goal --batch <name>               # Derive a machine-checkable /goal completion condition from AIDA metadata (TASK-242)
+aida goal --epic <ID> --pr <N>         # Flags (--batch/--epic/--spec/--pr/--queue-empty) compose with AND
+aida goal --spec <ID> --copy           # --copy → clipboard; --invoke → bare `/goal …` line for scripting
 ```
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
