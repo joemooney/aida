@@ -59,10 +59,11 @@ aida-tui = { version = "0.7", path = "../aida-tui", optional = true }
 libc = "0.2"
 
 [features]
-default = []
+default = ["tui"]
 remote = ["tonic", "prost", "tonic-build"]
-# EPIC-26 TUI shell. Default-off until STORY-6 lands the docs + flips
-# this into `default`.
+# EPIC-26 TUI shell. Default-on as of STORY-137 — the first vertical
+# (PTY host + overlay + multi-tab + crash recovery) is complete, so
+# `aida tui` ships in release binaries. trace:STORY-137 | ai:claude
 tui = ["aida-tui"]
 
 [dev-dependencies]
