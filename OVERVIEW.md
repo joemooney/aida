@@ -14,6 +14,30 @@ The defensible niche is the **agent-collaboration layer**: stable spec IDs, type
 
 ---
 
+## Public face: the TUI is the product (the platform is what makes it work)
+
+The visible product — what users install, what they look at, what they tell their friends about — is **a TUI that wraps Claude Code sessions** ([EPIC-26](docs/positioning/) for the implementation track). It hosts Claude Code as a child process. Drop out to a status overlay. Drop back in to the same conversation. Quick-action review, queue, merge, pull. List and switch between multiple Claude sessions. *That's the visible product.*
+
+The intended reaction on first sight is **"so what? I could write that in a 20-line bash script."**
+
+That reaction is a feature, not a bug. Three reasons:
+
+1. **Low barrier to adoption.** Anyone who looks at AIDA's TUI sees a tool that does what they could imagine doing themselves. No learning curve to be convinced it's worth trying. They install it because it's *obviously easy*, not because they've been sold on a platform vision.
+
+2. **The depth is what they discover after.** Once installed, the TUI's status overlay surfaces stable spec IDs, MCP-served requirement graphs, typed relationships, auto-bump lifecycle, queue routing, role-pure sessions, plan templates, integration recommendations for `/ultraplan` and `/ultrareview`, telemetry-informed deprecation hygiene, the auto-queued reviewer hand-off, the worktree-isolated implementer sessions, the orphan-store provenance trail. None of that is visible up front. It's all underneath the "trivial wrapper."
+
+3. **The platform is the durable value; the TUI is just the surface that exposes it.** If a competing tool ships a similar TUI tomorrow, they'd need to also ship: the YAML-canonical store with serializable IDs, the cache + projection model, the node-aware identity scheme with merge-gate promotion, the MCP server, the trace-comment convention, the relationship graph, the role/session/worktree model, the scaffolded skill set, the auto-bump lifecycle, the integration framework. Months of foundational work. The TUI on top of all that is the easy part; building all that without the TUI is what people who try the bash-script version will discover they're now signed up for.
+
+This is the **Trojan-horse positioning**: ship the visible product as humble. Let people install it because it looks simple. Let them discover, over weeks of use, that they're now using a platform with no equivalent. Don't try to convince anyone of the platform upfront — convince them through their own experience.
+
+> *The TUI is what people will think AIDA is. The platform is what AIDA actually is.*
+
+This framing intentionally shapes documentation, marketing, and prioritization: when adding features, the test isn't "is this visible in the TUI?" — it's "does this make the TUI's quiet depth stronger when someone digs in?"
+
+For the implementation track + child STORYs see EPIC-26 in the requirements DB (`aida show EPIC-26`).
+
+---
+
 ## Architecture
 
 ### Storage (EPIC-1-001) — git-canonical by default
