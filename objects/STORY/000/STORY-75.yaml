@@ -39,9 +39,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:15.276275091Z
-modified_at: 2026-05-15T04:02:06.101727132Z
+modified_at: 2026-05-15T04:02:10.802877819Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e10a7-78a6-7750-bfc7-d1a34532da4d
   created_at: 2026-05-10T06:51:16.277772616Z
+comments:
+- id: 019e29cc-88f2-7630-9a3a-4a715bf5e21c
+  author: joe
+  content: 'Deferred 2026-05-14 (Trojan-horse triage): priority lowered to Low per the same rationale as STORY-74 — cross-project surface, not TUI-Trojan-horse aligned. Re-evaluate after EPIC-26 ships.'
+  created_at: 2026-05-15T04:02:10.802877819Z
+  modified_at: 2026-05-15T04:02:10.802877819Z
