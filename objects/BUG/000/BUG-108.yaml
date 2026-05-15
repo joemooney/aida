@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T20:22:22.918845671Z
-modified_at: 2026-05-15T22:57:38.011694563Z
+modified_at: 2026-05-15T22:58:35.408244997Z
 req_type: Bug
 tags:
 - cwd
@@ -73,6 +73,12 @@ relationships:
   target_id: 019e2ddb-d51d-7210-a7fa-0363a9b4862b
   created_at: 2026-05-15T22:57:38.011685193Z
   created_by: joe
+comments:
+- id: 019e2ddc-f310-7613-9e51-67fa858f2e3e
+  author: joe
+  content: 'Implemented via PR #43 (commit 41d02d5e): `aida queue list` warns on a dangling cwd instead of silently printing an empty queue. Tests: 737/737 workspace green; cargo fmt + clippy clean.'
+  created_at: 2026-05-15T22:58:35.408244997Z
+  modified_at: 2026-05-15T22:58:35.408244997Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T22:16:58.346684435Z
