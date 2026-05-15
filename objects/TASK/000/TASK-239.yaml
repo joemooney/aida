@@ -1,0 +1,88 @@
+id: 019e2942-2d3e-7b63-8fe4-5047f4dee5aa
+spec_id: TASK-239
+agreed_id: TASK-239
+title: 'Skill next-steps blocks: ASCII fallback for unicode glyphs (avoid terminal interleave corruption)'
+description: |-
+  AIDA skill templates use unicode glyphs in next-steps blocks for visual hierarchy:
+
+    1. ▶ Primary action
+    2. ⏵ Alternative path
+    3. 🚪 Stop / exit
+
+  These render fine in isolation but interact badly with other TUI writers (notably Claude Code's recap banner) when both compete for the same terminal area. Emoji like 🚪 are sometimes counted as 1 cell when actually 2 (or vice versa) depending on font + terminal + cell-width-detection logic. Once a width miscalculation happens upstream, subsequent positioning gets corrupted and bytes from different writers interleave.
+
+  ## Observed 2026-05-14
+
+  After implementer shipped TASK-107, Claude Code's recap banner overlapped with the agent's Next-steps block. Output looked like:
+
+    TASK-107 shipped.1Build clean, a   367 tests pass, fetch tests cov r th   hree key invariants...
+    1. ▶ G  b nex  item → /aida-pickup
+    2.S⏵ Wrap up what's shipped as a PR3→7/aida-prass, fetch tests cover the three key invariants...
+
+  Characters scrambled mid-word ('Grab' → 'G  b'). User asked 'what is G b nex item characters are getting gobbled. Do I need a different font.'
+
+  Root cause is on Claude Code's side (TUI rendering race), but AIDA can mitigate by:
+  1. Offering an ASCII-only mode for skill output
+  2. Detecting terminal capabilities and falling back automatically
+
+  ## Proposed mitigation
+
+  Add an AIDA_NO_UNICODE environment variable (or config flag) that swaps glyphs:
+
+    AIDA_NO_UNICODE=1 → next-steps render as:
+
+    1. [PRIMARY]    Grab next item → /aida-pickup
+    2. [ALT]        Wrap up as PR → /aida-pr
+    3. [STOP]       Stop here → Ctrl+D + aida session end ...
+
+  When set, all skill templates that use ▶ ⏵ 🚪 ◐ ✓ ⚠ symbols substitute ASCII equivalents (▶ → [PRIMARY], ⏵ → [ALT], 🚪 → [STOP], ◐ → o, ✓ → OK, ⚠ → !WARNING).
+
+  Or auto-detect: if running inside Claude Code (detect via env vars or stdout being non-TTY?), default to ASCII. If running in a regular interactive terminal, use unicode.
+
+  ## Files affected
+
+  All skill templates in aida-core/templates/skills/ that emit Next-steps blocks:
+  - aida-pickup.md
+  - aida-pr.md
+  - aida-review.md
+  - (audit via grep '▶\|⏵\|🚪' for the full list)
+
+  The substitution can be done via a shared helper in the templates if there's a templating layer, or via post-render filter, or via two parallel template variants.
+
+  ## Composes with
+
+  - TASK-110 (next-steps ordering fix): same templates touched; bundle the ASCII-fallback work
+  - STORY-127 (workflow state-aware guidance): both are about skill output quality
+  - BUG-99 (SIGPIPE panic): both are about CLI output robustness — different surface, same theme
+
+  ## Why low priority
+
+  The glyphs ARE useful when the terminal handles them correctly (which is most of the time outside Claude Code's recap-interleave window). Forcing ASCII universally would lose visual hierarchy. The mitigation is an opt-in fallback, not a forced replacement.
+
+  ## Acceptance
+
+  - [ ] AIDA_NO_UNICODE env var supported; when set, all skill output uses ASCII fallbacks
+  - [ ] Optional: auto-detect Claude Code environment and default to ASCII (heuristic, opt-out via env)
+  - [ ] All skill templates emit one of: native unicode glyph OR ASCII fallback via shared substitution
+  - [ ] Tests cover: unicode-enabled rendering, ASCII-fallback rendering, auto-detect-on-CC environment
+  - [ ] CLAUDE.md or AIDA.md mentions the AIDA_NO_UNICODE escape hatch
+
+  ## Discovered via
+
+  2026-05-14 — user saw output corruption ('G b nex item' instead of 'Grab next item') in a Claude Code session. Root cause is Claude Code's TUI overlay racing with AIDA's output; AIDA can mitigate by offering ASCII fallback. Not file-worthy as a BUG because AIDA is rendering correctly — but worth filing as resilience improvement.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T01:31:03.358659728Z
+modified_at: 2026-05-15T01:31:03.358659728Z
+req_type: Task
+tags:
+- ascii-fallback
+- emoji
+- glyphs
+- robustness
+- skills
+- terminal
+- unicode
+- width
