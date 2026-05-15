@@ -1,0 +1,59 @@
+id: 019e294b-01ee-7e20-ab7e-2538c9a9adac
+spec_id: BUG-103
+agreed_id: BUG-103
+title: 'CI macos-latest job intermittently fails: cargo resolves to rustup-init (stale cache)'
+description: |-
+  GitHub Actions macos-latest runner intermittently has a stale cache where 'cargo' resolves to 'rustup-init' instead of the actual cargo binary. The build step then errors:
+
+    Run cargo build --workspace --release
+    error: unexpected argument 'build' found
+    Usage: rustup-init[EXE] [OPTIONS]
+
+  This is GitHub's infrastructure, not AIDA's code. But it's recurring (observed twice 2026-05-13/14: PR-24 macos failed for this reason; PR-28 macos failed for the same reason). Each time the workaround is gh run rerun --failed, which usually passes.
+
+  ## Mitigations possible on AIDA side
+
+  The CI workflow file (.github/workflows/ci.yml or similar) could:
+
+  1. Explicitly call cargo with an absolute path: /Users/runner/.cargo/bin/cargo build ... instead of cargo build ...
+  2. Add a 'which cargo && cargo --version' diagnostic step BEFORE the build to catch the resolution issue early and fail fast with a clear error message
+  3. Add a 'rustup default stable' step before the build to ensure the toolchain is initialized correctly
+  4. Pin a specific cache key that doesn't conflict with the rustup-init binary
+  5. Skip the rustup setup entirely on macOS if the runner image already has cargo (saves time + avoids the cache collision)
+
+  Probably (3) is the most reliable single-line fix. Adding 'rustup default stable' before any cargo invocation should force the right resolution.
+
+  ## Why low priority
+
+  The workaround (gh run rerun --failed) is mechanical and takes ~30 seconds to invoke. The flake doesn't block merges — it just delays them. Adding the explicit rustup setup step is robust but not urgent.
+
+  ## Composes with
+
+  - TASK-110 (next-steps ordering): post-PR-open suggestions could mention 'CI flake retry path' as a standard option
+  - TASK-111 (CI-aware session end): correctly catches this as red, but could surface 'this looks like the recurring macos rustup-init flake; consider gh run rerun --failed first' as a hint
+
+  ## Acceptance
+
+  - [ ] CI workflow file adds explicit toolchain initialization (rustup default stable OR equivalent) before cargo invocations on macOS
+  - [ ] At minimum: diagnostic 'which cargo && cargo --version' step that fails clearly if cargo isn't cargo
+  - [ ] No regression on ubuntu/windows runners
+  - [ ] After fix lands: at least 3 macos CI runs back-to-back pass without rerun
+
+  ## Discovered via
+
+  2026-05-14 — recurring failure pattern. PR-24 macos failed during TASK-218 review; PR-28 macos failed during TASK-107 (this current incident). Same error signature. Confidence: pure infrastructure, not AIDA code.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T01:40:42.094102793Z
+modified_at: 2026-05-15T01:40:42.094102793Z
+req_type: Bug
+tags:
+- cache
+- ci
+- flaky
+- github-actions
+- infrastructure
+- macos
+- rustup
