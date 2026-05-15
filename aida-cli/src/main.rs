@@ -197,6 +197,12 @@ fn run() -> Result<()> {
         cli.server = std::env::var("AIDA_SERVER").ok();
     }
 
+    // BUG-108: a shell whose worktree was removed by `aida session end`
+    // (in this or another terminal) has a dangling cwd — flag it before
+    // any project-root lookup silently degrades to empty state and makes
+    // `aida queue list` print "Your queue is empty". trace:BUG-108
+    warn_if_cwd_removed();
+
     // Handle init before path resolution (no DB exists yet)
     if let Command::Init {
         no_skills,
@@ -10781,6 +10787,45 @@ pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
+/// Render the BUG-108 dangling-cwd warning, given the result of a
+/// `getcwd()` probe. Pure, so the removed-worktree state is regression-
+/// testable without a process-global `chdir`: a worktree that `aida
+/// session end` removed makes `std::env::current_dir()` return
+/// `Err(ENOENT)`, which is exactly the `Err` input here. `None` means
+/// the cwd is healthy and nothing should be printed.
+/// trace:BUG-108 | ai:claude
+fn cwd_removed_warning(cwd: &std::io::Result<std::path::PathBuf>) -> Option<String> {
+    if cwd.is_ok() {
+        return None;
+    }
+    Some(format!(
+        "{} this directory no longer exists — its worktree was probably \
+         removed by `aida session end`.\n  AIDA can't resolve a project \
+         from a deleted directory, so any queue / list output below is an \
+         empty fallback, not the real state.\n  {} cd to the main repo and \
+         retry (e.g. `cd ~/ai/<project>`).",
+        "⚠".yellow().bold(),
+        "→".cyan(),
+    ))
+}
+
+/// BUG-108: warn — once, up front — when the shell's working directory
+/// was removed out from under it, typically a worktree that `aida
+/// session end` deleted in another terminal. Without this, every
+/// project-root walk silently falls back to empty state and `aida queue
+/// list` prints "Your queue is empty" indistinguishably from a genuinely
+/// empty queue. Returns true when the warning fired.
+/// trace:BUG-108 | ai:claude
+fn warn_if_cwd_removed() -> bool {
+    match cwd_removed_warning(&std::env::current_dir()) {
+        Some(msg) => {
+            eprintln!("{msg}");
+            true
+        }
+        None => false,
+    }
+}
+
 /// Resolve the MAIN worktree path given a starting checkout (which may
 /// itself be a linked worktree). When the caller is inside a linked
 /// worktree (created via `git worktree add`), `find_project_root()`
@@ -17939,6 +17984,26 @@ mod statusline_tests {
         // A live cwd → the plain message, no false "missing cwd" claim.
         let live = gh_spawn_error(gh, &std::env::temp_dir(), &enoent);
         assert!(!live.contains("no longer exists"));
+    }
+
+    /// BUG-108: a worktree removed by `aida session end` leaves any shell
+    /// still inside it with a dangling cwd — `getcwd()` returns ENOENT.
+    /// The warning must fire for that `Err` and stay silent for a healthy
+    /// `Ok` cwd, so a genuinely-empty queue is never mislabeled.
+    /// trace:BUG-108 | ai:claude
+    #[test]
+    fn cwd_removed_warning_fires_only_for_a_dangling_cwd() {
+        // Healthy cwd → no warning.
+        let healthy: std::io::Result<std::path::PathBuf> = Ok(std::env::temp_dir());
+        assert!(cwd_removed_warning(&healthy).is_none());
+
+        // Removed worktree → getcwd() yields ENOENT → warning fires and
+        // names the cause so the user can tell it from an empty queue.
+        let dangling: std::io::Result<std::path::PathBuf> =
+            Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+        let msg = cwd_removed_warning(&dangling).expect("warning for a dangling cwd");
+        assert!(msg.contains("no longer exists"));
+        assert!(msg.contains("session end"));
     }
 
     /// TASK-74: branch-shape heuristic for "this is a reviewer session;
