@@ -2875,6 +2875,38 @@ pub enum Command {
         json: bool,
     },
 
+    /// Detect, classify, and (optionally) execute a rebase of the
+    /// current branch onto its upstream. Four phases: detect
+    /// (ahead/behind + file-path overlap), classify (clean / ahead-only
+    /// / behind-only / diverged-safe / diverged-risky), execute (auto
+    /// for safe cases, prompt for risky), report (structured, --json).
+    /// Stateless — safe to invoke anywhere. trace:TASK-103 | ai:claude
+    Rebase {
+        /// Execute safe rebases (behind-only, diverged-safe) without a
+        /// confirmation prompt. Risky (file-overlap) cases still prompt.
+        #[clap(long)]
+        auto: bool,
+        /// Classify only — report the state and exit 0 without
+        /// touching the working tree.
+        #[clap(long)]
+        dry_run: bool,
+        /// Skip the `git fetch` during detection; classify against the
+        /// already-cached upstream ref. trace:TASK-103 | ai:claude
+        #[clap(long)]
+        no_fetch: bool,
+        /// Refuse to run on a dirty working tree instead of the default
+        /// auto-stash + pop around the rebase.
+        #[clap(long)]
+        no_stash: bool,
+        /// Machine-readable JSON output for skill / agent consumers.
+        #[clap(long)]
+        json: bool,
+        /// Target ref to rebase onto (default: the current branch's
+        /// tracked upstream `@{u}`).
+        #[clap(long)]
+        branch: Option<String>,
+    },
+
     /// AIDA-developer-only commands: activate the in-repo dev binary,
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]
