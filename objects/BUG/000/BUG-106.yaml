@@ -1,0 +1,65 @@
+id: 019e2c0b-4f0c-71b3-9f70-0a74f327b572
+spec_id: BUG-106
+agreed_id: BUG-106
+title: Auto-bump misses implementer specs after squash-merge of cluster PR (PR title lacks individual spec IDs)
+description: |-
+  When a cluster-mode PR is squash-merged to main, the merge commit's subject is the PR TITLE (e.g., 'Implementer queue drain: git-verb surface + show/queue/session display polish (10 specs) (#30)'). The auto-bump scan looks for (SPEC-ID) patterns in commit subjects. The squash commit's subject mentions '(10 specs)' and '(#30)' but NOT the 10 individual spec IDs — so auto-bump matches nothing and the specs stay at Done.
+
+  Individual commits on the PR branch DO have spec IDs (per AIDA convention), but squash-merge flattens them. The information is lost on main.
+
+  ## Observed 2026-05-15
+
+  After PR-30 squash-merged with 10 specs covered (TASK-103, 104, 105, 106, 108, 234, 236, 237, 238, 241):
+  - aida pull ran cleanly (fast-forward from eda81f9f to b2764d00)
+  - No 'Auto-bumped N Done → Completed' message in pull output
+  - aida show TASK-103 still showed Status: Done after pull
+  - aida db reconcile-status was the manual fix
+
+  This is the STANDARD pattern for AIDA's cluster-mode PRs (PR-23, PR-25, PR-26, PR-27, PR-29, PR-30 all had similar structures). Auto-bump misses all of them on first pull. User must remember to run reconcile-status.
+
+  ## Why this is BUG-102 followup
+
+  BUG-102 extended auto-bump to recognize REVIEW STORIES via the PR-N → review-story-N linkage in the auto-queue manifest. That fix works: review stories auto-bump cleanly now (verified on PR-26, PR-29).
+
+  But IMPLEMENTER specs (the ones the PR actually covers) still rely on spec IDs being in commit subjects. Squash-merge breaks this. The fix should extend the SAME PR-linkage path to also bump implementer specs.
+
+  ## Proposed fix
+
+  When auto-bump scans a merge commit on main:
+
+  1. Existing path (commit-subject scan): match (SPEC-ID) patterns → bump if Done — keep this
+  2. NEW path (PR-linkage scan): match (#N) PR suffix → look up the auto-queue review story for PR-N → read its 'covers' metadata listing all specs the PR covered → bump each Done spec in that list
+
+  The 'covers' metadata already exists (it's how STORY-N's title gets the spec list when the auto-queue files it). Just need to USE it during auto-bump.
+
+  ## Composes with
+
+  - BUG-102 (shipped): review-story auto-bump via PR linkage — same architectural path
+  - TASK-226 (aida db reconcile-status, shipped): the manual recovery tool that picks up after this misses; the structural fix here reduces reconcile-status to rare-edge-case-only
+  - TASK-241 (aida show git linkage, shipped): the linkage data this fix needs is already exposed
+
+  ## Acceptance
+
+  - [ ] auto_bump_done_to_completed extended to scan merge commits for (#N) PR refs in addition to (SPEC-ID) refs
+  - [ ] When (#N) is matched, look up the auto-queue review story for PR-N and bump all specs in its 'covers' list that are still Done
+  - [ ] Tests cover: squash-merge of cluster PR (10 specs, no spec IDs in subject) — auto-bump catches all 10
+  - [ ] Tests cover: non-squash merge (commit subjects have spec IDs) — still works as before
+  - [ ] Tests cover: PR-N with no review story (shouldn't crash; just skip the PR-linkage path)
+  - [ ] aida db reconcile-status remains as the manual recovery for edge cases
+
+  ## Discovered via
+
+  2026-05-15 — PR-30 (10-spec cluster-mode squash-merge) shipped cleanly but auto-bump fired for 0/10 specs. Manual aida db reconcile-status fixed it. This pattern will recur on every cluster-mode PR until the structural fix lands.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T14:29:59.179320451Z
+modified_at: 2026-05-15T14:29:59.179320451Z
+req_type: Bug
+tags:
+- auto-bump
+- bug-102-followup
+- cluster-pr
+- pr-linkage
+- squash-merge
