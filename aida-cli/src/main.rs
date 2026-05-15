@@ -583,6 +583,12 @@ fn run() -> Result<()> {
                  the deprecated centralized backend with `aida db export-git`)."
             );
         }
+        Command::Rebase { .. } => {
+            anyhow::bail!(
+                "`aida rebase` requires a git-canonical store. Run `aida init` (or upgrade from \
+                 the deprecated centralized backend with `aida db export-git`)."
+            );
+        }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
@@ -1567,11 +1573,25 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             store_only,
             message,
             no_rebase_check,
+            dry_run,
+            json,
         } => {
-            return handle_push_command(
-                store_path,
+            // TASK-106: AIDA_PUSH_DEFAULT lets a user flip the default
+            // scope when neither flag is passed explicitly.
+            let (code_only, store_only) = resolve_push_scope(
                 *code_only,
                 *store_only,
+                std::env::var("AIDA_PUSH_DEFAULT").ok().as_deref(),
+            );
+            // TASK-108: --dry-run (or --json, which implies it) prints
+            // the plan and exits without touching origin.
+            if *dry_run || *json {
+                return handle_push_dry_run(store_path, code_only, store_only, *json);
+            }
+            return handle_push_command(
+                store_path,
+                code_only,
+                store_only,
                 message.as_deref(),
                 *no_rebase_check,
             );
@@ -1581,7 +1601,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             store_only,
             quiet,
             no_gate,
+            dry_run,
+            json,
         } => {
+            // TASK-108: --dry-run fetches, reports, and exits.
+            if *dry_run || *json {
+                return handle_pull_dry_run(store_path, *code_only, *store_only, *json);
+            }
             return handle_pull_command(store_path, *code_only, *store_only, *quiet, *no_gate);
         }
         Command::Fetch {
@@ -1590,6 +1616,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             quiet,
         } => {
             return handle_fetch_command(store_path, *code_only, *store_only, *quiet);
+        }
+        Command::Rebase {
+            auto,
+            dry_run,
+            no_fetch,
+            no_stash,
+            json,
+            branch,
+        } => {
+            return handle_rebase_command(
+                store_path,
+                *auto,
+                *dry_run,
+                *no_fetch,
+                *no_stash,
+                *json,
+                branch.as_deref(),
+            );
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
@@ -2278,6 +2322,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             tree,
             depth,
             sync,
+            no_git,
+            verbose,
         } => {
             // STORY-78: opt-in sync-pull before show. trace:STORY-78 | ai:claude
             if *sync {
@@ -2419,6 +2465,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         for c in &req.comments {
                             print_comment(c, 0);
                         }
+                    }
+                    // TASK-241: append the git-linkage section unless
+                    // --no-git. Grep against every id form the spec has
+                    // worn (canonical / agreed / origin) so commits and
+                    // trace comments survive id migration.
+                    if !*no_git {
+                        let mut ids: Vec<String> = vec![req.display_id()];
+                        if let Some(ref a) = req.agreed_id {
+                            if !ids.contains(&a.to_string()) {
+                                ids.push(a.to_string());
+                            }
+                        }
+                        if let Some(ref o) = req.spec_id {
+                            if !ids.contains(o) {
+                                ids.push(o.clone());
+                            }
+                        }
+                        let project_root = store_path
+                            .parent()
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                        print_git_linkage(&project_root, &ids, *verbose);
                     }
                 }
                 None => {
@@ -10653,7 +10721,7 @@ fn slugify(s: &str) -> String {
 /// Walk up from cwd looking for a .git directory — the project root. We
 /// don't use git_ops::is_git_repo here because we need the *path*, not
 /// just a yes/no.
-fn find_project_root() -> Result<std::path::PathBuf> {
+pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
     let mut cur = std::env::current_dir()?;
     loop {
         if cur.join(".git").exists() {
@@ -15587,7 +15655,9 @@ fn build_display_id_lookup(
 /// to the legacy YAML/SQLite path. Returns None on any error — caller
 /// renders with "(not found)" placeholders so missing data degrades
 /// gracefully. trace:STORY-98 | ai:claude
-fn load_store_for_lookup(project_root: &std::path::Path) -> Option<aida_core::RequirementsStore> {
+pub(crate) fn load_store_for_lookup(
+    project_root: &std::path::Path,
+) -> Option<aida_core::RequirementsStore> {
     // Git-canonical: walk up from project_root looking for an .aida/config.toml.
     if let Some(store_path) = detect_distributed_store_from(project_root) {
         if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
@@ -19960,6 +20030,318 @@ mod auto_bump_done_tests {
     }
 }
 
+/// TASK-103: `aida rebase` — detect → classify → execute → report.
+/// The detection + classification live in `aida_core::rebase` (reusable
+/// substrate); this handler owns the execute (auto/prompt/stash) and
+/// report (human + `--json`) phases. trace:TASK-103 | ai:claude
+fn handle_rebase_command(
+    store_path: &std::path::Path,
+    auto: bool,
+    dry_run: bool,
+    no_fetch: bool,
+    no_stash: bool,
+    json: bool,
+    branch: Option<&str>,
+) -> Result<()> {
+    use aida_core::rebase::{self, DetectError};
+
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // ---- Phase 1+2: detect + classify ----
+    let detection = match rebase::detect(&project_root, branch, !no_fetch) {
+        Ok(d) => d,
+        Err(DetectError::NoUpstream(b)) => {
+            // No upstream is a soft "nothing to rebase onto" — report
+            // and exit 0 so scripts/skills can call this unconditionally.
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "classification": "clean",
+                        "branch": b,
+                        "note": "no upstream configured",
+                    })
+                );
+            } else {
+                println!(
+                    "{} branch {} has no upstream — nothing to rebase onto.",
+                    "·".dimmed(),
+                    b.cyan()
+                );
+                println!(
+                    "  {}",
+                    "Pass --branch <ref> to pick a target explicitly.".dimmed()
+                );
+            }
+            return Ok(());
+        }
+        Err(e) => anyhow::bail!("rebase detection failed: {}", e),
+    };
+    let class = detection.class();
+
+    // ---- Phase 3: execute ----
+    let mut executed = false;
+    let mut aborted_conflict = false;
+    let mut conflicts: Vec<String> = Vec::new();
+    let mut refused_dirty = false;
+
+    let want_execute = !dry_run && class.needs_rebase();
+    if want_execute {
+        let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
+        // Safe cases run under --auto; risky cases always need a human.
+        let proceed = if class.is_safe() {
+            if auto {
+                true
+            } else if interactive {
+                rebase_confirm(&format!(
+                    "Rebase {} onto {} ({} behind)?",
+                    detection.branch, detection.upstream, detection.behind
+                ))
+            } else {
+                false // non-interactive, no --auto: report only
+            }
+        } else {
+            // diverged-risky: surface the overlap, always prompt.
+            if !json {
+                eprintln!(
+                    "{} {} file{} touched on BOTH sides — rebase may conflict:",
+                    "⚠".yellow().bold(),
+                    detection.overlap.len(),
+                    if detection.overlap.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    }
+                );
+                for f in detection.overlap.iter().take(10) {
+                    eprintln!("    {}", f.dimmed());
+                }
+            }
+            interactive
+                && rebase_confirm(&format!(
+                    "Rebase anyway ({} ahead, {} behind, overlap exists)?",
+                    detection.ahead, detection.behind
+                ))
+        };
+
+        if proceed {
+            if !detection.working_tree_clean && no_stash {
+                refused_dirty = true;
+            } else {
+                let stashed = !detection.working_tree_clean;
+                if stashed {
+                    let _ = std::process::Command::new("git")
+                        .arg("-C")
+                        .arg(&project_root)
+                        .args(["stash", "push", "-u", "-m", "aida rebase auto-stash"])
+                        .status();
+                }
+                let status = std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(&project_root)
+                    .args(["rebase", &detection.upstream])
+                    .status();
+                match status {
+                    Ok(s) if s.success() => executed = true,
+                    _ => {
+                        // Conflict (or other failure): collect the
+                        // conflicted paths, then abort to leave a clean
+                        // state — `aida rebase` is a convenience verb,
+                        // not a place to strand a half-finished rebase.
+                        conflicts = std::process::Command::new("git")
+                            .arg("-C")
+                            .arg(&project_root)
+                            .args(["diff", "--name-only", "--diff-filter=U"])
+                            .output()
+                            .ok()
+                            .filter(|o| o.status.success())
+                            .map(|o| {
+                                String::from_utf8_lossy(&o.stdout)
+                                    .lines()
+                                    .map(|l| l.to_string())
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let _ = std::process::Command::new("git")
+                            .arg("-C")
+                            .arg(&project_root)
+                            .args(["rebase", "--abort"])
+                            .status();
+                        aborted_conflict = true;
+                    }
+                }
+                if stashed {
+                    let _ = std::process::Command::new("git")
+                        .arg("-C")
+                        .arg(&project_root)
+                        .args(["stash", "pop"])
+                        .status();
+                }
+            }
+        }
+    }
+
+    // ---- Phase 4: report ----
+    rebase_report(
+        &detection,
+        class,
+        executed,
+        aborted_conflict,
+        refused_dirty,
+        &conflicts,
+        json,
+    );
+    if aborted_conflict {
+        anyhow::bail!("rebase hit conflicts and was aborted — resolve manually");
+    }
+    Ok(())
+}
+
+/// TASK-103: yes/no confirmation for the rebase execute phase.
+fn rebase_confirm(question: &str) -> bool {
+    use std::io::Write;
+    eprint!("{} [y/N] ", question);
+    let _ = std::io::stderr().flush();
+    let mut answer = String::new();
+    let _ = std::io::stdin().read_line(&mut answer);
+    matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+}
+
+/// TASK-103: render the rebase report — human-readable, or `--json`.
+fn rebase_report(
+    d: &aida_core::rebase::RebaseDetection,
+    class: aida_core::rebase::RebaseClass,
+    executed: bool,
+    aborted_conflict: bool,
+    refused_dirty: bool,
+    conflicts: &[String],
+    json: bool,
+) {
+    // Suggested follow-ups, classification + outcome aware.
+    let mut followups: Vec<String> = Vec::new();
+    if refused_dirty {
+        followups.push("commit or stash your changes, then re-run `aida rebase`".to_string());
+    } else if aborted_conflict {
+        followups.push(format!(
+            "git rebase {} — resolve conflicts manually",
+            d.upstream
+        ));
+    } else if executed {
+        if d.ahead > 0 {
+            followups.push("aida push — publish the rebased commits".to_string());
+        }
+    } else {
+        match class {
+            aida_core::rebase::RebaseClass::AheadOnly => {
+                followups.push("aida push — publish your local commits".to_string());
+            }
+            aida_core::rebase::RebaseClass::BehindOnly
+            | aida_core::rebase::RebaseClass::DivergedSafe => {
+                followups.push("aida rebase --auto — execute this safe rebase".to_string());
+            }
+            aida_core::rebase::RebaseClass::DivergedRisky => {
+                followups.push(format!(
+                    "review the {} overlapping file(s), then `aida rebase` to decide",
+                    d.overlap.len()
+                ));
+            }
+            aida_core::rebase::RebaseClass::Clean => {}
+        }
+    }
+
+    if json {
+        let obj = serde_json::json!({
+            "branch": d.branch,
+            "upstream": d.upstream,
+            "fetched": d.fetched,
+            "ahead": d.ahead,
+            "behind": d.behind,
+            "classification": class.label(),
+            "overlap": d.overlap,
+            "working_tree_clean": d.working_tree_clean,
+            "executed": executed,
+            "aborted_conflict": aborted_conflict,
+            "refused_dirty": refused_dirty,
+            "conflicts": conflicts,
+            "followups": followups,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&obj).unwrap_or_else(|_| "{}".to_string())
+        );
+        return;
+    }
+
+    println!(
+        "{} {} vs {}",
+        "Rebase:".bold(),
+        d.branch.cyan(),
+        d.upstream.cyan()
+    );
+    println!(
+        "  state      {} ahead · {} behind{}",
+        d.ahead,
+        d.behind,
+        if d.fetched {
+            ""
+        } else {
+            "  (--no-fetch: cached refs)"
+        }
+    );
+    let class_colored = match class {
+        aida_core::rebase::RebaseClass::Clean | aida_core::rebase::RebaseClass::AheadOnly => {
+            class.label().green().to_string()
+        }
+        aida_core::rebase::RebaseClass::BehindOnly
+        | aida_core::rebase::RebaseClass::DivergedSafe => class.label().cyan().to_string(),
+        aida_core::rebase::RebaseClass::DivergedRisky => class.label().yellow().to_string(),
+    };
+    println!("  class      {}", class_colored);
+    if !d.overlap.is_empty() {
+        println!(
+            "  overlap    {} file{} on both sides",
+            d.overlap.len(),
+            if d.overlap.len() == 1 { "" } else { "s" }
+        );
+        for f in d.overlap.iter().take(10) {
+            println!("               {}", f.dimmed());
+        }
+    }
+    if !d.working_tree_clean {
+        println!(
+            "  worktree   {} ({} dirty path(s))",
+            "dirty".yellow(),
+            d.dirty_files.len()
+        );
+    }
+    if executed {
+        println!("  {}", "rebase executed — branch is now up to date".green());
+    } else if aborted_conflict {
+        println!(
+            "  {} ({} conflicted path(s)) — rebase aborted, working tree restored",
+            "conflicts".red(),
+            conflicts.len()
+        );
+        for f in conflicts.iter().take(10) {
+            println!("               {}", f.dimmed());
+        }
+    } else if refused_dirty {
+        println!(
+            "  {}",
+            "--no-stash and the working tree is dirty — not rebasing".yellow()
+        );
+    }
+    if !followups.is_empty() {
+        println!("  {}", "next:".bold());
+        for f in &followups {
+            println!("    {} {}", "·".dimmed(), f);
+        }
+    }
+}
+
 /// BUG-95: regression coverage for the claim that `aida pull --code-only`
 /// skips the Done → Completed auto-bump. The bug-as-filed asserted the
 /// conditional was nested in the wrong branch; the current structure has
@@ -20157,6 +20539,428 @@ mod handle_pull_command_tests {
             "--store-only should NOT have auto-bumped, status was {:?}",
             req.status
         );
+    }
+}
+
+/// TASK-106: coverage for the `aida push` / `aida pull` scope flags —
+/// all four combinations (default / --code-only / --store-only / both)
+/// at the clap-parse layer, the `AIDA_PUSH_DEFAULT` env-var override,
+/// and the mutual-exclusion guard. trace:TASK-106 | ai:claude
+#[cfg(test)]
+mod push_pull_scope_tests {
+    use super::*;
+    use clap::Parser;
+
+    /// Default: neither flag, no env → both legs.
+    #[test]
+    fn resolve_scope_default_is_both() {
+        assert_eq!(resolve_push_scope(false, false, None), (false, false));
+    }
+
+    /// Explicit flags pass straight through.
+    #[test]
+    fn resolve_scope_explicit_flags() {
+        assert_eq!(resolve_push_scope(true, false, None), (true, false));
+        assert_eq!(resolve_push_scope(false, true, None), (false, true));
+    }
+
+    /// AIDA_PUSH_DEFAULT flips the default when no flag is passed.
+    #[test]
+    fn resolve_scope_env_override() {
+        assert_eq!(
+            resolve_push_scope(false, false, Some("code")),
+            (true, false)
+        );
+        assert_eq!(
+            resolve_push_scope(false, false, Some("code-only")),
+            (true, false)
+        );
+        assert_eq!(
+            resolve_push_scope(false, false, Some("store")),
+            (false, true)
+        );
+        assert_eq!(
+            resolve_push_scope(false, false, Some("STORE-ONLY")),
+            (false, true)
+        );
+        // Unrecognized / explicit "both" → historical default.
+        assert_eq!(
+            resolve_push_scope(false, false, Some("both")),
+            (false, false)
+        );
+        assert_eq!(
+            resolve_push_scope(false, false, Some("xyz")),
+            (false, false)
+        );
+    }
+
+    /// An explicit flag always wins over the env var.
+    #[test]
+    fn resolve_scope_explicit_beats_env() {
+        assert_eq!(
+            resolve_push_scope(true, false, Some("store")),
+            (true, false)
+        );
+        assert_eq!(resolve_push_scope(false, true, Some("code")), (false, true));
+    }
+
+    /// All four parse combinations for `aida push`.
+    #[test]
+    fn push_flag_combinations_parse() {
+        // default
+        let cli = Cli::try_parse_from(["aida", "push"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                code_only: false,
+                store_only: false,
+                ..
+            }
+        ));
+        // --code-only
+        let cli = Cli::try_parse_from(["aida", "push", "--code-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                code_only: true,
+                store_only: false,
+                ..
+            }
+        ));
+        // --store-only
+        let cli = Cli::try_parse_from(["aida", "push", "--store-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                code_only: false,
+                store_only: true,
+                ..
+            }
+        ));
+        // both → clap rejects via conflicts_with
+        assert!(Cli::try_parse_from(["aida", "push", "--code-only", "--store-only"]).is_err());
+    }
+
+    /// Same four combinations for `aida pull`.
+    #[test]
+    fn pull_flag_combinations_parse() {
+        let cli = Cli::try_parse_from(["aida", "pull"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Pull {
+                code_only: false,
+                store_only: false,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "pull", "--code-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Pull {
+                code_only: true,
+                store_only: false,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "pull", "--store-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Pull {
+                code_only: false,
+                store_only: true,
+                ..
+            }
+        ));
+        assert!(Cli::try_parse_from(["aida", "pull", "--code-only", "--store-only"]).is_err());
+    }
+
+    /// TASK-108: --dry-run and --json parse for both verbs and compose
+    /// with the scope flags.
+    #[test]
+    fn dry_run_flags_parse() {
+        let cli = Cli::try_parse_from(["aida", "push", "--dry-run"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                dry_run: true,
+                json: false,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "push", "--json", "--code-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                json: true,
+                code_only: true,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "pull", "--dry-run", "--store-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Pull {
+                dry_run: true,
+                store_only: true,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "pull", "--json"]).unwrap();
+        assert!(matches!(cli.command, Command::Pull { json: true, .. }));
+    }
+}
+
+/// TASK-234 / TASK-241: integration coverage for the git-state
+/// classifiers behind `aida queue list`'s "Done — awaiting merge"
+/// section and `aida show`'s git-linkage section. Both extracted
+/// helpers (`classify_in_flight_specs`, `collect_git_linkage`) are
+/// gh-free — they only run `git` — so a temp repo with hand-built
+/// commits exercises every branch without a GitHub round-trip.
+/// trace:TASK-234 TASK-241 | ai:claude
+#[cfg(test)]
+mod in_flight_linkage_integration_tests {
+    use super::*;
+
+    fn git(repo: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .expect("git on PATH");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// A fresh repo on `main` with one initial commit.
+    fn init_repo() -> (tempfile::TempDir, std::path::PathBuf) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path().to_path_buf();
+        git(&root, &["init", "--initial-branch=main", "--quiet"]);
+        git(&root, &["config", "user.email", "t@example.com"]);
+        git(&root, &["config", "user.name", "Test"]);
+        std::fs::write(root.join("README.md"), "init\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "chore: init"]);
+        (tmp, root)
+    }
+
+    fn commit(root: &std::path::Path, file: &str, body: &str, subject: &str) {
+        std::fs::write(root.join(file), body).unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-q", "-m", subject]);
+    }
+
+    fn req(spec_id: &str) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new(format!("test {spec_id}"), String::new());
+        r.spec_id = Some(spec_id.to_string());
+        r
+    }
+
+    /// TASK-234: a mixed-state queue — one spec merged to main, one on a
+    /// feature branch, one with no commit — buckets into stuck /
+    /// awaiting / no_commit. Pure git, no gh.
+    #[test]
+    fn classify_buckets_mixed_state_queue() {
+        let (_tmp, root) = init_repo();
+        // STUCK: a commit on main referencing the spec.
+        commit(&root, "a.txt", "x", "feat: stuck work (TASK-801) (#7)");
+        // AWAITING: a commit on a feature branch, not merged to main.
+        git(&root, &["checkout", "-q", "-b", "feature/x"]);
+        commit(&root, "b.txt", "y", "feat: in-flight work (TASK-802)");
+        git(&root, &["checkout", "-q", "main"]);
+
+        let specs = [req("TASK-801"), req("TASK-802"), req("TASK-803")];
+        let refs: Vec<&aida_core::Requirement> = specs.iter().collect();
+        let b = classify_in_flight_specs(&refs, &root);
+
+        assert_eq!(b.stuck.len(), 1, "one stuck spec");
+        assert_eq!(b.stuck[0].0, "TASK-801");
+        assert_eq!(b.stuck[0].1, Some(7), "squash PR parsed for the stuck spec");
+
+        assert_eq!(
+            b.awaiting.get("feature/x").map(|v| v.as_slice()),
+            Some(&["TASK-802".to_string()][..])
+        );
+
+        assert_eq!(b.no_commit, vec!["TASK-803".to_string()]);
+    }
+
+    /// TASK-234: an empty queue yields three empty buckets — the
+    /// no-Done-items path.
+    #[test]
+    fn classify_handles_no_done_items() {
+        let (_tmp, root) = init_repo();
+        let b = classify_in_flight_specs(&[], &root);
+        assert!(b.stuck.is_empty() && b.awaiting.is_empty() && b.no_commit.is_empty());
+    }
+
+    /// TASK-241: a spec nothing references — no commits, no trace files.
+    #[test]
+    fn linkage_for_never_touched_spec_is_empty() {
+        let (_tmp, root) = init_repo();
+        let l = collect_git_linkage(&root, &["TASK-804".to_string()]);
+        assert!(l.commits.is_empty(), "no commits reference the spec");
+        assert!(l.files.is_empty(), "no trace files reference the spec");
+        assert!(!l.shipped);
+    }
+
+    /// TASK-241: a shipped spec — commit on main + a squash `(#NN)`
+    /// subject + a trace comment in a source file.
+    #[test]
+    fn linkage_for_shipped_spec() {
+        let (_tmp, root) = init_repo();
+        std::fs::write(root.join("touched.rs"), "// trace:TASK-805\nfn ship() {}\n").unwrap();
+        commit(
+            &root,
+            "touched.rs",
+            "// trace:TASK-805\nfn ship() {}\n",
+            "feat: ship it (TASK-805) (#42)",
+        );
+
+        let l = collect_git_linkage(&root, &["TASK-805".to_string()]);
+        assert_eq!(l.commits.len(), 1, "one referencing commit");
+        assert!(l.shipped, "commit is an ancestor of main");
+        assert_eq!(
+            l.shipped_pr,
+            Some(42),
+            "PR number parsed from squash subject"
+        );
+        assert_eq!(l.files.len(), 1, "the trace comment was found");
+        assert_eq!(l.files[0].0, "touched.rs");
+    }
+
+    /// TASK-241: an in-flight spec — commit on a feature branch, not on
+    /// main; the feature branch is reported and `shipped` is false.
+    #[test]
+    fn linkage_for_in_flight_spec() {
+        let (_tmp, root) = init_repo();
+        git(&root, &["checkout", "-q", "-b", "feature/y"]);
+        commit(&root, "c.txt", "z", "feat: flying (TASK-806)");
+        git(&root, &["checkout", "-q", "main"]);
+
+        let l = collect_git_linkage(&root, &["TASK-806".to_string()]);
+        assert_eq!(l.commits.len(), 1);
+        assert!(!l.shipped, "commit is not on main");
+        assert_eq!(l.branch.as_deref(), Some("feature/y"));
+    }
+}
+
+/// TASK-241: coverage for the squash-merge PR-number parser that
+/// `aida show`'s git-linkage section uses to point shipped specs at
+/// their merged PR. trace:TASK-241 | ai:claude
+#[cfg(test)]
+mod git_linkage_tests {
+    use super::*;
+
+    #[test]
+    fn squash_merge_subject_yields_pr_number() {
+        assert_eq!(
+            parse_squash_pr_number("EPIC-24 batch:plan-tooling — plan lifecycle (7 specs) (#29)"),
+            Some(29)
+        );
+        assert_eq!(parse_squash_pr_number("feat: thing (#1234)"), Some(1234));
+        // Trailing whitespace is tolerated.
+        assert_eq!(parse_squash_pr_number("fix: y (#7)  "), Some(7));
+    }
+
+    #[test]
+    fn aida_format_subject_has_no_pr_number() {
+        // The `(SPEC-ID)` AIDA commit format must NOT be mistaken for a
+        // PR pointer — only `(#NN)` counts.
+        assert_eq!(
+            parse_squash_pr_number("[AI:claude] feat(cli): aida rebase (TASK-103)"),
+            None
+        );
+        assert_eq!(parse_squash_pr_number("chore: bump deps"), None);
+    }
+
+    #[test]
+    fn malformed_pr_suffix_is_rejected() {
+        assert_eq!(parse_squash_pr_number("feat: x (#notanumber)"), None);
+        assert_eq!(parse_squash_pr_number("feat: x (#12"), None);
+        assert_eq!(parse_squash_pr_number(""), None);
+    }
+}
+
+/// TASK-238: coverage for the queue-list tag surfacing — the inline
+/// chip formatter and the `--by-batch` group key. trace:TASK-238
+#[cfg(test)]
+mod queue_tag_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    fn tags(items: &[&str]) -> HashSet<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn no_tags_yields_no_chip() {
+        assert_eq!(format_tag_chip(&HashSet::new()), None);
+    }
+
+    #[test]
+    fn single_tag_chip() {
+        assert_eq!(format_tag_chip(&tags(&["ux"])), Some("ux".to_string()));
+    }
+
+    #[test]
+    fn multi_tag_chip_caps_plain_tags_and_keeps_all_batch() {
+        // 1 batch tag + 5 plain → batch shown, 3 plain shown, "+2".
+        let chip = format_tag_chip(&tags(&[
+            "batch:display-polish",
+            "ux",
+            "queue",
+            "tags",
+            "visibility",
+            "display",
+        ]))
+        .unwrap();
+        assert!(
+            chip.starts_with("batch:display-polish"),
+            "batch tag first: {chip}"
+        );
+        assert!(chip.ends_with("+2"), "overflow marker: {chip}");
+        // batch + 3 plain + overflow = 5 comma-separated segments.
+        assert_eq!(chip.split(", ").count(), 5, "{chip}");
+    }
+
+    #[test]
+    fn batch_tag_of_finds_the_batch_tag() {
+        assert_eq!(
+            batch_tag_of(&tags(&["ux", "batch:plan-tooling", "queue"])),
+            Some("batch:plan-tooling")
+        );
+        assert_eq!(batch_tag_of(&tags(&["ux", "queue"])), None);
+        assert_eq!(batch_tag_of(&HashSet::new()), None);
+    }
+
+    #[test]
+    fn tag_exact_match_is_case_insensitive() {
+        let t = tags(&["batch:plan-tooling", "ux"]);
+        assert!(tag_matches_exact(&t, "ux"));
+        assert!(tag_matches_exact(&t, "UX"));
+        assert!(tag_matches_exact(&t, "batch:plan-tooling"));
+        // Exact, not substring: a prefix is not an exact match.
+        assert!(!tag_matches_exact(&t, "batch:plan"));
+        assert!(!tag_matches_exact(&t, "queue"));
+        assert!(!tag_matches_exact(&HashSet::new(), "ux"));
+    }
+
+    #[test]
+    fn tag_prefix_match_is_case_insensitive() {
+        let t = tags(&["batch:plan-tooling", "ux"]);
+        assert!(tag_matches_prefix(&t, "batch:"));
+        assert!(tag_matches_prefix(&t, "BATCH:"));
+        assert!(tag_matches_prefix(&t, "batch:plan"));
+        assert!(tag_matches_prefix(&t, "u"));
+        assert!(!tag_matches_prefix(&t, "integration:"));
+        assert!(!tag_matches_prefix(&HashSet::new(), "batch:"));
     }
 }
 
@@ -22331,6 +23135,579 @@ fn scan_trace_graph(
         }
     }
     out
+}
+
+/// TASK-241: extract the PR number from a GitHub squash-merge commit
+/// subject, which ends with `(#NN)`. Returns None when the subject has
+/// no such suffix. trace:TASK-241 | ai:claude
+fn parse_squash_pr_number(subject: &str) -> Option<u64> {
+    subject
+        .trim_end()
+        .rsplit_once("(#")
+        .and_then(|(_, tail)| tail.strip_suffix(')'))
+        .and_then(|n| n.parse::<u64>().ok())
+}
+
+/// TASK-238: the inline tag-chip body for an `aida queue list` row.
+/// `batch:*` tags come first and are always shown (they are the
+/// load-bearing grouping tags); plain tags are sorted, capped at 3, and
+/// any remainder collapses to a `+N` overflow marker. Returns None when
+/// the requirement carries no tags. trace:TASK-238 | ai:claude
+fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
+    if tags.is_empty() {
+        return None;
+    }
+    const MAX_PLAIN: usize = 3;
+    let mut batch_tags: Vec<&str> = Vec::new();
+    let mut plain_tags: Vec<&str> = Vec::new();
+    for t in tags {
+        if t.to_ascii_lowercase().starts_with("batch:") {
+            batch_tags.push(t.as_str());
+        } else {
+            plain_tags.push(t.as_str());
+        }
+    }
+    batch_tags.sort_unstable();
+    plain_tags.sort_unstable();
+    let mut shown: Vec<String> = batch_tags.iter().map(|s| s.to_string()).collect();
+    shown.extend(plain_tags.iter().take(MAX_PLAIN).map(|s| s.to_string()));
+    if plain_tags.len() > MAX_PLAIN {
+        shown.push(format!("+{}", plain_tags.len() - MAX_PLAIN));
+    }
+    Some(shown.join(", "))
+}
+
+/// TASK-238: does the tag set contain `want` (case-insensitive)? The
+/// predicate behind `aida queue list --tag`. trace:TASK-238 | ai:claude
+fn tag_matches_exact(tags: &std::collections::HashSet<String>, want: &str) -> bool {
+    tags.iter().any(|t| t.eq_ignore_ascii_case(want))
+}
+
+/// TASK-238: does any tag start with `prefix` (case-insensitive)? The
+/// predicate behind `aida queue list --tag-prefix`. trace:TASK-238
+fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) -> bool {
+    let lp = prefix.to_ascii_lowercase();
+    tags.iter().any(|t| t.to_ascii_lowercase().starts_with(&lp))
+}
+
+/// TASK-238: the `batch:*` tag a requirement carries (lowest-sorting
+/// when several), used as the group key for `aida queue list
+/// --by-batch`. None when the requirement is un-batched.
+/// trace:TASK-238 | ai:claude
+fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
+    let mut found: Vec<&str> = tags
+        .iter()
+        .filter(|t| t.to_ascii_lowercase().starts_with("batch:"))
+        .map(|s| s.as_str())
+        .collect();
+    found.sort_unstable();
+    found.into_iter().next()
+}
+
+/// TASK-234: the three in-flight buckets, split out of
+/// [`render_in_flight_grouped`] so the classification — which only ever
+/// touches git (`log` / `merge-base` / `branch --contains`), never gh —
+/// is unit-testable against a temp repo. trace:TASK-234 | ai:claude
+struct InFlightBuckets {
+    /// (spec_id, squash-merge PR number if any, relative time) — the
+    /// referencing commit is already on main but the spec never bumped
+    /// to Completed (auto-bump missed).
+    stuck: Vec<(String, Option<u64>, String)>,
+    /// branch → spec_ids — the commit is on a feature branch, awaiting
+    /// merge.
+    awaiting: std::collections::BTreeMap<String, Vec<String>>,
+    /// Done specs with no commit referencing the id yet.
+    no_commit: Vec<String>,
+}
+
+/// TASK-234: bucket Done specs by git state. gh-free by design — the
+/// PR-state lookup happens later, in [`render_in_flight_grouped`]. A
+/// referencing commit on main → `stuck`; on a feature branch →
+/// `awaiting`; no commit at all → `no_commit`. trace:TASK-234 | ai:claude
+fn classify_in_flight_specs(
+    specs: &[&aida_core::Requirement],
+    project_root: &std::path::Path,
+) -> InFlightBuckets {
+    use std::collections::BTreeMap;
+    use std::process::Command as PCmd;
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+    };
+    let is_ancestor = |sha: &str, target: &str| -> bool {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["merge-base", "--is-ancestor", sha, target])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+    let main_ref = if git(&["rev-parse", "--verify", "--quiet", "origin/main"]).is_some() {
+        "origin/main"
+    } else {
+        "main"
+    };
+
+    let mut stuck: Vec<(String, Option<u64>, String)> = Vec::new();
+    let mut awaiting: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut no_commit: Vec<String> = Vec::new();
+
+    for req in specs {
+        let id = req
+            .agreed_id
+            .as_deref()
+            .or(req.spec_id.as_deref())
+            .unwrap_or("???")
+            .to_string();
+        // Newest commit referencing the AIDA `(SPEC-ID)` format.
+        let pattern = format!("({})", id);
+        let line = git(&[
+            "log",
+            "--all",
+            "-F",
+            "-1",
+            "--grep",
+            pattern.as_str(),
+            "--pretty=format:%H\u{1f}%s\u{1f}%cr",
+        ])
+        .unwrap_or_default();
+        let mut parts = line.splitn(3, '\u{1f}');
+        let (Some(full), subject, ago) = (
+            parts.next().filter(|s| !s.is_empty()),
+            parts.next().unwrap_or(""),
+            parts.next().unwrap_or("recently"),
+        ) else {
+            no_commit.push(id);
+            continue;
+        };
+        if is_ancestor(full, main_ref) {
+            stuck.push((id, parse_squash_pr_number(subject), ago.to_string()));
+        } else {
+            let contains = git(&[
+                "branch",
+                "--all",
+                "--contains",
+                full,
+                "--format=%(refname:short)",
+            ])
+            .unwrap_or_default();
+            let branch = contains
+                .lines()
+                .map(|b| b.trim().trim_start_matches("origin/"))
+                .filter(|b| !b.is_empty() && *b != "HEAD" && *b != "main" && *b != "master")
+                .map(|b| b.to_string())
+                .next()
+                .unwrap_or_else(|| "(branch unknown)".to_string());
+            awaiting.entry(branch).or_default().push(id);
+        }
+    }
+
+    InFlightBuckets {
+        stuck,
+        awaiting,
+        no_commit,
+    }
+}
+
+/// TASK-234: render the "Done — awaiting merge" body grouped by PR +
+/// state instead of as a flat list. [`classify_in_flight_specs`] does
+/// the git-only bucketing; this adds one `gh` open-PR lookup per
+/// awaiting branch and prints each bucket with a concrete `▶ Next`
+/// action. trace:TASK-234 | ai:claude
+fn render_in_flight_grouped(specs: &[&aida_core::Requirement], project_root: &std::path::Path) {
+    let InFlightBuckets {
+        stuck,
+        awaiting,
+        no_commit,
+    } = classify_in_flight_specs(specs, project_root);
+
+    // ---- Awaiting merge, grouped by branch (one gh lookup per branch) ----
+    for (branch, ids) in &awaiting {
+        let pr = match detect_open_pr_for_branch(project_root, branch) {
+            PrLookup::Found(pr) => Some(pr),
+            _ => None,
+        };
+        match &pr {
+            Some(pr) => println!(
+                "  {} {} — {} spec{}:",
+                format!("PR-{}", pr.number).cyan().bold(),
+                "(open)".dimmed(),
+                ids.len(),
+                if ids.len() == 1 { "" } else { "s" }
+            ),
+            None => println!(
+                "  {} {} — {} spec{}:",
+                branch.cyan().bold(),
+                "(no PR opened yet)".dimmed(),
+                ids.len(),
+                if ids.len() == 1 { "" } else { "s" }
+            ),
+        }
+        println!(
+            "    {} {}",
+            "◐".bright_green(),
+            ids.iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join("  ")
+        );
+        match &pr {
+            Some(pr) => println!(
+                "    {} merge {}, then `{}`",
+                "▶ Next:".bold(),
+                format!("PR-{}", pr.number).cyan(),
+                "aida pull".cyan()
+            ),
+            None => println!(
+                "    {} open a PR (`{}`), then merge → `{}`",
+                "▶ Next:".bold(),
+                "/aida-pr".cyan(),
+                "aida pull".cyan()
+            ),
+        }
+    }
+
+    // ---- Stuck — auto-bump missed ----
+    if !stuck.is_empty() {
+        if !awaiting.is_empty() {
+            println!();
+        }
+        println!(
+            "  {} ({} spec{}):",
+            "Stuck — PR merged, auto-bump missed".yellow().bold(),
+            stuck.len(),
+            if stuck.len() == 1 { "" } else { "s" }
+        );
+        for (id, pr, ago) in &stuck {
+            let pr_note = pr
+                .map(|n| format!("(#{}, {})", n, ago))
+                .unwrap_or_else(|| format!("(merged {})", ago));
+            println!("    {} {}  {}", "◐".yellow(), id.bold(), pr_note.dimmed());
+        }
+        println!(
+            "    {} `{}` replays the missed bumps to Completed",
+            "▶ Next:".bold(),
+            "aida db reconcile-status".cyan()
+        );
+    }
+
+    // ---- Awaiting commit ----
+    if !no_commit.is_empty() {
+        if !awaiting.is_empty() || !stuck.is_empty() {
+            println!();
+        }
+        println!(
+            "  {} ({} spec{}):",
+            "Awaiting commit — no commit references the spec yet"
+                .dimmed()
+                .bold(),
+            no_commit.len(),
+            if no_commit.len() == 1 { "" } else { "s" }
+        );
+        println!("    {} {}", "◐".dimmed(), no_commit.join("  "));
+        println!(
+            "    {} commit the work with `({})` in the message, then open a PR",
+            "▶ Next:".bold(),
+            "SPEC-ID".cyan()
+        );
+    }
+}
+
+/// TASK-241: surface git linkage for a spec inside `aida show` — the
+/// commits that reference it (AIDA commit format puts `(SPEC-ID)` in
+/// the message), the files carrying its `trace:` comments, the branch +
+/// worktree the work lives on, and PR state. Every sub-probe is
+/// best-effort: a missing `gh`, an absent `origin/main`, or zero
+/// matches degrades to a dim note rather than failing the show.
+/// `--no-git` skips the whole section; `--verbose` un-caps the commit
+/// list and adds per-commit diff stats. trace:TASK-241 | ai:claude
+/// TASK-241: the git-linkage data for a spec — extracted from
+/// [`print_git_linkage`] so the collection (git-only, never gh) is
+/// unit-testable against a temp repo. trace:TASK-241 | ai:claude
+struct GitLinkage {
+    /// (full_sha, short_sha, subject), newest first.
+    commits: Vec<(String, String, String)>,
+    /// (file, symbol) per trace comment — deduped and sorted.
+    files: Vec<(String, Option<String>)>,
+    /// The newest referencing commit is an ancestor of main.
+    shipped: bool,
+    /// Feature branch holding the work (in-flight case only).
+    branch: Option<String>,
+    /// Worktree path checked out at `branch`, if any.
+    worktree: Option<String>,
+    /// PR number parsed from a squash-merge subject (shipped case only).
+    shipped_pr: Option<u64>,
+}
+
+/// TASK-241: collect the git linkage for `ids` — commits referencing the
+/// AIDA `(SPEC-ID)` format, files carrying `trace:` comments, and
+/// branch/worktree/shipped state. gh-free by design: the in-flight
+/// open-PR lookup happens later, in [`print_git_linkage`].
+/// trace:TASK-241 | ai:claude
+fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
+    use std::process::Command as PCmd;
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+    };
+    let is_ancestor = |sha: &str, target: &str| -> bool {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["merge-base", "--is-ancestor", sha, target])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+
+    // ---- Commits referencing the spec (across all refs) ----
+    // Match the AIDA commit format `(SPEC-ID)` as a fixed string: the
+    // parens exclude the orphan `aida-store` branch's bookkeeping
+    // commits ("update TASK-92"), which mention the bare id.
+    let patterns: Vec<String> = ids.iter().map(|id| format!("({})", id)).collect();
+    let mut args: Vec<&str> = vec![
+        "log",
+        "--all",
+        "-F",
+        "--date-order",
+        "--pretty=format:%H\u{1f}%h\u{1f}%s",
+    ];
+    for p in &patterns {
+        args.push("--grep");
+        args.push(p.as_str());
+    }
+    let log = git(&args).unwrap_or_default();
+    let commits: Vec<(String, String, String)> = log
+        .lines()
+        .filter_map(|l| {
+            let mut p = l.splitn(3, '\u{1f}');
+            Some((
+                p.next()?.to_string(),
+                p.next()?.to_string(),
+                p.next()?.to_string(),
+            ))
+        })
+        .collect();
+
+    // ---- Files carrying trace comments for the spec ----
+    let wanted: HashSet<String> = ids.iter().cloned().collect();
+    let trace_hits = scan_trace_graph(project_root, &wanted);
+    let mut files: Vec<(String, Option<String>)> = trace_hits
+        .values()
+        .flatten()
+        .map(|h| (h.file.clone(), h.symbol.clone()))
+        .collect();
+    files.sort();
+    files.dedup();
+
+    // ---- Branch / worktree / shipped state (anchored on newest commit) ----
+    let mut shipped = false;
+    let mut branch: Option<String> = None;
+    let mut worktree: Option<String> = None;
+    let mut shipped_pr: Option<u64> = None;
+    if let Some((full, _, _)) = commits.first() {
+        let main_ref = if git(&["rev-parse", "--verify", "--quiet", "origin/main"]).is_some() {
+            "origin/main"
+        } else {
+            "main"
+        };
+        shipped = is_ancestor(full, main_ref);
+        if shipped {
+            // A squash-merge subject ends with `(#NN)` — the cheapest,
+            // most reliable PR pointer for shipped work.
+            shipped_pr = commits
+                .iter()
+                .find_map(|(_, _, s)| parse_squash_pr_number(s));
+        } else {
+            // In flight: find the feature branch that holds the work.
+            let contains = git(&[
+                "branch",
+                "--all",
+                "--contains",
+                full,
+                "--format=%(refname:short)",
+            ])
+            .unwrap_or_default();
+            branch = contains
+                .lines()
+                .map(|b| b.trim().trim_start_matches("origin/"))
+                .filter(|b| !b.is_empty() && *b != "HEAD" && *b != "main" && *b != "master")
+                .map(|b| b.to_string())
+                .next();
+            if let (Some(b), Some(wt)) =
+                (branch.as_deref(), git(&["worktree", "list", "--porcelain"]))
+            {
+                let mut cur_path: Option<String> = None;
+                for line in wt.lines() {
+                    if let Some(p) = line.strip_prefix("worktree ") {
+                        cur_path = Some(p.to_string());
+                    } else if let Some(r) = line.strip_prefix("branch ") {
+                        if r.trim_start_matches("refs/heads/") == b {
+                            worktree = cur_path.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    GitLinkage {
+        commits,
+        files,
+        shipped,
+        branch,
+        worktree,
+        shipped_pr,
+    }
+}
+
+fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bool) {
+    use std::process::Command as PCmd;
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+    };
+
+    let GitLinkage {
+        commits,
+        files,
+        shipped,
+        branch,
+        worktree,
+        shipped_pr,
+    } = collect_git_linkage(project_root, ids);
+
+    if commits.is_empty() && files.is_empty() {
+        println!(
+            "\n{}: {}",
+            "Git linkage".green().bold(),
+            "no commits or trace comments reference this spec yet".dimmed()
+        );
+        return;
+    }
+
+    println!("\n{}:", "Git linkage".green().bold());
+
+    // ---- Branch / worktree / PR (anchored on the newest commit) ----
+    if !commits.is_empty() {
+        if shipped {
+            println!("  {}     {}", "Branch".bold(), "merged to main".green());
+            if let Some(num) = shipped_pr {
+                println!("  {}         {}", "PR".bold(), format!("PR-{}", num).cyan());
+            }
+        } else {
+            match branch.as_deref() {
+                Some(b) => {
+                    let wt = worktree
+                        .map(|p| format!(" (worktree: {})", p))
+                        .unwrap_or_default();
+                    println!(
+                        "  {}     {}{} · {}",
+                        "Branch".bold(),
+                        b.cyan(),
+                        wt,
+                        "in flight".yellow()
+                    );
+                    match detect_open_pr_for_branch(project_root, b) {
+                        PrLookup::Found(pr) => println!(
+                            "  {}         {} {}",
+                            "PR".bold(),
+                            format!("PR-{}", pr.number).cyan(),
+                            pr.url.dimmed()
+                        ),
+                        PrLookup::NoOpenPr => {
+                            println!("  {}         {}", "PR".bold(), "no PR opened yet".dimmed())
+                        }
+                        PrLookup::GhMissing => println!(
+                            "  {}         {}",
+                            "PR".bold(),
+                            "gh not installed — PR state unknown".dimmed()
+                        ),
+                        PrLookup::GhFailed(_) => println!(
+                            "  {}         {}",
+                            "PR".bold(),
+                            "gh lookup failed — PR state unknown".dimmed()
+                        ),
+                    }
+                }
+                None => println!(
+                    "  {}     {}",
+                    "Branch".bold(),
+                    "work committed but branch not found locally".yellow()
+                ),
+            }
+        }
+    }
+
+    // ---- Commits list ----
+    if !commits.is_empty() {
+        let cap = if verbose {
+            commits.len()
+        } else {
+            5.min(commits.len())
+        };
+        println!(
+            "  {} ({}{})",
+            "Commits".bold(),
+            commits.len(),
+            if !verbose && commits.len() > cap {
+                format!(", showing {}", cap)
+            } else {
+                String::new()
+            }
+        );
+        for (full, short, subject) in commits.iter().take(cap) {
+            println!("    {} {}", short.yellow(), subject);
+            if verbose {
+                if let Some(stat) =
+                    git(&["show", "--shortstat", "--format=", full]).filter(|s| !s.is_empty())
+                {
+                    if let Some(last) = stat.lines().last() {
+                        println!("      {}", last.trim().dimmed());
+                    }
+                }
+            }
+        }
+        if !verbose && commits.len() > cap {
+            println!(
+                "    {}",
+                format!("… {} more (--verbose to expand)", commits.len() - cap).dimmed()
+            );
+        }
+    }
+
+    // ---- Files traced ----
+    if !files.is_empty() {
+        println!("  {} ({})", "Files traced".bold(), files.len());
+        for (file, symbol) in &files {
+            match symbol {
+                Some(sym) => println!("    {} — {}", file, sym.dimmed()),
+                None => println!("    {}", file),
+            }
+        }
+    }
 }
 
 /// `aida plan helpers <spec>` — render a `## Reusable helpers` section
@@ -24623,6 +26000,480 @@ fn handle_usage_command(
 // trace:FR-264 | ai:claude
 // ----------------------------------------------------------------------------
 
+/// TASK-106: resolve the effective push scope. An explicit `--code-only`
+/// or `--store-only` always wins. When the user passes neither,
+/// `AIDA_PUSH_DEFAULT` can flip the default: `code`/`code-only` scopes
+/// to the code leg, `store`/`store-only` to the orphan store; anything
+/// else (including unset) keeps the historical both-legs default.
+/// trace:TASK-106 | ai:claude
+fn resolve_push_scope(code_only: bool, store_only: bool, env_value: Option<&str>) -> (bool, bool) {
+    if code_only || store_only {
+        return (code_only, store_only);
+    }
+    match env_value.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        Some("code") | Some("code-only") => (true, false),
+        Some("store") | Some("store-only") => (false, true),
+        _ => (false, false),
+    }
+}
+
+/// TASK-106: one leg of a `aida push` / `aida pull` pre-action summary.
+/// `pending` is true when the leg actually has work to do (commits to
+/// push, pending orphan changes) — used to decide whether to prompt.
+struct LegStatus {
+    label: &'static str,
+    detail: String,
+    pending: bool,
+}
+
+/// TASK-106: describe what the code leg of `aida push` will do, without
+/// touching origin. trace:TASK-106 | ai:claude
+fn push_code_leg_status(project_root: &std::path::Path) -> LegStatus {
+    use aida_core::git_ops;
+    if !git_ops::has_remote(project_root, "origin") {
+        return LegStatus {
+            label: "code",
+            detail: "no `origin` remote — will skip".to_string(),
+            pending: false,
+        };
+    }
+    let branch = git_ops::current_branch(project_root).unwrap_or_else(|_| "HEAD".to_string());
+    match ahead_behind_vs_ref(project_root, &branch, &format!("origin/{}", branch)) {
+        Some((0, _)) => LegStatus {
+            label: "code",
+            detail: format!("{} → origin (up to date, nothing to push)", branch),
+            pending: false,
+        },
+        Some((ahead, _)) => LegStatus {
+            label: "code",
+            detail: format!(
+                "{} → origin ({} commit{} ahead)",
+                branch,
+                ahead,
+                if ahead == 1 { "" } else { "s" }
+            ),
+            pending: true,
+        },
+        // No `origin/<branch>` ref yet — first push of a new branch.
+        None => LegStatus {
+            label: "code",
+            detail: format!("{} → origin (new branch — will publish)", branch),
+            pending: true,
+        },
+    }
+}
+
+/// TASK-106: describe what the orphan-store leg of `aida push` will do.
+/// trace:TASK-106 | ai:claude
+fn push_store_leg_status(store_path: &std::path::Path) -> LegStatus {
+    use aida_core::git_ops;
+    if !git_ops::is_git_repo(store_path) {
+        return LegStatus {
+            label: "store",
+            detail: "no orphan worktree — will skip".to_string(),
+            pending: false,
+        };
+    }
+    if !git_ops::has_remote(store_path, "origin") {
+        return LegStatus {
+            label: "store",
+            detail: "orphan store has no `origin` — will skip".to_string(),
+            pending: false,
+        };
+    }
+    let has_changes = git_ops::has_changes(store_path).unwrap_or(false);
+    let ahead = orphan_branch_sync_state(store_path)
+        .map(|(a, _)| a)
+        .unwrap_or(0);
+    if has_changes || ahead > 0 {
+        let mut parts: Vec<String> = Vec::new();
+        if ahead > 0 {
+            parts.push(format!(
+                "{} commit{} ahead",
+                ahead,
+                if ahead == 1 { "" } else { "s" }
+            ));
+        }
+        if has_changes {
+            parts.push("uncommitted changes to bundle".to_string());
+        }
+        LegStatus {
+            label: "store",
+            detail: format!("aida-store → origin ({})", parts.join(", ")),
+            pending: true,
+        }
+    } else {
+        LegStatus {
+            label: "store",
+            detail: "aida-store → origin (up to date, nothing to push)".to_string(),
+            pending: false,
+        }
+    }
+}
+
+/// TASK-106: print the pre-push plan and, when BOTH legs have commits to
+/// push (the only genuinely ambiguous case), prompt for confirmation.
+/// A single-leg push is unsurprising and proceeds silently. The summary
+/// itself is shown only on an interactive stdin so scripted/CI output
+/// stays stable; the prompt is additionally gated on `!no_rebase_check`
+/// (the established "skip interactive checks" signal). Returns `false`
+/// when the user declines. trace:TASK-106 | ai:claude
+fn confirm_push_plan(legs: &[LegStatus], no_rebase_check: bool) -> bool {
+    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
+    if !interactive {
+        return true;
+    }
+    println!("{}", "Push plan:".bold());
+    for leg in legs {
+        let marker = if leg.pending {
+            "→".cyan().to_string()
+        } else {
+            "·".dimmed().to_string()
+        };
+        println!("  {} {:<6} {}", marker, leg.label, leg.detail);
+    }
+    let pending = legs.iter().filter(|l| l.pending).count();
+    if pending < 2 || no_rebase_check {
+        return true;
+    }
+    use std::io::Write;
+    eprint!("Push both legs? [Y/n] ");
+    let _ = std::io::stderr().flush();
+    let mut answer = String::new();
+    let _ = std::io::stdin().read_line(&mut answer);
+    if matches!(answer.trim().to_ascii_lowercase().as_str(), "n" | "no") {
+        eprintln!("{}", "Push aborted.".dimmed());
+        false
+    } else {
+        true
+    }
+}
+
+/// TASK-108: count commits matching a git rev-list spec. 0 on failure.
+/// trace:TASK-108 | ai:claude
+fn commit_count(repo: &std::path::Path, spec: &[&str]) -> usize {
+    let mut args = vec!["rev-list", "--count"];
+    args.extend_from_slice(spec);
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(&args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// TASK-108: list "shorthash subject" lines for a git rev-list spec,
+/// capped at `limit`. Empty on any git failure. trace:TASK-108 | ai:claude
+fn commit_subjects(repo: &std::path::Path, spec: &[&str], limit: usize) -> Vec<String> {
+    let limit_arg = format!("-n{}", limit);
+    let mut args = vec!["log", "--format=%h %s", limit_arg.as_str()];
+    args.extend_from_slice(spec);
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(&args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|l| l.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// TASK-108: one leg of a `--dry-run` report.
+struct DryRunLeg {
+    label: &'static str,
+    summary: String,
+    count: usize,
+    subjects: Vec<String>,
+}
+
+/// TASK-108: render the dry-run plan — human-readable by default, JSON
+/// with `--json`. trace:TASK-108 | ai:claude
+fn emit_dry_run(verb: &str, legs: &[DryRunLeg], json: bool) {
+    if json {
+        let arr: Vec<serde_json::Value> = legs
+            .iter()
+            .map(|l| {
+                serde_json::json!({
+                    "leg": l.label,
+                    "summary": l.summary,
+                    "count": l.count,
+                    "commits": l.subjects,
+                })
+            })
+            .collect();
+        let obj = serde_json::json!({ "verb": verb, "dry_run": true, "legs": arr });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&obj).unwrap_or_else(|_| "{}".to_string())
+        );
+        return;
+    }
+    println!(
+        "{} {}",
+        format!("aida {} --dry-run", verb).bold(),
+        "(no changes made)".dimmed()
+    );
+    for leg in legs {
+        println!("  {} {}", leg.label.cyan().bold(), leg.summary);
+        for s in &leg.subjects {
+            println!("      {}", s.dimmed());
+        }
+        if leg.count > leg.subjects.len() {
+            println!(
+                "      {}",
+                format!("… and {} more", leg.count - leg.subjects.len()).dimmed()
+            );
+        }
+    }
+}
+
+/// TASK-108: `aida push --dry-run` — report what each in-scope leg would
+/// push without touching origin. trace:TASK-108 | ai:claude
+fn handle_push_dry_run(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+    json: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+    const LIMIT: usize = 10;
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    let mut legs: Vec<DryRunLeg> = Vec::new();
+
+    if !store_only {
+        let leg = if !git_ops::has_remote(&project_root, "origin") {
+            DryRunLeg {
+                label: "code",
+                summary: "no `origin` remote — nothing to push".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else {
+            let branch =
+                git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+            let origin_ref = format!("origin/{}", branch);
+            match ahead_behind_vs_ref(&project_root, &branch, &origin_ref) {
+                Some((ahead, behind)) => {
+                    let range = format!("{}..HEAD", origin_ref);
+                    let subjects = commit_subjects(&project_root, &[range.as_str()], LIMIT);
+                    let mut summary = format!(
+                        "{} → origin/{}: {} commit{} to push",
+                        branch,
+                        branch,
+                        ahead,
+                        if ahead == 1 { "" } else { "s" }
+                    );
+                    if behind > 0 {
+                        summary += &format!(
+                            " (DIVERGED — {} commit{} behind; rebase before pushing)",
+                            behind,
+                            if behind == 1 { "" } else { "s" }
+                        );
+                    }
+                    DryRunLeg {
+                        label: "code",
+                        summary,
+                        count: ahead as usize,
+                        subjects,
+                    }
+                }
+                // No origin/<branch> ref — first push of a new branch.
+                None => {
+                    let spec = ["HEAD", "--not", "--remotes"];
+                    let count = commit_count(&project_root, &spec);
+                    let subjects = commit_subjects(&project_root, &spec, LIMIT);
+                    DryRunLeg {
+                        label: "code",
+                        summary: format!(
+                            "{} → origin (new branch — would publish {} commit{})",
+                            branch,
+                            count,
+                            if count == 1 { "" } else { "s" }
+                        ),
+                        count,
+                        subjects,
+                    }
+                }
+            }
+        };
+        legs.push(leg);
+    }
+
+    if !code_only {
+        let leg = if !git_ops::is_git_repo(store_path) {
+            DryRunLeg {
+                label: "store",
+                summary: "no orphan worktree — nothing to push".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else if !git_ops::has_remote(store_path, "origin") {
+            DryRunLeg {
+                label: "store",
+                summary: "orphan store has no `origin` — nothing to push".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else {
+            let ahead = orphan_branch_sync_state(store_path)
+                .map(|(a, _)| a)
+                .unwrap_or(0);
+            let subjects = commit_subjects(store_path, &["origin/aida-store..HEAD"], LIMIT);
+            let mut summary = format!(
+                "aida-store → origin: {} commit{} to push",
+                ahead,
+                if ahead == 1 { "" } else { "s" }
+            );
+            if git_ops::has_changes(store_path).unwrap_or(false) {
+                summary += " (+ uncommitted changes that would be bundled)";
+            }
+            DryRunLeg {
+                label: "store",
+                summary,
+                count: ahead,
+                subjects,
+            }
+        };
+        legs.push(leg);
+    }
+
+    emit_dry_run("push", &legs, json);
+    Ok(())
+}
+
+/// TASK-108: `aida pull --dry-run` — fetch both in-scope legs, then
+/// report what each would pull without merging. trace:TASK-108 | ai:claude
+fn handle_pull_dry_run(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+    json: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+    const LIMIT: usize = 10;
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // Refresh origin refs first so the behind-counts reflect reality.
+    let _ = handle_fetch_command(store_path, code_only, store_only, true);
+
+    let mut legs: Vec<DryRunLeg> = Vec::new();
+
+    if !store_only {
+        let leg = if !git_ops::has_remote(&project_root, "origin") {
+            DryRunLeg {
+                label: "code",
+                summary: "no `origin` remote — nothing to pull".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else {
+            let branch =
+                git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+            let origin_ref = format!("origin/{}", branch);
+            match ahead_behind_vs_ref(&project_root, &branch, &origin_ref) {
+                Some((ahead, behind)) => {
+                    let range = format!("HEAD..{}", origin_ref);
+                    let subjects = commit_subjects(&project_root, &[range.as_str()], LIMIT);
+                    let how = if behind == 0 {
+                        "up to date".to_string()
+                    } else if ahead == 0 {
+                        format!(
+                            "{} commit{} to pull (fast-forward)",
+                            behind,
+                            if behind == 1 { "" } else { "s" }
+                        )
+                    } else {
+                        format!(
+                            "{} commit{} to pull ({} local commit{} → rebase/merge needed)",
+                            behind,
+                            if behind == 1 { "" } else { "s" },
+                            ahead,
+                            if ahead == 1 { "" } else { "s" }
+                        )
+                    };
+                    DryRunLeg {
+                        label: "code",
+                        summary: format!("{} ← origin/{}: {}", branch, branch, how),
+                        count: behind as usize,
+                        subjects,
+                    }
+                }
+                None => DryRunLeg {
+                    label: "code",
+                    summary: format!("no origin/{} ref — nothing to pull", branch),
+                    count: 0,
+                    subjects: Vec::new(),
+                },
+            }
+        };
+        legs.push(leg);
+    }
+
+    if !code_only {
+        let leg = if !git_ops::is_git_repo(store_path) {
+            DryRunLeg {
+                label: "store",
+                summary: "no orphan worktree — nothing to pull".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else if !git_ops::has_remote(store_path, "origin") {
+            DryRunLeg {
+                label: "store",
+                summary: "orphan store has no `origin` — nothing to pull".to_string(),
+                count: 0,
+                subjects: Vec::new(),
+            }
+        } else {
+            let (ahead, behind) = orphan_branch_sync_state(store_path).unwrap_or((0, 0));
+            let subjects = commit_subjects(store_path, &["HEAD..origin/aida-store"], LIMIT);
+            let how = if behind == 0 {
+                "up to date".to_string()
+            } else if ahead == 0 {
+                format!(
+                    "{} commit{} to pull (fast-forward)",
+                    behind,
+                    if behind == 1 { "" } else { "s" }
+                )
+            } else {
+                format!(
+                    "{} commit{} to pull ({} local commit{} → rebase)",
+                    behind,
+                    if behind == 1 { "" } else { "s" },
+                    ahead,
+                    if ahead == 1 { "" } else { "s" }
+                )
+            };
+            DryRunLeg {
+                label: "store",
+                summary: format!("aida-store ← origin: {}", how),
+                count: behind,
+                subjects,
+            }
+        };
+        legs.push(leg);
+    }
+
+    emit_dry_run("pull", &legs, json);
+    Ok(())
+}
+
 fn handle_push_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -24636,6 +26487,22 @@ fn handle_push_command(
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // TASK-106: pre-push summary. Show what each in-scope leg will do
+    // BEFORE touching origin; prompt only when both legs have commits
+    // (the ambiguous case — a single-leg push is no surprise).
+    {
+        let mut legs: Vec<LegStatus> = Vec::new();
+        if !store_only {
+            legs.push(push_code_leg_status(&project_root));
+        }
+        if !code_only {
+            legs.push(push_store_leg_status(store_path));
+        }
+        if !confirm_push_plan(&legs, no_rebase_check) {
+            return Ok(());
+        }
+    }
 
     // ---- Code push (current branch on the project repo) ----
     if !store_only {
@@ -24823,6 +26690,74 @@ fn handle_push_command(
     Ok(())
 }
 
+/// TASK-106: print the pre-pull plan — which legs are in scope and the
+/// action each will take. Shown only on an interactive stdin. Unlike
+/// `aida push` there is no confirmation prompt: both legs are
+/// non-destructive (`--ff-only` for code, rebase-pull for the
+/// AIDA-managed orphan store), so there is no "surprise publish" to
+/// guard against. trace:TASK-106 | ai:claude
+fn print_pull_plan(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+) {
+    use aida_core::git_ops;
+    if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        return;
+    }
+    let mut legs: Vec<LegStatus> = Vec::new();
+    if !store_only {
+        let leg = if !git_ops::has_remote(project_root, "origin") {
+            LegStatus {
+                label: "code",
+                detail: "no `origin` remote — will skip".to_string(),
+                pending: false,
+            }
+        } else {
+            let branch =
+                git_ops::current_branch(project_root).unwrap_or_else(|_| "HEAD".to_string());
+            LegStatus {
+                label: "code",
+                detail: format!("{} ← origin (git pull --ff-only)", branch),
+                pending: true,
+            }
+        };
+        legs.push(leg);
+    }
+    if !code_only {
+        let leg = if !git_ops::is_git_repo(store_path) {
+            LegStatus {
+                label: "store",
+                detail: "no orphan worktree — will skip".to_string(),
+                pending: false,
+            }
+        } else if !git_ops::has_remote(store_path, "origin") {
+            LegStatus {
+                label: "store",
+                detail: "orphan store has no `origin` — will skip".to_string(),
+                pending: false,
+            }
+        } else {
+            LegStatus {
+                label: "store",
+                detail: "aida-store ← origin (rebase pull)".to_string(),
+                pending: true,
+            }
+        };
+        legs.push(leg);
+    }
+    println!("{}", "Pull plan:".bold());
+    for leg in &legs {
+        let marker = if leg.pending {
+            "←".cyan().to_string()
+        } else {
+            "·".dimmed().to_string()
+        };
+        println!("  {} {:<6} {}", marker, leg.label, leg.detail);
+    }
+}
+
 /// `aida pull` — symmetric counterpart of `aida push`. Pulls both the
 /// current code branch (via `git pull --ff-only`) and the orphan store
 /// (via `git_ops::pull_rebase`, matching `aida db sync --pull`). Each
@@ -24841,6 +26776,9 @@ fn handle_pull_command(
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // TASK-106: pre-pull summary (interactive only, no prompt).
+    print_pull_plan(&project_root, store_path, code_only, store_only);
 
     // ---- Code pull (current branch on the project repo) ----
     if !store_only {
@@ -34268,6 +36206,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             no_in_flight,
             in_flight_only,
             batch: batch_filter,
+            tag: tag_filter,
+            tag_prefix: tag_prefix_filter,
+            by_batch,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
@@ -34446,6 +36387,30 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     };
                     req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want))
                 })
+                .filter(|e| {
+                    // TASK-238: --tag exact-match filter (case-insensitive).
+                    let Some(want) = tag_filter.as_deref() else {
+                        return true;
+                    };
+                    store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == e.requirement_id)
+                        .map(|req| tag_matches_exact(&req.tags, want))
+                        .unwrap_or(false)
+                })
+                .filter(|e| {
+                    // TASK-238: --tag-prefix filter (case-insensitive).
+                    let Some(prefix) = tag_prefix_filter.as_deref() else {
+                        return true;
+                    };
+                    store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == e.requirement_id)
+                        .map(|req| tag_matches_prefix(&req.tags, prefix))
+                        .unwrap_or(false)
+                })
                 .collect();
 
             // Load global entries for the active role unless --local was passed.
@@ -34579,7 +36544,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // instead of one long interleaved list. Globals stay flat
                 // after — we don't have foreign stores loaded to derive their
                 // parents. trace:TASK-33 | ai:claude
-                if *tree {
+                if *tree || *by_batch {
                     use std::collections::BTreeMap;
                     let mut groups: BTreeMap<String, Vec<&aida_core::QueueEntry>> = BTreeMap::new();
                     let unscoped_key = "~unscoped".to_string();
@@ -34592,11 +36557,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             groups.entry(unscoped_key.clone()).or_default().push(entry);
                             continue;
                         };
-                        let key = entry
-                            .for_scope
-                            .clone()
-                            .or_else(|| derive_parent_epic_label(req, &store))
-                            .unwrap_or_else(|| unscoped_key.clone());
+                        // TASK-238: --by-batch keys groups on the `batch:*`
+                        // tag; the default --tree keys on parent EPIC.
+                        let key = if *by_batch {
+                            batch_tag_of(&req.tags)
+                                .map(|t| t.to_string())
+                                .unwrap_or_else(|| unscoped_key.clone())
+                        } else {
+                            entry
+                                .for_scope
+                                .clone()
+                                .or_else(|| derive_parent_epic_label(req, &store))
+                                .unwrap_or_else(|| unscoped_key.clone())
+                        };
                         groups.entry(key).or_default().push(entry);
                     }
                     // Sort groups: real EPICs by count desc then name; unscoped last.
@@ -34646,19 +36619,33 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             let glyph = if is_last { "└─" } else { "├─" };
                             let pad =
                                 " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
+                            // TASK-238: surface the tag chip here too — the
+                            // grouped (--tree / --by-batch) view must show
+                            // tags just like the flat view, especially
+                            // --by-batch, which exists for the tags.
+                            // trace:TASK-238 | ai:claude
+                            let tag_chip = req
+                                .and_then(|r| format_tag_chip(&r.tags))
+                                .map(|c| format!("  {}", format!("[{}]", c).dimmed()))
+                                .unwrap_or_default();
                             println!(
-                                "  {} {}{}  {}  [{}]",
+                                "  {} {}{}  {}  [{}]{}",
                                 glyph.dimmed(),
                                 display_id_owned.bold(),
                                 pad,
                                 title_owned,
                                 status_colored,
+                                tag_chip,
                             );
                         };
 
                     for (key, group) in &ordered {
                         let header = if key == &unscoped_key {
-                            "Unscoped".to_string()
+                            if *by_batch {
+                                "No batch".to_string()
+                            } else {
+                                "Unscoped".to_string()
+                            }
                         } else {
                             key.clone()
                         };
@@ -34840,6 +36827,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     if !global_entries.is_empty() {
                         print!("  {}", format!("[origin:{}]", local_project_name).dimmed());
                     }
+                    // TASK-238: surface the requirement's tags inline so
+                    // the batch:* convention is visible without a per-item
+                    // `aida show`. trace:TASK-238 | ai:claude
+                    if let Some(chip) = req.and_then(|r| format_tag_chip(&r.tags)) {
+                        print!("  {}", format!("[{}]", chip).dimmed());
+                    }
                     if let Some(ref note) = entry.note {
                         print!("  {}", format!("\"{}\"", note).dimmed().italic());
                     }
@@ -34919,67 +36912,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     if in_flight_specs.len() == 1 { "" } else { "s" }
                 );
                 println!("{}", "─".repeat(80));
-                // Stable order: most-recently-implemented first so the
-                // freshly-shipped work surfaces at the top. Falls back to
-                // spec_id when timestamps are missing.
-                let mut sorted: Vec<&aida_core::Requirement> = in_flight_specs.clone();
-                sorted.sort_by(|a, b| {
-                    let a_ts = a
-                        .implementation_info
-                        .as_ref()
-                        .and_then(|i| i.implemented_at);
-                    let b_ts = b
-                        .implementation_info
-                        .as_ref()
-                        .and_then(|i| i.implemented_at);
-                    match (a_ts, b_ts) {
-                        (Some(a), Some(b)) => b.cmp(&a),
-                        (Some(_), None) => std::cmp::Ordering::Less,
-                        (None, Some(_)) => std::cmp::Ordering::Greater,
-                        (None, None) => a
-                            .agreed_id
-                            .as_deref()
-                            .unwrap_or("")
-                            .cmp(b.agreed_id.as_deref().unwrap_or("")),
-                    }
-                });
-                for req in &sorted {
-                    let display_id = req
-                        .agreed_id
-                        .as_deref()
-                        .or(req.spec_id.as_deref())
-                        .unwrap_or("???");
-                    let ago = req
-                        .implementation_info
-                        .as_ref()
-                        .and_then(|i| i.implemented_at)
-                        .map(|t| {
-                            let elapsed = chrono::Utc::now().signed_duration_since(t);
-                            if elapsed.num_minutes() < 1 {
-                                "just now".to_string()
-                            } else if elapsed.num_hours() < 1 {
-                                format!("{}m ago", elapsed.num_minutes())
-                            } else if elapsed.num_days() < 1 {
-                                format!("{}h ago", elapsed.num_hours())
-                            } else {
-                                format!("{}d ago", elapsed.num_days())
-                            }
-                        })
-                        .unwrap_or_else(|| "awaiting merge".to_string());
-                    println!(
-                        "  {} {}  {}  [{}]",
-                        "◐".bright_green(),
-                        display_id.bold(),
-                        req.title,
-                        ago.dimmed(),
-                    );
-                }
-                println!();
-                println!(
-                    "{}",
-                    "  (auto-bump to Completed fires when a commit referencing the spec lands on the default branch — `aida pull`)"
-                        .dimmed()
-                );
+                // TASK-234: grouped render — bucket the Done specs by PR
+                // + state (awaiting merge / stuck / awaiting commit),
+                // each with a concrete ▶ Next action, instead of a flat
+                // list under one descriptive hint. trace:TASK-234
+                let project_root = storage
+                    .path()
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                render_in_flight_grouped(&in_flight_specs, &project_root);
                 if !*in_flight_only {
                     println!(
                         "{}",

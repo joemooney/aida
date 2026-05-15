@@ -124,6 +124,42 @@ git config --global advice.diverging false  # silence the "Need to specify how t
 
 Trade-off: silent auto-rebase for fewer manual decisions. `autoStash` preserves uncommitted changes. If you'd rather see the prompt each time, leave these unset and the recipe above is your fallback.
 
+## Proactive invocation — `aida rebase` / `/aida-rebase`
+
+The recovery recipe above is now packaged as a verb. `aida rebase`
+(TASK-103) runs the four phases — **detect** (fetch + ahead/behind +
+file-path overlap), **classify** (clean / ahead-only / behind-only /
+diverged-safe / diverged-risky), **execute** (auto for safe cases,
+prompt for risky overlap, auto-stash around a dirty tree), **report**
+(human-readable or `--json`):
+
+```bash
+aida rebase --dry-run --json   # probe: classify only, no side effects
+aida rebase --auto             # execute the rebase when the class is safe
+aida rebase --no-fetch         # classify against cached refs (offline)
+```
+
+The point of the verb is not just convenience — it is **proactive
+invocation**. Branch drift is cheapest to fix *before* you commit or
+open a PR, not after. The `/aida-rebase` skill carries a
+proactive-invocation playbook in its "When to Use" section
+(`aida-core/templates/skills/aida-rebase.md`, TASK-105): an agent
+should fire the side-effect-free `--dry-run` probe — and surface the
+result — when
+
+- it is about to commit and the session has been open >15 minutes;
+- the user says "rebase" / "pull" / "push" / "is this up to date?" /
+  "let's ship";
+- it is about to open a PR;
+- a long session resumes after a 30+ minute idle gap.
+
+It should **not** fire on read-only operations, on detached HEAD or
+un-tracked branches, per-keystroke, or again after the user declined
+or said "I'll handle git" this session. The detection logic lives in
+the reusable `aida_core::rebase` module so the lifecycle delegators
+(`aida pull --autorebase`, the `/aida-commit` precheck) call it rather
+than re-deriving ahead/behind.
+
 ---
 
 ## Origin story
