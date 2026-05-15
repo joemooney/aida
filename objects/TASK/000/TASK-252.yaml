@@ -1,0 +1,25 @@
+id: 019e2e08-090a-7f60-9a15-a6cae1e9fd0f
+spec_id: TASK-252
+agreed_id: TASK-252
+title: 'TUI: overlay session-id truncation byte-slices &s.id[..12] — panic risk on a non-ASCII id'
+description: |-
+  Deep-pass finding from /aida-review of PR-43 (STORY-133).
+
+  aida-tui/src/overlay.rs render_session does 'let id = if s.id.len() > 12 { &s.id[..12] } else { &s.id };' — a byte-index slice of a String. A session id with a multi-byte UTF-8 char straddling byte 12 would panic. The overlay module's own doc comment states the invariant 'a malformed overlay must not block the keystroke that opened it', so a panic here contradicts the stated design.
+
+  Practically unreachable today — session ids are hex UUIDs (ASCII-only), minted by the uuid crate or filtered through parse_list_sessions' is_ascii_hexdigit check. But the slice is unguarded against a non-ASCII id arriving from 'aida status --json'.
+
+  Fix: clip by chars not bytes — reuse overlay::clip, or 's.id.chars().take(12).collect()'. Same pattern is safe in picker.rs:68 only because parse_list_sessions guarantees hex; harmonising on a char-safe helper is cleanest.
+
+  Surfaced in PR-43 review comment: https://github.com/joemooney/aida/pull/43#issuecomment-4464539917
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T23:45:39.082444287Z
+modified_at: 2026-05-15T23:45:39.082444287Z
+req_type: Task
+tags:
+- followup
+- review:PR-43
+- tui
