@@ -1,0 +1,68 @@
+id: 019e2931-12f3-7073-8283-bf16b174bfe0
+spec_id: TASK-236
+agreed_id: TASK-236
+title: 'aida session list: title field is stale for long-running sessions — display ''initial topic'' clearly or augment with recent activity'
+description: |-
+  Claude Code sets a session title once at conversation start (derived from the first user message or initial prompt). That title is fixed; it does NOT update as the conversation evolves. So aida session list, which reads and displays the title, shows misleading info for any session that has run more than a few minutes.
+
+  ## Concrete observation 2026-05-14
+
+  After a 24+ hour intensive session covering ~60 distinct topics (BUG fixes, STORY filings, workflow design, /ultraplan integration, etc.), aida session list --all rendered:
+
+    ● 1bf450af  11s     implementer  FR-1-042  aida @ main   Clarify CLI command naming convention
+
+  The title 'Clarify CLI command naming convention' was probably the initial topic when the session started days ago. It's now wildly disconnected from current activity. A user (or returning agent) scanning aida session list to find 'the session where I was working on auto-bump' would not match on this title.
+
+  ## The constraint
+
+  Claude Code's session title is set externally; AIDA can't update it programmatically (no API). So 'just keep the title accurate' isn't an option without vendor changes.
+
+  ## Possible mitigations
+
+  Three options, ordered easiest to most-thorough:
+
+  1. Re-label the column 'INITIAL TITLE' (or similar) and add a clarification line above the table: 'Title is set at session start; long-running sessions evolve beyond it. Use SPEC + recent activity to identify a session.'
+
+  2. Append last-touched-SPEC or last-recorded-activity to the display:
+     ID         AGE   ROLE        SPEC      WORKTREE      INITIAL TITLE                 LAST ACTIVITY
+     1bf450af   11s   implementer FR-1-042  aida @ main   Clarify CLI command...        STORY-127 (filed 1m ago)
+     The 'last activity' can be derived from aida history or from session-state writes (which AIDA already tracks).
+
+  3. Add an --activity / --recent flag that swaps the title column for last-activity entirely.
+
+  Option 1 is mechanical (~5 minutes of skill-template edits + display logic). Option 2 is more substantive (cross-referencing session ID to recent aida history entries). Option 3 is light addition on top of either.
+
+  ## Composes with
+
+  - aida history (already tracks per-session-id activity in many cases) — source for option 2's 'last activity' column
+  - STORY-127 (workflow state-aware guidance) — the same principle: surfaces should help name state, not require the user to maintain a mental model
+  - BUG-98 (session list vs leases inconsistency, shipped) — sibling fix on the same command; the disambiguation hint added there could be extended with this clarification
+
+  ## Why low priority
+
+  The current display isn't wrong, just incomplete. Users CAN cross-reference age + SPEC + worktree to identify a session without relying on title. The fix is quality-of-life polish, not blocking.
+
+  ## Acceptance
+
+  - [ ] aida session list display either renames 'TITLE' to indicate it's the initial topic, OR adds a 'LAST ACTIVITY' column (or both)
+  - [ ] If adding LAST ACTIVITY: derive from aida history's most-recent entry tied to the session ID
+  - [ ] aida session list --help mentions that title is set at session start and may not reflect current work
+  - [ ] Tests cover: session with no recent activity (fresh start), session with rich history, session ID not findable in history
+
+  ## Discovered via
+
+  2026-05-14 — user observed at session wrap-up that their 24-hour-old Claude conversation showed title 'Clarify CLI command naming convention' in aida session list. That was the topic at start. The session has since covered ~60 different topics. Asked to file the staleness as a small UX TASK.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T01:12:22.515363360Z
+modified_at: 2026-05-15T01:12:22.515363360Z
+req_type: Task
+tags:
+- clarity
+- display
+- session-list
+- staleness
+- title
+- ux
