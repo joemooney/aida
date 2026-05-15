@@ -49,9 +49,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T04:46:28.443236212Z
-modified_at: 2026-05-14T06:18:51.664367802Z
+modified_at: 2026-05-15T14:39:35.192017257Z
 req_type: Task
 tags:
+- batch:ux-polish
 - cancellation
 - fallback
 - scheduling
