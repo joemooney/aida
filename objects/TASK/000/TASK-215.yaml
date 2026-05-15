@@ -37,12 +37,12 @@ description: |-
   ## Discovered via
 
   PR-20 /aida-review deep-pass 2026-05-13.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:13.445056882Z
-modified_at: 2026-05-15T00:33:44.570831559Z
+modified_at: 2026-05-15T00:59:03.595130059Z
 req_type: Task
 tags:
 - batch:friction-fixes
