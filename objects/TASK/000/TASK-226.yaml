@@ -56,12 +56,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 — STORY-86 itself ended up needing this after the BUG-96 saga. Manual flip used as immediate workaround: aida edit STORY-86 --status completed. This TASK is the structural fix.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T01:41:49.104622752Z
-modified_at: 2026-05-15T00:33:45.646794978Z
+modified_at: 2026-05-15T00:59:01.925208430Z
 req_type: Task
 tags:
 - auto-bump
