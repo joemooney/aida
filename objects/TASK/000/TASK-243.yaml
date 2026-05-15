@@ -55,10 +55,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T13:34:35.165058127Z
-modified_at: 2026-05-15T13:34:35.165058127Z
+modified_at: 2026-05-15T14:39:32.328250393Z
 req_type: Task
 tags:
 - ambiguity
+- batch:ux-polish
 - display
 - resolution
 - role
