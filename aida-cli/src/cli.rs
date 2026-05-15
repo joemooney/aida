@@ -648,6 +648,19 @@ pub enum SessionCommand {
         cmd: SessionManifestCommand,
     },
 
+    /// Track fallback wakeups so a re-entered skill can deterministically
+    /// skip a zombie fire. An agent schedules a harness wakeup as
+    /// insurance against a hung event (CI watch, build poll), `register`s
+    /// the tag here, and `cancel`s it when the protected event completes
+    /// cleanly. The harness wakeup still fires, but the re-entered skill
+    /// checks `wakeup check <tag>` and exits immediately when cancelled —
+    /// deterministic, instead of relying on a `gh pr view`-style probe.
+    /// trace:TASK-228 | ai:claude
+    Wakeup {
+        #[command(subcommand)]
+        cmd: SessionWakeupCommand,
+    },
+
     /// Delete Claude Code session metadata (`.jsonl` files under
     /// `~/.claude/projects/<encoded>/`) older than N days. Walks the
     /// current project + the parent project (when run inside a session
@@ -684,6 +697,49 @@ pub enum SessionCommand {
         #[clap(long)]
         orphans: bool,
     },
+}
+
+/// TASK-228: fallback-wakeup registry subcommands. Records live at
+/// `.aida/wakeups/<tag>.toml`. The agent owns the lifecycle: `register`
+/// at schedule time, `cancel` on clean completion, `check` from the
+/// re-entered skill's early-exit guard. trace:TASK-228 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum SessionWakeupCommand {
+    /// Register a fallback wakeup as active. Call this right after
+    /// scheduling the harness wakeup it protects.
+    Register {
+        /// Stable tag identifying this wakeup (e.g. `pr-23-ci`).
+        tag: String,
+
+        /// The prompt / command the harness wakeup will re-enter, kept
+        /// for the `list` view (informational).
+        #[clap(long)]
+        prompt: Option<String>,
+
+        /// Free-form note describing what event this wakeup protects.
+        #[clap(long)]
+        note: Option<String>,
+    },
+
+    /// Cancel a registered wakeup — call this when the protected event
+    /// completes cleanly. Idempotent: cancelling an unknown or
+    /// already-cancelled tag is a no-op.
+    Cancel {
+        /// Tag passed to `register`.
+        tag: String,
+    },
+
+    /// Check whether a wakeup is still active. Prints `active` /
+    /// `cancelled` / `unknown` and exits 0 only when active — so a
+    /// re-entered skill can guard with `if aida session wakeup check
+    /// <tag>; then …`.
+    Check {
+        /// Tag passed to `register`.
+        tag: String,
+    },
+
+    /// List registered wakeups (active first, then cancelled).
+    List,
 }
 
 /// Planned-cluster manifest subcommands. The manifest is a per-session
