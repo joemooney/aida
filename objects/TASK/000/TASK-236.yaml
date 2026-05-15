@@ -57,9 +57,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:12:22.515363360Z
-modified_at: 2026-05-15T01:12:22.515363360Z
+modified_at: 2026-05-15T06:41:43.388214469Z
 req_type: Task
 tags:
+- batch:display-polish
 - clarity
 - display
 - session-list
