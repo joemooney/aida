@@ -57,9 +57,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:24:21.036579876Z
-modified_at: 2026-05-14T14:24:21.036579876Z
+modified_at: 2026-05-15T14:39:36.534851168Z
 req_type: Task
 tags:
+- batch:ux-polish
 - ci
 - interactive
 - session-end
