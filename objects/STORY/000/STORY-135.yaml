@@ -1,0 +1,14 @@
+id: 019e2cb8-2498-7ba3-9f72-c2a5c50af0c2
+spec_id: STORY-135
+agreed_id: STORY-135
+title: 'AIDA TUI crash recovery: .aida/tui-state.json + re-attach orphaned sessions'
+description: 'A TUI crash kills the PTY children but Claude conversations are durable .jsonl files (TASK-112). ''.aida/tui-state.json'' records each tab''s {session_id, scope, role, worktree} on spawn/exit. On relaunch ''aida tui'' reads the state file, lists orphaned sessions, and re-attaches each via ''aida queue work <scope> --resume <session_id>''. A graceful ''prefix d'' detach quits the TUI without killing children. See docs/plans/2026-05-15-epic-26-tui.md (Files: aida-tui/src/state.rs).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T17:38:46.040698658Z
+modified_at: 2026-05-15T17:38:46.040698658Z
+req_type: Story
+tags:
+- tui
