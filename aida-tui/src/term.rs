@@ -27,14 +27,23 @@ pub struct TermGuard {
 impl TermGuard {
     /// Enter raw mode + alternate screen. Fails if the process is not
     /// attached to a real terminal (e.g. output redirected to a file).
+    ///
+    /// The guard is constructed the instant raw mode is on — *before* the
+    /// alternate-screen switch — so a failure there returns `Err` through
+    /// `Drop` and `restore_terminal()` still disables raw mode. Otherwise
+    /// the early return would strand the terminal in raw mode with no
+    /// guard to tear it down. trace:TASK-248 | ai:claude
     pub fn enter() -> Result<Self> {
         terminal::enable_raw_mode().context("failed to enter terminal raw mode")?;
+        // Raw mode is on; own teardown now. Any `?` past this point drops
+        // `guard` on the way out and runs the full restore.
+        let guard = Self { active: true };
         let mut out = stdout();
         out.execute(EnterAlternateScreen)
             .context("failed to switch to the alternate screen")?;
         out.execute(cursor::Hide).ok();
         out.flush().ok();
-        Ok(Self { active: true })
+        Ok(guard)
     }
 }
 
