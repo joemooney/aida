@@ -4252,3 +4252,22 @@ User asked four questions:
 4. **Docker**: was broken — `Dockerfile` and `docker/Dockerfile.server` both `COPY aida-desktop/` and `COPY aida-web/` (removed in 4a948e5). Fixed by removing those COPY lines + adding a comment about volume-mounting `.aida-store/` for git-canonical mode. Top-level Dockerfile now serves the React dashboard against any data directory passed at `/data`.
 
 Bumped `[workspace.package]` version 0.2.0 → 0.4.0 plus the path-dep version constraints in `aida-cli/Cargo.toml` and `aida-crate/Cargo.toml`. Workspace builds clean.
+
+## Session 55: Implementer Queue Drain — EPIC-23/24 batch:tui-prereqs/lifecycle/ux-polish/small-wins (2026-05-15)
+
+**Request:** `/goal` — drain the implementer queue, one item per session, commit + push + open PR + autonomous-merge each, until `aida queue list` shows no implementer items remaining.
+
+Ten queued implementer items shipped as ten separate PRs (#31–#40), each branched off `main`, built + tested + `cargo fmt --check`'d locally, squash-merged (no branch protection), then `aida queue done` + `aida db sync --push`. Final `aida db reconcile-status` promoted all ten `Done → Completed` (the merges happened between `db sync --push`es, so the pull-driven auto-bump hadn't run).
+
+- **TASK-112** (PR #31) — `aida queue work --resume / --fresh / --list-sessions`. Resume a prior claude conversation for a scope; fresh launches mint a `--session-id` UUID recorded in the manifest's new `claude_session_id` field; `list_scope_sessions` scans `~/.claude/projects/` globally.
+- **TASK-245** (PR #32) — `aida session start --reuse-branch`: check out an existing branch instead of forking; an explicitly-named `--branch` that already exists auto-reuses with a hint.
+- **BUG-106** (PR #33) — auto-bump now follows the `(#N)` → review-story → `implements` linkage to bump a cluster PR's covered specs (their IDs never reach the squash-merge subject).
+- **TASK-246** (PR #34) — auto-bump also completes `In Progress` review stories whose PR merged (self-merge without a re-review iteration), with an audit comment.
+- **TASK-242** (PR #35) — new `aida goal` command: derives machine-checkable `/goal` completion conditions (`--batch/--epic/--spec/--pr/--queue-empty`, composing with AND), each with an explicit verify command; `--copy`/`--invoke`.
+- **TASK-243** (PR #36) — `aida session end` ambiguity prompt shows `role:` inline + the linked Claude session (id + last-active) from the manifest.
+- **TASK-244** (PR #37) — `aida statusline` warns on shell-role vs active-session-role mismatch (`role:X ⚠ session:Y`); `[statusline] role_mismatch_warning` opt-out.
+- **TASK-228** (PR #38) — `aida session wakeup register/cancel/check/list`: a registry so a re-entered skill can deterministically skip a zombie fallback-wakeup fire.
+- **TASK-233** (PR #39) — `aida session end --watch-ci`: live `gh run watch` progress, sibling to the silent `--wait-ci`.
+- **BUG-103** (PR #40) — CI: "Pin stable toolchain & verify cargo" step (`rustup default stable` + a `grep` guard) fixes the intermittent macos `cargo → rustup-init` flake.
+
+Net: `aida-cli` test suite grew 403 → 438 passing; every PR `cargo fmt --check`-clean. Tracked in-code with `trace:<SPEC>` comments throughout.
