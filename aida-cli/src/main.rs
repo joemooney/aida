@@ -59,8 +59,8 @@ use crate::cli::{
     DocCommand, DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand,
     NodeCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand,
     ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
-    ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, TraceCommand,
-    TypeCommand,
+    ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand,
+    TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -10121,6 +10121,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             orphans,
         } => session_prune(*days, *dry_run, *yes, *orphans),
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
+        SessionCommand::Wakeup { cmd } => session_wakeup_dispatch(cmd),
     }
 }
 
@@ -15944,6 +15945,270 @@ pub(crate) fn load_store_for_lookup(
         .ok()
         .map(Storage::new)
         .and_then(|s| s.load().ok())
+}
+
+// ────────────────────────────────────────────────────────────────────
+// TASK-228: cancellable fallback wakeups.
+//
+// An agent that schedules a harness wakeup as insurance against a hung
+// event `register`s the tag here, then `cancel`s it on clean
+// completion. AIDA can't stop the harness wakeup from firing, but the
+// re-entered skill can `check` the tag and exit deterministically when
+// cancelled — no more `gh pr view`-style state probes.
+// trace:TASK-228 | ai:claude
+// ────────────────────────────────────────────────────────────────────
+
+const WAKEUP_STATUS_ACTIVE: &str = "active";
+const WAKEUP_STATUS_CANCELLED: &str = "cancelled";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct WakeupRecord {
+    tag: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    session_id: Option<String>,
+    scheduled_at: chrono::DateTime<chrono::Utc>,
+    /// `active` or `cancelled`.
+    status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cancelled_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl WakeupRecord {
+    fn is_active(&self) -> bool {
+        self.status == WAKEUP_STATUS_ACTIVE
+    }
+}
+
+/// Filesystem-safe filename stem for a wakeup tag — every char outside
+/// `[A-Za-z0-9._-]` collapses to `-`. trace:TASK-228 | ai:claude
+fn sanitize_wakeup_tag(tag: &str) -> String {
+    tag.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+fn wakeups_dir(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida").join("wakeups")
+}
+
+fn wakeup_path(project_root: &std::path::Path, tag: &str) -> std::path::PathBuf {
+    wakeups_dir(project_root).join(format!("{}.toml", sanitize_wakeup_tag(tag)))
+}
+
+fn load_wakeup(path: &std::path::Path) -> Option<WakeupRecord> {
+    let content = std::fs::read_to_string(path).ok()?;
+    toml::from_str(&content).ok()
+}
+
+fn save_wakeup(path: &std::path::Path, rec: &WakeupRecord) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    let body = toml::to_string_pretty(rec).context("serialize wakeup record")?;
+    std::fs::write(path, body).with_context(|| format!("write {}", path.display()))?;
+    Ok(())
+}
+
+fn list_wakeups(project_root: &std::path::Path) -> Vec<WakeupRecord> {
+    let Ok(entries) = std::fs::read_dir(wakeups_dir(project_root)) else {
+        return Vec::new();
+    };
+    let mut out: Vec<WakeupRecord> = entries
+        .flatten()
+        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("toml"))
+        .filter_map(|e| load_wakeup(&e.path()))
+        .collect();
+    // Active first, then most-recently-scheduled.
+    out.sort_by(|a, b| {
+        b.is_active()
+            .cmp(&a.is_active())
+            .then(b.scheduled_at.cmp(&a.scheduled_at))
+    });
+    out
+}
+
+/// `aida session wakeup <subcommand>` dispatcher. trace:TASK-228
+fn session_wakeup_dispatch(cmd: &SessionWakeupCommand) -> Result<()> {
+    let project_root = find_main_worktree_root().or_else(|_| find_project_root())?;
+    match cmd {
+        SessionWakeupCommand::Register { tag, prompt, note } => {
+            let tag = tag.trim();
+            if tag.is_empty() {
+                anyhow::bail!("wakeup tag must not be empty");
+            }
+            let rec = WakeupRecord {
+                tag: tag.to_string(),
+                prompt: prompt.clone(),
+                note: note.clone(),
+                session_id: std::env::var("AIDA_SESSION_ID")
+                    .ok()
+                    .filter(|s| !s.is_empty()),
+                scheduled_at: chrono::Utc::now(),
+                status: WAKEUP_STATUS_ACTIVE.to_string(),
+                cancelled_at: None,
+            };
+            save_wakeup(&wakeup_path(&project_root, tag), &rec)?;
+            println!("{} registered fallback wakeup {}", "✓".green(), tag.cyan());
+            println!(
+                "  {}",
+                format!(
+                    "cancel on clean completion: aida session wakeup cancel {}",
+                    tag
+                )
+                .dimmed()
+            );
+            Ok(())
+        }
+        SessionWakeupCommand::Cancel { tag } => {
+            let tag = tag.trim();
+            let path = wakeup_path(&project_root, tag);
+            match load_wakeup(&path) {
+                Some(mut rec) if rec.is_active() => {
+                    rec.status = WAKEUP_STATUS_CANCELLED.to_string();
+                    rec.cancelled_at = Some(chrono::Utc::now());
+                    save_wakeup(&path, &rec)?;
+                    println!("{} cancelled fallback wakeup {}", "✓".green(), tag.cyan());
+                }
+                Some(_) => {
+                    println!(
+                        "{} wakeup {} was already cancelled — no-op",
+                        "ⓘ".cyan(),
+                        tag.cyan()
+                    );
+                }
+                None => {
+                    println!(
+                        "{} no registered wakeup tagged {} — no-op",
+                        "ⓘ".cyan(),
+                        tag.cyan()
+                    );
+                }
+            }
+            Ok(())
+        }
+        SessionWakeupCommand::Check { tag } => {
+            match load_wakeup(&wakeup_path(&project_root, tag.trim())) {
+                Some(rec) if rec.is_active() => {
+                    println!("active");
+                    Ok(())
+                }
+                Some(_) => {
+                    println!("cancelled");
+                    std::process::exit(1);
+                }
+                None => {
+                    println!("unknown");
+                    std::process::exit(1);
+                }
+            }
+        }
+        SessionWakeupCommand::List => {
+            let wakeups = list_wakeups(&project_root);
+            if wakeups.is_empty() {
+                println!("{}", "(no registered wakeups)".dimmed());
+                return Ok(());
+            }
+            println!(
+                "{} registered fallback wakeup(s):",
+                wakeups.len().to_string().bold()
+            );
+            for w in &wakeups {
+                let status = if w.is_active() {
+                    WAKEUP_STATUS_ACTIVE.green().to_string()
+                } else {
+                    WAKEUP_STATUS_CANCELLED.dimmed().to_string()
+                };
+                println!(
+                    "  {} {}  {}",
+                    w.tag.cyan().bold(),
+                    status,
+                    w.prompt.as_deref().unwrap_or("").dimmed()
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
+mod wakeup_tests {
+    use super::*;
+
+    fn rec(tag: &str, status: &str) -> WakeupRecord {
+        WakeupRecord {
+            tag: tag.to_string(),
+            prompt: None,
+            note: None,
+            session_id: None,
+            scheduled_at: chrono::Utc::now(),
+            status: status.to_string(),
+            cancelled_at: None,
+        }
+    }
+
+    #[test]
+    fn sanitize_tag_keeps_safe_chars_collapses_rest() {
+        assert_eq!(sanitize_wakeup_tag("pr-23-ci"), "pr-23-ci");
+        assert_eq!(sanitize_wakeup_tag("review/pr 23"), "review-pr-23");
+        assert_eq!(sanitize_wakeup_tag("a.b_c-1"), "a.b_c-1");
+    }
+
+    #[test]
+    fn save_load_roundtrip_and_is_active() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut r = rec("pr-23-ci", WAKEUP_STATUS_ACTIVE);
+        r.prompt = Some("/aida-review --pr 23".to_string());
+        let path = wakeup_path(dir.path(), "pr-23-ci");
+        save_wakeup(&path, &r).unwrap();
+        let loaded = load_wakeup(&path).unwrap();
+        assert_eq!(loaded.tag, "pr-23-ci");
+        assert!(loaded.is_active());
+        assert_eq!(loaded.prompt.as_deref(), Some("/aida-review --pr 23"));
+    }
+
+    #[test]
+    fn cancelled_record_is_not_active() {
+        let mut r = rec("x", WAKEUP_STATUS_ACTIVE);
+        assert!(r.is_active());
+        r.status = WAKEUP_STATUS_CANCELLED.to_string();
+        assert!(!r.is_active());
+    }
+
+    #[test]
+    fn list_wakeups_orders_active_before_cancelled() {
+        let dir = tempfile::tempdir().unwrap();
+        save_wakeup(
+            &wakeup_path(dir.path(), "live"),
+            &rec("live", WAKEUP_STATUS_ACTIVE),
+        )
+        .unwrap();
+        save_wakeup(
+            &wakeup_path(dir.path(), "done"),
+            &rec("done", WAKEUP_STATUS_CANCELLED),
+        )
+        .unwrap();
+        let listed = list_wakeups(dir.path());
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].tag, "live");
+        assert!(listed[0].is_active());
+        assert!(!listed[1].is_active());
+    }
+
+    #[test]
+    fn load_missing_wakeup_is_none() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(load_wakeup(&wakeup_path(dir.path(), "nope")).is_none());
+    }
 }
 
 /// `aida session manifest <subcommand>` dispatcher. trace:STORY-98
