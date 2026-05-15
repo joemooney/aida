@@ -72,10 +72,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:20:17.065998471Z
-modified_at: 2026-05-15T01:20:17.065998471Z
+modified_at: 2026-05-15T06:41:42.277217664Z
 req_type: Task
 tags:
 - batch
+- batch:display-polish
 - display
 - queue-list
 - tags
