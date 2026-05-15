@@ -23,12 +23,12 @@ description: |-
   - [ ] Reports missing required sections per the template
   - [ ] Exits non-zero on any failure
   - [ ] Docs in CLAUDE.md and /aida-plan skill updated
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T04:28:52.154142173Z
-modified_at: 2026-05-15T05:08:28.203606228Z
+modified_at: 2026-05-15T06:07:27.596219653Z
 req_type: Task
 tags:
 - batch:plan-tooling
