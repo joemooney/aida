@@ -22,12 +22,12 @@ description: |-
   - [ ] Manifest pre-populated with plan content (Critical Files, Followups, Verification)
   - [ ] /aida-pickup surfaces the plan summary in its first message
   - [ ] Graceful no-op when no plan file exists (today's behavior)
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T04:29:05.104232414Z
-modified_at: 2026-05-15T01:18:19.282158369Z
+modified_at: 2026-05-15T04:13:16.296374193Z
 req_type: Task
 tags:
 - batch:plan-tooling
@@ -39,3 +39,7 @@ relationships:
 - rel_type: Child
   target_id: 019e1f25-629b-79b1-ba62-7172b2c4c174
   created_at: 2026-05-13T04:29:07.721863223Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T04:13:16.296374193Z
+  implemented_by: joe
