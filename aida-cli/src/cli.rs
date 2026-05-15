@@ -3356,6 +3356,21 @@ pub enum PlanCommand {
         #[clap(long, short = 'q')]
         quiet: bool,
     },
+
+    /// Derive a `## Reusable helpers` section for a spec from the trace
+    /// graph: walk sibling specs (same parent), same-feature specs, and
+    /// tag-sharing specs, harvest their `// trace:` comments, and report
+    /// the files + helpers they already touch so the implementer reuses
+    /// rather than re-invents. trace:TASK-94 | ai:claude
+    Helpers {
+        /// SPEC-ID of the requirement to derive reusable helpers for.
+        spec: String,
+
+        /// Append the generated section to this plan file instead of
+        /// printing it to stdout.
+        #[clap(long)]
+        append: Option<PathBuf>,
+    },
 }
 
 /// GitHub integration commands

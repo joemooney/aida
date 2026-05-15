@@ -122,7 +122,16 @@ Two conventions worth honoring:
   implementer should call rather than re-invent (e.g.
   `extract_spec_ids_from_commit`, `git_ops::head_sha`,
   `Storage::update_atomically`). This is the highest-leverage section —
-  it prevents accidental reimplementation.
+  it prevents accidental reimplementation. Seed it from the trace graph:
+
+  ```bash
+  aida plan helpers <SPEC-ID>                          # print the section
+  aida plan helpers <SPEC-ID> --append docs/plans/<file>.md   # write it in
+  ```
+
+  `aida plan helpers` walks sibling / tag-mate / same-feature specs and
+  harvests their `// trace:` comments — review the output and prune it to
+  the helpers that actually matter for this plan.
 
 Worked example: `docs/plans/2026-05-13-story-86-done-status.md`.
 

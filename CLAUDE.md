@@ -62,6 +62,8 @@ aida db reconcile-status --since v0.5.1 --dry-run  # Preview a bounded replay
 aida cache status                      # Compare cache HEAD vs git HEAD
 aida plan verify docs/plans/<file>.md  # Lint a plan: drifted refs, missing files/sections (TASK-93)
 aida plan verify <file> --fix          # Rewrite drifted path:line refs in place
+aida plan helpers <spec>               # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
+aida plan helpers <spec> --append <file>  # Append the derived section to a plan file
 ```
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
@@ -93,6 +95,8 @@ Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Us
 **Followups get filed, not forgotten.** When a spec reaches Done (`aida queue done`) or Completed (the STORY-86 auto-bump on merge), AIDA parses the `## Followups` section of any plan that owns that spec and offers to file each bullet as a child TASK. `aida queue done` prompts per bullet (`[y/N/skip]`); `--yes` and the non-interactive auto-bump path file all. Idempotent — a `[aida:followups]` marker comment on the spec records what was filed and declined, so whichever path runs first wins and declines are never re-filed. Opt out with `AIDA_AUTO_FOLLOWUPS=false`. trace:TASK-96
 
 **The plan rides into the session.** `aida queue work <spec>` discovers any plan that owns the spec and pre-populates the session manifest with a *plan brief* — the `## Critical Files`, `## Followups`, and `## Verification` sections. `aida session show --plan` renders it, and `/aida-pickup` leads its first message with it so the implementer gets the blast radius and definition of done without grepping for the plan. Graceful no-op when no plan file exists. trace:TASK-95
+
+**Reusable helpers come from the trace graph.** `aida plan helpers <spec>` derives a `## Reusable helpers` section by walking the requirement graph — sibling specs (same parent), tag-mates, and (when discriminating) same-feature specs — and harvesting their `// trace:` comments for the files + symbols they already touch. It ranks siblings and tag-mates above the coarse same-feature set and only surfaces specs that name a helper, so the output stays a focused "don't reimplement this" brief. `--append <plan-file>` writes the section straight into a plan. trace:TASK-94
 
 ## AIDA-developer workflow (only when working on AIDA itself)
 

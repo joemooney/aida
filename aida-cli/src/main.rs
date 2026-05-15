@@ -286,8 +286,10 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    // Plan verification reads a markdown file + source files; no AIDA
-    // storage needed. trace:TASK-93 | ai:claude
+    // Plan tooling is self-contained: `verify` reads a markdown file +
+    // source files; `helpers` loads the store itself via
+    // `load_store_for_lookup`. Neither needs the shared storage handle, so
+    // dispatch the whole group early. trace:TASK-93 TASK-94 | ai:claude
     if let Command::Plan(plan_cmd) = &cli.command {
         return handle_plan_command(plan_cmd);
     }
@@ -17609,6 +17611,52 @@ cargo test -p aida-cli
         assert!(parse_plan_verification("## Approach\n\ntext\n").is_none());
     }
 
+    /// TASK-94: the trace-graph scanner walks source files, captures the
+    /// full node-aware spec id, finds the symbol on or just below the
+    /// trace line, and skips build/vendor trees.
+    #[test]
+    fn plan_helpers_scan_trace_graph() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("sub");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            src.join("a.rs"),
+            "// trace:STORY-86 | ai:claude\nfn auto_bump() {}\n\n// trace:FR-1-042\nstruct Thing;\n",
+        )
+        .unwrap();
+        std::fs::write(src.join("b.rs"), "pub fn inline() {} // trace:TASK-50\n").unwrap();
+        // A file under target/ must be skipped.
+        let skip = dir.path().join("target");
+        std::fs::create_dir_all(&skip).unwrap();
+        std::fs::write(skip.join("c.rs"), "// trace:STORY-86\nfn ignored() {}\n").unwrap();
+
+        let wanted: HashSet<String> = ["STORY-86", "FR-1-042", "TASK-50"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let hits = scan_trace_graph(dir.path(), &wanted);
+
+        // STORY-86 → auto_bump in a.rs only (the target/ copy is skipped).
+        let s86 = hits.get("STORY-86").expect("STORY-86 hit");
+        assert_eq!(s86.len(), 1);
+        assert_eq!(s86[0].symbol.as_deref(), Some("auto_bump"));
+        // Node-aware id captured in full — never bucketed under `FR-1`.
+        assert!(hits.get("FR-1").is_none());
+        assert_eq!(
+            hits.get("FR-1-042").expect("FR-1-042 hit")[0]
+                .symbol
+                .as_deref(),
+            Some("Thing")
+        );
+        // An inline trailing trace comment resolves the symbol on its line.
+        assert_eq!(
+            hits.get("TASK-50").expect("TASK-50 hit")[0]
+                .symbol
+                .as_deref(),
+            Some("inline")
+        );
+    }
+
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
     /// suffix so the auto-bump pass can match review stories filed against
     /// that PR. trace:BUG-102 | ai:claude
@@ -21600,6 +21648,7 @@ struct PlanRefFix {
 fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
     match cmd {
         PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),
+        PlanCommand::Helpers { spec, append } => plan_helpers(spec, append.as_deref()),
     }
 }
 
@@ -22091,6 +22140,332 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
     Ok(())
 }
 
+// ============================================================================
+// TASK-94 — `aida plan helpers <spec>`. Derive a "Reusable helpers" section
+// by walking the requirement graph (sibling / same-feature / same-tag specs)
+// and harvesting those specs' `// trace:` comments from the codebase, so the
+// implementer reuses existing helpers instead of re-inventing them.
+// trace:TASK-94 | ai:claude
+// ============================================================================
+
+/// One harvested trace comment: a related spec touches `file`, and (when a
+/// definition sits on or just below the comment) the named `symbol`.
+struct TraceHit {
+    file: String,
+    symbol: Option<String>,
+}
+
+/// Recursively collect source files under `dir`, skipping hidden dirs and
+/// the usual build/vendor trees.
+fn collect_source_files(dir: &std::path::Path, exts: &[&str], out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with('.')
+                || name == "target"
+                || name == "node_modules"
+                || name == "vendor"
+            {
+                continue;
+            }
+        }
+        if path.is_dir() {
+            collect_source_files(&path, exts, out);
+        } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if exts.contains(&ext) {
+                out.push(path);
+            }
+        }
+    }
+}
+
+/// Scan the codebase for `trace:<SPEC-ID>` comments whose id is in `wanted`,
+/// returning spec_id → the trace hits found. The symbol on each hit is the
+/// first definition on the trace line or the two lines below it (comment
+/// lines are skipped so the comment's own prose can't false-match).
+/// trace:TASK-94 | ai:claude
+fn scan_trace_graph(
+    project_root: &std::path::Path,
+    wanted: &HashSet<String>,
+) -> std::collections::HashMap<String, Vec<TraceHit>> {
+    use regex::Regex;
+    // Capture the full spec id — including the optional third segment of a
+    // node-aware id (`FR-1-042`), or `trace:FR-1-042` would bucket under a
+    // bogus `FR-1`.
+    let trace_re = Regex::new(r"\btrace:([A-Z]+-[0-9]+(?:-[0-9]+)?)").unwrap();
+    let sym_re = Regex::new(
+        r"\b(?:fn|struct|enum|trait|type|mod|const|static|function|class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",
+    )
+    .unwrap();
+    let exts = ["rs", "ts", "tsx", "js", "jsx", "py", "sh"];
+    let mut files = Vec::new();
+    collect_source_files(project_root, &exts, &mut files);
+
+    let mut out: std::collections::HashMap<String, Vec<TraceHit>> =
+        std::collections::HashMap::new();
+    for path in &files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let lines: Vec<&str> = content.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            for cap in trace_re.captures_iter(line) {
+                let id = cap[1].to_string();
+                if !wanted.contains(&id) {
+                    continue;
+                }
+                // Symbol: first definition on this line or the next two,
+                // skipping pure comment lines.
+                let mut symbol = None;
+                for probe in lines.iter().skip(i).take(3) {
+                    let t = probe.trim_start();
+                    if t.starts_with("//") || t.starts_with('#') || t.starts_with('*') {
+                        continue;
+                    }
+                    if let Some(m) = sym_re.captures(probe) {
+                        symbol = Some(m[1].to_string());
+                        break;
+                    }
+                }
+                let rel = path
+                    .strip_prefix(project_root)
+                    .unwrap_or(path)
+                    .display()
+                    .to_string();
+                out.entry(id)
+                    .or_default()
+                    .push(TraceHit { file: rel, symbol });
+            }
+        }
+    }
+    out
+}
+
+/// `aida plan helpers <spec>` — render a `## Reusable helpers` section
+/// derived from the trace graph. trace:TASK-94 | ai:claude
+fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+    let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_by_spec_id(spec_arg)
+    }
+    .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
+
+    // ── Related-spec discovery ── first reason wins (sibling beats
+    // feature beats tag) so each spec appears once with its strongest tie.
+    let parent_uuids: Vec<uuid::Uuid> = target
+        .relationships
+        .iter()
+        .filter(|r| r.rel_type == aida_core::RelationshipType::Child)
+        .map(|r| r.target_id)
+        .collect();
+    let target_feature = target.feature.trim().to_string();
+    let target_tags = target.tags.clone();
+
+    let mut related: Vec<(&aida_core::models::Requirement, &'static str)> = Vec::new();
+    let mut seen: HashSet<uuid::Uuid> = HashSet::new();
+    seen.insert(target.id);
+
+    if !parent_uuids.is_empty() {
+        for req in &store.requirements {
+            if seen.contains(&req.id) {
+                continue;
+            }
+            let is_sibling = req.relationships.iter().any(|r| {
+                r.rel_type == aida_core::RelationshipType::Child
+                    && parent_uuids.contains(&r.target_id)
+            });
+            if is_sibling {
+                seen.insert(req.id);
+                related.push((req, "sibling"));
+            }
+        }
+    }
+    // Shared tags before feature: a shared tag is a deliberate grouping
+    // (a `batch:`, a topic) and a stronger signal than `feature`, which
+    // is often a coarse project-wide bucket.
+    if !target_tags.is_empty() {
+        for req in &store.requirements {
+            if seen.contains(&req.id) {
+                continue;
+            }
+            if req.tags.iter().any(|t| target_tags.contains(t)) {
+                seen.insert(req.id);
+                related.push((req, "shared tag"));
+            }
+        }
+    }
+    if !target_feature.is_empty() {
+        let feature_matches: Vec<&aida_core::models::Requirement> = store
+            .requirements
+            .iter()
+            .filter(|r| !seen.contains(&r.id) && r.feature.trim() == target_feature)
+            .collect();
+        // A feature shared by dozens of specs is a project-wide bucket,
+        // not a meaningful relation — skip it rather than flood the
+        // section with weakly-related noise.
+        const FEATURE_DISCRIMINATION_CAP: usize = 25;
+        if feature_matches.len() <= FEATURE_DISCRIMINATION_CAP {
+            for req in feature_matches {
+                seen.insert(req.id);
+                related.push((req, "same feature"));
+            }
+        }
+    }
+
+    let target_display = target.display_id();
+    if related.is_empty() {
+        anyhow::bail!(
+            "no related specs found for {} — needs a parent (for siblings), a feature, or tags. \
+             Nothing to derive helpers from.",
+            target_display
+        );
+    }
+
+    // Every id-string a trace comment might use (canonical spec_id or the
+    // agreed short id) → index into `related`.
+    let mut id_to_idx: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (idx, (req, _)) in related.iter().enumerate() {
+        if let Some(s) = &req.spec_id {
+            id_to_idx.insert(s.clone(), idx);
+        }
+        if let Some(a) = &req.agreed_id {
+            id_to_idx.insert(a.clone(), idx);
+        }
+    }
+    let wanted: HashSet<String> = id_to_idx.keys().cloned().collect();
+
+    let hits = scan_trace_graph(&project_root, &wanted);
+
+    // Fold hits onto each related spec, deduped by (file, symbol).
+    let mut per_spec: Vec<(usize, std::collections::BTreeMap<String, Vec<String>>)> = Vec::new();
+    for (idx, _) in related.iter().enumerate() {
+        per_spec.push((idx, std::collections::BTreeMap::new()));
+    }
+    for (id, id_hits) in &hits {
+        let Some(&idx) = id_to_idx.get(id) else {
+            continue;
+        };
+        let by_file = &mut per_spec[idx].1;
+        for hit in id_hits {
+            let syms = by_file.entry(hit.file.clone()).or_default();
+            if let Some(sym) = &hit.symbol {
+                if !syms.contains(sym) {
+                    syms.push(sym.clone());
+                }
+            }
+        }
+    }
+
+    // Keep only specs that introduce at least one *named* helper — the
+    // section is "reusable helpers", and a bare file-touched hit (every
+    // spec touches main.rs) carries no reuse signal. Rank by tier
+    // (siblings are the closest relatives, then tag-mates, then the
+    // coarse same-feature set) and within a tier by helper count, then
+    // cap so the section stays a focused brief.
+    const HELPERS_SPEC_CAP: usize = 12;
+    const HELPERS_PER_FILE_CAP: usize = 8;
+    let tier = |reason: &str| -> u8 {
+        match reason {
+            "sibling" => 0,
+            "shared tag" => 1,
+            _ => 2, // same feature — project-wide, weakest signal
+        }
+    };
+    let mut ranked: Vec<(usize, u8, usize)> = per_spec
+        .iter()
+        .filter_map(|(idx, by_file)| {
+            let symbols: usize = by_file.values().map(Vec::len).sum();
+            (symbols > 0).then_some((*idx, tier(related[*idx].1), symbols))
+        })
+        .collect();
+    ranked.sort_by(|a, b| a.1.cmp(&b.1).then(b.2.cmp(&a.2)).then(a.0.cmp(&b.0)));
+    let truncated = ranked.len().saturating_sub(HELPERS_SPEC_CAP);
+    ranked.truncate(HELPERS_SPEC_CAP);
+
+    // ── Render the section ──
+    let mut md = String::new();
+    md.push_str("## Reusable helpers (do not reimplement)\n\n");
+    md.push_str(&format!(
+        "Derived from the trace graph for {target_display} — related specs that already \
+         touch this area. Call these rather than re-implementing.\n\n"
+    ));
+
+    if ranked.is_empty() {
+        md.push_str(&format!(
+            "_{} related spec(s) found, but none carry `trace:` comments that name a \
+             helper yet._\n",
+            related.len()
+        ));
+    }
+    for (idx, _, _) in &ranked {
+        let (req, reason) = related[*idx];
+        let by_file = &per_spec[*idx].1;
+        md.push_str(&format!(
+            "**{}** — {} · {} · {}\n\n",
+            req.display_id(),
+            req.title,
+            reason,
+            req.status
+        ));
+        for (file, syms) in by_file {
+            if syms.is_empty() {
+                md.push_str(&format!("- `{file}`\n"));
+            } else {
+                let mut sorted = syms.clone();
+                sorted.sort();
+                let extra = sorted.len().saturating_sub(HELPERS_PER_FILE_CAP);
+                sorted.truncate(HELPERS_PER_FILE_CAP);
+                let mut joined = sorted
+                    .iter()
+                    .map(|s| format!("`{s}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if extra > 0 {
+                    joined.push_str(&format!(", …+{extra}"));
+                }
+                md.push_str(&format!("- `{file}` — {joined}\n"));
+            }
+        }
+        md.push('\n');
+    }
+    if truncated > 0 {
+        md.push_str(&format!(
+            "_…and {truncated} more related spec(s) — narrow the scope or inspect with \
+             `aida list`._\n"
+        ));
+    }
+    md.push_str(&format!(
+        "\n_Generated by `aida plan helpers {target_display}` — verify before relying on it._\n"
+    ));
+
+    if let Some(path) = append {
+        let mut existing = std::fs::read_to_string(path)
+            .with_context(|| format!("could not read plan file {}", path.display()))?;
+        if !existing.ends_with('\n') {
+            existing.push('\n');
+        }
+        existing.push('\n');
+        existing.push_str(&md);
+        std::fs::write(path, existing)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        println!(
+            "{} appended Reusable helpers section to {}",
+            "✓".green(),
+            path.display()
+        );
+    } else {
+        print!("{md}");
+    }
+    Ok(())
+}
+
 fn print_help_all() {
     let groups: &[(&str, &[(&str, &str)])] = &[
         (
@@ -22118,7 +22493,7 @@ fn print_help_all() {
                 ("init", "Initialize AIDA in the current project"),
                 ("upgrade", "Upgrade aida to the latest release"),
                 ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
-                ("plan", "Verify implementation plans in docs/plans/"),
+                ("plan", "Verify plans + derive reusable-helper sections"),
             ],
         ),
         (
