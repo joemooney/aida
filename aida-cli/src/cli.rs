@@ -2804,6 +2804,29 @@ pub enum Command {
         no_rebase_check: bool,
     },
 
+    /// Fetch remote refs for both legs (code + orphan store) without
+    /// merging or touching the worktree. Read-only counterpart to
+    /// `aida pull` — refreshes what `origin/<branch>` points at so
+    /// downstream checks (statusline behind-count, queue precheck,
+    /// rebase dry-run) see the current remote state without paying
+    /// the cost of two separate `git fetch` invocations or being
+    /// surprised by an implicit merge. Bumps the
+    /// `~/.aida/cache/last-fetch.toml` timestamp on success so the
+    /// statusline freshness indicator reflects the fetch.
+    /// trace:TASK-107 | ai:claude
+    Fetch {
+        /// Skip the orphan-store fetch (only refresh code refs).
+        #[clap(long, conflicts_with = "store_only")]
+        code_only: bool,
+        /// Skip the code-branch fetch (only refresh orphan-store refs).
+        #[clap(long, conflicts_with = "code_only")]
+        store_only: bool,
+        /// Suppress progress + the "N new commits" summary. Errors still
+        /// print. Useful for background callers (statusline, hooks).
+        #[clap(long, short = 'q')]
+        quiet: bool,
+    },
+
     /// Pull code AND the AIDA orphan store in one shot. Symmetric to
     /// `aida push`: equivalent to `git pull --ff-only` on the current
     /// branch followed by `aida db sync --pull`. Skips a leg cleanly
