@@ -1,0 +1,46 @@
+id: 019e2a46-bd08-7201-bddf-0ca090a18a24
+spec_id: BUG-104
+agreed_id: BUG-104
+title: queue done followups extraction drops bullets in some edge cases (TASK-96 DP-1 followup)
+description: |-
+  Deep-pass finding from PR-29 review (2026-05-14): TASK-96's followup-extraction parser drops some bullets in edge cases. The reviewer agent observed the issue during the deep-pass adversarial probe (STORY-109's pattern) but it was non-blocking (didn't gate merge).
+
+  ## Symptom
+
+  aida queue done <spec> parses the Followups section of the matching docs/plans/<spec>.md and presents each bullet as a y/N/skip prompt. Under some bullet-formatting variants, bullets get silently dropped — not surfaced in the prompt at all.
+
+  Likely triggers (from reviewer's deep-pass):
+  - Bullets with leading whitespace before the dash (e.g., '  - bullet text')
+  - Bullets with continuation lines (multi-line bullets with sub-indentation)
+  - Bullets in nested lists (rare but possible)
+  - Empty bullets (e.g., '- ' with nothing after)
+
+  ## Why low priority
+
+  Workaround: the docs/plans/ file is still readable; the user can manually file any missed followups via aida add. The miss is silent but discoverable.
+
+  ## Acceptance
+
+  - [ ] Identify the specific bullet-format variants that trigger the drop (write a small test corpus from real docs/plans/ files in the repo)
+  - [ ] Fix the parser to handle all reasonable bullet variants OR explicitly warn 'N bullets dropped due to unrecognized format — see foo.md'
+  - [ ] Test: every bullet in a sample plan file's Followups section appears in the prompt (1:1 mapping)
+  - [ ] No regression on the happy-path bullets that already worked
+
+  ## Discovered via
+
+  2026-05-14 — PR-29 reviewer deep-pass identified this as DP-1 (deep-pass finding 1) and noted it as non-blocking for merge. User flagged it for filing post-merge.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T06:15:39.528620160Z
+modified_at: 2026-05-15T06:15:39.528620160Z
+req_type: Bug
+tags:
+- DP-1
+- bullet-drop
+- deep-pass-finding
+- edge-case
+- followups
+- parser
+- queue-done
