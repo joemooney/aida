@@ -80,3 +80,7 @@ tags:
 - supersedes-story-115-decision
 - verb
 - workflow
+relationships:
+- rel_type: Child
+  target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
+  created_at: 2026-05-15T02:52:33.405029566Z
