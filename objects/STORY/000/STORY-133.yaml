@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:38:36.856006582Z
-modified_at: 2026-05-15T22:57:43.284977079Z
+modified_at: 2026-05-15T22:58:33.323461079Z
 req_type: Story
 tags:
 - batch:tui-v1
@@ -28,6 +28,11 @@ comments:
   content: Commit e7463c4b references this requirement
   created_at: 2026-05-15T20:49:42.465364283Z
   modified_at: 2026-05-15T20:49:42.465364283Z
+- id: 019e2ddc-eaeb-74b1-9fc3-1ef600949236
+  author: joe
+  content: 'Implemented via PR #43 (commit e7463c4b): read-only ratatui status overlay (prefix o) over `aida status --json` with 3 quick actions; cache-first paint + background gh refresh. Tests: 737/737 workspace green; cargo fmt + clippy clean.'
+  created_at: 2026-05-15T22:58:33.323461079Z
+  modified_at: 2026-05-15T22:58:33.323461079Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T20:49:46.801969199Z
