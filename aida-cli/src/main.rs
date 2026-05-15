@@ -57,9 +57,10 @@ use aida_core::{
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     DocCommand, DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand,
-    NodeCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
-    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
-    ServerCommand, SessionCommand, SessionManifestCommand, TraceCommand, TypeCommand,
+    NodeCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand,
+    ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
+    ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, TraceCommand,
+    TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -283,6 +284,12 @@ fn run() -> Result<()> {
     if let Command::HelpAll = &cli.command {
         print_help_all();
         return Ok(());
+    }
+
+    // Plan verification reads a markdown file + source files; no AIDA
+    // storage needed. trace:TASK-93 | ai:claude
+    if let Command::Plan(plan_cmd) = &cli.command {
+        return handle_plan_command(plan_cmd);
     }
 
     // Roles + statusline dispatch before storage init — roles are TOML
@@ -573,6 +580,7 @@ fn run() -> Result<()> {
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
@@ -1578,6 +1586,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
@@ -17001,6 +17010,61 @@ mod statusline_tests {
         );
     }
 
+    /// TASK-93: `locate_symbol_line` finds a definition's 1-based line and,
+    /// crucially, is NOT thrown off by a preceding blank line (the `^\s*`
+    /// vs `^[ \t]*` off-by-one).
+    #[test]
+    fn plan_verify_locate_symbol_line() {
+        let src = "// header\n\nfn first() {}\n\n\npub fn target(x: u32) -> u32 { x }\n";
+        // `fn first` is on line 3, `pub fn target` on line 6 — the two
+        // blank lines before `target` must not shift the result.
+        assert_eq!(locate_symbol_line(src, "first"), Some(3));
+        assert_eq!(locate_symbol_line(src, "target"), Some(6));
+        // Struct / enum / trait kinds + a `::`-qualified name.
+        let src2 = "struct Foo;\n\nenum Bar { A }\n";
+        assert_eq!(locate_symbol_line(src2, "Foo"), Some(1));
+        assert_eq!(locate_symbol_line(src2, "Bar"), Some(3));
+        assert_eq!(locate_symbol_line(src2, "mod_path::Foo"), Some(1));
+        // A symbol that isn't defined resolves to None.
+        assert_eq!(locate_symbol_line(src2, "Nonexistent"), None);
+        // A mention that is not a definition (a call site) must not match.
+        let src3 = "fn caller() {\n    target();\n}\n";
+        assert_eq!(locate_symbol_line(src3, "target"), None);
+    }
+
+    /// TASK-93: placeholder paths from the template (and globs) are not
+    /// treated as real files; source extensions are recognised.
+    #[test]
+    fn plan_verify_path_heuristics() {
+        assert!(is_plan_placeholder_path("path/to/file.rs"));
+        assert!(is_plan_placeholder_path("aida-core/templates/skills/*.md"));
+        assert!(is_plan_placeholder_path("<STORY-N>.md"));
+        assert!(is_plan_placeholder_path("main.rs:NNN"));
+        assert!(!is_plan_placeholder_path("aida-cli/src/main.rs"));
+
+        assert!(has_plan_source_ext("aida-cli/src/main.rs"));
+        assert!(has_plan_source_ext("constants.ts"));
+        assert!(has_plan_source_ext("Cargo.lock"));
+        assert!(!has_plan_source_ext("aida pull"));
+        assert!(!has_plan_source_ext("no_extension"));
+    }
+
+    /// TASK-93: symbol extraction strips item keywords and rejects prose,
+    /// paths, and commands so only real identifiers are verified.
+    #[test]
+    fn plan_verify_symbols_on_line() {
+        let syms = plan_symbols_on_line("- `fn handle_pull_command`: snapshot the SHA");
+        assert!(syms.contains(&"handle_pull_command".to_string()));
+        let syms = plan_symbols_on_line("call `Storage::update_atomically` here");
+        assert!(syms.contains(&"Storage::update_atomically".to_string()));
+        // A backtick path or shell command is not a symbol.
+        let syms = plan_symbols_on_line("run `aida pull` against `aida-cli/src/main.rs`");
+        assert!(syms.is_empty());
+        // Un-backticked `fn name` is still caught.
+        let syms = plan_symbols_on_line("the fn verify_plan entry point");
+        assert!(syms.contains(&"verify_plan".to_string()));
+    }
+
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
     /// suffix so the auto-bump pass can match review stories filed against
     /// that PR. trace:BUG-102 | ai:claude
@@ -20881,6 +20945,608 @@ fn sess_label_with_suffix(scope: &str, suffix: &str, max_total: usize) -> String
     format!("{}{}", scope_part, suffix)
 }
 
+// ============================================================================
+// `aida plan verify` — lint a docs/plans/ file against the structured
+// template (TASK-92). Reports drifted line refs, missing files, and absent
+// required sections; exits non-zero on any hard failure so it can run as a
+// pre-commit hook. trace:TASK-93 | ai:claude
+// ============================================================================
+
+/// One section the structured plan template expects. `hard` sections are
+/// errors when absent; the rest are warnings. Matched by case-insensitive
+/// substring against the plan's `##` headers.
+struct PlanSectionSpec {
+    keyword: &'static str,
+    /// If set, a header matching `keyword` is rejected when it also
+    /// contains this string (disambiguates "Files" from "Critical Files").
+    exclude: Option<&'static str>,
+    label: &'static str,
+    hard: bool,
+}
+
+const PLAN_SECTIONS: &[PlanSectionSpec] = &[
+    PlanSectionSpec {
+        keyword: "approach",
+        exclude: None,
+        label: "Approach",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "decision",
+        exclude: None,
+        label: "Decisions",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "files",
+        exclude: Some("critical"),
+        label: "Files",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "critical files",
+        exclude: None,
+        label: "Critical Files",
+        hard: true,
+    },
+    PlanSectionSpec {
+        keyword: "reusable helper",
+        exclude: None,
+        label: "Reusable helpers",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "risk",
+        exclude: None,
+        label: "Risks + gotchas",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "test",
+        exclude: None,
+        label: "Tests",
+        hard: false,
+    },
+    PlanSectionSpec {
+        keyword: "verification",
+        exclude: None,
+        label: "Verification",
+        hard: true,
+    },
+    PlanSectionSpec {
+        keyword: "followup",
+        exclude: None,
+        label: "Followups",
+        hard: true,
+    },
+    PlanSectionSpec {
+        keyword: "related",
+        exclude: None,
+        label: "Related",
+        hard: false,
+    },
+];
+
+/// Source-file extensions a `path:line` ref or bare path is expected to use.
+/// Filters out commands (`aida pull`) and prose from the path heuristics.
+const PLAN_SOURCE_EXTS: &[&str] = &[
+    "rs", "ts", "tsx", "js", "jsx", "py", "toml", "md", "sh", "json", "yaml", "yml", "lock", "css",
+    "html",
+];
+
+#[derive(PartialEq)]
+enum PlanFindingLevel {
+    Ok,
+    Warn,
+    Error,
+}
+
+struct PlanFinding {
+    level: PlanFindingLevel,
+    msg: String,
+}
+
+/// A confirmed drifted line ref queued for `--fix` rewriting.
+struct PlanRefFix {
+    line_idx: usize,
+    old: String,
+    new: String,
+}
+
+fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
+    match cmd {
+        PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),
+    }
+}
+
+/// Walk up from the plan file to the enclosing git repo root. Paths inside
+/// a plan are repo-relative, so this is what we resolve them against. Falls
+/// back to the current directory when no `.git` is found.
+fn plan_repo_root(plan_file: &std::path::Path) -> std::path::PathBuf {
+    let start = plan_file
+        .canonicalize()
+        .ok()
+        .and_then(|p| p.parent().map(std::path::Path::to_path_buf));
+    let mut dir = match start {
+        Some(d) => d,
+        None => return std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+    };
+    loop {
+        if dir.join(".git").exists() {
+            return dir;
+        }
+        match dir.parent() {
+            Some(p) => dir = p.to_path_buf(),
+            None => {
+                return std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+            }
+        }
+    }
+}
+
+/// True when `tok` looks like a placeholder rather than a real path:
+/// template stand-ins (`path/to/file.rs`, `<STORY-N>`) and globs (`*.md`).
+fn is_plan_placeholder_path(tok: &str) -> bool {
+    tok.contains('<')
+        || tok.contains('>')
+        || tok.contains('*')
+        || tok.starts_with("path/to/")
+        || tok.contains("...")
+        || tok.contains("NNN")
+}
+
+/// True when `tok` (already stripped of any `:line` suffix) has a known
+/// source-file extension.
+fn has_plan_source_ext(tok: &str) -> bool {
+    match tok.rsplit_once('.') {
+        Some((_, ext)) => PLAN_SOURCE_EXTS.contains(&ext.to_ascii_lowercase().as_str()),
+        None => false,
+    }
+}
+
+/// Locate the 1-based line where `symbol` is *defined* in `content`.
+/// Recognises Rust item kinds and the common TypeScript/JS forms. Returns
+/// the first definition found. A `::`-qualified name is reduced to its
+/// final segment before searching.
+fn locate_symbol_line(content: &str, symbol: &str) -> Option<usize> {
+    use regex::Regex;
+    let bare = symbol.rsplit("::").next().unwrap_or(symbol);
+    if bare.is_empty() || !bare.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    let esc = regex::escape(bare);
+    // Leading indent must be `[ \t]*`, never `\s*` — `\s` matches `\n`, so a
+    // greedy `^\s*` would start the match on the *preceding* blank line and
+    // throw the reported line number off by one.
+    let rust_item = format!(
+        r#"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:default[ \t]+)?(?:async[ \t]+)?(?:unsafe[ \t]+)?(?:extern[ \t]+(?:"[^"]*"[ \t]+)?)?(?:fn|struct|enum|trait|type|union|mod|const|static)[ \t]+{esc}\b"#
+    );
+    let pat = format!(
+        r"(?m){rust_item}|^[ \t]*macro_rules![ \t]+{esc}\b|^[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:abstract[ \t]+)?(?:async[ \t]+)?(?:function|class|interface)[ \t]+{esc}\b|^[ \t]*(?:export[ \t]+)?(?:const|let|var)[ \t]+{esc}\b"
+    );
+    let re = Regex::new(&pat).ok()?;
+    let m = re.find(content)?;
+    Some(content[..m.start()].bytes().filter(|&b| b == b'\n').count() + 1)
+}
+
+/// Pull backtick-quoted identifiers that look like code symbols off a line
+/// of plan prose: `` `fn foo` `` → `foo`, `` `Storage::update` `` → kept as
+/// `Storage::update` (the locator reduces it). Leading item keywords are
+/// stripped. Also catches an un-backticked `fn name`.
+fn plan_symbols_on_line(line: &str) -> Vec<String> {
+    use regex::Regex;
+    let mut out = Vec::new();
+    let backtick = Regex::new(r"`([^`]+)`").unwrap();
+    for cap in backtick.captures_iter(line) {
+        let span = cap[1].trim();
+        // Drop a leading item keyword: "fn foo" -> "foo".
+        let ident = span
+            .strip_prefix("fn ")
+            .or_else(|| span.strip_prefix("struct "))
+            .or_else(|| span.strip_prefix("enum "))
+            .or_else(|| span.strip_prefix("trait "))
+            .or_else(|| span.strip_prefix("impl "))
+            .or_else(|| span.strip_prefix("type "))
+            .or_else(|| span.strip_prefix("macro_rules! "))
+            .unwrap_or(span)
+            .trim();
+        // Keep plausible identifiers (optionally `::`-qualified). Reject
+        // paths, prose, commands.
+        let core = ident.split('(').next().unwrap_or(ident).trim();
+        if !core.is_empty()
+            && !core.contains(' ')
+            && !core.contains('/')
+            && !core.contains('.')
+            && core
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == ':')
+        {
+            out.push(core.to_string());
+        }
+    }
+    let unq = Regex::new(r"\bfn\s+([a-z_][A-Za-z0-9_]*)").unwrap();
+    for cap in unq.captures_iter(line) {
+        out.push(cap[1].to_string());
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()> {
+    use regex::Regex;
+    let content = std::fs::read_to_string(plan_file)
+        .with_context(|| format!("could not read plan file {}", plan_file.display()))?;
+    let root = plan_repo_root(plan_file);
+    let lines: Vec<&str> = content.lines().collect();
+
+    let mut section_findings: Vec<PlanFinding> = Vec::new();
+    let mut file_findings: Vec<PlanFinding> = Vec::new();
+    let mut ref_findings: Vec<PlanFinding> = Vec::new();
+    let mut fixes: Vec<PlanRefFix> = Vec::new();
+
+    // --- Section pass: collect `##` headers, track section membership. ---
+    let mut headers_lower: Vec<String> = Vec::new();
+    let mut files_section_paths: Vec<String> = Vec::new();
+    let mut critical_section_paths: HashSet<String> = HashSet::new();
+    let mut in_fence = false;
+    let mut in_html_comment = false;
+    let mut current_section = String::new();
+
+    let path_ref_re = Regex::new(r"([A-Za-z0-9_][A-Za-z0-9_./\-]*\.[A-Za-z0-9]+):(\d+)").unwrap();
+    let bare_path_re = Regex::new(r"`([A-Za-z0-9_][A-Za-z0-9_./\-]*\.[A-Za-z0-9]+)`").unwrap();
+    let sym_ref_re = Regex::new(r"\b([a-z_][A-Za-z0-9_]*):(\d+)\b").unwrap();
+
+    for line in &lines {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        // Skip `<!-- ... -->` regions — meta-commentary, not plan content
+        // (the template's own guidance cites an example bad ref there).
+        if in_html_comment {
+            if line.contains("-->") {
+                in_html_comment = false;
+            }
+            continue;
+        }
+        if let Some(pos) = line.find("<!--") {
+            if !line[pos..].contains("-->") {
+                in_html_comment = true;
+            }
+            continue;
+        }
+        if let Some(h) = trimmed.strip_prefix("## ") {
+            if !trimmed.starts_with("### ") {
+                current_section = h.trim().to_ascii_lowercase();
+                headers_lower.push(current_section.clone());
+            }
+        }
+        if let Some(h) = trimmed.strip_prefix("### ") {
+            // `### `path/to/file.rs` — purpose` names a build-order file.
+            if let Some(cap) = bare_path_re.captures(h) {
+                let p = cap[1].to_string();
+                if current_section.contains("files") && !current_section.contains("critical") {
+                    files_section_paths.push(p);
+                }
+            }
+        }
+        if current_section.contains("critical files") {
+            for cap in bare_path_re.captures_iter(line) {
+                critical_section_paths.insert(cap[1].to_string());
+            }
+        }
+    }
+
+    for spec in PLAN_SECTIONS {
+        let present = headers_lower
+            .iter()
+            .any(|h| h.contains(spec.keyword) && !spec.exclude.is_some_and(|ex| h.contains(ex)));
+        if present {
+            section_findings.push(PlanFinding {
+                level: PlanFindingLevel::Ok,
+                msg: format!("{} section present", spec.label),
+            });
+        } else if spec.hard {
+            section_findings.push(PlanFinding {
+                level: PlanFindingLevel::Error,
+                msg: format!("required section missing: {}", spec.label),
+            });
+        } else {
+            section_findings.push(PlanFinding {
+                level: PlanFindingLevel::Warn,
+                msg: format!("recommended section missing: {}", spec.label),
+            });
+        }
+    }
+
+    // Critical Files completeness: every build-order file should also be
+    // enumerated in the Critical Files section.
+    for p in &files_section_paths {
+        if !critical_section_paths.contains(p) {
+            section_findings.push(PlanFinding {
+                level: PlanFindingLevel::Warn,
+                msg: format!("`{p}` is in Files but not enumerated in Critical Files"),
+            });
+        }
+    }
+
+    // --- File existence + line-ref pass (prose only, skip code fences
+    // and HTML comment regions). ---
+    let mut checked_paths: HashSet<String> = HashSet::new();
+    let mut current_h3_file: Option<String> = None;
+    in_fence = false;
+    in_html_comment = false;
+
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        if in_html_comment {
+            if line.contains("-->") {
+                in_html_comment = false;
+            }
+            continue;
+        }
+        if let Some(pos) = line.find("<!--") {
+            if !line[pos..].contains("-->") {
+                in_html_comment = true;
+            }
+            continue;
+        }
+        if let Some(h) = trimmed.strip_prefix("### ") {
+            if let Some(cap) = bare_path_re.captures(h) {
+                current_h3_file = Some(cap[1].to_string());
+            }
+        }
+
+        let symbols = plan_symbols_on_line(line);
+
+        // Bare file paths in backticks — existence check. Only repo-relative
+        // paths (containing `/`) are checked; a slashless `foo.rs` is prose
+        // shorthand for a file fully named elsewhere, not a path claim.
+        for cap in bare_path_re.captures_iter(line) {
+            let tok = cap[1].to_string();
+            if is_plan_placeholder_path(&tok) || !has_plan_source_ext(&tok) || !tok.contains('/') {
+                continue;
+            }
+            if !checked_paths.insert(tok.clone()) {
+                continue;
+            }
+            if root.join(&tok).exists() {
+                file_findings.push(PlanFinding {
+                    level: PlanFindingLevel::Ok,
+                    msg: tok,
+                });
+            } else {
+                file_findings.push(PlanFinding {
+                    level: PlanFindingLevel::Error,
+                    msg: format!("{tok} — file not found (plan line {})", idx + 1),
+                });
+            }
+        }
+
+        // `path.ext:NNN` refs — existence + drift.
+        for cap in path_ref_re.captures_iter(line) {
+            let path = cap[1].to_string();
+            let claimed: usize = cap[2].parse().unwrap_or(0);
+            if is_plan_placeholder_path(&path) || !has_plan_source_ext(&path) {
+                continue;
+            }
+            let full = root.join(&path);
+            if !full.exists() {
+                // A slashless `main.rs:NNN` is shorthand — the file may exist
+                // under some directory; warn rather than fail the build. A
+                // path with a directory that doesn't resolve is a real break.
+                if path.contains('/') {
+                    ref_findings.push(PlanFinding {
+                        level: PlanFindingLevel::Error,
+                        msg: format!("{path}:{claimed} — file not found (plan line {})", idx + 1),
+                    });
+                } else {
+                    ref_findings.push(PlanFinding {
+                        level: PlanFindingLevel::Warn,
+                        msg: format!(
+                            "{path}:{claimed} — bare filename does not resolve; use a \
+                             repo-relative path (plan line {})",
+                            idx + 1
+                        ),
+                    });
+                }
+                continue;
+            }
+            let body = std::fs::read_to_string(&full).unwrap_or_default();
+            let mut resolved = false;
+            for sym in &symbols {
+                if let Some(actual) = locate_symbol_line(&body, sym) {
+                    resolved = true;
+                    if actual == claimed {
+                        ref_findings.push(PlanFinding {
+                            level: PlanFindingLevel::Ok,
+                            msg: format!("{path}:{claimed} — `{sym}` confirmed"),
+                        });
+                    } else {
+                        let delta = actual as i64 - claimed as i64;
+                        ref_findings.push(PlanFinding {
+                            level: PlanFindingLevel::Warn,
+                            msg: format!(
+                                "{path}:{claimed} — `{sym}` is at line {actual} (drift {delta:+}); \
+                                 prefer symbol form `{sym}` or update to {path}:{actual} (plan line {})",
+                                idx + 1
+                            ),
+                        });
+                        fixes.push(PlanRefFix {
+                            line_idx: idx,
+                            old: format!("{path}:{claimed}"),
+                            new: format!("{path}:{actual}"),
+                        });
+                    }
+                    break;
+                }
+            }
+            if !resolved {
+                ref_findings.push(PlanFinding {
+                    level: PlanFindingLevel::Warn,
+                    msg: format!(
+                        "{path}:{claimed} — no named symbol on this line to verify the \
+                         line number against (plan line {})",
+                        idx + 1
+                    ),
+                });
+            }
+        }
+
+        // `symbol:NNN` refs (no path) — resolve against the current
+        // build-order file header, if any.
+        for cap in sym_ref_re.captures_iter(line) {
+            let sym = cap[1].to_string();
+            let claimed: usize = cap[2].parse().unwrap_or(0);
+            // Skip if this match is the tail of a longer token (a
+            // `path.ext:line` ref or a `dir/seg:line` fragment) rather
+            // than a standalone `symbol:line` ref.
+            let mstart = cap.get(0).unwrap().start();
+            if mstart > 0 {
+                let prev = line.as_bytes()[mstart - 1];
+                if prev == b'.' || prev == b'/' || prev == b'-' || prev.is_ascii_alphanumeric() {
+                    continue;
+                }
+            }
+            let Some(file) = &current_h3_file else {
+                continue;
+            };
+            if is_plan_placeholder_path(file) {
+                continue;
+            }
+            let full = root.join(file);
+            let Ok(body) = std::fs::read_to_string(&full) else {
+                continue;
+            };
+            if let Some(actual) = locate_symbol_line(&body, &sym) {
+                if actual == claimed {
+                    ref_findings.push(PlanFinding {
+                        level: PlanFindingLevel::Ok,
+                        msg: format!("{sym}:{claimed} — confirmed in {file}"),
+                    });
+                } else {
+                    let delta = actual as i64 - claimed as i64;
+                    ref_findings.push(PlanFinding {
+                        level: PlanFindingLevel::Warn,
+                        msg: format!(
+                            "{sym}:{claimed} — `{sym}` is at line {actual} in {file} \
+                             (drift {delta:+}); prefer symbol form `{sym}` (plan line {})",
+                            idx + 1
+                        ),
+                    });
+                    fixes.push(PlanRefFix {
+                        line_idx: idx,
+                        old: format!("{sym}:{claimed}"),
+                        new: format!("{sym}:{actual}"),
+                    });
+                }
+            }
+        }
+    }
+
+    // --- Report. ---
+    let plan_label = plan_file.display();
+    println!("{} {}", "Verifying plan:".bold(), plan_label);
+    println!();
+
+    let print_group = |title: &str, findings: &[PlanFinding]| {
+        if findings.is_empty() {
+            return;
+        }
+        println!("{}", title.cyan().bold());
+        for f in findings {
+            if quiet && f.level == PlanFindingLevel::Ok {
+                continue;
+            }
+            let tag = match f.level {
+                PlanFindingLevel::Ok => "  OK   ".green(),
+                PlanFindingLevel::Warn => "  WARN ".yellow(),
+                PlanFindingLevel::Error => "  ERROR".red().bold(),
+            };
+            println!("{} {}", tag, f.msg);
+        }
+        println!();
+    };
+
+    print_group("Sections", &section_findings);
+    print_group("Files", &file_findings);
+    print_group("Line refs", &ref_findings);
+
+    let count = |findings: &[PlanFinding], level: &PlanFindingLevel| {
+        findings.iter().filter(|f| &f.level == level).count()
+    };
+    let errors = count(&section_findings, &PlanFindingLevel::Error)
+        + count(&file_findings, &PlanFindingLevel::Error)
+        + count(&ref_findings, &PlanFindingLevel::Error);
+    let warns = count(&section_findings, &PlanFindingLevel::Warn)
+        + count(&file_findings, &PlanFindingLevel::Warn)
+        + count(&ref_findings, &PlanFindingLevel::Warn);
+
+    if fix && !fixes.is_empty() {
+        let mut patched = lines.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let mut applied = 0;
+        for f in &fixes {
+            if let Some(line) = patched.get_mut(f.line_idx) {
+                if line.contains(&f.old) {
+                    *line = line.replacen(&f.old, &f.new, 1);
+                    applied += 1;
+                }
+            }
+        }
+        let trailing_nl = content.ends_with('\n');
+        let mut new_content = patched.join("\n");
+        if trailing_nl {
+            new_content.push('\n');
+        }
+        std::fs::write(plan_file, new_content)?;
+        println!(
+            "{} rewrote {} drifted ref(s) in place",
+            "fix:".green().bold(),
+            applied
+        );
+        println!();
+    } else if !fixes.is_empty() {
+        println!(
+            "{} re-run with {} to rewrite {} drifted ref(s) automatically",
+            "hint:".bold(),
+            "--fix".cyan(),
+            fixes.len()
+        );
+        println!();
+    }
+
+    let verdict = if errors > 0 {
+        format!("{} error(s), {} warning(s) — FAIL", errors, warns)
+            .red()
+            .bold()
+            .to_string()
+    } else if warns > 0 {
+        format!("0 errors, {warns} warning(s) — PASS")
+            .yellow()
+            .to_string()
+    } else {
+        "all checks passed — PASS".green().bold().to_string()
+    };
+    println!("{} {}", "Verdict:".bold(), verdict);
+
+    if errors > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
 fn print_help_all() {
     let groups: &[(&str, &[(&str, &str)])] = &[
         (
@@ -20908,6 +21574,7 @@ fn print_help_all() {
                 ("init", "Initialize AIDA in the current project"),
                 ("upgrade", "Upgrade aida to the latest release"),
                 ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
+                ("plan", "Verify implementation plans in docs/plans/"),
             ],
         ),
         (

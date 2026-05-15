@@ -60,6 +60,8 @@ aida db reconcile-status               # Replay Done→Completed bumps the pull 
 aida db reconcile-status --spec STORY-86  # Targeted replay for a single spec
 aida db reconcile-status --since v0.5.1 --dry-run  # Preview a bounded replay
 aida cache status                      # Compare cache HEAD vs git HEAD
+aida plan verify docs/plans/<file>.md  # Lint a plan: drifted refs, missing files/sections (TASK-93)
+aida plan verify <file> --fix          # Rewrite drifted path:line refs in place
 ```
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
@@ -85,6 +87,8 @@ If you work conversationally without explicit `/aida-req` calls, use `/aida-capt
 Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Use `docs/plans/_TEMPLATE.md` (scaffolded by `aida init` from `aida-core/templates/plan-template.md`) as the starting structure — 11 sections cover Approach + diagram, Decisions, Files (in build-order), Critical Files, Reusable helpers, Risks + gotchas, Tests (named), Verification (executable), Followups, and Related. The header carries Date / Specs / Status / Complexity. trace:TASK-92
 
 **Symbol refs over line refs.** When citing code from a plan, prefer symbol refs (`fn handle_pull_command`, `struct ImplementationInfo`) over line refs (`main.rs:19713`). Symbol refs survive edits; line refs drift fast and are often stale within hours of generation. Worked example: `docs/plans/2026-05-13-story-86-done-status.md`.
+
+**Verify before relying on a plan.** `aida plan verify docs/plans/<file>.md` (TASK-93) lints a plan against the template: it reports drifted `path:line` refs (with the corrected line, located by symbol name), missing files, and absent required sections (Critical Files, Verification, Followups are hard requirements). It exits non-zero on any missing file or section, so it works as a pre-commit hook on `docs/plans/`. `--fix` rewrites drifted refs in place; `--quiet` drops the per-check OK lines. Refs inside `<!-- -->` comments and fenced code blocks are skipped. trace:TASK-93
 
 ## AIDA-developer workflow (only when working on AIDA itself)
 

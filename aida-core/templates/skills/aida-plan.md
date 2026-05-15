@@ -126,6 +126,17 @@ Two conventions worth honoring:
 
 Worked example: `docs/plans/2026-05-13-story-86-done-status.md`.
 
+After writing the plan, lint it:
+
+```bash
+aida plan verify docs/plans/YYYY-MM-DD-<slug>.md
+```
+
+`aida plan verify` reports drifted `path:line` refs (with the corrected
+line located by symbol name), missing files, and absent required sections.
+It exits non-zero on any missing file or section — usable as a pre-commit
+hook on `docs/plans/`. Pass `--fix` to rewrite drifted refs in place.
+
 ### Step 6: Mark as Planned
 
 When planning is complete:
