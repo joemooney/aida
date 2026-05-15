@@ -7,16 +7,20 @@
 //! out of a live session to a status overlay, takes one-keystroke
 //! actions, drops back into the *same* conversation.
 //!
-//! STORY-132 (this crate's first slice) delivers the shell: a PTY host, a
-//! bottom status strip, prefix-key routing, and a clean prefix-key exit.
-//! The status overlay (STORY-133), multi-tab management (STORY-3), and
-//! crash recovery (STORY-5) build on these primitives.
+//! STORY-132 (this crate's first slice) delivered the shell: a PTY host,
+//! a bottom status strip, prefix-key routing, and a clean prefix-key
+//! exit. STORY-133 adds the `prefix o` status overlay — a read-only
+//! `ratatui` view over `aida status --json` with three quick actions.
+//! Multi-tab management (STORY-3) and crash recovery (STORY-5) build on
+//! these primitives.
 //!
 //! trace:STORY-132 | ai:claude
 
+mod actions;
 mod app;
 mod config;
 mod event;
+mod overlay;
 mod pty;
 mod statusbar;
 mod tab;

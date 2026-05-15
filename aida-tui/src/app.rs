@@ -12,8 +12,10 @@
 //!
 //! trace:STORY-132 | ai:claude
 
+use crate::actions::{self, ActivityEntry, QuickAction};
 use crate::config::TuiConfig;
 use crate::event::TuiEvent;
+use crate::overlay::{self, OverlayModel};
 use crate::pty::PtyHost;
 use crate::statusbar;
 use crate::tab::{SessionTab, TabManager};
@@ -21,18 +23,28 @@ use crate::term::pty_rows;
 use anyhow::{Context, Result};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::{cursor, terminal, QueueableCommand};
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
 use std::io::{Stdout, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 
-/// Input-routing mode. `Overlay` is intentionally absent — the status
-/// overlay lands in STORY-133, which adds the variant and its handler.
+/// Cap on retained activity-log entries — old quick-action output is
+/// dropped once the log grows past this (the overlay only shows a tail).
+const ACTIVITY_LOG_CAP: usize = 200;
+
+/// Input-routing mode — the Focused → Command → Overlay state machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     /// Keystrokes pass straight through to the focused child.
     Focused,
     /// The prefix key was pressed; the next keystroke is a command.
     Command,
+    /// The `prefix o` status overlay is open — keystrokes drive the
+    /// overlay (selection / actions / close), never the hosted child,
+    /// and the child's PTY output is buffered (not blitted) until the
+    /// overlay closes. trace:STORY-133 | ai:claude
+    Overlay,
 }
 
 /// The outcome of routing one keystroke through [`App::route_key`].
@@ -56,6 +68,16 @@ pub enum Routing {
     NextTab,
     /// `prefix [` — focus the previous tab.
     PrevTab,
+    /// `prefix o` — open the status overlay (STORY-133).
+    OpenOverlay,
+    /// `esc` / `q` from the overlay — close it, repaint the focused tab.
+    CloseOverlay,
+    /// An overlay keystroke that only changed overlay state (selection
+    /// moved, confirm armed / cancelled) — repaint the overlay.
+    OverlayRedraw,
+    /// `enter` on a quick action with no pending confirm, or `y` once a
+    /// confirm is armed — run the action as a captured subprocess.
+    RunAction(QuickAction),
 }
 
 /// Supervisor state for one `aida tui` run.
@@ -79,6 +101,57 @@ pub struct App {
     /// exit — captured before children are killed so the caller can
     /// print resume hints once cooked mode is restored.
     exit_sessions: Vec<(String, String)>,
+    /// State for the `prefix o` status overlay (STORY-133).
+    overlay: OverlayState,
+    /// Quick-action results, oldest first — the overlay's activity log.
+    /// Survives overlay open/close within one `aida tui` run.
+    activity: Vec<ActivityEntry>,
+    /// `ratatui` terminal, created lazily on the first overlay open and
+    /// reused for every subsequent draw. The supervisor's passthrough
+    /// rendering writes raw bytes; this is only ever used while the
+    /// overlay owns the screen. trace:STORY-133 | ai:claude
+    overlay_term: Option<Terminal<CrosstermBackend<Stdout>>>,
+}
+
+/// State for the status overlay — what `App` carries while [`Mode::Over
+/// lay`] is active.
+struct OverlayState {
+    /// The most recent `aida status --json` projection driving the panels.
+    model: OverlayModel,
+    /// Index into [`QuickAction::ALL`] of the highlighted action.
+    selected: usize,
+    /// A quick action awaiting `y`/cancel confirmation, if any.
+    confirm: Option<QuickAction>,
+    /// True between an overlay open and the background CI refresh
+    /// landing — drives the header's "fetching PR/CI…" hint.
+    refreshing: bool,
+}
+
+impl OverlayState {
+    fn new() -> Self {
+        OverlayState {
+            model: OverlayModel::default(),
+            selected: 0,
+            confirm: None,
+            refreshing: false,
+        }
+    }
+
+    /// Highlight the next action, wrapping past the end.
+    fn select_next(&mut self) {
+        self.selected = (self.selected + 1) % QuickAction::ALL.len();
+    }
+
+    /// Highlight the previous action, wrapping past the start.
+    fn select_prev(&mut self) {
+        let n = QuickAction::ALL.len();
+        self.selected = (self.selected + n - 1) % n;
+    }
+
+    /// The currently highlighted action.
+    fn selected_action(&self) -> QuickAction {
+        QuickAction::ALL[self.selected]
+    }
 }
 
 impl App {
@@ -95,6 +168,9 @@ impl App {
             next_tab_id: 0,
             quit_armed: false,
             exit_sessions: Vec::new(),
+            overlay: OverlayState::new(),
+            activity: Vec::new(),
+            overlay_term: None,
         }
     }
 
@@ -105,8 +181,10 @@ impl App {
         &self.exit_sessions
     }
 
-    /// Route one keystroke. Pure state machine over `self.mode` — touches
-    /// no tabs and performs no I/O, so it is exhaustively unit-testable.
+    /// Route one keystroke. Pure state machine over `self.mode` +
+    /// `self.overlay` — touches no tabs and performs no I/O, so it is
+    /// exhaustively unit-testable. I/O actions are deferred: the routing
+    /// it returns names them and [`App::handle_routing`] performs them.
     pub fn route_key(&mut self, key: KeyEvent) -> Routing {
         let prefix = self.config.prefix_key;
         match self.mode {
@@ -119,7 +197,7 @@ impl App {
                 }
             }
             Mode::Command => {
-                // Every command-mode key is a single shot back to Focused.
+                // Every command-mode key is a single shot out of Command.
                 self.mode = Mode::Focused;
                 if key_matches(key, prefix) {
                     return Routing::LiteralPrefix;
@@ -127,12 +205,57 @@ impl App {
                 match key.code {
                     KeyCode::Char('q') => Routing::Quit,
                     KeyCode::Char('d') => Routing::Detach,
+                    KeyCode::Char('o') => {
+                        self.mode = Mode::Overlay;
+                        Routing::OpenOverlay
+                    }
                     KeyCode::Char('[') => Routing::PrevTab,
                     KeyCode::Char(']') => Routing::NextTab,
                     KeyCode::Char(c @ '1'..='9') => Routing::SwitchTab(c as usize - '1' as usize),
                     _ => Routing::Unbound,
                 }
             }
+            Mode::Overlay => self.route_overlay_key(key),
+        }
+    }
+
+    /// Route a keystroke while the status overlay is open. A pending
+    /// confirm gates everything — `y` runs the armed action, any other
+    /// key cancels it; otherwise arrows / `h` / `l` / Tab move the
+    /// selection, Enter runs (or arms a confirm for) the selected
+    /// action, and Esc / `q` close the overlay.
+    fn route_overlay_key(&mut self, key: KeyEvent) -> Routing {
+        if let Some(pending) = self.overlay.confirm.take() {
+            return if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y')) {
+                Routing::RunAction(pending)
+            } else {
+                Routing::OverlayRedraw
+            };
+        }
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.mode = Mode::Focused;
+                Routing::CloseOverlay
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                self.overlay.select_prev();
+                Routing::OverlayRedraw
+            }
+            KeyCode::Right | KeyCode::Char('l') | KeyCode::Tab => {
+                self.overlay.select_next();
+                Routing::OverlayRedraw
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                let action = self.overlay.selected_action();
+                if action.needs_confirm() {
+                    self.overlay.confirm = Some(action);
+                    Routing::OverlayRedraw
+                } else {
+                    Routing::RunAction(action)
+                }
+            }
+            // Any other key is a no-op; an idempotent redraw is harmless.
+            _ => Routing::OverlayRedraw,
         }
     }
 
@@ -148,12 +271,12 @@ impl App {
                 .with_context(|| format!("failed to host session for `{}`", scope))?;
         }
 
-        spawn_input_thread(tx);
+        spawn_input_thread(tx.clone());
 
         let mut out = std::io::stdout();
         self.full_repaint(&mut out)?;
 
-        let exit = self.event_loop(&rx, &mut out)?;
+        let exit = self.event_loop(&rx, &tx, &mut out)?;
 
         // Snapshot the live sessions before teardown so the caller can
         // print `--resume` hints (the conversations persist on disk).
@@ -173,8 +296,15 @@ impl App {
         Ok(exit)
     }
 
-    /// The blocking `recv` loop. Returns how the TUI exited.
-    fn event_loop(&mut self, rx: &Receiver<TuiEvent>, out: &mut Stdout) -> Result<ExitKind> {
+    /// The blocking `recv` loop. Returns how the TUI exited. `tx` is the
+    /// shared supervisor channel — the overlay's background refresh
+    /// thread needs a clone of it.
+    fn event_loop(
+        &mut self,
+        rx: &Receiver<TuiEvent>,
+        tx: &Sender<TuiEvent>,
+        out: &mut Stdout,
+    ) -> Result<ExitKind> {
         while let Ok(event) = rx.recv() {
             match event {
                 TuiEvent::Input(Event::Key(key)) => {
@@ -191,7 +321,7 @@ impl App {
                         self.paint_strip(out)?;
                         continue;
                     }
-                    if let Some(exit) = self.handle_routing(key, out)? {
+                    if let Some(exit) = self.handle_routing(key, tx, out)? {
                         return Ok(exit);
                     }
                 }
@@ -200,11 +330,20 @@ impl App {
                     if let Some(tab) = self.tabs.focused() {
                         let _ = tab.pty.resize(pty_rows(rows), cols);
                     }
-                    self.full_repaint(out)?;
+                    // `ratatui` autoresizes on its next draw; the focused
+                    // tab is repainted from its `vt100` snapshot.
+                    if self.mode == Mode::Overlay {
+                        self.draw_overlay()?;
+                    } else {
+                        self.full_repaint(out)?;
+                    }
                 }
                 TuiEvent::Input(_) => {}
                 TuiEvent::PtyOutput { tab, bytes } => {
-                    if self.is_focused_tab(tab) {
+                    // The overlay owns the screen — buffer the focused
+                    // child's output (the `vt100` mirror is still fed in
+                    // the reader thread) and blit it on overlay close.
+                    if self.mode != Mode::Overlay && self.is_focused_tab(tab) {
                         out.write_all(&bytes)?;
                         out.flush()?;
                     }
@@ -219,7 +358,21 @@ impl App {
                     if self.had_tabs && self.tabs.is_empty() {
                         return Ok(ExitKind::SessionEnded);
                     }
-                    self.full_repaint(out)?;
+                    if self.mode == Mode::Overlay {
+                        self.draw_overlay()?;
+                    } else {
+                        self.full_repaint(out)?;
+                    }
+                }
+                TuiEvent::OverlayRefresh(model) => {
+                    // The `gh`-backed refresh landed — repaint only if the
+                    // overlay is still open (it may have been closed
+                    // before the slow `gh` call returned).
+                    if self.mode == Mode::Overlay {
+                        self.overlay.model = *model;
+                        self.overlay.refreshing = false;
+                        self.draw_overlay()?;
+                    }
                 }
             }
         }
@@ -227,8 +380,14 @@ impl App {
     }
 
     /// Apply a routed keystroke. Returns `Some(ExitKind)` to break the
-    /// loop, `None` to continue.
-    fn handle_routing(&mut self, key: KeyEvent, out: &mut Stdout) -> Result<Option<ExitKind>> {
+    /// loop, `None` to continue. `tx` is handed to the overlay so its
+    /// background refresh thread can post back into the event channel.
+    fn handle_routing(
+        &mut self,
+        key: KeyEvent,
+        tx: &Sender<TuiEvent>,
+        out: &mut Stdout,
+    ) -> Result<Option<ExitKind>> {
         match self.route_key(key) {
             Routing::Passthrough(bytes) => {
                 if let Some(tab) = self.tabs.focused_mut() {
@@ -269,8 +428,91 @@ impl App {
                 self.tabs.prev();
                 self.focus_changed(out)?;
             }
+            Routing::OpenOverlay => self.open_overlay(tx)?,
+            Routing::CloseOverlay => {
+                self.overlay.confirm = None;
+                // Repaint the focused child from its `vt100` snapshot —
+                // focus returns to the same Claude conversation.
+                self.full_repaint(out)?;
+            }
+            Routing::OverlayRedraw => self.draw_overlay()?,
+            Routing::RunAction(action) => {
+                self.run_quick_action(action)?;
+            }
         }
         Ok(None)
+    }
+
+    /// Open the status overlay: paint immediately from a cache-only
+    /// `aida status --json --no-ci` (sub-millisecond), then kick off a
+    /// background `gh`-backed refresh that repaints when it lands.
+    fn open_overlay(&mut self, tx: &Sender<TuiEvent>) -> Result<()> {
+        self.overlay.selected = 0;
+        self.overlay.confirm = None;
+        match overlay::fetch(true) {
+            Ok(model) => self.overlay.model = model,
+            Err(e) => {
+                // A status failure must not block the overlay — render an
+                // empty model and log why the panels are bare.
+                self.overlay.model = OverlayModel::default();
+                self.push_activity(ActivityEntry::note("aida status", &e.to_string()));
+            }
+        }
+        self.overlay.refreshing = true;
+        spawn_overlay_refresh(tx.clone());
+
+        // Lazily build the `ratatui` terminal; `clear()` forces a full
+        // redraw over whatever the hosted child left on screen.
+        if self.overlay_term.is_none() {
+            self.overlay_term = Some(Terminal::new(CrosstermBackend::new(std::io::stdout()))?);
+        }
+        if let Some(term) = self.overlay_term.as_mut() {
+            term.clear()?;
+            term.hide_cursor()?;
+        }
+        self.draw_overlay()
+    }
+
+    /// Draw the overlay into the `ratatui` terminal. Disjoint-field
+    /// borrows: the panel inputs are borrowed before `overlay_term` is
+    /// borrowed mutably, so the draw closure and the terminal don't
+    /// alias.
+    fn draw_overlay(&mut self) -> Result<()> {
+        if self.overlay_term.is_none() {
+            self.overlay_term = Some(Terminal::new(CrosstermBackend::new(std::io::stdout()))?);
+        }
+        let model = &self.overlay.model;
+        let activity = &self.activity;
+        let selected = self.overlay.selected;
+        let confirm = self.overlay.confirm;
+        let refreshing = self.overlay.refreshing;
+        let term = self
+            .overlay_term
+            .as_mut()
+            .expect("overlay terminal initialized above");
+        term.draw(|frame| overlay::render(frame, model, activity, selected, confirm, refreshing))?;
+        Ok(())
+    }
+
+    /// Run a quick action as a captured subprocess, append the result to
+    /// the activity log, and repaint the overlay. The overlay stays open
+    /// so the user sees the output; focus returns to Claude on close.
+    fn run_quick_action(&mut self, action: QuickAction) -> Result<()> {
+        self.overlay.confirm = None;
+        let exe = aida_exe().to_string_lossy().into_owned();
+        let entry = actions::run(action, &exe);
+        self.push_activity(entry);
+        self.draw_overlay()
+    }
+
+    /// Append an activity-log entry, trimming the oldest once the log
+    /// passes [`ACTIVITY_LOG_CAP`].
+    fn push_activity(&mut self, entry: ActivityEntry) {
+        self.activity.push(entry);
+        if self.activity.len() > ACTIVITY_LOG_CAP {
+            let drop = self.activity.len() - ACTIVITY_LOG_CAP;
+            self.activity.drain(0..drop);
+        }
     }
 
     /// Spawn a hosted session for `scope` in a fresh tab. The child is
@@ -344,7 +586,11 @@ impl App {
         let chips: Vec<String> = self.tabs.iter().map(|t| t.title.clone()).collect();
         let hint = match self.mode {
             Mode::Focused => format!("{} = command", describe_key(self.config.prefix_key)),
-            Mode::Command => "command: q quit · d detach · [ ] tab".to_string(),
+            Mode::Command => "command: o overlay · q quit · d detach · [ ] tab".to_string(),
+            // The overlay paints its own full-screen chrome; the strip is
+            // only ever drawn in Focused / Command, but the arm is needed
+            // for the match to stay exhaustive.
+            Mode::Overlay => "overlay open".to_string(),
         };
         statusbar::render(
             out,
@@ -403,10 +649,22 @@ impl ExitKind {
     }
 }
 
-/// The `aida` binary to host — the currently-running executable, so a
-/// dev build hosts the same dev build.
-fn aida_exe() -> PathBuf {
+/// The `aida` binary to host / shell out to — the currently-running
+/// executable, so a dev build hosts (and queries) the same dev build.
+pub(crate) fn aida_exe() -> PathBuf {
     std::env::current_exe().unwrap_or_else(|_| PathBuf::from("aida"))
+}
+
+/// Spawn the overlay's background refresh: one CI-inclusive
+/// `aida status --json` whose result posts back as [`TuiEvent::Overlay
+/// Refresh`]. Detached and fire-and-forget — if the overlay closes
+/// before `gh` returns, the event is simply dropped by the loop.
+fn spawn_overlay_refresh(tx: Sender<TuiEvent>) {
+    std::thread::spawn(move || {
+        if let Ok(model) = overlay::fetch(false) {
+            let _ = tx.send(TuiEvent::OverlayRefresh(Box::new(model)));
+        }
+    });
 }
 
 /// Spawn the input thread: one [`TuiEvent::Input`] per crossterm event.
@@ -553,6 +811,84 @@ mod tests {
 
         app.route_key(prefix);
         assert!(matches!(app.route_key(plain('[')), Routing::PrevTab));
+    }
+
+    fn enter() -> KeyEvent {
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn prefix_o_opens_overlay_and_esc_closes_it() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+
+        // `prefix o` enters Overlay mode.
+        app.route_key(prefix);
+        assert!(matches!(app.route_key(plain('o')), Routing::OpenOverlay));
+        assert_eq!(app.mode, Mode::Overlay);
+
+        // A navigation key keeps the overlay open and just redraws.
+        assert!(matches!(app.route_key(plain('l')), Routing::OverlayRedraw));
+        assert_eq!(app.mode, Mode::Overlay);
+
+        // `esc` closes back to Focused.
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(matches!(app.route_key(esc), Routing::CloseOverlay));
+        assert_eq!(app.mode, Mode::Focused);
+    }
+
+    #[test]
+    fn overlay_enter_runs_read_only_action_without_confirm() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('o'));
+
+        // Selection starts on QueueNext — read-only, so Enter runs it
+        // straight away and the overlay stays open for the output.
+        assert_eq!(app.overlay.selected_action(), QuickAction::QueueNext);
+        match app.route_key(enter()) {
+            Routing::RunAction(QuickAction::QueueNext) => {}
+            other => panic!("expected RunAction(QueueNext), got {:?}", other),
+        }
+        assert_eq!(app.mode, Mode::Overlay);
+    }
+
+    #[test]
+    fn overlay_session_end_requires_y_confirm() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('o'));
+
+        // Move to "End session" — Enter arms a confirm, runs nothing.
+        app.route_key(plain('l'));
+        assert_eq!(app.overlay.selected_action(), QuickAction::SessionEnd);
+        assert!(matches!(app.route_key(enter()), Routing::OverlayRedraw));
+        assert_eq!(app.overlay.confirm, Some(QuickAction::SessionEnd));
+
+        // `y` confirms → the action runs and the confirm clears.
+        match app.route_key(plain('y')) {
+            Routing::RunAction(QuickAction::SessionEnd) => {}
+            other => panic!("expected RunAction(SessionEnd), got {:?}", other),
+        }
+        assert!(app.overlay.confirm.is_none());
+    }
+
+    #[test]
+    fn overlay_confirm_is_cancelled_by_any_other_key() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('o'));
+        app.route_key(plain('l')); // select "End session"
+        app.route_key(enter()); // arm the confirm
+        assert_eq!(app.overlay.confirm, Some(QuickAction::SessionEnd));
+
+        // Any non-`y` key cancels the confirm; the overlay stays open.
+        assert!(matches!(app.route_key(plain('n')), Routing::OverlayRedraw));
+        assert!(app.overlay.confirm.is_none());
+        assert_eq!(app.mode, Mode::Overlay);
     }
 
     #[test]

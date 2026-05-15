@@ -9,7 +9,9 @@
 /// An event delivered to the supervisor loop. Producers:
 ///   * the input thread — one [`TuiEvent::Input`] per crossterm event;
 ///   * each PTY host's reader thread — [`TuiEvent::PtyOutput`] chunks and
-///     a final [`TuiEvent::PtyExited`] when the child closes the PTY.
+///     a final [`TuiEvent::PtyExited`] when the child closes the PTY;
+///   * the overlay's background refresh thread — one [`TuiEvent::Overlay
+///     Refresh`] when the `gh`-backed `aida status --json` lands.
 pub enum TuiEvent {
     /// A keystroke / resize / paste from the real terminal.
     Input(crossterm::event::Event),
@@ -19,4 +21,8 @@ pub enum TuiEvent {
     PtyOutput { tab: usize, bytes: Vec<u8> },
     /// A hosted child closed its PTY (process exited or detached).
     PtyExited { tab: usize },
+    /// The overlay's background `aida status --json` (CI-inclusive)
+    /// refresh completed — repaint the overlay if it is still open
+    /// (STORY-133). Boxed to keep the enum small. trace:STORY-133
+    OverlayRefresh(Box<crate::overlay::OverlayModel>),
 }
