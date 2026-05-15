@@ -1568,10 +1568,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             message,
             no_rebase_check,
         } => {
-            return handle_push_command(
-                store_path,
+            // TASK-106: AIDA_PUSH_DEFAULT lets a user flip the default
+            // scope when neither flag is passed explicitly.
+            let (code_only, store_only) = resolve_push_scope(
                 *code_only,
                 *store_only,
+                std::env::var("AIDA_PUSH_DEFAULT").ok().as_deref(),
+            );
+            return handle_push_command(
+                store_path,
+                code_only,
+                store_only,
                 message.as_deref(),
                 *no_rebase_check,
             );
@@ -20160,6 +20167,139 @@ mod handle_pull_command_tests {
     }
 }
 
+/// TASK-106: coverage for the `aida push` / `aida pull` scope flags —
+/// all four combinations (default / --code-only / --store-only / both)
+/// at the clap-parse layer, the `AIDA_PUSH_DEFAULT` env-var override,
+/// and the mutual-exclusion guard. trace:TASK-106 | ai:claude
+#[cfg(test)]
+mod push_pull_scope_tests {
+    use super::*;
+    use clap::Parser;
+
+    /// Default: neither flag, no env → both legs.
+    #[test]
+    fn resolve_scope_default_is_both() {
+        assert_eq!(resolve_push_scope(false, false, None), (false, false));
+    }
+
+    /// Explicit flags pass straight through.
+    #[test]
+    fn resolve_scope_explicit_flags() {
+        assert_eq!(resolve_push_scope(true, false, None), (true, false));
+        assert_eq!(resolve_push_scope(false, true, None), (false, true));
+    }
+
+    /// AIDA_PUSH_DEFAULT flips the default when no flag is passed.
+    #[test]
+    fn resolve_scope_env_override() {
+        assert_eq!(
+            resolve_push_scope(false, false, Some("code")),
+            (true, false)
+        );
+        assert_eq!(
+            resolve_push_scope(false, false, Some("code-only")),
+            (true, false)
+        );
+        assert_eq!(
+            resolve_push_scope(false, false, Some("store")),
+            (false, true)
+        );
+        assert_eq!(
+            resolve_push_scope(false, false, Some("STORE-ONLY")),
+            (false, true)
+        );
+        // Unrecognized / explicit "both" → historical default.
+        assert_eq!(
+            resolve_push_scope(false, false, Some("both")),
+            (false, false)
+        );
+        assert_eq!(
+            resolve_push_scope(false, false, Some("xyz")),
+            (false, false)
+        );
+    }
+
+    /// An explicit flag always wins over the env var.
+    #[test]
+    fn resolve_scope_explicit_beats_env() {
+        assert_eq!(
+            resolve_push_scope(true, false, Some("store")),
+            (true, false)
+        );
+        assert_eq!(resolve_push_scope(false, true, Some("code")), (false, true));
+    }
+
+    /// All four parse combinations for `aida push`.
+    #[test]
+    fn push_flag_combinations_parse() {
+        // default
+        let cli = Cli::try_parse_from(["aida", "push"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                code_only: false,
+                store_only: false,
+                ..
+            }
+        ));
+        // --code-only
+        let cli = Cli::try_parse_from(["aida", "push", "--code-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                code_only: true,
+                store_only: false,
+                ..
+            }
+        ));
+        // --store-only
+        let cli = Cli::try_parse_from(["aida", "push", "--store-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                code_only: false,
+                store_only: true,
+                ..
+            }
+        ));
+        // both → clap rejects via conflicts_with
+        assert!(Cli::try_parse_from(["aida", "push", "--code-only", "--store-only"]).is_err());
+    }
+
+    /// Same four combinations for `aida pull`.
+    #[test]
+    fn pull_flag_combinations_parse() {
+        let cli = Cli::try_parse_from(["aida", "pull"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Pull {
+                code_only: false,
+                store_only: false,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "pull", "--code-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Pull {
+                code_only: true,
+                store_only: false,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "pull", "--store-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Pull {
+                code_only: false,
+                store_only: true,
+                ..
+            }
+        ));
+        assert!(Cli::try_parse_from(["aida", "pull", "--code-only", "--store-only"]).is_err());
+    }
+}
+
 /// TASK-107: regression coverage for `aida fetch`. The behaviors we
 /// pin: (1) code-leg fetch updates origin/<branch> without touching the
 /// worktree, (2) cache-invalidation hook fires after the store leg
@@ -24623,6 +24763,155 @@ fn handle_usage_command(
 // trace:FR-264 | ai:claude
 // ----------------------------------------------------------------------------
 
+/// TASK-106: resolve the effective push scope. An explicit `--code-only`
+/// or `--store-only` always wins. When the user passes neither,
+/// `AIDA_PUSH_DEFAULT` can flip the default: `code`/`code-only` scopes
+/// to the code leg, `store`/`store-only` to the orphan store; anything
+/// else (including unset) keeps the historical both-legs default.
+/// trace:TASK-106 | ai:claude
+fn resolve_push_scope(code_only: bool, store_only: bool, env_value: Option<&str>) -> (bool, bool) {
+    if code_only || store_only {
+        return (code_only, store_only);
+    }
+    match env_value.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        Some("code") | Some("code-only") => (true, false),
+        Some("store") | Some("store-only") => (false, true),
+        _ => (false, false),
+    }
+}
+
+/// TASK-106: one leg of a `aida push` / `aida pull` pre-action summary.
+/// `pending` is true when the leg actually has work to do (commits to
+/// push, pending orphan changes) — used to decide whether to prompt.
+struct LegStatus {
+    label: &'static str,
+    detail: String,
+    pending: bool,
+}
+
+/// TASK-106: describe what the code leg of `aida push` will do, without
+/// touching origin. trace:TASK-106 | ai:claude
+fn push_code_leg_status(project_root: &std::path::Path) -> LegStatus {
+    use aida_core::git_ops;
+    if !git_ops::has_remote(project_root, "origin") {
+        return LegStatus {
+            label: "code",
+            detail: "no `origin` remote — will skip".to_string(),
+            pending: false,
+        };
+    }
+    let branch = git_ops::current_branch(project_root).unwrap_or_else(|_| "HEAD".to_string());
+    match ahead_behind_vs_ref(project_root, &branch, &format!("origin/{}", branch)) {
+        Some((0, _)) => LegStatus {
+            label: "code",
+            detail: format!("{} → origin (up to date, nothing to push)", branch),
+            pending: false,
+        },
+        Some((ahead, _)) => LegStatus {
+            label: "code",
+            detail: format!(
+                "{} → origin ({} commit{} ahead)",
+                branch,
+                ahead,
+                if ahead == 1 { "" } else { "s" }
+            ),
+            pending: true,
+        },
+        // No `origin/<branch>` ref yet — first push of a new branch.
+        None => LegStatus {
+            label: "code",
+            detail: format!("{} → origin (new branch — will publish)", branch),
+            pending: true,
+        },
+    }
+}
+
+/// TASK-106: describe what the orphan-store leg of `aida push` will do.
+/// trace:TASK-106 | ai:claude
+fn push_store_leg_status(store_path: &std::path::Path) -> LegStatus {
+    use aida_core::git_ops;
+    if !git_ops::is_git_repo(store_path) {
+        return LegStatus {
+            label: "store",
+            detail: "no orphan worktree — will skip".to_string(),
+            pending: false,
+        };
+    }
+    if !git_ops::has_remote(store_path, "origin") {
+        return LegStatus {
+            label: "store",
+            detail: "orphan store has no `origin` — will skip".to_string(),
+            pending: false,
+        };
+    }
+    let has_changes = git_ops::has_changes(store_path).unwrap_or(false);
+    let ahead = orphan_branch_sync_state(store_path)
+        .map(|(a, _)| a)
+        .unwrap_or(0);
+    if has_changes || ahead > 0 {
+        let mut parts: Vec<String> = Vec::new();
+        if ahead > 0 {
+            parts.push(format!(
+                "{} commit{} ahead",
+                ahead,
+                if ahead == 1 { "" } else { "s" }
+            ));
+        }
+        if has_changes {
+            parts.push("uncommitted changes to bundle".to_string());
+        }
+        LegStatus {
+            label: "store",
+            detail: format!("aida-store → origin ({})", parts.join(", ")),
+            pending: true,
+        }
+    } else {
+        LegStatus {
+            label: "store",
+            detail: "aida-store → origin (up to date, nothing to push)".to_string(),
+            pending: false,
+        }
+    }
+}
+
+/// TASK-106: print the pre-push plan and, when BOTH legs have commits to
+/// push (the only genuinely ambiguous case), prompt for confirmation.
+/// A single-leg push is unsurprising and proceeds silently. The summary
+/// itself is shown only on an interactive stdin so scripted/CI output
+/// stays stable; the prompt is additionally gated on `!no_rebase_check`
+/// (the established "skip interactive checks" signal). Returns `false`
+/// when the user declines. trace:TASK-106 | ai:claude
+fn confirm_push_plan(legs: &[LegStatus], no_rebase_check: bool) -> bool {
+    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
+    if !interactive {
+        return true;
+    }
+    println!("{}", "Push plan:".bold());
+    for leg in legs {
+        let marker = if leg.pending {
+            "→".cyan().to_string()
+        } else {
+            "·".dimmed().to_string()
+        };
+        println!("  {} {:<6} {}", marker, leg.label, leg.detail);
+    }
+    let pending = legs.iter().filter(|l| l.pending).count();
+    if pending < 2 || no_rebase_check {
+        return true;
+    }
+    use std::io::Write;
+    eprint!("Push both legs? [Y/n] ");
+    let _ = std::io::stderr().flush();
+    let mut answer = String::new();
+    let _ = std::io::stdin().read_line(&mut answer);
+    if matches!(answer.trim().to_ascii_lowercase().as_str(), "n" | "no") {
+        eprintln!("{}", "Push aborted.".dimmed());
+        false
+    } else {
+        true
+    }
+}
+
 fn handle_push_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -24636,6 +24925,22 @@ fn handle_push_command(
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // TASK-106: pre-push summary. Show what each in-scope leg will do
+    // BEFORE touching origin; prompt only when both legs have commits
+    // (the ambiguous case — a single-leg push is no surprise).
+    {
+        let mut legs: Vec<LegStatus> = Vec::new();
+        if !store_only {
+            legs.push(push_code_leg_status(&project_root));
+        }
+        if !code_only {
+            legs.push(push_store_leg_status(store_path));
+        }
+        if !confirm_push_plan(&legs, no_rebase_check) {
+            return Ok(());
+        }
+    }
 
     // ---- Code push (current branch on the project repo) ----
     if !store_only {
@@ -24823,6 +25128,74 @@ fn handle_push_command(
     Ok(())
 }
 
+/// TASK-106: print the pre-pull plan — which legs are in scope and the
+/// action each will take. Shown only on an interactive stdin. Unlike
+/// `aida push` there is no confirmation prompt: both legs are
+/// non-destructive (`--ff-only` for code, rebase-pull for the
+/// AIDA-managed orphan store), so there is no "surprise publish" to
+/// guard against. trace:TASK-106 | ai:claude
+fn print_pull_plan(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+) {
+    use aida_core::git_ops;
+    if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        return;
+    }
+    let mut legs: Vec<LegStatus> = Vec::new();
+    if !store_only {
+        let leg = if !git_ops::has_remote(project_root, "origin") {
+            LegStatus {
+                label: "code",
+                detail: "no `origin` remote — will skip".to_string(),
+                pending: false,
+            }
+        } else {
+            let branch =
+                git_ops::current_branch(project_root).unwrap_or_else(|_| "HEAD".to_string());
+            LegStatus {
+                label: "code",
+                detail: format!("{} ← origin (git pull --ff-only)", branch),
+                pending: true,
+            }
+        };
+        legs.push(leg);
+    }
+    if !code_only {
+        let leg = if !git_ops::is_git_repo(store_path) {
+            LegStatus {
+                label: "store",
+                detail: "no orphan worktree — will skip".to_string(),
+                pending: false,
+            }
+        } else if !git_ops::has_remote(store_path, "origin") {
+            LegStatus {
+                label: "store",
+                detail: "orphan store has no `origin` — will skip".to_string(),
+                pending: false,
+            }
+        } else {
+            LegStatus {
+                label: "store",
+                detail: "aida-store ← origin (rebase pull)".to_string(),
+                pending: true,
+            }
+        };
+        legs.push(leg);
+    }
+    println!("{}", "Pull plan:".bold());
+    for leg in &legs {
+        let marker = if leg.pending {
+            "←".cyan().to_string()
+        } else {
+            "·".dimmed().to_string()
+        };
+        println!("  {} {:<6} {}", marker, leg.label, leg.detail);
+    }
+}
+
 /// `aida pull` — symmetric counterpart of `aida push`. Pulls both the
 /// current code branch (via `git pull --ff-only`) and the orphan store
 /// (via `git_ops::pull_rebase`, matching `aida db sync --pull`). Each
@@ -24841,6 +25214,9 @@ fn handle_pull_command(
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // TASK-106: pre-pull summary (interactive only, no prompt).
+    print_pull_plan(&project_root, store_path, code_only, store_only);
 
     // ---- Code pull (current branch on the project repo) ----
     if !store_only {

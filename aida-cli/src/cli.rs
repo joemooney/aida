@@ -2779,12 +2779,14 @@ pub enum Command {
         limit: usize,
     },
 
-    /// Push code AND the AIDA orphan store in one shot. Equivalent to
-    /// running `git push` on the current branch followed by
-    /// `aida db sync --push` — the two operations users routinely
-    /// forget to do together. Skips a leg cleanly when nothing's pending
-    /// (no upstream tracked, no commits ahead, no orphan drift).
-    /// trace:FR-264 | ai:claude
+    /// Push code branch AND orphan aida-store branch to origin. Use
+    /// --code-only or --store-only to scope. Equivalent to running
+    /// `git push` on the current branch followed by `aida db sync
+    /// --push` — the two operations users routinely forget to do
+    /// together. Skips a leg cleanly when nothing's pending (no
+    /// upstream tracked, no commits ahead, no orphan drift). Set
+    /// `AIDA_PUSH_DEFAULT=code|store` to flip the default scope.
+    /// trace:FR-264 TASK-106 | ai:claude
     Push {
         /// Skip the code push (only sync the orphan store).
         #[clap(long, conflicts_with = "store_only")]
@@ -2827,11 +2829,12 @@ pub enum Command {
         quiet: bool,
     },
 
-    /// Pull code AND the AIDA orphan store in one shot. Symmetric to
-    /// `aida push`: equivalent to `git pull --ff-only` on the current
-    /// branch followed by `aida db sync --pull`. Skips a leg cleanly
-    /// when there's nothing to pull (no upstream tracked, no orphan
-    /// remote). trace:TASK-43 | ai:claude
+    /// Pull code branch AND orphan aida-store branch from origin. Use
+    /// --code-only or --store-only to scope. Symmetric to `aida push`:
+    /// equivalent to `git pull --ff-only` on the current branch
+    /// followed by `aida db sync --pull`. Skips a leg cleanly when
+    /// there's nothing to pull (no upstream tracked, no orphan
+    /// remote). trace:TASK-43 TASK-106 | ai:claude
     Pull {
         /// Skip the code pull (only sync the orphan store).
         #[clap(long, conflicts_with = "store_only")]
