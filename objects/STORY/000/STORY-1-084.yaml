@@ -1,0 +1,40 @@
+id: 019e2e09-055e-7e60-a945-32640c445ed2
+spec_id: STORY-1-084
+title: 'Modernize the 7 existing MCP tools: bring schemas up to current CLI vocabulary'
+description: |-
+  Smallest-viable first slice of the MCP modernization EPIC: update the 7 existing tools' schemas + handlers to match current CLI vocabulary. No new tools yet — just bring existing ones current.
+
+  ## Acceptance
+
+  - [ ] \`list_requirements\` accepts: tags (CSV), batch (string), priority, parent, role/for, in_flight (bool). Filters apply via cache.
+  - [ ] \`show_requirement\` accepts: include_git (default true), verbose (default false). Returns git linkage by default (branch, PR, commits) matching \`aida show --git\` output.
+  - [ ] \`add_requirement\` accepts: parent (SPEC-ID), feature, tags (CSV), owner. All optional but supported.
+  - [ ] \`update_requirement\` accepts: title, type, priority, tags, parent (in addition to id/status/description).
+  - [ ] \`search_requirements\` accepts: type, status filters; uses FTS5 ranking.
+  - [ ] Status enum updated: \`draft, approved, planned, in-progress, done, completed, rejected\` (was missing planned + done).
+  - [ ] Type enum updated: \`functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc\` (was missing folder, meta, doc, sprint).
+  - [ ] \`list_features\` and \`add_comment\` get reviewed; current schemas appear correct, but verify output format matches modern \`aida list-features\`.
+  - [ ] Tests cover each tool's new parameters + enum values.
+  - [ ] CLAUDE.md updated noting MCP tool schemas now mirror current CLI capabilities.
+
+  ## Out of scope (separate STORYs)
+
+  - New tools (queue/session/role/workflow) — separate child STORYs of the EPIC
+  - New resources — separate child STORY
+  - Removing MCP server entirely — not on the table; modernization in place
+
+  ## Complexity
+
+  ~200-400 LOC change in \`aida-cli/src/mcp.rs\`. The schemas are JSON literals; the handlers already exist but pass simpler args to the underlying \`aida-core\` storage layer. Most work is enum updates + adding optional filters/fields. ~1-2 days.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T23:46:43.678942829Z
+modified_at: 2026-05-15T23:46:43.678942829Z
+req_type: Story
+tags:
+- first-vertical
+- mcp
+- modernization
+- schema-update
