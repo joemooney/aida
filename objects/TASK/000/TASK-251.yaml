@@ -1,0 +1,23 @@
+id: 019e2e07-eb82-7822-9bf3-ac308b478234
+spec_id: TASK-251
+agreed_id: TASK-251
+title: 'TUI: surface a notice when a requested scope isn''t hosted because crash-recovery filled MAX_TABS'
+description: |-
+  Deep-pass finding from /aida-review of PR-43 (STORY-135).
+
+  In aida-tui App::run, crash-recovery re-attaches recorded tabs before hosting the freshly-requested scope. If recovery alone fills MAX_TABS, the explicitly-requested 'aida tui <scope>' is silently NOT hosted — the 'self.tabs.len() < max_tabs' guard is false. The user only sees a 'recovered N session(s)' badge; there is no 'requested scope <X> not opened — tab cap reached' notice.
+
+  Fix: when a requested scope is dropped for the cap, set a distinct badge (or activity-log note) naming the scope and the cap, so the user knows their launch arg was not honoured and can close a recovered tab + reopen it via prefix-n.
+
+  Not a crash or data loss — polish. Surfaced in PR-43 review comment: https://github.com/joemooney/aida/pull/43#issuecomment-4464539917
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T23:45:31.522913541Z
+modified_at: 2026-05-15T23:45:31.522913541Z
+req_type: Task
+tags:
+- followup
+- review:PR-43
+- tui
