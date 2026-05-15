@@ -76,10 +76,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:28:23.693582217Z
-modified_at: 2026-05-15T06:44:07.988630745Z
+modified_at: 2026-05-15T14:39:29.950461366Z
 req_type: Task
 tags:
 - autonomous-agents
+- batch:lifecycle
 - completion-condition
 - goal
 - goal-helper
