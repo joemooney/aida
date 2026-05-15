@@ -1,0 +1,70 @@
+id: 019e2d4d-efc6-7303-893a-bed4930159c2
+spec_id: BUG-108
+agreed_id: BUG-108
+title: 'aida queue list: returns ''Your queue is empty'' when cwd is in a removed/missing worktree (should detect + warn)'
+description: |-
+  \`aida queue list\` (and likely other AIDA commands) silently falls back to an empty default state when invoked from a cwd whose worktree was removed by \`aida session end\`. Returns \"Your queue is empty\" instead of detecting the missing context and warning.
+
+  ## Observed (2026-05-15)
+
+  User had an implementer worktree at \`/home/joe/ai/aida-epic-26\`. A separate terminal ran \`aida session end 019e2d31ce52\`, which removed the worktree (\`git worktree remove\`). The user's original shell in that path was unaware — its cwd is now in a deleted directory.
+
+  In that shell:
+  \`\`\`
+  (role:implementer) (aida-debug) joe@imac:~/ai/aida-epic-26$ aida queue list --all
+  Your queue is empty.
+  \`\`\`
+
+  Then \`cd -\` to \`~/ai/aida\`:
+  \`\`\`
+  $ aida queue list --all
+  My Queue (9 items)  # all 9 items visible
+  \`\`\`
+
+  ## Why this matters
+
+  This is the SECOND class of \"misleading empty queue\" bug observed in this session. The first was cold-cache in a fresh worktree (resolved by waiting / cache warming). This is the inverse — STALE worktree context. Both display the same message: \"Your queue is empty.\" Users can't tell the difference.
+
+  ## Acceptance
+
+  - [ ] \`aida queue list\` (and \`aida list\`, \`aida show\`, etc.) detects when the cwd's worktree is missing/removed (e.g., \`.aida-store\` symlink dangling, \`.git\` not findable, cache.db absent) and prints a clear warning: *\"⚠ this directory's AIDA context is missing — the worktree may have been removed. cd to \`~/ai/aida\` to access the project's queue.\"*
+  - [ ] The detection happens BEFORE the empty-queue path is taken — error/warning is more useful than \"Your queue is empty.\"
+  - [ ] Add a regression test that simulates the removed-worktree state and asserts the warning fires.
+
+  ## Related bugs in the same family
+
+  - BUG-89 (queue identity confusion — \$USER vs node-id vs role user_id)
+  - Earlier today: cold-cache in fresh worktree — different mechanism, same symptom
+
+  ## Composes with
+
+  - TUI work (EPIC-26) — if the TUI is hosting claude in a removed worktree, this becomes more important to surface
+  - TASK-244 (statusline role mismatch) — same family: surface context mismatches loudly rather than silently fall back
+
+  ## How AIDA could detect
+
+  Several signals available:
+  - \`.aida-store\` symlink target exists?
+  - \`git rev-parse --show-toplevel\` succeeds?
+  - \`.aida/cache.db\` present?
+  - The cwd itself accessible (try a syscall like \`pwd\` or \`stat .\`)?
+
+  Any one of these failing is sufficient signal to flag the context as broken.
+
+  ## Origin
+
+  User flagged 2026-05-15: *\"note that when we end the session (in another terminal) it put ~/ai/aida-epic-26 in a funky state again — 'Your queue is empty.'\"*
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T20:22:22.918845671Z
+modified_at: 2026-05-15T20:22:22.918845671Z
+req_type: Bug
+tags:
+- cwd
+- misleading-output
+- missing-context
+- queue
+- session-end
+- worktree
