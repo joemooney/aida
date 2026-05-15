@@ -62,12 +62,12 @@ description: |-
   ## Discovered via
 
   2026-05-15 — PR-30 fixup iteration: reviewer found 7 partial specs, implementer pushed fixups, CI went green, user self-merged without re-review. STORY-131 stayed at In Progress until manual flip. Pattern is recurring enough to capture: every self-merge-without-re-review produces this stuck state.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T14:37:10.550678589Z
-modified_at: 2026-05-15T15:20:46.782212840Z
+modified_at: 2026-05-15T15:21:44.869522207Z
 req_type: Task
 tags:
 - aida-review
@@ -81,3 +81,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T14:37:13.234988909Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T15:21:44.869522207Z
+  implemented_by: joe
