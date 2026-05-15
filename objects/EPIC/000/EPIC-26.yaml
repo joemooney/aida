@@ -95,7 +95,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T03:37:04.274286254Z
-modified_at: 2026-05-15T03:43:24.785344100Z
+modified_at: 2026-05-15T16:34:25.046345002Z
 req_type: Epic
 tags:
 - claude-code
@@ -134,3 +134,70 @@ comments:
     When in doubt designing EPIC-26 child STORYs: 'does this make the TUI's quiet depth stronger when someone digs in?' is the right test. Surface complexity in the TUI itself is anti-pattern.
   created_at: 2026-05-15T03:43:24.785344100Z
   modified_at: 2026-05-15T03:43:24.785344100Z
+- id: 019e2c7d-3a96-7c92-a40c-8d0fa1fb9e41
+  author: joe
+  content: |-
+    ## Enrichment 2026-05-15 — prereqs shipped + planning anchors
+
+    The hard-dependency block is now cleared. Implementer batch 2026-05-15 (PRs #31–#40) shipped the primitives the TUI builds on:
+
+    **TUI-load-bearing primitives now in place:**
+
+    - **TASK-112** (`aida queue work --resume / --fresh / --list-sessions`) — claude session continuity primitive. The TUI's "drop out + drop back in to SAME conversation" promise is now structurally possible.
+    - **TASK-245** (`aida session start --reuse-branch` + auto-detect) — fixup-on-existing-branch flow. TUI users hit "fix this PR" without leaving the TUI for a manual git dance.
+    - **TASK-242** (`aida goal`) — derives machine-checkable completion conditions from spec metadata. The TUI's "drop into autonomous mode for this spec" button has a real implementation behind it (and dodges the literal-phrasing trap we hit 2026-05-15 with the implementer queue drain).
+    - **TASK-243** (session-end ambiguity prompt shows role + claude session) — the TUI's status overlay can show "role: implementer  session: 0a3f…" without ambiguity.
+    - **TASK-244** (statusline warns on shell-role vs session-role mismatch) — the TUI can treat the lease as canonical truth; PS1 mismatch is a surface-layer warning, not an ambiguity.
+    - **TASK-228** (cancellable wakeups via wakeup registry) — TUI doesn't have to worry about zombie wakeup fires interrupting active work or duplicating signals.
+    - **TASK-233** (`aida session end --watch-ci` live progress) — live CI progress is now a primitive; TUI embeds it as a panel rather than re-implementing.
+    - **BUG-106** (auto-bump via cluster-PR review-story linkage) — TUI's "PR-N affects specs X, Y, Z" rollup is now reliable on cluster PRs (the common autonomous-batch shape).
+    - **TASK-246** (auto-complete In-Progress review story on self-merge) — TUI workflow is self-merge-safe; user merging from a TUI quick-action won't strand a review story.
+
+    **Design test (from CLAUDE.md, sharpened by /goal phrasing lesson):**
+
+    The test for any TUI feature is: **"does this make the TUI's quiet depth stronger when someone digs in?"** Surface complexity in the TUI itself is anti-pattern — the value surfaces through *use*, not first impression. Karpathy-style first-glance should still produce *"so what? I could do this in 20 lines of bash"* — the depth is what they discover when they keep using it.
+
+    Corollary, learned 2026-05-15: **single-keystroke actions matter more than panels.** The /goal autonomous drain succeeded because every step was a single, real command. A TUI that surfaces panels but requires multi-step interactions inside them loses to a TUI that shows less but each visible action is one keystroke away from done.
+
+    **Anti-patterns (negative space — what the TUI must NOT do):**
+
+    - NOT a passive dashboard that just *displays* state — every visible item must have an associated one-keystroke action.
+    - NOT a re-implementation of Claude Code's chrome — claude code stays exactly the way it is; the TUI HOSTS its pty, doesn't replace its UI.
+    - NOT surface-busy on first open — quiet by default. Depth surfaces on `?` or context-sensitive expansion.
+    - NOT a force-take of the terminal — exitable cleanly with one keystroke; \`q\` or Ctrl-C returns the user to the bare shell.
+    - NOT a feature-flag forest — every visible primitive is wired end-to-end. If something is half-done, it's hidden.
+    - NOT a tmux replacement — focused specifically on AIDA workflow + claude code session hosting. If a user wants general terminal multiplexing, they should still reach for tmux.
+
+    **Open design questions for /ultraplan to explore:**
+
+    These are the design forks where the planner should explore multiple paths rather than commit to one:
+
+    1. **Hosting model**: PTY-host claude code as child process (the EPIC's current sketch) vs tmux-pane integration (host inside an existing tmux session) vs window-manager-style (manage multiple claude windows externally). Tradeoffs: pty-host gives full control + portability across users without tmux; tmux-pane composes with existing user setups but locks out non-tmux users; window-manager is most flexible but most complex.
+    2. **Session focus model**: single-session-at-a-time (TUI hosts one claude conversation at a time, switching means killing/resuming) vs multi-session-pane (TUI hosts multiple claude conversations in panes simultaneously) vs session-as-tab (TUI hosts multiple but only one focused; switch is cheap).
+    3. **State sync model**: poll-based (TUI re-queries every N seconds) vs git-hook-driven (TUI subscribes to orphan-branch updates) vs MCP-pushed (TUI listens to MCP notifications). Reuse of \`.aida/cache.db\`'s stale-detection mechanism is the obvious starting point.
+    4. **Notification model**: in-band overlay (toast in TUI itself) vs dedicated panel (always-visible activity log) vs system notification (libnotify / desktop). The 2026-05-15 /goal session had no notifications and users had to poll \`gh pr list\` manually — naming this gap is concrete.
+    5. **/goal composition**: the TUI's "fire autonomous drain" button MUST use \`aida goal\` (TASK-242) to derive completion conditions safely, not generate /goal text in-line where the literal-phrasing trap can recur. This is the AIDA + Claude Code composition's headline value — make it explicit.
+    6. **First-vertical scope**: simplest version that delivers value is "host one claude session + status overlay (read-only) + 3 quick actions (queue work, session end, gh pr view)". Identify the minimum vertical that proves the Trojan-horse design test before adding panels.
+    7. **Exit model**: how does the user return to a bare shell? \`q\` from overlay only, or any-time exitable mid-claude-session, or "Ctrl-C twice"? Defines whether the TUI feels like a host or a captor.
+
+    **The Trojan-horse one-liner (from OVERVIEW.md, durable):**
+
+    *"The TUI is what people will think AIDA is. The platform is what AIDA actually is."*
+
+    The planner should keep this in front of mind. Every TUI feature has a "surface impression" cost and a "discovery depth" return. Favor features that score high on the latter.
+
+    **Composition with the implementer batch's lessons (2026-05-15):**
+
+    - The /goal phrasing trap (literal command flags only; mechanism clause shapes workflow): the TUI's "fire autonomous /goal" button must generate the goal text from \`aida goal\` output, not from user-typed shorthand. This is concrete UX, not a future concern.
+    - The autonomous-merge vs ping-pong tradeoff: the TUI surfaces this as TWO buttons, not one. "Drain to review" (queues PR-N for reviewer) vs "Drain to merge" (autonomous-merge each). Naming the tradeoff in the UI is the value-add over a single \`/goal\` shorthand.
+    - The cluster-PR auto-bump pattern (BUG-106): the TUI's PR view shows "PR-30 → review-story-30 → covers TASK-103/104/105/106/108/234/236/237/238/241" so a user sees the spec rollup at a glance — addresses the 2026-05-15 "where are these specs in the git log?" friction directly.
+
+    **Prereqs still wanted before TUI implementation starts (not blockers, but would compound):**
+
+    - **STORY-121** (ping-pong v1) — the implementer-blocks-on-reviewer block primitive. TUI surfaces "blocked waiting for review" as a status without it, but with it the TUI can offer "drop into reviewer role" as a quick action that hands the user a properly-scoped reviewer session.
+    - **STORY-49** (\`aida store checkout\` time-travel) — the TUI's "show me what specs looked like 3 hours ago" is structurally possible with this; without it the TUI shows only current state.
+    - **STORY-127** (workflow state-aware guidance) — the TUI surfaces this as context-sensitive next-action hints in the status panel; without it the hints come from \`aida queue next\`'s output, which is less rich.
+
+    These three are the highest-leverage TUI-adjacent backlog items. Worth shipping in the next implementer batch before TUI implementation kicks off.
+  created_at: 2026-05-15T16:34:25.046345002Z
+  modified_at: 2026-05-15T16:34:25.046345002Z
