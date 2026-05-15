@@ -20,6 +20,8 @@ pub mod oplog;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]
+pub mod rebase;
+#[cfg(feature = "native")]
 pub mod registry;
 #[cfg(feature = "native")]
 pub mod report;

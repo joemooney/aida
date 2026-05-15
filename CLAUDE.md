@@ -50,7 +50,8 @@ aida init --force              # Overwrite existing files
 aida list                              # Cache-backed (sub-ms vs full-store load)
 aida list --status draft               # Filter by status
 aida search "<query>"                  # Cache-backed FTS5 search
-aida show <ID>                         # Show requirement details (FR-1-001 or FR-1)
+aida show <ID>                         # Show requirement details + git linkage (commits/files/branch/PR — TASK-241)
+aida show <ID> --no-git                # Skip the git-linkage section; --verbose expands it
 aida add --title "..." --type story --status draft --tags "tag1,tag2"
 aida edit <ID> --status completed
 aida comment add <ID> "..."
@@ -191,7 +192,7 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 ## Claude Code skills
 
-`aida init` scaffolds 29 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-doc`, `/aida-search`, `/aida-plan`, `/aida-onboard`. The `/ultraplan` round-trip pair: `aida ultraplan <SPEC>` assembles the prompt, `/aida-import-plan <FILE>` lands the saved output back under `docs/plans/` (TASK-113/TASK-114). Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
+`aida init` scaffolds 30 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-doc`, `/aida-search`, `/aida-plan`, `/aida-rebase`, `/aida-onboard`. The `/ultraplan` round-trip pair: `aida ultraplan <SPEC>` assembles the prompt, `/aida-import-plan <FILE>` lands the saved output back under `docs/plans/` (TASK-113/TASK-114). Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
 
 ### MCP server
 

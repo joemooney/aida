@@ -1,0 +1,10 @@
+# Raise the per-thread stack for `cargo test`. libtest spawns each test
+# on a thread with a 2 MiB default stack; building/validating clap's
+# `Command` tree (`Command::debug_assert` recurses in debug builds over
+# a 50+-variant enum with nested subcommands) consumes ~1.5–2 MiB, so
+# any test that calls `Cli::try_parse_from` sits right on the edge and
+# overflows on CI. The shipped `aida` binary parses on the 8 MiB main
+# thread and is unaffected — this only matters for the test harness.
+# trace:TASK-103 | ai:claude
+[env]
+RUST_MIN_STACK = "8388608"

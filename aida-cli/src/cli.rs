@@ -367,6 +367,11 @@ pub enum SessionCommand {
     /// use `aida session leases`. The two views answer different
     /// questions; when in doubt for "what's running?" reach for
     /// `aida session leases`. trace:BUG-98 | ai:claude
+    ///
+    /// The INITIAL TOPIC column is the session title Claude Code set at
+    /// conversation start — it is fixed and does NOT track current
+    /// work, so for a long-running session it can read stale. Identify
+    /// a session by its SPEC + AGE, not the topic. trace:TASK-236
     List {
         /// Show at most N sessions (default 20).
         #[clap(long, short = 'n', default_value = "20")]
@@ -2099,6 +2104,22 @@ pub enum QueueCommand {
         /// trace:TASK-229 | ai:claude
         #[clap(long, value_name = "NAME")]
         batch: Option<String>,
+        /// Filter to entries whose requirement carries this exact tag
+        /// (case-insensitive). The general form of `--batch`.
+        /// trace:TASK-238 | ai:claude
+        #[clap(long, value_name = "TAG")]
+        tag: Option<String>,
+        /// Filter to entries with any tag starting with this prefix —
+        /// e.g. `--tag-prefix batch:` for all batched items.
+        /// trace:TASK-238 | ai:claude
+        #[clap(long, value_name = "PREFIX")]
+        tag_prefix: Option<String>,
+        /// Group the queue by `batch:*` tag value — each batch under
+        /// its own header, un-batched items under "No batch". Queue
+        /// position order is preserved within each group.
+        /// trace:TASK-238 | ai:claude
+        #[clap(long)]
+        by_batch: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -2609,6 +2630,18 @@ pub enum Command {
         /// See `aida list --sync`. trace:STORY-78 | ai:claude
         #[clap(long)]
         sync: bool,
+
+        /// Skip the git-linkage section (commits / files traced /
+        /// branch / PR). Faster for read-only contexts that only need
+        /// the requirement fields. trace:TASK-241 | ai:claude
+        #[clap(long)]
+        no_git: bool,
+
+        /// Expand the git-linkage section: every referencing commit
+        /// (not just the most recent 5) plus per-commit diff stats.
+        /// trace:TASK-241 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
     },
 
     /// Edit an existing requirement
@@ -2779,12 +2812,14 @@ pub enum Command {
         limit: usize,
     },
 
-    /// Push code AND the AIDA orphan store in one shot. Equivalent to
-    /// running `git push` on the current branch followed by
-    /// `aida db sync --push` — the two operations users routinely
-    /// forget to do together. Skips a leg cleanly when nothing's pending
-    /// (no upstream tracked, no commits ahead, no orphan drift).
-    /// trace:FR-264 | ai:claude
+    /// Push code branch AND orphan aida-store branch to origin. Use
+    /// --code-only or --store-only to scope. Equivalent to running
+    /// `git push` on the current branch followed by `aida db sync
+    /// --push` — the two operations users routinely forget to do
+    /// together. Skips a leg cleanly when nothing's pending (no
+    /// upstream tracked, no commits ahead, no orphan drift). Set
+    /// `AIDA_PUSH_DEFAULT=code|store` to flip the default scope.
+    /// trace:FR-264 TASK-106 | ai:claude
     Push {
         /// Skip the code push (only sync the orphan store).
         #[clap(long, conflicts_with = "store_only")]
@@ -2802,6 +2837,15 @@ pub enum Command {
         /// on stdin. trace:TASK-54 BUG-88 | ai:claude
         #[clap(long)]
         no_rebase_check: bool,
+        /// Show what each in-scope leg would push (commit count +
+        /// subjects) and exit 0 without pushing anything. Honors
+        /// --code-only / --store-only. trace:TASK-108 | ai:claude
+        #[clap(long)]
+        dry_run: bool,
+        /// Emit the dry-run plan as JSON instead of text. Implies
+        /// --dry-run. trace:TASK-108 | ai:claude
+        #[clap(long)]
+        json: bool,
     },
 
     /// Fetch remote refs for both legs (code + orphan store) without
@@ -2827,11 +2871,12 @@ pub enum Command {
         quiet: bool,
     },
 
-    /// Pull code AND the AIDA orphan store in one shot. Symmetric to
-    /// `aida push`: equivalent to `git pull --ff-only` on the current
-    /// branch followed by `aida db sync --pull`. Skips a leg cleanly
-    /// when there's nothing to pull (no upstream tracked, no orphan
-    /// remote). trace:TASK-43 | ai:claude
+    /// Pull code branch AND orphan aida-store branch from origin. Use
+    /// --code-only or --store-only to scope. Symmetric to `aida push`:
+    /// equivalent to `git pull --ff-only` on the current branch
+    /// followed by `aida db sync --pull`. Skips a leg cleanly when
+    /// there's nothing to pull (no upstream tracked, no orphan
+    /// remote). trace:TASK-43 TASK-106 | ai:claude
     Pull {
         /// Skip the code pull (only sync the orphan store).
         #[clap(long, conflicts_with = "store_only")]
@@ -2852,6 +2897,47 @@ pub enum Command {
         /// trace:TASK-78 | ai:claude
         #[clap(long)]
         no_gate: bool,
+        /// Fetch both in-scope legs, then show what each would pull
+        /// (commit count + subjects) and exit 0 without merging.
+        /// Honors --code-only / --store-only. trace:TASK-108 | ai:claude
+        #[clap(long)]
+        dry_run: bool,
+        /// Emit the dry-run plan as JSON instead of text. Implies
+        /// --dry-run. trace:TASK-108 | ai:claude
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Detect, classify, and (optionally) execute a rebase of the
+    /// current branch onto its upstream. Four phases: detect
+    /// (ahead/behind + file-path overlap), classify (clean / ahead-only
+    /// / behind-only / diverged-safe / diverged-risky), execute (auto
+    /// for safe cases, prompt for risky), report (structured, --json).
+    /// Stateless — safe to invoke anywhere. trace:TASK-103 | ai:claude
+    Rebase {
+        /// Execute safe rebases (behind-only, diverged-safe) without a
+        /// confirmation prompt. Risky (file-overlap) cases still prompt.
+        #[clap(long)]
+        auto: bool,
+        /// Classify only — report the state and exit 0 without
+        /// touching the working tree.
+        #[clap(long)]
+        dry_run: bool,
+        /// Skip the `git fetch` during detection; classify against the
+        /// already-cached upstream ref. trace:TASK-103 | ai:claude
+        #[clap(long)]
+        no_fetch: bool,
+        /// Refuse to run on a dirty working tree instead of the default
+        /// auto-stash + pop around the rebase.
+        #[clap(long)]
+        no_stash: bool,
+        /// Machine-readable JSON output for skill / agent consumers.
+        #[clap(long)]
+        json: bool,
+        /// Target ref to rebase onto (default: the current branch's
+        /// tracked upstream `@{u}`).
+        #[clap(long)]
+        branch: Option<String>,
     },
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
