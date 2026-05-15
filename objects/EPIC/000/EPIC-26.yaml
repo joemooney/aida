@@ -95,7 +95,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T03:37:04.274286254Z
-modified_at: 2026-05-15T03:37:04.274286254Z
+modified_at: 2026-05-15T03:43:24.785344100Z
 req_type: Epic
 tags:
 - claude-code
@@ -105,3 +105,32 @@ tags:
 - shell
 - tui
 - workflow
+comments:
+- id: 019e29bb-5a71-78e2-b7ae-74fa99dfad40
+  author: joe
+  content: |-
+    Strategic positioning captured 2026-05-14 in OVERVIEW.md 'Public face: the TUI is the product (the platform is what makes it work)' section.
+
+    Key framing (user's words 2026-05-14):
+    'I want this TUI skin that wraps our claude code experience to be the product that people think aida is, a trivial little wrapper around claude code to the point where people think so what? I could do that in a 20 line bash script.'
+
+    This is the Trojan-horse positioning:
+    1. The visible product is the TUI (intentionally simple-looking)
+    2. The 'so what?' reaction at first sight is a FEATURE
+    3. The actual value is the platform underneath (graph, IDs, traces, MCP, queue, lifecycle, etc.)
+    4. People install because it looks easy; they discover depth through use
+
+    Implication for EPIC-26 design:
+    - TUI's UI should be deceptively simple — clean panels, obvious actions, no exposed complexity
+    - Don't show off the platform; let it surface through the actions
+    - Documentation about the TUI should be terse + functional (like a simple tool), not a sales pitch
+    - The DEPTH is what gets documented elsewhere (OVERVIEW.md, the existing positioning docs)
+
+    Implication for marketing/positioning:
+    - The TUI's announcement should read 'small TUI that wraps Claude Code with status + queue + review actions' — not 'comprehensive agent-collaboration platform with TUI'
+    - Let users discover the platform through use
+    - The TUI is the discovery surface; the platform is the retention surface
+
+    When in doubt designing EPIC-26 child STORYs: 'does this make the TUI's quiet depth stronger when someone digs in?' is the right test. Surface complexity in the TUI itself is anti-pattern.
+  created_at: 2026-05-15T03:43:24.785344100Z
+  modified_at: 2026-05-15T03:43:24.785344100Z
