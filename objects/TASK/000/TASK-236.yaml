@@ -52,12 +52,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user observed at session wrap-up that their 24-hour-old Claude conversation showed title 'Clarify CLI command naming convention' in aida session list. That was the topic at start. The session has since covered ~60 different topics. Asked to file the staleness as a small UX TASK.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:12:22.515363360Z
-modified_at: 2026-05-15T07:47:14.471619516Z
+modified_at: 2026-05-15T07:47:21.353528417Z
 req_type: Task
 tags:
 - batch:display-polish
@@ -71,3 +71,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T01:12:24.521409519Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T07:47:21.353528417Z
+  implemented_by: joe
