@@ -10110,8 +10110,17 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             force,
             purge_cc,
             wait_ci,
+            watch_ci,
             skip_ci,
-        } => session_end(id.as_deref(), *yes, *force, *purge_cc, *wait_ci, *skip_ci),
+        } => session_end(
+            id.as_deref(),
+            *yes,
+            *force,
+            *purge_cc,
+            *wait_ci,
+            *watch_ci,
+            *skip_ci,
+        ),
         SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
         SessionCommand::Prune {
@@ -12414,8 +12423,11 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
         }
         CiProbe::InProgress { pr_number } => {
             if wait_ci {
+                // TASK-233: flag-neutral wording — the caller passes
+                // `--wait-ci || --watch-ci` and prints the variant-
+                // specific intro line itself.
                 eprintln!(
-                    "  {} CI in progress on PR-{} (--wait-ci will block).",
+                    "  {} CI in progress on PR-{} — blocking until CI completes.",
                     "◐".yellow(),
                     pr_number,
                 );
@@ -12617,6 +12629,60 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
         }
     }
     CiProbe::NoSignal("--wait-ci gave up after 30m".to_string())
+}
+
+/// TASK-233: extract the most-recent workflow run id from `gh run list
+/// --json databaseId` JSON output. Pure — unit-testable independent of
+/// the `gh` subprocess. trace:TASK-233 | ai:claude
+fn first_run_id_from_gh_json(json: &str) -> Option<String> {
+    let parsed: serde_json::Value = serde_json::from_str(json).ok()?;
+    let id = parsed.as_array()?.first()?.get("databaseId")?;
+    id.as_u64().map(|n| n.to_string())
+}
+
+/// TASK-233: `--watch-ci` — stream live CI progress via `gh run watch`
+/// rather than silently polling, then re-probe for the terminal state so
+/// the end-session decision tree (green proceeds / red prompts) runs
+/// exactly as it does for `--wait-ci`. Falls back to the silent poll
+/// loop when `gh` is missing or no run id resolves. trace:TASK-233
+fn watch_ci_terminal(branch: &str) -> CiProbe {
+    let Some(gh) = resolve_gh_binary() else {
+        return wait_for_ci_terminal(branch);
+    };
+    // Resolve the latest workflow run id for this branch.
+    let run_id = std::process::Command::new(&gh)
+        .args([
+            "run",
+            "list",
+            "--branch",
+            branch,
+            "--limit",
+            "1",
+            "--json",
+            "databaseId",
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| first_run_id_from_gh_json(&String::from_utf8_lossy(&o.stdout)));
+    let Some(run_id) = run_id else {
+        // No resolvable run — degrade to the silent poll loop rather
+        // than failing the session-end.
+        return wait_for_ci_terminal(branch);
+    };
+    eprintln!(
+        "  {} streaming `gh run watch {}`",
+        "▶".cyan(),
+        run_id.dimmed()
+    );
+    // Inherit stdio so gh's live-updating display renders straight to
+    // the user's terminal. `gh run watch` returns when the run reaches
+    // a terminal state.
+    let _ = std::process::Command::new(&gh)
+        .args(["run", "watch", &run_id])
+        .status();
+    // Re-probe to classify Green/Red for the end-session decision tree.
+    probe_ci_state_for_branch(branch)
 }
 
 /// trace:STORY-73 | ai:claude
@@ -13028,6 +13094,7 @@ fn session_end(
     force: bool,
     purge_cc: bool,
     wait_ci: bool,
+    watch_ci: bool,
     skip_ci: bool,
 ) -> Result<()> {
     let project_root = find_project_root()?;
@@ -13048,14 +13115,24 @@ fn session_end(
     // claude-process disclosure. trace:TASK-111 | ai:claude
     if !skip_ci && !force {
         let probe = probe_ci_state_for_branch(&target.branch);
-        match decide_ci_action(&probe, wait_ci, yes) {
+        // TASK-233: --watch-ci blocks like --wait-ci, so it produces the
+        // same `CiAction::Wait`; the difference is the live display.
+        match decide_ci_action(&probe, wait_ci || watch_ci, yes) {
             CiAction::Proceed => {}
             CiAction::Wait => {
-                eprintln!(
-                    "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
-                    "→".cyan()
-                );
-                let final_probe = wait_for_ci_terminal(&target.branch);
+                let final_probe = if watch_ci {
+                    eprintln!(
+                        "{} CI in progress — streaming live progress (Ctrl+C to stop watching)",
+                        "→".cyan()
+                    );
+                    watch_ci_terminal(&target.branch)
+                } else {
+                    eprintln!(
+                        "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
+                        "→".cyan()
+                    );
+                    wait_for_ci_terminal(&target.branch)
+                };
                 match decide_ci_action(&final_probe, false, yes) {
                     CiAction::Proceed => {}
                     CiAction::Wait => {} // can't loop on Wait again
@@ -30304,6 +30381,54 @@ mod ci_action_tests {
         assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
     }
 
+    /// TASK-233: `--watch-ci` blocks exactly like `--wait-ci` — the
+    /// caller passes `wait_ci || watch_ci`, so InProgress yields
+    /// `CiAction::Wait` and the decision tree is identical once CI is
+    /// terminal. trace:TASK-233 | ai:claude
+    #[test]
+    fn watch_ci_blocks_like_wait_ci_on_in_progress() {
+        let probe = CiProbe::InProgress { pr_number: 26 };
+        // wait || watch == true → Wait (block).
+        assert_eq!(decide_ci_action(&probe, true, false), CiAction::Wait);
+        // Terminal states re-decided after the block: green proceeds.
+        assert_eq!(
+            decide_ci_action(&CiProbe::Green { pr_number: 26 }, false, false),
+            CiAction::Proceed
+        );
+        // Red prompts (Cancel) unless --yes.
+        assert!(matches!(
+            decide_ci_action(
+                &CiProbe::Red {
+                    pr_number: 26,
+                    failed_summary: "macos".to_string()
+                },
+                false,
+                false
+            ),
+            CiAction::Cancel(_)
+        ));
+    }
+
+    /// TASK-233: run-id extraction from `gh run list --json databaseId`.
+    /// trace:TASK-233 | ai:claude
+    #[test]
+    fn first_run_id_from_gh_json_shapes() {
+        assert_eq!(
+            first_run_id_from_gh_json(r#"[{"databaseId":12345}]"#),
+            Some("12345".to_string())
+        );
+        // Multiple runs → the first (most recent) wins.
+        assert_eq!(
+            first_run_id_from_gh_json(r#"[{"databaseId":999},{"databaseId":111}]"#),
+            Some("999".to_string())
+        );
+        // Empty array (no runs yet) → None.
+        assert_eq!(first_run_id_from_gh_json("[]"), None);
+        // Garbage / non-JSON → None, no panic.
+        assert_eq!(first_run_id_from_gh_json("not json"), None);
+        assert_eq!(first_run_id_from_gh_json(""), None);
+    }
+
     #[test]
     fn green_always_proceeds() {
         let probe = CiProbe::Green { pr_number: 7 };
@@ -40804,6 +40929,7 @@ fn handle_queue_work(
                 /* force */ false,
                 /* purge_cc */ false,
                 /* wait_ci */ false,
+                /* watch_ci */ false,
                 // --steal is a recovery path for stuck leases; skip the
                 // CI probe so we don't ask the user to wait on CI for a
                 // session they're actively stealing. trace:TASK-111
