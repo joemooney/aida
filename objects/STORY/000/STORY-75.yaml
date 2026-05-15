@@ -35,11 +35,11 @@ description: |
   - [ ] Composes with `--for <role>` and existing `--user`
   - [ ] Tested against the aida↔aida-tutor pair (registry from STORY-foundation)
 status: Approved
-priority: Medium
+priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:15.276275091Z
-modified_at: 2026-05-10T06:51:15.276275091Z
+modified_at: 2026-05-15T04:02:06.101727132Z
 req_type: Story
 relationships:
 - rel_type: Child
