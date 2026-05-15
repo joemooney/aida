@@ -75,7 +75,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:45:22.472590028Z
-modified_at: 2026-05-14T15:06:22.683366817Z
+modified_at: 2026-05-15T00:32:42.540863587Z
 req_type: Bug
 tags:
 - auto-bump
@@ -90,6 +90,20 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T14:45:24.464054243Z
+comments:
+- id: 019e290c-c22c-7ad1-bf47-59e99872e24f
+  author: joe
+  content: |-
+    Implemented via PR-27 (commit 8996af1): https://github.com/joemooney/aida/pull/27
+
+    - Auto-bump scan now also captures the trailing `(#N)` squash-merge suffix from each merge commit subject
+    - After loading the store, scans for Done-status stories with title `Review PR-N:` and adds them to the flip list with the same completion_sha as the code specs
+    - Two new pure helpers: extract_pr_number_from_commit_subject + parse_review_story_pr_number
+    - Integration tests cover the recovery case (review story flips via PR-number match) and the negative (no `(#N)` suffix → no false-flip)
+
+    Test status: 609/609 workspace tests green (4 new in auto_bump_done_tests)
+  created_at: 2026-05-15T00:32:42.540863587Z
+  modified_at: 2026-05-15T00:32:42.540863587Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:06:22.683366817Z
