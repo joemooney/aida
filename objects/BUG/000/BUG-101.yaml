@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:42:13.417792965Z
-modified_at: 2026-05-14T15:16:09.545155692Z
+modified_at: 2026-05-15T00:33:22.489501004Z
 req_type: Bug
 tags:
 - aida-pull
@@ -77,6 +77,19 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T14:42:16.266654881Z
+comments:
+- id: 019e290d-5e39-7f11-aac5-519782501930
+  author: joe
+  content: |-
+    Implemented via PR-27 (commit 9965d41): https://github.com/joemooney/aida/pull/27
+
+    - Release-ready next-steps template now inserts `aida pull` step between session-end and `make release-patch` (step 2)
+    - Also adds an optional "verify auto-bump fired" check (step 3) pointing at `aida db reconcile-status` (TASK-226) as the back-stop
+    - Explicit "don't skip step 2" callout under the template explains why local main is behind origin/main right after the merge
+
+    Test status: 609/609 workspace tests green (skill template change; no code logic to test)
+  created_at: 2026-05-15T00:33:22.489501004Z
+  modified_at: 2026-05-15T00:33:22.489501004Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:16:09.545155692Z
