@@ -24,6 +24,25 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # BUG-103: the macos-latest runner intermittently has a stale cache
+      # where `cargo` resolves to `rustup-init`, breaking `cargo build`
+      # with "unexpected argument 'build'". Re-pinning the default
+      # toolchain regenerates the rustup proxy binaries; the grep guard
+      # then fails the job fast + clearly if `cargo` is still wrong,
+      # instead of a cryptic mid-build error. Runs on every OS (idempotent
+      # elsewhere) via `shell: bash`, which GitHub provides on all
+      # runners. trace:BUG-103 | ai:claude
+      - name: Pin stable toolchain & verify cargo
+        shell: bash
+        run: |
+          rustup default stable
+          echo "cargo path: $(command -v cargo)"
+          cargo --version
+          cargo --version | grep -q '^cargo ' || {
+            echo "::error::cargo did not resolve to the real cargo binary (stale rustup-init cache — BUG-103)"
+            exit 1
+          }
+
       # protoc is required by tonic-build (aida-server's gRPC build script).
       # See BUG-66.
       - name: Install protoc
@@ -81,6 +100,25 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      # BUG-103: the macos-latest runner intermittently has a stale cache
+      # where `cargo` resolves to `rustup-init`, breaking `cargo build`
+      # with "unexpected argument 'build'". Re-pinning the default
+      # toolchain regenerates the rustup proxy binaries; the grep guard
+      # then fails the job fast + clearly if `cargo` is still wrong,
+      # instead of a cryptic mid-build error. Runs on every OS (idempotent
+      # elsewhere) via `shell: bash`, which GitHub provides on all
+      # runners. trace:BUG-103 | ai:claude
+      - name: Pin stable toolchain & verify cargo
+        shell: bash
+        run: |
+          rustup default stable
+          echo "cargo path: $(command -v cargo)"
+          cargo --version
+          cargo --version | grep -q '^cargo ' || {
+            echo "::error::cargo did not resolve to the real cargo binary (stale rustup-init cache — BUG-103)"
+            exit 1
+          }
 
       # protoc is required by tonic-build (aida-server's gRPC build script).
       # See BUG-66.
