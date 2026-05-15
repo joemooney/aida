@@ -31,12 +31,12 @@ description: |-
   - [ ] Pre-action summary shows what each leg will do; only prompts when ambiguous
   - [ ] Tests cover all 4 flag combinations + default
   - [ ] AIDA_PUSH_DEFAULT env var optional for users who want to flip the default scope
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:07:29.389071454Z
-modified_at: 2026-05-14T14:54:25.635806651Z
+modified_at: 2026-05-15T07:02:14.980528152Z
 req_type: Task
 tags:
 - batch:verb-surface
