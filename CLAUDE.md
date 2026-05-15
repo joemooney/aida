@@ -54,6 +54,9 @@ aida edit <ID> --status completed
 aida comment add <ID> "..."
 aida db merge-gate                     # Assign agreed short IDs (FR-7-001 → FR-1)
 aida db sync --pull --push             # Sync orphan branch with remote
+aida db reconcile-status               # Replay Done→Completed bumps the pull missed (TASK-226)
+aida db reconcile-status --spec STORY-86  # Targeted replay for a single spec
+aida db reconcile-status --since v0.5.1 --dry-run  # Preview a bounded replay
 aida cache status                      # Compare cache HEAD vs git HEAD
 ```
 
@@ -195,7 +198,7 @@ Always verify CLI arguments with `aida <command> --help`. Common parameters:
 - `--type` (lowercase): `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `doc`
 - `--feature`: feature category name (NOT a type)
 - `--status`: `draft`, `approved`, `planned`, `in-progress`, `done`, `completed`, `rejected`
-  - **`done` vs `completed` (STORY-86)**: `done` means "work finished on a branch" (set by `aida queue done`). `completed` means "merged to the default branch." `aida pull` and `aida db sync --pull` auto-bump `done → completed` when a commit referencing the spec lands on main, so you typically don't set `--status completed` manually — let the merge promote it.
+  - **`done` vs `completed` (STORY-86)**: `done` means "work finished on a branch" (set by `aida queue done`). `completed` means "merged to the default branch." `aida pull` and `aida db sync --pull` auto-bump `done → completed` when a commit referencing the spec lands on main, so you typically don't set `--status completed` manually — let the merge promote it. **When the auto-bump misses** (BUG-96 made the YAML unreadable at pull time, or the spec flipped to Done after the referencing commit was already on local main), recover with `aida db reconcile-status` — a manual replay of the same scan over a wider window. Add `--spec SPEC-ID` for a targeted replay, `--since REF` to bound the range, `--dry-run` to preview without writing. trace:TASK-226
 - `--priority`: `high`, `medium`, `low`
 
 ### Requirement types

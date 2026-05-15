@@ -3218,6 +3218,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             handle_retire_legacy_ids(&backend, store_path, *dry_run)?;
         }
 
+        // trace:TASK-226 | ai:claude
+        Command::Db(DbCommand::ReconcileStatus {
+            since,
+            spec,
+            dry_run,
+        }) => {
+            handle_db_reconcile_status(store_path, since.as_deref(), spec.as_deref(), *dry_run)?;
+        }
+
         // trace:TASK-80 | ai:claude
         Command::Db(DbCommand::Check { collisions, repair }) => {
             if !*collisions {
@@ -10075,6 +10084,20 @@ fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     out
 }
 
+/// BUG-98: cheap lease count for the `aida session list` footer hint.
+/// Users repeatedly reach for `session list` looking for "active
+/// sessions" when they really want `session leases` (the scoped-lease
+/// view). Exposing the count here lets the historical-view command
+/// nudge them at the right moment. Tries the current project root first
+/// and silently falls through to 0 if we're not inside a project.
+/// trace:BUG-98 | ai:claude
+pub(crate) fn active_lease_count_for_cwd() -> usize {
+    match find_project_root() {
+        Ok(root) => list_leases(&root).len(),
+        Err(_) => 0,
+    }
+}
+
 /// Find the active session lease whose worktree contains `cwd`, if any.
 /// Used by statusline + enforcement to identify which session "owns" the
 /// shell the user is operating from.
@@ -14015,6 +14038,14 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
             "aida session start --owns".cyan(),
             "<scope>".dimmed()
         );
+        // BUG-98: explicit pointer at the historical-conversations view so
+        // users who landed here looking for `list` know where it lives.
+        eprintln!();
+        eprintln!(
+            "{}",
+            "(for the historical list of Claude Code conversations in this project, run `aida session list`)"
+                .dimmed()
+        );
         return Ok(());
     }
 
@@ -16948,6 +16979,56 @@ mod statusline_tests {
         );
     }
 
+    /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
+    /// suffix so the auto-bump pass can match review stories filed against
+    /// that PR. trace:BUG-102 | ai:claude
+    #[test]
+    fn extract_pr_number_from_commit_subject_shapes() {
+        // Plain squash-merge subject from `gh pr merge --squash`.
+        let s = "EPIC-23 batch 6: observability — queue progress, status (#26)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), Some(26));
+        // Conventional + spec ids + `(#N)` (the canonical AIDA shape).
+        let s = "[AI:claude] feat(queue): rework verb (TASK-218) (#24)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), Some(24));
+        // Multi-spec + (#N).
+        let s = "[AI:claude] feat(session): polish (STORY-98 STORY-90 BUG-74) (#10)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), Some(10));
+        // No (#N) trailer — non-PR commit or pushed-to-main commit.
+        let s = "[AI:claude] feat(api): endpoint (FR-1-042)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), None);
+        // `(#N)` only valid when it's the literal trailing group.
+        let s = "release (#23) v1.2.3";
+        assert_eq!(extract_pr_number_from_commit_subject(s), None);
+        // Not a digit-only group.
+        let s = "chore: (#foo)";
+        assert_eq!(extract_pr_number_from_commit_subject(s), None);
+        // Empty parens.
+        let s = "chore: ()";
+        assert_eq!(extract_pr_number_from_commit_subject(s), None);
+        // Multi-line input — only subject (first non-blank line) is scanned.
+        let s = "subject (#7)\n\nbody mentions (#9)\n";
+        assert_eq!(extract_pr_number_from_commit_subject(s), Some(7));
+    }
+
+    /// BUG-102: title-to-PR parser used to match Done review stories
+    /// against just-merged PR numbers. trace:BUG-102 | ai:claude
+    #[test]
+    fn parse_review_story_pr_number_shapes() {
+        let t = "Review PR-26: EPIC-23 batch 6: observability — 6 specs";
+        assert_eq!(parse_review_story_pr_number(t), Some(26));
+        let t = "Review PR-1: small";
+        assert_eq!(parse_review_story_pr_number(t), Some(1));
+        // Non-review-story titles return None.
+        assert_eq!(parse_review_story_pr_number("Add OAuth provider"), None);
+        // Prefix-but-no-colon must NOT match (avoids prose like "Review PR-26 mention").
+        assert_eq!(
+            parse_review_story_pr_number("Review PR-26 mention in docs"),
+            None
+        );
+        // Non-numeric.
+        assert_eq!(parse_review_story_pr_number("Review PR-abc: x"), None);
+    }
+
     /// BUG-85: end-to-end shape of the PR-14 over-counting incident. The
     /// auto-queue extractor walked a multi-commit range and incorrectly
     /// added body-referenced spec IDs to the "covers" list. After this fix,
@@ -17954,6 +18035,52 @@ mod lease_enforcement_tests {
         let owner = lease_owning_spec(&leases, None, a.id, a.spec_id.as_deref(), &store);
         assert!(owner.is_none());
     }
+
+    /// BUG-98: list_leases scans the on-disk lease toml files and
+    /// returns one entry per file. This is the count `aida session list`
+    /// uses to decide whether to render the leases-hint footer. The
+    /// shape exercised here matches the BUG-98 repro (multiple leases
+    /// from concurrent worktrees on the project).
+    /// trace:BUG-98 | ai:claude
+    #[test]
+    fn list_leases_counts_active_lease_files() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project_root = tmp.path().to_path_buf();
+        let dir = leases_dir(&project_root);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Empty directory → 0.
+        assert_eq!(list_leases(&project_root).len(), 0);
+
+        // Drop three valid lease toml files and one bogus non-toml — the
+        // count should be 3.
+        for (idx, scope) in ["EPIC-20", "PR-19", "EPIC-21"].iter().enumerate() {
+            let id = format!("019e0000000{:01}", idx);
+            let toml = format!(
+                "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"{slug}\"\nowner = \"t\"\n\
+                 worktree_path = \"/tmp/{id}\"\nbranch = \"br\"\nstarted_at = \"2026-05-14T00:00:00Z\"\n\
+                 hostname = \"h\"\n",
+                id = id,
+                scope = scope,
+                slug = scope.to_lowercase(),
+            );
+            std::fs::write(dir.join(format!("{}.toml", id)), toml).unwrap();
+        }
+        std::fs::write(dir.join("README.txt"), "ignored").unwrap();
+        let leases = list_leases(&project_root);
+        assert_eq!(
+            leases.len(),
+            3,
+            "expected 3 active leases, got {} ({:?})",
+            leases.len(),
+            leases.iter().map(|l| l.scope.as_str()).collect::<Vec<_>>()
+        );
+        // Sorted by started_at (all equal here) — make sure no scope is
+        // dropped silently.
+        let scopes: Vec<&str> = leases.iter().map(|l| l.scope.as_str()).collect();
+        assert!(scopes.contains(&"EPIC-20"));
+        assert!(scopes.contains(&"PR-19"));
+        assert!(scopes.contains(&"EPIC-21"));
+    }
 }
 
 #[cfg(test)]
@@ -18767,6 +18894,501 @@ mod auto_bump_done_tests {
         assert!(
             matches!(req.status, RequirementStatus::Done),
             "unrelated commit should leave the spec at Done"
+        );
+    }
+
+    /// Seed a Story-typed review-story at status=Done with the given
+    /// `Review PR-<n>: <suffix>` title and spec_id. Mirrors
+    /// `seed_done_spec` but stamps the title that BUG-102's matcher keys
+    /// off of. trace:BUG-102 | ai:claude
+    fn seed_done_review_story(
+        store_path: &std::path::Path,
+        spec_id: &str,
+        pr_number: u64,
+        suffix: &str,
+    ) -> String {
+        let storage = Storage::new(store_path.to_path_buf());
+        let mut store = storage.load().unwrap_or_default();
+        let mut req = aida_core::Requirement::new(
+            format!("Review PR-{}: {}", pr_number, suffix),
+            String::new(),
+        );
+        req.spec_id = Some(spec_id.to_string());
+        req.req_type = aida_core::RequirementType::Story;
+        req.set_status_from_str("Done");
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        spec_id.to_string()
+    }
+
+    /// BUG-102: a merge commit with `(#N)` squash-suffix flips any Done
+    /// review story whose title encodes PR-N — even when that review
+    /// story's spec ID is NOT in any commit subject. This is the gap
+    /// before the fix: review stories filed by /aida-pr's auto-queue
+    /// were stuck at Done forever. trace:BUG-102 | ai:claude
+    #[test]
+    fn auto_bump_flips_review_story_via_pr_number_match() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let review_id =
+            seed_done_review_story(&store_path, "STORY-9101", 42, "EPIC-23 batch X: small wrap");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        // Squash-merge subject: subject contains code-spec parens AND the
+        // (#N) suffix. The review story's spec ID is intentionally absent
+        // from the subject — that's the whole point of the bug.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                "EPIC-23 batch X: small wrap (BUG-9101 TASK-9101) (#42)",
+            ],
+        );
+        let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+
+        assert!(
+            flips.iter().any(|(id, _)| id == &review_id),
+            "review story should flip via PR-number match, got: {:?}",
+            flips
+        );
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "review story should be Completed, was {:?}",
+            req.status
+        );
+        let info = req.implementation_info.as_ref().expect("info populated");
+        assert_eq!(
+            info.completion_sha.as_deref(),
+            Some(merge_sha.as_str()),
+            "completion_sha should match the merge commit"
+        );
+    }
+
+    /// BUG-94 acceptance check: `aida db sync --pull` calls
+    /// `auto_bump_done_to_completed` with `pre_sha = None`. The helper's
+    /// HEAD~50 fallback range must catch any spec-referencing commit
+    /// that landed on the code branch (typically from a separate
+    /// `git pull` the user ran before this command). Verifies the
+    /// "scan range collapses to empty" claim is fixed/non-reproducible:
+    /// with the fallback range, the bump still fires.
+    /// trace:BUG-94 | ai:claude
+    #[test]
+    fn auto_bump_with_none_pre_sha_uses_head_50_fallback() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9201");
+
+        // Simulate a teammate's merge landing on the default branch.
+        // The user has separately `git pull`'d, so the merge is in the
+        // local code-branch history. They now run `aida db sync --pull`,
+        // which calls auto_bump with pre_sha = None.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                &format!("feat: teammate merge ({})", spec_id),
+            ],
+        );
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, None, &storage).unwrap();
+
+        assert!(
+            flips.iter().any(|(id, _)| id == &spec_id),
+            "BUG-94: HEAD~50 fallback should catch the merge, got: {:?}",
+            flips
+        );
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "spec should be Completed after fallback-range bump, was {:?}",
+            req.status
+        );
+    }
+
+    /// BUG-102: when no `(#N)` suffix is present in any subject, review
+    /// stories stay untouched (no false-positives from PR-numbered titles
+    /// that happen to match an unrelated number elsewhere in the repo).
+    /// trace:BUG-102 | ai:claude
+    #[test]
+    fn auto_bump_leaves_review_story_alone_without_pr_suffix() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let review_id =
+            seed_done_review_story(&store_path, "STORY-9102", 99, "nothing should fire");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        // Subject has spec parens but no (#N) trailer (e.g. direct push,
+        // not a squash-merge). Review story must NOT flip.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", "chore: direct push (TASK-1)"],
+        );
+
+        let storage = Storage::new(store_path.clone());
+        let _ = auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+            .unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "review story should still be Done, was {:?}",
+            req.status
+        );
+    }
+
+    /// TASK-226: reconcile-status replays the same scan as the pull-time
+    /// auto-bump but over a wider, user-bounded range. Verifies the
+    /// recovery path for a spec whose YAML was unreadable at pull time:
+    /// the merge commit is already on local main (so pull's scan window
+    /// has moved past it), but reconcile-status still finds and flips it.
+    /// trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_replays_missed_bump() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9601");
+
+        // Land a commit referencing the spec on main. Imagine pull-time
+        // auto-bump missed it because the YAML was unreadable.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: x ({})", spec_id)],
+        );
+
+        let r = handle_db_reconcile_status(&store_path, None, None, false);
+        assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "spec should be Completed after reconcile, was {:?}",
+            req.status
+        );
+        let info = req.implementation_info.as_ref().expect("info populated");
+        assert!(info.completed_at.is_some());
+        assert!(info.completion_sha.is_some());
+    }
+
+    /// TASK-226: --dry-run reports the planned flips without writing.
+    /// trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_dry_run_does_not_write() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9602");
+
+        std::fs::write(project_root.join("f.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "f.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: y ({})", spec_id)],
+        );
+
+        let r = handle_db_reconcile_status(&store_path, None, None, true);
+        assert!(r.is_ok(), "dry-run failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "spec should still be Done after dry-run, was {:?}",
+            req.status
+        );
+    }
+
+    /// TASK-226: --spec narrows the candidate set to a single requirement.
+    /// Other Done specs (with referencing commits) stay untouched.
+    /// trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_spec_filter_narrows_candidates() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let target = seed_done_spec(&store_path, "STORY-9603");
+        let bystander = seed_done_spec(&store_path, "STORY-9604");
+
+        // Both specs have referencing commits.
+        std::fs::write(project_root.join("a.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "a.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: a ({})", target)],
+        );
+        std::fs::write(project_root.join("b.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "b.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: b ({})", bystander)],
+        );
+
+        // Narrow to just `target` — bystander must NOT flip.
+        let r = handle_db_reconcile_status(&store_path, None, Some(&target), false);
+        assert!(r.is_ok(), "reconcile failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let target_req = after.get_requirement_by_spec_id(&target).unwrap();
+        let bystander_req = after.get_requirement_by_spec_id(&bystander).unwrap();
+        assert!(matches!(target_req.status, RequirementStatus::Completed));
+        assert!(
+            matches!(bystander_req.status, RequirementStatus::Done),
+            "bystander should still be Done, was {:?}",
+            bystander_req.status
+        );
+    }
+
+    /// TASK-226: a spec already at Completed is a no-op (no double-write,
+    /// no error). This is the idempotency contract — running the
+    /// command twice in a row should be safe. trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_idempotent_on_completed_specs() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9605");
+        std::fs::write(project_root.join("f.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "f.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: z ({})", spec_id)],
+        );
+
+        // First run flips.
+        handle_db_reconcile_status(&store_path, None, None, false).unwrap();
+        // Second run should be a clean no-op (the spec is now Completed).
+        let r = handle_db_reconcile_status(&store_path, None, None, false);
+        assert!(r.is_ok(), "second reconcile failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(matches!(req.status, RequirementStatus::Completed));
+    }
+
+    /// TASK-226: refuses to run on a non-default branch — same guard as
+    /// the pull-time auto-bump, since the scan window only makes sense
+    /// for default-branch history. trace:TASK-226 | ai:claude
+    #[test]
+    fn reconcile_status_refuses_non_default_branch() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let _ = seed_done_spec(&store_path, "STORY-9606");
+        run_git(&project_root, &["checkout", "-b", "feature/x"]);
+        let r = handle_db_reconcile_status(&store_path, None, None, false);
+        assert!(r.is_err(), "expected error on feature branch, got Ok");
+    }
+}
+
+/// BUG-95: regression coverage for the claim that `aida pull --code-only`
+/// skips the Done → Completed auto-bump. The bug-as-filed asserted the
+/// conditional was nested in the wrong branch; the current structure has
+/// the auto-bump correctly inside the code-pull block (gated by
+/// `!store_only`), so `--code-only` (code_only=true, store_only=false)
+/// reaches it. This test exercises that path end-to-end via
+/// `handle_pull_command` and verifies the bump fires.
+/// trace:BUG-95 | ai:claude
+#[cfg(test)]
+mod handle_pull_command_tests {
+    use super::*;
+
+    fn run_git_in(repo: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .expect("git binary on PATH");
+        if !out.status.success() {
+            panic!(
+                "git {:?} (in {:?}) failed: stdout={} stderr={}",
+                args,
+                repo,
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Build a bare "remote" repo that already has one initial commit so
+    /// `--ff-only` has a valid base, plus a "clone" project repo
+    /// configured with `origin` pointing at it. Returns the temp guards
+    /// plus the bare-repo path and the project path.
+    fn make_remote_and_clone() -> (
+        tempfile::TempDir,
+        tempfile::TempDir,
+        std::path::PathBuf,
+        std::path::PathBuf,
+    ) {
+        let bare_tmp = tempfile::TempDir::new().unwrap();
+        let bare = bare_tmp.path().to_path_buf();
+        run_git_in(
+            &bare,
+            &["init", "--bare", "--initial-branch=main", "--quiet"],
+        );
+
+        // Seed the bare repo via a temp clone, then drop it; the project
+        // clone below will fetch this initial commit.
+        let seed_tmp = tempfile::TempDir::new().unwrap();
+        let seed = seed_tmp.path().to_path_buf();
+        run_git_in(
+            &seed,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                seed.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&seed, &["config", "user.email", "test@example.com"]);
+        run_git_in(&seed, &["config", "user.name", "Test"]);
+        std::fs::write(seed.join("README.md"), "init\n").unwrap();
+        run_git_in(&seed, &["add", "README.md"]);
+        run_git_in(&seed, &["commit", "-m", "chore: init"]);
+        run_git_in(&seed, &["push", "origin", "main", "--quiet"]);
+
+        // Now make the actual project clone the test will operate on.
+        let proj_tmp = tempfile::TempDir::new().unwrap();
+        let proj = proj_tmp.path().to_path_buf();
+        run_git_in(
+            &proj,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                proj.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&proj, &["config", "user.email", "test@example.com"]);
+        run_git_in(&proj, &["config", "user.name", "Test"]);
+
+        (bare_tmp, proj_tmp, bare, proj)
+    }
+
+    /// Push a new commit referencing `spec_id` to the bare remote so a
+    /// subsequent `git pull --ff-only` from the project clone fast-forwards
+    /// to it. Done via a fresh temp clone to avoid touching the project
+    /// repo under test.
+    fn push_remote_commit_referencing(bare: &std::path::Path, spec_id: &str) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let work = tmp.path().to_path_buf();
+        run_git_in(
+            &work,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                work.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&work, &["config", "user.email", "test@example.com"]);
+        run_git_in(&work, &["config", "user.name", "Test"]);
+        std::fs::write(work.join("landed.txt"), "x\n").unwrap();
+        run_git_in(&work, &["add", "landed.txt"]);
+        run_git_in(
+            &work,
+            &[
+                "commit",
+                "-m",
+                &format!("feat: teammate work ({})", spec_id),
+            ],
+        );
+        run_git_in(&work, &["push", "origin", "main", "--quiet"]);
+    }
+
+    fn seed_done_spec_at(store_path: &std::path::Path, spec_id: &str) {
+        let storage = Storage::new(store_path.to_path_buf());
+        let mut store = storage.load().unwrap_or_default();
+        let mut req = aida_core::Requirement::new(format!("test-{}", spec_id), String::new());
+        req.spec_id = Some(spec_id.to_string());
+        req.set_status_from_str("Done");
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+    }
+
+    /// BUG-95: `aida pull --code-only` (code_only=true, store_only=false)
+    /// must trigger the auto-bump on the just-pulled commits. Regression
+    /// guard against the bug-as-filed (claimed the conditional was in the
+    /// wrong block). trace:BUG-95 | ai:claude
+    #[test]
+    fn pull_code_only_triggers_auto_bump() {
+        let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        let storage = Storage::new(store_path.clone());
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        let spec_id = "STORY-9501".to_string();
+        seed_done_spec_at(&store_path, &spec_id);
+
+        // Remote gets the merge; our local doesn't have it yet.
+        push_remote_commit_referencing(&bare, &spec_id);
+
+        // The actual call under test: code_only=true skips the store
+        // leg entirely, but the code leg + auto-bump must still run.
+        handle_pull_command(&store_path, true, false, true, true).unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "BUG-95: --code-only should have auto-bumped {} to Completed, was {:?}",
+            spec_id,
+            req.status
+        );
+    }
+
+    /// BUG-95 mirror: `aida pull --store-only` should NOT touch the code
+    /// branch (no code pull happens), so the auto-bump correctly does
+    /// not fire — even if there's a Done spec that a separate code pull
+    /// would have bumped. Defensive guard against an over-broad fix.
+    /// trace:BUG-95 | ai:claude
+    #[test]
+    fn pull_store_only_does_not_run_auto_bump() {
+        let (_bare_tmp, _proj_tmp, _bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        let storage = Storage::new(store_path.clone());
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        // Lay down a local code commit that references the Done spec
+        // (simulating a state where the code is already at the merge —
+        // but `--store-only` shouldn't scan it).
+        let spec_id = "STORY-9502".to_string();
+        seed_done_spec_at(&store_path, &spec_id);
+        std::fs::write(project_root.join("local.txt"), "x\n").unwrap();
+        run_git_in(&project_root, &["add", "local.txt"]);
+        run_git_in(
+            &project_root,
+            &["commit", "-m", &format!("feat: x ({})", spec_id)],
+        );
+
+        // store_only=true; no orphan store configured → store-pull branch
+        // prints a note + returns Ok(()). Code leg is skipped → no auto-bump.
+        handle_pull_command(&store_path, false, true, true, true).unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "--store-only should NOT have auto-bumped, status was {:?}",
+            req.status
         );
     }
 }
@@ -21530,7 +22152,10 @@ fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
     if trimmed.is_empty() {
         anyhow::bail!("--since cannot be empty");
     }
-    let (num, unit) = trimmed.split_at(trimmed.len().saturating_sub(1));
+    // BUG-100: peel the last CHAR (not the last byte). `split_at` panics
+    // on a non-char-boundary byte index, so a multi-byte trailing unit
+    // like `2日` would crash the process.
+    let (num, unit) = split_last_char(trimmed);
     let n: i64 = num
         .parse()
         .map_err(|_| anyhow::anyhow!("invalid duration `{}` — try `30d`, `7d`, `12h`", raw))?;
@@ -21540,6 +22165,18 @@ fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
         "m" => chrono::Duration::minutes(n),
         _ => anyhow::bail!("invalid duration unit `{}` — use d/h/m", unit),
     })
+}
+
+/// Split a non-empty string into `(prefix, last_char_str)` on a valid
+/// UTF-8 char boundary. Cheaper than `chars().last()` for the parsing
+/// path because it avoids an extra allocation. The empty-string case is
+/// already guarded at every call site, so this returns `("", "")` for
+/// empty input rather than panicking. trace:BUG-100 | ai:claude
+fn split_last_char(s: &str) -> (&str, &str) {
+    match s.char_indices().next_back() {
+        Some((idx, _)) => s.split_at(idx),
+        None => ("", ""),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -22253,20 +22890,28 @@ fn auto_bump_done_to_completed(
         return Ok(Vec::new());
     }
 
-    // ── Step 2: build the commit range ──
-    let range = match pre_sha {
-        Some(pre) => format!("{}..HEAD", pre),
-        // First-pull / shallow-clone fallback. The `status == Done`
-        // guard on the flip itself keeps this from over-firing —
-        // any spec that's already Completed stays Completed.
-        None => "HEAD~50..HEAD".to_string(),
-    };
+    // ── Step 2: build the git log invocation ──
+    // BUG-94: with `pre_sha = None` we can't form a `X..HEAD` range
+    // because `HEAD~50` fails (`git rev-parse` exit 128) on repos with
+    // fewer than 50 commits — `aida db sync --pull` would then silently
+    // skip the bump on any small/young project. Use `--max-count=50 HEAD`
+    // instead, which degrades gracefully when history is shorter. The
+    // `status == Done` guard inside step 4 keeps over-broad windows from
+    // double-firing.
+    let mut log_args: Vec<String> = vec!["log".to_string(), "--pretty=format:%H%x09%s".to_string()];
+    match pre_sha {
+        Some(pre) => log_args.push(format!("{}..HEAD", pre)),
+        None => {
+            log_args.push("--max-count=50".to_string());
+            log_args.push("HEAD".to_string());
+        }
+    }
 
     // ── Step 3: walk `git log` for (sha, subject) pairs ──
     let log_out = ProcessCommand::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "--pretty=format:%H%x09%s", &range])
+        .args(&log_args)
         .output();
     let log = match log_out {
         Ok(o) if o.status.success() => o.stdout,
@@ -22279,6 +22924,11 @@ fn auto_bump_done_to_completed(
     // the same spec are follow-up edits, not the original landing).
     let mut candidates: std::collections::BTreeMap<String, String> =
         std::collections::BTreeMap::new();
+    // BUG-102: pr_number → first-seen commit_sha for `(#N)` squash-merge
+    // suffixes. Used after the store loads to match review stories filed
+    // by /aida-pr's auto-queue (their spec IDs are NEVER in commit
+    // subjects, so the `candidates` scan above can't see them).
+    let mut pr_to_sha: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
     for line in log_str.lines() {
         let mut parts = line.splitn(2, '\t');
         let sha = parts.next().unwrap_or("").trim();
@@ -22289,9 +22939,12 @@ fn auto_bump_done_to_completed(
         for spec_id in extract_spec_ids_from_commit(subject) {
             candidates.entry(spec_id).or_insert_with(|| sha.to_string());
         }
+        if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
+            pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
+        }
     }
 
-    if candidates.is_empty() {
+    if candidates.is_empty() && pr_to_sha.is_empty() {
         return Ok(Vec::new());
     }
 
@@ -22306,6 +22959,30 @@ fn auto_bump_done_to_completed(
             continue;
         }
         flips.push((spec_id.clone(), sha.clone()));
+    }
+    // BUG-102: also scan the store for Done-status review stories whose
+    // title encodes a PR number that just merged. Composes the two
+    // designs (STORY-66/90 auto-queue review story, STORY-86 auto-bump
+    // by commit-subject scan) that previously didn't talk to each other.
+    if !pr_to_sha.is_empty() {
+        for req in &store.requirements {
+            if !matches!(req.status, RequirementStatus::Done) {
+                continue;
+            }
+            let Some(pr_n) = parse_review_story_pr_number(&req.title) else {
+                continue;
+            };
+            let Some(sha) = pr_to_sha.get(&pr_n) else {
+                continue;
+            };
+            let Some(spec_id) = req.spec_id.as_deref() else {
+                continue;
+            };
+            if flips.iter().any(|(id, _)| id == spec_id) {
+                continue;
+            }
+            flips.push((spec_id.to_string(), sha.clone()));
+        }
     }
     if flips.is_empty() {
         return Ok(Vec::new());
@@ -22363,6 +23040,229 @@ fn auto_bump_done_to_completed(
     let _ = store_path;
 
     Ok(confirmed)
+}
+
+/// TASK-226: manual replay of the Done → Completed scan over a wider
+/// range than `aida pull` saw. Used to recover specs stranded at Done
+/// when:
+/// - the YAML was unreadable at pull time (BUG-96 deletion);
+/// - the spec was flipped to Done after the referencing commit was
+///   already on local main;
+/// - the user cold-cloned and never had a pull moment where both the
+///   spec and the commit were visible together.
+///
+/// The handler reuses `auto_bump_done_to_completed`'s pure helpers
+/// (extract_spec_ids_from_commit + extract_pr_number_from_commit_subject
+/// + parse_review_story_pr_number) but does its own scan because the
+/// pull-time helper hard-codes pre_sha-or-HEAD~50 ranges. Here we accept
+/// `--since REF` for a bounded replay or default to a 200-commit window.
+/// `--spec SPEC-ID` narrows the candidate set to a single requirement.
+/// `--dry-run` previews without writing.
+/// trace:TASK-226 | ai:claude
+fn handle_db_reconcile_status(
+    store_path: &std::path::Path,
+    since: Option<&str>,
+    spec: Option<&str>,
+    dry_run: bool,
+) -> Result<()> {
+    use std::process::Command as ProcessCommand;
+
+    let project_root = store_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("could not derive project root from store path"))?;
+
+    let default_branch: Option<String> = ProcessCommand::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            String::from_utf8(o.stdout)
+                .ok()
+                .map(|s| s.trim().to_string())
+                .and_then(|s| s.strip_prefix("origin/").map(|x| x.to_string()))
+        });
+    let current = aida_core::git_ops::current_branch(project_root).ok();
+    let default_branch = default_branch.or_else(|| match current.as_deref() {
+        Some("main") | Some("master") => current.clone(),
+        _ => None,
+    });
+    let Some(default_branch) = default_branch else {
+        anyhow::bail!(
+            "could not detect default branch (no `origin/HEAD` symref and not on main/master) — \
+             reconcile-status only scans the default branch"
+        );
+    };
+    if current.as_deref() != Some(default_branch.as_str()) {
+        anyhow::bail!(
+            "reconcile-status must run on the default branch ({}). Currently on `{}`. \
+             Switch with `git checkout {}` first.",
+            default_branch,
+            current.as_deref().unwrap_or("(detached)"),
+            default_branch
+        );
+    }
+
+    let mut log_args: Vec<String> = vec!["log".to_string(), "--pretty=format:%H%x09%s".to_string()];
+    match since {
+        Some(s) => log_args.push(format!("{}..HEAD", s)),
+        None => {
+            log_args.push("--max-count=200".to_string());
+            log_args.push("HEAD".to_string());
+        }
+    }
+    let log_out = ProcessCommand::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(&log_args)
+        .output();
+    let log = match log_out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        Ok(o) => anyhow::bail!(
+            "git log failed (resolving `--since {}`?): {}",
+            since.unwrap_or("<auto>"),
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => anyhow::bail!("git log failed: {}", e),
+    };
+
+    let mut candidates: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
+    let mut pr_to_sha: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
+    for line in log.lines() {
+        let mut parts = line.splitn(2, '\t');
+        let sha = parts.next().unwrap_or("").trim();
+        let subject = parts.next().unwrap_or("").trim();
+        if sha.is_empty() || subject.is_empty() {
+            continue;
+        }
+        for id in extract_spec_ids_from_commit(subject) {
+            candidates.entry(id).or_insert_with(|| sha.to_string());
+        }
+        if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
+            pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
+        }
+    }
+
+    let storage = Storage::new(store_path.to_path_buf());
+    let store = storage.load()?;
+
+    // Build the planned-flip list. For --spec, we narrow to that one
+    // candidate (matched against either spec_id or review-story title).
+    let mut flips: Vec<(String, String)> = Vec::new();
+    for (spec_id, sha) in &candidates {
+        if let Some(target) = spec {
+            if !spec_id.eq_ignore_ascii_case(target) {
+                continue;
+            }
+        }
+        let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
+            continue;
+        };
+        if !matches!(req.status, RequirementStatus::Done) {
+            continue;
+        }
+        flips.push((spec_id.clone(), sha.clone()));
+    }
+    if !pr_to_sha.is_empty() {
+        for req in &store.requirements {
+            if !matches!(req.status, RequirementStatus::Done) {
+                continue;
+            }
+            let Some(pr_n) = parse_review_story_pr_number(&req.title) else {
+                continue;
+            };
+            let Some(sha) = pr_to_sha.get(&pr_n) else {
+                continue;
+            };
+            let Some(sid) = req.spec_id.as_deref() else {
+                continue;
+            };
+            if let Some(target) = spec {
+                if !sid.eq_ignore_ascii_case(target) {
+                    continue;
+                }
+            }
+            if flips.iter().any(|(id, _)| id == sid) {
+                continue;
+            }
+            flips.push((sid.to_string(), sha.clone()));
+        }
+    }
+
+    if flips.is_empty() {
+        match spec {
+            Some(s) => println!(
+                "No eligible flips for {}. Either it's not at status Done, \
+                 or no commit in the scan range references it.",
+                s
+            ),
+            None => println!(
+                "No eligible flips. All Done specs in the store either have no \
+                 referencing commit in the scan range, or are already Completed."
+            ),
+        }
+        return Ok(());
+    }
+
+    if dry_run {
+        println!(
+            "{} would flip {} Done spec{} → Completed:",
+            "dry-run:".dimmed(),
+            flips.len(),
+            if flips.len() == 1 { "" } else { "s" }
+        );
+        for (sid, sha) in &flips {
+            let short = if sha.len() >= 7 { &sha[..7] } else { sha };
+            println!("  {} ({})", sid.bold(), short.dimmed());
+        }
+        return Ok(());
+    }
+
+    let now = chrono::Utc::now();
+    let flips_for_write = flips.clone();
+    storage.update_atomically(|s| {
+        for (spec_id, sha) in &flips_for_write {
+            if let Some(r) = s
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+            {
+                if !matches!(r.status, RequirementStatus::Done) {
+                    continue;
+                }
+                r.set_status_from_str("Completed");
+                r.modified_at = now;
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.completed_at.get_or_insert(now);
+                if info.completion_sha.is_none() {
+                    info.completion_sha = Some(sha.clone());
+                }
+            }
+        }
+    })?;
+
+    let after = storage.load().unwrap_or_else(|_| store.clone());
+    let confirmed: Vec<(String, String)> = flips
+        .into_iter()
+        .filter(|(sid, _)| {
+            after
+                .get_requirement_by_spec_id(sid)
+                .map(|r| matches!(r.status, RequirementStatus::Completed))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    for (spec_id, _) in &confirmed {
+        record_role_activity(spec_id, "reconcile-status");
+    }
+
+    print_auto_bump_summary(&confirmed);
+    Ok(())
 }
 
 /// STORY-86: print the auto-bump summary line after a successful pull.
@@ -26137,6 +27037,13 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 "!".yellow()
             );
         }
+        // trace:TASK-226 | ai:claude
+        DbCommand::ReconcileStatus { .. } => {
+            println!(
+                "{} db reconcile-status only applies to git-backed stores. Run `aida init` to migrate.",
+                "!".yellow()
+            );
+        }
         DbCommand::WorkspaceInit { name, remote } => {
             let cwd = std::env::current_dir()?;
             let ws_name = name.as_deref().unwrap_or_else(|| {
@@ -28569,6 +29476,34 @@ fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     let mut out = Vec::new();
     push_paren_spec_ids_from_line(subject, &mut out);
     out
+}
+
+/// Extract a trailing `(#N)` PR-number suffix from a commit subject (the
+/// shape `gh` writes when squash-merging a PR). Returns None when the
+/// subject doesn't end with `(#<digits>)`. trace:BUG-102 | ai:claude
+fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64> {
+    let subject = message.lines().find(|l| !l.trim().is_empty())?;
+    let trimmed = subject.trim();
+    if !trimmed.ends_with(')') {
+        return None;
+    }
+    let open_at = trimmed.rfind('(')?;
+    let inner = &trimmed[open_at + 1..trimmed.len() - 1];
+    let digits = inner.strip_prefix('#')?;
+    if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u64>().ok()
+}
+
+/// Parse the PR number out of a review-story title. Titles are filed by
+/// /aida-pr's auto-queue as `Review PR-<n>: <pr-title>` (see
+/// `aida_subcmd_add_review_story` callsite); anything not matching that
+/// shape returns None. trace:BUG-102 | ai:claude
+fn parse_review_story_pr_number(title: &str) -> Option<u64> {
+    let rest = title.strip_prefix("Review PR-")?;
+    let (num, _) = rest.split_once(':')?;
+    num.trim().parse::<u64>().ok()
 }
 
 /// Pull spec-id-shaped `(REQ-ID)` parens from BODY lines of a commit message
@@ -32765,7 +33700,9 @@ fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
         return Ok(ts.with_timezone(&chrono::Utc));
     }
     // Relative form: <number><unit>, unit ∈ {d,h,m}
-    let (num_str, unit) = trimmed.split_at(trimmed.len().saturating_sub(1));
+    // BUG-100: peel the last CHAR rather than the last BYTE so multi-byte
+    // trailing units don't crash the process.
+    let (num_str, unit) = split_last_char(trimmed);
     let n: i64 = num_str.parse().map_err(|_| {
         anyhow::anyhow!(
             "invalid --since value `{}` (try `2d`, `12h`, or RFC3339)",
@@ -33144,6 +34081,41 @@ mod queue_progress_tests {
         assert!(parse_since_arg("").is_err());
         assert!(parse_since_arg("xyz").is_err());
         assert!(parse_since_arg("3z").is_err());
+    }
+
+    /// BUG-100: a multi-byte trailing char (e.g. `2日`) used to crash
+    /// the process via `split_at` on a non-char-boundary byte. After the
+    /// fix it returns a clean Err. trace:BUG-100 | ai:claude
+    #[test]
+    fn parse_since_does_not_panic_on_multibyte_unit() {
+        // Inputs from the bug repro section.
+        assert!(parse_since_arg("2日").is_err());
+        assert!(parse_since_arg("3秒").is_err());
+        // Pure multi-byte string (no digits to parse, last char is the
+        // only char): still a clean error.
+        assert!(parse_since_arg("日").is_err());
+        // Multi-char multi-byte trailer: also bails cleanly.
+        assert!(parse_since_arg("3日間").is_err());
+    }
+
+    /// BUG-100: mirror coverage for parse_days_arg, which uses the same
+    /// split-last-char path. trace:BUG-100 | ai:claude
+    #[test]
+    fn parse_days_does_not_panic_on_multibyte_unit() {
+        assert!(parse_days_arg("2日").is_err());
+        assert!(parse_days_arg("3秒").is_err());
+        assert!(parse_days_arg("日").is_err());
+    }
+
+    /// BUG-100: the helper itself stays char-boundary-safe for both
+    /// ASCII and multi-byte trailers. trace:BUG-100 | ai:claude
+    #[test]
+    fn split_last_char_is_char_boundary_safe() {
+        assert_eq!(split_last_char("2d"), ("2", "d"));
+        assert_eq!(split_last_char("12h"), ("12", "h"));
+        assert_eq!(split_last_char("2日"), ("2", "日"));
+        assert_eq!(split_last_char("日"), ("", "日"));
+        assert_eq!(split_last_char(""), ("", ""));
     }
 
     #[test]
