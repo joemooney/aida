@@ -32,12 +32,12 @@ description: |-
   - [ ] --json output mode for both
   - [ ] Honors --code-only / --store-only from the granularity TASK
   - [ ] Help text reflects the new flag
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:07:46.578737046Z
-modified_at: 2026-05-15T07:10:56.920979990Z
+modified_at: 2026-05-15T07:14:21.068451840Z
 req_type: Task
 tags:
 - batch:verb-surface
@@ -50,3 +50,7 @@ relationships:
 - rel_type: Child
   target_id: 019e1ff2-4f0c-7501-b5fc-098cbcc7edd8
   created_at: 2026-05-13T06:07:48.823824774Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T07:14:21.068451840Z
+  implemented_by: joe
