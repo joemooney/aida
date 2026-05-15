@@ -1,0 +1,107 @@
+id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
+spec_id: EPIC-26
+agreed_id: EPIC-26
+title: 'AIDA TUI: process-supervisor shell wrapping claude code sessions + workflow orchestration'
+description: |-
+  AIDA today is CLI-only. The user runs claude code as the outer shell; when they exit a Claude session they're back in the terminal. To act on AIDA state mid-conversation, they have to exit claude, run aida commands, then resume claude (or start a new session).
+
+  User's vision (2026-05-14): flip this. AIDA's TUI becomes the OUTER SHELL — a process supervisor that hosts claude code sessions inside it. From the TUI, the user can drop out of any claude session (without ending it) to see status, take quick actions (queue work, review PRs, mark specs), then drop back in to the SAME claude conversation. The TUI manages multiple claude sessions, surfaces notifications, and serves as the durable orchestration layer that doesn't get blown away when individual claude conversations end.
+
+  Closer to 'tmux for AIDA workflows' than a traditional dashboard.
+
+  ## Why this matters
+
+  Today's friction:
+  - Exit claude → lose context (or pay cold-resume tax via TASK-112)
+  - Need separate shells for status + queue + active claude — context-switching tax
+  - Status awareness lives in scrolling output, not panels — easy to miss signals
+  - Multi-session workflows (implementer + reviewer concurrently) require multiple terminals
+  - The 'workflow state-aware guidance' principle of STORY-127 gets buried in scroll history
+
+  Your vision turns each of those into a one-keystroke action.
+
+  ## How this composes with existing work
+
+  Every UX improvement filed during today's session is a COMPONENT of the TUI's value proposition. Shipping them as CLI improvements is correct — each is independently useful — but the TUI is where they compose:
+
+  - TASK-112 (resume claude session): CRITICAL PREREQ — TUI's 'drop out and resume' requires this primitive. Cannot ship TUI shell without it.
+  - TASK-220 (aida status): data source for the TUI's status overlay
+  - TASK-232 (aida queue progress): source for the queue/batch progress panel
+  - STORY-121 (ping-pong block): TUI lets user drop out during the block, see what's happening, drop back in to the same context
+  - STORY-127 (workflow state-aware guidance): TUI surfaces this guidance in panels instead of scrolling output
+  - TASK-228 (cancellable fallback wakeups): TUI cancels them when user takes manual action
+  - TASK-234 (Done section next-actions): TUI's 'what should I do?' panel
+  - TASK-238 (queue list tags display): TUI naturally groups by batch tag
+  - BUG-102 (review-story auto-bump): TUI surfaces stuck specs proactively, not by user discovery
+
+  The TUI is the orchestration shell that turns ~25 individual CLI fixes into a coherent product surface.
+
+  ## Architecture sketch (not committal — implementer designs)
+
+  - Rust TUI library (ratatui likely; crossterm for input)
+  - Claude code launched as child process inside a pty (pseudo-terminal); TUI hosts the pty as its main view
+  - Keybinding (e.g., Ctrl-T or similar) captures from claude's pty, switches focus to TUI's status overlay
+  - Status overlay panels: queue, leases, sessions, PRs (with CI status), recent activity, notifications
+  - Quick actions from status: invoke aida queue work, gh pr merge, /aida-review, etc. — TUI returns focus to active claude session
+  - Multi-session: list all active claude conversations as switchable views/panes
+  - Notifications: surface 'PR-N CI went green' / 'review story stuck' / 'build completed' as non-disruptive overlay
+
+  ## Candidate child STORYs (sketch — NOT pre-decomposed; implementer designs)
+
+  1. TUI shell core: pty-host claude code as child, capture/release keybindings, status overlay basic
+  2. State panels: queue, leases, sessions, PRs, CI rollup — read-only views first
+  3. Quick actions: from status overlay, invoke common AIDA commands; return focus to claude
+  4. Multi-session view: list/switch between multiple active claude conversations
+  5. Resume integration: from TUI, pick any historical claude session, drop-in via claude --resume
+  6. Notifications: surface workflow events (CI state changes, PR merges, stuck specs) as non-disruptive overlays
+
+  The implementer picking this EPIC up should consider whether these are the right 6 children. Likely some merge, some split, some get added.
+
+  ## What this is NOT
+
+  - NOT a wrapper that controls Claude's API — Claude code is still Claude code; the TUI just hosts its terminal as a child process
+  - NOT a replacement for individual CLI commands (aida queue work, gh pr merge, /aida-review, etc.) — TUI INVOKES them with better UX
+  - NOT requiring any Anthropic-side changes — pure user-side tooling against claude code's existing pty-friendly behavior
+  - NOT day-one feasible — TASK-112 (resume claude session) is the hard dependency; until that ships, the TUI cannot deliver its key 'drop out + drop back in to same conversation' value
+  - NOT a replacement for tmux for general terminal multiplexing — focused specifically on AIDA workflow + claude code session hosting
+  - NOT a hostile takeover of the user's terminal — exitable, optional, never required
+
+  ## Composition with EPIC-23
+
+  EPIC-23 (Session orchestration & autonomy) is the conceptual home for individual session-lifecycle work. This new EPIC is a level above: it's the durable surface where the session-orchestration primitives EPIC-23 ships find their natural integration point. EPIC-23 is filled with TUI components in retrospect; this EPIC names the integration explicitly.
+
+  ## Acceptance (EPIC-level, not item-level)
+
+  - [ ] TUI shell exists; can launch claude code as a child + host its pty as main view
+  - [ ] Keybinding drops the user from claude pty to status overlay without ending the claude session
+  - [ ] Status overlay shows queue, leases, recent activity, PR/CI state
+  - [ ] Common quick actions invokable from status overlay; return focus to claude
+  - [ ] Multiple claude sessions managed (list, switch, resume historical)
+  - [ ] Documented in docs/tui/ as the canonical reference
+  - [ ] CLAUDE.md / AIDA.md mention the TUI as the recommended interactive surface
+
+  ## Why this is filed as an EPIC, not a STORY
+
+  - Scope spans 6+ substantial STORYs of work
+  - Architecturally new surface (today AIDA is CLI-only)
+  - Composes broadly with ~10+ existing filings; the EPIC is the integration point
+  - Multi-month work realistically; needs an EPIC-level home for sub-decomposition
+
+  ## Discovered via
+
+  2026-05-14 — user articulated the vision after 24+ hours of CLI workflow friction: 'I'm thinking about the dashboard TUI, I want a TUI sitting right on top of claude code sessions, so I easily drop out of the session to see status, maybe review or request review, or resume the same session with a pickup, basically the TUI becomes a natural layer or shell surrounding claude code.' The framing is novel because it inverts the typical 'claude is the shell' relationship: AIDA's TUI BECOMES the shell, claude lives inside. This EPIC captures the product direction; child STORYs will sub-decompose as the work is picked up.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T03:37:04.274286254Z
+modified_at: 2026-05-15T03:37:04.274286254Z
+req_type: Epic
+tags:
+- claude-code
+- orchestration
+- process-supervisor
+- product-direction
+- shell
+- tui
+- workflow
