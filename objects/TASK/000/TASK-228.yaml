@@ -44,12 +44,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 — scheduled wakeup at 21:43 PT fired /aida-review --pr 23 four minutes after PR-23 was merged. User saw 'Background work is running' prompt asking whether to wait or exit. The wakeup had no purpose; it should have been cancelled when CI completed.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T04:46:28.443236212Z
-modified_at: 2026-05-15T15:39:22.600131868Z
+modified_at: 2026-05-15T15:43:43.504728168Z
 req_type: Task
 tags:
 - batch:ux-polish
@@ -82,3 +82,7 @@ comments:
     - Until then, the early-exit pattern (TASK-227) is the canonical answer
   created_at: 2026-05-14T06:18:47.718181838Z
   modified_at: 2026-05-14T06:18:47.718181838Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T15:43:43.504728168Z
+  implemented_by: joe
