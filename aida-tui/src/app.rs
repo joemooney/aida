@@ -546,9 +546,13 @@ impl App {
                 self.full_repaint(out)?;
             }
             Routing::OverlayRedraw => self.draw_overlay()?,
-            Routing::RunAction(action) => {
-                self.run_quick_action(action)?;
-            }
+            Routing::RunAction(action) => match action.injection() {
+                // Drain actions type a slash command into the focused
+                // Claude session (STORY-136); the rest run as captured
+                // subprocesses.
+                Some(text) => self.inject_to_focused(text, out)?,
+                None => self.run_quick_action(action)?,
+            },
             Routing::OpenPicker => self.open_picker()?,
             Routing::ClosePicker => self.full_repaint(out)?,
             Routing::PickerRedraw => self.draw_picker()?,
@@ -683,6 +687,34 @@ impl App {
             .expect("ratatui terminal initialized above");
         term.draw(|frame| overlay::render(frame, model, activity, selected, confirm, refreshing))?;
         Ok(())
+    }
+
+    /// Type a slash command into the focused Claude session, then close
+    /// the overlay so Claude — now focused — receives and runs it. The
+    /// autonomous-drain buttons use this (STORY-136): the drain runs
+    /// *inside* the hosted conversation, not as a TUI subprocess, and
+    /// the drain text comes from `/aida-drain-queue`, never hand-written
+    /// `/goal`. trace:STORY-136 | ai:claude
+    fn inject_to_focused(&mut self, text: &str, out: &mut Stdout) -> Result<()> {
+        self.overlay.confirm = None;
+        self.mode = Mode::Focused;
+        if self.tabs.focused().is_some() {
+            let mut bytes = text.as_bytes().to_vec();
+            bytes.push(b'\r');
+            if let Some(tab) = self.tabs.focused_mut() {
+                let _ = tab.pty.write_input(&bytes);
+            }
+            self.push_activity(ActivityEntry::note(
+                "drain",
+                &format!("started — typed `{text}` into the focused session"),
+            ));
+        } else {
+            self.push_activity(ActivityEntry::note(
+                "drain",
+                "no focused session — open one with `prefix n` before starting a drain",
+            ));
+        }
+        self.full_repaint(out)
     }
 
     /// Run a quick action as a captured subprocess, append the result to
@@ -1111,6 +1143,32 @@ mod tests {
         assert!(matches!(app.route_key(plain('n')), Routing::OverlayRedraw));
         assert!(app.overlay.confirm.is_none());
         assert_eq!(app.mode, Mode::Overlay);
+    }
+
+    #[test]
+    fn overlay_drain_action_confirms_then_routes_run_action() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('o'));
+
+        // QuickAction::ALL = [QueueNext, SessionEnd, PrView, DrainToReview,
+        // DrainToMerge] — step right to "Drain → review" (index 3).
+        for _ in 0..3 {
+            app.route_key(plain('l'));
+        }
+        assert_eq!(app.overlay.selected_action(), QuickAction::DrainToReview);
+
+        // A drain is autonomous → it arms a confirm, runs nothing yet.
+        assert!(matches!(app.route_key(enter()), Routing::OverlayRedraw));
+        assert_eq!(app.overlay.confirm, Some(QuickAction::DrainToReview));
+
+        // `y` confirms → RunAction; handle_routing injects the
+        // `/aida-drain-queue` slash command into the focused session.
+        match app.route_key(plain('y')) {
+            Routing::RunAction(QuickAction::DrainToReview) => {}
+            other => panic!("expected RunAction(DrainToReview), got {:?}", other),
+        }
     }
 
     #[test]
