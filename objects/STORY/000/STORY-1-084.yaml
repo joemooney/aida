@@ -1,5 +1,6 @@
 id: 019e2e09-055e-7e60-a945-32640c445ed2
 spec_id: STORY-1-084
+agreed_id: STORY-82
 title: 'Modernize the 7 existing MCP tools: bring schemas up to current CLI vocabulary'
 description: |-
   Smallest-viable first slice of the MCP modernization EPIC: update the 7 existing tools' schemas + handlers to match current CLI vocabulary. No new tools yet — just bring existing ones current.
