@@ -16663,6 +16663,79 @@ fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {
 mod statusline_tests {
     use super::*;
 
+    /// TASK-244: matching shell + session role — no warning, plain
+    /// `role:X` segment (the common case, behavior unchanged).
+    #[test]
+    fn role_segment_matching_state_is_unchanged() {
+        let (text, mismatch) = role_segment_text("implementer", Some("implementer"), true);
+        assert_eq!(text, "role:implementer");
+        assert!(!mismatch);
+        // Case-insensitive — `Implementer` vs `implementer` is a match.
+        let (_, mismatch) = role_segment_text("Implementer", Some("implementer"), true);
+        assert!(!mismatch);
+    }
+
+    /// TASK-244: shell role disagrees with the active session's role —
+    /// both surfaced with the `⚠` glyph.
+    #[test]
+    fn role_segment_mismatch_surfaces_both() {
+        let (text, mismatch) = role_segment_text("implementer", Some("reviewer"), true);
+        assert!(mismatch);
+        assert!(text.contains("role:implementer"), "got: {}", text);
+        assert!(text.contains("session:reviewer"), "got: {}", text);
+        assert!(text.contains('⚠'), "got: {}", text);
+    }
+
+    /// TASK-244: no active session → no mismatch, plain segment.
+    #[test]
+    fn role_segment_no_active_session() {
+        let (text, mismatch) = role_segment_text("implementer", None, true);
+        assert_eq!(text, "role:implementer");
+        assert!(!mismatch);
+    }
+
+    /// TASK-244: the `[statusline] role_mismatch_warning = false` knob
+    /// suppresses the warning even when the roles disagree.
+    #[test]
+    fn role_segment_warning_disabled_suppresses_mismatch() {
+        let (text, mismatch) = role_segment_text("implementer", Some("reviewer"), false);
+        assert_eq!(text, "role:implementer");
+        assert!(!mismatch);
+    }
+
+    /// TASK-244: `role_mismatch_warning` defaults to on, parses an
+    /// explicit `false`, and ignores the key outside `[statusline]`.
+    #[test]
+    fn statusline_role_mismatch_config_parsing() {
+        let tmp = std::env::temp_dir().join(format!(
+            "aida-task244-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        let aida = tmp.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+
+        // No config file → default true.
+        assert!(statusline_role_mismatch_enabled(&tmp));
+
+        // Explicit false in [statusline] → false.
+        std::fs::write(
+            aida.join("config.toml"),
+            "[statusline]\nrole_mismatch_warning = false  # quiet\n",
+        )
+        .unwrap();
+        assert!(!statusline_role_mismatch_enabled(&tmp));
+
+        // The key under a different section is ignored → default true.
+        std::fs::write(
+            aida.join("config.toml"),
+            "[behavior]\nrole_mismatch_warning = false\n",
+        )
+        .unwrap();
+        assert!(statusline_role_mismatch_enabled(&tmp));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// Cache-stored full SHA matches `--short` output. trace:TASK-1-045
     #[test]
     fn sha_prefix_match_full_vs_short() {
@@ -22700,6 +22773,67 @@ fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Optio
     Some(count)
 }
 
+/// TASK-244: read `[statusline] role_mismatch_warning` from
+/// `.aida/config.toml`. Defaults to `true` (warn on mismatch) when the
+/// key, section, or file is absent. trace:TASK-244 | ai:claude
+fn statusline_role_mismatch_enabled(project_dir: &std::path::Path) -> bool {
+    let Ok(content) = std::fs::read_to_string(project_dir.join(".aida").join("config.toml")) else {
+        return true;
+    };
+    let mut in_section = false;
+    for raw in content.lines() {
+        let line = strip_toml_inline_comment(raw).trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_section = rest.trim_end_matches(']').trim() == "statusline";
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("role_mismatch_warning") {
+            if let Some(val) = rest.split('=').nth(1) {
+                let v = val
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_ascii_lowercase();
+                return !matches!(v.as_str(), "false" | "0" | "no" | "off");
+            }
+        }
+    }
+    true
+}
+
+/// TASK-244: render the statusline `role:` segment, surfacing a mismatch
+/// between the shell-persistent role (`$AIDA_SESSION_ROLE`, set by `aida
+/// role enter`) and the active AIDA session's role (the lease). When
+/// they disagree — and the warning is enabled — both are shown with a
+/// `⚠` glyph so three-way role confusion (shell vs session vs resumed
+/// conversation) is visible at a glance. Returns `(text, is_mismatch)`
+/// so the caller picks the colour. Pure — unit-tested independent of
+/// the statusline IO. trace:TASK-244 | ai:claude
+fn role_segment_text(
+    shell_role: &str,
+    session_role: Option<&str>,
+    warn_enabled: bool,
+) -> (String, bool) {
+    let mismatch = warn_enabled
+        && session_role
+            .map(|s| !s.eq_ignore_ascii_case(shell_role))
+            .unwrap_or(false);
+    if mismatch {
+        (
+            format!("role:{} ⚠ session:{}", shell_role, session_role.unwrap()),
+            true,
+        )
+    } else {
+        (format!("role:{}", shell_role), false)
+    }
+}
+
 fn handle_statusline_command(color: &str) -> Result<()> {
     // trace:FR-1-041 | ai:claude
     apply_color_mode(color);
@@ -22816,7 +22950,18 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
 
     if let Some(r) = &role {
-        parts.push(format!("role:{}", r).yellow().bold().to_string());
+        // TASK-244: surface a shell-role vs active-session-role mismatch
+        // (e.g. shell persists `implementer` while the only active
+        // session is `reviewer`). trace:TASK-244 | ai:claude
+        let session_role = lease.as_ref().and_then(|l| l.role.as_deref());
+        let warn_enabled = statusline_role_mismatch_enabled(&project_root);
+        let (role_text, role_mismatch) = role_segment_text(r, session_role, warn_enabled);
+        let role_segment = if role_mismatch {
+            role_text.red().bold().to_string()
+        } else {
+            role_text.yellow().bold().to_string()
+        };
+        parts.push(role_segment);
         // @SPEC segment. Default: newest activity entry the active role
         // touched. Source preference: the session-local activity log when
         // cwd is inside an active session lease (STORY-56), else the
