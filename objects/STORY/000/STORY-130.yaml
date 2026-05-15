@@ -1,0 +1,32 @@
+id: 019e2a08-ff45-7261-853e-fe71b81fe09f
+spec_id: STORY-130
+agreed_id: STORY-130
+title: 'Review PR-29: EPIC-24 batch:plan-tooling — plan lifecycle: template, verify, helpers, queue integration, /ultraplan round-trip (7 specs)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e2999`) for branch `epic-24-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/29>
+  - Branch: `epic-24-2` → `main`
+
+  ## Covers
+
+  - TASK-114
+  - TASK-113
+  - TASK-94
+  - TASK-95
+  - TASK-96
+  - TASK-93
+  - TASK-92
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 29` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T05:08:13.253163978Z
+modified_at: 2026-05-15T05:08:13.253163978Z
+req_type: Story
