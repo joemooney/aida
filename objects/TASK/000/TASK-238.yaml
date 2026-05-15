@@ -1,0 +1,83 @@
+id: 019e2938-50aa-75e2-9918-ddf62b795f80
+spec_id: TASK-238
+agreed_id: TASK-238
+title: 'aida queue list: surface tags (especially batch:* tags) in default output'
+description: |-
+  Tags are first-class on requirements (settable via aida add --tags / aida edit --tags) and now load-bearing as 'batch' grouping (TASK-229's batch:NAME convention). But aida queue list doesn't display them — users can't see which batch each queued item belongs to without running aida show per item.
+
+  ## Observed 2026-05-14
+
+  User queued 7 plan-tooling items and applied tag 'batch:plan-tooling' to each. aida queue list --all then rendered:
+
+    My Queue (10 items)
+    1. TASK-107 ... [for:implementer]
+    ...
+    4. TASK-92 ... [for:implementer] [@EPIC-24*]
+    ...
+
+  The batch:plan-tooling tag (applied successfully — verifiable via aida show) is invisible. User said 'I don't see the tags' — exactly the discoverability problem the batch convention is supposed to solve.
+
+  ## Proposed render
+
+  Add tags inline at end of each row, possibly truncated or filtered to 'interesting' tags only:
+
+    4. TASK-92 ... [for:implementer] [@EPIC-24*] [batch:plan-tooling]
+    9. TASK-113 ... [for:implementer] [@EPIC-23*] [batch:plan-tooling, integration:ultraplan]
+
+  Or group by batch:* tag if --by-batch flag is set:
+
+    aida queue list --by-batch
+
+    Batch: plan-tooling (7 items)
+      4. TASK-92 ...
+      5. TASK-93 ...
+      ...
+
+    No batch (3 items)
+      1. TASK-107 ...
+      2. TASK-106 ...
+      3. TASK-108 ...
+
+  ## Filter flags
+
+  aida queue list --tag batch:plan-tooling           - filter to items with this exact tag
+  aida queue list --tag-prefix batch:                - filter to items with any batch:* tag
+
+  The --tag flag composes with --batch (TASK-229) — same surface for filter+drain.
+
+  ## Composes with
+
+  - TASK-102 (aida show enumerate relationships): same theme — surfaces don't show all relevant metadata
+  - TASK-229 (aida queue work --batch): batch convention is useless if you can't SEE batches
+  - TASK-234 (Done section grouping): could group by batch tag in the Done section too
+  - TASK-237 (session list prefer agreed-id): sibling display-quality TASK
+  - TASK-236 (session list title staleness): another session-list display TASK
+
+  This is part of a small cluster of 'AIDA display surfaces don't show enough' TASKs. When any one of them ships, the implementer should consider doing all of them as a coherent display-polish batch.
+
+  ## Acceptance
+
+  - [ ] aida queue list default render includes tags inline (with truncation/filtering as needed for terminal width)
+  - [ ] --tag NAME filter limits queue to items with that exact tag
+  - [ ] --tag-prefix PREFIX filter limits queue to items with any tag matching PREFIX
+  - [ ] --by-batch groups queue output by batch:* tag value
+  - [ ] aida queue list --help documents tag display + filter flags
+  - [ ] Tests cover: no-tags items, single-tag items, multi-tag items, --tag exact match, --by-batch grouping
+
+  ## Discovered via
+
+  2026-05-14 — user applied batch:plan-tooling to 7 queued items, then ran aida queue list --all and saw no tags. Said 'I don't see the tags' — confirming the surface gap.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T01:20:17.065998471Z
+modified_at: 2026-05-15T01:20:17.065998471Z
+req_type: Task
+tags:
+- batch
+- display
+- queue-list
+- tags
+- ux
+- visibility
