@@ -15788,6 +15788,7 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
         session_id: lease.id.clone(),
         planned_at: now,
         plan_source: source.to_string(),
+        claude_session_id: None,
         plan: None,
         items: manifest_items,
     };
@@ -37885,6 +37886,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             steal,
             batch,
             dry_run,
+            resume,
+            fresh,
+            list_sessions,
             user,
         } => {
             let user_id = get_user(user);
@@ -37997,6 +38001,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 branch.as_deref(),
                 path.as_deref(),
                 *steal,
+                resume.as_deref(),
+                *fresh,
+                *list_sessions,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -38739,6 +38746,9 @@ fn handle_queue_rework(
             /* branch_override */ None,
             /* path_override */ None,
             steal,
+            /* resume */ None,
+            /* fresh */ false,
+            /* list_sessions */ false,
         )?;
     } else {
         println!(
@@ -39354,8 +39364,33 @@ fn handle_queue_work(
     branch_override: Option<&str>,
     path_override: Option<&str>,
     steal: bool,
+    resume: Option<&str>,
+    fresh: bool,
+    list_sessions: bool,
 ) -> Result<()> {
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
+
+    // TASK-112: `--list-sessions` is a pure read — print the recorded
+    // claude conversations for this scope and exit before any side
+    // effects (no worktree, no lease, no pull).
+    if list_sessions {
+        return print_scope_sessions(&plan.anchor_display);
+    }
+
+    // TASK-112: decide cold-launch-vs-resume up front, *before*
+    // session_start mints a worktree — so a bad `--resume <id>` (or a
+    // bare `--resume` with no prior session) fails clean with nothing to
+    // unwind. `None` when `--no-launch` (setup-only, no conversation).
+    let launch: Option<QueueWorkLaunch> = if no_launch {
+        None
+    } else {
+        Some(resolve_queue_work_launch(
+            &plan.anchor_display,
+            resume,
+            fresh,
+        )?)
+    };
+
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
 
     // Permission mode resolution (TASK-83 → TASK-84). Order:
@@ -39426,6 +39461,17 @@ fn handle_queue_work(
         ),
     );
     line("skill", prompt.cyan().to_string());
+    // TASK-112: surface a resume in the pre-flight summary.
+    if let Some(QueueWorkLaunch::Resume(id)) = &launch {
+        line(
+            "resume",
+            format!(
+                "{} {}",
+                id[..id.len().min(8)].cyan(),
+                "(continuing prior conversation)".dimmed()
+            ),
+        );
+    }
     if plan.entries.len() > 1 {
         line(
             "cluster",
@@ -39582,13 +39628,30 @@ fn handle_queue_work(
     // when a plan file exists (no plan file → today's no-op behavior).
     // trace:TASK-95 | ai:claude
     let plan_context = discover_plan_context(&project_root, &plan.anchor_display);
-    if plan.mode == QueueWorkMode::Cluster {
-        write_queue_work_manifest(&project_root, &lease, &plan, plan_context.clone())?;
-        eprintln!(
-            "  {} wrote manifest with {} planned item(s)",
-            "✓".green(),
-            plan.entries.len()
-        );
+    // TASK-112: the claude session id to record in the manifest — the
+    // UUID minted for a fresh launch, or the id being resumed. `None`
+    // under --no-launch (no conversation to record).
+    let claude_session_id: Option<String> = launch.as_ref().map(|l| l.session_id().to_string());
+    // Write the manifest when there are planned cluster items, a plan
+    // brief was discovered, or there's a claude session id to record so
+    // a later `--resume` can find this conversation.
+    // trace:STORY-98, TASK-95, TASK-112 | ai:claude
+    if plan.mode == QueueWorkMode::Cluster || plan_context.is_some() || claude_session_id.is_some()
+    {
+        write_queue_work_manifest(
+            &project_root,
+            &lease,
+            &plan,
+            plan_context.clone(),
+            claude_session_id,
+        )?;
+        if plan.mode == QueueWorkMode::Cluster {
+            eprintln!(
+                "  {} wrote manifest with {} planned item(s)",
+                "✓".green(),
+                plan.entries.len()
+            );
+        }
         if let Some(ctx) = &plan_context {
             eprintln!(
                 "  {} attached plan brief from {}",
@@ -39596,14 +39659,6 @@ fn handle_queue_work(
                 ctx.plan_file.cyan()
             );
         }
-    } else if let Some(ctx) = plan_context {
-        let plan_file = ctx.plan_file.clone();
-        write_queue_work_manifest(&project_root, &lease, &plan, Some(ctx))?;
-        eprintln!(
-            "  {} attached plan brief from {}",
-            "✓".green(),
-            plan_file.cyan()
-        );
     }
 
     if no_launch {
@@ -39646,20 +39701,42 @@ fn handle_queue_work(
     std::env::set_current_dir(&lease.worktree_path)
         .with_context(|| format!("failed to chdir into {}", lease.worktree_path.display()))?;
 
-    let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
+    // TASK-112: exec — resume the prior conversation, or cold-launch
+    // with the minted session id so this conversation is itself
+    // resumable later. trace:TASK-112 | ai:claude
+    let launch = launch.expect("launch decision is set when !no_launch");
     eprintln!();
-    eprintln!(
-        "{} {}",
-        "▶".green().bold(),
-        format!(
-            "launching claude in {} (permission-mode {}, prompt `{}`)",
-            lease.worktree_path.display(),
-            permission_mode,
-            prompt
-        )
-        .cyan()
-    );
-    session::exec_claude_with_prompt(&permission_mode, name.as_deref(), &prompt)
+    match launch {
+        QueueWorkLaunch::Resume(id) => {
+            eprintln!(
+                "{} {}",
+                "▶".green().bold(),
+                format!(
+                    "resuming claude session {} in {} (permission-mode {})",
+                    &id[..id.len().min(8)],
+                    lease.worktree_path.display(),
+                    permission_mode
+                )
+                .cyan()
+            );
+            session::exec_claude_resume(&id, Some(&permission_mode))
+        }
+        QueueWorkLaunch::Fresh(id) => {
+            let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
+            eprintln!(
+                "{} {}",
+                "▶".green().bold(),
+                format!(
+                    "launching claude in {} (permission-mode {}, prompt `{}`)",
+                    lease.worktree_path.display(),
+                    permission_mode,
+                    prompt
+                )
+                .cyan()
+            );
+            session::exec_claude_with_session(&permission_mode, name.as_deref(), &prompt, &id)
+        }
+    }
 }
 
 /// TASK-84: pure resolver for `aida queue work` permission-mode.
@@ -39807,6 +39884,7 @@ fn write_queue_work_manifest(
     lease: &SessionLease,
     plan: &QueueWorkPlan,
     plan_context: Option<session_manifest::PlanContext>,
+    claude_session_id: Option<String>,
 ) -> Result<()> {
     use crate::session_manifest::{ManifestItem, SessionManifest};
 
@@ -39827,12 +39905,207 @@ fn write_queue_work_manifest(
         session_id: lease.id.clone(),
         planned_at: chrono::Utc::now(),
         plan_source: "queue work".to_string(),
+        claude_session_id,
         plan: plan_context,
         items,
     };
     let path = session_manifest::manifest_path(project_root, &lease.id);
     session_manifest::save(&path, &manifest)?;
     Ok(())
+}
+
+/// TASK-112: how `aida queue work` should launch claude — a cold launch
+/// with a freshly-minted session id, or a resume of a recorded one.
+/// trace:TASK-112 | ai:claude
+enum QueueWorkLaunch {
+    /// Cold launch; the `String` is a freshly-minted UUID passed as
+    /// `claude --session-id` so the new conversation is itself resumable.
+    Fresh(String),
+    /// Resume a recorded conversation by its claude session id.
+    Resume(String),
+}
+
+impl QueueWorkLaunch {
+    fn session_id(&self) -> &str {
+        match self {
+            QueueWorkLaunch::Fresh(id) | QueueWorkLaunch::Resume(id) => id,
+        }
+    }
+}
+
+/// TASK-112: resolve a (possibly truncated) session id against the
+/// recorded sessions for a scope. Returns the full id on a unique match;
+/// a non-matching value of UUID-ish length is passed through verbatim
+/// (the user pasted a full id we didn't index). trace:TASK-112 | ai:claude
+fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
+    let matches: Vec<&String> = recorded
+        .iter()
+        .filter(|id| id.starts_with(requested))
+        .collect();
+    match matches.len() {
+        1 => Ok(matches[0].clone()),
+        0 if requested.len() >= 16 => Ok(requested.to_string()),
+        0 => anyhow::bail!(
+            "no recorded claude session matches `{}` — run \
+             `aida queue work <scope> --list-sessions` to see recorded ids",
+            requested
+        ),
+        n => anyhow::bail!(
+            "{} recorded sessions match `{}` — use a longer prefix",
+            n,
+            requested
+        ),
+    }
+}
+
+/// TASK-112: decide fresh-vs-resume for `aida queue work`. Called before
+/// the worktree is created so a bad `--resume` fails clean.
+///   * `--fresh`           → cold launch, new minted id
+///   * `--resume <id>`     → resume that id (prefix-matched)
+///   * bare `--resume`     → resume the most recent recorded session
+///   * neither, prior exists, interactive → prompt
+///   * neither, otherwise  → cold launch
+/// trace:TASK-112 | ai:claude
+fn resolve_queue_work_launch(
+    scope: &str,
+    resume: Option<&str>,
+    fresh: bool,
+) -> Result<QueueWorkLaunch> {
+    use std::io::IsTerminal;
+
+    let mint_fresh = || QueueWorkLaunch::Fresh(uuid::Uuid::now_v7().to_string());
+
+    if fresh {
+        return Ok(mint_fresh());
+    }
+
+    let prior = session::list_scope_sessions(scope).unwrap_or_default();
+
+    match resume {
+        // Explicit `--resume <id>`.
+        Some(id) if !id.is_empty() => {
+            let recorded: Vec<String> = prior.iter().map(|m| m.id.clone()).collect();
+            Ok(QueueWorkLaunch::Resume(resolve_resume_id(&recorded, id)?))
+        }
+        // Bare `--resume` — most recent recorded session for the scope.
+        Some(_) => {
+            let m = prior.first().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no recorded claude session for scope `{}` to resume — \
+                     drop --resume (or pass --fresh) to cold-launch",
+                    scope
+                )
+            })?;
+            Ok(QueueWorkLaunch::Resume(m.id.clone()))
+        }
+        // Default: prompt when prior sessions exist and we're
+        // interactive; cold-launch otherwise (non-interactive /
+        // autonomous runs default to fresh — no blocking prompt).
+        None => {
+            if prior.is_empty() || !std::io::stdin().is_terminal() {
+                return Ok(mint_fresh());
+            }
+            let fresh_label = "○  start a fresh session".to_string();
+            let mut labels: Vec<String> = vec![fresh_label.clone()];
+            for m in prior.iter().take(8) {
+                labels.push(session::format_session_line(m));
+            }
+            let pick = inquire::Select::new(
+                &format!(
+                    "{} prior claude session(s) for {} — resume one?",
+                    prior.len(),
+                    scope
+                ),
+                labels.clone(),
+            )
+            .with_help_message("↑↓ to move, Enter to choose")
+            .prompt()
+            .context("session-resume picker cancelled")?;
+            if pick == fresh_label {
+                Ok(mint_fresh())
+            } else {
+                let idx = labels
+                    .iter()
+                    .position(|l| l == &pick)
+                    .map(|p| p.saturating_sub(1))
+                    .unwrap_or(0);
+                Ok(QueueWorkLaunch::Resume(prior[idx].id.clone()))
+            }
+        }
+    }
+}
+
+/// TASK-112: `aida queue work <scope> --list-sessions` — print recorded
+/// claude conversations for the scope, newest first. trace:TASK-112
+fn print_scope_sessions(scope: &str) -> Result<()> {
+    let sessions = session::list_scope_sessions(scope)?;
+    if sessions.is_empty() {
+        println!(
+            "{}",
+            format!("(no recorded claude sessions for scope `{}`)", scope).dimmed()
+        );
+        println!(
+            "  {}",
+            "a session is recorded the first time `aida queue work` launches claude for this scope"
+                .dimmed()
+        );
+        return Ok(());
+    }
+    println!(
+        "{} claude session(s) for {} (most recent first):",
+        sessions.len(),
+        scope.cyan()
+    );
+    for m in &sessions {
+        println!("  {}", session::format_session_line(m));
+    }
+    println!();
+    println!(
+        "  {}",
+        format!(
+            "resume one:  aida queue work {} --resume <session-id>",
+            scope
+        )
+        .dimmed()
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod queue_work_resume_tests {
+    use super::*;
+
+    #[test]
+    fn resolve_resume_id_unique_prefix() {
+        let recorded = vec!["abc123def456".to_string(), "xyz789ghi012".to_string()];
+        assert_eq!(resolve_resume_id(&recorded, "abc").unwrap(), "abc123def456");
+    }
+
+    #[test]
+    fn resolve_resume_id_ambiguous_prefix_errs() {
+        let recorded = vec!["abc1".to_string(), "abc2".to_string()];
+        assert!(resolve_resume_id(&recorded, "abc").is_err());
+    }
+
+    #[test]
+    fn resolve_resume_id_passthrough_full_id() {
+        // No recorded match, but a UUID-ish-length id → passed through.
+        let recorded: Vec<String> = vec![];
+        let full = "0123456789abcdef0123";
+        assert_eq!(resolve_resume_id(&recorded, full).unwrap(), full);
+    }
+
+    #[test]
+    fn resolve_resume_id_short_no_match_errs() {
+        let recorded: Vec<String> = vec![];
+        assert!(resolve_resume_id(&recorded, "abc").is_err());
+    }
+
+    #[test]
+    fn queue_work_launch_session_id_accessor() {
+        assert_eq!(QueueWorkLaunch::Fresh("f".into()).session_id(), "f");
+        assert_eq!(QueueWorkLaunch::Resume("r".into()).session_id(), "r");
+    }
 }
 
 // trace:ARCH-github-integration | ai:claude
