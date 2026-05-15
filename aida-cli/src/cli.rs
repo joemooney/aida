@@ -361,6 +361,12 @@ pub enum SessionCommand {
     /// role + spec context extracted from each session's .jsonl. By
     /// default shows sessions with activity in the last 24 hours, up
     /// to 20 entries — `--all` bypasses the recency cutoff.
+    ///
+    /// This is the HISTORICAL view (past conversations). For the live
+    /// view of which scoped session leases are holding work right now,
+    /// use `aida session leases`. The two views answer different
+    /// questions; when in doubt for "what's running?" reach for
+    /// `aida session leases`. trace:BUG-98 | ai:claude
     List {
         /// Show at most N sessions (default 20).
         #[clap(long, short = 'n', default_value = "20")]
@@ -572,8 +578,14 @@ pub enum SessionCommand {
         skip_ci: bool,
     },
 
-    /// List active session leases (separately from the historical list
-    /// of past Claude Code sessions in `aida session list`).
+    /// List active session leases — the canonical "who holds what
+    /// scoped work right now" view.
+    ///
+    /// Separate from `aida session list`, which lists HISTORICAL Claude
+    /// Code conversations in this project (.jsonl files) — a different
+    /// concept that does NOT show the scoped leases `aida session start`
+    /// creates. For "what's running?" reach for `aida session leases`
+    /// first. trace:BUG-98 | ai:claude
     Leases {
         /// Probe live `claude` processes and warn about ones whose cwd is
         /// `(deleted)` (worktree was removed without ending claude — the
@@ -1216,6 +1228,34 @@ pub enum DbCommand {
     Block {
         #[clap(subcommand)]
         subcommand: BlockCommand,
+    },
+
+    /// Replay the Done → Completed auto-bump scan over a wider commit
+    /// range than `aida pull` saw, recovering specs that got stranded
+    /// at Done. STORY-86's pull-time auto-bump only scans commits the
+    /// current pull brings in; if a spec's YAML was unreadable at pull
+    /// time (BUG-96 deletion), or the user pulled before flipping the
+    /// spec to Done, the bump silently misses and the spec is stuck
+    /// without manual intervention. trace:TASK-226 | ai:claude
+    ReconcileStatus {
+        /// Bound the scan range. Accepts a commit SHA, a tag, or any
+        /// `git rev-parse`-able ref. Without --since, walks the most
+        /// recent 200 commits on the default branch (an over-broad
+        /// window is safe — only Done specs flip, so idempotent on
+        /// already-Completed specs).
+        #[clap(long, value_name = "REF")]
+        since: Option<String>,
+
+        /// Limit the replay to a single spec. Faster than the full
+        /// scan when you know which spec is stuck. The same default-
+        /// branch + status-Done guards apply.
+        #[clap(long, value_name = "SPEC-ID")]
+        spec: Option<String>,
+
+        /// Show what would flip without writing anything. Pairs with
+        /// `--since` / `--spec` for previewing a targeted replay.
+        #[clap(long)]
+        dry_run: bool,
     },
 
     /// Audit the store for consistency problems. Currently supports

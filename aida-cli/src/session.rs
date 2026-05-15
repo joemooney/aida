@@ -103,6 +103,7 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
         } else {
             eprintln!("{}", "(no past sessions in this directory)".dimmed());
         }
+        print_leases_hint();
         return Ok(());
     }
     fill_branches(&mut here);
@@ -140,7 +141,31 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
             .dimmed()
         );
     }
+    print_leases_hint();
     Ok(())
+}
+
+/// BUG-98: append a one-line nudge pointing at `aida session leases`
+/// when the project has any active scoped leases. `aida session list`
+/// shows historical .jsonl conversations — not the same set as the
+/// scoped-lease view — so users reaching here for "what's active"
+/// otherwise miss the leases entirely. We only print when there's
+/// something to point at; an empty-leases project gets no noise.
+/// trace:BUG-98 | ai:claude
+fn print_leases_hint() {
+    let count = crate::active_lease_count_for_cwd();
+    if count == 0 {
+        return;
+    }
+    let label = if count == 1 { "lease" } else { "leases" };
+    eprintln!(
+        "{}",
+        format!(
+            "({} active session {} — run `aida session leases` for the live view)",
+            count, label
+        )
+        .dimmed()
+    );
 }
 
 /// STORY-58: a friendly label for a project-root path — the basename when
