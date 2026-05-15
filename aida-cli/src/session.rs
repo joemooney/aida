@@ -361,7 +361,7 @@ pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
         Some(prefix) => resolve_id(&prefix)?,
         None => pick_interactive(limit)?,
     };
-    exec_claude_resume(&target)
+    exec_claude_resume(&target, None)
 }
 
 /// `aida session new` — capture role + title up-front, append a record
@@ -538,32 +538,48 @@ fn sanitize_for_tsv(s: &str) -> String {
 /// is `Some(...)`, also passes `--name <n>` so the launched session is
 /// labeled in the /resume picker and terminal title. trace:TASK-31 | ai:claude
 fn exec_claude_new(permission_mode: &str, name: Option<&str>) -> Result<()> {
-    exec_claude(permission_mode, name, None)
+    exec_claude(permission_mode, name, None, None)
 }
 
-/// STORY-42: replace this process with `claude --permission-mode <mode>
-/// [--name <n>] [<initial_prompt>]`. The initial prompt becomes claude's
-/// first message — pass `/aida-pickup` / `/aida-review --pr N` so the
-/// agent routes into the right skill on launch with no extra typing.
-/// trace:STORY-42 | ai:claude
-pub fn exec_claude_with_prompt(
+/// STORY-42 / TASK-112: replace this process with `claude
+/// --permission-mode <mode> [--name <n>] --session-id <uuid>
+/// <initial_prompt>`. The initial prompt becomes claude's first message
+/// — pass `/aida-pickup` / `/aida-review --pr N` so the agent routes
+/// into the right skill on launch with no extra typing. `aida queue
+/// work` mints the UUID up front so it can record it in the session
+/// manifest (and a later `--resume` can find the conversation) before
+/// `exec` replaces this process. `session_id` must be a valid UUID —
+/// claude rejects anything else. trace:STORY-42, TASK-112 | ai:claude
+pub fn exec_claude_with_session(
     permission_mode: &str,
     name: Option<&str>,
     initial_prompt: &str,
+    session_id: &str,
 ) -> Result<()> {
-    exec_claude(permission_mode, name, Some(initial_prompt))
+    exec_claude(
+        permission_mode,
+        name,
+        Some(initial_prompt),
+        Some(session_id),
+    )
 }
 
 fn exec_claude(
     permission_mode: &str,
     name: Option<&str>,
     initial_prompt: Option<&str>,
+    session_id: Option<&str>,
 ) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
     cmd.args(["--permission-mode", permission_mode]);
     if let Some(n) = name {
         cmd.args(["--name", n]);
+    }
+    // TASK-112: a caller-minted session id, so the conversation is
+    // addressable for `aida queue work --resume`.
+    if let Some(sid) = session_id {
+        cmd.args(["--session-id", sid]);
     }
     if let Some(p) = initial_prompt {
         // Positional first-message — claude treats trailing positionals
@@ -708,6 +724,77 @@ pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
     let encoded = s.replace('/', "-");
     let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;
     Ok(home.join(".claude/projects").join(encoded))
+}
+
+/// TASK-112: scan every Claude Code project directory under
+/// `~/.claude/projects/` and return recorded sessions whose first-mentioned
+/// SPEC-ID matches `scope` (case-insensitive), most recent first. Used by
+/// `aida queue work --resume` / `--list-sessions` to find a prior
+/// conversation to continue for a given scope — sessions launched in a
+/// since-removed worktree still surface, because the `.jsonl` files persist
+/// after `aida session end` removes the worktree.
+///
+/// Bounded: across all project dirs we parse only the 150
+/// most-recently-modified `.jsonl` files, so the scan stays fast even with
+/// hundreds of historical sessions. trace:TASK-112 | ai:claude
+pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
+    let home = dirs::home_dir().context("HOME not set; cannot locate Claude sessions")?;
+    let projects = home.join(".claude").join("projects");
+    if !projects.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut entries: Vec<(PathBuf, SystemTime)> = Vec::new();
+    if let Ok(dirs) = std::fs::read_dir(&projects) {
+        for dir in dirs.flatten() {
+            let p = dir.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let Ok(files) = std::fs::read_dir(&p) else {
+                continue;
+            };
+            for f in files.flatten() {
+                let fp = f.path();
+                if fp.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                if let Ok(mtime) = f.metadata().and_then(|m| m.modified()) {
+                    entries.push((fp, mtime));
+                }
+            }
+        }
+    }
+    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.truncate(150);
+
+    let now = SystemTime::now();
+    let want = scope.trim();
+    let mut out: Vec<SessionMeta> = entries
+        .into_iter()
+        .filter_map(|(path, mtime)| parse_session_meta(&path, mtime, now).ok())
+        .filter(|m| {
+            m.spec
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(want))
+                .unwrap_or(false)
+        })
+        .collect();
+    out.sort_by_key(|m| m.age_seconds);
+    Ok(out)
+}
+
+/// TASK-112: one-line summary of a recorded Claude session, for the
+/// `aida queue work --list-sessions` output. `<liveness> <id8>  <age>
+/// <role>  <title>`. trace:TASK-112 | ai:claude
+pub fn format_session_line(m: &SessionMeta) -> String {
+    format!(
+        "{} {:<8}  {:>4}  {:<11}  {}",
+        liveness_indicator(m.age_seconds),
+        &m.id[..m.id.len().min(8)],
+        humanize_age(m.age_seconds),
+        m.role.as_deref().unwrap_or("-"),
+        m.title.as_deref().unwrap_or("(untitled)"),
+    )
 }
 
 fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result<SessionMeta> {
@@ -1097,22 +1184,26 @@ fn resolve_id(prefix: &str) -> Result<String> {
 }
 
 /// Replace this process with `claude --resume <id>`. Falls back to spawn
-/// + wait on platforms without exec semantics.
-fn exec_claude_resume(id: &str) -> Result<()> {
+/// + wait on platforms without exec semantics. `permission_mode`, when
+/// given, is passed through so a resumed `aida queue work` session keeps
+/// the same permission posture as a fresh one. trace:TASK-112 | ai:claude
+pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>) -> Result<()> {
     use std::process::Command;
+    let mut cmd = Command::new("claude");
+    cmd.args(["--resume", id]);
+    if let Some(m) = permission_mode {
+        cmd.args(["--permission-mode", m]);
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
-        let err = Command::new("claude").args(["--resume", id]).exec();
+        let err = cmd.exec();
         // exec only returns on failure
         anyhow::bail!("failed to exec claude: {}", err);
     }
     #[cfg(not(unix))]
     {
-        let status = Command::new("claude")
-            .args(["--resume", id])
-            .status()
-            .context("failed to spawn claude")?;
+        let status = cmd.status().context("failed to spawn claude")?;
         std::process::exit(status.code().unwrap_or(1));
     }
 }

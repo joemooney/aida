@@ -80,6 +80,16 @@ pub struct SessionManifest {
     /// "user prompt" when /aida-pickup confirmed a user-specified cluster;
     /// "auto" when the skill defaulted to the head item. Free-form.
     pub plan_source: String,
+    /// TASK-112: the `claude` conversation this session launched with.
+    /// Recorded by `aida queue work` — either the UUID it minted for a
+    /// fresh launch (`claude --session-id <uuid>`) or the id it resumed
+    /// (`--resume`). Lets a later `aida queue work --resume <scope>` find
+    /// the conversation to continue. `None` for sessions launched before
+    /// TASK-112 or by paths that don't record it.
+    /// Declared as a scalar before `plan`/`items` so TOML serializes it
+    /// ahead of the `[plan]` table and `[[items]]` array-of-tables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_session_id: Option<String>,
     /// TASK-95: plan brief pre-populated from a matching `docs/plans/` file
     /// at `aida queue work` time. `None` when no plan file was found.
     /// Declared before `items` so TOML serialization emits the `[plan]`
@@ -297,6 +307,7 @@ mod tests {
             session_id: id.to_string(),
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
+            claude_session_id: None,
             plan: None,
             items: specs.iter().map(|(s, p)| item(s, *p)).collect(),
         }
@@ -394,6 +405,7 @@ mod tests {
             session_id: "abc12345".to_string(),
             planned_at: chrono::Utc::now(),
             plan_source: "user prompt".to_string(),
+            claude_session_id: None,
             plan: None,
             items: vec![item("STORY-1", 1), item("BUG-2", 2)],
         };
@@ -412,6 +424,7 @@ mod tests {
             session_id: "s1".to_string(),
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
+            claude_session_id: None,
             plan: None,
             items: vec![item("X", 1)],
         };
@@ -441,6 +454,7 @@ mod tests {
             session_id: "s1".to_string(),
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
+            claude_session_id: None,
             plan: None,
             items: vec![item("X", 1)],
         };

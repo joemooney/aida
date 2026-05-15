@@ -2358,6 +2358,31 @@ pub enum QueueCommand {
         /// trace:TASK-229 | ai:claude
         #[clap(long)]
         dry_run: bool,
+        /// Resume a prior `claude` conversation for this scope instead of
+        /// cold-launching. Bare `--resume` continues the most recent
+        /// recorded session for the scope; `--resume <session-id>` (or a
+        /// unique prefix) continues a specific one. The conversation's
+        /// JSONL persists after `aida session end` removes the worktree,
+        /// so a session can be resumed days later. Mutually exclusive
+        /// with `--fresh`. trace:TASK-112 | ai:claude
+        #[clap(
+            long,
+            value_name = "SESSION-ID",
+            num_args = 0..=1,
+            default_missing_value = "",
+            conflicts_with = "fresh"
+        )]
+        resume: Option<String>,
+        /// Force a cold launch even when prior `claude` sessions exist
+        /// for this scope — suppresses the default resume prompt.
+        /// trace:TASK-112 | ai:claude
+        #[clap(long)]
+        fresh: bool,
+        /// List the recorded `claude` sessions for this scope (most
+        /// recent first) and exit without launching a session.
+        /// trace:TASK-112 | ai:claude
+        #[clap(long)]
+        list_sessions: bool,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
