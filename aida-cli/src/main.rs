@@ -20063,6 +20063,97 @@ mod auto_bump_done_tests {
         );
     }
 
+    /// TASK-246: seed an In-Progress review story with a
+    /// `Review PR-<n>: <suffix>` title — the state a reviewer leaves it
+    /// in when requesting fixups. trace:TASK-246 | ai:claude
+    fn seed_inprogress_review_story(
+        store_path: &std::path::Path,
+        spec_id: &str,
+        pr_number: u64,
+        suffix: &str,
+    ) -> String {
+        let storage = Storage::new(store_path.to_path_buf());
+        let mut store = storage.load().unwrap_or_default();
+        let mut req = aida_core::Requirement::new(
+            format!("Review PR-{}: {}", pr_number, suffix),
+            String::new(),
+        );
+        req.spec_id = Some(spec_id.to_string());
+        req.req_type = aida_core::RequirementType::Story;
+        req.set_status_from_str("in-progress");
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        spec_id.to_string()
+    }
+
+    /// TASK-246: a review story left at In Progress when the user
+    /// self-merges the PR (no fresh /aida-review iteration) flips to
+    /// Completed on the next `aida pull`, with an audit comment.
+    /// trace:TASK-246 | ai:claude
+    #[test]
+    fn auto_bump_completes_inprogress_review_story_on_self_merge() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let review_id =
+            seed_inprogress_review_story(&store_path, "STORY-9501", 91, "fixup iteration");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(&project_root, &["commit", "-m", "Fixups land (#91)"]);
+        let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+        let storage = Storage::new(store_path.clone());
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "In-Progress review story should auto-complete on merge, was {:?}",
+            req.status
+        );
+        assert_eq!(
+            req.implementation_info
+                .as_ref()
+                .and_then(|i| i.completion_sha.as_deref()),
+            Some(merge_sha.as_str()),
+        );
+        assert!(
+            req.comments
+                .iter()
+                .any(|c| c.content.contains("without a re-review iteration")),
+            "an audit comment should be recorded on the auto-completed story"
+        );
+    }
+
+    /// TASK-246: an In-Progress review story whose PR has NOT merged is
+    /// left untouched — only the `(#N)` merge signal triggers the flip,
+    /// so an active review iteration is never stomped.
+    /// trace:TASK-246 | ai:claude
+    #[test]
+    fn auto_bump_leaves_inprogress_review_story_alone_without_merge() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let review_id =
+            seed_inprogress_review_story(&store_path, "STORY-9601", 92, "still reviewing");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        // A commit with NO `(#N)` suffix — the PR has not merged.
+        std::fs::write(project_root.join("file.txt"), "wip\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(&project_root, &["commit", "-m", "chore: unrelated work"]);
+
+        let storage = Storage::new(store_path.clone());
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::InProgress),
+            "review story stays In Progress until its PR merges, was {:?}",
+            req.status
+        );
+    }
+
     /// BUG-94 acceptance check: `aida db sync --pull` calls
     /// `auto_bump_done_to_completed` with `pre_sha = None`. The helper's
     /// HEAD~50 fallback range must catch any spec-referencing commit
@@ -27671,13 +27762,46 @@ fn auto_bump_done_to_completed(
             }
         }
     }
-    if flips.is_empty() {
+
+    // TASK-246: a review story left at In Progress when the user
+    // self-merges the PR (instead of running a fresh /aida-review
+    // iteration) never reaches Completed — auto-bump only handles
+    // Done → Completed and the reviewer skill never re-runs. The merge
+    // landing on the default branch IS the authoritative "review is
+    // over" signal, so for each merged `(#N)` PR flip its review story
+    // from In Progress to Completed too, with an audit comment.
+    // trace:TASK-246 | ai:claude
+    let mut inprogress_review_flips: Vec<(String, String, u64)> = Vec::new();
+    if !pr_to_sha.is_empty() {
+        for (pr_n, sha) in &pr_to_sha {
+            let Some(review_story) = store
+                .requirements
+                .iter()
+                .find(|r| parse_review_story_pr_number(&r.title) == Some(*pr_n))
+            else {
+                continue;
+            };
+            if !matches!(review_story.status, RequirementStatus::InProgress) {
+                continue;
+            }
+            let Some(spec_id) = review_story.spec_id.as_deref() else {
+                continue;
+            };
+            if flips.iter().any(|(id, _)| id == spec_id) {
+                continue;
+            }
+            inprogress_review_flips.push((spec_id.to_string(), sha.clone(), *pr_n));
+        }
+    }
+
+    if flips.is_empty() && inprogress_review_flips.is_empty() {
         return Ok(Vec::new());
     }
 
     // ── Step 5: atomic write ──
     let now = chrono::Utc::now();
     let flips_for_write = flips.clone();
+    let inprogress_for_write = inprogress_review_flips.clone();
     storage.update_atomically(|s| {
         for (spec_id, sha) in &flips_for_write {
             if let Some(r) = s
@@ -27701,6 +27825,37 @@ fn auto_bump_done_to_completed(
                 }
             }
         }
+        // TASK-246: In-Progress review stories whose PR just merged.
+        // Re-check `InProgress` inside the atomic window — keeps this
+        // idempotent (a second `aida pull` sees Completed and skips).
+        for (spec_id, sha, pr_n) in &inprogress_for_write {
+            if let Some(r) = s
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+            {
+                if !matches!(r.status, RequirementStatus::InProgress) {
+                    continue;
+                }
+                r.set_status_from_str("Completed");
+                r.modified_at = now;
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.completed_at.get_or_insert(now);
+                if info.completion_sha.is_none() {
+                    info.completion_sha = Some(sha.clone());
+                }
+                r.add_comment(aida_core::Comment::new(
+                    "aida-auto-bump".to_string(),
+                    format!(
+                        "Auto-completed: PR #{} merged without a re-review iteration \
+                         — the review story was left at In Progress.",
+                        pr_n
+                    ),
+                ));
+            }
+        }
     })?;
 
     // Filter the report to only specs we actually still flipped after
@@ -27716,6 +27871,41 @@ fn auto_bump_done_to_completed(
                 .unwrap_or(false)
         })
         .collect();
+
+    // TASK-246: report the In-Progress review stories that flipped to
+    // Completed. Kept separate from `confirmed` so the Done→Completed
+    // summary count stays accurate; printed here so every caller
+    // (`aida pull`, `aida db sync --pull`) surfaces it uniformly.
+    // trace:TASK-246 | ai:claude
+    let confirmed_inprogress: Vec<&(String, String, u64)> = inprogress_review_flips
+        .iter()
+        .filter(|(spec_id, _, _)| {
+            after
+                .get_requirement_by_spec_id(spec_id)
+                .map(|r| matches!(r.status, RequirementStatus::Completed))
+                .unwrap_or(false)
+        })
+        .collect();
+    if !confirmed_inprogress.is_empty() {
+        let n = confirmed_inprogress.len();
+        println!(
+            "  {} {} review stor{} → {} (PR merged without a re-review iteration)",
+            "auto-completed".cyan(),
+            n,
+            if n == 1 { "y" } else { "ies" },
+            "Completed".green().bold()
+        );
+        for (spec_id, _, pr_n) in &confirmed_inprogress {
+            println!(
+                "    {} {}",
+                spec_id.bold(),
+                format!("(PR #{})", pr_n).dimmed()
+            );
+        }
+    }
+    for (spec_id, _, _) in &confirmed_inprogress {
+        record_role_activity(spec_id, "auto-completed");
+    }
 
     // ── Step 6: activity log ──
     for (spec_id, _) in &confirmed {
