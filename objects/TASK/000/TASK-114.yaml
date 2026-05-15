@@ -58,12 +58,12 @@ description: |-
   - [ ] --dry-run flag works without side effects
   - [ ] make sync-templates relinks correctly
   - [ ] aida init scaffolds the skill
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:52:22.828568930Z
-modified_at: 2026-05-15T05:08:16.311401646Z
+modified_at: 2026-05-15T06:07:38.223648242Z
 req_type: Task
 tags:
 - automation
