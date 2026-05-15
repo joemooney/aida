@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:01.699959803Z
-modified_at: 2026-05-14T15:13:46.040524310Z
+modified_at: 2026-05-15T00:32:54.341990374Z
 req_type: Bug
 tags:
 - auto-bump
@@ -50,6 +50,18 @@ comments:
   content: 'Resolved by adding regression-test coverage (no code change needed). Verified end-to-end against handle_pull_command: the auto-bump sits inside the !store_only block (code-pull leg) at main.rs:22233, which fires for both default AND --code-only modes. The bug-as-filed misread the conditional — the actual block is gated by !store_only (skip code pull when store-only requested), not !code_only. Tests pull_code_only_triggers_auto_bump and pull_store_only_does_not_run_auto_bump lock the correct behavior. trace:BUG-95 | ai:claude'
   created_at: 2026-05-14T15:13:46.040524310Z
   modified_at: 2026-05-14T15:13:46.040524310Z
+- id: 019e290c-f045-7dc0-85c5-bc68e0a099f9
+  author: joe
+  content: |-
+    Verified-not-reproducible via PR-27 (commit df65ff4): https://github.com/joemooney/aida/pull/27
+
+    - Bug-as-filed claimed `aida pull --code-only` skipped the Done → Completed auto-bump because the call was nested in the wrong conditional. End-to-end audit of handle_pull_command showed the auto-bump call sits inside `if !store_only` (the code-pull leg), which correctly fires for both default AND --code-only modes
+    - Added two regression tests (`pull_code_only_triggers_auto_bump` + `pull_store_only_does_not_run_auto_bump`) using a bare git remote + project clone to exercise the path end-to-end
+    - No code change — just test coverage to lock the correct shape
+
+    Test status: 609/609 workspace tests green (2 new regression tests in handle_pull_command_tests)
+  created_at: 2026-05-15T00:32:54.341990374Z
+  modified_at: 2026-05-15T00:32:54.341990374Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:13:37.934151774Z
