@@ -18,6 +18,7 @@ use crate::event::TuiEvent;
 use crate::overlay::{self, OverlayModel};
 use crate::picker::{self, PickerState};
 use crate::pty::PtyHost;
+use crate::state::{self, TabRecord, TuiState};
 use crate::statusbar;
 use crate::tab::{SessionTab, TabManager};
 use crate::term::pty_rows;
@@ -136,6 +137,9 @@ pub struct App {
     /// The scope the TUI was launched with, if any — the picker offers
     /// resumable conversations for it. trace:STORY-134 | ai:claude
     launch_scope: Option<String>,
+    /// Project root (holds `.aida/`) — where the crash-recovery state
+    /// file lives. trace:STORY-135 | ai:claude
+    project_root: PathBuf,
     /// `ratatui` terminal, created lazily on the first modal open and
     /// reused for every subsequent draw of the overlay or picker. The
     /// supervisor's passthrough rendering writes raw bytes; this is only
@@ -202,6 +206,7 @@ impl App {
             activity: Vec::new(),
             picker: PickerState::empty(),
             launch_scope: None,
+            project_root: PathBuf::new(),
             ratatui_term: None,
         }
     }
@@ -320,17 +325,56 @@ impl App {
         }
     }
 
-    /// Run the supervisor loop until the user quits or detaches. Hosts
-    /// the optional `scope` in the first tab; with `None`, opens an empty
-    /// shell — `prefix n` then populates it from the picker (STORY-134).
-    pub fn run(&mut self, scope: Option<String>) -> Result<ExitKind> {
+    /// Run the supervisor loop until the user quits or detaches.
+    ///
+    /// On launch (STORY-135) any sessions a prior crashed-or-detached TUI
+    /// left in `.aida/tui-state.json` are re-attached first (unless
+    /// `no_recover`), then the freshly-requested `scope` is hosted. With
+    /// neither, an empty shell opens — `prefix n` populates it.
+    pub fn run(
+        &mut self,
+        project_root: PathBuf,
+        scope: Option<String>,
+        no_recover: bool,
+    ) -> Result<ExitKind> {
+        self.project_root = project_root;
         self.term_size = terminal::size().unwrap_or((80, 24));
         self.launch_scope = scope.clone();
         let (tx, rx) = mpsc::channel::<TuiEvent>();
 
+        // STORY-135: re-attach orphaned sessions before hosting the
+        // requested scope. `--no-recover` discards the stale state so a
+        // later launch doesn't pick it up either.
+        let mut recovered = 0usize;
+        if no_recover {
+            state::clear(&self.project_root);
+        } else if let Some(prior) = state::load(&self.project_root) {
+            for rec in prior.tabs {
+                if self.tabs.len() >= self.config.max_tabs {
+                    break;
+                }
+                if self
+                    .spawn_tab(&rec.scope, TabLaunch::Resume(rec.session_id), tx.clone())
+                    .is_ok()
+                {
+                    recovered += 1;
+                }
+            }
+        }
+
         if let Some(scope) = scope {
-            self.spawn_tab(&scope, TabLaunch::Fresh, tx.clone())
-                .with_context(|| format!("failed to host session for `{}`", scope))?;
+            // Don't double-host a scope a recovered tab already covers.
+            let already_hosted = self.tabs.iter().any(|t| t.scope == scope);
+            if !already_hosted && self.tabs.len() < self.config.max_tabs {
+                self.spawn_tab(&scope, TabLaunch::Fresh, tx.clone())
+                    .with_context(|| format!("failed to host session for `{}`", scope))?;
+            }
+        }
+        if recovered > 0 {
+            self.badge = Some(format!(
+                "recovered {} session(s) from a prior TUI",
+                recovered
+            ));
         }
 
         spawn_input_thread(tx.clone());
@@ -348,9 +392,18 @@ impl App {
             .map(|t| (t.scope.clone(), t.session_id.clone()))
             .collect();
 
+        // STORY-135: a clean quit / session-end has nothing to recover —
+        // drop the state file. A `prefix d` detach leaves it in place so
+        // the next launch re-attaches the conversations.
+        match exit {
+            ExitKind::Quit | ExitKind::SessionEnded => state::clear(&self.project_root),
+            ExitKind::Detached => {}
+        }
+
         // Tear children down explicitly (PtyHost::Drop also kills, but an
-        // explicit pass keeps the intent visible). STORY-5 will make a
-        // detach record the sessions for re-attach instead of killing.
+        // explicit pass keeps the intent visible). The conversations are
+        // durable `.jsonl` files — a detach re-attaches them via the
+        // state file, regardless of the child process's fate.
         for tab in self.tabs.iter_mut() {
             tab.pty.kill();
         }
@@ -410,6 +463,8 @@ impl App {
                 TuiEvent::PtyExited { tab } => {
                     if let Some(idx) = self.tab_index(tab) {
                         self.tabs.remove(idx);
+                        // STORY-135: the recoverable tab set just shrank.
+                        self.persist_state();
                     }
                     // A hosted session that has ended takes the TUI with
                     // it; the no-scope empty shell (never had a tab)
@@ -692,7 +747,24 @@ impl App {
         };
         self.tabs.add(tab)?;
         self.had_tabs = true;
+        // STORY-135: the recoverable tab set just changed.
+        self.persist_state();
         Ok(())
+    }
+
+    /// Write the live tab set to `.aida/tui-state.json` so a crash or
+    /// `prefix d` detach can re-attach the sessions on the next launch.
+    /// trace:STORY-135 | ai:claude
+    fn persist_state(&self) {
+        let tabs = self
+            .tabs
+            .iter()
+            .map(|t| TabRecord {
+                session_id: t.session_id.clone(),
+                scope: t.scope.clone(),
+            })
+            .collect();
+        state::save(&self.project_root, &TuiState { tabs });
     }
 
     /// Whether stable tab id `id` is the currently focused tab.
