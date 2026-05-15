@@ -323,6 +323,14 @@ fn run() -> Result<()> {
         );
     }
 
+    // `aida tui` is the EPIC-26 TUI shell — a process supervisor that
+    // holds no storage handle (it shells out to `aida` subcommands), so
+    // it dispatches before storage init like Goal / Statusline.
+    // trace:STORY-132 | ai:claude
+    if let Command::Tui { scope, no_recover } = &cli.command {
+        return handle_tui_command(scope.clone(), *no_recover);
+    }
+
     // Roles + statusline dispatch before storage init — roles are TOML
     // files at .aida/roles/, statusline reads the cache directly.
     if let Command::Role(role_cmd) = &cli.command {
@@ -620,6 +628,7 @@ fn run() -> Result<()> {
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
+        Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
@@ -1667,6 +1676,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
+        Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
@@ -25070,6 +25080,25 @@ fn build_goal_clauses(
     Ok(clauses)
 }
 
+/// EPIC-26: launch the AIDA TUI shell. Gated behind the `tui` feature
+/// (default-off until STORY-6) — the `aida tui` subcommand stays visible
+/// in `--help` either way, but a binary built without the feature errors
+/// clearly instead of half-running. trace:STORY-132 | ai:claude
+#[cfg(feature = "tui")]
+fn handle_tui_command(scope: Option<String>, no_recover: bool) -> Result<()> {
+    aida_tui::run(aida_tui::TuiOptions { scope, no_recover })
+}
+
+/// Stub for binaries built without the `tui` feature.
+/// trace:STORY-132 | ai:claude
+#[cfg(not(feature = "tui"))]
+fn handle_tui_command(_scope: Option<String>, _no_recover: bool) -> Result<()> {
+    anyhow::bail!(
+        "the `aida tui` shell is not compiled into this binary — rebuild \
+         aida-cli with `--features tui` (EPIC-26 is default-off until STORY-6)"
+    )
+}
+
 /// Join clauses into a single `/goal`-pasteable condition string. Each
 /// clause inlines its verification command so a Haiku-class evaluator
 /// can check it deterministically. trace:TASK-242 | ai:claude
@@ -39278,6 +39307,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             resume,
             fresh,
             list_sessions,
+            session_id,
             user,
         } => {
             let user_id = get_user(user);
@@ -39393,6 +39423,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 resume.as_deref(),
                 *fresh,
                 *list_sessions,
+                session_id.as_deref(),
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -40138,6 +40169,7 @@ fn handle_queue_rework(
             /* resume */ None,
             /* fresh */ false,
             /* list_sessions */ false,
+            /* session_id */ None,
         )?;
     } else {
         println!(
@@ -40756,7 +40788,15 @@ fn handle_queue_work(
     resume: Option<&str>,
     fresh: bool,
     list_sessions: bool,
+    session_id: Option<&str>,
 ) -> Result<()> {
+    // STORY-132: validate a caller-minted --session-id up front — before
+    // any side effect — so a malformed id fails clean with a clear
+    // message rather than surfacing deep in session setup.
+    if let Some(sid) = session_id {
+        uuid::Uuid::parse_str(sid)
+            .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
+    }
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
 
     // TASK-112: `--list-sessions` is a pure read — print the recorded
@@ -40777,6 +40817,7 @@ fn handle_queue_work(
             &plan.anchor_display,
             resume,
             fresh,
+            session_id,
         )?)
     };
 
@@ -41020,9 +41061,17 @@ fn handle_queue_work(
     // trace:TASK-95 | ai:claude
     let plan_context = discover_plan_context(&project_root, &plan.anchor_display);
     // TASK-112: the claude session id to record in the manifest — the
-    // UUID minted for a fresh launch, or the id being resumed. `None`
-    // under --no-launch (no conversation to record).
-    let claude_session_id: Option<String> = launch.as_ref().map(|l| l.session_id().to_string());
+    // UUID minted for a fresh launch, or the id being resumed.
+    // STORY-132: a caller-minted `--session-id` is recorded even under
+    // `--no-launch` (the TUI sets up a session then hosts the launch
+    // itself), so the manifest carries the id either way.
+    let claude_session_id: Option<String> = match (&launch, session_id) {
+        (Some(l), _) => Some(l.session_id().to_string()),
+        // --no-launch + caller-minted id: record it so the manifest
+        // carries it (already validated as a UUID at function entry).
+        (None, Some(sid)) => Some(sid.to_string()),
+        (None, None) => None,
+    };
     // Write the manifest when there are planned cluster items, a plan
     // brief was discovered, or there's a claude session id to record so
     // a later `--resume` can find this conversation.
@@ -41308,6 +41357,7 @@ fn write_queue_work_manifest(
 /// TASK-112: how `aida queue work` should launch claude — a cold launch
 /// with a freshly-minted session id, or a resume of a recorded one.
 /// trace:TASK-112 | ai:claude
+#[derive(Debug)]
 enum QueueWorkLaunch {
     /// Cold launch; the `String` is a freshly-minted UUID passed as
     /// `claude --session-id` so the new conversation is itself resumable.
@@ -41351,20 +41401,33 @@ fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
 
 /// TASK-112: decide fresh-vs-resume for `aida queue work`. Called before
 /// the worktree is created so a bad `--resume` fails clean.
+///   * `--session-id <uuid>` → cold launch with that caller-minted id
+///     (STORY-132 — the TUI tracks the conversation deterministically)
 ///   * `--fresh`           → cold launch, new minted id
 ///   * `--resume <id>`     → resume that id (prefix-matched)
 ///   * bare `--resume`     → resume the most recent recorded session
 ///   * neither, prior exists, interactive → prompt
 ///   * neither, otherwise  → cold launch
-/// trace:TASK-112 | ai:claude
+/// trace:TASK-112, STORY-132 | ai:claude
 fn resolve_queue_work_launch(
     scope: &str,
     resume: Option<&str>,
     fresh: bool,
+    session_id_override: Option<&str>,
 ) -> Result<QueueWorkLaunch> {
     use std::io::IsTerminal;
 
     let mint_fresh = || QueueWorkLaunch::Fresh(uuid::Uuid::now_v7().to_string());
+
+    // STORY-132: a caller-minted session id is a fresh cold launch with
+    // that exact UUID — validated up front so a malformed id fails clean
+    // before any worktree side effects. Clap already makes it mutually
+    // exclusive with `--resume`.
+    if let Some(sid) = session_id_override {
+        uuid::Uuid::parse_str(sid)
+            .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
+        return Ok(QueueWorkLaunch::Fresh(sid.to_string()));
+    }
 
     if fresh {
         return Ok(mint_fresh());
@@ -41496,6 +41559,25 @@ mod queue_work_resume_tests {
     fn queue_work_launch_session_id_accessor() {
         assert_eq!(QueueWorkLaunch::Fresh("f".into()).session_id(), "f");
         assert_eq!(QueueWorkLaunch::Resume("r".into()).session_id(), "r");
+    }
+
+    #[test]
+    fn queue_work_session_id_override_threads_through() {
+        // STORY-132: a caller-minted UUID becomes the Fresh launch id
+        // verbatim, instead of the auto-generated `Uuid::now_v7()`.
+        let uuid = "019e2cb7-a2cd-7782-a503-f0daf2b8df82";
+        let launch = resolve_queue_work_launch("EPIC-26", None, false, Some(uuid)).unwrap();
+        assert!(matches!(launch, QueueWorkLaunch::Fresh(_)));
+        assert_eq!(launch.session_id(), uuid);
+    }
+
+    #[test]
+    fn queue_work_rejects_non_uuid_session_id() {
+        // STORY-132: a malformed `--session-id` fails clean, before any
+        // worktree side effects, with a UUID-flavored message.
+        let err =
+            resolve_queue_work_launch("EPIC-26", None, false, Some("not-a-uuid")).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("uuid"));
     }
 }
 
