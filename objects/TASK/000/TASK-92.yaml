@@ -99,12 +99,12 @@ description: |-
   - [ ] CLAUDE.md plan-archival section references the template + symbol-ref convention
   - [ ] /aida-plan skill (existing) updated to mention the template
   - [ ] At least one existing docs/plans/ file retrofitted as worked example (STORY-86 plan from 2026-05-13 is a natural candidate)
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T02:23:27.442361366Z
-modified_at: 2026-05-15T05:08:30.422832220Z
+modified_at: 2026-05-15T06:07:25.712085311Z
 req_type: Task
 tags:
 - batch:plan-tooling
