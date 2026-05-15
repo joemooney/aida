@@ -55,10 +55,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T14:29:59.179320451Z
-modified_at: 2026-05-15T14:29:59.179320451Z
+modified_at: 2026-05-15T14:39:27.052912661Z
 req_type: Bug
 tags:
 - auto-bump
+- batch:lifecycle
 - bug-102-followup
 - cluster-pr
 - pr-linkage
