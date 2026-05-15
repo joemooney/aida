@@ -1,0 +1,91 @@
+id: 019e2bdc-9aa7-7c31-93ac-81a4d344d07b
+spec_id: TASK-244
+agreed_id: TASK-244
+title: PS1 'role:X' prefix shows shell-persistent role, not active session's role — surfaces mismatch when they disagree
+description: |-
+  AIDA's PS1 prefix (e.g., '(role:implementer)') is set by 'aida role enter <name>' and persists in the shell across sessions. It does NOT reflect the role of the currently active AIDA session. When these disagree, users see a misleading state signal.
+
+  ## Observed 2026-05-15
+
+  After shipping PR-30:
+  1. User's implementer AIDA session ended cleanly (auto-closed via /aida-pr flow)
+  2. User ran 'aida queue work PR-30' to spawn reviewer AIDA session 019e2bd3
+  3. User resumed the implementer Claude conversation via 'claude --resume f82f45c1...'
+  4. Shell PS1 still says '(role:implementer)' because that's persistent
+  5. User ran 'aida session end' — got prompt about session 019e2bd3 (the REVIEWER one, only active AIDA session)
+  6. User: 'I thought I just exited an implementer session, not a reviewer session'
+
+  The confusion is real: shell signals implementer, AIDA's only active session is reviewer, resumed Claude conversation is implementer's transcript. Three different role signals disagreeing.
+
+  ## Three role signals the user sees
+
+  1. **PS1 prefix** (shell-persistent): set by 'aida role enter <name>'; survives across multiple sessions
+  2. **AIDA session role** (per-session): captured at 'aida queue work' / 'aida session start'; visible in 'aida session leases' table's ROLE column
+  3. **Claude conversation role** (per-transcript): whatever role was active when the Claude conversation started
+
+  Today users have to mentally reconcile these when they disagree.
+
+  ## Proposed fix
+
+  Three options, ordered easiest-to-most-thorough:
+
+  ### A. Augment PS1 to show both roles when they disagree
+
+  When shell role != active AIDA session role, show both:
+
+    (role:implementer ⚠ active session: reviewer) (aida-debug) joe@imac:~/ai/aida$
+
+  The warning glyph signals the mismatch. User can clear by 'aida role end' or 'aida role enter <matching-role>'.
+
+  ### B. Make PS1 reflect active AIDA session role (not shell-persistent)
+
+  Replace the shell-persistent role with the active session's role. When no session active, show '(role:none)' or omit. This is more architecturally correct but breaks the 'I'm working in implementer headspace' shell-state intent.
+
+  ### C. Two-prefix approach
+
+  Show both unconditionally:
+
+    (shell:implementer | session:reviewer) (aida-debug) joe@imac:~/ai/aida$
+
+  Cleaner separation. Users see the distinction always.
+
+  Recommended: Option A (warn on mismatch). Preserves the shell-persistent intent but flags disagreement.
+
+  ## Composes with
+
+  - TASK-243 (filed minutes ago): aida session end shows role in ambiguity prompt — same theme, different surface
+  - TASK-236 / TASK-237 (in overnight queue): session list display polish — siblings
+  - BUG-98 (shipped): session list vs leases consistency — related coherence work
+  - STORY-127 (workflow state-aware guidance): surfaces should help name state without user mental reconciliation — this TASK is an instance
+
+  ## Why medium priority
+
+  The mismatch IS misleading in practice (user-confused 2026-05-15) and causes wrong mental model. Easy to fix at PS1 generation time. Not blocking workflow but real cognitive overhead.
+
+  ## Acceptance
+
+  - [ ] aida statusline (which feeds PS1) detects shell-role vs active-session-role mismatch
+  - [ ] When mismatched, surface both with a clear glyph or label
+  - [ ] When matched (the common case), behavior unchanged
+  - [ ] Configurable via aida.toml [statusline] section
+  - [ ] Tests cover: matching state, mismatch state, no-active-session state
+
+  ## Discovered via
+
+  2026-05-15 — user observed: 'I thought I just exited an implementer session, not a reviewer session, we finished that session by opening a pr.' The shell PS1 said implementer but the only active AIDA session was reviewer — three role signals were disagreeing simultaneously.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T13:38:58.343338812Z
+modified_at: 2026-05-15T13:38:58.343338812Z
+req_type: Task
+tags:
+- mismatch
+- prompt
+- ps1
+- role
+- session-role
+- shell
+- trojan-horse-depth
+- ux
