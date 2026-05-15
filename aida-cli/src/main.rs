@@ -22929,6 +22929,192 @@ fn parse_squash_pr_number(subject: &str) -> Option<u64> {
         .and_then(|n| n.parse::<u64>().ok())
 }
 
+/// TASK-234: render the "Done — awaiting merge" body grouped by PR +
+/// state instead of as a flat list. Three buckets, each with a concrete
+/// `▶ Next` action:
+///   * Stuck — the referencing commit is already on main but the spec
+///     never bumped to Completed (auto-bump missed). Detected purely
+///     locally (`merge-base --is-ancestor`), so it works without `gh`.
+///   * Awaiting merge — the commit is on a feature branch; grouped by
+///     branch, with one `gh` open-PR lookup per branch.
+///   * Awaiting commit — Done but nothing references the spec id yet.
+/// trace:TASK-234 | ai:claude
+fn render_in_flight_grouped(specs: &[&aida_core::Requirement], project_root: &std::path::Path) {
+    use std::collections::BTreeMap;
+    use std::process::Command as PCmd;
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+    };
+    let is_ancestor = |sha: &str, target: &str| -> bool {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["merge-base", "--is-ancestor", sha, target])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+    let main_ref = if git(&["rev-parse", "--verify", "--quiet", "origin/main"]).is_some() {
+        "origin/main"
+    } else {
+        "main"
+    };
+
+    // Buckets.
+    let mut stuck: Vec<(String, Option<u64>, String)> = Vec::new(); // (id, pr, ago)
+    let mut awaiting: BTreeMap<String, Vec<String>> = BTreeMap::new(); // branch -> ids
+    let mut no_commit: Vec<String> = Vec::new();
+
+    for req in specs {
+        let id = req
+            .agreed_id
+            .as_deref()
+            .or(req.spec_id.as_deref())
+            .unwrap_or("???")
+            .to_string();
+        // Newest commit referencing the AIDA `(SPEC-ID)` format.
+        let pattern = format!("({})", id);
+        let line = git(&[
+            "log",
+            "--all",
+            "-F",
+            "-1",
+            "--grep",
+            pattern.as_str(),
+            "--pretty=format:%H\u{1f}%s\u{1f}%cr",
+        ])
+        .unwrap_or_default();
+        let mut parts = line.splitn(3, '\u{1f}');
+        let (Some(full), subject, ago) = (
+            parts.next().filter(|s| !s.is_empty()),
+            parts.next().unwrap_or(""),
+            parts.next().unwrap_or("recently"),
+        ) else {
+            no_commit.push(id);
+            continue;
+        };
+        if is_ancestor(full, main_ref) {
+            stuck.push((id, parse_squash_pr_number(subject), ago.to_string()));
+        } else {
+            let contains = git(&[
+                "branch",
+                "--all",
+                "--contains",
+                full,
+                "--format=%(refname:short)",
+            ])
+            .unwrap_or_default();
+            let branch = contains
+                .lines()
+                .map(|b| b.trim().trim_start_matches("origin/"))
+                .filter(|b| !b.is_empty() && *b != "HEAD" && *b != "main" && *b != "master")
+                .map(|b| b.to_string())
+                .next()
+                .unwrap_or_else(|| "(branch unknown)".to_string());
+            awaiting.entry(branch).or_default().push(id);
+        }
+    }
+
+    // ---- Awaiting merge, grouped by branch (one gh lookup per branch) ----
+    for (branch, ids) in &awaiting {
+        let pr = match detect_open_pr_for_branch(project_root, branch) {
+            PrLookup::Found(pr) => Some(pr),
+            _ => None,
+        };
+        match &pr {
+            Some(pr) => println!(
+                "  {} {} — {} spec{}:",
+                format!("PR-{}", pr.number).cyan().bold(),
+                "(open)".dimmed(),
+                ids.len(),
+                if ids.len() == 1 { "" } else { "s" }
+            ),
+            None => println!(
+                "  {} {} — {} spec{}:",
+                branch.cyan().bold(),
+                "(no PR opened yet)".dimmed(),
+                ids.len(),
+                if ids.len() == 1 { "" } else { "s" }
+            ),
+        }
+        println!(
+            "    {} {}",
+            "◐".bright_green(),
+            ids.iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join("  ")
+        );
+        match &pr {
+            Some(pr) => println!(
+                "    {} merge {}, then `{}`",
+                "▶ Next:".bold(),
+                format!("PR-{}", pr.number).cyan(),
+                "aida pull".cyan()
+            ),
+            None => println!(
+                "    {} open a PR (`{}`), then merge → `{}`",
+                "▶ Next:".bold(),
+                "/aida-pr".cyan(),
+                "aida pull".cyan()
+            ),
+        }
+    }
+
+    // ---- Stuck — auto-bump missed ----
+    if !stuck.is_empty() {
+        if !awaiting.is_empty() {
+            println!();
+        }
+        println!(
+            "  {} ({} spec{}):",
+            "Stuck — PR merged, auto-bump missed".yellow().bold(),
+            stuck.len(),
+            if stuck.len() == 1 { "" } else { "s" }
+        );
+        for (id, pr, ago) in &stuck {
+            let pr_note = pr
+                .map(|n| format!("(#{}, {})", n, ago))
+                .unwrap_or_else(|| format!("(merged {})", ago));
+            println!("    {} {}  {}", "◐".yellow(), id.bold(), pr_note.dimmed());
+        }
+        println!(
+            "    {} `{}` replays the missed bumps to Completed",
+            "▶ Next:".bold(),
+            "aida db reconcile-status".cyan()
+        );
+    }
+
+    // ---- Awaiting commit ----
+    if !no_commit.is_empty() {
+        if !awaiting.is_empty() || !stuck.is_empty() {
+            println!();
+        }
+        println!(
+            "  {} ({} spec{}):",
+            "Awaiting commit — no commit references the spec yet"
+                .dimmed()
+                .bold(),
+            no_commit.len(),
+            if no_commit.len() == 1 { "" } else { "s" }
+        );
+        println!("    {} {}", "◐".dimmed(), no_commit.join("  "));
+        println!(
+            "    {} commit the work with `({})` in the message, then open a PR",
+            "▶ Next:".bold(),
+            "SPEC-ID".cyan()
+        );
+    }
+}
+
 /// TASK-241: surface git linkage for a spec inside `aida show` — the
 /// commits that reference it (AIDA commit format puts `(SPEC-ID)` in
 /// the message), the files carrying its `trace:` comments, the branch +
@@ -36309,67 +36495,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     if in_flight_specs.len() == 1 { "" } else { "s" }
                 );
                 println!("{}", "─".repeat(80));
-                // Stable order: most-recently-implemented first so the
-                // freshly-shipped work surfaces at the top. Falls back to
-                // spec_id when timestamps are missing.
-                let mut sorted: Vec<&aida_core::Requirement> = in_flight_specs.clone();
-                sorted.sort_by(|a, b| {
-                    let a_ts = a
-                        .implementation_info
-                        .as_ref()
-                        .and_then(|i| i.implemented_at);
-                    let b_ts = b
-                        .implementation_info
-                        .as_ref()
-                        .and_then(|i| i.implemented_at);
-                    match (a_ts, b_ts) {
-                        (Some(a), Some(b)) => b.cmp(&a),
-                        (Some(_), None) => std::cmp::Ordering::Less,
-                        (None, Some(_)) => std::cmp::Ordering::Greater,
-                        (None, None) => a
-                            .agreed_id
-                            .as_deref()
-                            .unwrap_or("")
-                            .cmp(b.agreed_id.as_deref().unwrap_or("")),
-                    }
-                });
-                for req in &sorted {
-                    let display_id = req
-                        .agreed_id
-                        .as_deref()
-                        .or(req.spec_id.as_deref())
-                        .unwrap_or("???");
-                    let ago = req
-                        .implementation_info
-                        .as_ref()
-                        .and_then(|i| i.implemented_at)
-                        .map(|t| {
-                            let elapsed = chrono::Utc::now().signed_duration_since(t);
-                            if elapsed.num_minutes() < 1 {
-                                "just now".to_string()
-                            } else if elapsed.num_hours() < 1 {
-                                format!("{}m ago", elapsed.num_minutes())
-                            } else if elapsed.num_days() < 1 {
-                                format!("{}h ago", elapsed.num_hours())
-                            } else {
-                                format!("{}d ago", elapsed.num_days())
-                            }
-                        })
-                        .unwrap_or_else(|| "awaiting merge".to_string());
-                    println!(
-                        "  {} {}  {}  [{}]",
-                        "◐".bright_green(),
-                        display_id.bold(),
-                        req.title,
-                        ago.dimmed(),
-                    );
-                }
-                println!();
-                println!(
-                    "{}",
-                    "  (auto-bump to Completed fires when a commit referencing the spec lands on the default branch — `aida pull`)"
-                        .dimmed()
-                );
+                // TASK-234: grouped render — bucket the Done specs by PR
+                // + state (awaiting merge / stuck / awaiting commit),
+                // each with a concrete ▶ Next action, instead of a flat
+                // list under one descriptive hint. trace:TASK-234
+                let project_root = storage
+                    .path()
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                render_in_flight_grouped(&in_flight_specs, &project_root);
                 if !*in_flight_only {
                     println!(
                         "{}",
