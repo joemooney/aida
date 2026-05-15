@@ -111,7 +111,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:35:41.965231513Z
-modified_at: 2026-05-15T06:28:01.801249602Z
+modified_at: 2026-05-15T06:44:19.584090786Z
 req_type: Story
 tags:
 - composition
@@ -249,3 +249,37 @@ comments:
     Anthropic's earlier in-session loop primitive (Ralph plugin) suffered context rot — each iteration accumulated context in the same conversation. Bash wrappers were the manual workaround. /goal is the native, context-rot-free version: each loop iteration is a fresh model turn, evaluator runs as a separate model. This matches the same anti-anchoring principle as /ultraplan's 3-explorers + 1-critic (vs-ultraplan.md documents this principle).
   created_at: 2026-05-15T06:28:01.801249602Z
   modified_at: 2026-05-15T06:28:01.801249602Z
+- id: 019e2a60-fc00-7563-86ed-91aa6c54b2cf
+  author: joe
+  content: |-
+    Clarification 2026-05-14 from the Buildur /goal cheatsheet: there are FOUR distinct autonomy primitives in Claude Code, not one stack:
+
+    | Primitive | Trigger | Best for |
+    | /goal | Previous turn finishes | Tasks with clear verifiable end state (completion-driven) |
+    | /loop | A time interval elapses | Polling, monitoring, repeated checks (time-driven — DIFFERENT from /goal) |
+    | Stop hook | Previous turn finishes | Custom evaluation logic across all sessions (user extensibility point) |
+    | Auto mode | Within a single turn only | Removing PER-TOOL approval prompts (not per-turn) |
+
+    Plus the orchestration layer:
+    - /schedule — cadence (cron-like)
+    - Agent view — visual observability for autonomous runs
+
+    My earlier framing conflated /loop with /goal. They're different temporally:
+    - /goal asks 'is the work done?' between turns (completion)
+    - /loop asks 'has time elapsed?' between turns (cadence)
+
+    Stop hook is interesting for AIDA: it's an EXTENSIBILITY POINT. AIDA could ship a stop-hook variant of its checkpoint primitives (e.g., 'stop and require user confirmation if more than 10 specs would flip status in one turn'). Worth a follow-up TASK if we decide to expose this.
+
+    For STORY-125's v1 integration table, expand to:
+
+    | Tool | Project trigger | AIDA-side integration |
+    | /goal | autonomous batch drain | TASK-242 (aida goal-helper, just refined per cheatsheet) |
+    | /loop | recurring health checks | NEW — 'aida loop X minutes' to schedule periodic aida queue list, aida db reconcile-status, etc. |
+    | /schedule | cadence-driven autonomy | NEW — 'aida schedule' helpers for nightly drains, morning triage, weekly cleanup |
+    | Stop hook | custom checkpoint logic | NEW — AIDA stop-hook patterns for write-safety, batch-completion verification |
+    | Auto mode | unattended within-turn | (consumed by /goal + /loop; no AIDA-specific integration needed) |
+    | Agent view | monitor autonomous runs | TUI's status overlay overlaps here — EPIC-26 |
+
+    The four primitives aren't all worth filing immediate AIDA integrations — /goal is the highest-leverage. The others are noted for completeness.
+  created_at: 2026-05-15T06:44:19.584090786Z
+  modified_at: 2026-05-15T06:44:19.584090786Z
