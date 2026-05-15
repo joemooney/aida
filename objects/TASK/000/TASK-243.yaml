@@ -1,0 +1,67 @@
+id: 019e2bd8-969d-77e2-9e7f-be4d8f756416
+spec_id: TASK-243
+agreed_id: TASK-243
+title: 'aida session end: print role + claude-session-id in ambiguity-resolution prompt'
+description: |-
+  When aida session end resolves to a single session (the 'Only one active session: ID (scope X, branch Y)' message before asking for confirmation), it shows session ID + scope + branch but NOT role. Users with multiple session types active (implementer + reviewer concurrently) can't tell which session they're about to end without separate verification.
+
+  ## Observed 2026-05-15
+
+  After spawning a reviewer session via 'aida queue work PR-30' and exiting the Claude conversation, user ran 'aida session end' and got:
+
+    Only one active session: 019e2bd3 (scope PR-30, branch pr-30)
+    End it? [y/N]
+
+  User asked: 'is this the session I just exited?' — couldn't tell from the output. Had to mentally cross-reference: 'scope PR-30 means reviewer was set up for PR-30, but the message doesn't say role.'
+
+  ## Proposed output
+
+  Add role inline:
+
+    Only one active session: 019e2bd3 (role:reviewer, scope PR-30, branch pr-30)
+    End it? [y/N]
+
+  Optionally also surface the Claude Code session linkage for users with multiple Claude conversations active:
+
+    Only one active session: 019e2bd3 (role:reviewer, scope PR-30, branch pr-30)
+      Claude session: f82f45c1-9978-4fad-... (last active 12s ago)
+    End it? [y/N]
+
+  The Claude-session-id linkage requires TASK-112's session-manifest recording to be wired (which it should be, per BUG-102's About: PR-N pattern that already wires similar metadata). If not available, fall back to role + scope + branch.
+
+  ## Why low priority
+
+  Today's output is correct — just incomplete. Users CAN cross-reference via 'aida session leases' to see the full table with role column. The fix saves one mental step.
+
+  ## Composes with
+
+  - TASK-236 (session list title staleness): sibling display-polish for aida session list
+  - TASK-237 (session list prefer agreed-id): sibling display-polish
+  - TASK-241 (aida show git linkage): same theme — surfaces don't show enough data
+  - BUG-98 (session list vs leases consistency): both about aida session UX coherence
+
+  ## Acceptance
+
+  - [ ] aida session end ambiguity-resolution message includes role inline
+  - [ ] Optional: Claude session ID + last-active timestamp surfaced (gated on manifest having the field)
+  - [ ] Tests cover: implementer-only session, reviewer-only session, mixed-role multi-session, manifest-missing-claude-id case
+  - [ ] aida session leases output already shows role — verify it's consistent with the new aida session end output
+
+  ## Discovered via
+
+  2026-05-15 — user observed: 'which does not seem like the session I just exited. What is the correlation between 019e2bd3 and f82f45c1-9978-4fad-8bb7-974103803afe? Can we/should we print the role of the active session?' The correlation question revealed the two-ID system (Claude session vs AIDA session) is not surfaced anywhere; the role question is the immediate UX improvement.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T13:34:35.165058127Z
+modified_at: 2026-05-15T13:34:35.165058127Z
+req_type: Task
+tags:
+- ambiguity
+- display
+- resolution
+- role
+- session-end
+- trojan-horse-depth
+- ux
