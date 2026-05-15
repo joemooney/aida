@@ -13480,12 +13480,30 @@ fn session_end(
     // `try_auto_queue_pr_review` (Review PR-N story already exists) means
     // both firing the same PR is safe; the second one renders as
     // `AlreadyExists`. trace:STORY-90 | ai:claude
-    let outcome = try_auto_queue_pr_review(
-        &project_root,
-        &target.branch,
-        &target.id,
-        AutoQueueOrigin::SessionEnd,
-    );
+    // BUG-107: the auto-queue side-effect shells out to `gh`, `git`, and
+    // `aida`, all of which need a working directory that still exists.
+    // When `aida session end` is run from inside the worktree it just
+    // removed, `project_root` (resolved from cwd at entry) now points at
+    // a deleted directory and every spawn fails with a misleading
+    // ENOENT blamed on the gh binary. Prefer the lease's recorded parent
+    // project root — the main worktree, which `session end` never
+    // removes. trace:BUG-107 | ai:claude
+    let outcome =
+        match auto_queue_working_dir(target.parent_project_root.as_deref(), &project_root) {
+            Some(root) => try_auto_queue_pr_review(
+                &root,
+                &target.branch,
+                &target.id,
+                AutoQueueOrigin::SessionEnd,
+            ),
+            None => AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: no surviving project directory to query `gh` from \
+                 (worktree removed, parent project root unrecorded) — reviewer \
+                 story for branch `{}` not filed; run `aida pr auto-queue-review \
+                 --branch {}` from the main repo",
+                target.branch, target.branch
+            )),
+        };
     render_auto_queue_outcome(&outcome);
 
     // STORY-106: workflow hint when a review story is now queued for this
@@ -13731,6 +13749,26 @@ fn is_executable(path: &std::path::Path) -> bool {
     }
 }
 
+/// Format a `gh` spawn failure for a `PrLookup::GhFailed`. The OS reports
+/// ENOENT against the *binary* when the spawn's working directory has been
+/// removed — even though the binary is perfectly fine. `aida session end`
+/// removes the session worktree, so this case is common; say so plainly
+/// rather than letting the message read as "gh is missing".
+/// trace:BUG-107 | ai:claude
+fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::Error) -> String {
+    if !cwd.is_dir() {
+        format!(
+            "working directory `{}` no longer exists — the `{}` binary is fine \
+             (os reports the missing cwd as ENOENT on the spawn): {}",
+            cwd.display(),
+            gh_bin.display(),
+            e
+        )
+    } else {
+        format!("spawn `{}` (cwd `{}`): {}", gh_bin.display(), cwd.display(), e)
+    }
+}
+
 /// fails session_end. The richer return shape lets the caller print an
 /// honest skip reason instead of pretending nothing happened.
 ///
@@ -13767,10 +13805,12 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Pr
         .output();
     let out = match spawned {
         Ok(o) => o,
-        // We resolved the binary path above, so NotFound here is a race
-        // (binary deleted between resolve and spawn). Treat as a failure
-        // not a "gh missing" — the user almost certainly still has gh.
-        Err(e) => return PrLookup::GhFailed(format!("spawn {:?}: {}", gh_bin.display(), e)),
+        // We resolved the binary path above, so NotFound here is either a
+        // race (binary deleted between resolve and spawn) or — far more
+        // commonly — a removed working directory (BUG-107). Treat it as a
+        // failure not a "gh missing"; the user almost certainly still has
+        // gh, and `gh_spawn_error` names the real culprit.
+        Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -13813,7 +13853,7 @@ fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> 
         .output();
     let out = match spawned {
         Ok(o) => o,
-        Err(e) => return PrLookup::GhFailed(format!("spawn {:?}: {}", gh_bin.display(), e)),
+        Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -14553,6 +14593,26 @@ impl AutoQueueOrigin {
 /// doesn't leave the reviewer unaware. Returns an outcome describing what
 /// happened — see `AutoQueueStatus` for the categories.
 /// trace:STORY-66 STORY-90 BUG-72 | ai:claude
+/// Pick a working directory the end-of-session auto-queue can safely
+/// shell out from. It runs `gh` / `git` / `aida` subprocesses, every one
+/// of which fails with a misleading ENOENT (blamed on the binary, not the
+/// cwd) if its working directory was removed. `aida session end` removes
+/// the session worktree, so when that worktree was the invocation dir we
+/// fall back to the lease's recorded parent project root — the main
+/// worktree, which is never removed. Returns the first candidate that is
+/// still a real directory, or `None` when both are gone.
+/// trace:BUG-107 | ai:claude
+fn auto_queue_working_dir(
+    parent_project_root: Option<&std::path::Path>,
+    invocation_root: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    [parent_project_root, Some(invocation_root)]
+        .into_iter()
+        .flatten()
+        .find(|p| p.is_dir())
+        .map(|p| p.to_path_buf())
+}
+
 fn try_auto_queue_pr_review(
     project_root: &std::path::Path,
     branch: &str,
@@ -17831,6 +17891,54 @@ mod statusline_tests {
             assert!(matches!(s.status, AutoQueueStatus::SkippedNeedsAttention));
             assert_eq!(s.summary, phrase);
         }
+    }
+
+    /// BUG-107: `aida session end` removes the session worktree, then runs
+    /// the auto-queue, which shells out to `gh`. If the auto-queue uses the
+    /// removed worktree as its cwd, every spawn fails with a misleading
+    /// ENOENT. `auto_queue_working_dir` must pick a directory that still
+    /// exists — preferring the lease's recorded parent project root.
+    /// trace:BUG-107 | ai:claude
+    #[test]
+    fn auto_queue_working_dir_skips_removed_worktree() {
+        let real = std::env::temp_dir(); // always exists
+        let gone = real.join("aida-bug107-removed-worktree-does-not-exist");
+        let gone2 = real.join("aida-bug107-parent-also-gone");
+        assert!(!gone.exists(), "test precondition: phantom path must not exist");
+
+        // Worktree (invocation dir) removed → fall back to the parent.
+        assert_eq!(
+            auto_queue_working_dir(Some(real.as_path()), &gone),
+            Some(real.clone())
+        );
+        // Parent recorded but itself gone → fall through to a live cwd.
+        assert_eq!(
+            auto_queue_working_dir(Some(gone2.as_path()), &real),
+            Some(real.clone())
+        );
+        // No parent recorded (pre-STORY-58 lease) + live cwd → use the cwd.
+        assert_eq!(auto_queue_working_dir(None, &real), Some(real.clone()));
+        // Both gone → no safe directory; caller must skip, not spawn.
+        assert_eq!(auto_queue_working_dir(Some(gone2.as_path()), &gone), None);
+    }
+
+    /// BUG-107: a spawn failure whose real cause is a removed working
+    /// directory must not read as "gh is missing" — `gh_spawn_error`
+    /// names the cwd as the culprit and absolves the binary.
+    /// trace:BUG-107 | ai:claude
+    #[test]
+    fn gh_spawn_error_blames_the_missing_cwd_not_the_binary() {
+        let gh = std::path::Path::new("/usr/bin/gh");
+        let gone = std::env::temp_dir().join("aida-bug107-no-such-cwd");
+        let enoent = std::io::Error::from(std::io::ErrorKind::NotFound);
+
+        let removed = gh_spawn_error(gh, &gone, &enoent);
+        assert!(removed.contains("no longer exists"));
+        assert!(removed.contains("binary is fine"));
+
+        // A live cwd → the plain message, no false "missing cwd" claim.
+        let live = gh_spawn_error(gh, &std::env::temp_dir(), &enoent);
+        assert!(!live.contains("no longer exists"));
     }
 
     /// TASK-74: branch-shape heuristic for "this is a reviewer session;
