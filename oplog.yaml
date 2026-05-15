@@ -4836,5 +4836,13 @@ operations:
       ## Discovered via
 
       2026-05-14 — user saw output corruption from Claude Code recap interleaving with AIDA's next-steps. When asked about ASCII fallback, user said 'I like emoji though...they really help.' The fix needs to keep them while addressing the interleave.
-clock: 562
+- id: 019e2976-958d-7853-9301-fb4c275115c9
+  target_id: 019e2975-c54a-79f2-b324-efa9c45aa56a
+  author: aida
+  node_id: '1'
+  lamport: 563
+  timestamp: 2026-05-15T02:28:17.933596515Z
+  kind: !SetStatus
+    status: In Progress
+clock: 563
 node_id: '1'
