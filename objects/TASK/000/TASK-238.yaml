@@ -67,12 +67,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user applied batch:plan-tooling to 7 queued items, then ran aida queue list --all and saw no tags. Said 'I don't see the tags' — confirming the surface gap.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:20:17.065998471Z
-modified_at: 2026-05-15T13:21:41.587462698Z
+modified_at: 2026-05-15T14:32:25.789007377Z
 req_type: Task
 tags:
 - batch
