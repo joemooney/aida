@@ -1,0 +1,15 @@
+id: 019e2cb7-a2cd-7782-a503-f0daf2b8df82
+spec_id: STORY-132
+agreed_id: STORY-132
+title: 'AIDA TUI shell: PTY-host a Claude session + status strip + prefix-key exit'
+description: 'First half of EPIC-26''s first vertical. New ''aida-tui'' workspace library crate + thin ''aida tui'' subcommand. Owns the real terminal in raw mode, reserves the bottom row for a status strip, and hosts a Claude session in a portable-pty PTY whose child is ''aida queue work <scope> --session-id <uuid>''. Configurable prefix key (Ctrl-a) toggles command mode; clean prefix-key exit/detach; TermGuard + panic hook restore the terminal. Adds ''aida queue work --session-id <uuid>'' so the TUI mints+tracks the conversation. See docs/plans/2026-05-15-epic-26-tui.md (Files: aida-tui/Cargo.toml, lib.rs, term.rs, pty.rs, tab.rs, statusbar.rs, app.rs).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T17:38:12.813489208Z
+modified_at: 2026-05-15T17:38:12.813489208Z
+req_type: Story
+tags:
+- first-vertical
+- tui
