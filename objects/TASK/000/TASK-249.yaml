@@ -1,0 +1,73 @@
+id: 019e2d3b-bc5e-7271-aaf3-782464f156b1
+spec_id: TASK-249
+agreed_id: TASK-249
+title: '/aida-drain-queue skill: canonical autonomous-drain wrapper (eliminates /goal phrasing traps)'
+description: |-
+  A custom AIDA skill at \`.claude/skills/aida-drain-queue.md\` + slash command at \`/aida-drain-queue\` that wraps the autonomous queue-drain pattern with safe defaults, eliminating the /goal phrasing traps observed 2026-05-15.
+
+  ## Why this matters
+
+  The 2026-05-15 implementer-queue drain hit two recurring traps in /goal authoring:
+
+  1. **Literal command flags** — \`aida queue work --next\` was used as shorthand for "pick the head item" but \`--next\` is not a real flag. The Stop hook kept checking the literal mechanism clause, refusing to declare completion. Required manual \`/goal clear\`.
+  2. **Mechanism clause shapes workflow** — \`autonomous-merge each\` skipped the reviewer-in-the-loop handoff (which fires in \`aida session end\`); the reviewer queue stayed empty despite 10 PRs going through.
+
+  Both are AVOIDABLE if /goal phrasing is templated, not hand-rolled. The skill is the templating layer.
+
+  ## What it does
+
+  \`/aida-drain-queue\` assembles a /goal prompt with safe defaults pulled from flags:
+
+  \`\`\`
+  /aida-drain-queue                       # default: role=implementer, mode=review (ping-pong)
+  /aida-drain-queue --mode merge          # autonomous-merge (no reviewer checkpoint)
+  /aida-drain-queue --role reviewer       # drain the reviewer queue instead
+  /aida-drain-queue --batch tui-v1        # filter to a specific batch tag
+  /aida-drain-queue --max 5               # stop after 5 items even if more queued
+  \`\`\`
+
+  Internally generates the /goal text:
+
+  - Real commands only: \`aida queue work\` (no \`--next\` etc.)
+  - Mechanism clause selected by \`--mode\`:
+    - \`review\` → \`commit + push + open PR + aida session end (queues PR-N for reviewer)\`
+    - \`merge\` → \`commit + push + PR + autonomous-merge each\`
+  - Termination: \`until aida queue list --role <role> [--batch <tag>] shows no items\`
+
+  ## Composes with EPIC-26
+
+  STORY-136 (AIDA TUI autonomous-mode panel) becomes a thin TUI shell over this skill — the panel's "Drain to review / Drain to merge" buttons dispatch to \`/aida-drain-queue --mode review\` / \`--mode merge\`. The skill ships value immediately (CLI / Claude Code usage); STORY-136 ships value of seeing it surfaced as buttons in the TUI.
+
+  ## Acceptance
+
+  - [ ] \`.claude/skills/aida-drain-queue.md\` exists, scaffolded by \`aida init\` via master template at \`aida-core/templates/skills/aida-drain-queue.md\`
+  - [ ] \`.claude/commands/aida-drain-queue.md\` exists (slash-command surface)
+  - [ ] Flags: \`--mode review|merge\` (default review), \`--role <name>\` (default current role), \`--batch <tag>\`, \`--max <N>\`
+  - [ ] Generates /goal text with literal-flag-only commands AND correct mechanism clause
+  - [ ] Skill template documents both traps explicitly so future agents reading it see WHY the phrasing matters
+  - [ ] Tested: dry-run prints the assembled /goal text without invoking it; default invocation kicks off the drain
+
+  ## Origin
+
+  User asked 2026-05-15: *"do we want an /aida-drain-queue for your role/assignments?"* after recognizing the same pattern recurring across the 2026-05-15 implementer drain and the upcoming pre-TUI batch. Filed as the canonical primitive STORY-136 builds on.
+
+  ## Related
+
+  - EPIC-26 (TUI) — STORY-136 is the TUI surface that dispatches to this skill
+  - feedback_goal_prompt_phrasing.md (memory) — the trap pattern this skill eliminates
+  - TASK-242 (\`aida goal\` helper) — derives completion conditions from spec metadata; \`/aida-drain-queue\` is the workflow-level wrapper that uses similar discipline
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T20:02:30.110688099Z
+modified_at: 2026-05-15T20:02:30.110688099Z
+req_type: Task
+tags:
+- ai-collaboration
+- autonomous
+- drain-queue
+- goal
+- phrasing-trap
+- role-aware
+- skill
