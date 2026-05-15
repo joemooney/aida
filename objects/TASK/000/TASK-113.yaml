@@ -51,12 +51,12 @@ description: |-
   - [ ] Clipboard / browser / stdout / json output paths working
   - [ ] Tests cover the 5 edge cases above
   - [ ] CLI help text + cross-link in docs/positioning/vs-ultraplan.md
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:52:12.835941228Z
-modified_at: 2026-05-15T01:18:21.857969397Z
+modified_at: 2026-05-15T04:46:45.340494902Z
 req_type: Task
 tags:
 - batch:plan-tooling
@@ -68,3 +68,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T06:52:15.018496368Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-15T04:46:45.340494902Z
+  implemented_by: joe
