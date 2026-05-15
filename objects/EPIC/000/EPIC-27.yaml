@@ -84,3 +84,7 @@ tags:
 - modernization
 - strategic
 - workflow-tools
+relationships:
+- rel_type: Parent
+  target_id: 019e2e09-055e-7e60-a945-32640c445ed2
+  created_at: 2026-05-15T23:46:45.889512906Z
