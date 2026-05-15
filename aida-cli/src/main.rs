@@ -19915,6 +19915,154 @@ mod auto_bump_done_tests {
         );
     }
 
+    /// BUG-106: seed a Done review story for PR-N that `implements`
+    /// (covers) the given specs — mirrors what /aida-pr's auto-queue
+    /// records. Each covered spec is seeded at Done. Returns
+    /// `(review_story_spec_id, covered_spec_ids)`. trace:BUG-106 | ai:claude
+    fn seed_cluster_pr_review_story(
+        store_path: &std::path::Path,
+        review_spec_id: &str,
+        pr_number: u64,
+        covered: &[&str],
+    ) -> (String, Vec<String>) {
+        let storage = Storage::new(store_path.to_path_buf());
+        let mut store = storage.load().unwrap_or_default();
+
+        let mut covered_ids: Vec<String> = Vec::new();
+        let mut covered_uuids: Vec<uuid::Uuid> = Vec::new();
+        for spec in covered {
+            let mut req = aida_core::Requirement::new(format!("test-{}", spec), String::new());
+            req.spec_id = Some(spec.to_string());
+            req.set_status_from_str("Done");
+            covered_uuids.push(req.id);
+            covered_ids.push(spec.to_string());
+            store.requirements.push(req);
+        }
+
+        let mut review = aida_core::Requirement::new(
+            format!(
+                "Review PR-{}: cluster of {} specs",
+                pr_number,
+                covered.len()
+            ),
+            String::new(),
+        );
+        review.spec_id = Some(review_spec_id.to_string());
+        review.req_type = aida_core::RequirementType::Story;
+        review.set_status_from_str("Done");
+        for target_id in covered_uuids {
+            review.relationships.push(aida_core::Relationship {
+                rel_type: aida_core::RelationshipType::Custom("implements".to_string()),
+                target_id,
+                created_at: None,
+                created_by: None,
+            });
+        }
+        store.requirements.push(review);
+        storage.save(&store).unwrap();
+        (review_spec_id.to_string(), covered_ids)
+    }
+
+    /// BUG-106: a cluster-mode PR squash-merges with the PR TITLE as the
+    /// commit subject — the covered specs' IDs never reach main's commit
+    /// log. Auto-bump must follow the `(#N)` → review-story →
+    /// `implements` linkage and flip every covered Done spec.
+    /// trace:BUG-106 | ai:claude
+    #[test]
+    fn auto_bump_flips_cluster_pr_covered_specs_via_review_story() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let (review_id, covered) = seed_cluster_pr_review_story(
+            &store_path,
+            "STORY-9301",
+            77,
+            &["TASK-9301", "TASK-9302", "BUG-9303"],
+        );
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        // Squash-merge subject: PR title + `(#N)` ONLY — no covered
+        // spec IDs, exactly as a real cluster-PR squash-merge looks.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                "Cluster drain: polish + fixes (3 specs) (#77)",
+            ],
+        );
+        let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+
+        // All three covered specs flip — none were in the commit subject.
+        for spec in &covered {
+            assert!(
+                flips.iter().any(|(id, _)| id == spec),
+                "covered spec {} should flip via PR linkage, got: {:?}",
+                spec,
+                flips
+            );
+        }
+        let after = storage.load().unwrap();
+        for spec in &covered {
+            let req = after.get_requirement_by_spec_id(spec).unwrap();
+            assert!(
+                matches!(req.status, RequirementStatus::Completed),
+                "{} should be Completed, was {:?}",
+                spec,
+                req.status
+            );
+            assert_eq!(
+                req.implementation_info
+                    .as_ref()
+                    .and_then(|i| i.completion_sha.as_deref()),
+                Some(merge_sha.as_str()),
+                "{} completion_sha should match the merge commit",
+                spec
+            );
+        }
+        // The review story itself also flips (BUG-102 path) — unchanged.
+        assert!(
+            flips.iter().any(|(id, _)| id == &review_id),
+            "review story should still flip via the BUG-102 path"
+        );
+    }
+
+    /// BUG-106: a `(#N)` merge with no review story for PR-N must not
+    /// crash and must flip nothing — the PR-linkage path finds nothing.
+    /// trace:BUG-106 | ai:claude
+    #[test]
+    fn auto_bump_cluster_pr_without_review_story_is_noop() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9401");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        // `(#88)` present but no review story encodes PR-88.
+        run_git(&project_root, &["commit", "-m", "Some merge (#88)"]);
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+        assert!(
+            flips.is_empty(),
+            "no review story for PR-88 → nothing flips, got: {:?}",
+            flips
+        );
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "spec stays Done when its PR has no review story"
+        );
+    }
+
     /// BUG-94 acceptance check: `aida db sync --pull` calls
     /// `auto_bump_done_to_completed` with `pre_sha = None`. The helper's
     /// HEAD~50 fallback range must catch any spec-referencing commit
@@ -27479,6 +27627,48 @@ fn auto_bump_done_to_completed(
                 continue;
             }
             flips.push((spec_id.to_string(), sha.clone()));
+        }
+    }
+    // BUG-106: a cluster-mode PR squash-merges with the PR TITLE as the
+    // commit subject — the *covered* specs' IDs never reach main's
+    // commit log, so the `candidates` scan above matches none of them.
+    // For each merged `(#N)` PR, find its auto-queued review story and
+    // bump every Done spec the story `implements` (the 'covers' list
+    // recorded by /aida-pr's auto-queue). The BUG-102 block above bumps
+    // the review STORY; this block bumps the implementer SPECS it
+    // covers. PRs with no review story just fall through.
+    // trace:BUG-106 | ai:claude
+    if !pr_to_sha.is_empty() {
+        for (pr_n, sha) in &pr_to_sha {
+            let Some(review_story) = store
+                .requirements
+                .iter()
+                .find(|r| parse_review_story_pr_number(&r.title) == Some(*pr_n))
+            else {
+                continue;
+            };
+            for rel in &review_story.relationships {
+                if !matches!(
+                    &rel.rel_type,
+                    aida_core::RelationshipType::Custom(n) if n.eq_ignore_ascii_case("implements")
+                ) {
+                    continue;
+                }
+                let Some(covered) = store.requirements.iter().find(|r| r.id == rel.target_id)
+                else {
+                    continue;
+                };
+                if !matches!(covered.status, RequirementStatus::Done) {
+                    continue;
+                }
+                let Some(spec_id) = covered.spec_id.as_deref() else {
+                    continue;
+                };
+                if flips.iter().any(|(id, _)| id == spec_id) {
+                    continue;
+                }
+                flips.push((spec_id.to_string(), sha.clone()));
+            }
         }
     }
     if flips.is_empty() {
