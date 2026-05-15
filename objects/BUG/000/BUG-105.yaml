@@ -1,0 +1,55 @@
+id: 019e2a46-f574-7453-a33f-3da01e33e09b
+spec_id: BUG-105
+agreed_id: BUG-105
+title: queue work pre-populate-manifest uses only first matching plan file (TASK-95 DP-2 followup)
+description: |-
+  Deep-pass finding from PR-29 review (2026-05-14): TASK-95's session-manifest pre-population from docs/plans/ matches only the FIRST plan file it finds, even when multiple match the target spec. Non-blocking but a real edge case.
+
+  ## Symptom
+
+  aida queue work <spec> scans docs/plans/ for files matching the spec id (filename, frontmatter, or first heading), and if one is found, pre-populates the session manifest with its Critical Files / Followups / Verification sections.
+
+  When multiple plan files match the same spec (e.g., docs/plans/2026-05-13-foo.md AND docs/plans/2026-05-14-foo-revised.md both reference SPEC-X), only the FIRST one found is used. The newer one is silently ignored.
+
+  ## Why this matters
+
+  Real scenario: spec gets a plan from /ultraplan day 1, then a revised plan after design discussion day 3. Both files exist in docs/plans/; user expects the newer one to be picked up. The current logic might pick the older one based on directory ordering.
+
+  ## Why low priority
+
+  Workaround: delete or rename the older plan file before running aida queue work. The user can also explicitly pass --plan-file <path>. The default behavior is the only thing that needs improvement.
+
+  ## Proposed fix
+
+  When multiple plan files match the same spec:
+  1. Prefer the file with the most recent mtime (or the most recent date in filename if present)
+  2. OR: surface a warning 'multiple matching plan files; using foo.md, ignoring bar.md' so the user knows
+  3. OR: combine multiple matches by concatenating their Critical Files / Followups sections (richer but messy)
+
+  Option 1 (newest-wins) + Option 2 (warn) together is probably the right default.
+
+  ## Acceptance
+
+  - [ ] aida queue work --dry-run shows which plan file would be used when multiple match
+  - [ ] Default selection: most-recently-modified plan file
+  - [ ] Warning surfaced when multiple files match (so user can dedupe if intended)
+  - [ ] --plan-file <path> flag explicitly overrides
+  - [ ] Test: two plan files matching same spec; queue work picks the newer; warning printed
+
+  ## Discovered via
+
+  2026-05-14 — PR-29 reviewer deep-pass identified this as DP-2 (deep-pass finding 2) and noted it as non-blocking for merge. User flagged it for filing post-merge.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T06:15:53.972861010Z
+modified_at: 2026-05-15T06:15:53.972861010Z
+req_type: Bug
+tags:
+- DP-2
+- deep-pass-finding
+- first-only
+- plan-file
+- queue-work
+- session-manifest
