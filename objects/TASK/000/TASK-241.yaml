@@ -104,7 +104,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T04:20:55.937732251Z
-modified_at: 2026-05-15T13:21:02.511125286Z
+modified_at: 2026-05-15T13:21:46.276143130Z
 req_type: Task
 tags:
 - aida-show
@@ -125,6 +125,12 @@ relationships:
   target_id: 019e2bcb-fa1e-79f1-b150-9a24600af7bb
   created_at: 2026-05-15T13:21:02.511114745Z
   created_by: joe
+comments:
+- id: 019e2bcc-db24-72a3-8896-c221eba97a10
+  author: joe
+  content: 'Implemented via PR-30 (commit e77cfdba). Test status: 640/640 tests green (cargo test -p aida-cli -p aida-core).'
+  created_at: 2026-05-15T13:21:46.276143130Z
+  modified_at: 2026-05-15T13:21:46.276143130Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T07:33:32.051559268Z
