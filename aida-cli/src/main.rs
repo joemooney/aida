@@ -20710,6 +20710,147 @@ mod push_pull_scope_tests {
     }
 }
 
+/// TASK-234 / TASK-241: integration coverage for the git-state
+/// classifiers behind `aida queue list`'s "Done — awaiting merge"
+/// section and `aida show`'s git-linkage section. Both extracted
+/// helpers (`classify_in_flight_specs`, `collect_git_linkage`) are
+/// gh-free — they only run `git` — so a temp repo with hand-built
+/// commits exercises every branch without a GitHub round-trip.
+/// trace:TASK-234 TASK-241 | ai:claude
+#[cfg(test)]
+mod in_flight_linkage_integration_tests {
+    use super::*;
+
+    fn git(repo: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .expect("git on PATH");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// A fresh repo on `main` with one initial commit.
+    fn init_repo() -> (tempfile::TempDir, std::path::PathBuf) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path().to_path_buf();
+        git(&root, &["init", "--initial-branch=main", "--quiet"]);
+        git(&root, &["config", "user.email", "t@example.com"]);
+        git(&root, &["config", "user.name", "Test"]);
+        std::fs::write(root.join("README.md"), "init\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "chore: init"]);
+        (tmp, root)
+    }
+
+    fn commit(root: &std::path::Path, file: &str, body: &str, subject: &str) {
+        std::fs::write(root.join(file), body).unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-q", "-m", subject]);
+    }
+
+    fn req(spec_id: &str) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new(format!("test {spec_id}"), String::new());
+        r.spec_id = Some(spec_id.to_string());
+        r
+    }
+
+    /// TASK-234: a mixed-state queue — one spec merged to main, one on a
+    /// feature branch, one with no commit — buckets into stuck /
+    /// awaiting / no_commit. Pure git, no gh.
+    #[test]
+    fn classify_buckets_mixed_state_queue() {
+        let (_tmp, root) = init_repo();
+        // STUCK: a commit on main referencing the spec.
+        commit(&root, "a.txt", "x", "feat: stuck work (TASK-801) (#7)");
+        // AWAITING: a commit on a feature branch, not merged to main.
+        git(&root, &["checkout", "-q", "-b", "feature/x"]);
+        commit(&root, "b.txt", "y", "feat: in-flight work (TASK-802)");
+        git(&root, &["checkout", "-q", "main"]);
+
+        let specs = [req("TASK-801"), req("TASK-802"), req("TASK-803")];
+        let refs: Vec<&aida_core::Requirement> = specs.iter().collect();
+        let b = classify_in_flight_specs(&refs, &root);
+
+        assert_eq!(b.stuck.len(), 1, "one stuck spec");
+        assert_eq!(b.stuck[0].0, "TASK-801");
+        assert_eq!(b.stuck[0].1, Some(7), "squash PR parsed for the stuck spec");
+
+        assert_eq!(
+            b.awaiting.get("feature/x").map(|v| v.as_slice()),
+            Some(&["TASK-802".to_string()][..])
+        );
+
+        assert_eq!(b.no_commit, vec!["TASK-803".to_string()]);
+    }
+
+    /// TASK-234: an empty queue yields three empty buckets — the
+    /// no-Done-items path.
+    #[test]
+    fn classify_handles_no_done_items() {
+        let (_tmp, root) = init_repo();
+        let b = classify_in_flight_specs(&[], &root);
+        assert!(b.stuck.is_empty() && b.awaiting.is_empty() && b.no_commit.is_empty());
+    }
+
+    /// TASK-241: a spec nothing references — no commits, no trace files.
+    #[test]
+    fn linkage_for_never_touched_spec_is_empty() {
+        let (_tmp, root) = init_repo();
+        let l = collect_git_linkage(&root, &["TASK-804".to_string()]);
+        assert!(l.commits.is_empty(), "no commits reference the spec");
+        assert!(l.files.is_empty(), "no trace files reference the spec");
+        assert!(!l.shipped);
+    }
+
+    /// TASK-241: a shipped spec — commit on main + a squash `(#NN)`
+    /// subject + a trace comment in a source file.
+    #[test]
+    fn linkage_for_shipped_spec() {
+        let (_tmp, root) = init_repo();
+        std::fs::write(root.join("touched.rs"), "// trace:TASK-805\nfn ship() {}\n").unwrap();
+        commit(
+            &root,
+            "touched.rs",
+            "// trace:TASK-805\nfn ship() {}\n",
+            "feat: ship it (TASK-805) (#42)",
+        );
+
+        let l = collect_git_linkage(&root, &["TASK-805".to_string()]);
+        assert_eq!(l.commits.len(), 1, "one referencing commit");
+        assert!(l.shipped, "commit is an ancestor of main");
+        assert_eq!(
+            l.shipped_pr,
+            Some(42),
+            "PR number parsed from squash subject"
+        );
+        assert_eq!(l.files.len(), 1, "the trace comment was found");
+        assert_eq!(l.files[0].0, "touched.rs");
+    }
+
+    /// TASK-241: an in-flight spec — commit on a feature branch, not on
+    /// main; the feature branch is reported and `shipped` is false.
+    #[test]
+    fn linkage_for_in_flight_spec() {
+        let (_tmp, root) = init_repo();
+        git(&root, &["checkout", "-q", "-b", "feature/y"]);
+        commit(&root, "c.txt", "z", "feat: flying (TASK-806)");
+        git(&root, &["checkout", "-q", "main"]);
+
+        let l = collect_git_linkage(&root, &["TASK-806".to_string()]);
+        assert_eq!(l.commits.len(), 1);
+        assert!(!l.shipped, "commit is not on main");
+        assert_eq!(l.branch.as_deref(), Some("feature/y"));
+    }
+}
+
 /// TASK-241: coverage for the squash-merge PR-number parser that
 /// `aida show`'s git-linkage section uses to point shipped specs at
 /// their merged PR. trace:TASK-241 | ai:claude
@@ -20797,6 +20938,29 @@ mod queue_tag_tests {
         );
         assert_eq!(batch_tag_of(&tags(&["ux", "queue"])), None);
         assert_eq!(batch_tag_of(&HashSet::new()), None);
+    }
+
+    #[test]
+    fn tag_exact_match_is_case_insensitive() {
+        let t = tags(&["batch:plan-tooling", "ux"]);
+        assert!(tag_matches_exact(&t, "ux"));
+        assert!(tag_matches_exact(&t, "UX"));
+        assert!(tag_matches_exact(&t, "batch:plan-tooling"));
+        // Exact, not substring: a prefix is not an exact match.
+        assert!(!tag_matches_exact(&t, "batch:plan"));
+        assert!(!tag_matches_exact(&t, "queue"));
+        assert!(!tag_matches_exact(&HashSet::new(), "ux"));
+    }
+
+    #[test]
+    fn tag_prefix_match_is_case_insensitive() {
+        let t = tags(&["batch:plan-tooling", "ux"]);
+        assert!(tag_matches_prefix(&t, "batch:"));
+        assert!(tag_matches_prefix(&t, "BATCH:"));
+        assert!(tag_matches_prefix(&t, "batch:plan"));
+        assert!(tag_matches_prefix(&t, "u"));
+        assert!(!tag_matches_prefix(&t, "integration:"));
+        assert!(!tag_matches_prefix(&HashSet::new(), "batch:"));
     }
 }
 
@@ -23013,6 +23177,19 @@ fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
     Some(shown.join(", "))
 }
 
+/// TASK-238: does the tag set contain `want` (case-insensitive)? The
+/// predicate behind `aida queue list --tag`. trace:TASK-238 | ai:claude
+fn tag_matches_exact(tags: &std::collections::HashSet<String>, want: &str) -> bool {
+    tags.iter().any(|t| t.eq_ignore_ascii_case(want))
+}
+
+/// TASK-238: does any tag start with `prefix` (case-insensitive)? The
+/// predicate behind `aida queue list --tag-prefix`. trace:TASK-238
+fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) -> bool {
+    let lp = prefix.to_ascii_lowercase();
+    tags.iter().any(|t| t.to_ascii_lowercase().starts_with(&lp))
+}
+
 /// TASK-238: the `batch:*` tag a requirement carries (lowest-sorting
 /// when several), used as the group key for `aida queue list
 /// --by-batch`. None when the requirement is un-batched.
@@ -23027,17 +23204,30 @@ fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
     found.into_iter().next()
 }
 
-/// TASK-234: render the "Done — awaiting merge" body grouped by PR +
-/// state instead of as a flat list. Three buckets, each with a concrete
-/// `▶ Next` action:
-///   * Stuck — the referencing commit is already on main but the spec
-///     never bumped to Completed (auto-bump missed). Detected purely
-///     locally (`merge-base --is-ancestor`), so it works without `gh`.
-///   * Awaiting merge — the commit is on a feature branch; grouped by
-///     branch, with one `gh` open-PR lookup per branch.
-///   * Awaiting commit — Done but nothing references the spec id yet.
-/// trace:TASK-234 | ai:claude
-fn render_in_flight_grouped(specs: &[&aida_core::Requirement], project_root: &std::path::Path) {
+/// TASK-234: the three in-flight buckets, split out of
+/// [`render_in_flight_grouped`] so the classification — which only ever
+/// touches git (`log` / `merge-base` / `branch --contains`), never gh —
+/// is unit-testable against a temp repo. trace:TASK-234 | ai:claude
+struct InFlightBuckets {
+    /// (spec_id, squash-merge PR number if any, relative time) — the
+    /// referencing commit is already on main but the spec never bumped
+    /// to Completed (auto-bump missed).
+    stuck: Vec<(String, Option<u64>, String)>,
+    /// branch → spec_ids — the commit is on a feature branch, awaiting
+    /// merge.
+    awaiting: std::collections::BTreeMap<String, Vec<String>>,
+    /// Done specs with no commit referencing the id yet.
+    no_commit: Vec<String>,
+}
+
+/// TASK-234: bucket Done specs by git state. gh-free by design — the
+/// PR-state lookup happens later, in [`render_in_flight_grouped`]. A
+/// referencing commit on main → `stuck`; on a feature branch →
+/// `awaiting`; no commit at all → `no_commit`. trace:TASK-234 | ai:claude
+fn classify_in_flight_specs(
+    specs: &[&aida_core::Requirement],
+    project_root: &std::path::Path,
+) -> InFlightBuckets {
     use std::collections::BTreeMap;
     use std::process::Command as PCmd;
 
@@ -23066,9 +23256,8 @@ fn render_in_flight_grouped(specs: &[&aida_core::Requirement], project_root: &st
         "main"
     };
 
-    // Buckets.
-    let mut stuck: Vec<(String, Option<u64>, String)> = Vec::new(); // (id, pr, ago)
-    let mut awaiting: BTreeMap<String, Vec<String>> = BTreeMap::new(); // branch -> ids
+    let mut stuck: Vec<(String, Option<u64>, String)> = Vec::new();
+    let mut awaiting: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut no_commit: Vec<String> = Vec::new();
 
     for req in specs {
@@ -23120,6 +23309,25 @@ fn render_in_flight_grouped(specs: &[&aida_core::Requirement], project_root: &st
             awaiting.entry(branch).or_default().push(id);
         }
     }
+
+    InFlightBuckets {
+        stuck,
+        awaiting,
+        no_commit,
+    }
+}
+
+/// TASK-234: render the "Done — awaiting merge" body grouped by PR +
+/// state instead of as a flat list. [`classify_in_flight_specs`] does
+/// the git-only bucketing; this adds one `gh` open-PR lookup per
+/// awaiting branch and prints each bucket with a concrete `▶ Next`
+/// action. trace:TASK-234 | ai:claude
+fn render_in_flight_grouped(specs: &[&aida_core::Requirement], project_root: &std::path::Path) {
+    let InFlightBuckets {
+        stuck,
+        awaiting,
+        no_commit,
+    } = classify_in_flight_specs(specs, project_root);
 
     // ---- Awaiting merge, grouped by branch (one gh lookup per branch) ----
     for (branch, ids) in &awaiting {
@@ -23221,7 +23429,30 @@ fn render_in_flight_grouped(specs: &[&aida_core::Requirement], project_root: &st
 /// matches degrades to a dim note rather than failing the show.
 /// `--no-git` skips the whole section; `--verbose` un-caps the commit
 /// list and adds per-commit diff stats. trace:TASK-241 | ai:claude
-fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bool) {
+/// TASK-241: the git-linkage data for a spec — extracted from
+/// [`print_git_linkage`] so the collection (git-only, never gh) is
+/// unit-testable against a temp repo. trace:TASK-241 | ai:claude
+struct GitLinkage {
+    /// (full_sha, short_sha, subject), newest first.
+    commits: Vec<(String, String, String)>,
+    /// (file, symbol) per trace comment — deduped and sorted.
+    files: Vec<(String, Option<String>)>,
+    /// The newest referencing commit is an ancestor of main.
+    shipped: bool,
+    /// Feature branch holding the work (in-flight case only).
+    branch: Option<String>,
+    /// Worktree path checked out at `branch`, if any.
+    worktree: Option<String>,
+    /// PR number parsed from a squash-merge subject (shipped case only).
+    shipped_pr: Option<u64>,
+}
+
+/// TASK-241: collect the git linkage for `ids` — commits referencing the
+/// AIDA `(SPEC-ID)` format, files carrying `trace:` comments, and
+/// branch/worktree/shipped state. gh-free by design: the in-flight
+/// open-PR lookup happens later, in [`print_git_linkage`].
+/// trace:TASK-241 | ai:claude
+fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<String> {
@@ -23261,7 +23492,6 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
         args.push(p.as_str());
     }
     let log = git(&args).unwrap_or_default();
-    // (full_sha, short_sha, subject), newest first.
     let commits: Vec<(String, String, String)> = log
         .lines()
         .filter_map(|l| {
@@ -23277,49 +23507,32 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
     // ---- Files carrying trace comments for the spec ----
     let wanted: HashSet<String> = ids.iter().cloned().collect();
     let trace_hits = scan_trace_graph(project_root, &wanted);
-    let mut files: Vec<&TraceHit> = trace_hits.values().flatten().collect();
-    files.sort_by(|a, b| {
-        (a.file.as_str(), a.symbol.as_deref()).cmp(&(b.file.as_str(), b.symbol.as_deref()))
-    });
-    files.dedup_by(|a, b| a.file == b.file && a.symbol == b.symbol);
+    let mut files: Vec<(String, Option<String>)> = trace_hits
+        .values()
+        .flatten()
+        .map(|h| (h.file.clone(), h.symbol.clone()))
+        .collect();
+    files.sort();
+    files.dedup();
 
-    if commits.is_empty() && files.is_empty() {
-        println!(
-            "\n{}: {}",
-            "Git linkage".green().bold(),
-            "no commits or trace comments reference this spec yet".dimmed()
-        );
-        return;
-    }
-
-    println!("\n{}:", "Git linkage".green().bold());
-
-    // ---- Branch / worktree / PR (anchored on the newest commit) ----
+    // ---- Branch / worktree / shipped state (anchored on newest commit) ----
+    let mut shipped = false;
+    let mut branch: Option<String> = None;
+    let mut worktree: Option<String> = None;
+    let mut shipped_pr: Option<u64> = None;
     if let Some((full, _, _)) = commits.first() {
         let main_ref = if git(&["rev-parse", "--verify", "--quiet", "origin/main"]).is_some() {
             "origin/main"
         } else {
             "main"
         };
-        let shipped = is_ancestor(full, main_ref);
-
-        // Branches that contain the newest referencing commit; prefer a
-        // non-main branch (where in-flight work lives).
+        shipped = is_ancestor(full, main_ref);
         if shipped {
-            // The commit is an ancestor of main — the work shipped.
-            // Don't surface a feature branch (it's likely deleted, and
-            // the commit also being an ancestor of the current branch
-            // would otherwise misreport it as the home of the work).
-            let _ = main_ref;
-            println!("  {}     {}", "Branch".bold(), "merged to main".green());
             // A squash-merge subject ends with `(#NN)` — the cheapest,
             // most reliable PR pointer for shipped work.
-            if let Some(num) = commits
+            shipped_pr = commits
                 .iter()
-                .find_map(|(_, _, s)| parse_squash_pr_number(s))
-            {
-                println!("  {}         {}", "PR".bold(), format!("PR-{}", num).cyan());
-            }
+                .find_map(|(_, _, s)| parse_squash_pr_number(s));
         } else {
             // In flight: find the feature branch that holds the work.
             let contains = git(&[
@@ -23330,15 +23543,12 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                 "--format=%(refname:short)",
             ])
             .unwrap_or_default();
-            let branch = contains
+            branch = contains
                 .lines()
                 .map(|b| b.trim().trim_start_matches("origin/"))
                 .filter(|b| !b.is_empty() && *b != "HEAD" && *b != "main" && *b != "master")
                 .map(|b| b.to_string())
                 .next();
-
-            // Worktree path for that branch, if one is checked out.
-            let mut worktree: Option<String> = None;
             if let (Some(b), Some(wt)) =
                 (branch.as_deref(), git(&["worktree", "list", "--porcelain"]))
             {
@@ -23353,7 +23563,61 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                     }
                 }
             }
+        }
+    }
 
+    GitLinkage {
+        commits,
+        files,
+        shipped,
+        branch,
+        worktree,
+        shipped_pr,
+    }
+}
+
+fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bool) {
+    use std::process::Command as PCmd;
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+    };
+
+    let GitLinkage {
+        commits,
+        files,
+        shipped,
+        branch,
+        worktree,
+        shipped_pr,
+    } = collect_git_linkage(project_root, ids);
+
+    if commits.is_empty() && files.is_empty() {
+        println!(
+            "\n{}: {}",
+            "Git linkage".green().bold(),
+            "no commits or trace comments reference this spec yet".dimmed()
+        );
+        return;
+    }
+
+    println!("\n{}:", "Git linkage".green().bold());
+
+    // ---- Branch / worktree / PR (anchored on the newest commit) ----
+    if !commits.is_empty() {
+        if shipped {
+            println!("  {}     {}", "Branch".bold(), "merged to main".green());
+            if let Some(num) = shipped_pr {
+                println!("  {}         {}", "PR".bold(), format!("PR-{}", num).cyan());
+            }
+        } else {
             match branch.as_deref() {
                 Some(b) => {
                     let wt = worktree
@@ -23437,10 +23701,10 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
     // ---- Files traced ----
     if !files.is_empty() {
         println!("  {} ({})", "Files traced".bold(), files.len());
-        for hit in &files {
-            match &hit.symbol {
-                Some(sym) => println!("    {} — {}", hit.file, sym.dimmed()),
-                None => println!("    {}", hit.file),
+        for (file, symbol) in &files {
+            match symbol {
+                Some(sym) => println!("    {} — {}", file, sym.dimmed()),
+                None => println!("    {}", file),
             }
         }
     }
@@ -36132,7 +36396,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         .requirements
                         .iter()
                         .find(|r| r.id == e.requirement_id)
-                        .map(|req| req.tags.iter().any(|t| t.eq_ignore_ascii_case(want)))
+                        .map(|req| tag_matches_exact(&req.tags, want))
                         .unwrap_or(false)
                 })
                 .filter(|e| {
@@ -36140,16 +36404,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     let Some(prefix) = tag_prefix_filter.as_deref() else {
                         return true;
                     };
-                    let lp = prefix.to_ascii_lowercase();
                     store
                         .requirements
                         .iter()
                         .find(|r| r.id == e.requirement_id)
-                        .map(|req| {
-                            req.tags
-                                .iter()
-                                .any(|t| t.to_ascii_lowercase().starts_with(&lp))
-                        })
+                        .map(|req| tag_matches_prefix(&req.tags, prefix))
                         .unwrap_or(false)
                 })
                 .collect();
@@ -36360,13 +36619,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             let glyph = if is_last { "└─" } else { "├─" };
                             let pad =
                                 " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
+                            // TASK-238: surface the tag chip here too — the
+                            // grouped (--tree / --by-batch) view must show
+                            // tags just like the flat view, especially
+                            // --by-batch, which exists for the tags.
+                            // trace:TASK-238 | ai:claude
+                            let tag_chip = req
+                                .and_then(|r| format_tag_chip(&r.tags))
+                                .map(|c| format!("  {}", format!("[{}]", c).dimmed()))
+                                .unwrap_or_default();
                             println!(
-                                "  {} {}{}  {}  [{}]",
+                                "  {} {}{}  {}  [{}]{}",
                                 glyph.dimmed(),
                                 display_id_owned.bold(),
                                 pad,
                                 title_owned,
                                 status_colored,
+                                tag_chip,
                             );
                         };
 

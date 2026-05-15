@@ -245,6 +245,10 @@ the dialog/captain seat:
 - `aida queue list --all` — see the full queue including other-role items
 - `aida queue add <id> --for <role> --note "..."` — route work
 - `aida statusline` — confirm the active role + queue depth
+- `/aida-rebase` — at session pickup, run `aida rebase --dry-run --json`
+  to verify the branch isn't stale before diving in; the playbook in the
+  `/aida-rebase` skill treats session pickup as an invocation trigger.
+  trace:TASK-105
 
 ## Shell helper (for developers)
 

@@ -220,6 +220,13 @@ fn normalize_specs(sessions: &mut [SessionMeta]) {
     let Some(store) = crate::load_store_for_lookup(&root) else {
         return;
     };
+    normalize_specs_with_store(sessions, &store);
+}
+
+/// TASK-237: the store-pure half of [`normalize_specs`] — split out so
+/// the resolution rules are unit-testable without a project on disk.
+/// trace:TASK-237 | ai:claude
+fn normalize_specs_with_store(sessions: &mut [SessionMeta], store: &aida_core::RequirementsStore) {
     for s in sessions.iter_mut() {
         let Some(spec) = s.spec.as_deref() else {
             continue;
@@ -232,6 +239,86 @@ fn normalize_specs(sessions: &mut [SessionMeta]) {
             }
             None => s.spec = Some(format!("{} (unresolved)", spec)),
         }
+    }
+}
+
+#[cfg(test)]
+mod normalize_specs_tests {
+    use super::*;
+
+    fn meta(spec: Option<&str>) -> SessionMeta {
+        SessionMeta {
+            id: "deadbeef".to_string(),
+            age_seconds: 10,
+            role: None,
+            spec: spec.map(|s| s.to_string()),
+            title: None,
+            started_at: None,
+            last_cwd: None,
+            branch: None,
+        }
+    }
+
+    fn req(spec_id: &str, agreed_id: Option<&str>) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new(format!("test {spec_id}"), String::new());
+        r.spec_id = Some(spec_id.to_string());
+        r.agreed_id = agreed_id.map(|s| s.to_string());
+        r
+    }
+
+    fn store(reqs: Vec<aida_core::Requirement>) -> aida_core::RequirementsStore {
+        let mut s = aida_core::RequirementsStore::default();
+        s.requirements = reqs;
+        s
+    }
+
+    /// Long-form node-aware id rewrites to the agreed short id.
+    #[test]
+    fn long_form_resolves_to_agreed_id() {
+        let st = store(vec![req("FR-1-042", Some("FR-42"))]);
+        let mut sessions = vec![meta(Some("FR-1-042"))];
+        normalize_specs_with_store(&mut sessions, &st);
+        assert_eq!(sessions[0].spec.as_deref(), Some("FR-42"));
+    }
+
+    /// A spec already stored in short form (the agreed id) resolves and
+    /// stays in short form — `get_requirement_by_spec_id` matches the
+    /// agreed id too.
+    #[test]
+    fn short_form_stays_short() {
+        let st = store(vec![req("FR-1-042", Some("FR-42"))]);
+        let mut sessions = vec![meta(Some("FR-42"))];
+        normalize_specs_with_store(&mut sessions, &st);
+        assert_eq!(sessions[0].spec.as_deref(), Some("FR-42"));
+    }
+
+    /// A requirement with no agreed id keeps its long-form spec_id —
+    /// that is the correct fallback, not an error.
+    #[test]
+    fn no_agreed_id_keeps_long_form() {
+        let st = store(vec![req("FR-1-042", None)]);
+        let mut sessions = vec![meta(Some("FR-1-042"))];
+        normalize_specs_with_store(&mut sessions, &st);
+        assert_eq!(sessions[0].spec.as_deref(), Some("FR-1-042"));
+    }
+
+    /// A spec that doesn't resolve (deleted, or never existed) is marked
+    /// `(unresolved)` rather than silently shown as a live id.
+    #[test]
+    fn unresolvable_spec_is_flagged() {
+        let st = store(vec![req("FR-1-042", Some("FR-42"))]);
+        let mut sessions = vec![meta(Some("BUG-999"))];
+        normalize_specs_with_store(&mut sessions, &st);
+        assert_eq!(sessions[0].spec.as_deref(), Some("BUG-999 (unresolved)"));
+    }
+
+    /// A session with no spec is left untouched.
+    #[test]
+    fn missing_spec_is_left_alone() {
+        let st = store(vec![req("FR-1-042", Some("FR-42"))]);
+        let mut sessions = vec![meta(None)];
+        normalize_specs_with_store(&mut sessions, &st);
+        assert_eq!(sessions[0].spec, None);
     }
 }
 

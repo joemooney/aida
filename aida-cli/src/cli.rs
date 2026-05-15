@@ -367,6 +367,11 @@ pub enum SessionCommand {
     /// use `aida session leases`. The two views answer different
     /// questions; when in doubt for "what's running?" reach for
     /// `aida session leases`. trace:BUG-98 | ai:claude
+    ///
+    /// The INITIAL TOPIC column is the session title Claude Code set at
+    /// conversation start — it is fixed and does NOT track current
+    /// work, so for a long-running session it can read stale. Identify
+    /// a session by its SPEC + AGE, not the topic. trace:TASK-236
     List {
         /// Show at most N sessions (default 20).
         #[clap(long, short = 'n', default_value = "20")]

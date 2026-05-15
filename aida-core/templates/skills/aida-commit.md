@@ -174,3 +174,13 @@ aida comment add <SPEC-ID> "..."
 - Always include REQ-ID for feat/fix commits; add commit hash to requirement comments for bidirectional traceability
 - Use `[AI:claude]` when the commit includes AI-assisted code
 - Don't skip trace comments for substantial code (>20 lines of logic)
+
+## Related skills / commands
+
+- `/aida-rebase` — before committing on a session that's been open a
+  while, run `aida rebase --dry-run --json` first. Committing on a
+  stale base creates divergent-branch grief at push time; the
+  proactive-invocation playbook in the `/aida-rebase` skill names "about
+  to commit, session open >15 min" as a trigger. trace:TASK-105
+- `/aida-pr` — once the batch's commits are in, `/aida-pr` opens the PR
+  with linked specs and a test plan.
