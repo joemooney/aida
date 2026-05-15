@@ -27,12 +27,6 @@
   added_at: 2026-05-13T06:17:50.851180255Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e26e0-0aa7-79e1-a2c1-c0955fdad35e
-  position: 40000
-  added_by: joe
-  added_at: 2026-05-15T06:41:29.443796592Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e2938-50aa-75e2-9918-ddf62b795f80
   position: 41000
   added_by: joe
