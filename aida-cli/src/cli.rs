@@ -2099,6 +2099,22 @@ pub enum QueueCommand {
         /// trace:TASK-229 | ai:claude
         #[clap(long, value_name = "NAME")]
         batch: Option<String>,
+        /// Filter to entries whose requirement carries this exact tag
+        /// (case-insensitive). The general form of `--batch`.
+        /// trace:TASK-238 | ai:claude
+        #[clap(long, value_name = "TAG")]
+        tag: Option<String>,
+        /// Filter to entries with any tag starting with this prefix —
+        /// e.g. `--tag-prefix batch:` for all batched items.
+        /// trace:TASK-238 | ai:claude
+        #[clap(long, value_name = "PREFIX")]
+        tag_prefix: Option<String>,
+        /// Group the queue by `batch:*` tag value — each batch under
+        /// its own header, un-batched items under "No batch". Queue
+        /// position order is preserved within each group.
+        /// trace:TASK-238 | ai:claude
+        #[clap(long)]
+        by_batch: bool,
     },
     /// Add a requirement to your queue
     Add {

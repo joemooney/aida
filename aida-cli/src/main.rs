@@ -20745,6 +20745,59 @@ mod git_linkage_tests {
     }
 }
 
+/// TASK-238: coverage for the queue-list tag surfacing — the inline
+/// chip formatter and the `--by-batch` group key. trace:TASK-238
+#[cfg(test)]
+mod queue_tag_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    fn tags(items: &[&str]) -> HashSet<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn no_tags_yields_no_chip() {
+        assert_eq!(format_tag_chip(&HashSet::new()), None);
+    }
+
+    #[test]
+    fn single_tag_chip() {
+        assert_eq!(format_tag_chip(&tags(&["ux"])), Some("ux".to_string()));
+    }
+
+    #[test]
+    fn multi_tag_chip_caps_plain_tags_and_keeps_all_batch() {
+        // 1 batch tag + 5 plain → batch shown, 3 plain shown, "+2".
+        let chip = format_tag_chip(&tags(&[
+            "batch:display-polish",
+            "ux",
+            "queue",
+            "tags",
+            "visibility",
+            "display",
+        ]))
+        .unwrap();
+        assert!(
+            chip.starts_with("batch:display-polish"),
+            "batch tag first: {chip}"
+        );
+        assert!(chip.ends_with("+2"), "overflow marker: {chip}");
+        // batch + 3 plain + overflow = 5 comma-separated segments.
+        assert_eq!(chip.split(", ").count(), 5, "{chip}");
+    }
+
+    #[test]
+    fn batch_tag_of_finds_the_batch_tag() {
+        assert_eq!(
+            batch_tag_of(&tags(&["ux", "batch:plan-tooling", "queue"])),
+            Some("batch:plan-tooling")
+        );
+        assert_eq!(batch_tag_of(&tags(&["ux", "queue"])), None);
+        assert_eq!(batch_tag_of(&HashSet::new()), None);
+    }
+}
+
 /// TASK-107: regression coverage for `aida fetch`. The behaviors we
 /// pin: (1) code-leg fetch updates origin/<branch> without touching the
 /// worktree, (2) cache-invalidation hook fires after the store leg
@@ -22927,6 +22980,49 @@ fn parse_squash_pr_number(subject: &str) -> Option<u64> {
         .rsplit_once("(#")
         .and_then(|(_, tail)| tail.strip_suffix(')'))
         .and_then(|n| n.parse::<u64>().ok())
+}
+
+/// TASK-238: the inline tag-chip body for an `aida queue list` row.
+/// `batch:*` tags come first and are always shown (they are the
+/// load-bearing grouping tags); plain tags are sorted, capped at 3, and
+/// any remainder collapses to a `+N` overflow marker. Returns None when
+/// the requirement carries no tags. trace:TASK-238 | ai:claude
+fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
+    if tags.is_empty() {
+        return None;
+    }
+    const MAX_PLAIN: usize = 3;
+    let mut batch_tags: Vec<&str> = Vec::new();
+    let mut plain_tags: Vec<&str> = Vec::new();
+    for t in tags {
+        if t.to_ascii_lowercase().starts_with("batch:") {
+            batch_tags.push(t.as_str());
+        } else {
+            plain_tags.push(t.as_str());
+        }
+    }
+    batch_tags.sort_unstable();
+    plain_tags.sort_unstable();
+    let mut shown: Vec<String> = batch_tags.iter().map(|s| s.to_string()).collect();
+    shown.extend(plain_tags.iter().take(MAX_PLAIN).map(|s| s.to_string()));
+    if plain_tags.len() > MAX_PLAIN {
+        shown.push(format!("+{}", plain_tags.len() - MAX_PLAIN));
+    }
+    Some(shown.join(", "))
+}
+
+/// TASK-238: the `batch:*` tag a requirement carries (lowest-sorting
+/// when several), used as the group key for `aida queue list
+/// --by-batch`. None when the requirement is un-batched.
+/// trace:TASK-238 | ai:claude
+fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
+    let mut found: Vec<&str> = tags
+        .iter()
+        .filter(|t| t.to_ascii_lowercase().starts_with("batch:"))
+        .map(|s| s.as_str())
+        .collect();
+    found.sort_unstable();
+    found.into_iter().next()
 }
 
 /// TASK-234: render the "Done — awaiting merge" body grouped by PR +
@@ -35844,6 +35940,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             no_in_flight,
             in_flight_only,
             batch: batch_filter,
+            tag: tag_filter,
+            tag_prefix: tag_prefix_filter,
+            by_batch,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
@@ -36022,6 +36121,35 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     };
                     req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want))
                 })
+                .filter(|e| {
+                    // TASK-238: --tag exact-match filter (case-insensitive).
+                    let Some(want) = tag_filter.as_deref() else {
+                        return true;
+                    };
+                    store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == e.requirement_id)
+                        .map(|req| req.tags.iter().any(|t| t.eq_ignore_ascii_case(want)))
+                        .unwrap_or(false)
+                })
+                .filter(|e| {
+                    // TASK-238: --tag-prefix filter (case-insensitive).
+                    let Some(prefix) = tag_prefix_filter.as_deref() else {
+                        return true;
+                    };
+                    let lp = prefix.to_ascii_lowercase();
+                    store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == e.requirement_id)
+                        .map(|req| {
+                            req.tags
+                                .iter()
+                                .any(|t| t.to_ascii_lowercase().starts_with(&lp))
+                        })
+                        .unwrap_or(false)
+                })
                 .collect();
 
             // Load global entries for the active role unless --local was passed.
@@ -36155,7 +36283,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // instead of one long interleaved list. Globals stay flat
                 // after — we don't have foreign stores loaded to derive their
                 // parents. trace:TASK-33 | ai:claude
-                if *tree {
+                if *tree || *by_batch {
                     use std::collections::BTreeMap;
                     let mut groups: BTreeMap<String, Vec<&aida_core::QueueEntry>> = BTreeMap::new();
                     let unscoped_key = "~unscoped".to_string();
@@ -36168,11 +36296,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             groups.entry(unscoped_key.clone()).or_default().push(entry);
                             continue;
                         };
-                        let key = entry
-                            .for_scope
-                            .clone()
-                            .or_else(|| derive_parent_epic_label(req, &store))
-                            .unwrap_or_else(|| unscoped_key.clone());
+                        // TASK-238: --by-batch keys groups on the `batch:*`
+                        // tag; the default --tree keys on parent EPIC.
+                        let key = if *by_batch {
+                            batch_tag_of(&req.tags)
+                                .map(|t| t.to_string())
+                                .unwrap_or_else(|| unscoped_key.clone())
+                        } else {
+                            entry
+                                .for_scope
+                                .clone()
+                                .or_else(|| derive_parent_epic_label(req, &store))
+                                .unwrap_or_else(|| unscoped_key.clone())
+                        };
                         groups.entry(key).or_default().push(entry);
                     }
                     // Sort groups: real EPICs by count desc then name; unscoped last.
@@ -36234,7 +36370,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
                     for (key, group) in &ordered {
                         let header = if key == &unscoped_key {
-                            "Unscoped".to_string()
+                            if *by_batch {
+                                "No batch".to_string()
+                            } else {
+                                "Unscoped".to_string()
+                            }
                         } else {
                             key.clone()
                         };
@@ -36415,6 +36555,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     // with their origin so the merge view is unambiguous.
                     if !global_entries.is_empty() {
                         print!("  {}", format!("[origin:{}]", local_project_name).dimmed());
+                    }
+                    // TASK-238: surface the requirement's tags inline so
+                    // the batch:* convention is visible without a per-item
+                    // `aida show`. trace:TASK-238 | ai:claude
+                    if let Some(chip) = req.and_then(|r| format_tag_chip(&r.tags)) {
+                        print!("  {}", format!("[{}]", chip).dimmed());
                     }
                     if let Some(ref note) = entry.note {
                         print!("  {}", format!("\"{}\"", note).dimmed().italic());
