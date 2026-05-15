@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:38:12.813489208Z
-modified_at: 2026-05-15T18:22:07.055464066Z
+modified_at: 2026-05-15T18:32:12.580583940Z
 req_type: Story
 tags:
 - batch:tui-v1
@@ -18,6 +18,19 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-05-15T17:38:14.907264042Z
+comments:
+- id: 019e2ce9-1224-7ed2-8dad-79cb9fe3116b
+  author: joe
+  content: |-
+    Implemented via branch epic-26 (commit 35953cd3):
+
+    - New aida-tui workspace crate: term (RAII guard + panic hook), pty (portable-pty host + vt100 mirror), tab (generic TabManager), statusbar, app (Focused/Command prefix-key state machine), config ([tui] prefix_key/max_tabs).
+    - `aida tui [scope] [--no-recover]` subcommand, dispatched before storage init, gated behind a default-off `tui` feature; a stub errors when off.
+    - `aida queue work --session-id <uuid>`: caller-minted Claude conversation id, UUID-validated up front, recorded in the session manifest even under --no-launch.
+
+    Test status: 455/455 tests green (440 aida-cli + 15 aida-tui); plan verification 8/8.
+  created_at: 2026-05-15T18:32:12.580583940Z
+  modified_at: 2026-05-15T18:32:12.580583940Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T18:22:07.055464066Z
