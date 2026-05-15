@@ -1,0 +1,31 @@
+id: 019e2e08-f32b-7940-b096-0eca2f63f769
+spec_id: TASK-253
+agreed_id: TASK-253
+title: Add .mcp.json to AIDA dev repo so Claude Code dogfoods aida mcp-serve in our own workflow
+description: |-
+  The AIDA dev repo has NO \`.mcp.json\` at the project root. So Claude Code sessions working IN this repo don't connect to \`aida mcp-serve\` — they use the CLI directly (\`aida list\`, \`aida show\`, \`aida queue\`, etc.) instead of structured MCP tool calls.
+
+  This is a missed dogfooding opportunity: MCP-specific bugs (schema drift, edge cases in tool responses) only surface when other projects use AIDA's MCP server, never in our own dev workflow.
+
+  ## Acceptance
+
+  - [ ] \`.mcp.json\` exists at \`/home/joe/ai/aida/.mcp.json\` (or wherever the dev repo lives) configuring \`aida mcp-serve\` as the project's MCP server
+  - [ ] After restarting Claude Code in this dir, the \`aida__*\` tools appear in available tool calls
+  - [ ] CLAUDE.md notes that the dev repo dogfoods its own MCP server, and that MCP-via-CLI parity gaps surface here first
+  - [ ] Optional: \`aida init\` already scaffolds \`.mcp.json\` for new projects — confirm by inspecting the master template; if missing for the dev repo just because the repo predates that init, fix the gap
+
+  ## Composes with
+
+  - The MCP modernization EPIC (next filing) — adding \`.mcp.json\` here lets us validate each new tool as we add it
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T23:46:39.019532900Z
+modified_at: 2026-05-15T23:46:39.019532900Z
+req_type: Task
+tags:
+- agent-collaboration
+- dev-environment
+- dogfooding
+- mcp
