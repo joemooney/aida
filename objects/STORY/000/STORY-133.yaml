@@ -1,0 +1,15 @@
+id: 019e2cb8-00b8-7352-aa72-487a63b0631a
+spec_id: STORY-133
+agreed_id: STORY-133
+title: AIDA TUI status overlay (read-only) + 3 quick actions
+description: 'Second half of EPIC-26''s first vertical. A ratatui status overlay (prefix o) built from ''aida status --json'' — panels for Queue, Leases, Branch/PR/CI, Activity log. First paint is cache-only (--no-ci) for sub-ms render, then a background gh-backed refresh repaints. Three quick actions invocable from the overlay: ''aida queue work'', ''aida session end'', ''gh pr view'' — each a subprocess whose output lands in the activity log; focus returns to Claude after. See docs/plans/2026-05-15-epic-26-tui.md (Files: aida-tui/src/overlay.rs, actions.rs).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T17:38:36.856006582Z
+modified_at: 2026-05-15T17:38:36.856006582Z
+req_type: Story
+tags:
+- first-vertical
+- tui
