@@ -1,0 +1,34 @@
+id: 019e2ddb-d51d-7210-a7fa-0363a9b4862b
+spec_id: STORY-140
+agreed_id: STORY-140
+title: 'Review PR-43: EPIC-26 batch 3: TUI overlay, multi-tab, crash recovery + autonomous drains'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e2d4f`) for branch `epic-26-3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/43>
+  - Branch: `epic-26-3` → `main`
+
+  ## Covers
+
+  - STORY-137
+  - STORY-136
+  - TASK-249
+  - TASK-247
+  - STORY-135
+  - STORY-134
+  - BUG-108
+  - BUG-107
+  - STORY-133
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 43` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T22:57:22.205144439Z
+modified_at: 2026-05-15T22:57:22.205144439Z
+req_type: Story
