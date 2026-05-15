@@ -21,12 +21,12 @@ description: |-
   - [ ] Walks siblings (same parent) + same-feature + same-tag specs
   - [ ] Output is markdown-suitable for pasting into a docs/plans/ file
   - [ ] /aida-plan skill optionally calls it to seed the 'Reusable helpers' section
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T04:28:57.865149268Z
-modified_at: 2026-05-15T05:08:20.915958943Z
+modified_at: 2026-05-15T06:07:29.181822235Z
 req_type: Task
 tags:
 - batch:plan-tooling
