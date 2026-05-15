@@ -3470,6 +3470,46 @@ pub enum Command {
         json: bool,
     },
 
+    /// Derive a machine-checkable completion condition from AIDA
+    /// metadata, ready to paste into `/goal` (or `/schedule`). Each flag
+    /// contributes one clause; multiple flags compose with `AND`. Every
+    /// clause carries an explicit verification command so a small
+    /// evaluator can check it deterministically — no vague "make the
+    /// tests pass" conditions that loop forever. trace:TASK-242 | ai:claude
+    Goal {
+        /// Condition: all specs tagged `batch:<NAME>` reach a terminal
+        /// status (Completed/Rejected). `batch:` prefix optional.
+        #[clap(long, value_name = "NAME")]
+        batch: Option<String>,
+
+        /// Condition: all direct children of EPIC/STORY `<ID>` reach a
+        /// terminal status.
+        #[clap(long, value_name = "ID")]
+        epic: Option<String>,
+
+        /// Condition: spec `<SPEC-ID>` reaches status Completed.
+        #[clap(long, value_name = "SPEC-ID")]
+        spec: Option<String>,
+
+        /// Condition: PR `<N>` is merged.
+        #[clap(long, value_name = "N")]
+        pr: Option<u64>,
+
+        /// Condition: the given role's queue is empty. Accepts
+        /// `implementer` or `role:implementer`.
+        #[clap(long, value_name = "ROLE")]
+        queue_empty: Option<String>,
+
+        /// Copy the assembled `/goal` line to the system clipboard.
+        #[clap(long, conflicts_with = "invoke")]
+        copy: bool,
+
+        /// Print only the bare `/goal <condition>` line, no framing —
+        /// for scripting / command substitution.
+        #[clap(long)]
+        invoke: bool,
+    },
+
     /// List all commands (including the less-common ones hidden from
     /// `aida --help`), grouped by topic.
     HelpAll,
