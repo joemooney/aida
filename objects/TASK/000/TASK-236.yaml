@@ -57,7 +57,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:12:22.515363360Z
-modified_at: 2026-05-15T13:20:53.018773534Z
+modified_at: 2026-05-15T13:21:42.847023054Z
 req_type: Task
 tags:
 - batch:display-polish
@@ -75,6 +75,12 @@ relationships:
   target_id: 019e2bcb-fa1e-79f1-b150-9a24600af7bb
   created_at: 2026-05-15T13:20:53.018759549Z
   created_by: joe
+comments:
+- id: 019e2bcc-cdbf-7a41-9c53-77b0ef36cf62
+  author: joe
+  content: 'Implemented via PR-30 (commit cd446776). Test status: 640/640 tests green (cargo test -p aida-cli -p aida-core).'
+  created_at: 2026-05-15T13:21:42.847023054Z
+  modified_at: 2026-05-15T13:21:42.847023054Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T07:47:21.353528417Z
