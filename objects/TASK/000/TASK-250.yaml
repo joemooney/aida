@@ -1,0 +1,63 @@
+id: 019e2dfa-3f95-7280-b83c-96d62eb2c8d7
+spec_id: TASK-250
+agreed_id: TASK-250
+title: 'aida queue list: distinguish ''review in progress'' from ''awaiting merge'' in the Done section'
+description: |-
+  \`aida queue list\`'s \"Done — awaiting merge\" section currently conflates four distinct PR lifecycle states under one bucket with a single \"Next: merge PR-N\" hint:
+
+  1. **PR open, no review started** — needs \`aida queue work PR-N\`
+  2. **Review in progress** — reviewer lease + session active; merging now would be premature
+  3. **Reviewed + approved** — review verdict in queue; safe to merge
+  4. **Merged, auto-bump pending** — need \`aida pull\` on a synced main
+
+  The current hint (\"Next: merge PR-N, then \`aida pull\`\") is correct for state 3 only. For state 2 it's actively misleading — merging mid-review breaks the ping-pong workflow. For state 4 it tells you to do something you've already done.
+
+  ## Observed (2026-05-15)
+
+  User had PR-43 open with an active reviewer session in another terminal. From the implementer shell:
+
+  \`\`\`
+  $ aida queue list
+  Your queue (no items routed to role implementer)
+  Done — awaiting merge (9 items)
+    PR-43 (open) — 9 specs: ◐ TASK-249 ...
+      ▶ Next: merge PR-43, then \`aida pull\`
+  \`\`\`
+
+  The \"merge PR-43\" hint was wrong — review was actively in progress. The user had to cross-check \`aida queue list --role reviewer\` or \`aida session leases --all\` to know the actual state.
+
+  ## Acceptance
+
+  - [ ] \`aida queue list\` Done section subdivides into the four states, with state-specific next-action hints:
+    - State 1 → *\"Next: start review (\`aida queue work PR-N\`)\"*
+    - State 2 → *\"Review in progress (reviewer session \`{lease}\` since {time})\"*
+    - State 3 → *\"Review approved by {reviewer} — Next: merge (\`gh pr merge {N} --squash\`)\"*
+    - State 4 → *\"Merged at {time} — Next: \`aida pull\` (auto-bumps {N} specs to Completed)\"*
+  - [ ] State 2 is detected by querying active session leases for scope=PR-N OR by checking for an In-Progress review story
+  - [ ] State 3 is detected by an Approved review story for PR-N
+  - [ ] State 4 is detected by gh PR status = merged but spec status still Done
+  - [ ] Tests cover each state transition
+
+  ## Composes with
+
+  - STORY-127 (workflow state-aware guidance) — this is a concrete instance of that principle: surface workflow state in next-action hints
+  - TASK-220 (\`aida status\`) — same display surface, same state model
+  - TASK-234 (Done-section next-actions) — extends the existing logic, doesn't replace
+  - BUG-108 (misleading empty queue) — same family: AIDA's display should reflect actual state, not fall back to defaults
+
+  ## Origin
+
+  User asked 2026-05-15: *\"the review is in progress, not sure if the queue list shows that to be ongoing?\"* — confirmed gap.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T23:30:35.541902232Z
+modified_at: 2026-05-15T23:30:35.541902232Z
+req_type: Task
+tags:
+- done-section
+- queue-list
+- review-state
+- ux
+- workflow-state-aware
