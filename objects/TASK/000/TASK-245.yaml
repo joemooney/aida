@@ -1,0 +1,72 @@
+id: 019e2bea-f83c-7762-9dd3-0d2eab297709
+spec_id: TASK-245
+agreed_id: TASK-245
+title: 'aida session start: support --reuse-branch (or auto-detect existing branch) for fixup-on-existing-PR-branch flow'
+description: |-
+  Today aida session start --branch BRANCH forks a NEW branch with that name from origin/main (or from --base). When the branch already exists locally, git worktree add fails with 'a branch named X already exists.'
+
+  This breaks the natural fixup workflow: 'I want a worktree on the implementer's existing branch to do PR review fixups, resuming the implementer's Claude conversation.'
+
+  ## Observed 2026-05-15
+
+  User attempted to set up a fixup worktree on PR-30's branch (implementer-queue-drain):
+
+    aida session start --owns PR-30-fixup --branch implementer-queue-drain
+    → ⓘ cwd is on implementer-queue-drain; forking new branch from origin/main
+    → fatal: a branch named 'implementer-queue-drain' already exists
+    → Error: 'git worktree add' failed
+
+  The user had to bypass aida session start entirely and use 'git worktree add /path branch' directly — losing AIDA's session lease + manifest tracking.
+
+  ## Proposed fix
+
+  Three options:
+
+  ### A. --reuse-branch flag
+
+    aida session start --owns SCOPE --branch BRANCH --reuse-branch
+
+  Explicitly says 'use this existing branch'; aida session start does 'git worktree add /path BRANCH' (no -b flag).
+
+  ### B. Auto-detect existing branch
+
+  If --branch BRANCH exists locally OR on origin, don't try to fork; just add the worktree on that branch. Surface a hint: 'using existing branch <name>, not forking.' Most natural; matches user intent in most cases.
+
+  ### C. --base for fork, --branch for reuse semantics
+
+  Reverse the current semantics: --branch means 'use this branch (existing)' and --base means 'fork from here, create new branch.' Today --branch creates and --base is the fork-from-point. Could be a breaking change.
+
+  Recommended: Option B (auto-detect). Least friction; user intent is usually clear.
+
+  ## Composes with
+
+  - TASK-112 (resume claude session, priority bumped earlier today): the resume workflow needs the fixup-on-existing-branch setup. Once both ship, 'aida queue work --resume <claude-id> --pr <N>' could collapse the entire setup into one verb.
+  - aida queue work --no-launch flag: similar 'set up infrastructure, don't auto-launch claude' semantics; this TASK provides the matching session-start mode for non-queued work
+  - BUG-98 (session list vs leases — shipped): another aida session UX coherence improvement
+
+  ## Acceptance
+
+  - [ ] aida session start detects when --branch is an existing branch (local or origin) and reuses it
+  - [ ] Surface a hint when reusing ('using existing branch X')
+  - [ ] Optional explicit --reuse-branch flag for users who want unambiguous behavior
+  - [ ] 'aida session start --owns PR-N-fixup --branch <pr-branch>' works for fixup workflows without git fallback
+  - [ ] aida session start --help documents the reuse vs fork-from-base distinction
+
+  ## Discovered via
+
+  2026-05-15 — PR-30 review found 7 partial specs + CI red. User attempted manual TASK-112 workaround to set up fixup worktree on implementer-queue-drain branch via aida session start; hit the 'branch already exists' error because aida session start always forks. Had to bypass to raw git worktree add. The friction validates this UX gap.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T13:54:39.804611197Z
+modified_at: 2026-05-15T13:54:39.804611197Z
+req_type: Task
+tags:
+- branch
+- fix-forward
+- fixup
+- reuse
+- session-start
+- ux
+- worktree
