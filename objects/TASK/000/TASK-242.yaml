@@ -1,0 +1,88 @@
+id: 019e2a52-660d-7c41-afef-145a8ce845ce
+spec_id: TASK-242
+agreed_id: TASK-242
+title: 'aida goal: derive machine-checkable completion conditions from AIDA metadata (for /goal, /schedule, etc.)'
+description: |-
+  AIDA's structured graph (status, tags, types, relationships, parent/child, batch labels) is a vocabulary for machine-checkable completion conditions. Today users hand-write these conditions when invoking /goal — and the community discipline says vague conditions (e.g., 'make the tests pass') will loop forever on flaky suites.
+
+  AIDA can DERIVE precise conditions from the graph. That's a direct value-add to the /goal + /schedule + auto-mode stack.
+
+  ## Proposed CLI
+
+    aida goal --batch NAME
+      → emits: 'all specs tagged batch:NAME are status Completed'
+
+    aida goal --epic <ID>
+      → emits: 'all children of <ID> are status Completed AND their referenced PRs are merged'
+
+    aida goal --queue-empty role:implementer
+      → emits: 'aida queue list --for implementer returns empty AND no specs in Done state are stuck'
+
+    aida goal --pr <N>
+      → emits: 'PR-<N> is merged AND its linked specs are all status Completed'
+
+    aida goal --spec <SPEC-ID>
+      → emits: 'spec <SPEC-ID> is status Completed'
+
+    aida goal --copy
+      → copy the generated condition to clipboard for pasting into /goal
+
+    aida goal --invoke
+      → print the /goal command line ready to paste/execute
+
+  ## Output shape
+
+  Default: emit a structured completion condition string that's pasteable into /goal directly.
+
+    $ aida goal --batch plan-tooling
+    /goal all specs tagged batch:plan-tooling are status Completed (check via 'aida list --tag batch:plan-tooling --status -completed' returns empty)
+
+  The emitted condition should be EXPLICIT about how to verify (e.g., the aida command that returns truthy/falsy), so a Haiku-class evaluator can check it deterministically.
+
+  ## Why this matters
+
+  Without aida goal: users write vague conditions OR write precise conditions by hand-deriving from spec metadata.
+
+  With aida goal: precise conditions are one command. The composition AIDA + /goal becomes much tighter than naive /goal usage. This is exactly the 'platform depth on discovery' moment described in OVERVIEW.md's 'Public face' section — TUI surface looks simple, deeper integration reveals real value.
+
+  ## Composes with
+
+  - STORY-125 (parent): integration framework
+  - /goal (Claude Code 2.1.139, shipped 2026-05-12): consumes the conditions aida goal emits
+  - /schedule: same — schedule a /goal with an AIDA-derived condition
+  - TASK-229 (aida queue work --batch, shipped): same vocabulary surface
+  - EPIC-26 (TUI Trojan-horse): TUI's quick-actions menu surfaces 'set goal for current batch' as a one-click action
+  - vs-ultraplan.md positioning: same composition pattern — AIDA structures, /goal executes
+
+  ## Why medium priority
+
+  Concrete, well-scoped, ships AIDA-specific value as soon as /goal users discover the helper. Not low because the integration with /goal is timely (just released 2026-05-12).
+
+  ## Acceptance
+
+  - [ ] aida goal subcommand implemented with --batch / --epic / --queue-empty / --pr / --spec flags
+  - [ ] Output: structured /goal condition string + explicit verification command
+  - [ ] --copy and --invoke flags for ergonomic integration with /goal
+  - [ ] Multiple flags compose (e.g., --batch X --pr-merged → both conditions)
+  - [ ] Tests cover each flag + composition
+  - [ ] CLAUDE.md / AIDA.md daily-commands section mentions the helper
+  - [ ] docs/positioning/vs-ultraplan.md sibling: maybe a new doc about /goal integration
+
+  ## Discovered via
+
+  2026-05-14 — community signals around /goal release (Claude Code 2.1.139, 2026-05-12) emphasized: 'The real discipline shifts to writing machine-checkable completion criteria upfront.' AIDA's metadata is exactly the right vocabulary. Filing this TASK is the concrete deliverable that makes AIDA + /goal a tighter composition than naive /goal usage.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T06:28:23.693582217Z
+modified_at: 2026-05-15T06:28:23.693582217Z
+req_type: Task
+tags:
+- autonomous-agents
+- completion-condition
+- goal
+- goal-helper
+- integration
+- machine-checkable
+- trojan-horse-depth
