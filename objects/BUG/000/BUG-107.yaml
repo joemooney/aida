@@ -1,0 +1,69 @@
+id: 019e2d1d-20e6-76c3-a479-c41aeb07c7ee
+spec_id: BUG-107
+agreed_id: BUG-107
+title: 'aida session end: auto-queue spawn fails with ENOENT even when gh exists at /usr/bin/gh'
+description: |-
+  \`aida session end\` reports:
+
+  \`\`\`
+  ⚠ auto-queue: \`gh pr list\` failed for branch \`epic-26\` (spawn "/usr/bin/gh": No such file or directory (os error 2)) — no reviewer story filed
+  \`\`\`
+
+  But \`/usr/bin/gh\` actually exists and is executable:
+
+  \`\`\`
+  $ which gh
+  /usr/bin/gh
+  $ ls -la /usr/bin/gh
+  -rwxr-xr-x 1 root root 54972600 Oct  1  2025 /usr/bin/gh
+  \`\`\`
+
+  The same shell context that ran \`aida session end\` can also run \`gh\` fine. So the ENOENT must come from \`aida session end\`'s subprocess environment — possibly:
+
+  - The worktree's \`.aida/session-env.sh\` modified PATH in a way that excluded \`/usr/bin/\` before AIDA spawned the auto-queue child
+  - AIDA's spawn ran in a forked context where the working directory or environment differed
+  - A race in tokio's spawn between PATH resolution and exec
+
+  ## Observed (2026-05-15)
+
+  Inside worktree \`/home/joe/ai/aida-epic-26\` after STORY-132 shipped:
+
+  \`\`\`
+  ✓ lease deleted
+  ✓ worktree removed
+  ⚠ auto-queue: \`gh pr list\` failed for branch \`epic-26\` (spawn "/usr/bin/gh": No such file or directory (os error 2)) — no reviewer story filed
+  \`\`\`
+
+  Then from \`~/ai/aida\` with the same user:
+
+  \`\`\`
+  $ which gh
+  /usr/bin/gh
+  \`\`\`
+
+  Non-blocking in this case because \`/aida-pr\` had already queued STORY-138 earlier in the implementer session, so the reviewer queue was correctly populated. But on a session-end path that doesn't go through \`/aida-pr\` first, this would silently drop the reviewer story.
+
+  ## Acceptance
+
+  - [ ] Auto-queue subprocess inherits the user's PATH (not a stripped-down one)
+  - [ ] If spawn fails, the warning surfaces the actual PATH that was searched (not just the resolved binary path that the OS rejected)
+  - [ ] Idempotency check: when STORY-N already covers PR-N in the reviewer queue (filed by \`/aida-pr\`), the auto-queue logs "already queued" instead of attempting + failing silently
+  - [ ] Test on Linux verifies the auto-queue actually fires with real gh on PATH
+
+  ## Related
+
+  - TASK-111 (session end CI probing) — same lifecycle path
+  - /aida-pr — the redundant filer; if the dedupe were perfect, this bug would be cosmetic only
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T19:29:04.230402571Z
+modified_at: 2026-05-15T19:29:04.230402571Z
+req_type: Bug
+tags:
+- auto-queue
+- enoent
+- gh
+- session-end
+- spawn
