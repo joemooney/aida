@@ -1,0 +1,26 @@
+id: 019e2d40-9544-7b02-b4a6-23f34ac98d50
+spec_id: STORY-139
+agreed_id: STORY-139
+title: 'Review PR-42: EPIC-26: fix TermGuard raw-mode leak on alt-screen failure (TASK-248)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e2d31`) for branch `epic-26-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/42>
+  - Branch: `epic-26-2` → `main`
+
+  ## Covers
+
+  - TASK-248
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 42` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T20:07:47.780602570Z
+modified_at: 2026-05-15T20:07:47.780602570Z
+req_type: Story
