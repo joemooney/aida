@@ -58,12 +58,12 @@ description: |-
   - [ ] Pre-resume fresh-pull fires (composes with TASK-99)
   - [ ] TASK-111's end summary updated to mention resume option when CI failed (composes)
   - [ ] Tests cover fresh / resume / resume-failure / no-prior-session paths
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:23:13.837377870Z
-modified_at: 2026-05-15T15:03:34.423044400Z
+modified_at: 2026-05-15T15:51:59.302650916Z
 req_type: Task
 tags:
 - batch:tui-prereqs
@@ -151,3 +151,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:03:34.423044400Z
   implemented_by: joe
+  completed_at: 2026-05-15T15:51:59.302650916Z
+  completion_sha: 1095a8650acefa256d6f28793d7e0f9644e46ed6

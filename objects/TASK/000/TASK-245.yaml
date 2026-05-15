@@ -55,12 +55,12 @@ description: |-
   ## Discovered via
 
   2026-05-15 — PR-30 review found 7 partial specs + CI red. User attempted manual TASK-112 workaround to set up fixup worktree on implementer-queue-drain branch via aida session start; hit the 'branch already exists' error because aida session start always forks. Had to bypass to raw git worktree add. The friction validates this UX gap.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T13:54:39.804611197Z
-modified_at: 2026-05-15T15:10:08.894771415Z
+modified_at: 2026-05-15T15:51:59.302650916Z
 req_type: Task
 tags:
 - batch:tui-prereqs
@@ -79,3 +79,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:10:08.894771415Z
   implemented_by: joe
+  completed_at: 2026-05-15T15:51:59.302650916Z
+  completion_sha: 1786fe4b48e8dd3698fbedc4efa9de2a13e6cc71

@@ -50,12 +50,12 @@ description: |-
   ## Discovered via
 
   2026-05-15 — PR-30 (10-spec cluster-mode squash-merge) shipped cleanly but auto-bump fired for 0/10 specs. Manual aida db reconcile-status fixed it. This pattern will recur on every cluster-mode PR until the structural fix lands.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T14:29:59.179320451Z
-modified_at: 2026-05-15T15:16:23.003022572Z
+modified_at: 2026-05-15T15:51:59.302650916Z
 req_type: Bug
 tags:
 - auto-bump
@@ -72,3 +72,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:16:23.003022572Z
   implemented_by: joe
+  completed_at: 2026-05-15T15:51:59.302650916Z
+  completion_sha: 15b947e54984619caaeaf2b82ae608960e3effe7

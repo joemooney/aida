@@ -71,12 +71,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — community signals around /goal release (Claude Code 2.1.139, 2026-05-12) emphasized: 'The real discipline shifts to writing machine-checkable completion criteria upfront.' AIDA's metadata is exactly the right vocabulary. Filing this TASK is the concrete deliverable that makes AIDA + /goal a tighter composition than naive /goal usage.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:28:23.693582217Z
-modified_at: 2026-05-15T15:27:19.254572073Z
+modified_at: 2026-05-15T15:51:59.302650916Z
 req_type: Task
 tags:
 - autonomous-agents
@@ -146,3 +146,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:27:19.254572073Z
   implemented_by: joe
+  completed_at: 2026-05-15T15:51:59.302650916Z
+  completion_sha: e82fd62e91b42138458b057d514bdbdb281543da

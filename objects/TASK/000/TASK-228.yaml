@@ -44,12 +44,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 — scheduled wakeup at 21:43 PT fired /aida-review --pr 23 four minutes after PR-23 was merged. User saw 'Background work is running' prompt asking whether to wait or exit. The wakeup had no purpose; it should have been cancelled when CI completed.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T04:46:28.443236212Z
-modified_at: 2026-05-15T15:43:43.504728168Z
+modified_at: 2026-05-15T15:51:59.302650916Z
 req_type: Task
 tags:
 - batch:ux-polish
@@ -86,3 +86,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:43:43.504728168Z
   implemented_by: joe
+  completed_at: 2026-05-15T15:51:59.302650916Z
+  completion_sha: 6289fc6ea35e7b0fb404094b07941f7a503558e5
