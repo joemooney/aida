@@ -1,0 +1,1 @@
+../../aida-core/templates/skills/aida-rebase.md
