@@ -42,7 +42,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:13.445056882Z
-modified_at: 2026-05-14T15:24:32.329015736Z
+modified_at: 2026-05-15T00:33:44.570831559Z
 req_type: Task
 tags:
 - batch:friction-fixes
@@ -55,6 +55,20 @@ relationships:
 - rel_type: Child
   target_id: 019e134a-57d3-70e0-a15c-006dea10310d
   created_at: 2026-05-13T06:56:15.756137505Z
+comments:
+- id: 019e290d-b47a-7312-b310-3b19de387f7c
+  author: joe
+  content: |-
+    Implemented via PR-27 (commit fda6a44): https://github.com/joemooney/aida/pull/27
+
+    - build_project_context now appends a "Lifecycle Vocabulary" section naming the full Draft→Approved→Planned→In Progress→Done→Completed chain and disambiguating the two terminals (Done = on-branch, Completed = merged to main)
+    - All five META prompts (Evaluate, Find Duplicates, Suggest Relationships, Improve Description, Generate Children) include `{project_context}`, so they inherit the lifecycle vocabulary for free
+    - DEFAULT_GENERATE_CHILDREN_PROMPT also adds an explicit trailing sentence about child-spec status guidance (children start at Approved/Draft, flip to In Progress on pickup, Done on `aida queue done`, Completed on merge)
+    - Two tests cover: project_context contains the Lifecycle Vocabulary section + key phrasing; generate-children prompt explicitly names the Done set-point
+
+    Test status: 609/609 workspace tests green (2 new tests in ai::prompts::tests)
+  created_at: 2026-05-15T00:33:44.570831559Z
+  modified_at: 2026-05-15T00:33:44.570831559Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:24:32.329015736Z
