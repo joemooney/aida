@@ -1,0 +1,35 @@
+id: 019e2bcb-fa1e-79f1-b150-9a24600af7bb
+spec_id: STORY-131
+agreed_id: STORY-131
+title: 'Review PR-30: Implementer queue drain: git-verb surface + show/queue/session display polish (10 specs)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `implementer-queue-drain`.
+
+  - PR: <https://github.com/joemooney/aida/pull/30>
+  - Branch: `implementer-queue-drain` → `main`
+
+  ## Covers
+
+  - TASK-236
+  - TASK-237
+  - TASK-238
+  - TASK-234
+  - TASK-241
+  - TASK-105
+  - TASK-104
+  - TASK-103
+  - TASK-108
+  - TASK-106
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 30` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-15T13:20:48.670938082Z
+modified_at: 2026-05-15T13:20:48.670938082Z
+req_type: Story
