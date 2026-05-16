@@ -130,12 +130,12 @@ description: |-
   ## Origin
 
   User reflected 2026-05-15 after a long session manually orchestrating implementer → CI → reviewer → merge → pull cycles: *\"perhaps before focusing on the TUI, we could get \`aida work task-123\` to have an option to try to complete the process... basically when we exit the implementer claude session we automatically \`aida session end --wait-ci\` and when the ci finished we perform the \`aida work pr-123\` to complete that and if it is successful (return code 0) we would pull and build.\"* This STORY captures the orchestration primitive.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T05:14:38.848884130Z
-modified_at: 2026-05-16T05:33:30.935121960Z
+modified_at: 2026-05-16T16:13:47.945180394Z
 req_type: Story
 tags:
 - alpha-readiness
@@ -149,3 +149,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-16T05:14:41.169922232Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-16T16:13:47.945180394Z
+  implemented_by: joe
