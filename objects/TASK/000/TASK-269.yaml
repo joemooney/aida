@@ -72,11 +72,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:37:48.985304743Z
-modified_at: 2026-05-16T17:37:48.985304743Z
+modified_at: 2026-05-16T17:37:53.352753758Z
 req_type: Task
 tags:
 - aida-show
 - alpha-readiness
+- batch:display-polish
 - color-coding
 - display-polish
 - first-users
