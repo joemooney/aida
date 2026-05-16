@@ -1,0 +1,37 @@
+id: 019e2e18-5228-7b70-a9f0-861fa1c130f3
+spec_id: TASK-254
+agreed_id: TASK-254
+title: 'Temporarily revert STORY-137''s default-flip: aida-cli default = [] until empty-state TUI is discoverable (BUG-NEW)'
+description: |-
+  STORY-137 flipped \`aida-cli\`'s feature default to \`[\"tui\"]\`, shipping the TUI on by default. The empty-state TUI is undiscoverable (BUG just filed) — black screen, no help, no key hints. v0.8.0 cut now would ship a feature that frustrates first-time users.
+
+  Surgical action: one-line revert of the default flip, keeping the TUI subcommand AVAILABLE behind \`--features tui\` but not in the default feature set. Once the empty-state UX is fixed (BUG referenced), flip back on.
+
+  ## Acceptance
+
+  - [ ] \`aida-cli/Cargo.toml\` line \`default = [\"tui\"]\` → \`default = []\`
+  - [ ] PR title: *\"chore(tui): temporarily un-flip default-on until empty-state UX lands\"*
+  - [ ] Commit body references STORY-137 (the original flip) and the empty-state BUG
+  - [ ] Verify \`aida tui\` still works for users who explicitly built \`--features tui\` OR for the default binary if we keep \`default = [\"tui\"]\` — pick one of: (a) revert to default = [], (b) keep default but add empty-state help. Pick whichever is faster to ship.
+  - [ ] Recommended path: (a) revert default; ship empty-state-help in a follow-up STORY
+  - [ ] v0.8.0 release tag waits on this revert (don't release with undiscoverable TUI)
+
+  ## Why pick this over a forward-fix
+
+  A forward-fix (adding empty-state help in the same release window) is the "right" thing but requires designing + implementing the help UI under time pressure. A revert is one line + immediate. v0.8.0 still ships everything else (workflow tools, drain skill, BUG fixes, MCP modernization filings) — just not the default-on TUI.
+
+  ## Origin
+
+  User reported broken empty-state TUI 2026-05-15 immediately after STORY-137 flipped the default.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T00:03:26.376647792Z
+modified_at: 2026-05-16T00:03:26.376647792Z
+req_type: Task
+tags:
+- default-feature
+- emergency-fix
+- revert
+- tui
