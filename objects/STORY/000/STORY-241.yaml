@@ -85,12 +85,12 @@ description: |-
   ## Origin
 
   User articulated the workflow loop 2026-05-15 after BUG-109's implementer paused on welcome-panel design decisions. They wanted the broader mental model captured before iterating on the minimal fix.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:32:32.371630658Z
-modified_at: 2026-05-16T04:25:39.842095899Z
+modified_at: 2026-05-16T04:43:45.883744702Z
 req_type: Story
 tags:
 - alpha-gating
@@ -238,3 +238,7 @@ comments:
     User reflected after BUG-109's welcome panel shipped — explicit request to keep Ctrl-A but make direct keys primary in mission control.
   created_at: 2026-05-16T04:25:39.842095899Z
   modified_at: 2026-05-16T04:25:39.842095899Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-16T04:43:45.883744702Z
+  implemented_by: joe
