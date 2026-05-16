@@ -1,0 +1,16 @@
+id: 019e31a5-6f69-7381-9d8c-449af80078ee
+spec_id: TASK-262
+agreed_id: TASK-262
+title: Add automated coverage for RealPhaseDriver subprocess wiring
+description: 'STORY-246 ships the auto-complete orchestrator with full mock-driver coverage (27 tests against MockPhaseDriver exercising orchestrate()), but RealPhaseDriver — the actual subprocess wiring (spawn aida queue work, CI poll, lease discovery via .aida/sessions/ snapshot-diff, gh merge, aida pull, cargo build) — has zero automated coverage. The PR body discloses this honestly. Close the gap: either a scripted end-to-end smoke test with a fake ''claude'' binary on PATH, or focused tests for the discoverable units (discover_new_lease multiplicity 0/1/N, read_verdict_file malformed/missing JSON, ensure_queued_for_implementer idempotence). Found during PR-46 review deep-pass.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T16:36:26.089388165Z
+modified_at: 2026-05-16T16:36:26.089388165Z
+req_type: Task
+tags:
+- auto-complete
+- tech-debt
+- testing
