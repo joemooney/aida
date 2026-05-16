@@ -1,0 +1,43 @@
+id: 019e2e1d-cf4e-76a1-873e-a4e729be0dbd
+spec_id: BUG-110
+agreed_id: BUG-110
+title: 'TUI: install SIGTERM/SIGINT handler so killing the process restores terminal state (raw mode + cursor)'
+description: |-
+  TermGuard's RAII drop() restores raw mode + alt-screen + cursor on normal exit and panic, but not on SIGTERM or SIGINT (drop never runs when a signal terminates the process abruptly). Result: a user who kills \`aida tui\` from another terminal (\`kill <pid>\`, default SIGTERM) finds their shell stranded with cursor-hidden + raw-mode-on. Recovery requires \`reset\` or \`stty sane && tput cnorm\`.
+
+  SIGKILL is genuinely uncatchable — that one we can't fix. But SIGTERM and SIGINT are catchable, and installing a handler that runs the terminal-restore sequence before propagating the signal would handle the common case.
+
+  ## Observed (2026-05-15)
+
+  User invoked \`aida tui\` (empty scope). Black screen, undiscoverable (BUG-109). Killed the process from another terminal. Cursor never reappeared. Recovery via \`reset\` worked.
+
+  ## Acceptance
+
+  - [ ] On TUI launch, install signal handlers for SIGTERM + SIGINT (Unix) and CTRL_C_EVENT + CTRL_BREAK_EVENT (Windows)
+  - [ ] Handler: disable raw mode, leave alternate screen, show cursor (cnorm), then exit with the appropriate status code (or re-raise)
+  - [ ] Composes with TermGuard: don't double-restore. Use an atomic flag or check terminal state before restoring.
+  - [ ] Test: simulate SIGTERM during a running TUI, verify the parent shell's terminal is sane afterward
+  - [ ] SIGKILL behavior documented in TUI docs as the only case where \`reset\` may be required
+
+  ## Related
+
+  - TASK-248 (TermGuard raw-mode/alt-screen window) — same family: terminal-state correctness
+  - BUG-109 (empty-state discoverability) — same underlying user incident (user killed because they couldn't escape)
+  - STORY-132 (TUI shell + PTY-host) — original TermGuard implementation
+
+  ## Origin
+
+  User reported 2026-05-15 after killing TUI: *\"my blinking cursor is no longer showing after I killed the process, no visible cursor upon kill\"*. Recovery: \`reset\`.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T00:09:26.094137392Z
+modified_at: 2026-05-16T00:09:26.094137392Z
+req_type: Bug
+tags:
+- cleanup
+- signal-handling
+- termguard
+- terminal-state
+- tui
