@@ -1,0 +1,147 @@
+id: 019e2f35-3d80-7da2-893e-65bd6aa6e144
+spec_id: STORY-246
+agreed_id: STORY-246
+title: 'aida queue work --auto-complete: orchestrate full implementer→CI→reviewer→merge→pull lifecycle per spec'
+description: |-
+  Collapse the 5+ commands a user runs to ship a single spec into one: \`aida queue work <SPEC> --auto-complete\`. The orchestrator drives implementer → CI → reviewer → merge → pull → build automatically; the human only interacts inside the Claude sessions themselves.
+
+  ## The phases
+
+  \`\`\`
+  Phase 1: implementer session
+     aida queue work SPEC-X → exec Claude → human implements → /exit
+          ↓ (exit code 0 from Claude)
+  Phase 2: end + wait for CI
+     aida session end --wait-ci
+          ↓ (CI green; lease released; PR-N auto-queued to reviewer)
+  Phase 3: reviewer session
+     aida queue work PR-N → exec Claude → human reviews → /exit
+          ↓ (review verdict = Approved, captured by /aida-review)
+  Phase 4: merge
+     gh pr merge N --squash --delete-branch
+          ↓
+  Phase 5: pull + auto-bump
+     aida pull
+          ↓
+  Phase 6: build verify
+     cargo build --release
+          ↓
+  ✓ SPEC-X shipped, Completed, binary fresh
+  \`\`\`
+
+  ## User experience
+
+  \`\`\`
+  $ aida queue work TASK-247 --auto-complete
+
+  ▶ Phase 1: implementer session for TASK-247
+     [Claude session: implements, opens PR, exits]
+  ▶ Phase 2: CI on PR-46 ...........  green (3m 24s)
+  ▶ Phase 3: reviewer session for PR-46
+     [Claude session: reviews, verdict APPROVED, exits]
+  ▶ Phase 4: merging PR-46 (squash + delete-branch) ✓
+  ▶ Phase 5: aida pull → auto-bump 1 spec to Completed ✓
+  ▶ Phase 6: cargo build --release ✓
+
+  ✓ TASK-247 shipped (5m 18s total)
+  \`\`\`
+
+  ## Acceptance
+
+  ### Core orchestration
+
+  - [ ] \`aida queue work <SPEC> --auto-complete\` runs the 6 phases sequentially
+  - [ ] Each phase blocks on its predecessor; failure surfaces and stops the chain with a specific exit code
+  - [ ] Total elapsed time displayed at end (success or failure)
+  - [ ] \`--auto-complete --json\` emits one JSON line per phase transition (\`{\"phase\": \"implementer\", \"status\": \"started\", \"spec\": \"TASK-247\", ...}\`)
+
+  ### Exit codes (for programmatic consumers + TUI integration)
+
+  - \`0\` — success (all 6 phases complete)
+  - \`1\` — implementer phase failed (Claude session exited non-zero or aborted)
+  - \`2\` — CI failed (\`aida session end --wait-ci\` returned red)
+  - \`3\` — reviewer rejected (verdict ≠ Approved)
+  - \`4\` — merge failed (gh pr merge returned non-zero)
+  - \`5\` — \`aida pull\` failed (divergence, conflict)
+  - \`6\` — build failed (cargo build --release returned non-zero)
+
+  ### Reviewer verdict detection
+
+  - [ ] \`/aida-review\` skill writes a verdict file \`.aida/review-verdicts/PR-N.json\` with \`{\"verdict\": \"Approved|Rejected|RequestChanges\", \"summary\": \"...\"}\`
+  - [ ] Orchestrator reads the verdict file after reviewer Claude exits
+  - [ ] If verdict is not Approved, orchestrator stops at phase 3 with exit code 3 and prints next-step hints
+
+  ### Failure recovery hints
+
+  Each non-zero exit prints a specific recovery hint pointing at the right command:
+
+  - Exit 1 (implementer failed): \`aida queue work --resume <session-id>\` to continue
+  - Exit 2 (CI red): \`gh run view <run-id>\` to investigate; \`aida queue work PR-N --branch <branch> --steal\` to push fixups
+  - Exit 3 (review rejected): \`aida queue work <SPEC> --branch <branch> --steal\` to address review feedback
+  - Exit 4 (merge failed): \`gh pr view N\` to investigate
+  - Exit 5 (pull failed): \`aida rebase --dry-run --json\` to classify
+  - Exit 6 (build failed): \`cargo check --workspace\` for fast feedback
+
+  ### Variants
+
+  - [ ] \`--auto-complete=through-ci\` — stop after phase 2 (CI green; PR routed to reviewer queue; user does review manually)
+  - [ ] \`--auto-complete=through-merge\` — stop after phase 4 (skip pull + build; useful if user wants to batch pulls)
+  - [ ] \`--auto-complete=skip-build\` — phases 1-5 only (faster; build can happen lazily)
+  - [ ] Default \`--auto-complete\` is full pipeline (all 6 phases)
+
+  ### Tests
+
+  - [ ] Mock-Claude integration test: simulate clean implementer + reviewer sessions, verify orchestrator runs all 6 phases
+  - [ ] Failure-injection tests: each phase failure produces the correct exit code + hint
+  - [ ] CI-failure injection: simulate red CI, verify orchestrator stops at phase 2
+
+  ## Why this might be MORE important than STORY-244 (TUI launcher) for alpha
+
+  User's stated alpha wow (2026-05-15): *\"I need aida init → aida add → see the requirement → /aida-pickup in Claude → ship a PR.\"*
+
+  This STORY collapses the \"ship a PR\" half from 5+ commands into one. The CLI wow becomes:
+  \`\`\`
+  aida init
+  aida add --title \"My feature\"
+  aida queue work <SPEC> --auto-complete
+  \`\`\`
+
+  Three commands from cold-start to shipped feature. That's the demo. The TUI is gravy on top.
+
+  ## Composes with
+
+  - **TASK-249** (\`/aida-drain-queue\` skill) — queue drain becomes a loop over \`--auto-complete\`. Cleaner than the current per-step orchestration.
+  - **STORY-244** (TUI launcher) — TUI mission control \`Enter\` action invokes \`--auto-complete\` directly instead of dispatching individual steps
+  - **TASK-233** (\`aida session end --watch-ci\` — shipped) — orchestrator uses this for phase 2 live-progress
+  - **TASK-242** (\`aida goal\` helper — shipped) — could surface phase-by-phase completion conditions for an \`--auto-complete-with-goal\` mode (autonomous review verdict from /goal)
+  - **EPIC-23** (Session orchestration & autonomy) — natural parent; this is the headline orchestration primitive
+
+  ## Out of scope
+
+  - **Auto-approve from reviewer Claude** — \`--auto-complete\` requires a human in BOTH Claude sessions. Fully-autonomous variant (no human in reviewer) is a follow-up; risk profile is higher.
+  - **Multi-spec orchestration** — that's \`/aida-drain-queue\`'s job; this STORY is one-spec.
+  - **Notification integration** — no toast/desktop alerts on phase transitions; pure CLI output. Follow-up if useful.
+  - **--auto-complete with fixup-loop** — if review requests changes, currently stops at exit 3. Auto-fixup-loop (re-enter implementer with review feedback, iterate until approved) is genuinely useful but its own STORY.
+
+  ## Priority argument
+
+  This STORY directly enables the CLI alpha wow. STORY-244 enables the TUI alpha wow. The user has been explicit that the CLI workflow is the primary alpha story. Filing as **High** priority with the explicit suggestion: **consider moving this ahead of STORY-244 in the queue.**
+
+  ## Origin
+
+  User reflected 2026-05-15 after a long session manually orchestrating implementer → CI → reviewer → merge → pull cycles: *\"perhaps before focusing on the TUI, we could get \`aida work task-123\` to have an option to try to complete the process... basically when we exit the implementer claude session we automatically \`aida session end --wait-ci\` and when the ci finished we perform the \`aida work pr-123\` to complete that and if it is successful (return code 0) we would pull and build.\"* This STORY captures the orchestration primitive.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T05:14:38.848884130Z
+modified_at: 2026-05-16T05:14:38.848884130Z
+req_type: Story
+tags:
+- alpha-readiness
+- auto-complete
+- cli-wow
+- first-vertical-alpha
+- lifecycle
+- ping-pong
+- workflow-automation
