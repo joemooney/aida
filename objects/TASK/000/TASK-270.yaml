@@ -1,0 +1,71 @@
+id: 019e31df-2573-7b03-9415-3cb25a2c9df7
+spec_id: TASK-270
+agreed_id: TASK-270
+title: 'aida queue work: accept ''batch:NAME'' as positional, or suggest --batch flag in the error'
+description: |-
+  \`aida queue work batch:workflow-hint-polish\` fails with:
+
+  \`\`\`
+  Error: \`batch:workflow-hint-polish\` doesn't match any queued entry or known requirement
+  \`\`\`
+
+  The user's mental model: \`batch:workflow-hint-polish\` is the literal tag printed in \`aida queue list\`, so it should be a valid identifier to pass back. The actual syntax requires the \`--batch\` flag with the bare name:
+
+  \`\`\`
+  aida queue work --batch workflow-hint-polish
+  \`\`\`
+
+  Asymmetry between display vocabulary (with prefix) and command vocabulary (without prefix) trips up the first-user reflex to copy-paste from output.
+
+  ## Two fixes, both small
+
+  ### (a) Accept positional \`batch:NAME\` (preferred)
+
+  \`\`\`
+  aida queue work batch:workflow-hint-polish   # equivalent to --batch workflow-hint-polish
+  aida queue work TASK-X                       # unchanged
+  aida queue work PR-N                         # unchanged
+  \`\`\`
+
+  The argument parser already disambiguates SPEC-ID prefixes (TASK-, BUG-, STORY-, etc.). Adding \`batch:\` to the recognized-prefix set is small.
+
+  ### (b) Smarter error message (always useful)
+
+  When the positional argument starts with \`batch:\`, change the error to:
+
+  \`\`\`
+  Error: \`batch:workflow-hint-polish\` is a tag name, not a spec ID.
+     Did you mean: aida queue work --batch workflow-hint-polish
+  \`\`\`
+
+  ## Acceptance
+
+  - [ ] (Preferred) \`aida queue work batch:NAME\` is accepted as positional, equivalent to \`--batch NAME\`
+  - [ ] (Alternative or both) The error for unmatched positionals containing \`batch:\` suggests the \`--batch\` form
+  - [ ] Test: \`aida queue work batch:NAME\` picks the head of that batch (same as \`--batch NAME\`)
+  - [ ] Same applies to sibling commands that take \`--batch\`: \`aida queue list\`, \`aida queue progress\`
+
+  ## Composes with
+
+  - **failed-flag-attempts-are-ux-signals memory** — this filing is the pattern in action again
+  - **batch:workflow-hint-polish** (which the user was trying to work) — once this lands, the batch they were trying to drain works the way they expected
+  - **TASK-249** (\`/aida-drain-queue\` skill) — same family: the skill should also accept \`batch:NAME\` form
+
+  ## Origin
+
+  User attempted \`aida queue work batch:workflow-hint-polish\` 2026-05-16 after seeing the tag in \`aida queue list\` output. Reasonable mental model; the error didn't help.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T17:39:28.243433899Z
+modified_at: 2026-05-16T17:39:28.243433899Z
+req_type: Task
+tags:
+- alpha-readiness
+- batch
+- error-message
+- failed-flag-signal
+- first-users
+- positional-arg
+- queue-work
