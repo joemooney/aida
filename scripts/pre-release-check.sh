@@ -65,19 +65,34 @@ watch_run() {
 }
 
 dispatch_and_watch() {
+    # Snapshot the most recent workflow_dispatch run id BEFORE dispatching, so
+    # we can distinguish "my new run" from "a stale previous run." Without
+    # this, the post-dispatch poll returns a days-old run during the few-second
+    # registration window and `gh run watch` reports a stale conclusion —
+    # silently bypassing the freshness gate this script exists to enforce.
+    # trace:STORY-254 | ai:claude
+    local prev_id
+    prev_id=$(gh run list --workflow="$WORKFLOW" --branch main --event workflow_dispatch \
+                --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+
     echo "→ dispatching $WORKFLOW on main ..."
     gh workflow run "$WORKFLOW" --ref main
 
-    # The dispatched run takes a few seconds to register; poll for it.
+    # Poll for a run whose id differs from the snapshot — that's the one we
+    # just dispatched. The dispatched run takes a few seconds to register.
     local id=""
     for _ in $(seq 1 15); do
         sleep 4
-        id=$(gh run list --workflow="$WORKFLOW" --branch main --event workflow_dispatch \
+        local candidate
+        candidate=$(gh run list --workflow="$WORKFLOW" --branch main --event workflow_dispatch \
                 --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
-        [ -n "$id" ] && break
+        if [ -n "$candidate" ] && [ "$candidate" != "$prev_id" ]; then
+            id="$candidate"
+            break
+        fi
     done
     if [ -z "$id" ]; then
-        echo "error: dispatched the workflow but could not locate the run." >&2
+        echo "error: dispatched the workflow but could not locate the new run." >&2
         echo "       Check 'gh run list --workflow=$WORKFLOW' manually." >&2
         exit 1
     fi
