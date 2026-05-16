@@ -1,0 +1,26 @@
+id: 019e31d2-52a7-76d2-a2fa-8f8be810e601
+spec_id: STORY-249
+agreed_id: STORY-249
+title: 'Review PR-47: [AI:claude] feat(aida-pr): print ''about to happen'' banner before side effects (TASK-259)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e31b2`) for branch `task-259`.
+
+  - PR: <https://github.com/joemooney/aida/pull/47>
+  - Branch: `task-259` → `main`
+
+  ## Covers
+
+  - TASK-259
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 47` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T17:25:27.847305481Z
+modified_at: 2026-05-16T17:25:27.847305481Z
+req_type: Story
