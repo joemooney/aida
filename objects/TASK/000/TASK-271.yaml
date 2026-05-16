@@ -1,0 +1,26 @@
+id: 019e3214-867e-75d0-85b7-efcc67380809
+spec_id: TASK-271
+agreed_id: TASK-271
+title: 'Tighten BUG-114 genuine-miss error message: candidate ids vs --resume semantics'
+description: |-
+  The genuine-miss failure in `discover_orchestrated_lease` (aida-cli/src/main.rs, BUG-114) builds the message:
+
+    "could not match the orchestrated session (claude id …) to a session lease. Candidate lease(s): <X>, <Y>. Resume one manually with `aida queue work <spec> --resume <session-id>`."
+
+  The candidates listed are LEASE ids (from `lease_ids_in`). But `aida queue work --resume <id>` resolves <id> against CLAUDE SESSION ids — `resolve_resume_id` matches against `list_scope_sessions` (aida-cli/src/session.rs:740), which walks ~/.claude/projects/*/*.jsonl. A user who pastes a listed candidate lease id into --resume hits a second (clean) error.
+
+  Fix options (pick one):
+  - Drop the per-candidate list and suggest bare `aida queue work <spec> --resume` (picks most-recent recorded claude session), OR
+  - List the claude session ids instead of lease ids, OR
+  - Reword so the lease-id list is clearly diagnostic-only and not an argument to --resume.
+
+  Low priority — genuine-miss is a rare path (the deterministic claude-id pin from BUG-114 makes the miss itself uncommon). Surfaced in the PR-48 review (review story STORY-250).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T18:37:46.494688183Z
+modified_at: 2026-05-16T18:37:46.494688183Z
+req_type: Task
+tags:
+- batch:skills-polish
