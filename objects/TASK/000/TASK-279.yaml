@@ -1,0 +1,90 @@
+id: 019e322b-5d30-72a1-8c0a-f1a8733c1d79
+spec_id: TASK-279
+agreed_id: TASK-279
+title: Rename role:dialog's user-facing identity to 'advisor' (keep internal role name)
+description: |-
+  The \`dialog\` role's user-facing identity is being clarified. Internally the role name stays \`dialog\` (avoid churn — config, status lines, queue routing all wire to that identifier). User-facing identity becomes **\"advisor\"** — \"trusted counsel\" framing that maps better to the 6 responsibilities (friction-to-spec translator, mental model articulator, strategic gap detector, queue gardener, workflow orchestrator, memory curator) than \"dialog.\"
+
+  ## What changes (user-facing surfaces)
+
+  - [ ] **Role definition template** at \`aida-core/templates/roles/dialog.toml\` (or wherever role descriptions live) — \`description\` field becomes:
+
+    \`\`\`
+    Your AIDA advisor — trusted counsel across project lifetime.
+    Surfaces friction, articulates mental models, gardens the queue,
+    curates memory across sessions. Doesn't write code; produces specs,
+    comments, and structured artifacts.
+    \`\`\`
+
+  - [ ] **\`aida role show dialog\`** output reflects the new description (output format unchanged; the description text updates)
+
+  - [ ] **\`aida role list\`** output shows \"dialog (advisor)\" as the rendered identity, e.g.:
+    \`\`\`
+    implementer  — heads-down coding, drives a spec to Completed
+    reviewer     — reviews PRs, renders verdicts
+    dialog       — advisor: trusted counsel across project lifetime
+    \`\`\`
+
+  - [ ] **CLAUDE.md** (project-level) — wherever roles are mentioned, add the advisor framing
+  - [ ] **OVERVIEW.md** — if role:dialog is referenced, mention the advisor identity
+  - [ ] **Skill templates that reference dialog role** (e.g., \`/aida-capture\`, scaffolding skills) — update prose to use \"advisor\" framing where appropriate
+
+  ## What does NOT change (internal wiring)
+
+  - The role identifier \`dialog\` stays as-is everywhere in code
+  - \`role:dialog\` PS1 prefix and status line output unchanged (or optionally appends \" · advisor\" subtitle, implementer's call)
+  - \`aida queue add --for dialog\` still works
+  - \`AIDA_SESSION_ROLE=dialog\` env var unchanged
+  - Memory file naming (\`feedback_dialog_role_responsibilities.md\`) optionally renamed to \`feedback_advisor_role_responsibilities.md\` for cleanliness, but the rename is cosmetic — file content matters more than name
+
+  ## Memory file update (small additional scope)
+
+  Update \`/home/joe/.claude/projects/-home-joe-ai-aida/memory/feedback_dialog_role_responsibilities.md\`:
+
+  - First line of body: replace \"dialog role\" framing with \"dialog role (your AIDA advisor)\"
+  - Six-responsibilities section: rename to \"What an advisor does for an AIDA project\"
+  - Add a section: \"On naming\" — explain dialog is the internal identifier; advisor is the user-facing identity
+  - MEMORY.md index entry: update one-line hook to mention \"advisor\" framing
+
+  Optionally rename file to \`feedback_advisor_role_responsibilities.md\` if file cleanup is wanted; the implementer can decide based on how it sits with the rest of memory.
+
+  ## Acceptance
+
+  - [ ] Role description text updated to advisor framing in all listed surfaces
+  - [ ] \`aida role list\` / \`aida role show dialog\` reflect new copy
+  - [ ] CLAUDE.md / OVERVIEW.md mention advisor identity
+  - [ ] Memory file updated (rename optional)
+  - [ ] Status line behavior: unchanged by default; consider optional \" · advisor\" subtitle if it fits cleanly without bloat
+  - [ ] Tests for \`aida role\` commands assert the new description text
+
+  ## Why this matters for alpha
+
+  First-users seeing \`aida role list\` will encounter \"dialog\" as a name. \"Dialog\" sounds like \"just a chatbot\" — undersells the strategic + tactical role. \"Advisor\" immediately signals \"trusted counsel\" — standard corporate vocabulary; first-users grok it without AIDA-specific learning.
+
+  The split (internal name `dialog`, user-facing identity `advisor`) preserves the no-churn property (config unchanged) while improving the first-impression clarity.
+
+  ## Composes with
+
+  - **batch:alpha-docs** — sibling docs work; this is part of user-facing-vocabulary cleanup
+  - **feedback_dialog_role_responsibilities.md** memory — the role's responsibilities don't change; only the framing/naming
+  - **CLAUDE.md / OVERVIEW.md role mentions** — same reframing propagates
+
+  ## Origin
+
+  User asked 2026-05-16: *\"what about advisor?\"* after considering supervisor/overseer/foreman. \"Advisor\" maps best to the role's actual responsibilities (4 strong fits + 2 medium) and uses standard corporate vocabulary that translates beyond AIDA. The split (internal name vs user-facing identity) avoids the churn of renaming the role primitive.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T19:02:43.248239099Z
+modified_at: 2026-05-16T19:02:43.248239099Z
+req_type: Task
+tags:
+- advisor
+- alpha-readiness
+- batch:alpha-docs
+- dialog
+- documentation
+- role
+- user-facing
+- vocabulary
