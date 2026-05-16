@@ -108,7 +108,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:49:41.734450590Z
-modified_at: 2026-05-16T18:49:46.788165528Z
+modified_at: 2026-05-16T20:22:20.417092233Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -119,3 +119,29 @@ tags:
 - lifecycle
 - onboarding
 - readme
+comments:
+- id: 019e3274-4201-74a3-ba03-01a976e06952
+  author: joe
+  content: |-
+    ## Vocabulary callout: define \"auto-bump\" in the lifecycle section
+
+    When documenting the lifecycle (Draft → Approved → Planned → In Progress → Done → Completed), make \"auto-bump\" an explicit named concept. First-users hit this in the wild: their spec is Done, they merge the PR, then run \`aida pull\` and see the status flip — without knowing the term, the transition feels magical or unclear.
+
+    Suggested glossary entry:
+
+    > **auto-bump** — AIDA's automatic transition of a spec's status from \`Done\` → \`Completed\` when it detects the spec's work merged to the default branch. Triggered by \`aida pull\` (or \`aida db sync --pull\`), which scans new merge commits, parses \`(SPEC-ID)\` references, and flips matching Done specs to Completed.
+    >
+    > Three flavors:
+    > - **Direct match** — commit message says \`(TASK-N)\`, TASK-N flips
+    > - **Cluster-PR linkage** — one PR covers many specs via the review-story's \`Covers\` section
+    > - **Self-merge chain** — reviewer requested changes, implementer fixed, user self-merged without re-review; review story still flips
+    >
+    > When auto-bump misses, the manual replay is \`aida db reconcile-status --spec STORY-N\`.
+
+    Also reference in the State/Verb table: the **Completed** state's row should mention \"via auto-bump on \`aida pull\`\" so the user knows they don't drive that transition manually.
+
+    ## Origin
+
+    User asked 2026-05-16: *\"what does auto-bump mean?\"* — confirmed it's vocabulary that needs explicit definition in user-facing docs, not just implementation-detail handwaved in conversation.
+  created_at: 2026-05-16T20:22:20.417092233Z
+  modified_at: 2026-05-16T20:22:20.417092233Z
