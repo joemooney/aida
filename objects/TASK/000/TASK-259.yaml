@@ -66,12 +66,12 @@ description: |-
   ## Origin
 
   User requested 2026-05-16 (dialog role, friction-capture pattern): *\"when we run /aida-pr print out a banner explaining what is about to happen. Along the lines 'we have completed the implementation of ... Now we will ... and then you ...'\"*
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:21:23.113629365Z
-modified_at: 2026-05-16T16:21:23.113629365Z
+modified_at: 2026-05-16T16:53:33.653466785Z
 req_type: Task
 tags:
 - aida-pr
