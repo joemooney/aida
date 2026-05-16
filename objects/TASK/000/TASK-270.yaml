@@ -59,11 +59,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:39:28.243433899Z
-modified_at: 2026-05-16T17:39:28.243433899Z
+modified_at: 2026-05-16T17:39:32.955483251Z
 req_type: Task
 tags:
 - alpha-readiness
 - batch
+- batch:workflow-hint-polish
 - error-message
 - failed-flag-signal
 - first-users
