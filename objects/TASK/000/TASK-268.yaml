@@ -54,12 +54,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16: *\"why \`Start the review with aida queue work STORY-249 (or aida queue work PR-47 per TASK-85).\`? why not just \`aida queue work PR-47\`? What does \`per TASK-85\` mean?\"* — confirmed the SPEC-ID citation as a user-facing wart.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:31:13.138421089Z
-modified_at: 2026-05-16T20:54:27.091682013Z
+modified_at: 2026-05-16T20:54:38.376875586Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -80,3 +80,7 @@ comments:
   content: Commit e069cd74 references this requirement
   created_at: 2026-05-16T20:54:27.091682013Z
   modified_at: 2026-05-16T20:54:27.091682013Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-16T20:54:38.376875586Z
+  implemented_by: joe
