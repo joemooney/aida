@@ -1,0 +1,48 @@
+id: 019e3235-1c32-7a40-8e26-1d43ced66812
+spec_id: BUG-115
+agreed_id: BUG-115
+title: 'aida db block: ''low warning'' fires on lowest block even when higher block has capacity (warn-on-stale-info)'
+description: |-
+  \`aida db block status\` prints \"WARNING: Low, claim soon\" when the LOWEST numbered block has few IDs remaining, even when a HIGHER block has already been claimed with full capacity.
+
+  ## Observed (2026-05-16)
+
+  \`\`\`
+  $ aida db block status
+  Blocks for node 1:
+     BUG: 3 remaining (BUG-17..116) — WARNING: Low, claim soon
+     ...
+     BUG: 100 remaining (BUG-217..316)
+  \`\`\`
+
+  The warning fires on the BUG-17..116 block's 3 remaining, ignoring that BUG-217..316 has 100 IDs available. After a new block is claimed, the warning should look at the AGGREGATE of all claimed blocks for that type — not just the lowest-numbered one. Currently the user sees the warning every time they run \`aida add --type bug\`, even though they have plenty of headroom.
+
+  ## Acceptance
+
+  - [ ] Block-low warning uses aggregate remaining across all claimed blocks for a type, not just the lowest-numbered block
+  - [ ] Display shows total available: \"BUG: 103 remaining across 2 blocks (BUG-17..116, BUG-217..316)\"
+  - [ ] Warning threshold tied to the aggregate: e.g., \"warn if total remaining < 20 across all blocks\"
+  - [ ] Auto-claim suggestion remains when aggregate gets low
+
+  ## Composes with
+
+  - **BUG-89** family — same \"warn fires on stale information\" pattern as queue-identity confusion
+  - **aida add** flow — warning is most visible there; downstream impact is the noise loop
+
+  ## Origin
+
+  Dialog session 2026-05-15 to 2026-05-16: warnings fired ~5 times during the session for blocks that had higher-numbered blocks available with 100 IDs each. Cosmetic but noise. Captured during \`/aida-capture\` sweep.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T19:13:21.970743293Z
+modified_at: 2026-05-16T19:13:21.970743293Z
+req_type: Bug
+tags:
+- block-status
+- bug-89-family
+- first-users
+- low-priority
+- stale-info
+- warning
