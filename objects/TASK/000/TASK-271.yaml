@@ -24,3 +24,7 @@ modified_at: 2026-05-16T18:37:46.494688183Z
 req_type: Task
 tags:
 - batch:skills-polish
+relationships:
+- rel_type: Child
+  target_id: 019e31c8-4b68-7e73-9065-92717c138769
+  created_at: 2026-05-16T18:37:50.013476591Z
