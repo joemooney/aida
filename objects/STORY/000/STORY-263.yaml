@@ -1,0 +1,90 @@
+id: 019e331c-2c7d-7882-a682-79257f902e64
+spec_id: STORY-263
+agreed_id: STORY-263
+title: 'aida queue work --auto-complete --no-human: headless reviewer (and optionally implementer) for true overnight autonomy'
+description: |-
+  Today, \`--auto-complete\` spawns interactive Claude sessions for phase 1 (implementer) and phase 3 (reviewer). Each requires the human to Ctrl+D between phases for the orchestrator to advance. That's fine for daily-use \"watch a spec ship in 25min\" pattern but blocks **true overnight drain** — you can't walk away.
+
+  \`--no-human\` (opt-in flag) makes the orchestrator spawn Claude in **headless mode** (\`claude -p \"<prompt>\"\`) so each phase exits automatically when its single-turn response completes. No Ctrl+D needed.
+
+  **Default stays interactive** — TASK-291 (clear Ctrl+D instruction) is the polished default. \`--no-human\` is for power users who want \`aida queue work --batch X --auto-complete --no-human\` and walk away.
+
+  ## Acceptance
+
+  ### CLI flag
+
+  - [ ] \`--no-human\` accepted alongside \`--auto-complete\`
+  - [ ] \`--no-human\` enables headless mode for BOTH phase 1 (implementer) and phase 3 (reviewer) by default
+  - [ ] Sub-flags for granular control: \`--no-human=reviewer-only\` (headless phase 3 only; interactive phase 1) and \`--no-human=both\` (default)
+  - [ ] Aliases acceptable: \`--unattended\`, \`--headless\` — pick one canonical, accept the others as deprecated alias
+  - [ ] Composes with \`--batch\`: \`aida queue work --batch X --auto-complete --no-human\` is the canonical \"drain overnight\" form (requires TASK-285 too)
+
+  ### Headless reviewer (phase 3) — the SAFE first cut
+
+  - [ ] Orchestrator spawns \`claude -p \"/aida-review --pr <N>\" --permission-mode bypassPermissions --output-format=stream-json\`
+  - [ ] Reviewer runs to completion, writes verdict file, exits
+  - [ ] No Ctrl+D needed; orchestrator's child-wait returns; phase 4 fires
+  - [ ] If verdict is RequestChanges, orchestrator stops at phase 3 with the appropriate hint (existing BUG-218 logic)
+  - [ ] Headless reviewer can't run design-fork pauses — it MUST render a verdict on first pass; this is OK because /aida-review is verdict-rendering by design
+
+  ### Headless implementer (phase 1) — RISKIER but valuable
+
+  - [ ] Orchestrator spawns \`claude -p \"/aida-pickup <SPEC>\" --permission-mode bypassPermissions\` for phase 1
+  - [ ] Implementer Claude must detect headless mode (env var or argv inspection) and SKIP design-checkpoint pauses (per \`feedback_pause_for_design_input.md\` memory) — auto-choose sensible defaults
+  - [ ] If the spec genuinely requires design input that can't be auto-defaulted, the implementer MUST file a follow-up TASK explaining the deferred decision, NOT silently pick wrong
+  - [ ] After phase 1, the work is committed + PR opened; user reviews the result in the morning
+
+  ### Failure handling
+
+  - [ ] Any phase failure under \`--no-human\` mode → orchestrator captures failure context + writes telemetry (composes with TASK-266) — no manual recovery prompt at the terminal
+  - [ ] End-of-batch summary (if batch-mode): shipped count, shelved count, failure modes — surfaces what to triage the next morning
+  - [ ] \`aida usage --auto-complete --failures\` (TASK-266) shows what bailed
+
+  ### Documentation
+
+  - [ ] \`docs/aida-discipline/autonomous-drain.md\` (or sibling) describes the \`--no-human\` mode + when it's appropriate
+  - [ ] Specifically: small specs with clear acceptance bullets are good candidates; specs with explicit \"design fork\" mention in description are NOT (use interactive)
+  - [ ] CLAUDE.md notes the trade-off: interactive = better quality decisions, autonomous = better throughput; pick per session
+
+  ## Out of scope
+
+  - **Approving/rejecting the implementer's design retroactively** — once shipped, it's shipped; user reviews in the morning, files follow-ups if needed
+  - **Smart routing** (\"this spec needs human; that one doesn't\") — user decides per invocation
+  - **Parallel autonomous sessions** — single-spec at a time (until STORY-248 stacked-branches OR TASK-285 batch composition lands)
+  - **Persistent learning** from autonomous failures — TASK-266 (failure telemetry) covers the data capture; learning is a future iteration
+
+  ## Composes with
+
+  - **TASK-291** (interactive-mode clarity — \"Press Ctrl+D\" instruction) — TASK-291 is the polished DEFAULT; this STORY is the opt-in alternative
+  - **TASK-286** (orchestrator-aware skill menus) — under \`--no-human\`, menus shouldn't render at all because there's no human reading
+  - **STORY-246** (\`--auto-complete\` orchestrator) — adds the new mode; same orchestrator state machine
+  - **TASK-285** (\`--batch + --auto-complete\` composition) — \`--no-human\` is most valuable with batch; design assumes both work together
+  - **EPIC-28** (dependency-aware drain) — \`--no-human\` combined with shelving makes resilient autonomy real
+  - **feedback_pause_for_design_input.md** memory — explicit override: in \`--no-human\` mode, implementer skips design pauses and defers via follow-up TASK
+  - **TASK-266** (orchestrator failure telemetry) — required for triaging \`--no-human\` failures the next morning
+
+  ## Why post-alpha (probably)
+
+  Alpha users want \"watch a spec ship\" interactive value (the wow). Autonomous overnight drain is a power-user pattern that emerges after alpha shakes out the basic loop. Prerequisites: BUG-114, BUG-217, BUG-218 fixed (all done today); TASK-285 batch composition shipped; TASK-266 telemetry in place.
+
+  But the headless REVIEWER phase is so much safer than headless implementer — could ship reviewer-only as a first cut even pre-alpha.
+
+  ## Origin
+
+  User asked 2026-05-16: *\"if we could take the human out of the loop that would be great but I doubt claude code is going to allow that.\"* — actually Claude Code DOES support headless via \`claude -p\`, so this is feasible. User followed up: *\"file the autonomy STORY, but TASK-291 may be the default. We may want a different option like --no-human.\"*
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T23:25:44.957144080Z
+modified_at: 2026-05-16T23:25:44.957144080Z
+req_type: Story
+tags:
+- advanced-user
+- auto-complete
+- autonomous
+- headless
+- no-human
+- overnight-drain
+- post-alpha
+- unattended
