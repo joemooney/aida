@@ -1,0 +1,63 @@
+id: 019e31b3-57a7-7b01-b054-68ab05be6773
+spec_id: BUG-113
+agreed_id: BUG-113
+title: 'auto-bump + reconcile-status: review stories with populated Covers section still stuck at Done after merge (BUG-106 follow-up)'
+description: |-
+  BUG-106 shipped a fix for cluster-PR auto-bump linkage: \"PR-N → review-story → covers SPEC-X chain\" so review stories get auto-completed when their PR merges. But the fix has a gap: when the review story's status moves through In-Progress → Done (e.g., reviewer session marks it Done) BEFORE the merge-pull runs, the auto-bump on pull only scans Done specs and doesn't catch the In-Progress→Completed transition. The review story stays at Done forever unless manually flipped.
+
+  Worse, \`aida db reconcile-status --spec STORY-X\` doesn't implement the BUG-106 chain at all — it only does direct commit-message matching. So the manual replay tool can't fix what the auto-bump missed.
+
+  ## Observed (2026-05-16)
+
+  PR-46 merged 16:34 UTC carrying STORY-246 (\`--auto-complete\` orchestrator). After merge + pull:
+
+  - **STORY-246**: Completed ✓ (auto-bump worked on direct \`(STORY-246)\` commit reference)
+  - **STORY-247** (review story for PR-46): **stuck at Done** ✗
+    - Has \`## Covers\` section populated with \`- STORY-246\` ✓
+    - PR-46 is merged ✓
+    - Should have been auto-completed via the BUG-106 chain
+  - \`aida db reconcile-status --spec STORY-247\` returns \`No eligible flips for STORY-247. Either it's not at status Done, or no commit in the scan range references it.\` ← but it IS at Done; reconcile just doesn't look for the chain
+
+  ## Two underlying gaps
+
+  ### Gap 1: Auto-bump status-transition window
+
+  When a review story moves In-Progress → Done (typical: reviewer's \`/aida-review\` skill marks it Done at end of review), then the merge happens and \`aida pull\` runs auto-bump, the bump's scan only looks at specs at Done — but the linkage requires it to consider the chain regardless of the implementer-spec's prior transitions. If the timing produces an in-flight Done state at the wrong moment, the bump misses.
+
+  ### Gap 2: \`reconcile-status\` doesn't implement BUG-106's chain
+
+  \`reconcile-status\` is the manual replay tool for when auto-bump misses something. It should be the safety net. But it only does direct \`(SPEC-N)\` commit-message matching — it doesn't follow the PR-N → review-story → Covers chain that BUG-106 fixed for live auto-bump.
+
+  ## Acceptance
+
+  - [ ] \`reconcile-status\` includes BUG-106's chain logic: for each Done review-story, check if its referenced PR is merged AND any of its Covers entries are Completed; if so, flip review story to Completed
+  - [ ] Auto-bump's status-transition logic handles the case where the review story is at Done at the moment of pull, regardless of whether In-Progress→Done was recent
+  - [ ] Add a regression test: review story with Covers section, PR merges, pull runs, verify the review story flips to Completed in a single pass
+  - [ ] Add a regression test for \`reconcile-status --spec STORY-N\` on a stuck review story — must also flip it
+
+  ## Composes with
+
+  - **BUG-106** — this is its incomplete-case follow-up
+  - **STORY-246** (the orchestrator that just shipped) — uses auto-bump as part of its \`--auto-complete\` flow; if review stories don't complete cleanly, \`--auto-complete\` will surface this gap loudly
+  - **feedback_verify_before_filing.md** — verified by inspection of \`aida show STORY-247\` + reconcile-status output before filing
+
+  ## Manual fix applied
+
+  \`aida edit STORY-247 --status completed\` — works as a one-off but doesn't scale.
+
+  ## Origin
+
+  User noticed STORY-247 stuck at Done with the misleading display message *\"Awaiting commit — no commit references the spec yet — Next: commit the work with \`(SPEC-ID)\` in the message\"* after PR-46 merged. Asked for diagnosis. The display message is also misleading for review stories specifically — they don't need their own commit; they need the underlying PR's auto-bump to follow the BUG-106 chain.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T16:51:37.511646683Z
+modified_at: 2026-05-16T16:51:37.511646683Z
+req_type: Bug
+tags:
+- auto-bump
+- bug-106-followup
+- covers-chain
+- reconcile-status
+- review-story
