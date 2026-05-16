@@ -86,7 +86,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:31:11.178643234Z
-modified_at: 2026-05-16T20:31:11.178643234Z
+modified_at: 2026-05-16T20:33:39.497600400Z
 req_type: Story
 tags:
 - aida-init
@@ -97,3 +97,64 @@ tags:
 - knowledge-transfer
 - memories
 - scaffolding
+comments:
+- id: 019e327e-9ea9-7590-bf7b-591e8512e120
+  author: joe
+  content: |-
+    ## Three additions 2026-05-16 — based on follow-up discussion
+
+    User asked two follow-ups: (1) is the propagation memory itself a candidate for scaffolding propagation? (2) to what extent should there be project-specific extensions to AIDA's shipped skills?
+
+    These yield three small additions to STORY-255's scope:
+
+    ### Addition 1 — Split the propagation memory into generic + AIDA-specific halves
+
+    \`feedback_propagate_generic_discipline_via_scaffolding.md\` (written in AIDA dev project) has two layers:
+
+    - **Generic half** (\"ask the propagation question when writing a new memory\") → belongs in the scaffolded starter memory pack as e.g. \`feedback_classify_memory_propagation.md\`
+    - **AIDA-specific half** (\"AIDA's scaffolding channels are at these paths\") → stays in AIDA dev project memory only
+
+    Add a curation pass to STORY-255's implementation: when building the starter pack, strip AIDA-internal references from each memory file (file paths, internal SPEC references, AIDA-specific commands).
+
+    ### Addition 2 — Scaffold \`.claude/skills/local/\` directory + README
+
+    \`aida init\` scaffolds an empty \`.claude/skills/local/\` with a README:
+
+    \`\`\`
+    # Project-local skills
+
+    This directory holds skills specific to YOUR project, not shipped by AIDA.
+    - AIDA-shipped skills live at .claude/skills/*.md and are managed by
+      \`aida init --refresh\`
+    - Skills you write here are project-specific and never touched by refresh
+    - Examples: /deploy, /feature-flag, /run-integration-tests, etc.
+
+    Claude Code reads both directories; project-local skills compose with
+    AIDA-shipped ones.
+    \`\`\`
+
+    ### Addition 3 — Support \`<skill>.local.md\` per-project extensions
+
+    For projects that want to EXTEND (not replace) an AIDA-shipped skill:
+
+    - AIDA-shipped: \`.claude/skills/aida-capture.md\`
+    - Project addendum: \`.claude/skills/aida-capture.local.md\` (project-owned)
+    - The shipped skill's instructions include: *\"After applying this base guidance, also apply any rules in \`aida-capture.local.md\` if it exists.\"*
+    - \`aida init --refresh\` updates the base file; never touches \`.local.md\`
+
+    Update each scaffolded skill template's final section to point at its \`.local.md\` companion. Document the pattern in \`docs/aida-discipline/extending-skills.md\`.
+
+    ### Why these are additive
+
+    All three are *light convention* — no new mechanism, no extension grammar, no plugin system. Projects get:
+    - Their own skill directory (Addition 2)
+    - The ability to extend AIDA skills with project-specific addenda (Addition 3)
+    - The discipline of asking the propagation question themselves (Addition 1)
+
+    Without these, projects feel locked into AIDA's defaults. With them, AIDA stays opinionated AND extensible.
+
+    ### Origin
+
+    User asked 2026-05-16: *\"is that something that is also a project specific aida capture. And to what extent should there be project specific extensions to aida capture or other skills/commands?\"* — surfaced the project-specific-extension gap.
+  created_at: 2026-05-16T20:33:39.497600400Z
+  modified_at: 2026-05-16T20:33:39.497600400Z
