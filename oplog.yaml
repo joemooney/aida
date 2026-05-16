@@ -5548,5 +5548,13 @@ operations:
   timestamp: 2026-05-16T16:53:33.686507901Z
   kind: !SetStatus
     status: In Progress
-clock: 651
+- id: 019e31b7-2b5b-79f1-8af2-26c6051fa6e3
+  target_id: 019e31b6-d9ba-7d43-b77f-57a46165e034
+  author: aida
+  node_id: '1'
+  lamport: 652
+  timestamp: 2026-05-16T16:55:48.315515547Z
+  kind: !SetTitle
+    title: '/aida-pickup: pretty-print the picked-up spec at session start (in-terminal context, no separate aida show)'
+clock: 652
 node_id: '1'
