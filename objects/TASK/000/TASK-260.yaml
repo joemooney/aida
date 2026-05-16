@@ -62,7 +62,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:27:19.857342230Z
-modified_at: 2026-05-16T17:47:12.311286211Z
+modified_at: 2026-05-16T18:18:44.749667424Z
 req_type: Task
 tags:
 - aida-pickup
@@ -75,6 +75,23 @@ tags:
 - skill
 - table-format
 - ux
+comments:
+- id: 019e3203-1a8d-7800-8c00-f98de36aa374
+  author: joe
+  content: |-
+    Implemented on branch task-260 (commit a960bc3a):
+
+    - Converted all 8 multi-option end-of-session next-steps templates —
+      aida-pickup.md Step 6 (4 templates), aida-pr.md Step 12 (2), and
+      aida-review.md Step 11 (2) — from numbered-bullet lists to GFM
+      Path / What happens / Why tables
+    - Each skill's glyph-convention block states the rule verbatim; the Why
+      column carries the role/lease/worktree implication
+    - New docs/skills-convention.md documents the convention
+
+    Test status: skill-template + docs change — no unit-test surface; cargo fmt --all --check clean
+  created_at: 2026-05-16T18:18:44.749667424Z
+  modified_at: 2026-05-16T18:18:44.749667424Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T17:47:12.311286211Z
