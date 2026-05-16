@@ -1,0 +1,91 @@
+id: 019e3217-175b-7241-bc03-ed46ec697616
+spec_id: TASK-272
+agreed_id: TASK-272
+title: '/aida-pickup: detect batch context, offer cluster-mode continuation before /aida-pr'
+description: |-
+  When the implementer is draining a batch (\`aida queue work --batch NAME\`), \`/aida-pickup\` and the end-of-session next-steps prompt should detect the batch context and offer **cluster-mode continuation** as the primary option, BEFORE \`/aida-pr\`.
+
+  Today the next-steps menu after shipping a batch item looks like:
+
+  \`\`\`
+  1 ▶ continue   /aida-pickup     Next: <next-batch-item or next-implementer-item>
+  2 ⇒ pr         /aida-pr          Submit task-260 for review
+  3 ⏸ pause      Ctrl+D            ...
+  \`\`\`
+
+  Problem: option 2 \`/aida-pr\` exits the cluster pattern. If the user wanted to drain the rest of the batch in cluster mode (all on one branch, one PR at end), they need option 1 with batch awareness.
+
+  ## Proposed behavior
+
+  When inside a batch drain (detected via the active session's manifest or via \`--batch\` flag history), the end-of-session menu becomes:
+
+  \`\`\`
+  ┌──────────────────┬─────────────────────────────┬─────────────────────────────────────────────────┐
+  │       Path       │       What happens          │                       Why                       │
+  ├──────────────────┼─────────────────────────────┼─────────────────────────────────────────────────┤
+  │ 1 ▶ continue     │ /aida-pickup --batch        │ Next batch item: TASK-267 — workflow-hint       │
+  │   Next in batch  │   workflow-hint-polish      │ stops short                                     │
+  │                  │                             │                                                 │
+  │                  │                             │ Stays on same branch + Claude conversation —    │
+  │                  │                             │ accumulates as a cluster.                       │
+  ├──────────────────┼─────────────────────────────┼─────────────────────────────────────────────────┤
+  │ 2 ⇒ cluster-pr   │ /aida-pr                    │ Wrap all batch items shipped so far as one PR   │
+  │   Submit batch   │                             │ (currently: TASK-260 + 1 more if pre-shipped).  │
+  ├──────────────────┼─────────────────────────────┼─────────────────────────────────────────────────┤
+  │ 3 ⏸ pause        │ Ctrl+D                      │ Step out. Batch state retained — resume with    │
+  │   Step out       │ (test, debug, continue      │ \`aida queue work --batch <NAME>\`                │
+  │                  │  later)                     │                                                 │
+  ├──────────────────┼─────────────────────────────┼─────────────────────────────────────────────────┤
+  │ 4 ⏵ pr-and-exit  │ /aida-pr → exit             │ Ship JUST TASK-260 as a single PR (drops the    │
+  │   Solo PR        │ → aida session end          │ rest of the batch; pick up later individually). │
+  └──────────────────┴─────────────────────────────┴─────────────────────────────────────────────────┘
+  \`\`\`
+
+  Options 1 and 2 are batch-aware (continue clustering / wrap cluster). Options 3 and 4 are the existing flow.
+
+  ## Detection mechanism
+
+  - \`aida queue work --batch <NAME>\` writes \`batch_name = \"<NAME>\"\` into the session manifest at \`.aida/sessions/<id>.toml\`
+  - \`/aida-pickup\` checks for this; if present, offers batch-aware options
+  - When the batch is exhausted, fall back to the non-batch menu
+
+  ## Acceptance
+
+  - [ ] Session manifest records the \`batch_name\` when invoked via \`--batch\`
+  - [ ] \`/aida-pickup --batch <NAME>\` (used from inside the active session, not spawning a new worktree) picks up the next batch member as additional commits on the same branch
+  - [ ] End-of-session menu detects batch context and reorders/relabels options (cluster-pr becomes option 2; single-pr-exit becomes option 4)
+  - [ ] When batch is exhausted, menu reverts to single-spec form
+  - [ ] \`/aida-pr\` invoked in batch context auto-includes ALL batch items shipped so far in the PR body and trace comments
+  - [ ] Tests cover: batch detection, batch-aware menu rendering, cluster PR opening
+
+  ## Composes with
+
+  - **TASK-260** (Path/Action/Why next-steps tables) — this TASK extends the menu shape with batch awareness
+  - **batch:workflow-hint-polish** — the batch this would unblock for cleaner drain
+  - **TASK-249** (\`/aida-drain-queue\` skill) — autonomous flavor of the same workflow; this TASK is the interactive flavor
+  - **STORY-248** (stacked-branch pipelining) — post-alpha; this TASK ships the cluster-mode foundation first
+  - **STORY-246** (\`--auto-complete\`) — orchestrator already cluster-mode-aware internally; this TASK exposes the same to interactive use
+
+  ## Why this matters for alpha
+
+  First-users dogfooding workflow-hint-polish or display-polish will run \`aida queue work --batch NAME\` and expect cluster-mode to Just Work. Right now they'll either hit Path 1 (slow sequential) or have to know to manually re-pickup. Cluster-mode as the FIRST suggestion is the dialog-shaped UX.
+
+  ## Origin
+
+  User asked 2026-05-16 after draining the first batch item (TASK-260): *\"As implementer the last command was aida queue work --batch workflow-hint-polish but mid stream claude suggested a PR which we are completing... does that really jive with our flow? Did I need to leave that chat in order to unlock so that the PR work review could proceed?\"*
+
+  The honest answer: leaving wasn't strictly necessary (different scopes can run in parallel), but cluster-mode was the natural fit for the batch and wasn't surfaced.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T18:40:34.651717351Z
+modified_at: 2026-05-16T18:40:34.651717351Z
+req_type: Task
+tags:
+- aida-pickup
+- alpha-readiness
+- batch-drain
+- cluster-mode
+- next-steps
+- workflow-automation
