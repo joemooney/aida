@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:30:35.541902232Z
-modified_at: 2026-05-16T19:05:37.434046536Z
+modified_at: 2026-05-16T19:08:25.904394907Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
@@ -68,6 +68,18 @@ comments:
   content: Commit c15acff2 references this requirement
   created_at: 2026-05-16T19:05:22.078985116Z
   modified_at: 2026-05-16T19:05:22.078985116Z
+- id: 019e3230-97b0-70d1-8b62-d5fdfef5dfb4
+  author: joe
+  content: |-
+    Implemented on branch task-250 (commit c15acff2):
+
+    - `aida queue list`'s "Done — awaiting merge" section now sub-classifies each open-PR row into four PR-lifecycle states (review not started / in progress / approved / merged-pre-pull), replacing the blanket "Next: merge PR-N" hint.
+    - State 2 (review in progress) is detected via a PR-scoped session lease or an In-Progress `Review PR-N:` story (`detect_local_review_state`, gh-free); State 3 via gh `reviewDecision == APPROVED`; State 4 via `gh pr list --state merged` on a branch with no open PR.
+    - Design note: State 3 uses gh `reviewDecision` rather than review-story status because `Review PR-N:` stories are filed at status `approved` ("ready to work", never a verdict) — so they can't distinguish State 1 from State 3. On solo-dev own-PRs State 3 cleanly falls back to State 1.
+
+    Test status: 12 new tests cover every state transition; 83 queue + 5 in-flight tests green; cargo fmt --check clean.
+  created_at: 2026-05-16T19:08:25.904394907Z
+  modified_at: 2026-05-16T19:08:25.904394907Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T19:05:37.434046536Z
