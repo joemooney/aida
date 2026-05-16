@@ -4271,3 +4271,11 @@ Ten queued implementer items shipped as ten separate PRs (#31–#40), each branc
 - **BUG-103** (PR #40) — CI: "Pin stable toolchain & verify cargo" step (`rustup default stable` + a `grep` guard) fixes the intermittent macos `cargo → rustup-init` flake.
 
 Net: `aida-cli` test suite grew 403 → 438 passing; every PR `cargo fmt --check`-clean. Tracked in-code with `trace:<SPEC>` comments throughout.
+
+## Session 56: Implementer Pickup — TASK-259 `/aida-pr` "about to happen" banner (2026-05-16)
+
+**Request:** `/aida-pickup TASK-259` — give `/aida-pr` a preview banner so first-time users aren't surprised by the comment writes, branch push, PR creation, and reviewer-queue routing it performs.
+
+`/aida-pr` is a Claude Code skill (markdown), so the banner is a new workflow step, not Rust. Added **step 5 — "Print the about-to-happen banner"** to `aida-core/templates/skills/aida-pr.md`, positioned after the last read-only check (step 4, `cargo fmt --check`) and *before* the first mutation (step 6, `aida comment add`). Renumbered subsequent steps 5→6 … 11→12 and fixed every in-prose `step N` cross-reference. The banner has three sections — ✓ Completed (past tense, real data: spec/title/branch/commit+file+LOC counts/specs covered), ▶ Now I will (the four side effects in execution order: comments → push → PR → auto-queue), ↓ Then you can (four next-action commands). Suppressed by `--quiet` / `AIDA_NO_BANNER=1` (autonomous flows) and skipped in non-TTY contexts; a `sleep 3` pause gives a Ctrl-C abort window before any mutation.
+
+**Spec correction:** the spec's original mockup listed "mark spec Done" as a side effect — `/aida-pr` never transitions status (step 3 *refuses* unless every covered spec is already `Done`). Paused for design input (AskUserQuestion + banner previews); user chose the accurate side-effect list and asked to strike "mark spec Done" from the spec. Edited the TASK-259 description's banner mockup + Acceptance accordingly. Also updated the thin `aida-core/templates/commands/aida-pr.md` wrapper (`--quiet` in Usage + a banner step).

@@ -80,7 +80,7 @@ cargo fmt --all -- --check
 
 If `cargo fmt --all -- --check` exits non-zero:
 
-- STOP — do not push, do not run `gh pr create`, do not add comments per step 5
+- STOP — do not push, do not run `gh pr create`, do not add comments per step 6
 - Report the drifted files (the diff output names them); typical fix is one command:
   ```bash
   cargo fmt --all
@@ -92,7 +92,82 @@ Skip silently for non-Rust projects (no `Cargo.toml` at the repo root). This is 
 
 Bypass: `--skip-fmt-check` for the rare case where drift is intentional (e.g. an in-flight rustfmt config change). Default is to refuse.
 
-### 5. Attach an implementation summary comment per spec (STORY-81)
+### 5. Print the "about to happen" banner — trace:TASK-259
+
+`/aida-pr` performs side effects — per-spec comments, a branch push, the
+PR itself, the reviewer-queue story — and the first two land *before*
+the step-9 confirm. A first-time user typing `/aida-pr` should never be
+surprised by what reaches GitHub. Print a banner that previews the whole
+sequence, then hold a short abort window, BEFORE any side effect runs.
+
+**When to print:** after step 4 (the last read-only check) and before
+step 6 (`aida comment add`, the first write). Every value the banner
+needs is already in hand — the branch from step 1, the commit / file /
+LOC counts from step 2, the verified spec IDs + titles from step 3.
+
+**When to skip** the banner entirely (go straight to step 6 — no banner,
+no pause) if ANY of these hold:
+
+- `--quiet` is among the skill arguments, or the env var `AIDA_NO_BANNER`
+  is set (`AIDA_NO_BANNER=1`). Autonomous flows — `/goal`, STORY-246's
+  `aida queue work --auto-complete` orchestrator — print their own phase
+  headers and must not stall on an interactive pause.
+- stdout is not a TTY (`[ -t 1 ]` is false). Piped or captured output
+  shouldn't carry box-drawing or a human-facing countdown — keep logs clean.
+
+**Banner format** — three sections, past → present → future:
+
+```
+═══════════════════════════════════════════════════════════════════
+▶ /aida-pr — opening pull request for <lead-SPEC>
+═══════════════════════════════════════════════════════════════════
+
+  ✓ Completed: <lead-SPEC> — "<title>"
+                Branch:  <branch>  (status: Done)
+                Commits: <N>  ·  <F> files  ·  +<add> / -<del> LOC
+                Specs covered: <SPEC-1>, <SPEC-2>, ...
+
+  ▶ Now I will:
+       1. Attach an implementation-summary comment to each covered spec
+       2. Push branch `<branch>` + orphan aida-store to origin
+       3. Open a pull request against `<base>` with an auto-generated body
+       4. Auto-queue a review story for your reviewer role
+
+  ↓ Then you can:
+       • aida session end --wait-ci   # block until CI completes
+       • aida queue work PR-<n>       # start the review session
+       • gh pr merge <n> --squash     # merge once approved
+       • aida pull                    # auto-bump the spec to Completed
+
+  (Press Ctrl-C to abort, or wait 3s to continue...)
+═══════════════════════════════════════════════════════════════════
+```
+
+Fill every `<...>` placeholder with real data — the box rules and glyphs
+are literal:
+
+- **✓ Completed** — past tense; what is already done. The lead spec's ID
+  + title, the branch name (`status: Done` — verified in step 3), the
+  commit count, and the file count + `+add / -del` LOC totals from
+  `git diff --shortstat <base>..HEAD`. `Specs covered` lists every
+  REQ-ID in the batch (the step-3 set).
+- **▶ Now I will** — the side effects this skill is about to perform, in
+  execution order: the per-spec comments (step 6), the push (step 7),
+  the PR (step 10), the reviewer-queue story (step 11). This list is the
+  contract — it must match what the skill actually does. `/aida-pr` does
+  **not** transition spec status: step 3 already required every spec to
+  be `Done`, so there is deliberately no "mark Done" line.
+- **↓ Then you can** — the four next-action commands, in the order the
+  user runs them once the PR is open.
+
+**The pause is the safety valve.** After printing the banner, pause ~3
+seconds (`sleep 3`) so the user can interrupt (Ctrl-C / Esc) before the
+first side effect. If the pause elapses untouched, proceed to step 6.
+
+Keep the emoji glyphs (`▶ ✓ ↓ ═ •`) — they carry the section structure,
+and AIDA's CLI output uses them deliberately.
+
+### 6. Attach an implementation summary comment per spec (STORY-81)
 
 For each `Done` / `Completed` REQ-ID derived in step 2, run:
 
@@ -119,9 +194,9 @@ Mechanically derived — no creative writing required:
 
 Skip the comment for trivial fixes whose entire commit body is one line (typo, doc bump, lint) — the commit subject is the whole context.
 
-Once the PR opens (step 8) and the URL is known, revise the comments to include the actual PR URL via `aida comment edit`. This step is best-effort — if the user cancels before step 8, the comments still survive as useful "implemented via commit <sha>" markers.
+Once the PR opens (step 10) and the URL is known, revise the comments to include the actual PR URL via `aida comment edit`. This step is best-effort — if the user cancels before step 10, the comments still survive as useful "implemented via commit <sha>" markers.
 
-### 6. Push code + orphan store
+### 7. Push code + orphan store
 
 The orphan-branch store changes have to land before the PR is opened — otherwise reviewers see commits referencing requirements they can't `aida show`.
 
@@ -139,7 +214,7 @@ gh pr list --head <branch> --state open --json number
 
 If the branch's previous PR has already merged, `aida push` warns and prompts before continuing — the commit would land on `origin/<branch>` but never reach `main`. Don't say "Pushed `<sha>` to PR-N" if PR-N is merged; the right action is a follow-up PR (`gh pr create --base main --head <branch>`) or cherry-picking onto a fresh branch off `origin/main`.
 
-### 7. Draft the PR title + body
+### 8. Draft the PR title + body
 
 **Title format** (mirrors PR-3 through PR-6):
 
@@ -171,14 +246,14 @@ Derive `N` from the dominant `@EPIC-N` chip across the batch's requirements; der
 - [ ] <other smoke tests run during development>
 ```
 
-### 8. Confirm with the user
+### 9. Confirm with the user
 
 Show the title and the Summary paragraph. Ask explicitly: "Open this PR?"  The user can:
-- Accept (proceed to step 9)
+- Accept (proceed to step 10)
 - Edit the title/summary inline (revise and re-confirm)
 - Cancel (no `gh pr create` call)
 
-### 9. Open the PR
+### 10. Open the PR
 
 ```bash
 gh pr create --base <base> --head <branch> --title "<title>" --body "$(cat <<'EOF'
@@ -189,9 +264,9 @@ EOF
 
 Use HEREDOC for the body so markdown formatting and code fences survive intact.
 
-### 10. Auto-queue the review for the reviewer role — trace:STORY-90 BUG-86
+### 11. Auto-queue the review for the reviewer role — trace:STORY-90 BUG-86
 
-Right after `gh pr create` returns the URL (and BEFORE step 11's URL output), file the reviewer story:
+Right after `gh pr create` returns the URL (and BEFORE step 12's URL output), file the reviewer story:
 
 ```bash
 aida pr auto-queue-review
@@ -214,7 +289,7 @@ The command prints one of four shapes. Each MUST be relayed verbatim, with a cle
 ✓ filed STORY-N (covers SPEC-1, SPEC-2, ...) → reviewer queue (PR #<n>)
 ```
 
-Quote the line verbatim. Step 11's "Next steps" template renders the success path.
+Quote the line verbatim. Step 12's "Next steps" template renders the success path.
 
 *Idempotent re-fire (ⓘ already exists):*
 
@@ -242,14 +317,14 @@ This is non-fatal but the reviewer queue is empty. Tell the user explicitly: "th
 
 The exit code is non-zero on this path. STOP — do not pretend the hand-off succeeded:
 
-1. Tell the user explicitly that step 10 FAILED and the reviewer queue is empty
+1. Tell the user explicitly that step 11 FAILED and the reviewer queue is empty
 2. Quote the exact error line + the re-run command
 3. The most common causes are `gh` unauthenticated (`gh auth status`), `gh` not on PATH, or a network blip — suggest the user run `gh auth status` first
 4. The session-end backup will retry later as a fail-safe, but the user shouldn't depend on that — fixing it now keeps the implementer→reviewer hand-off tight
 
-Step 11's "Next steps" template branches on whether step 10 succeeded — the *auto-queue skipped/failed* variant is for the by-design and needs-attention paths.
+Step 12's "Next steps" template branches on whether step 11 succeeded — the *auto-queue skipped/failed* variant is for the by-design and needs-attention paths.
 
-### 11. Output the URL + Next steps — trace:TASK-87 trace:TASK-110
+### 12. Output the URL + Next steps — trace:TASK-87 trace:TASK-110
 
 Print the URL `gh` returned. Then surface a structured
 `Next steps (recommended order):` block so the implementer→reviewer hand-off
@@ -274,7 +349,7 @@ gh run list --branch <pr-branch> --limit 1 --json status,conclusion 2>/dev/null
 aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
 ```
 
-Combine with step 10's auto-queue outcome (✓ filed / ⓘ already exists /
+Combine with step 11's auto-queue outcome (✓ filed / ⓘ already exists /
 ⚠ skipped).
 
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
@@ -297,7 +372,7 @@ Next steps (recommended order):
   2. ⏵ Start review session → from parent shell: `aida queue work <STORY-X>` (or `aida queue work PR-<N>`)
 ```
 
-*Auto-queue skipped/failed (⚠ outcome from step 10):*
+*Auto-queue skipped/failed (⚠ outcome from step 11):*
 
 ```
 PR-<N> opened: <url>
@@ -313,8 +388,8 @@ Print exactly one block — don't dump both templates.
 ## Composes With
 
 - `/aida-commit` — commit first, then PR. Skill chain: commit → pr.
-- `/aida-code-review` — sister skill on the reviewer side; opens automatically once `aida pr auto-queue-review` (step 10) fires.
-- STORY-66 / STORY-90 (auto-queue PR for reviewer) — primary trigger is step 10 here; `aida session end` re-fires the same logic as an idempotent backup so a forgotten /aida-pr (or a raw `gh pr create`) still ends up routed to the reviewer.
+- `/aida-code-review` — sister skill on the reviewer side; opens automatically once `aida pr auto-queue-review` (step 11) fires.
+- STORY-66 / STORY-90 (auto-queue PR for reviewer) — primary trigger is step 11 here; `aida session end` re-fires the same logic as an idempotent backup so a forgotten /aida-pr (or a raw `gh pr create`) still ends up routed to the reviewer.
 - BUG-74 — gh detection uses an explicit PATH walk + absolute-path fallback so the auto-queue isn't fooled by a stripped child-process PATH. `AIDA_DEBUG_GH=1` prints the search trace when gh ends up not found.
 
 ## Common Failure Modes
