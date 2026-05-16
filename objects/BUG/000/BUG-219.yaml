@@ -40,12 +40,12 @@ description: |-
   ## Origin
 
   User observed 2026-05-16: *\"would \`aida work\` clean these up or what should I do?\"* — after seeing 4 stale Approved review stories in the reviewer queue. \`aida queue work\` isn't the right cleanup tool (merged PRs can't be reviewed); manual flip works; the underlying auto-bump should handle this case.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:53:25.986865011Z
-modified_at: 2026-05-16T23:07:09.282742318Z
+modified_at: 2026-05-16T23:17:15.597700011Z
 req_type: Bug
 tags:
 - approved-state
@@ -81,3 +81,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-16T23:04:27.415290503Z
   implemented_by: joe
+  completed_at: 2026-05-16T23:17:15.597700011Z
+  completion_sha: 04cd909d2811953d1f4ddc6858d4862fc0615116
