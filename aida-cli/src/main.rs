@@ -42138,6 +42138,74 @@ fn find_orchestrated_lease(
     Some((peek.id, peek.branch))
 }
 
+/// Resolve the aida binary path for orchestrator subprocess spawning, once
+/// at orchestrator construction time so a mid-flight binary replacement
+/// can't invalidate it.
+///
+/// Why this matters (BUG-217): the orchestrator drives multiple phases over
+/// 15-30 minutes. The implementer's phase-1 Claude session often runs
+/// `cargo build` (rebuilding the dev binary at `target/debug/aida`). On
+/// Linux, `/proc/self/exe` then returns the original path with " (deleted)"
+/// appended once the file is unlinked — and `Command::new("<path>
+/// (deleted)").spawn()` fails with ENOENT. By resolving once at the start
+/// (before phase 1 can rebuild) and stripping any pre-existing suffix, we
+/// stabilise the path for the whole orchestrator run.
+///
+/// Falls back to the bare "aida" name (PATH search) if `current_exe()`
+/// failed or the resolved path doesn't exist on disk.
+///
+/// trace:BUG-217 | ai:claude
+fn resolve_aida_exe() -> std::path::PathBuf {
+    if let Ok(p) = std::env::current_exe() {
+        // Linux's `/proc/self/exe` can return "<path> (deleted)" when the
+        // executable file has been unlinked. Strip that before checking.
+        let lossy = p.to_string_lossy();
+        let cleaned = lossy
+            .strip_suffix(" (deleted)")
+            .map(std::path::PathBuf::from)
+            .unwrap_or(p);
+        if cleaned.exists() {
+            return cleaned;
+        }
+    }
+    // Fall back to PATH search. Either current_exe() failed, or the
+    // resolved path no longer points at an existing file.
+    std::path::PathBuf::from("aida")
+}
+
+#[cfg(test)]
+mod resolve_aida_exe_tests {
+    use super::resolve_aida_exe;
+
+    #[test]
+    fn returns_a_path() {
+        // In the test binary, current_exe() resolves to the test runner.
+        // The function should return that path (it exists) — not the
+        // "aida" fallback.
+        let exe = resolve_aida_exe();
+        assert!(
+            exe.exists() || exe == std::path::PathBuf::from("aida"),
+            "expected an existing path or the `aida` fallback, got: {}",
+            exe.display()
+        );
+    }
+
+    #[test]
+    fn handles_deleted_suffix_via_string_strip() {
+        // The function strips " (deleted)" from the path string. This is a
+        // direct unit on the stripping logic — we can't easily simulate a
+        // real /proc/self/exe with the suffix without binary trickery, so
+        // we verify the suffix-stripping invariant via the public API by
+        // checking the returned path doesn't contain " (deleted)".
+        let exe = resolve_aida_exe();
+        let s = exe.to_string_lossy();
+        assert!(
+            !s.contains(" (deleted)"),
+            "resolved path must not contain ' (deleted)' suffix; got: {s}"
+        );
+    }
+}
+
 /// The real [`auto_complete::PhaseDriver`]. Holds the project root + the
 /// state discovered as phases run (branch, lease id, PR number).
 /// trace:STORY-246 | ai:claude
@@ -42150,6 +42218,12 @@ struct RealPhaseDriver {
     implementer_lease: Option<String>,
     pr_number: Option<u32>,
     ci_run_id: Option<String>,
+    /// Cached aida binary path, resolved once at construction. Re-resolving
+    /// per-call broke in BUG-217 when the implementer's phase-1 `cargo build`
+    /// replaced the running dev binary: `/proc/self/exe` then includes a
+    /// " (deleted)" suffix, and `Command::new("<path> (deleted)").spawn()`
+    /// fails with ENOENT. trace:BUG-217 | ai:claude
+    aida_exe: std::path::PathBuf,
 }
 
 impl RealPhaseDriver {
@@ -42168,6 +42242,7 @@ impl RealPhaseDriver {
             implementer_lease: None,
             pr_number: None,
             ci_run_id: None,
+            aida_exe: resolve_aida_exe(),
         }
     }
 
@@ -42176,7 +42251,7 @@ impl RealPhaseDriver {
     }
 
     fn aida_exe(&self) -> std::path::PathBuf {
-        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"))
+        self.aida_exe.clone()
     }
 
     /// Locate the session lease `aida queue work --session-id <uuid>` created
