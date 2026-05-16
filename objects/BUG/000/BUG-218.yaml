@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:43:28.745969796Z
-modified_at: 2026-05-16T22:38:12.002155591Z
+modified_at: 2026-05-16T22:38:13.319350652Z
 req_type: Bug
 tags:
 - auto-complete
@@ -47,6 +47,16 @@ tags:
 - misleading-hint
 - recovery-hint
 - workflow-hint-polish
+comments:
+- id: 019e32f0-aa8c-73f1-978b-bf27f29d8a2b
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-16-bug-218-recovery-hint-failure-kind.md
+    filed 0 task(s)
+    declined 1:
+      - TASK-266 can now bucket auto-complete failures by the `kind` slug in the
+  created_at: 2026-05-16T22:38:13.644342464Z
+  modified_at: 2026-05-16T22:38:13.644342464Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T22:38:12.002155591Z
