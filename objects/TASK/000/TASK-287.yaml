@@ -1,0 +1,51 @@
+id: 019e3290-f2b8-72d1-a268-166193b59b2b
+spec_id: TASK-287
+agreed_id: TASK-287
+title: Strip trace:/SPEC-ID markers from clap doc comments so 'aida <cmd> --help' is clean
+description: |-
+  Follow-up from TASK-268's audit.
+
+  `clap` renders `///` doc comments on commands and arguments into `aida <cmd> --help` output. ~250 doc-comment lines in `aida-cli/src/cli.rs` carry `trace:STORY-57 | ai:claude`-style markers (and inline `(TASK-45)` / `(BUG-87)` parentheticals). They leak into help text every user reads.
+
+  Confirmed instance — `aida queue add --help` literally prints:
+    --scope ...  trace:STORY-57 | ai:claude
+    --global ... trace:FR-1-012 | ai:claude
+    --force ...  Bypass the TASK-45 guard ... trace:TASK-45 | ai:claude
+
+  This is the same wart as TASK-268 (internal SPEC-ID citations in user-facing output), at ~250x scale and on the surface every user hits first. It was scoped OUT of TASK-268 (whose acceptance was `println/eprintln/format!` strings) and filed here so the sweep gets its own acceptance criteria.
+
+  ## The fix needs a method decision
+
+  The `trace:` markers are the code-to-spec traceability mechanism — they cannot just be deleted. The clean fix preserves traceability while removing it from `--help`:
+
+  - Pure trailing `/// trace:X | ai:claude` lines (~101): convert to a plain `// trace:X | ai:claude` comment above the field/struct. Still a code comment, no longer help text.
+  - Inline citations (`... trace:STORY-57 | ai:claude` ending a `///` sentence; `(TASK-45)` mid-sentence): strip the citation from the `///` line, add/keep a `//` trace comment nearby.
+
+  ## Acceptance
+
+  - [ ] No `trace:` marker or bare SPEC-ID appears in any `aida <cmd> --help` output (spot-check: `aida queue add`, `aida queue work`, `aida session end`, `aida edit`, `aida add`)
+  - [ ] Every clap field/command that had a `trace:` marker keeps an equivalent `// trace:` comment in code (traceability preserved)
+  - [ ] Inline `(TASK-N)` / `(BUG-N)` parentheticals removed from `///` doc comments; descriptive prose retained
+  - [ ] `cargo build` + `cargo fmt --all -- --check` clean
+  - [ ] Follows the rule in docs/user-facing-text-conventions.md
+
+  ## Composes with
+
+  - TASK-268 (parent audit — fixed the println/eprintln instance + wrote the convention doc)
+  - TASK-267, TASK-260, TASK-259 — workflow-hint / UX polish family
+  - First-users alpha readiness
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T20:53:40.664367503Z
+modified_at: 2026-05-16T20:53:40.664367503Z
+req_type: Task
+tags:
+- alpha-readiness
+- batch:workflow-hint-polish
+- clap-help
+- first-users
+- internal-citations
+- user-facing-text
+- workflow-hint
