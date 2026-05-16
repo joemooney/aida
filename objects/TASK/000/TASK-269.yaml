@@ -1,0 +1,84 @@
+id: 019e31dd-a1b9-71f2-8e29-855763189fbb
+spec_id: TASK-269
+agreed_id: TASK-269
+title: 'aida show: color-code Status field + reprint as last line (always-visible glance signal)'
+description: |-
+  \`aida show <ID>\` output can be 50-150 lines (description + acceptance + comments + git linkage). The Status field at the top scrolls off-screen for long specs. Users have to scroll up to answer the most important question: *\"what state is this spec in right now?\"*
+
+  Two small fixes compound:
+
+  1. **Color-code Status inline** — so the eye catches it during a quick scan
+  2. **Reprint Status as the LAST line** of output — always visible at the cursor position after the command completes
+
+  ## Proposed color map (terminal colors)
+
+  | Status | Color | Glyph |
+  |---|---|---|
+  | Draft | dim grey | ◯ |
+  | Approved | cyan | ▸ |
+  | Planned | blue | ▷ |
+  | InProgress | yellow | ◐ |
+  | Done | bright green | ◉ |
+  | Completed | green | ✓ |
+  | Rejected | red | ✗ |
+
+  Glyphs are bonus — they help colorblind users and copy-paste consumers see the status without color.
+
+  ## Proposed output shape
+
+  \`\`\`
+  ID: TASK-259
+  UUID: 019e3197-...
+  Title: /aida-pr: print 'about to happen' banner ...
+  Type: Task
+  Status: ✓ Completed        ← color-coded inline (top)
+  Priority: Medium
+  ...
+
+  [description, acceptance, comments, git linkage]
+
+  ────────────────────────────────────────
+  Status: ✓ Completed        ← reprinted at bottom, color-coded
+  (or: Status: ◐ In Progress  ← if changes during display, repeats current)
+  \`\`\`
+
+  ## Acceptance
+
+  - [ ] \`aida show <ID>\` displays Status with color + glyph at the top (existing position)
+  - [ ] At the end of the output, after a horizontal rule, repeats \`Status: <glyph> <status>\` color-coded
+  - [ ] Respects \`NO_COLOR\` env var (no escape codes when set; degrades to plain text + glyphs)
+  - [ ] Respects \`user_likes_emoji.md\` — glyphs preserved
+  - [ ] Color choices stable across themes (TASK-256 — Catppuccin/Dark/Light/Nord): use semantic colors that look right on dark + light backgrounds
+  - [ ] Consider applying the same status-glyph + color across \`aida list\`, \`aida queue list\`, \`aida session leases\`, etc., for consistency
+
+  ## Composes with
+
+  - **TASK-256** (TUI theming — Catppuccin/Dark/Light/Nord) — color choices should map cleanly across themes
+  - **user_likes_emoji.md** — glyphs are explicitly preserved
+  - **first-users alpha readiness** — status is the most-asked question; surfacing it loudly is leverage
+  - **\`aida list\` / \`aida queue list\`** — these already show status in brackets; could adopt the same color + glyph for consistency
+
+  ## Out of scope
+
+  - **Per-status background colors** (e.g., red background for Rejected) — too loud; foreground color is enough
+  - **Color in JSON output** — \`aida show --json\` stays plain (machine-consumer)
+  - **Custom user-defined status palettes** — bonus, follow-up
+
+  ## Origin
+
+  User asked 2026-05-16 after running \`aida show TASK-259\` and noticing Status was the most-glance-worthy field but buried near the top: *\"should we color code Status, or maybe better as the last line in the output reprint the status color coded.\"*
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T17:37:48.985304743Z
+modified_at: 2026-05-16T17:37:48.985304743Z
+req_type: Task
+tags:
+- aida-show
+- alpha-readiness
+- color-coding
+- display-polish
+- first-users
+- status
+- visibility
