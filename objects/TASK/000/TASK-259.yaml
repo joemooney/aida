@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:21:23.113629365Z
-modified_at: 2026-05-16T16:53:33.653466785Z
+modified_at: 2026-05-16T16:56:35.011278341Z
 req_type: Task
 tags:
 - aida-pr
@@ -80,3 +80,42 @@ tags:
 - skill
 - transparency
 - ux
+comments:
+- id: 019e31b7-e1c3-73f2-be9a-a808c140127f
+  author: joe
+  content: |-
+    ## Correction 2026-05-16 — spec mockup was inaccurate
+
+    Implementer (during pickup, pausing for design input — \`feedback_pause_for_design_input.md\` pattern working) noted the spec's \"Now I will\" list didn't match actual \`/aida-pr\` workflow. My drafted mockup was based on incomplete reading of the skill — same friction pattern as the \`session prune\` flag-guessing mistake. Verified accurate side effects with the implementer:
+
+    **Actual side effects of \`/aida-pr\`:**
+
+    1. (BEFORE banner could pause) Adds per-spec implementation-summary comment to each spec referenced by trace comments
+    2. Refuses to proceed unless every covered spec is already at status \`Done\` — does NOT mark them Done itself
+    3. (After user confirmation) Push branch to origin
+    4. Open PR against main with auto-generated body
+    5. Auto-queue PR-N as review story for the reviewer role
+
+    ## Two implementation options the implementer should choose between
+
+    **Option A: Banner FIRST, comments AFTER (preferred)**
+
+    Refactor \`/aida-pr\` so the banner is the FIRST action, before any side effects. Then \"Now I will\" honestly lists: comments, push, PR, auto-queue. User gets agency to Ctrl-C before ANY mutation.
+
+    **Option B: Banner LAST, reports done + pending**
+
+    Keep current order. Banner appears AFTER comments are added. Splits into:
+    - \"✓ Completed (already done):\" — implementation comments added to N specs
+    - \"▶ Now I will:\" — push, open PR, auto-queue
+
+    Option A is cleaner UX. Option B is smaller refactor. Implementer's call.
+
+    ## Updated acceptance — strike 'mark spec Done'
+
+    The original acceptance criterion said \"mark spec Done\" — this is **wrong**. Remove it. Replace with: \"verify all covered specs are already Done; refuse to proceed if any are not.\"
+
+    ## Origin
+
+    Dialog-role spec drafted without running \`/aida-pr --help\` or reading \`aida-core/templates/skills/aida-pr.md\` first. Same pattern as the \`session prune\` flag-guessing failure from earlier today. The \`feedback_run_help_before_suggesting_flags.md\` memory should be extended to include \"verify skill workflows by reading templates, not just CLI help.\"
+  created_at: 2026-05-16T16:56:35.011278341Z
+  modified_at: 2026-05-16T16:56:35.011278341Z
