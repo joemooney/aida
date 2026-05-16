@@ -20,10 +20,10 @@ description: |-
                   Specs covered: STORY-X, BUG-Y
 
     ▶ Now I will:
-         1. Push branch \`feature/story-x\` to origin
-         2. Open PR-N against \`main\` with auto-generated body
-         3. Auto-queue PR-N as a review story for your reviewer role
-         4. Mark STORY-X status: in-progress → done
+         1. Attach an implementation-summary comment to each covered spec
+         2. Push branch \`feature/story-x\` to origin
+         3. Open PR-N against \`main\` with auto-generated body
+         4. Auto-queue PR-N as a review story for your reviewer role
 
     ↓ Then you can:
          • aida session end --wait-ci        # block until CI completes
@@ -40,7 +40,8 @@ description: |-
   - [ ] \`/aida-pr\` (in \`aida-core/templates/skills/aida-pr.md\`) prints the banner BEFORE any side-effecting action
   - [ ] Banner sections: **Completed** (past tense — what was done) / **Now** (active — what /aida-pr will do) / **Then you** (next user actions)
   - [ ] The **Completed** section pulls real data: spec ID + title, branch name, commit count, file count, +/- LOC, specs covered (via trace comments)
-  - [ ] The **Now** section lists exactly the side effects in order: push, open PR, auto-queue review story, mark spec Done
+  - [ ] The **Now** section lists exactly the side effects in order: attach per-spec comments, push, open PR, auto-queue review story
+  - [ ] \`/aida-pr\` does NOT transition spec status — it verifies every covered spec is already \`Done\` and refuses to proceed if any are not (corrected 2026-05-16, see comment)
   - [ ] The **Then you** section gives the 4 next-action commands in order
   - [ ] A 3-second pause after the banner lets the user Ctrl-C to abort
   - [ ] \`--quiet\` flag (or \`AIDA_NO_BANNER=1\` env var) suppresses the banner for autonomous flows (\`/goal\`, \`--auto-complete\` from STORY-246)
@@ -71,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:21:23.113629365Z
-modified_at: 2026-05-16T16:56:35.011278341Z
+modified_at: 2026-05-16T17:05:51.319910837Z
 req_type: Task
 tags:
 - aida-pr

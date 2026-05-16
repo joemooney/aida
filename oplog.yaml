@@ -5556,5 +5556,77 @@ operations:
   timestamp: 2026-05-16T16:55:48.315515547Z
   kind: !SetTitle
     title: '/aida-pickup: pretty-print the picked-up spec at session start (in-terminal context, no separate aida show)'
-clock: 652
+- id: 019e31c0-5ef8-7a43-af8e-68caf942e8b9
+  target_id: 019e3197-a829-7903-b76c-6a540f0e743d
+  author: aida
+  node_id: '1'
+  lamport: 653
+  timestamp: 2026-05-16T17:05:51.352713441Z
+  kind: !SetDescription
+    description: |-
+      \`/aida-pr\` opens a PR without explaining what's about to happen. For first-users especially, this is opaque — they ran \`/aida-pr\` and are surprised by the PR creation, branch push, reviewer-queue routing, and CI launch. A banner that previews the sequence sets expectations and gives the user agency (Ctrl-C to abort).
+
+      ## Banner format
+
+      Three sections, matching how a human would describe the workflow:
+
+      \`\`\`
+      ═══════════════════════════════════════════════════════════════════
+      ▶ /aida-pr — opening pull request for STORY-X
+      ═══════════════════════════════════════════════════════════════════
+
+        ✓ Completed: STORY-X — \"Add user authentication endpoint\"
+                      Branch:  feature/story-x
+                      Commits: 3 (12 files, +234 / -45 LOC)
+                      Specs covered: STORY-X, BUG-Y
+
+        ▶ Now I will:
+             1. Attach an implementation-summary comment to each covered spec
+             2. Push branch \`feature/story-x\` to origin
+             3. Open PR-N against \`main\` with auto-generated body
+             4. Auto-queue PR-N as a review story for your reviewer role
+
+        ↓ Then you can:
+             • aida session end --wait-ci        # block until CI completes
+             • aida queue work PR-N              # start the review session
+             • gh pr merge N --squash            # merge if approved
+             • aida pull                         # auto-bump to Completed
+
+        (Press Ctrl-C to abort, or wait 3s to continue...)
+      ═══════════════════════════════════════════════════════════════════
+      \`\`\`
+
+      ## Acceptance
+
+      - [ ] \`/aida-pr\` (in \`aida-core/templates/skills/aida-pr.md\`) prints the banner BEFORE any side-effecting action
+      - [ ] Banner sections: **Completed** (past tense — what was done) / **Now** (active — what /aida-pr will do) / **Then you** (next user actions)
+      - [ ] The **Completed** section pulls real data: spec ID + title, branch name, commit count, file count, +/- LOC, specs covered (via trace comments)
+      - [ ] The **Now** section lists exactly the side effects in order: attach per-spec comments, push, open PR, auto-queue review story
+      - [ ] \`/aida-pr\` does NOT transition spec status — it verifies every covered spec is already \`Done\` and refuses to proceed if any are not (corrected 2026-05-16, see comment)
+      - [ ] The **Then you** section gives the 4 next-action commands in order
+      - [ ] A 3-second pause after the banner lets the user Ctrl-C to abort
+      - [ ] \`--quiet\` flag (or \`AIDA_NO_BANNER=1\` env var) suppresses the banner for autonomous flows (\`/goal\`, \`--auto-complete\` from STORY-246)
+      - [ ] Banner respects \`user_likes_emoji.md\` — emoji glyphs preserved (▶ ✓ ↓ ═)
+      - [ ] No banner output when running in non-TTY contexts (e.g., piped to a file) — keeps logs clean
+
+      ## Composes with
+
+      - **STORY-246** (\`--auto-complete\` orchestrator) — uses \`--quiet\` to avoid banner noise mid-orchestration; the orchestrator prints its own phase headers
+      - **/aida-pickup, /aida-review, /aida-commit** — could get the same banner treatment in follow-up TASKs (sibling skills)
+      - **First-users-in-days** alpha — banners are the cheapest way to make actions transparent to fresh users
+      - **user_likes_emoji.md** memory — preserves the emoji glyphs in banners
+
+      ## Why this matters for alpha
+
+      A first-time user typing \`/aida-pr\` should never be surprised. They should know:
+      1. What I just did is recognized (Completed)
+      2. What's about to happen to my code/GitHub state (Now)
+      3. What I do next (Then you)
+
+      The 3-second pause is the safety valve. The banner is the contract.
+
+      ## Origin
+
+      User requested 2026-05-16 (dialog role, friction-capture pattern): *\"when we run /aida-pr print out a banner explaining what is about to happen. Along the lines 'we have completed the implementation of ... Now we will ... and then you ...'\"*
+clock: 653
 node_id: '1'
