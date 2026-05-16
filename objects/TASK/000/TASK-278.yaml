@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:53:57.712289137Z
-modified_at: 2026-05-16T19:29:04.973883778Z
+modified_at: 2026-05-16T19:32:09.841460493Z
 req_type: Task
 tags:
 - aida-review
@@ -47,6 +47,19 @@ tags:
 - gh-pr-review
 - state-detection
 - workflow-hint
+comments:
+- id: 019e3246-51f1-75a1-ab49-a41ab3cbad0e
+  author: joe
+  content: |-
+    Implemented via commit 102fb0df (PR pending):
+
+    - /aida-review step 8 now synthesizes the overall verdict and, on a fully-positive verdict, fires `gh pr review <N> --approve` before the merge question — so `gh reviewDecision` flips to APPROVED even if the merge is deferred (TASK-250 State 3 reads this).
+    - Symmetric own-PR handling: own-PR + approve skips the formal call (GitHub blocks self-approval) and surfaces the one-line note, mirroring the existing TASK-216 request-changes skip.
+    - Existing request-changes path left byte-identical (criterion 3 said "(existing)").
+
+    Test status: no automated tests — skill template (markdown) change; `cargo fmt --all -- --check` clean.
+  created_at: 2026-05-16T19:32:09.841460493Z
+  modified_at: 2026-05-16T19:32:09.841460493Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T19:29:04.973883778Z
