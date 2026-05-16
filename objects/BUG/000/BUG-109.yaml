@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:03:23.325463299Z
-modified_at: 2026-05-16T00:53:41.964553761Z
+modified_at: 2026-05-16T01:04:16.626152321Z
 req_type: Bug
 tags:
 - default-on
@@ -47,6 +47,21 @@ tags:
 - empty-state
 - tui
 - ux
+comments:
+- id: 019e2e50-04f2-7791-9e71-f43d2b087b3c
+  author: joe
+  content: |-
+    Implemented via PR-44 (commit 2e766c96):
+
+    - welcome.rs: centered empty-state welcome panel — context line, top 5 Ctrl-A bindings, relaunch-with-scope banner
+    - help.rs: prefix-? (and bare ? in the empty shell) keybinding cheatsheet, grouped Sessions/Tabs/Overlays/Lifecycle
+    - rotating status-strip hint (3s ticker), paused while the prefix is armed
+    - TUI is now a persistent shell — last hosted session ending returns to the welcome panel instead of exiting
+
+    Test status: 51/51 aida-tui tests green
+    Follow-up: TASK-255 (mission-control empty state) filed — overlaps STORY-241, dedupe pending
+  created_at: 2026-05-16T01:04:16.626152321Z
+  modified_at: 2026-05-16T01:04:16.626152321Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T00:53:41.964553761Z
