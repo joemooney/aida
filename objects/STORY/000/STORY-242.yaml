@@ -59,12 +59,12 @@ description: |-
   ## Origin
 
   User reflected 2026-05-15 after a 14+ hour session orchestrating EPIC-26 ship + 12 follow-up filings: *\"this conversation feels like a role and worth having open all the time when working on a project.\"* Captured the realization that the conversation surface itself — not just the code or the queue — is a load-bearing project artifact.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:42:21.797075011Z
-modified_at: 2026-05-16T00:42:21.797075011Z
+modified_at: 2026-05-16T04:45:24.221751477Z
 req_type: Story
 tags:
 - dialog-role
