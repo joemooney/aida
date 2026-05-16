@@ -1,0 +1,99 @@
+id: 019e327c-5b4a-7743-b1dd-f40e9ec04c53
+spec_id: STORY-255
+agreed_id: STORY-255
+title: 'aida init: ship a starter discipline pack — generic memories + docs/aida-discipline/'
+description: |-
+  The AIDA dev project's memory directory (\`~/.claude/projects/-home-joe-ai-aida/memory/\`) has accumulated ~10 generic discipline-discovery entries that describe **how to use AIDA effectively** — applies to ANY AIDA-using project, not just AIDA's own development. Currently this corpus is invisible to projects scaffolded by \`aida init\`: every new project re-discovers the same friction the AIDA dev sessions captured.
+
+  This STORY ships the corpus as scaffolding: a starter discipline pack new projects inherit on \`aida init\`.
+
+  ## The corpus (audit from 2026-05-16 conversation)
+
+  Generic memory entries (all written in AIDA's dev project, all GENERIC to AIDA usage):
+
+  1. **\`feedback_dialog_role_responsibilities.md\`** — Advisor role has 6 responsibilities (friction-to-spec, mental model articulation, strategic gap detection, queue gardening, workflow orchestration, memory curation). Not a code-implementer.
+  2. **\`feedback_check_in_flight_before_rejecting.md\`** — Before rejecting a spec, check \`aida session leases\` for active work.
+  3. **\`feedback_trust_reviewer_over_dialog_intuition.md\`** — When reviewer verdict conflicts with dialog recommendation, trust the reviewer.
+  4. **\`feedback_run_help_before_suggesting_flags.md\`** — Run \`<cmd> --help\` / read the template / inspect the artifact before suggesting flags or specifying behavior.
+  5. **\`feedback_precise_lifecycle_vocabulary.md\`** — Don't conflate committed / pushed / merged / completed / released under fuzzy \"ship.\"
+  6. **\`feedback_parallel_vs_sequential_ui.md\`** — \"Next steps\" UI splits into parallel choices (table) vs sequential steps (numbered list).
+  7. **\`feedback_goal_prompt_phrasing.md\`** — /goal prompts: use only real flags; mechanism clauses shape workflow.
+  8. **\`feedback_pause_for_design_input.md\`** — Implementer pauses for design forks before sleepwalking through UX-laden work.
+  9. **\`feedback_verify_before_filing.md\`** — Verify symptom's cause via diagnostic commands before filing.
+  10. **\`feedback_failed_flag_attempts_are_ux_signals.md\`** — Failed CLI flag attempts are UX gaps worth filing.
+
+  All 10 are AIDA-using discipline. None require the AIDA codebase to apply.
+
+  ## Three propagation channels (this STORY's scope)
+
+  ### Channel A — \`docs/aida-discipline/\` scaffolded by \`aida init\` (REQUIRED)
+
+  - [ ] \`aida-core/templates/docs/aida-discipline/\` holds canonical markdown of each discipline area
+  - [ ] Files: \`advisor-role.md\`, \`lifecycle-vocabulary.md\`, \`workflow-patterns.md\` (goal phrasing, parallel-vs-sequential UI), \`session-discipline.md\` (in-flight checks, design pauses, verify-before-filing)
+  - [ ] \`aida init\` scaffolds this directory into the new project's \`docs/aida-discipline/\`
+  - [ ] CLAUDE.md template adds a one-line \"Discipline for AIDA-using sessions\" section pointing at \`docs/aida-discipline/README.md\`
+
+  ### Channel B — starter memory pack (OPT-IN via flag)
+
+  - [ ] \`aida-core/templates/memories/\` holds the 10 generic memory files PLUS a \`MEMORY.md\` skeleton
+  - [ ] \`aida init --with-memories\` (opt-in) writes the pack to \`~/.claude/projects/<slug>/memory/\`
+  - [ ] First-time projects skip by default; sophisticated users opt in
+  - [ ] Each starter memory file's frontmatter carries an \`originSessionId: aida-scaffold\` marker so they're identifiable as scaffolded vs user-written
+
+  ### Channel C — CLAUDE.md template enrichment (CONCISE)
+
+  - [ ] Add a section to the scaffolded CLAUDE.md: \"Discipline for AIDA-using Claude sessions\" — 5-7 bullets, each pointing at a docs/aida-discipline/ file
+  - [ ] Existing CLAUDE.md content stays; new section is additive and brief
+
+  ## Acceptance
+
+  - [ ] Run \`aida init\` in a fresh repo → \`docs/aida-discipline/\` is present with 4 canonical markdown files
+  - [ ] CLAUDE.md is scaffolded with the new discipline section pointing at the docs
+  - [ ] \`aida init --with-memories\` writes 10 starter memory files to \`~/.claude/projects/<slug>/memory/\` + an index entry per file
+  - [ ] Memories carry \`originSessionId: aida-scaffold\` so they're distinguishable from user-written
+  - [ ] CLAUDE.md template tested against existing project's CLAUDE.md (don't break AIDA's own dev CLAUDE.md)
+  - [ ] Memory pack is updateable: subsequent \`aida init --with-memories --refresh\` overlays new versions without nuking user edits to the same files (manage via the originSessionId marker — refresh only files whose marker matches \`aida-scaffold\` and the user hasn't edited)
+  - [ ] Tests: scaffold into a temp dir, assert structure
+  - [ ] CLAUDE.md docs updated to describe the discipline-pack mechanism
+
+  ## Out of scope (future filings)
+
+  - Curating WHICH memories ship vs stay AIDA-only — initial pack is the 10 listed above; growth is incremental
+  - Multi-language / multi-cultural variants of the discipline docs — English only
+  - Automated synchronization: pulling updates from upstream AIDA over time — manual \`aida init --with-memories --refresh\` is enough
+  - A way for users to CONTRIBUTE back upstream — separate concern
+
+  ## Composes with
+
+  - **TASK-273** (lifecycle diagram + State/Verb table) — directly feeds \`docs/aida-discipline/lifecycle-vocabulary.md\`
+  - **TASK-279** (advisor user-facing identity) — content for \`advisor-role.md\`
+  - **batch:alpha-docs** — sibling work; ship together
+  - **OVERVIEW.md / CLAUDE.md** templates — receive the discipline pointers
+
+  ## Why this matters for alpha
+
+  First-users running \`aida init\` should get **\$10 hours of AIDA-using-discipline-learning for free**. Without this STORY, they re-discover the same friction (rejecting in-flight specs, conflating committed/merged/released, /goal phrasing traps, etc.). With it, AIDA ships not just a tool but a USE PATTERN.
+
+  This is the difference between AIDA being \"a CLI tool with a TUI\" and AIDA being \"an agent-collaboration discipline + a tool that embodies it.\"
+
+  ## Origin
+
+  User asked 2026-05-16: *\"You have added a lot of memories and perhaps other updates to files. We are developing aida. We also have projects that will use aida. How much of what we have done needs to find its way into scaffolding?\"*
+
+  The audit revealed ~10 memories that are generic discipline and currently don't propagate. This STORY captures the gap.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T20:31:11.178643234Z
+modified_at: 2026-05-16T20:31:11.178643234Z
+req_type: Story
+tags:
+- aida-init
+- alpha-readiness
+- batch:alpha-docs
+- discipline
+- first-users
+- knowledge-transfer
+- memories
+- scaffolding
