@@ -1,0 +1,96 @@
+id: 019e31b6-d9ba-7d43-b77f-57a46165e034
+spec_id: TASK-265
+agreed_id: TASK-265
+title: '/aida-pickup: pretty-print the picked-up spec at session start (in-terminal context, no separate )'
+description: |-
+  \`/aida-pickup <ID>\` currently jumps straight into work after marking the spec In Progress. The user loses visual context — they have to either remember what \`<ID>\` is OR run \`aida show <ID>\` in another shell. The picked-up spec's details should render at the top of the pickup session so they're scrollable terminal context for the entire conversation.
+
+  ## Proposed output
+
+  \`\`\`
+  ═══════════════════════════════════════════════════════════════════
+  ▶ /aida-pickup TASK-259 — picked up at queue head
+  ═══════════════════════════════════════════════════════════════════
+
+    TASK-259 · Task · Medium · Approved → In Progress
+
+    ▸ Title:    /aida-pr: print 'about to happen' banner
+    ▸ Feature:  skill-polish
+    ▸ Tags:     aida-pr, banner, ux, transparency, first-users
+    ▸ Parent:   (none)
+    ▸ Sibling:  TASK-260 (next-steps tables), STORY-246 (--auto-complete)
+
+    ▸ Description (first 3 paragraphs):
+      /aida-pr opens a PR without explaining what's about to happen. For
+      first-users especially, this is opaque — they ran /aida-pr and are
+      surprised by the PR creation, branch push, reviewer-queue routing,
+      and CI launch. A banner that previews the sequence sets expectations
+      and gives the user agency (Ctrl-C to abort).
+
+      [continues...]
+
+    ▸ Acceptance (5 items):
+      [ ] /aida-pr prints the banner BEFORE any side-effecting action
+      [ ] Banner sections: Completed / Now / Then you
+      [ ] 3-second pause before action fires
+      [ ] --quiet flag for autonomous flows
+      [ ] No banner output in non-TTY contexts
+      [...]
+
+    ▸ Plan brief (if exists in docs/plans/*):
+      [Critical files / Followups / Verification sections]
+
+    ▸ Git linkage:
+      No prior commits reference TASK-259.
+
+    ✓ Status: In Progress    Branch: bug-109 (current)   Lease: 019e2f...
+
+    Starting work on TASK-259...
+  ═══════════════════════════════════════════════════════════════════
+  \`\`\`
+
+  ## Acceptance
+
+  - [ ] \`/aida-pickup\` skill (in \`aida-core/templates/skills/aida-pickup.md\`) renders the spec details at session start, before any implementation work begins
+  - [ ] Display includes: ID + type + priority + status transition, title, feature, tags, parent, sibling/related specs, description (truncated to first ~3 paragraphs or ~500 chars with \"...\" if longer), acceptance criteria, plan brief if any, git linkage summary
+  - [ ] Description truncation respects paragraph boundaries (don't cut mid-sentence)
+  - [ ] Full \`aida show <ID>\` is still available as the canonical view — pretty-print is a convenience, not a replacement
+  - [ ] \`--brief\` flag: only shows ID/title/status; for autonomous flows
+  - [ ] \`--full\` flag: shows everything (no truncation); for deep dives
+  - [ ] Default: balanced (the layout above)
+  - [ ] Status strip / banner respects \`user_likes_emoji.md\` — glyphs preserved
+  - [ ] Non-TTY mode: pretty-print degrades to a single-line summary
+
+  ## Composes with
+
+  - **TASK-259** (\`/aida-pr\` banner) — pre-action transparency
+  - **TASK-260** (next-steps table) — post-action paths
+  - **BUG-112** (INITIAL TOPIC display) — same family: improving \"what am I looking at\" terminal context
+
+  ## Why this matters for alpha
+
+  When the user attaches a Claude session to a worktree and Claude starts working, the terminal scrollback IS the working memory. Having the spec details at the top means:
+  - The user can scroll up at any point and remind themselves what the goal is
+  - They can spot mismatches between Claude's interpretation and the actual spec
+  - First-users learn the spec structure by seeing it formatted in real conversation contexts
+
+  Same principle as the \`/aida-pr\` banner: surface the contract loud and early.
+
+  ## Origin
+
+  User asked 2026-05-16: *\"when we \`/aida-pickup TASK-259\` a task, I think we should pretty print the task at the outset so that as I look at the terminal I can see what is/was about to be worked on without having to issue a separate command to show the details of the task.\"*
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T16:55:27.418304419Z
+modified_at: 2026-05-16T16:55:27.418304419Z
+req_type: Task
+tags:
+- aida-pickup
+- banner
+- first-users
+- skill
+- spec-display
+- terminal-context
+- ux
