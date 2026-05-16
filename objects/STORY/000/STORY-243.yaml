@@ -1,0 +1,26 @@
+id: 019e2e50-0cb8-7ed2-b923-06465219507e
+spec_id: STORY-243
+agreed_id: STORY-243
+title: 'Review PR-44: EPIC-26: discoverable TUI empty state — welcome panel + keybinding help (BUG-109)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e2e23`) for branch `bug-109`.
+
+  - PR: <https://github.com/joemooney/aida/pull/44>
+  - Branch: `bug-109` → `main`
+
+  ## Covers
+
+  - BUG-109
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 44` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T01:04:18.616601284Z
+modified_at: 2026-05-16T01:04:18.616601284Z
+req_type: Story
