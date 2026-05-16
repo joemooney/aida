@@ -1,0 +1,26 @@
+id: 019e3296-b62a-7f43-9d0c-e9c87f0fc70a
+spec_id: STORY-257
+agreed_id: STORY-257
+title: 'Review PR-53: [AI:claude] fix(tui): drop internal SPEC-ID from welcome panel; add user-facing-text convention (TASK-268)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e328a`) for branch `task-268`.
+
+  - PR: <https://github.com/joemooney/aida/pull/53>
+  - Branch: `task-268` → `main`
+
+  ## Covers
+
+  - TASK-268
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 53` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T20:59:58.378231682Z
+modified_at: 2026-05-16T20:59:58.378231682Z
+req_type: Story
