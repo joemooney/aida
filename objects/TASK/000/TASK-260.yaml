@@ -62,7 +62,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:27:19.857342230Z
-modified_at: 2026-05-16T18:18:44.749667424Z
+modified_at: 2026-05-16T18:20:08.052963471Z
 req_type: Task
 tags:
 - aida-pickup
@@ -75,6 +75,11 @@ tags:
 - skill
 - table-format
 - ux
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e3204-49db-7410-af5e-c804bed1f7f1
+  created_at: 2026-05-16T18:20:08.052949848Z
+  created_by: joe
 comments:
 - id: 019e3203-1a8d-7800-8c00-f98de36aa374
   author: joe
