@@ -1,0 +1,72 @@
+id: 019e3272-5387-74b3-ab49-a47687d5f336
+spec_id: TASK-285
+agreed_id: TASK-285
+title: 'aida queue work: allow --batch + --auto-complete composition (drain batch via orchestrator)'
+description: |-
+  \`aida queue work --batch <NAME> --auto-complete\` is the most natural mental-model composition: pick the head of a batch, drive its full lifecycle, pick the next batch member, repeat until the batch is empty. The CLI currently refuses with \"argument cannot be used with\" error.
+
+  ## Observed (2026-05-16)
+
+  \`\`\`
+  $ aida queue work --batch workflow-hint-polish --auto-complete
+  error: the argument '--batch <NAME>' cannot be used with '--auto-complete [<MODE>]'
+  \`\`\`
+
+  The user's mental model maps directly to a real workflow:
+  - \`--batch NAME\` = scope to a batch (head-pickup loop)
+  - \`--auto-complete\` = drive full lifecycle for the picked spec
+  - Composed: autonomous batch drain. Equivalent to \`/aida-drain-queue --batch NAME --mode review\` (TASK-249's skill) but exposed at the CLI surface.
+
+  ## Acceptance
+
+  - [ ] \`aida queue work --batch <NAME> --auto-complete\` accepted; mutually-exclusive guard removed
+  - [ ] Semantics: pick the batch's head, run all 6 phases (implementer → CI → reviewer → merge → pull → build), then re-run with the new head. Continue until the batch is empty for the role.
+  - [ ] On any phase failure (per STORY-246's exit codes), stop the batch drain at that spec; surface the recovery hint for the failed phase + indicate which batch members were already completed
+  - [ ] \`--auto-complete=through-ci --batch NAME\` and \`--auto-complete=through-merge --batch NAME\` also compose
+  - [ ] \`--max N\` flag (composes with \`--batch\` + \`--auto-complete\`) — stop after N items even if batch has more
+  - [ ] Test: simulate 3-item batch with all green, verify all 3 ship via auto-complete chain
+  - [ ] Test: simulate 3-item batch with phase 1 failure on item 2, verify item 1 shipped + item 2 failed + item 3 untouched (queue intact for retry)
+
+  ## Composes with
+
+  - **STORY-246** (\`--auto-complete\` orchestrator) — this TASK is its batch-extension
+  - **TASK-249** (\`/aida-drain-queue\` skill — not yet shipped) — \`--auto-complete --batch\` IS the canonical primitive that skill would wrap. Could ship this first and have the skill just invoke the CLI form.
+  - **TASK-272** (cluster-mode interactive batch pickup) — different shape (interactive accumulation on one branch) vs this (autonomous one-PR-per-spec)
+  - **BUG-114** (orchestrator phase-1 disambiguation) — must be solid before batch chains are reliable
+  - **TASK-266** (orchestrator failure telemetry) — gains usage data from longer batch runs
+
+  ## Why this matters for alpha
+
+  The natural autonomous-drain workflow for first-users learning AIDA is:
+
+  \`\`\`
+  aida queue work --batch <NAME> --auto-complete
+  # (go to lunch / sleep / parallel task)
+  # come back: batch shipped or surface'd at a specific failure
+  \`\`\`
+
+  Without this composition, users have to either:
+  - Manually re-run \`--auto-complete\` per spec (clumsy)
+  - Use the as-yet-unshipped \`/aida-drain-queue\` skill (TASK-249)
+  - Hand-roll a \`/goal\` (failed-flag-phrasing-trap territory)
+
+  The composition is the smallest CLI-shape change that unblocks the natural workflow.
+
+  ## Origin
+
+  User attempted \`aida queue work --batch workflow-hint-polish --auto-complete\` 2026-05-16 immediately after PR-51 (TASK-257, the CI cycle-time multiplier) merged. Wanted to drain the workflow-hint-polish batch autonomously now that subsequent PRs benefit from Linux-only CI. The flag-combination error is exactly the friction this filing captures.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T20:20:13.831734961Z
+modified_at: 2026-05-16T20:20:13.831734961Z
+req_type: Task
+tags:
+- alpha-readiness
+- auto-complete
+- batch-drain
+- batch:workflow-hint-polish
+- failed-flag-signal
+- first-users
+- workflow-automation
