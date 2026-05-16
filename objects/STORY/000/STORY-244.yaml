@@ -193,7 +193,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:45:16.445271126Z
-modified_at: 2026-05-16T04:45:16.445271126Z
+modified_at: 2026-05-16T05:25:49.176665798Z
 req_type: Story
 tags:
 - alpha-gating
@@ -208,3 +208,30 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-05-16T04:45:18.970066482Z
+comments:
+- id: 019e2f3f-77f8-73a3-89ea-ad1afa722cac
+  author: joe
+  content: |-
+    ## Salvageable references from PR-45 (closed without merge)
+
+    PR-45 was closed without merge 2026-05-15 — implemented rejected STORY-241's PTY-host architecture (reviewer verdict: architecturally incompatible with launcher model). Branch \`epic-26-4\` is retained on origin for cherry-picking specific helpers when STORY-244 implementation begins.
+
+    Worth referencing (NOT wholesale copying):
+
+    - **Merge-confirmation modal UX** in \`aida-tui/src/dashboard.rs\` (e1c67591) — the \`Ctrl-A M\` confirmation flow with PR title + auto-bump preview is good UX work. STORY-244's launcher emits a \`launch:gh pr merge ...\` intent, but the confirmation rendering can be reused.
+    - **PR/lease parsing helpers** — fetching \`gh pr list\` and \`aida session leases\` for the dashboard. Structured types + error handling worth referencing.
+    - **\`Mode::Dashboard\` state machine** in \`aida-tui/src/app.rs\` — the routing back from a session-end to the dashboard refresh logic is reusable (just route to \`launch:\` intent emission instead of PTY tab spawn).
+    - **Cache-staleness 2s poll** — the refresh trigger logic in dashboard.rs is fine; reuse for launcher mode's re-entry refresh.
+
+    DO NOT REUSE:
+    - The four-region layout in PR-45 — it's actually the stacked-panel original-STORY-241 design, not the refined four-region layout in this STORY's other comments
+    - Any PTY-tab integration paths — STORY-244 is launcher-only by definition
+    - \`Ctrl-A\` as primary keybinding — STORY-244 uses direct keys with Ctrl-A as alternative
+
+    Reference branch: \`git fetch origin epic-26-4 && git show origin/epic-26-4:aida-tui/src/dashboard.rs\`
+
+    ## Lesson recorded
+
+    Filed memory note \`feedback_check_in_flight_before_rejecting.md\` 2026-05-15: dialog role must check for active implementer leases before rejecting a STORY. PR-45 is the demonstration case — an in-flight session shipped the rejected spec in good faith, requiring the close-and-restart we're doing now.
+  created_at: 2026-05-16T05:25:49.176665798Z
+  modified_at: 2026-05-16T05:25:49.176665798Z
