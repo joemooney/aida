@@ -45,12 +45,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16 after running `aida session end --wait-ci` for TASK-259's PR-47: *"I expected to see files pulled. Did `gh pr merge 47 --squash --delete-branch` happen or am I supposed to do it, it is not in the hint"* — confirmed the hint stopped at the review step, didn't surface the merge step or self-merge alternative.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:29:17.082223638Z
-modified_at: 2026-05-16T20:27:12.757002772Z
+modified_at: 2026-05-16T20:32:55.718740790Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -95,3 +95,7 @@ comments:
     The shape mismatch (parallel vs sequential UI patterns) is a recurring trap. Worth a memory entry so dialog-role doesn't re-conflate them when filing future polish work.
   created_at: 2026-05-16T20:25:18.089680565Z
   modified_at: 2026-05-16T20:25:18.089680565Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-16T20:32:55.718740790Z
+  implemented_by: joe
