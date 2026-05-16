@@ -1,0 +1,130 @@
+id: 019e2f24-233c-7e33-8353-1d7f99ba358a
+spec_id: TASK-257
+agreed_id: TASK-257
+title: 'Split CI: Linux-only on PRs, Windows + macOS on nightly cron + manual dispatch'
+description: |-
+  Current CI runs the full \`[ubuntu-latest, windows-latest, macos-latest]\` matrix on every PR push. Cycle time is 8-10 minutes and we've burned hours today chasing platform-specific flakes (macOS rustup-init per BUG-103, Windows test-count variance during the PR-41 episode). For an alpha targeting Linux-using friends + colleagues, cross-platform-on-every-PR is over-investment.
+
+  Split: PR CI stays fast on Linux only; cross-platform moves to a separate workflow on cron + manual dispatch.
+
+  ## Acceptance
+
+  ### \`.github/workflows/ci.yml\` (existing — edit)
+
+  - [ ] Restrict matrix to Linux-only:
+    \`\`\`yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    \`\`\`
+  - [ ] Job names still parameterize on \`\${{ matrix.os }}\` so the change is trivial to revert
+  - [ ] CI passes on the next PR without flakes from non-Linux platforms
+
+  ### \`.github/workflows/cross-platform.yml\` (new file)
+
+  - [ ] Mirror \`ci.yml\`'s job structure but restrict matrix to:
+    \`\`\`yaml
+    matrix:
+      os: [windows-latest, macos-latest]
+    \`\`\`
+  - [ ] Triggers:
+    - \`schedule\`: cron \`\"0 6 * * *\"\` (06:00 UTC daily, on main)
+    - \`workflow_dispatch\`: manual run from GitHub UI / \`gh workflow run cross-platform.yml\`
+  - [ ] Runs against \`main\` only (not PRs) — keep PR cycle fast
+  - [ ] Includes BUG-103's \"Pin stable toolchain & verify cargo\" step (avoid macOS rustup-init flake regressing)
+
+  ### Pre-release verification pattern
+
+  - [ ] \`scripts/release.sh\` (or a sibling script \`scripts/pre-release-check.sh\`) triggers \`cross-platform.yml\` via \`gh workflow run\` and blocks on its completion before tagging
+  - [ ] Document in CLAUDE.md: \"Releases require cross-platform CI green within 24h of tagging — \`gh workflow run cross-platform.yml\` to refresh\"
+
+  ### Documentation
+
+  - [ ] README / docs note: \"Linux is the primary platform during alpha; Windows + macOS supported with nightly-validated builds available via release tarballs\"
+  - [ ] Issue template (when filed): includes \"OS:\" field with \"Linux (Tier 1)\" / \"macOS (Tier 2 — nightly-validated)\" / \"Windows (Tier 2)\" tier descriptions
+
+  ## YAML sketch — main CI edit
+
+  \`\`\`yaml
+  # Before
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-latest]
+  # After
+  matrix:
+    os: [ubuntu-latest]
+  \`\`\`
+
+  ## YAML sketch — new cross-platform.yml
+
+  \`\`\`yaml
+  name: Cross-platform (nightly)
+  on:
+    schedule:
+      - cron: '0 6 * * *'   # 06:00 UTC daily
+    workflow_dispatch:
+
+  jobs:
+    build:
+      name: Build (\${{ matrix.os }})
+      runs-on: \${{ matrix.os }}
+      strategy:
+        fail-fast: false
+        matrix:
+          os: [windows-latest, macos-latest]
+      steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+        - name: Pin stable toolchain & verify cargo
+          shell: bash
+          run: |
+            rustup default stable
+            cargo --version | grep -q '^cargo ' || exit 1
+        - name: Install protoc
+          uses: arduino/setup-protoc@v3
+        - uses: Swatinem/rust-cache@v2
+        - name: Build all packages
+          run: cargo build --workspace --release
+        - name: Run tests
+          run: cargo test --workspace
+  \`\`\`
+
+  ## Trade-offs
+
+  **Pros:**
+  - PR cycle time: 8-10 min → 3-5 min (~50% reduction)
+  - Eliminates known platform flake noise on PR merges (BUG-103 macOS rustup-init recurring)
+  - Faster alpha iteration, especially for the upcoming STORY-244 + theming + dialog-tab work
+
+  **Cons:**
+  - Cross-platform regressions caught within ~24h instead of instantly
+  - Pre-release manual workflow-dispatch step adds ceremony to releases
+  - Cross-platform code (PTY in \`aida-tui/src/pty.rs\`, signal handling per BUG-110) could rot if nobody checks nightly results
+
+  **Mitigations:**
+  - Document the nightly results URL in CLAUDE.md so contributors check it
+  - Block release tagging on cross-platform green (pre-release verification step)
+  - Re-enable PR-time cross-platform CI once we have non-Linux users and the matrix has been quiet for 2+ weeks
+
+  ## Composes with
+
+  - **BUG-103** (macOS rustup-init flake) — moving to nightly reduces blocking impact; fix still wanted
+  - **BUG-111** (release.sh hardcoded dep pin list) — release-tooling family
+  - **STORY-244** + remaining EPIC-26 work — faster cycle helps the alpha iteration loop
+
+  ## Origin
+
+  User asked 2026-05-15: *\"I will have no immediate Windows or MacOS users. I wonder if we should just continue to support but stop building them in the CI to cut down cycle time.\"* Pattern (b) chosen — split into nightly + dispatch workflows.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T04:55:58.012552109Z
+modified_at: 2026-05-16T04:55:58.012552109Z
+req_type: Task
+tags:
+- alpha-readiness
+- ci
+- cross-platform
+- cycle-time
+- workflow-split
