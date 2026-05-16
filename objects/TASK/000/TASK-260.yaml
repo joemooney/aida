@@ -62,7 +62,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:27:19.857342230Z
-modified_at: 2026-05-16T18:20:08.052963471Z
+modified_at: 2026-05-16T18:27:55.014342414Z
 req_type: Task
 tags:
 - aida-pickup
@@ -97,6 +97,94 @@ comments:
     Test status: skill-template + docs change — no unit-test surface; cargo fmt --all --check clean
   created_at: 2026-05-16T18:18:44.749667424Z
   modified_at: 2026-05-16T18:18:44.749667424Z
+- id: 019e320b-8006-7b03-824d-0aa2153d7138
+  author: joe
+  content: |-
+    ## Refined design 2026-05-16 — discussed iteratively with dialog
+
+    The original spec called for Path/Action/Why tables in skill end-of-session output. Discussion through 2026-05-16 refined the column shape, vocabulary, and content. Apply this refined version.
+
+    ### Column structure
+
+    - **Path**: \`<number> <glyph> <verb>\` + indented sub-label
+      - User can type the number (\`1\`, \`2\`, \`3\`) OR the verb (\`continue\`, \`pr\`, \`pause\`)
+      - The verb is the typeable shortcut; the sub-label is the human-readable description
+    - **What happens**: the literal command/keystrokes the user enters next
+    - **Why**: load-bearing context — next-up item for \`continue\`, what \`pr\` produces, what's retained on \`pause\`
+
+    ### Glyphs (replace original \`▶ ⏵ 🚪\`)
+
+    | Path | Glyph | Reasoning |
+    |---|---|---|
+    | continue | \`▶\` | Forward motion, unchanged |
+    | pr | \`⇒\` | Implies / submits → for review (NOT \`⏵\` ambiguous pointer, NOT \`⏩\` video-y) |
+    | pause | \`⏸\` | Double-bar pause (NOT \`🚪\` door which implied exit) |
+
+    ### Vocabulary rules (user-facing)
+
+    | Internal | User-facing |
+    |---|---|
+    | Worktree | Workspace |
+    | Lease | Lock (or omit; \"workspace\" implies it) |
+    | Branch (e.g., \`task-260\`) | Keep the literal name; user wants to \`git log task-260\` |
+    | Scope | The spec ID directly (TASK-260, EPIC-26) |
+    | Session end | Avoid in user-facing menus — it's a separate intent (\"done\"), not pause |
+
+    ### \"Pause\" semantics — corrected
+
+    Original spec implied \`aida session end\` was part of pause. **This is wrong.** \`aida session end\` releases the lease and removes the worktree — that's \"done\" semantics, not \"pause.\"
+
+    True pause:
+    - **Action**: Ctrl+D out of Claude
+    - **What stays**: files, branch, lock on scope, Claude conversation (auto-disk-saved)
+    - **What you can do during pause**: test changes, debug, run \`cargo test\`, switch to other AIDA scopes in parallel
+    - **How to resume**: \`aida queue work TASK-N --resume\` (TASK-112 wrapper) OR \`claude --resume <session-id>\` directly
+
+    ### Updated table (the canonical form)
+
+    \`\`\`
+    ┌──────────────┬─────────────────────────────┬─────────────────────────────────────────────────┐
+    │     Path     │        What happens         │                       Why                       │
+    ├──────────────┼─────────────────────────────┼─────────────────────────────────────────────────┤
+    │ 1 ▶ continue │ /aida-pickup                │ Next: <SPEC-X> (<priority>) — <short title>     │
+    │   Grab next  │                             │                                                 │
+    ├──────────────┼─────────────────────────────┼─────────────────────────────────────────────────┤
+    │ 2 ⇒ pr       │ /aida-pr                    │ Submit <branch-name> for review (opens PR).     │
+    │   Submit PR  │                             │                                                 │
+    ├──────────────┼─────────────────────────────┼─────────────────────────────────────────────────┤
+    │ 3 ⏸ pause    │ Ctrl+D                      │ Step out of Claude. Workspace for <SPEC>        │
+    │   Step out   │ (test changes, debug,       │ stays open — files, branch, lock all retained.  │
+    │              │  then resume or submit      │                                                 │
+    │              │  later)                     │ Resume anytime:                                 │
+    │              │                             │   aida queue work <SPEC> --resume               │
+    │              │                             │                                                 │
+    │              │                             │ Other AIDA work continues in parallel —         │
+    │              │                             │ pause only holds this workspace.                │
+    └──────────────┴─────────────────────────────┴─────────────────────────────────────────────────┘
+    \`\`\`
+
+    ### Acceptance refinements (additive to original)
+
+    - [ ] Path column: \`<n> <glyph> <verb>\` + indented sub-label
+    - [ ] User input accepts both the number AND the verb (e.g., \`1\` and \`continue\` both work)
+    - [ ] Glyphs: \`▶\` continue, \`⇒\` pr, \`⏸\` pause
+    - [ ] Pause path does NOT call \`aida session end\` — just instructs Ctrl+D
+    - [ ] Pause's Why mentions parallel work in other scopes is fine
+    - [ ] Branch name preserved literally (e.g., \`task-260\`) — drop the word \"branch\" since the name carries it
+    - [ ] User-facing vocabulary substitutions: workspace not worktree, lock not lease
+
+    ### Rationale anchored in dialog responsibilities
+
+    - **Mental model articulator**: discussion through the column shape, glyph choices, and the workspace-vs-worktree vocabulary captures the actual UX-first model
+    - **Friction-to-spec translator**: each iteration question (\"why per TASK-85\", \"why session end on pause\") became a discrete clarification baked into the spec
+    - **Memory curator**: composes with \`feedback_pause_for_design_input.md\` — the implementer can pause for input on the new vocabulary if they hit edge cases
+
+    ### Out of scope for TASK-260 (file separately if needed)
+
+    - Color-coding the glyphs by status — not part of this TASK; TASK-269 (status color) is the home for that
+    - \`aida session end\` as a fourth path — let users invoke \`session end\` explicitly when they're done, not as an option in the post-session menu
+  created_at: 2026-05-16T18:27:55.014342414Z
+  modified_at: 2026-05-16T18:27:55.014342414Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T17:47:12.311286211Z
