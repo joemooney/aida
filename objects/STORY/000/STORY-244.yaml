@@ -1,0 +1,206 @@
+id: 019e2f1a-591d-7583-9637-dff9bb7fc89c
+spec_id: STORY-244
+agreed_id: STORY-244
+title: 'TUI architecture pivot: launcher + bash-wrapper re-entry (replaces PTY-host model)'
+description: |-
+  **Architectural pivot, 2026-05-15**: stop trying to PTY-host Claude Code inside the TUI. Instead, the TUI becomes a **launcher** — a full-screen navigator that emits an intent line on exit, which a small bash wrapper function dispatches. Re-entry is automatic on the dispatched command's exit. This trades \"peek at status while Claude runs\" for \"Claude works perfectly, every time.\"
+
+  ## Why the pivot
+
+  User observed 2026-05-15 with PR-43 shipped and \`aida tui\` launched as default:
+
+  > *\"the status line is messing with the claude code session. Perhaps it will not be possible to run claude under the tui without corrupting the experience and interfering with the output.\"*
+
+  Screenshot confirmed: Claude Code is itself a full-screen TUI (alt-screen + reserved chrome rows for status strip + input prompt + Bash blocks). Hosting it as a PTY child means **two TUIs compete for the same terminal**:
+  - Claude doesn't know about aida-tui's reserved tab bar / status strip
+  - aida-tui doesn't know about Claude's render assumptions
+  - Result: visual bleed (tab labels overlay Claude's output, status strip clobbers Claude's strip, etc.)
+
+  This is **architectural, not polish**. More effort on PTY rendering will not fix it — Claude is designed to own its terminal.
+
+  The pivot accepts that fact and routes around it.
+
+  ## New architecture
+
+  ```
+  ┌─ bash shell ────────────────────────────────────────┐
+  │ $ aida-tui                  ← shell function entry  │
+  │                                                     │
+  │  ┌─ aida tui --launcher runs full-screen ─────────┐ │
+  │  │ [implementer] reviewer  dialog                 │ │
+  │  │ ▶ Queue   STORY-X   STORY-X preview            │ │
+  │  │ ...                                            │ │
+  │  └────────[Enter on STORY-X]─────────────────────┘ │
+  │                                                     │
+  │  TUI writes \"launch:queue work STORY-X\" + exits    │
+  │                                                     │
+  │  ┌─ Claude runs full-screen (no contention) ─────┐ │
+  │  │ /aida-pickup STORY-X                          │ │
+  │  │ ▶ working...                                  │ │
+  │  └────────[Ctrl-D / exit]────────────────────────┘ │
+  │                                                     │
+  │  Shell function re-launches TUI ─→ loop continues  │
+  └─────────────────────────────────────────────────────┘
+  ```
+
+  ### The bash wrapper
+
+  ```bash
+  function aida-tui() {
+      while true; do
+          # Launcher mode: TUI runs full-screen, emits one line on exit
+          intent=$(command aida tui --launcher \"$@\" 3>&1 1>/dev/tty 2>/dev/tty)
+          case \"$intent\" in
+              quit|\"\")             break ;;
+              \"launch:\"*)          eval \"${intent#launch:}\" ;;
+              \"resume:\"*)          claude --resume \"${intent#resume:}\" ;;
+              \"shell:\"*)           eval \"${intent#shell:}\" ;;
+              *)                   break ;;
+          esac
+      done
+  }
+  ```
+
+  The TUI emits the intent line on fd 3 so it can render full-screen on stdout/stderr without interleaving. The shell function dispatches, then re-launches.
+
+  ### What the user experiences
+
+  1. \`aida-tui\` in shell → full-screen TUI dashboard
+  2. Browse queue/backlog/history; arrow keys + Enter
+  3. Enter on a queue item → TUI exits → Claude session runs full-screen
+  4. Work in Claude → \`/exit\` or Ctrl-D → shell re-launches TUI
+  5. TUI shows updated state (new PR in reviewer queue, lease cleaned up, etc.)
+  6. Repeat
+
+  ## Acceptance
+
+  ### Launcher mode
+
+  - [ ] \`aida tui --launcher\` runs full-screen TUI in launcher mode
+  - [ ] On exit, writes one line to fd 3 (or specified by \`--intent-fd <N>\`):
+    - \`quit\` — user requested exit
+    - \`launch:<command>\` — user selected an action; shell should run \`<command>\`
+    - \`resume:<session-id>\` — user selected a stored Claude session; shell should run \`claude --resume <id>\`
+    - \`shell:<command>\` — generic shell escape (e.g., \`gh pr view 42\`)
+  - [ ] Returns exit code 0 on \`quit\` / clean exits; non-zero on error
+  - [ ] **Without** \`--launcher\` flag, \`aida tui\` retains legacy PTY-host behavior (STORY-132) for backward compatibility
+
+  ### Bash wrapper
+
+  - [ ] \`aida-tui\` shell function scaffolded into \`shell-init.sh\` (the file \`aida dev shell-init --install\` modifies)
+  - [ ] Function loops launcher → dispatch → re-enter until \`quit\` intent
+  - [ ] Function exposes \`aida-tui --once\` to disable re-entry loop (debug / scripting)
+
+  ### Four-region layout (carried from STORY-241)
+
+  - [ ] Top tabs: role switcher (\`[ implementer ]  reviewer   dialog\`)
+  - [ ] Left nav: Queue / Backlog / History / PRs / Sessions / (action verbs below rule: \`/aida-drain\`, \`New session\`, \`Switch role\`)
+  - [ ] Middle list: items in selected nav, role-filtered
+  - [ ] Right preview: equivalent of \`aida show <ID>\` for the highlighted item; updates live with cursor
+  - [ ] Status strip (bottom): direct-key hints + role + ambient state
+
+  ### Mode-aware keybindings (carried from STORY-241)
+
+  - [ ] In launcher mode there's no PTY child, so ALL keys are direct (no prefix needed)
+  - [ ] \`q\` queue · \`b\` backlog · \`h\` history · \`p\` PRs · \`s\` sessions · \`r\` switch role · \`t\` theme picker · \`?\` help
+  - [ ] Arrow keys navigate middle list; Enter acts; Tab cycles role tabs; Esc/Ctrl-C quit
+  - [ ] \`:\` command palette (vim-style) — \`:q\`, \`:role reviewer\`, \`:resume <id>\`
+  - [ ] Legacy \`Ctrl-A <key>\` bindings preserved as alternative (muscle-memory path)
+
+  ### Persistent dialog session (carried from STORY-242, simplified)
+
+  - [ ] TUI tracks a \"current dialog session ID\" in \`.aida/tui-state.json\`
+  - [ ] Top tabs include a \`dialog\` tab; selecting it surfaces the dialog session for resume (\`resume:<id>\` intent)
+  - [ ] If no dialog session exists yet, selecting \`dialog\` tab spawns one via \`launch:aida queue work --role dialog\` (or equivalent)
+  - [ ] After Claude session ends, TUI re-enters; dialog session ID remains available for next resume
+
+  ### Activity awareness
+
+  - [ ] TUI re-fetches AIDA state on each re-entry (queue, leases, PRs, recent commits)
+  - [ ] Status strip shows ambient state: \`role:implementer · queue:3 · dialog:idle\`
+  - [ ] State persistence in \`.aida/tui-state.json\` (composes with STORY-135 crash recovery)
+
+  ### Tests
+
+  - [ ] Snapshot tests for the four-region layout rendering
+  - [ ] Intent emission tests: each user action produces the correct intent string
+  - [ ] Bash wrapper integration test: launch → intent → dispatch → re-launch
+  - [ ] Mode detection: \`--launcher\` vs no flag (legacy PTY) produces different behavior
+
+  ## Out of scope (separate STORYs / TASKs)
+
+  - **Theming** (TASK-256 — Catppuccin/Dark/Light/Nord) — orthogonal; lands separately
+  - **Mouse support** — keyboard-first; mouse later
+  - **Search/filter in middle list** — MVP shape first
+  - **Auto-refresh in launcher mode** (without user action) — initially manual refresh via \`g\`; auto-poll later
+  - **Cross-project dialog continuity** — project-scoped only
+
+  ## Implementation notes
+
+  ### File structure
+
+  - \`aida-tui/src/launcher.rs\` — new module for launcher mode entry point
+  - \`aida-tui/src/lib.rs\` — \`run\` dispatches between launcher mode and legacy PTY mode based on \`TuiOptions::launcher\`
+  - \`aida-tui/src/dashboard.rs\` — four-region layout (renames \`welcome\`)
+  - \`aida-tui/src/nav.rs\` — left nav state + item lists per category
+  - \`aida-tui/src/preview.rs\` — right preview render
+  - \`aida-tui/src/intent.rs\` — intent emission types + serialization
+  - \`aida-cli/src/cli.rs\` — add \`--launcher\` and \`--intent-fd\` flags to the \`Tui\` subcommand
+  - \`shell-init.sh\` (master template) — add \`aida-tui\` shell function
+
+  ### Legacy PTY mode preservation
+
+  - STORY-132's PTY host code stays in \`aida-tui/src/pty.rs\` and \`aida-tui/src/tab.rs\`
+  - Triggered only when \`--launcher\` is NOT passed AND \`[tui] mode = \"pty-host\"\` is in config (default: \`mode = \"launcher\"\`)
+  - Documented in \`docs/tui/README.md\` as \"advanced mode for users who want concurrent PTY panes; expect render artifacts with full-screen children like Claude Code\"
+
+  ### Distribution
+
+  The shell wrapper function must be on the user's PATH for the workflow to work. Options:
+  - (a) \`aida dev shell-init --install\` already installs \`aida-on\` / \`aida-off\` to user's rc file — add \`aida-tui\` to that scaffold
+  - (b) Ship \`aida-tui\` as a standalone POSIX shell script in the release tarball, install to \`~/.local/bin/\`
+  - (c) Both — option (a) for AIDA developers, option (b) for general installs
+
+  Recommend (c). First-users (binary tarball) get (b). AIDA developers (path-built) get (a).
+
+  ## Composes with
+
+  - **STORY-132** (PTY-host shell, shipped) — becomes legacy mode under \`[tui] mode = \"pty-host\"\`
+  - **STORY-133** (status overlay, shipped) — overlay still useful, opened by \`o\` or \`Ctrl-A O\` in launcher mode
+  - **STORY-134** (multi-tab, shipped) — \"tabs\" now mean \"stored Claude sessions you can resume,\" not concurrent PTY panes
+  - **STORY-135** (crash recovery, shipped) — \`.aida/tui-state.json\` is the persistence layer for launcher re-entry continuity
+  - **STORY-136** (autonomous panel, shipped) — cleaner: \`launch:/goal ...\` intent dispatches to the shell, no PTY contention
+  - **STORY-137** (default-on, shipped) — fine, no change
+  - **BUG-109** (empty-state, shipped) — the welcome panel will be replaced by the four-region layout
+  - **BUG-110** (SIGTERM handler) — still relevant; even more important now because the TUI exits/re-enters constantly
+  - **TASK-112** (\`claude --resume\`, shipped) — the resume primitive that makes \"drop out, drop back in\" work
+  - **TASK-256** (theming) — applies to the four-region layout
+
+  ## Supersedes
+
+  - **STORY-241** (TUI workflow loop) — same goal, PTY-tab architecture. Reject with a comment pointing at this STORY.
+  - **STORY-242** (persistent dialog tab) — same goal, PTY-tab architecture. Reject with a comment pointing at this STORY.
+
+  ## Why this matters for alpha
+
+  The user's stated alpha wow is the CLI workflow. The TUI is *\"nice to have in preliminary form, assuming we can do something with it.\"* The PTY-host architecture fails the \"can do something with it\" test for the most common task (run Claude). The launcher architecture passes it cleanly. This pivot is **alpha-gating** for the TUI side and **non-blocking** for the CLI alpha wow.
+
+  ## Origin
+
+  User reported 2026-05-15 screenshot of \`aida tui\` hosting a Claude session: TUI's status strip clobbered Claude's chrome, top bar bled into Claude's output, scroll-wheel warnings appeared from Claude. User's framing: *\"Perhaps it will not be possible to run claude under the tui without corrupting the experience and interfering with the output. I am open to having a bash function aida wrapper such that we exit the tui run the clude and then the shell function launches us back into the tui.\"* This STORY captures that pivot.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T04:45:16.445271126Z
+modified_at: 2026-05-16T04:45:16.445271126Z
+req_type: Story
+tags:
+- alpha-gating
+- architecture-pivot
+- bash-wrapper
+- first-vertical-alpha
+- launcher-mode
+- supersedes-story-241
+- supersedes-story-242
+- tui
