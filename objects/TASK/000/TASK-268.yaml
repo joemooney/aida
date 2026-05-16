@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:31:13.138421089Z
-modified_at: 2026-05-16T20:50:49.690071727Z
+modified_at: 2026-05-16T20:53:55.455428549Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -69,3 +69,8 @@ tags:
 - polish
 - user-facing-text
 - workflow-hint
+relationships:
+- rel_type: Parent
+  target_id: 019e3290-f2b8-72d1-a268-166193b59b2b
+  created_at: 2026-05-16T20:53:55.455423660Z
+  created_by: joe
