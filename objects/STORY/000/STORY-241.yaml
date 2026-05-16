@@ -90,7 +90,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:32:32.371630658Z
-modified_at: 2026-05-16T04:15:24.851412510Z
+modified_at: 2026-05-16T04:23:57.690048684Z
 req_type: Story
 tags:
 - alpha-gating
@@ -103,3 +103,72 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-05-16T00:32:35.630931562Z
+comments:
+- id: 019e2f06-d5fa-7973-a545-746d9eac28d9
+  author: joe
+  content: |-
+    ## Layout refinement 2026-05-15 — left-nav + role tabs + middle-list + preview
+
+    User reviewed BUG-109's shipped welcome panel and found it functional-but-flat (*"I am not loving the TUI landing page. I don't really know what to do."*). Articulated the desired shape: left panel for Queue/Backlog/History, role tabs at the top, with email-client-inspired layout (Catppuccin reference image).
+
+    ### Concrete layout
+
+    ```
+    ┌──── αιδα · aida tui ──────────────────────────────────────────────────────┐
+    │  [ implementer ]  reviewer   dialog                          q:3 · pr:1   │  role tabs
+    ├─────────────────┬───────────────────────────────────────┬─────────────────┤
+    │ ▶ Queue    (3)  │  STORY-241  TUI workflow loop         │  STORY-241      │
+    │   Backlog (47)  │             alpha-gating · @EPIC-26   │  ───────────    │
+    │   History       │                                       │                 │
+    │   PRs      (1)  │  STORY-242  Persistent dialog tab     │  Status: Approv │
+    │   Sessions (1)  │             tui, dialog-role          │  Tags: tui...   │
+    │                 │                                       │                 │
+    │   ─────────     │  BUG-110    SIGTERM handler           │  Description:   │
+    │   /aida-drain   │             tui, signal-handling      │   The TUI's     │
+    │   New session   │                                       │   empty state   │
+    │   Switch role   │  TASK-254   Revert default-flip       │   needs to be   │
+    │                 │                                       │   mission       │
+    │                 │                                       │   control...    │
+    ├─────────────────┴───────────────────────────────────────┴─────────────────┤
+    │  ^a N new   ^a O overlay   ^a ?  role:implementer · pinned dialog: idle    │  status
+    └──────────────────────────────────────────────────────────────────────────┘
+    ```
+
+    ### Why each region
+
+    - **Top tabs (role switcher)**: Selecting a role re-fetches the middle list. Single-letter shortcut `r` cycles forward; `R` opens picker. Replaces \`Ctrl-A R\` from original acceptance — keep both bindings.
+    - **Left nav (navigation)**: 5 always-visible categories — Queue / Backlog / History / PRs / Sessions. Counts in parens reflect role-filtered totals (or all for History). Below the rule: action verbs (`/aida-drain`, `New session`, `Switch role`) — discoverable text, not buried keystrokes.
+    - **Middle list (items)**: Current-nav items, role-filtered. Cursor up/down to navigate; Enter to act.
+    - **Right preview (details)**: Equivalent of `aida show <ID>` for the highlighted item. Updates live as the cursor moves. Shows Status/Tags/Description/Acceptance/Comments/Git linkage.
+    - **Status strip (bottom)**: Compact keybinding hints (rotating set) + role indicator + pinned-dialog-tab state (per STORY-242).
+
+    ### Updated acceptance (replaces/refines section 1 of original acceptance)
+
+    - [ ] Empty-state TUI renders the four-region layout (top tabs / left nav / middle list / right preview), not a centered keybinding card
+    - [ ] Left nav items: Queue, Backlog, History, PRs, Sessions — with counts
+    - [ ] Action items below the rule: \`/aida-drain\`, \`New session\`, \`Switch role\` (clickable / Enter-actionable)
+    - [ ] Right preview re-renders as cursor moves through middle list (debounced)
+    - [ ] Top tabs reflect current role with bracketed `[ ]` highlight on the active role
+    - [ ] Action on Enter is **context-aware**:
+      - In Queue: pick up the highlighted item (`aida queue work <id>`)
+      - In PRs (reviewer role): start review session
+      - In Sessions: switch to that session's tab
+      - In History: open the spec's detail view (read-only)
+      - In Backlog: pick up (`aida queue add <id>` if not yet queued, then work)
+
+    ### Out of scope (separate STORYs / TASKs)
+
+    - **Theming** — Catppuccin + Dark + Light + Nord — filed as separate TASK (see sibling filing)
+    - **Mouse / click support** — keyboard-first; mouse follow-up
+    - **Search / filter** in the middle list — follow-up after MVP shape lands
+    - **Multi-row preview** (e.g., comments expansion) — minimal preview first; rich preview follow-up
+
+    ### Why this matters
+
+    The Trojan-horse design test (per CLAUDE.md): *"does this make the TUI's quiet depth stronger when someone digs in?"* A keybinding card fails this — first impression is *"here are 5 things you can press"*, depth is invisible. The four-region layout passes — first impression is *"here's my work, here's the system, what should I do?"*, depth is the cursor-driven preview revealing graph structure, tags, comments, git linkage.
+
+    ### Origin
+
+    User reflected 2026-05-15 immediately after BUG-109's welcome panel landed in their TUI. Wanted a richer foundation before the implementer builds the workflow loop on top.
+  created_at: 2026-05-16T04:23:57.690048684Z
+  modified_at: 2026-05-16T04:23:57.690048684Z
