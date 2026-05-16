@@ -1,7 +1,7 @@
 id: 019e31b6-d9ba-7d43-b77f-57a46165e034
 spec_id: TASK-265
 agreed_id: TASK-265
-title: '/aida-pickup: pretty-print the picked-up spec at session start (in-terminal context, no separate )'
+title: '/aida-pickup: pretty-print the picked-up spec at session start (in-terminal context, no separate aida show)'
 description: |-
   \`/aida-pickup <ID>\` currently jumps straight into work after marking the spec In Progress. The user loses visual context — they have to either remember what \`<ID>\` is OR run \`aida show <ID>\` in another shell. The picked-up spec's details should render at the top of the pickup session so they're scrollable terminal context for the entire conversation.
 
@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-05-16T16:55:27.418304419Z
+modified_at: 2026-05-16T16:55:48.283668067Z
 req_type: Task
 tags:
 - aida-pickup
