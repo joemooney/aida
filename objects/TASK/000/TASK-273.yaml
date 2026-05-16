@@ -108,10 +108,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:49:41.734450590Z
-modified_at: 2026-05-16T18:49:41.734450590Z
+modified_at: 2026-05-16T18:49:46.788165528Z
 req_type: Task
 tags:
 - alpha-readiness
+- batch:alpha-docs
 - documentation
 - first-users
 - flow-diagram
