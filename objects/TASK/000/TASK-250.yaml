@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:30:35.541902232Z
-modified_at: 2026-05-16T18:47:53.905582207Z
+modified_at: 2026-05-16T19:05:22.078985116Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
@@ -62,3 +62,9 @@ tags:
 - review-state
 - ux
 - workflow-state-aware
+comments:
+- id: 019e322d-c99e-75e2-9589-927c06c32edf
+  author: joe
+  content: Commit c15acff2 references this requirement
+  created_at: 2026-05-16T19:05:22.078985116Z
+  modified_at: 2026-05-16T19:05:22.078985116Z
