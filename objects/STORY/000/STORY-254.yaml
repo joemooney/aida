@@ -1,0 +1,26 @@
+id: 019e325a-9454-7b33-a7da-d3808d6196df
+spec_id: STORY-254
+agreed_id: STORY-254
+title: 'Review PR-51: ci: split CI — Linux-only PRs, nightly cross-platform workflow (TASK-257)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3252`) for branch `task-257`.
+
+  - PR: <https://github.com/joemooney/aida/pull/51>
+  - Branch: `task-257` → `main`
+
+  ## Covers
+
+  - TASK-257
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 51` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T19:54:17.556409206Z
+modified_at: 2026-05-16T19:54:17.556409206Z
+req_type: Story
