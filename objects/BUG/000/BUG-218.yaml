@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:43:28.745969796Z
-modified_at: 2026-05-16T22:42:51.158549457Z
+modified_at: 2026-05-16T22:42:59.513741751Z
 req_type: Bug
 tags:
 - auto-complete
@@ -62,6 +62,17 @@ comments:
       - TASK-266 can now bucket auto-complete failures by the `kind` slug in the
   created_at: 2026-05-16T22:38:13.644342464Z
   modified_at: 2026-05-16T22:38:13.644342464Z
+- id: 019e32f5-0739-7153-897f-201e6033a2ab
+  author: joe
+  content: |-
+    Implemented via PR #56 (commit 74382d14):
+
+    - Added a `FailureKind` enum on `PhaseFailure`; the driver tags each phase failure at its source so `recovery_hint` keys on `(phase, kind)` instead of phase index alone.
+    - A phase-2 spawn ENOENT now reads "Subprocess spawn failed — not CI" with the phase's manual fallback; only a genuine red run says "CI failed on run <ID>".
+
+    Test status: 36/36 auto_complete tests green (incl. the `recovery_hint_ci_spawn_does_not_blame_ci` regression test)
+  created_at: 2026-05-16T22:42:59.513741751Z
+  modified_at: 2026-05-16T22:42:59.513741751Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T22:38:12.002155591Z
