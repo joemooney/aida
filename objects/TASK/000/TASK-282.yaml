@@ -1,0 +1,64 @@
+id: 019e325b-a10f-74a0-9c01-5eb22e0149ee
+spec_id: TASK-282
+agreed_id: TASK-282
+title: 'aida statusline: hide redundant sess:/wt: indicators; show only when they diverge from the current scope'
+description: |-
+  The AIDA statusline shows \`@<scope> · sess:<session-anchor> · wt:<worktree-name>\` (when applicable). When the session anchor and worktree match the scope (the common case), \`sess:\` and \`wt:\` repeat information already conveyed by \`@\`. Cleaner default + informative-on-divergence is the right shape.
+
+  ## Observed (2026-05-16)
+
+  \`\`\`
+  αιδα · Aida · role:implementer · @TASK-257 · q:27 · sess:TASK-257
+  \`\`\`
+
+  \`@TASK-257 · sess:TASK-257\` is redundant — the session was opened FOR TASK-257 and hasn't drifted. The \`sess:\` is signal-free here.
+
+  But sess: CAN convey real information:
+  - **Cluster-mode drift**: session opened on TASK-257, picked up TASK-280 mid-session via /aida-pickup. Active scope is TASK-280; session anchor stays TASK-257. Useful divergence: \`@TASK-280 [sess:TASK-257]\` tells the user \"working TASK-280 inside the session that started on TASK-257.\"
+  - **Session UUID**: if sess: shows the actual UUID prefix (e.g., \`sess:019e31df\`), it's always distinct from scope and useful as a session-identification key.
+
+  Same logic applies to worktree:
+  - Default worktree path: \`/home/joe/ai/aida-<scope-slug>\` (e.g., \`aida-task-257\`)
+  - When path is custom (passed via \`--branch foo\`), \`wt:foo\` signals the deviation
+  - When path matches the default slug, \`wt:\` is redundant
+
+  ## Acceptance
+
+  - [ ] Statusline hides \`sess:<X>\` when X matches the current \`@<scope>\` (no drift)
+  - [ ] Statusline shows \`@<current> [sess:<anchor>]\` when current scope differs from session anchor
+  - [ ] Statusline hides \`wt:<name>\` when worktree name matches the slug derived from scope (e.g., scope=TASK-257 → expected wt slug = \`task-257\`)
+  - [ ] Statusline shows \`wt:<name>\` only when worktree name differs from the expected slug
+  - [ ] Compose: both can render at once (\`@TASK-280 [sess:TASK-257] · wt:hot-fix\`)
+  - [ ] Tests: each divergence case + the default no-divergence case
+  - [ ] Status strip in TUI (STORY-244 / dashboard) follows the same rules for consistency
+
+  ## Composes with
+
+  - **batch:display-polish** — tagged accordingly
+  - **TASK-269** (color-coded status in \`aida show\`) — same family: declutter display, signal-on-divergence
+  - **BUG-112** (INITIAL TOPIC stale display) — same UX family: surface what's TRUE not what's STALE
+  - **Cluster-mode pickup** (TASK-272) — when this lands, divergence will be more common; statusline should communicate it cleanly
+
+  ## Why this matters for alpha
+
+  Statuslines are read constantly. Reducing noise to signal-only improves the cognitive load every time the user glances at the prompt. First-users with no AIDA context will see \`@TASK-257 · q:27\` and parse it immediately; \`sess:TASK-257\` next to it just adds visual weight without information.
+
+  ## Origin
+
+  User observed 2026-05-16 while watching the implementer statusline: *\"impl@TASK-257, it seems a little redundant having sess:TASK-257 but I am conflicted. I also wonder if the worktree name is worth showing if it differs from the task?\"*
+
+  The conflict resolves naturally: hide when redundant, show when divergent.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T19:55:26.351418339Z
+modified_at: 2026-05-16T19:55:26.351418339Z
+req_type: Task
+tags:
+- batch:display-polish
+- display-polish
+- divergence-aware
+- first-users
+- redundancy
+- statusline
