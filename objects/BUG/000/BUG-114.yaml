@@ -59,12 +59,12 @@ description: |-
   ## Origin
 
   2026-05-16 first dogfood of \`aida queue work TASK-259 --auto-complete\` on the freshly-merged orchestrator. Phase 1 disambiguation failed despite the implementer session completing successfully. The work shipped to a local branch but the orchestrator bailed before pushing.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:14:30.632335051Z
-modified_at: 2026-05-16T17:14:30.632335051Z
+modified_at: 2026-05-16T17:54:57.342796168Z
 req_type: Bug
 tags:
 - auto-complete
