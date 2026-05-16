@@ -1,0 +1,75 @@
+id: 019e31c8-4b68-7e73-9065-92717c138769
+spec_id: BUG-114
+agreed_id: BUG-114
+title: 'aida queue work --auto-complete: phase-1 lease disambiguation fails when multiple session leases appear'
+description: |-
+  First real-world use of STORY-246's \`--auto-complete\` orchestrator failed at phase 1 with:
+
+  \`\`\`
+  ✗ phase 1 (implementer session) failed: multiple new session leases appeared — cannot disambiguate the orchestrated session
+    → Continue the implementer session: \`aida queue work TASK-259 --resume\`
+
+  ✗ TASK-259 — auto-complete failed at phase 1 (21m 10s)
+  \`\`\`
+
+  The implementer session DID complete the work successfully (TASK-259 marked Done, commit \`4f53babf\` on branch \`task-259\`, queue dequeued). But the orchestrator's lease-tracking heuristic couldn't identify which session lease corresponded to its orchestrated run, so it bailed without proceeding to phase 2 (push + open PR).
+
+  Result: work shipped to a local branch, but no PR opened. User has to manually push + open PR + run the rest of the cycle.
+
+  ## Root cause hypothesis
+
+  The orchestrator's phase-1 tracking appears to be: \"snapshot lease set BEFORE launching implementer Claude, snapshot AFTER, expect exactly one new lease.\" Fragile heuristic — fails when:
+
+  1. Pre-existing dormant leases are counted toward \"new\" because their state changed (dormant → live → dormant) during phase 1
+  2. A nested \`/aida-pickup\` inside the implementer Claude creates additional lease state
+  3. The user has parallel sessions running on other terminals that ALSO create leases during the orchestrated window
+  4. A race in lease snapshotting
+
+  The fix is to **track the orchestrated lease by ID explicitly** — capture the \`AIDA_SESSION_ID\` env var or lease file path that \`aida queue work\` creates, not infer it from a diff.
+
+  ## Acceptance
+
+  - [ ] Orchestrator captures the orchestrated lease's ID explicitly at phase-1 start (e.g., from \`aida queue work\`'s stdout, or from a deterministic lease-file path)
+  - [ ] Phase-1 completion check polls THAT specific lease, not a set diff
+  - [ ] If multiple leases exist concurrently (parallel user sessions), they don't interfere
+  - [ ] Regression test: simulate concurrent leases during phase 1, verify orchestrator still tracks correctly
+  - [ ] Better failure message: if disambiguation genuinely can't be done, name the candidate lease IDs so the user can pick
+
+  ## Workaround until fixed
+
+  \`aida queue work <SPEC>\` (no \`--auto-complete\`), then run the lifecycle steps manually:
+
+  \`\`\`
+  aida queue work SPEC                    # phase 1, interactive
+  # (Claude does work, exits)
+  aida session end --wait-ci              # phase 2, manual
+  aida queue work PR-N                    # phase 3, manual
+  # (reviewer does work, exits)
+  gh pr merge N --squash --delete-branch  # phase 4
+  aida pull                               # phase 5
+  \`\`\`
+
+  ## Composes with
+
+  - **STORY-246** (\`--auto-complete\` original) — this is its first-dogfood-failure follow-up
+  - **\`/aida-drain-queue\`** (TASK-249) — when filed, will call \`--auto-complete\` per item; needs this BUG fixed first
+  - **BUG-113** (auto-bump review-story chain) — related orchestrator-reliability concern
+  - **EPIC-23** (Session orchestration & autonomy) — natural parent
+
+  ## Origin
+
+  2026-05-16 first dogfood of \`aida queue work TASK-259 --auto-complete\` on the freshly-merged orchestrator. Phase 1 disambiguation failed despite the implementer session completing successfully. The work shipped to a local branch but the orchestrator bailed before pushing.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T17:14:30.632335051Z
+modified_at: 2026-05-16T17:14:30.632335051Z
+req_type: Bug
+tags:
+- auto-complete
+- first-dogfood
+- lease-tracking
+- orchestrator
+- phase-1
+- story-246-followup
