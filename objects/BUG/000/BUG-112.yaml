@@ -1,0 +1,83 @@
+id: 019e31ab-6d46-7373-a6fe-bd6c3f2bd3e5
+spec_id: BUG-112
+agreed_id: BUG-112
+title: 'aida session list: INITIAL TOPIC column shows stale data for long-running sessions (misleading)'
+description: |-
+  \`aida session list\` shows an \"INITIAL TOPIC\" column set once at session-start. For long-running sessions (especially dialog sessions that evolve across topics, or implementer sessions that pick up multiple specs sequentially), the column displays *stale* information — what the session was about *originally*, not what it is now.
+
+  A returning user reading the list to answer *\"which session was I in? what was I doing?\"* gets misleading signal.
+
+  ## Observed (2026-05-16)
+
+  User ran \`aida session list\` and got:
+
+  \`\`\`
+   ID        AGE     ROLE         SPEC                   WORKTREE                      INITIAL TOPIC
+  ◐ 1bf450af  11m     implementer  FR-1-042 (unresolved)  aida @ main                   Clarify CLI command naming convention
+    7b6f91d2  22h     implementer  TASK-112               aida @ main                   (untitled)
+  \`\`\`
+
+  Session \`1bf450af\` had been running 14+ hours and had drifted across: filing TASKs, designing EPIC-26 architecture, orchestrating the v0.8.0 release, validating the launcher pivot, reviewing PR-45, and ~20 follow-up filings. Its current focus was strategic dialog about the TUI workflow. But INITIAL TOPIC still said \"Clarify CLI command naming convention\" — true at minute one, irrelevant at hour fourteen.
+
+  Session \`7b6f91d2\` had INITIAL TOPIC = \"(untitled)\" — no signal at all.
+
+  The list has a footnote: *\"INITIAL TOPIC is set once at session start; long sessions evolve beyond it — identify a session by SPEC + AGE\"*. The footnote acknowledges the problem but doesn't fix it.
+
+  ## Acceptance — pick the cleanest of these three paths
+
+  **Option A: Replace with CURRENT scope/spec evolution** (recommended)
+
+  - [ ] Drop INITIAL TOPIC column
+  - [ ] Add \"RECENT FOCUS\" column populated from the session manifest's most recently picked-up spec (e.g., latest \`aida queue work <SPEC>\` invocation, or latest \`aida show <SPEC>\` call surfaced via telemetry, or the latest commit's trace comment)
+  - [ ] For dialog sessions with no spec-pickup, fall back to the most recent comment authored by the session ID
+
+  **Option B: Track and surface scope changes**
+
+  - [ ] Detect when a session's scope changes (new \`aida queue work\` invocation while session is alive)
+  - [ ] Append a small \"+N drifts\" indicator next to SPEC column (\"FR-1-042 +12 drifts\")
+  - [ ] Keep INITIAL TOPIC but mark stale: \"Clarify CLI ... (initial; +12 scope changes)\"
+
+  **Option C: Minimal — clarify the column header**
+
+  - [ ] Rename \"INITIAL TOPIC\" to \"STARTED WITH\" or \"AT LAUNCH\"
+  - [ ] Keep the value but mark it visually deprecated (dim, parenthetical) for sessions older than ~2 hours
+  - [ ] No new tracking needed
+
+  **Recommendation: Option A.** It's the most useful for the \"returning user, what was I doing\" question. Option B is over-engineered. Option C is a band-aid.
+
+  ## Implementation notes
+
+  For Option A, the data source is:
+
+  - Session manifest at \`.aida/sessions/<id>.toml\` records the initial \`anchor\` (the \`--scope\` passed to \`aida queue work\`)
+  - A second field \`recent_anchors: Vec<String>\` could be appended each time the session's scope effectively changes (detected via new commits with new trace comments, new \`aida queue work\` invocations in the same shell, etc.)
+  - The list command takes the last entry of \`recent_anchors\` as the displayed value; falls back to initial \`anchor\` if empty
+  - For dialog sessions with no anchor at all, show \"(dialog)\" + last activity timestamp
+
+  ## Composes with
+
+  - **STORY-242** (persistent dialog tab — rejected, replaced by STORY-244) — but the principle stands: long-running dialog sessions need surface representation
+  - **Returning user UX** — the alpha-adjacent question \"where was I yesterday\" depends on this signal being accurate
+  - **STORY-246** (\`--auto-complete\` orchestrator) — orchestrator-driven sessions will rapid-fire change scope; the column needs to keep up
+
+  ## Why this matters for alpha
+
+  First-users in a few days will run \`aida session list\` after taking a break and ask: *\"which one was I in?\"* If every session shows its TWELVE-HOURS-AGO topic, the list is useless. They'll just \`aida session prune --orphans\` and lose anything they care about. Or worse, ignore the feature entirely.
+
+  ## Origin
+
+  User asked 2026-05-16: *\"the session list's INITIAL TOPIC column is misleading after long sessions — it's stale data presented as current state... it directly affects 'what does my session list mean to me as a returning user' — alpha-adjacent.\"*
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T16:42:58.758955507Z
+modified_at: 2026-05-16T16:42:58.758955507Z
+req_type: Bug
+tags:
+- alpha-readiness
+- initial-topic
+- returning-user
+- session-list
+- stale-data
+- ux
