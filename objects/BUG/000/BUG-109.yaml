@@ -34,12 +34,12 @@ description: |-
   ## Origin
 
   User reported 2026-05-15 immediately after PR-43 merged and TUI flipped default-on. Screenshot in prior message.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:03:23.325463299Z
-modified_at: 2026-05-16T00:18:34.075814604Z
+modified_at: 2026-05-16T00:53:41.964553761Z
 req_type: Bug
 tags:
 - default-on
@@ -47,3 +47,7 @@ tags:
 - empty-state
 - tui
 - ux
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-16T00:53:41.964553761Z
+  implemented_by: joe
