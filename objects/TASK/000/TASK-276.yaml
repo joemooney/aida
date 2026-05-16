@@ -1,0 +1,39 @@
+id: 019e3221-0371-7023-9bd4-4df177b0a1f9
+spec_id: TASK-276
+agreed_id: TASK-276
+title: 'README: surface docs/positioning/ links (vs-ultraplan / vs-ultrareview / vs-karpathy-md / vs-saas-pm)'
+description: |-
+  \`docs/positioning/\` already has well-developed comparison docs (vs-ultrareview.md, vs-ultraplan.md, vs-karpathy-md.md, vs-saas-pm.md). The README doesn't surface them. First-users asking \"why AIDA instead of X?\" can't find the answers without grep.
+
+  ## Acceptance
+
+  - [ ] README has a \"How AIDA compares\" or \"Should I use AIDA?\" section near the bottom
+  - [ ] Each link to a positioning doc has a one-sentence summary:
+    - \`vs-ultraplan.md\` — \"AIDA layers requirement structure on top of Claude's planning; /ultraplan is the planning primitive AIDA composes with.\"
+    - \`vs-ultrareview.md\` — \"AIDA's /aida-review is workflow-integrated, single-perspective; /ultrareview is parallel cloud multi-agent. Complementary, not competing.\"
+    - \`vs-karpathy-md.md\` — \"Structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, lifecycle.\"
+    - \`vs-saas-pm.md\` — \"Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.\"
+  - [ ] Section positioned AFTER getting-started, BEFORE deep architecture — for the \"I've tried it; what is this actually for?\" reader
+
+  ## Composes with
+
+  - **batch:alpha-docs** — sibling docs work
+  - **OVERVIEW.md** — already covers Trojan-horse and horizontal/vertical positioning; this TASK surfaces it via positioning docs
+
+  ## Origin
+
+  Dialog-session 2026-05-16 alpha-docs scoping. positioning/ exists but is buried.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T18:51:24.913047136Z
+modified_at: 2026-05-16T18:51:24.913047136Z
+req_type: Task
+tags:
+- batch:alpha-docs
+- differentiation
+- documentation
+- positioning
+- readme
+- strategic
