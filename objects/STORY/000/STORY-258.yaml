@@ -1,0 +1,26 @@
+id: 019e32b1-0665-7f31-97a9-2e568ea4dfb0
+spec_id: STORY-258
+agreed_id: STORY-258
+title: 'Review PR-54: [AI:claude] feat(cli): accept batch:NAME positional on aida queue work (TASK-270)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e329b`) for branch `task-270`.
+
+  - PR: <https://github.com/joemooney/aida/pull/54>
+  - Branch: `task-270` → `main`
+
+  ## Covers
+
+  - TASK-270
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 54` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T21:28:42.853481126Z
+modified_at: 2026-05-16T21:28:42.853481126Z
+req_type: Story
