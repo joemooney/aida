@@ -135,7 +135,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T05:14:38.848884130Z
-modified_at: 2026-05-16T16:20:34.332288265Z
+modified_at: 2026-05-16T16:20:48.645926635Z
 req_type: Story
 tags:
 - alpha-readiness
@@ -153,6 +153,21 @@ relationships:
   target_id: 019e3196-dcab-7520-b14e-af4cbbb7fbe4
   created_at: 2026-05-16T16:20:34.332277871Z
   created_by: joe
+comments:
+- id: 019e3197-2185-7ee3-8311-41e52ef75ea9
+  author: joe
+  content: |-
+    Implemented via PR-46 (https://github.com/joemooney/aida/pull/46, commit b329c68a):
+
+    - New `aida-cli/src/auto_complete.rs`: phase-sequencing core behind a `PhaseDriver` trait — variant gating, verdict parsing, JSON phase events, recovery hints; 27 tests against a `MockPhaseDriver`.
+    - `RealPhaseDriver` (main.rs): subprocesses `aida queue work` for interactive phases, owns the CI gate, discovers leases via `.aida/sessions/` snapshot-diff, shells out to gh/aida/cargo. Exit codes 0-6 keyed to the failing phase.
+    - `/aida-review` skill: verdict-file handshake via `$AIDA_REVIEW_VERDICT_FILE`.
+    - Four variants: full / through-ci / through-merge / skip-build; `--json` for machine-readable progress.
+
+    Test status: 472/472 aida-cli tests green; fmt + clippy clean; plan verify PASS.
+    Follow-up: full live end-to-end run not exercisable from a dev session — see plan Followups for the auto-fixup-loop and fully-autonomous-reviewer variants.
+  created_at: 2026-05-16T16:20:48.645926635Z
+  modified_at: 2026-05-16T16:20:48.645926635Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T16:13:47.945180394Z
