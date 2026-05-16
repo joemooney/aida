@@ -13571,7 +13571,7 @@ fn session_end(
             workflow_hints::after_session_end_with_pr(
                 Some(&project_root),
                 pr_n,
-                outcome.review_story_id.as_deref(),
+                &outcome.covered_specs,
             );
         }
     }
@@ -14549,11 +14549,11 @@ struct AutoQueueOutcome {
     /// workflow hint. `None` for the skip cases.
     /// trace:STORY-106 | ai:claude
     pr_number: Option<u64>,
-    /// STORY-106: review story id when known. Filed knows it (just
-    /// minted the story); AlreadyExists doesn't look it up (the
-    /// `aida queue work PR-N` form handles the unknown case).
-    /// trace:STORY-106 | ai:claude
-    review_story_id: Option<String>,
+    /// TASK-267: delivered `(REQ-ID)` trailers the PR carries. Lets the
+    /// post-session workflow hint name which specs `aida pull` will
+    /// auto-bump Done → Completed. Populated on Filed; empty otherwise.
+    /// trace:TASK-267 | ai:claude
+    covered_specs: Vec<String>,
 }
 
 impl AutoQueueOutcome {
@@ -14562,7 +14562,7 @@ impl AutoQueueOutcome {
             status: AutoQueueStatus::Filed,
             summary: s.into(),
             pr_number: None,
-            review_story_id: None,
+            covered_specs: Vec::new(),
         }
     }
     fn already_exists(s: impl Into<String>) -> Self {
@@ -14570,7 +14570,7 @@ impl AutoQueueOutcome {
             status: AutoQueueStatus::AlreadyExists,
             summary: s.into(),
             pr_number: None,
-            review_story_id: None,
+            covered_specs: Vec::new(),
         }
     }
     /// STORY-106: attach the PR number that this outcome refers to. Used
@@ -14579,9 +14579,11 @@ impl AutoQueueOutcome {
         self.pr_number = Some(pr_number);
         self
     }
-    /// STORY-106: attach the newly-filed review story id (Filed only).
-    fn with_review_story(mut self, story_id: impl Into<String>) -> Self {
-        self.review_story_id = Some(story_id.into());
+    /// TASK-267: attach the delivered spec IDs the PR covers, so the
+    /// session-end hint names them in the `aida pull` auto-bump line.
+    /// trace:TASK-267 | ai:claude
+    fn with_specs(mut self, specs: Vec<String>) -> Self {
+        self.covered_specs = specs;
         self
     }
     /// Skip the user shouldn't care about (review session, no PR-producing
@@ -14591,7 +14593,7 @@ impl AutoQueueOutcome {
             status: AutoQueueStatus::SkippedByDesign,
             summary: s.into(),
             pr_number: None,
-            review_story_id: None,
+            covered_specs: Vec::new(),
         }
     }
     /// Skip the user might want to act on (missing tool, gh failed, queue
@@ -14601,7 +14603,7 @@ impl AutoQueueOutcome {
             status: AutoQueueStatus::SkippedNeedsAttention,
             summary: s.into(),
             pr_number: None,
-            review_story_id: None,
+            covered_specs: Vec::new(),
         }
     }
 }
@@ -14821,7 +14823,7 @@ fn try_auto_queue_pr_review(
         new_id, covers, pr.number
     ))
     .with_pr(pr.number)
-    .with_review_story(new_id)
+    .with_specs(spec_ids)
 }
 
 /// Print an `AutoQueueOutcome` in the convention shared by `aida session
