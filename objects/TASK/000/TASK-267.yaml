@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:29:17.082223638Z
-modified_at: 2026-05-16T17:32:15.625540875Z
+modified_at: 2026-05-16T20:25:18.089680565Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -19,3 +19,37 @@ tags:
 - session-end
 - ux
 - workflow-hint
+comments:
+- id: 019e3276-f809-7ba0-8d0b-b7559139074f
+  author: joe
+  content: |-
+    ## Spec correction 2026-05-16 — strike TASK-260 table reference
+
+    Acceptance criterion in the original spec said \"Rendering uses the Path/Action/Why table format from TASK-260 when shipped.\" **This is wrong** — implementer caught the contradiction during pickup design-checkpoint.
+
+    TASK-260's Path/Action/Why table is for **parallel choices** (pick ONE of N: continue / pr / pause). TASK-267's hint is a **sequential step list** (do ALL in order: review → merge → pull). Different problem shapes; different formats.
+
+    **Authoritative format**: numbered list, as shown in the spec's first preview:
+
+    \`\`\`
+    ⓘ Next steps for PR #47:
+    1. ▶ Start review     aida queue work PR-47
+    2. ↓ After approval   gh pr merge 47 --squash --delete-branch
+    3. ↓ Then pull        aida pull   (auto-bumps TASK-259 → Completed)
+
+       Or self-merge (solo dev — skip review):
+          gh pr merge 47 --squash --delete-branch && aida pull
+    \`\`\`
+
+    - \`▶\` arrow on step 1 (primary action)
+    - \`↓\` arrows on subsequent steps (flow continuation)
+    - Self-merge alternative as an indented sidebar block
+    - One-line degrade in non-TTY/piped output
+
+    The TASK-260 cross-reference in the original acceptance is struck. Implementer is freed to ship the numbered-list shape without the table-format constraint.
+
+    ## Pattern worth capturing in memory
+
+    The shape mismatch (parallel vs sequential UI patterns) is a recurring trap. Worth a memory entry so dialog-role doesn't re-conflate them when filing future polish work.
+  created_at: 2026-05-16T20:25:18.089680565Z
+  modified_at: 2026-05-16T20:25:18.089680565Z
