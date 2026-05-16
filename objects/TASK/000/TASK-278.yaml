@@ -1,0 +1,49 @@
+id: 019e3223-5850-7811-b03d-41e759f96dff
+spec_id: TASK-278
+agreed_id: TASK-278
+title: '/aida-review: fire gh pr review --approve on positive verdict (so gh reviewDecision = APPROVED)'
+description: |-
+  \`/aida-review\` records rejection verdicts formally via \`gh pr review --request-changes\` (see skill template lines 307-327 for the own-PR skip handling). But the symmetric **approval** path doesn't fire \`gh pr review --approve\` — approval is recorded only as a posted comment.
+
+  Consequence: after a clean AIDA review, GitHub's \`reviewDecision\` field stays \`REVIEW_REQUIRED\` instead of \`APPROVED\`. Downstream tooling that reads this signal (TASK-250's State 3 detection — \"reviewed + approved, awaiting merge\") never lights up. The display shows the wrong state (\"start review\" instead of \"merge approved review\") for PRs that ARE approved.
+
+  ## Acceptance
+
+  - [ ] After step 7's verdict synthesis in \`aida-review.md\`, when the overall verdict is positive (\"approve\" / \"LGTM\" / no \"request-changes\" required), fire:
+
+    \`\`\`bash
+    gh pr review <N> --approve --body \"<one-line summary, optionally with spec ids covered>\"
+    \`\`\`
+
+  - [ ] Symmetric own-PR handling: solo developers reviewing their own PR can't \`gh pr review --approve\` either (GitHub blocks self-approval). For own-PR + approve, skip the formal call and surface a note:
+
+    \`\`\`
+    ℹ Own-PR: skipped \`gh pr review --approve\` (GitHub blocks self-approval). The consolidated review comment above is the signal; merge directly with \`gh pr merge\`.
+    \`\`\`
+
+  - [ ] Verdict-routing logic: positive verdict → \`--approve\`; negative → \`--request-changes\` (existing); abstention / partial → existing comment-only path
+  - [ ] Composes with TASK-250's State 3 detection: after this TASK ships, gh reviewDecision = APPROVED for non-self reviews and the State 3 display fires correctly
+
+  ## Composes with
+
+  - **TASK-250** (queue list state subdivision) — directly enables State 3's signal to fire on AIDA-flow approvals
+  - **TASK-216** (\`/aida-review\` own-PR detection — shipped) — sibling: same family of own-PR-skip logic; this TASK extends it to the approval path
+  - **batch:workflow-hint-polish** — tagged into this batch; the signal it provides is consumed by TASK-250 in the same batch
+
+  ## Origin
+
+  Discovered 2026-05-16 while reviewing TASK-250's State 3 detection design. \`/aida-review\` records rejections formally but not approvals — the asymmetry breaks downstream consumers expecting \`gh reviewDecision = APPROVED\`. Adjacent gap surfaced via the design-checkpoint question, filed separately to keep TASK-250 scope tight.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T18:53:57.712289137Z
+modified_at: 2026-05-16T18:53:57.712289137Z
+req_type: Task
+tags:
+- aida-review
+- batch:workflow-hint-polish
+- formal-approval
+- gh-pr-review
+- state-detection
+- workflow-hint
