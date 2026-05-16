@@ -1,0 +1,120 @@
+id: 019e321f-7066-7522-962a-6edd619b31ac
+spec_id: TASK-273
+agreed_id: TASK-273
+title: Add spec-lifecycle flow diagram + State/Verb table to README (alpha onboarding)
+description: |-
+  First-users hit AIDA's spec lifecycle (Draft → Approved → Planned → In Progress → Done → Completed → Released) as **implicit knowledge** that takes hours to absorb. A flow diagram + State/Verb table in the README — placed in the \"Quick start\" or new \"Lifecycle\" section — closes that gap on first read.
+
+  Helps users unfamiliar with git terminology too: \"merged\" vs \"shipped\" vs \"released\" become disambiguated visually.
+
+  ## Proposed README additions
+
+  ### Section: \"Spec lifecycle at a glance\"
+
+  \`\`\`
+  ┌──────────┐  aida add    ┌──────────┐  aida edit    ┌──────────┐
+  │  (file)  │ ───────────> │  Draft   │ ────────────> │ Approved │
+  └──────────┘              └──────────┘   --status    └─────┬────┘
+                                           approved          │ aida queue work SPEC
+                                                             ▼
+                                                      ┌──────────────┐
+                                                      │ In Progress  │
+                                                      └──────┬───────┘
+                                                             │ (Claude implements)
+                                                             │ git commit
+                                                             │ /aida-pr
+                                                             ▼
+                                                      ┌──────────┐
+                                                      │   Done   │ ─── PR opened
+                                                      └────┬─────┘     on GitHub
+                                                           │
+                                                           │ /aida-review → approve
+                                                           │ gh pr merge --squash
+                                                           │ aida pull
+                                                           ▼
+                                                      ┌───────────┐
+                                                      │ Completed │
+                                                      └─────┬─────┘
+                                                            │
+                                                            │ make release-minor
+                                                            │ (aggregates many)
+                                                            ▼
+                                                      ┌──────────┐
+                                                      │ Released │
+                                                      └──────────┘
+  \`\`\`
+
+  ### Section: \"What 'shipped' actually means\"
+
+  The word \"ship\" is fuzzy across the software industry. AIDA distinguishes six steps in the lifecycle. When unsure, use the precise verb:
+
+  | Verb | Where the work is | Spec status |
+  |---|---|---|
+  | **Committed** | Local git history | In Progress |
+  | **Pushed** | On \`origin\` (remote) | In Progress |
+  | **PR opened** | GitHub PR exists, awaiting CI/review | Done |
+  | **Reviewed** | Reviewer gave verdict (approved / requested changes) | Done |
+  | **Merged** | PR squashed to \`main\` | Completed (via auto-bump on \`aida pull\`) |
+  | **Released** | Tagged version + binaries published | Cross-spec; many merged specs aggregate per release |
+
+  Default meaning of \"shipped\" in AIDA docs: **merged to \`main\`** (developer-facing \"out the door\"). For user-facing \"available to download with a version number\", use **\"released\"** (e.g., v0.8.0).
+
+  ### Section: \"Commands at each stage\"
+
+  | Transition | Command | What it does |
+  |---|---|---|
+  | File spec | \`aida add --title \"...\" --type task\` | Creates spec in Draft (or Approved with \`--status\`) |
+  | Queue for work | \`aida queue add SPEC --for implementer\` | Routes to a role's queue |
+  | Pick up work | \`aida queue work SPEC\` | Spawns Claude session in fresh worktree |
+  | Open PR | \`/aida-pr\` (inside Claude) | Pushes branch + opens PR + auto-queues reviewer story |
+  | End implementer session | \`aida session end --wait-ci\` | Blocks until CI green, then releases lease |
+  | Start review | \`aida queue work PR-N\` | Spawns reviewer session for the PR |
+  | Approve + merge | \`gh pr merge N --squash --delete-branch\` | Lands the work on main |
+  | Auto-bump status | \`aida pull\` | Detects merge, flips spec status → Completed |
+  | Release | \`make release-minor YES=1\` | Bumps version, tags, pushes, publishes binaries |
+  | Full lifecycle automation | \`aida queue work SPEC --auto-complete\` | Runs all of the above as one command (STORY-246) |
+
+  ## Acceptance
+
+  - [ ] README has a new section \"Spec lifecycle\" between the project overview and \"Quick start\" — flow diagram + state/verb table + commands table
+  - [ ] Companion deeper doc at \`docs/lifecycle.md\` if the section gets too long; README has the visual + table, docs/lifecycle.md has the full prose treatment with edge cases (cluster PRs, parallel pipelining, autonomous /goal flows)
+  - [ ] Update CLAUDE.md to point at the new lifecycle section (currently CLAUDE.md mentions Done vs Completed deep in the storage section; should be discoverable from the lifecycle doc)
+  - [ ] Flow diagram uses ASCII (renders in plain markdown viewers; no Mermaid plugin required)
+  - [ ] Each verb in the State/Verb table is linked to its CLI command or skill
+  - [ ] First-time setup section (\`aida init\`) references the lifecycle doc as \"after \`aida init\`, your first spec goes through this lifecycle\"
+
+  ## Composes with
+
+  - **feedback_precise_lifecycle_vocabulary.md** (memory, captured 2026-05-16) — this TASK ships the doc surface for that memory's discipline
+  - **batch:workflow-hint-polish** — workflow hints surface specific lifecycle transitions; the README diagram is the BIG picture they're sub-sampling
+  - **First-users alpha readiness** — biggest single doc win for orienting new users
+  - **TASK-269** (status color-coding) — visual representation of the same lifecycle in `aida show`
+
+  ## Why this matters for alpha
+
+  Tech-savvy friends know git but not AIDA's vocabulary. The lifecycle diagram + table:
+
+  - Makes the gap between \"merged\" and \"completed\" explicit (most users assume they're the same)
+  - Surfaces the \"Released\" concept (when does a thing actually become an installable version?)
+  - Shows how \`--auto-complete\` shortcuts the manual flow (a real wow)
+
+  Without this in the README, first-users will run \`aida add\` and then ask \"now what?\" — same friction the workflow-hint-polish batch tries to fix one-message-at-a-time.
+
+  ## Origin
+
+  User asked 2026-05-16 after the dialog-role \"ship\" vocabulary correction: *\"I think a flow diagram added to the documentation, maybe the readme with all the verbs commands etc. would help. I really like your State/Verb table, maybe add that also, it helps people unfamiliar with git terminology.\"*
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T18:49:41.734450590Z
+modified_at: 2026-05-16T18:49:41.734450590Z
+req_type: Task
+tags:
+- alpha-readiness
+- documentation
+- first-users
+- flow-diagram
+- lifecycle
+- onboarding
+- readme
