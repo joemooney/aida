@@ -90,7 +90,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:32:32.371630658Z
-modified_at: 2026-05-16T04:23:57.690048684Z
+modified_at: 2026-05-16T04:25:39.842095899Z
 req_type: Story
 tags:
 - alpha-gating
@@ -172,3 +172,69 @@ comments:
     User reflected 2026-05-15 immediately after BUG-109's welcome panel landed in their TUI. Wanted a richer foundation before the implementer builds the workflow loop on top.
   created_at: 2026-05-16T04:23:57.690048684Z
   modified_at: 2026-05-16T04:23:57.690048684Z
+- id: 019e2f08-6502-7af3-ac18-efecc8cc542a
+  author: joe
+  content: |-
+    ## Keybinding model refinement 2026-05-15 — mode-aware direct keys + prefix fallback
+
+    User requested 2026-05-15: *"I'd like to move away from Ctrl-A and just use keybindings like 'q' for queue and/or navigate with arrows, you can keep the Ctrl-A as an alternative."*
+
+    The Ctrl-A prefix exists because PTY-hosted children (Claude sessions) own the keyboard by default. In mission control mode, no child is focused, so the prefix is unnecessary ceremony. Move to **mode-aware bindings**:
+
+    ### Two modes
+
+    | Mode | Keys |
+    |---|---|
+    | **Mission control** (no PTY child has focus) | Direct keys primary; Ctrl-A still works as alternative |
+    | **Hosted session** (Claude PTY child in foreground) | Ctrl-A required (otherwise keys go to child) |
+
+    ### Direct-key map (mission control mode)
+
+    | Key | Action |
+    |---|---|
+    | `q` | **Q**ueue view (left nav) |
+    | `b` | **B**acklog |
+    | `h` | **H**istory |
+    | `p` | **P**Rs |
+    | `s` | **S**essions |
+    | `r` | Switch **r**ole (cycle implementer → reviewer → dialog) |
+    | `R` | Role picker (overlay) |
+    | `t` | **T**heme picker (TASK-256) |
+    | `?` | Help overlay (all keybindings) |
+    | `↑↓` | Navigate items in middle list |
+    | `Enter` | Act on selected item (pick up / review / merge depending on context) |
+    | `Tab` / `Shift-Tab` | Cycle role tabs |
+    | `Esc` | Back / dismiss overlay / quit if at top level |
+    | `Ctrl-C` | Quit (universal escape) |
+    | `:` | Command palette (vim-style) — `:q` quit, `:new STORY-X`, `:role reviewer` |
+
+    ### Legacy compatibility
+
+    All existing `Ctrl-A <key>` bindings from STORY-132 continue to work in BOTH modes:
+    - In mission control: alternative path (for muscle memory; e.g., tmux users)
+    - In hosted session: REQUIRED path (otherwise keys go to Claude child)
+
+    ### Resolving `q` ambiguity
+
+    Today `Ctrl-A Q` = quit; introducing direct `q` = queue conflicts. Resolution:
+    - **In mission control**: `q` = queue view; quit via `Esc`, `Ctrl-C`, `:q`, or `Ctrl-A Q`
+    - **In hosted session**: `Ctrl-A Q` still quits (unchanged)
+    - Do NOT use uppercase `Q` for quit — too accidental; reserve for future
+
+    ### Updated acceptance (additive to prior)
+
+    - [ ] Mode detection: TUI tracks whether ANY tab has a focused PTY child. If yes → hosted mode; if no → mission control mode.
+    - [ ] Mode-aware key dispatching in the main event loop
+    - [ ] In mission control mode, the status strip shows direct-key hints (\`q queue · b backlog · ? help\`); in hosted mode it shows prefix hints (\`^a Q quit · ^a O overlay · ^a ? help\`)
+    - [ ] `Esc` and `Ctrl-C` quit cleanly with TermGuard restore (composes with BUG-110's signal handler)
+    - [ ] Tests cover both modes' dispatching behavior
+
+    ### Why this matters
+
+    The Ctrl-A prefix is a power-user artifact from tmux culture. First-users-in-days will not have that muscle memory. Direct keys are the on-ramp; the prefix is the depth-on-discovery model — exactly the Trojan-horse design test from CLAUDE.md.
+
+    ### Origin
+
+    User reflected after BUG-109's welcome panel shipped — explicit request to keep Ctrl-A but make direct keys primary in mission control.
+  created_at: 2026-05-16T04:25:39.842095899Z
+  modified_at: 2026-05-16T04:25:39.842095899Z
