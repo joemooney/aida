@@ -5756,5 +5756,55 @@ operations:
   timestamp: 2026-05-16T20:26:29.123200696Z
   kind: !SetStatus
     status: In Progress
-clock: 669
+- id: 019e3278-b816-7ae2-8df3-134ec6f1e8e0
+  target_id: 019e31d5-d21a-7fe2-bb3e-e3f376f6d1d9
+  author: aida
+  node_id: '1'
+  lamport: 670
+  timestamp: 2026-05-16T20:27:12.790508767Z
+  kind: !SetDescription
+    description: |-
+      When `aida session end --wait-ci` completes (CI green, lease released, review story auto-queued), the workflow hint says:
+
+      ```
+      ⓘ Workflow hint: PR #47 has a reviewer story in the queue.
+        Start the review with `aida queue work STORY-249` (or `aida queue work PR-47` per TASK-85).
+      ```
+
+      The hint stops one step short of where the user actually needs to be. After starting the review, the user must ALSO:
+
+      1. Walk the diff (`/aida-review`)
+      2. Approve
+      3. Merge: `gh pr merge N --squash --delete-branch`
+      4. Pull: `aida pull` (auto-bumps spec → Completed)
+
+      Without steps 3-4, `aida pull` returns "Already up to date" and the spec stays in Done forever — exactly the friction the user hit 2026-05-16.
+
+      ## Acceptance
+
+      - [ ] Workflow hint shows the FULL remaining path, not just the next step:
+        ```
+        ⓘ Next steps for PR #47:
+          1. ▶ Start review     aida queue work PR-47
+          2. ↓ After approval   gh pr merge 47 --squash --delete-branch
+          3. ↓ Then pull        aida pull   (auto-bumps TASK-259 → Completed)
+
+          Or self-merge (solo dev — skip review):
+             gh pr merge 47 --squash --delete-branch && aida pull
+        ```
+      - [ ] Rendering is a numbered SEQUENTIAL step list — `▶` on step 1 (primary action), `↓` on subsequent flow steps, self-merge alternative as an indented sidebar block. NOT TASK-260's Path/Action/Why table: that format is for parallel choices (pick ONE of N); this hint is a do-ALL-in-order sequence. (Spec correction 2026-05-16 — see comment.)
+      - [ ] Self-merge path explicit: many users (especially solo developers, alpha audience) won't have a separate reviewer; the path should be acknowledged
+      - [ ] In non-TTY contexts (piped output), degrades to a single-line summary
+
+      ## Composes with
+
+      - **TASK-260** (Path/Action/Why next-steps tables) — same `batch:workflow-hint-polish` family, but a DIFFERENT problem shape: TASK-260 renders parallel choices (pick one) as a table; this TASK renders a sequential step chain (do all) as a numbered list. Not an instance of TASK-260.
+      - **BUG-113** (auto-bump review-story chain) — same friction family (workflow steps not surfacing what the user needs)
+      - **STORY-246** (`--auto-complete` orchestrator) — when working, replaces the whole hint; this TASK is for when users run the lifecycle manually
+      - **first-users alpha readiness** — opaque next-steps are a common bounce trigger
+
+      ## Origin
+
+      User asked 2026-05-16 after running `aida session end --wait-ci` for TASK-259's PR-47: *"I expected to see files pulled. Did `gh pr merge 47 --squash --delete-branch` happen or am I supposed to do it, it is not in the hint"* — confirmed the hint stopped at the review step, didn't surface the merge step or self-merge alternative.
+clock: 670
 node_id: '1'
