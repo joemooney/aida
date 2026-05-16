@@ -3,12 +3,12 @@ spec_id: TASK-267
 agreed_id: TASK-267
 title: 'aida session end: workflow hint stops short — mention merge step + offer self-merge path'
 description: "When \\`aida session end --wait-ci\\` completes (CI green, lease released, review story auto-queued), the workflow hint says:\n\n\\`\\`\\`\nⓘ Workflow hint: PR #47 has a reviewer story in the queue.\n  Start the review with \\`aida queue work STORY-249\\` (or \\`aida queue work PR-47\\` per TASK-85).\n\\`\\`\\`\n\nThe hint stops one step short of where the user actually needs to be. After starting the review, the user must ALSO:\n\n1. Walk the diff (\\`/aida-review\\`)\n2. Approve\n3. Merge: \\`gh pr merge N --squash --delete-branch\\`\n4. Pull: \\`aida pull\\` (auto-bumps spec → Completed)\n\nWithout steps 3-4, \\`aida pull\\` returns \\\"Already up to date\\\" and the spec stays in Done forever — exactly the friction the user hit 2026-05-16.\n\n## Acceptance\n\n- [ ] Workflow hint shows the FULL remaining path, not just the next step:\n  \\`\\`\\`\n  ⓘ Next steps for PR #47:\n    1. ▶ Start review:    aida queue work PR-47\n    2. ↓ After approval:  gh pr merge 47 --squash --delete-branch\n    3. ↓ Then pull:       aida pull       (auto-bumps TASK-259 to Completed)\n  \n    Or self-merge (skip review, solo developer):\n       gh pr merge 47 --squash --delete-branch && aida pull\n  \\`\\`\\`\n- [ ] Rendering uses the Path/Action/Why table format from TASK-260 when shipped\n- [ ] Self-merge path explicit: many users (especially solo developers, alpha audience) won't have a separate reviewer; the path should be acknowledged\n- [ ] In non-TTY contexts (piped output), degrades to a single-line summary\n\n## Composes with\n\n- **TASK-260** (Path/Action/Why next-steps tables) — same family; this is an instance\n- **BUG-113** (auto-bump review-story chain) — same friction family (workflow steps not surfacing what the user needs)\n- **STORY-246** (\\`--auto-complete\\` orchestrator) — when working, replaces the whole hint; this TASK is for when users run the lifecycle manually\n- **first-users alpha readiness** — opaque next-steps are a common bounce trigger\n\n## Origin\n\nUser asked 2026-05-16 after running \\`aida session end --wait-ci\\` for TASK-259's PR-47: *\\\"I expected to see files pulled. Did \\`gh pr merge 47 --squash --delete-branch\\` happen or am I supposed to do it, it is not in the hint\\\"* — confirmed the hint stopped at the review step, didn't surface the merge step or self-merge alternative."
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:29:17.082223638Z
-modified_at: 2026-05-16T20:25:18.089680565Z
+modified_at: 2026-05-16T20:26:29.089363620Z
 req_type: Task
 tags:
 - alpha-readiness
