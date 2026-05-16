@@ -2469,6 +2469,34 @@ pub enum QueueCommand {
         /// `--resume`. trace:STORY-132 | ai:claude
         #[clap(long, value_name = "UUID", conflicts_with = "resume")]
         session_id: Option<String>,
+        /// Drive the full implementer → CI → reviewer → merge → pull →
+        /// build lifecycle for one SPEC in a single command, instead of
+        /// running the 5+ steps by hand. The orchestrator spawns each
+        /// Claude session, waits for it, and advances; the human only
+        /// interacts inside the sessions themselves. Bare `--auto-complete`
+        /// runs all six phases; the value picks a variant that stops early:
+        ///   through-ci    — stop after CI is green (PR routed to reviewer)
+        ///   through-merge — stop after the merge (skip pull + build)
+        ///   skip-build    — phases 1-5 (skip the final build verify)
+        /// Exit code is 0 on success, else the 1-based index of the phase
+        /// that failed (1 implementer, 2 CI, 3 review, 4 merge, 5 pull,
+        /// 6 build). Requires a SPEC id. trace:STORY-246 | ai:claude
+        #[clap(
+            long,
+            value_name = "MODE",
+            num_args = 0..=1,
+            default_missing_value = "full",
+            conflicts_with_all = [
+                "batch", "no_launch", "resume", "fresh", "list_sessions",
+                "dry_run", "type_filter",
+            ]
+        )]
+        auto_complete: Option<String>,
+        /// With `--auto-complete`: emit one JSON line per phase transition
+        /// on stdout (machine-readable progress for TUI / scripting) instead
+        /// of the human-readable progress lines. trace:STORY-246 | ai:claude
+        #[clap(long, requires = "auto_complete")]
+        json: bool,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
