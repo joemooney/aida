@@ -163,11 +163,11 @@ This is one atomic step that:
 
 Equivalent to: `aida edit <spec_id> --status done && aida queue remove <spec_id>`
 
-### Step 6: Next steps (state-aware) — trace:TASK-87
+### Step 6: Next steps (state-aware) — trace:TASK-87 trace:TASK-260
 
-After step 5 succeeds, surface a structured `Next steps (recommended order):`
-block so the workflow self-guides instead of relying on improvised "want me
-to push?" prompts. Don't auto-execute — the user picks.
+After step 5 succeeds, surface a structured next-steps table so the
+workflow self-guides instead of relying on improvised "want me to push?"
+prompts. Don't auto-execute — the user picks.
 
 **Detect state first.** Three signals decide which template to render:
 
@@ -186,44 +186,60 @@ aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id
 `🚪` = stop/exit. Recommendations must be CONCRETE — name the command, name
 the IDs. "You might want to consider…" is not a Next step.
 
+**Render multi-option prompts as a table.** When presenting 2+ paths
+forward, render as a markdown table with columns Path / What happens / Why.
+Use ▶ ⏵ 🚪 glyphs in the Path cell for the primary / alternate / exit
+semantics. Emit it as a real GFM markdown table — *not* wrapped in a code
+fence — so Claude Code's terminal draws the box-rule grid instead of raw
+pipes. The **Why** column is load-bearing: it explains the role / lease /
+worktree implication of each path, never just restates the action. A
+single linear next-step stays a compact one-liner — the table is for 2+
+options only. Full convention: `docs/skills-convention.md`.
+
 **Templates** (substitute `<session-id>`, `<cluster-id>`, etc. from
-detection above):
+detection above). Each shows a prose lead-in line followed by the
+next-steps table — print the lead-in as a normal sentence, then the table
+as a real GFM markdown table (no surrounding code fence):
 
 *Cluster drained:*
 
-```
-Drained <N> items from <cluster-id>. Next steps (recommended order):
-  1. ▶ Open PR for this batch → `/aida-pr`
-  2. ⏵ Pick up a different cluster → `aida queue work <EPIC-M>`
-  3. 🚪 Stop here → Ctrl+D, then `aida session end <session-id>` from parent shell
-```
+Drained <N> items from <cluster-id>.
+
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ Open PR for this batch | `/aida-pr` | Same session, same lease — the batch is done; ship it before the context goes cold |
+| ⏵ Pick up a different cluster | `aida queue work <EPIC-M>` | New scope → new lease + worktree; end this session first or the leases conflict |
+| 🚪 Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the cluster lease — the drained work is safe, the PR can wait |
 
 *Cluster partial:*
 
-```
-<N>/<total> done on <cluster-id> (<remaining> remaining). Next steps:
-  1. ▶ Keep draining this cluster → `aida queue work` (no-arg = next planned item)
-  2. ⏵ Pause + check on something else → `aida queue list --all`
-  3. 🚪 Stop here → Ctrl+D, then `aida session end <session-id>` from parent shell
-```
+<N>/<total> done on <cluster-id> (<remaining> remaining).
+
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ Keep draining this cluster | `aida queue work` (no-arg = next planned item) | Same role + lease + worktree — the manifest is the consent record, no re-confirm |
+| ⏵ Pause + check on something else | `aida queue list --all` | Read-only peek; doesn't drop the lease, you can return to the drain |
+| 🚪 Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease mid-cluster; `[planned:by-<session>]` chips keep the rest claimed for next time |
 
 *Simple mode, queue has more items routed to this role:*
 
-```
-✓ <SPEC-ID> done. <N> more items queued for <role>. Next steps:
-  1. ▶ Grab next item → `/aida-pickup`
-  2. ⏵ Wrap up what's shipped as a PR → `/aida-pr`
-  3. 🚪 Stop here → Ctrl+D, then `aida session end <session-id>` from parent shell
-```
+✓ <SPEC-ID> done. <N> more items queued for <role>.
+
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ Grab next item | `/aida-pickup` | Same role + lease + worktree — reuse this session, no re-entry cost |
+| ⏵ Wrap up what's shipped as a PR | `/aida-pr` | Still this session; ships the current branch before picking up more |
+| 🚪 Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; the queued items stay routed to <role> for later |
 
 *Simple mode, queue empty:*
 
-```
-✓ <SPEC-ID> done. Queue empty for <role>. Next steps:
-  1. ▶ Open PR for what shipped → `/aida-pr`
-  2. ⏵ Switch hats and queue more → `eval "$(aida role enter dialog)"` + `aida queue add <id> --for <role>`
-  3. 🚪 Stop here → Ctrl+D, then `aida session end <session-id>` from parent shell
-```
+✓ <SPEC-ID> done. Queue empty for <role>.
+
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ Open PR for what shipped | `/aida-pr` | Same session — nothing left queued, so ship the branch now |
+| ⏵ Switch hats and queue more | `eval "$(aida role enter dialog)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; dialog is the producer seat that refills the queue |
+| 🚪 Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; nothing is queued, so it's a clean stopping point |
 
 Print exactly one block — don't dump all four templates. Don't auto-loop
 without confirmation: the user may want to break, review, switch roles, or
