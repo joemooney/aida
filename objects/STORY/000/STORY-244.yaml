@@ -193,12 +193,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:45:16.445271126Z
-modified_at: 2026-05-16T05:28:21.770138241Z
+modified_at: 2026-05-16T22:58:47.867417904Z
 req_type: Story
 tags:
 - alpha-gating
 - architecture-pivot
 - bash-wrapper
+- batch:tui-v2
 - first-vertical-alpha
 - launcher-mode
 - supersedes-story-241
