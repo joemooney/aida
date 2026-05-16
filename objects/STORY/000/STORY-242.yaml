@@ -1,0 +1,76 @@
+id: 019e2e3b-f4e5-7a30-b8c1-25fa34791044
+spec_id: STORY-242
+agreed_id: STORY-242
+title: 'TUI persistent dialog tab: pinned strategic-partner session always available alongside implementer/reviewer'
+description: |-
+  The dialog role today is narrowly framed (\"route work to implementer via \`aida queue add --for implementer\`\"). In practice it's much bigger — a persistent strategic + tactical partner that does friction-to-spec translation, mental model articulation, queue gardening, workflow orchestration, and memory curation. The user observed 2026-05-15: *\"this conversation feels like a role and worth having open all the time when working on a project.\"*
+
+  The TUI is the natural home for this role: a **pinned dialog tab** always available alongside transient implementer/reviewer task tabs. Drop into it to think; drop out to implement.
+
+  ## The four-surface model
+
+  | Surface | Mode | Lifecycle |
+  |---|---|---|
+  | Mission control | Dashboard | Always present (STORY-241) |
+  | \`implementer\` tab | Heads-down on one spec | Spawned per task, ends on \`session end\` |
+  | \`reviewer\` tab | Review one PR | Spawned per PR, ends on \`session end\` |
+  | **\`dialog\` tab (pinned)** | **This conversation** | **Always one, always present; survives TUI restarts** |
+
+  ## What the pinned dialog tab does (responsibilities)
+
+  1. **Friction-to-spec translator** — every papercut the user hits becomes a captured TASK/BUG (~12 filings during the 2026-05-15 alpha-prep session)
+  2. **Mental model articulator** — the user-asked \"what's your mental model\" back-and-forth that shapes design decisions
+  3. **Strategic gap detector** — surfaces issues like \"MCP is severely out of date\", \"this PR shouldn't have landed\", \"alpha-gating because empty state bounces users\"
+  4. **Queue gardener** — prioritization, batching, ordering, rejection decisions
+  5. **Workflow orchestrator** — Pattern A vs B vs C; /goal phrasing trap awareness; ping-pong vs autonomous-merge tradeoffs
+  6. **Memory curator** — captures feedback that helps future sessions stay coherent
+
+  ## Acceptance
+
+  - [ ] TUI launches with a dialog tab already pinned (position 0, never closeable via normal session-end)
+  - [ ] Dialog tab hosts a Claude session bound to \`role:dialog\` with project context loaded
+  - [ ] **Memory continuity**: the dialog tab's claude session resumes across TUI launches via TASK-112's \`--resume <session-id>\` mechanism. Conversation history persists.
+  - [ ] **Distinct from implementer/reviewer**: dialog tab does NOT modify code; it produces TASK/BUG/STORY filings, comments, queue moves, memory entries. Code work routes to implementer.
+  - [ ] **Pin behavior**: \`Ctrl-A 0\` always focuses the dialog tab. New session pickers (\`Ctrl-A N\`) don't displace it.
+  - [ ] **Initial prompt on first launch**: dialog session greets with a brief \"I'm your project partner — what's on your mind?\" or shows the AIDA dashboard inline. Subsequent launches resume mid-conversation.
+  - [ ] **Status strip indicates**: when the user has focus on the dialog tab, status strip shows \`role:dialog · pinned · sess:<id>\`
+  - [ ] **Quit behavior**: \`Ctrl-A Q\` quits the TUI; the dialog session is preserved (claude session ID stays in \`.aida/tui-state.json\`); next launch resumes it.
+
+  ## Composes with
+
+  - **STORY-241** (TUI workflow loop) — must ship FIRST so mission control + role switching exist; this STORY adds the pinned dialog tab to that framework
+  - **TASK-112** (\`aida queue work --resume\`) — claude session resume primitive; dialog tab uses this for continuity
+  - **STORY-135** (crash recovery via \`.aida/tui-state.json\`) — dialog tab's session ID is what survives a crash
+  - **EPIC-27** (MCP modernization) — the dialog tab's claude session gains workflow-aware tool calls (queue_list, session_leases, pr_status) when EPIC-27 lands; without MCP, dialog tab shells out to CLI like other Claude sessions
+  - **\`/aida-capture\` skill** — composes naturally; dialog tab's user can invoke it to harvest session-conversation friction into filings
+
+  ## Out of scope
+
+  - **Cross-project dialog continuity** — only project-bound for now; \"my AIDA partner across all projects\" is bigger
+  - **Dialog tab as autonomous /goal driver** — STORY-136 covers the autonomous panel; dialog tab is conversational not autonomous
+  - **Voice / multimodal input** — text-only via PTY
+
+  ## Why this matters for the agent-collaboration positioning
+
+  Per OVERVIEW.md, AIDA's defensible niche is *\"the agent-collaboration layer.\"* The pinned dialog tab IS the agent-collaboration layer made concrete: a persistent agentic partner that knows the project, the queue, the lifecycle, the memory. Not just \"Claude Code with notes\" — Claude Code as a domain-specific role within a workflow surface.
+
+  This is the kind of thing that's hard to imagine until you experience it, but obvious in retrospect. Filing now because the 2026-05-15 conversation made the shape clear.
+
+  ## Origin
+
+  User reflected 2026-05-15 after a 14+ hour session orchestrating EPIC-26 ship + 12 follow-up filings: *\"this conversation feels like a role and worth having open all the time when working on a project.\"* Captured the realization that the conversation surface itself — not just the code or the queue — is a load-bearing project artifact.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T00:42:21.797075011Z
+modified_at: 2026-05-16T00:42:21.797075011Z
+req_type: Story
+tags:
+- dialog-role
+- memory-continuity
+- persistent-session
+- pinned-tab
+- strategic-partner
+- tui
+- workflow-orchestration
