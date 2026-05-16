@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:43:32.733116866Z
-modified_at: 2026-05-16T16:43:32.733116866Z
+modified_at: 2026-05-16T16:43:55.265502711Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -54,3 +54,24 @@ tags:
 - failed-flag-signal
 - returning-user
 - session-prune
+comments:
+- id: 019e31ac-4a01-74c0-82eb-6e158afc282f
+  author: joe
+  content: |-
+    ## Additional failed-flag signal 2026-05-16
+
+    User also attempted \`aida session prune --interactive\` and got the same \"unexpected argument\" error. Adding to this TASK's scope rather than filing a sibling — both are the same UX gap (\`prune\` has no filtering / picker flags beyond \`--orphans\`).
+
+    Updated acceptance:
+
+    - [ ] \`--completed\` — prune sessions whose anchor SPEC is Completed (already listed)
+    - [ ] \`--interactive\` — open a picker: list candidate sessions, multi-select via space, confirm with Enter, prune the selection. The dialog-style UX a user reaches for first when \`prune\` without filter feels too blunt.
+    - [ ] \`--older-than <duration>\` — bonus, mentioned originally
+    - [ ] \`--rejected\` and \`--all-terminal\` — bonus
+    - [ ] All flags compose: \`--completed --interactive\` opens picker pre-populated with Completed sessions
+
+    The \`--interactive\` mode is the safest default for first-users: \`aida session prune\` without flags could DROP into interactive mode rather than erroring (or doing nothing); current behavior is implicit.
+
+    Three flag attempts from the user's session in <10 min (\`--completed\`, \`--interactive\`, plus the earlier acknowledged dialog-role missing path): the surface is under-developed.
+  created_at: 2026-05-16T16:43:55.265502711Z
+  modified_at: 2026-05-16T16:43:55.265502711Z
