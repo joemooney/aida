@@ -1,0 +1,52 @@
+id: 019e3220-f160-7413-af64-a030e84c99ff
+spec_id: TASK-274
+agreed_id: TASK-274
+title: 'README: ''Getting started in 5 minutes'' section — aida init → add → pickup → PR walkthrough'
+description: |-
+  First-users from the tarball install need a 5-minute walkthrough that takes them from \`aida init\` to their first PR. This is the alpha wow path:
+
+  \`\`\`
+  aida init                                                    # one-time setup
+  aida add --title \"Add user login\" --type story --status approved
+  aida queue work STORY-N                                      # spawns Claude session
+  # Inside Claude: implement, /aida-pr
+  aida session end --wait-ci
+  aida queue work PR-N                                         # review session
+  # Inside Claude: /aida-review, approve
+  gh pr merge N --squash --delete-branch
+  aida pull                                                    # auto-bump to Completed
+  \`\`\`
+
+  ## Acceptance
+
+  - [ ] README has a \"Getting started\" section near the top — under the project overview, above the deep architecture
+  - [ ] Section walks through ONE concrete spec end-to-end (not abstract): \`aida add\` a specific example spec, run through Claude, ship PR, merge, see Completed
+  - [ ] Shows real expected output at each step (terminal screenshots-as-code-blocks)
+  - [ ] Cross-references TASK-273's lifecycle diagram + State/Verb table
+  - [ ] Includes the \`--auto-complete\` shortcut as a \"once you're comfortable, collapse to one command\" addendum
+  - [ ] Total reading time: 3-5 min; total following-along time: 10-15 min
+
+  ## Composes with
+
+  - **TASK-273** (lifecycle diagram) — getting-started is the practical demo of that diagram
+  - **batch:alpha-docs** — sibling work
+  - **Install instructions TASK** (sibling) — getting-started assumes install completed
+
+  ## Origin
+
+  Dialog-session 2026-05-16: user wants tech-savvy friends/colleagues to onboard from a prebuilt binary in days. Getting-started is the most-leverage doc.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T18:51:20.288052451Z
+modified_at: 2026-05-16T18:51:20.288052451Z
+req_type: Task
+tags:
+- alpha-readiness
+- batch:alpha-docs
+- documentation
+- first-users
+- getting-started
+- onboarding
+- readme
