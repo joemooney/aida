@@ -33,9 +33,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:09:26.094137392Z
-modified_at: 2026-05-16T00:09:26.094137392Z
+modified_at: 2026-05-16T22:58:49.640636803Z
 req_type: Bug
 tags:
+- batch:tui-v2
 - cleanup
 - signal-handling
 - termguard
