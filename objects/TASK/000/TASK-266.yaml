@@ -1,0 +1,115 @@
+id: 019e31cc-26c3-70f3-adb6-3b20cb6d32a9
+spec_id: TASK-266
+agreed_id: TASK-266
+title: 'aida --auto-complete: failure telemetry + auto-draft BUG on phase failures for recurse-fix dogfood'
+description: |-
+  The \`--auto-complete\` orchestrator is the kind of feature that should evolve through dogfooded use: every failure surfaces a gap, the gap becomes a BUG, the BUG is fixed using \`--auto-complete\` itself (when possible). For this loop to work, failures must be **systematically captured** — not lost to terminal scrollback.
+
+  First-dogfood example 2026-05-16: \`aida queue work TASK-259 --auto-complete\` failed at phase 1 (disambiguation, BUG-114). User filed BUG-114 by hand. That's friction.
+
+  ## The pattern
+
+  \`\`\`
+                        ┌────────────────────────────┐
+                        │   aida --auto-complete X   │
+                        │                            │
+                        │  phase 1 → 2 → 3 ... 6     │
+                        └─────────────┬──────────────┘
+                                      │
+                         ┌────────────┴─────────────┐
+                         │                          │
+                    Phase fails              All phases pass
+                         │                          │
+                    Append JSONL                Append JSONL
+                    log entry                   log entry
+                         │                       (success)
+                    Auto-draft a
+                    failure BUG
+                    (in Draft state)
+                         │
+                    Surface to user
+                    via `aida usage`
+                    in next session
+                         │
+                    User triages,
+                    fills, queues
+                         │
+                    Run --auto-complete
+                    on the BUG itself
+                    (if --auto-complete
+                    still works enough)
+                         │
+                         ▼
+                    Bug fixed; pattern continues
+  \`\`\`
+
+  ## Acceptance
+
+  ### Telemetry log
+
+  - [ ] \`~/.aida/auto-complete.jsonl\` records every \`--auto-complete\` invocation:
+    - \`spec_id\`, \`started_at\`, \`completed_at\`, \`outcome\` (\`success\` / \`failed\`), \`failed_phase\` (1-6 if failure), \`failure_message\`, \`phase_durations\` (per-phase wall time)
+  - [ ] Respects the same opt-out as \`aida usage\` telemetry: \`AIDA_TELEMETRY=0\` env or \`[telemetry] enabled = false\` in \`.aida/config.toml\` — privacy-aware
+  - [ ] No argument values or file contents logged (same privacy floor as existing telemetry)
+
+  ### Auto-draft BUG on failure
+
+  - [ ] On non-success outcome, orchestrator auto-files a Draft BUG with:
+    - **Title**: \`auto-complete failure: phase {N} on {spec-id}\`
+    - **Description**: includes the failure_message, phase_durations, recovery commands suggested by the orchestrator, and the JSONL log entry verbatim
+    - **Tags**: \`auto-complete\`, \`failure-{phase-N}\`, \`auto-drafted\`, the failing phase's name
+    - **Parent**: EPIC-23
+  - [ ] Draft BUG is NOT queued — user reviews + promotes to Approved if it's a real bug (vs user error / environment issue)
+  - [ ] \`aida usage --auto-complete\` surfaces recent failures (date, spec, phase, link to the drafted BUG)
+
+  ### Recurse-fix dogfood UX
+
+  - [ ] When user runs \`aida usage --auto-complete --failures\`, output shows:
+    \`\`\`
+    Recent --auto-complete failures:
+      2026-05-16 14:23  TASK-259  phase 1 (disambiguation) → BUG-114 [Approved]
+      2026-05-16 16:01  TASK-260  phase 4 (merge conflict) → BUG-115 [Draft]
+    \`\`\`
+  - [ ] Each entry links to the BUG so the user can promote, prioritize, fix, dogfood again
+  - [ ] \`aida usage --auto-complete --pattern\` shows which phases fail most often (signal for where to invest fixes)
+
+  ## Composes with
+
+  - **STORY-246** (\`--auto-complete\` original) — this is its observability layer
+  - **BUG-114** (first dogfood failure) — should be the first entry that this telemetry would have captured had it existed
+  - **aida usage telemetry** (STORY-122 / TASK-122) — extends the existing JSONL telemetry pattern
+  - **feedback_failed_flag_attempts_are_ux_signals.md** — same family: \"capture friction systematically\"
+  - **\`/aida-drain-queue\`** (TASK-249) — when filed, runs many \`--auto-complete\` cycles; the failure telemetry helps the drain dashboard report
+
+  ## Why this matters for alpha
+
+  The orchestrator IS the alpha CLI wow. If first users hit \`--auto-complete\` failures, their friction needs to surface back to the project. Three benefits to capturing systematically:
+
+  1. **Self-healing**: failures auto-draft BUGs, no manual filing burden
+  2. **Prioritization signal**: \`--pattern\` view shows which phases fail most — guides fix priority
+  3. **Confidence metric**: a low failure rate is the demo-able \"\`--auto-complete\` works\" claim
+
+  ## Out of scope
+
+  - Telemetry phoned home — local-only, like existing \`aida usage\`
+  - Automated promotion of Draft BUGs to Approved — user must triage (avoids spam from environment issues)
+  - Cross-user aggregation — single-user telemetry only
+
+  ## Origin
+
+  User observed 2026-05-16 after BUG-114 was hand-filed for the first \`--auto-complete\` dogfood failure: *\"track --auto-complete dogfood failures so we can recurse-fix the orchestrator using itself.\"* This TASK makes that pattern operational.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T17:18:43.395729318Z
+modified_at: 2026-05-16T17:18:43.395729318Z
+req_type: Task
+tags:
+- alpha-readiness
+- auto-complete
+- dogfood
+- observability
+- recurse-fix
+- self-fix
+- telemetry
