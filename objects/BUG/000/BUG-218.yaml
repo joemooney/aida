@@ -33,12 +33,12 @@ description: |-
   ## Origin
 
   User observed 2026-05-16 after \`--auto-complete\` failed at phase 2: the message claimed CI red, but the SAME output above it showed CI completed with 'success'. Caught the misleading hint immediately.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:43:28.745969796Z
-modified_at: 2026-05-16T20:43:28.745969796Z
+modified_at: 2026-05-16T22:31:52.796057612Z
 req_type: Bug
 tags:
 - auto-complete
