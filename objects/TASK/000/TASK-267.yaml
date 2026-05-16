@@ -45,12 +45,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16 after running `aida session end --wait-ci` for TASK-259's PR-47: *"I expected to see files pulled. Did `gh pr merge 47 --squash --delete-branch` happen or am I supposed to do it, it is not in the hint"* — confirmed the hint stopped at the review step, didn't surface the merge step or self-merge alternative.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:29:17.082223638Z
-modified_at: 2026-05-16T20:37:59.366626952Z
+modified_at: 2026-05-16T20:42:00.992118274Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -119,3 +119,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-16T20:32:55.718740790Z
   implemented_by: joe
+  completed_at: 2026-05-16T20:42:00.992118274Z
+  completion_sha: a3f9733a57f7db6d2b40e1fcd13c995fb34b0e90
