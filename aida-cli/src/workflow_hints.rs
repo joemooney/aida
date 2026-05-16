@@ -188,29 +188,78 @@ pub fn after_queue_drained(
     emit(project_root, &[header, body]);
 }
 
-/// Hint after `aida session end` filed (or found an existing) review story
-/// for a PR on the just-ended branch. Caller supplies the PR number + the
-/// review story id (when known) so the hint can be concrete.
+/// Build the post-`session end` PR hint as ready-to-print lines.
+///
+/// The hint is a SEQUENTIAL step chain (review → merge → pull), so it
+/// renders as a numbered list — `▶` on step 1 (the primary action),
+/// `↓` on the flow-continuation steps — followed by an indented
+/// self-merge sidebar for solo developers with no separate reviewer.
+/// This is deliberately NOT the Path/Action/Why table format (TASK-260):
+/// that shape is for parallel choices (pick one of N); this is a do-all
+/// sequence. trace:TASK-267 | ai:claude
+///
+/// `tty` picks the form — the multi-line numbered block for an
+/// interactive terminal, a single-line summary when stderr is piped.
+/// `covered_specs` are the delivered `(REQ-ID)` trailers the PR carries;
+/// they name the `aida pull` auto-bump targets when known. Pure (no I/O)
+/// so it is unit-testable.
+fn session_end_pr_hint_lines(pr_number: u64, covered_specs: &[String], tty: bool) -> Vec<String> {
+    let merge_cmd = format!("gh pr merge {} --squash --delete-branch", pr_number);
+    let bump_phrase = match covered_specs {
+        [] => "auto-bumps the merged spec → Completed".to_string(),
+        [one] => format!("auto-bumps {} → Completed", one),
+        many => format!("auto-bumps {} → Completed", many.join(", ")),
+    };
+    if !tty {
+        // Piped output: collapse the whole chain onto one scannable line.
+        return vec![format!(
+            "PR #{} next: `aida queue work PR-{}` → `{}` → `aida pull` \
+             (or self-merge: `{} && aida pull`).",
+            pr_number, pr_number, merge_cmd, merge_cmd
+        )];
+    }
+    vec![
+        format!("Next steps for PR #{}:", pr_number),
+        format!(
+            "  1. ▶ {:<14}   aida queue work PR-{}",
+            "Start review", pr_number
+        ),
+        format!("  2. ↓ {:<14}   {}", "After approval", merge_cmd),
+        format!("  3. ↓ {:<14}   aida pull   ({})", "Then pull", bump_phrase),
+        String::new(),
+        "  Or self-merge (solo dev — skip review):".to_string(),
+        format!("     {} && aida pull", merge_cmd),
+    ]
+}
+
+/// Hint after `aida session end` filed (or found an existing) review
+/// story for a PR on the just-ended branch. Shows the FULL remaining
+/// path — start review, merge, pull — plus the self-merge alternative,
+/// so the user isn't left one step short with the spec stuck at Done.
+/// trace:TASK-267 | ai:claude
 pub fn after_session_end_with_pr(
     project_root: Option<&Path>,
     pr_number: u64,
-    review_story_id: Option<&str>,
+    covered_specs: &[String],
 ) {
     if !enabled(project_root) {
         return;
     }
-    let header = format!("PR #{} has a reviewer story in the queue.", pr_number);
-    let body = match review_story_id {
-        Some(id) => format!(
-            "Start the review with `aida queue work {}` (or `aida queue work PR-{}` per TASK-85).",
-            id, pr_number
-        ),
-        None => format!(
-            "Start the review with `aida queue work PR-{}` (TASK-85 routes PR-N to the matching review story).",
-            pr_number
-        ),
-    };
-    emit(project_root, &[header, body]);
+    let tty = std::io::IsTerminal::is_terminal(&std::io::stderr());
+    let lines = session_end_pr_hint_lines(pr_number, covered_specs, tty);
+    if !tty {
+        // Single-line summary routes through `emit` for the standard
+        // `ⓘ Workflow hint:` prefix.
+        emit(project_root, &lines);
+        return;
+    }
+    // TTY: numbered block under its own `Next steps for PR #N:` header
+    // (no "Workflow hint:" label — the numbered list is self-describing).
+    eprintln!();
+    eprintln!("{} {}", "ⓘ".dimmed(), lines[0].dimmed());
+    for line in &lines[1..] {
+        eprintln!("{}", line.dimmed());
+    }
 }
 
 #[cfg(test)]
@@ -319,5 +368,51 @@ mod tests {
         assert_eq!(body.matches("workflow_hints").count(), 1);
         assert!(body.contains("workflow_hints = true"));
         assert!(body.contains("other = 1"));
+    }
+
+    // TASK-267: the session-end PR hint shows the full review → merge →
+    // pull path, with a self-merge sidebar, and degrades to one line
+    // when stderr is piped.
+    #[test]
+    fn session_end_hint_tty_is_numbered_sequential_block() {
+        let specs = vec!["TASK-259".to_string()];
+        let lines = session_end_pr_hint_lines(47, &specs, true);
+        // Header + 3 numbered steps + blank + sidebar header + sidebar cmd.
+        assert_eq!(lines.len(), 7);
+        assert_eq!(lines[0], "Next steps for PR #47:");
+        assert!(lines[1].contains("1. ▶"));
+        assert!(lines[1].contains("aida queue work PR-47"));
+        assert!(lines[2].contains("2. ↓"));
+        assert!(lines[2].contains("gh pr merge 47 --squash --delete-branch"));
+        assert!(lines[3].contains("3. ↓"));
+        assert!(lines[3].contains("aida pull"));
+        assert!(lines[3].contains("auto-bumps TASK-259 → Completed"));
+        assert!(lines[4].is_empty());
+        assert!(lines[5].contains("self-merge"));
+        assert!(lines[6].contains("gh pr merge 47 --squash --delete-branch && aida pull"));
+    }
+
+    #[test]
+    fn session_end_hint_non_tty_is_single_line() {
+        let specs = vec!["TASK-259".to_string()];
+        let lines = session_end_pr_hint_lines(47, &specs, false);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("aida queue work PR-47"));
+        assert!(lines[0].contains("gh pr merge 47 --squash --delete-branch"));
+        assert!(lines[0].contains("aida pull"));
+        assert!(lines[0].contains("self-merge"));
+    }
+
+    #[test]
+    fn session_end_hint_names_multiple_covered_specs() {
+        let specs = vec!["TASK-259".to_string(), "BUG-113".to_string()];
+        let lines = session_end_pr_hint_lines(47, &specs, true);
+        assert!(lines[3].contains("auto-bumps TASK-259, BUG-113 → Completed"));
+    }
+
+    #[test]
+    fn session_end_hint_generic_when_no_covered_specs() {
+        let lines = session_end_pr_hint_lines(47, &[], true);
+        assert!(lines[3].contains("auto-bumps the merged spec → Completed"));
     }
 }
