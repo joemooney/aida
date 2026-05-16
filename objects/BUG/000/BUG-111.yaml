@@ -1,0 +1,47 @@
+id: 019e2e79-55e3-7d52-af0e-4e6c268e487f
+spec_id: BUG-111
+agreed_id: BUG-111
+title: 'scripts/release.sh: discover intra-workspace dep pins generically, not via hardcoded list'
+description: |-
+  \`scripts/release.sh\` bumps the workspace version and updates known intra-workspace dependency pins (e.g., \`aida-core = { version = \"0.7\", path = \"../aida-core\" }\` → \`\"0.8\"\`). But the list of crates it knows about is hardcoded, so newly-added workspace crates miss the bump.
+
+  ## Observed (2026-05-15)
+
+  \`make release-minor YES=1\` on v0.7.0 → v0.8.0 bump failed:
+
+  \`\`\`
+  error: failed to select a version for the requirement \`aida-tui = \"^0.7\"\`
+  candidate versions found which didn't match: 0.8.0
+  location searched: /home/joe/ai/aida/aida-tui
+  required by package \`aida-cli v0.8.0\`
+  \`\`\`
+
+  STORY-132 added \`aida-tui\` as a workspace crate two days before this release. The release script knew about \`aida-core\` (bumped its pin correctly) but not about \`aida-tui\` (left at \`\"0.7\"\`). Fix: manually changed line 53 of \`aida-cli/Cargo.toml\` from \`\"0.7\"\` to \`\"0.8\"\`.
+
+  ## Acceptance
+
+  - [ ] Release script auto-discovers all intra-workspace deps by parsing \`[workspace.members]\` and matching against \`{ path = \"../<crate>\" }\` patterns in every \`Cargo.toml\`
+  - [ ] Update ALL such pins to the new version, not just a hardcoded subset
+  - [ ] Add a verification step before \`cargo update\` / \`git commit\` that runs \`cargo check --workspace\` and fails fast with a clear message naming the unbumped crate
+  - [ ] Regression test: simulate \"add a new workspace crate, run release\" — release should succeed without manual intervention
+
+  ## Composes with
+
+  - v0.8.0 release shipped via the manual one-line fix; future releases need this protection
+  - BUG-103 (rustup-init flake) — same release-tooling family
+
+  ## Origin
+
+  User running \`make release-minor YES=1\` for v0.8.0 after EPIC-26's TUI default-flip landed. Manual fix unblocked the release; this BUG ensures the next release doesn't hit the same trap.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T01:49:24.323883905Z
+modified_at: 2026-05-16T01:49:24.323883905Z
+req_type: Bug
+tags:
+- intra-workspace
+- maintenance
+- release-script
+- version-bump
