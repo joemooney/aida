@@ -295,12 +295,45 @@ echo "${AIDA_REVIEW_VERDICT_FILE:-}"
 
 ### 8. Confirm with the user before merge
 
+**Synthesize the overall verdict** from the per-spec verdicts recorded in step 3 — same routing as the 7a verdict file: every covered spec ✅ PASS → *positive*; any ⚠️ PARTIAL or ❌ FAIL → *negative*; no per-spec verdicts reached (e.g. `--merge-only`) → *abstention*.
+
+**If the verdict is positive, record the formal approval before asking about the merge** — see "Approve path" below. Recording it here, *before* the merge question, means `gh reviewDecision` flips to `APPROVED` even when the user defers the merge: TASK-250's State 3 ("reviewed + approved, awaiting merge") reads exactly that signal, so an approved-but-unmerged PR displays correctly instead of falling back to "start review". trace:TASK-278 | ai:claude
+
 Show the verdict table. Ask explicitly: "All green — `gh pr merge <N> --squash`?" The user can:
 - **Accept** (proceed to step 9)
 - **Request changes** (see "Request-changes path" below — comment-only mode is the default; STOP)
-- **Cancel** (no merge call)
+- **Cancel** (no merge call — a formal approval, if recorded, still stands; the PR shows as approved-but-unmerged)
 
 Never auto-merge — the reviewer's `aida-review` is a workflow accelerant, not a YOLO switch.
+
+**Approve path** — trace:TASK-278 | ai:claude
+
+Fires when the overall verdict is positive — every covered spec earned a ✅ PASS, with no ⚠️ PARTIAL or ❌ FAIL. Anything less does not approve: abstention and partial/fail verdicts skip this path entirely. The consolidated comment from step 7 is their signal, and a verdict the user decides to act on routes through the Request-changes path below.
+
+Before calling `gh pr review --approve`, check whether the reviewer is the PR author. GitHub blocks `addPullRequestReview` with `APPROVE` on your own pull request — the error `Can not approve your own pull request` is guaranteed in solo-developer / author-is-reviewer scenarios, and surfacing the failure is just noise. (Symmetric with the Request-changes path's own-PR skip — same family of own-author handling.)
+
+Detect own-PR cheaply:
+
+```bash
+PR_AUTHOR=$(gh pr view <N> --json author --jq '.author.login' 2>/dev/null)
+ME=$(gh api user --jq '.login' 2>/dev/null)
+```
+
+Then:
+
+- **If `$PR_AUTHOR` != `$ME` (cross-author PR)**: post the formal approval. This flips `gh reviewDecision` to `APPROVED`, lighting up TASK-250's State 3 display for the approved-but-unmerged window:
+
+  ```bash
+  gh pr review <N> --approve --body "<one-line summary, optionally the spec ids covered — e.g. 'All specs PASS: BUG-71, TASK-61, STORY-91'>"
+  ```
+
+- **If `$PR_AUTHOR` == `$ME` (own PR)**: SKIP `gh pr review --approve` — solo developers reviewing their own PR can't formally approve it (GitHub blocks self-approval). The consolidated comment from step 7 is the signal. Surface a one-line note so the user understands the skip:
+
+  ```
+  ℹ Own-PR: skipped `gh pr review --approve` (GitHub blocks self-approval). The consolidated review comment above is the signal; merge directly with `gh pr merge`.
+  ```
+
+- **If `gh` isn't on PATH or either lookup fails**: degrade to comment-only with a note: "ℹ `gh` user lookup unavailable — formal approval review skipped; the comment above is the signal." Don't block the workflow on metadata lookups.
 
 **Request-changes path** — trace:TASK-216 | ai:claude
 
