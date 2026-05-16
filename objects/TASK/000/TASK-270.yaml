@@ -54,12 +54,12 @@ description: |-
   ## Origin
 
   User attempted \`aida queue work batch:workflow-hint-polish\` 2026-05-16 after seeing the tag in \`aida queue list\` output. Reasonable mental model; the error didn't help.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:39:28.243433899Z
-modified_at: 2026-05-16T21:08:57.151699371Z
+modified_at: 2026-05-16T21:14:45.765283536Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -70,3 +70,7 @@ tags:
 - first-users
 - positional-arg
 - queue-work
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-16T21:14:45.765283536Z
+  implemented_by: joe
