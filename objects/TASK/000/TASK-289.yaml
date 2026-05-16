@@ -1,0 +1,52 @@
+id: 019e32f9-58f9-7191-a5ae-bb9f9adf6d0f
+spec_id: TASK-289
+agreed_id: TASK-289
+title: 'README: AIDA''s defensible niche statement (8 dimensions from 2026-05-16 competitive analysis)'
+description: |-
+  The README needs a \"Why AIDA?\" or \"What makes AIDA distinct?\" section surfacing the 8 dimensions of AIDA's defensible niche extracted from the 2026-05-16 marketplace analysis. Without it, first-users see AIDA as \"another agent-collaboration tool\" and bounce.
+
+  ## Acceptance
+
+  - [ ] README has a section (probably between project overview and Quick Start) titled something like \"What makes AIDA distinct\" or \"AIDA's niche\"
+  - [ ] Section is 8 short bullets (one per dimension), each with a one-line elaboration:
+
+    1. **Spec graph as the backbone** — typed relationships drive coordination, not a queue or swarm
+    2. **Identity stability** — TASK-N is TASK-N forever; survives years, releases, refactors
+    3. **Trace-comment enforcement** — code knows its spec; specs know their code (`// trace:TASK-N`)
+    4. **Discipline-first** — ships vocabulary, patterns, memories alongside tools
+    5. **Lifecycle-based roles** — implementer / reviewer / dialog with deterministic handoffs
+    6. **Trojan-horse surface** — simple on first sight; depth compounds through use
+    7. **Git-native** — worktree isolation, orphan-branch storage, trace comments
+    8. **Single-user-first** — built for solo developers and small teams, not enterprise federation
+
+  - [ ] Section closes with: \"For deeper positioning vs specific tools, see \`docs/competitive-analysis/positioning.md\`.\"
+  - [ ] Cross-link: the positioning doc references back to README for the elevator pitch
+
+  ## Composes with
+
+  - **batch:alpha-docs** — same family as TASK-275 (install), TASK-273 (lifecycle), TASK-274 (getting-started), TASK-276 (positioning links), TASK-277 (first project)
+  - **STORY-NEW** (maintained competitive-analysis doc) — README's section is the elevator pitch; the maintained doc is the deeper treatment
+  - **TASK-276** (surface positioning links) — likely overlaps; could merge or this becomes the predecessor
+
+  ## Why this matters for alpha
+
+  A first-user reads the README in 90 seconds. The 8-dimension niche statement is what makes them decide \"this is different from claude-flow\" or \"this is the same\". Without it, they default to \"same as everything else.\"
+
+  ## Origin
+
+  User asked 2026-05-16: *\"AIDA's defensible niche may need to go in a readme.\"* — surfaced after the competitive analysis extracted 8 dimensions worth surfacing prominently.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T22:47:42.585063299Z
+modified_at: 2026-05-16T22:47:42.585063299Z
+req_type: Task
+tags:
+- alpha-readiness
+- batch:alpha-docs
+- competitive-analysis
+- defensible-niche
+- first-users
+- positioning
+- readme
