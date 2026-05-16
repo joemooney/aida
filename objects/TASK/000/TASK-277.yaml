@@ -1,0 +1,53 @@
+id: 019e3221-0dd6-7973-94d6-39f3296461eb
+spec_id: TASK-277
+agreed_id: TASK-277
+title: Sample 'first project' walkthrough in docs/ — concrete AIDA-from-zero example
+description: |-
+  Beyond README's 5-min getting-started, a deeper \"first project\" walkthrough at \`docs/first-project.md\` shows the workflow end-to-end with a real (small) example project. Helps first-users see what AIDA is FOR, not just how each command works.
+
+  ## Proposed shape
+
+  \`docs/first-project.md\` — \"Building a TODO CLI with AIDA\" or similar tiny scope. Walks through:
+
+  1. \`aida init\` in a fresh repo
+  2. \`aida add\` three specs: EPIC-1 (todo cli), STORY-1 (CRUD commands), STORY-2 (storage). Show how aida links them.
+  3. \`aida queue work STORY-1\` → implement → ship PR → review → merge
+  4. \`aida queue work STORY-2\` → implement → ship PR → review → merge
+  5. After both: \`aida show EPIC-1 --git\` shows the EPIC's full git linkage; \`aida list --feature todo\` confirms shape
+  6. (Optional) \`aida ultraplan STORY-3\` for a more design-heavy spec
+  7. (Optional) \`/aida-drain-queue\` for autonomous
+
+  ## Acceptance
+
+  - [ ] Walkthrough doc at \`docs/first-project.md\`
+  - [ ] Sample project scope: tiny but real (5-10 specs, completable in 1-2 hours of following along)
+  - [ ] Each step shows command + expected output
+  - [ ] Annotates where AIDA's value-add shows up (graph linkage, trace comments, queue routing)
+  - [ ] Compares to \"how you'd do this without AIDA\" sidebars where instructive
+  - [ ] README references this doc as \"Want to see AIDA on a real project? See docs/first-project.md\"
+  - [ ] Lower priority than README onboarding (TASK-273, getting-started, install) — those land first; this is enrichment
+
+  ## Composes with
+
+  - **batch:alpha-docs** — sibling work
+  - **Getting started** (sibling TASK) — first-project is the deeper walkthrough after getting-started teases the value
+  - **MCP modernization (EPIC-27)** — once MCP exposes more tools, first-project can show MCP-driven workflow as a sidebar
+
+  ## Origin
+
+  Dialog-session 2026-05-16 alpha-docs scoping. Friends/colleagues onboarding from a prebuilt tarball; a real example doc supplements the README.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T18:51:27.574885685Z
+modified_at: 2026-05-16T18:51:27.574885685Z
+req_type: Task
+tags:
+- alpha-readiness
+- batch:alpha-docs
+- docs
+- documentation
+- first-users
+- onboarding
+- sample-project
