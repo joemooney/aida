@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:03:26.376647792Z
-modified_at: 2026-05-16T00:12:07.249598803Z
+modified_at: 2026-05-16T00:12:59.249825903Z
 req_type: Task
 tags:
 - default-feature
@@ -41,3 +41,8 @@ comments:
   content: Rejected 2026-05-15 — user is the sole consumer of AIDA today, so the 'new users trapped by undiscoverable empty-state' justification doesn't apply. They know the Ctrl-A prefix keybindings. TUI ships default-on in v0.8.0 as planned. BUG-109 (empty-state help) drops from blocking-release to normal-priority; ship it whenever convenient.
   created_at: 2026-05-16T00:12:07.249598803Z
   modified_at: 2026-05-16T00:12:07.249598803Z
+- id: 019e2e21-0ff1-7430-92ce-8bb74d91baac
+  author: joe
+  content: Un-rejected 2026-05-15 — user revealed first users arriving in a few days. The 'sole-user, skip the revert' framing is now invalid. Default-on with undiscoverable empty-state would bounce first users on contact. Revert is back on the critical path.
+  created_at: 2026-05-16T00:12:59.249825903Z
+  modified_at: 2026-05-16T00:12:59.249825903Z
