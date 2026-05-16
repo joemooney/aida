@@ -28,10 +28,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:03:26.376647792Z
-modified_at: 2026-05-16T00:12:06.062753258Z
+modified_at: 2026-05-16T00:12:07.249598803Z
 req_type: Task
 tags:
 - default-feature
 - emergency-fix
 - revert
 - tui
+comments:
+- id: 019e2e20-44d1-7ba3-a69b-98ca53938ff7
+  author: joe
+  content: Rejected 2026-05-15 — user is the sole consumer of AIDA today, so the 'new users trapped by undiscoverable empty-state' justification doesn't apply. They know the Ctrl-A prefix keybindings. TUI ships default-on in v0.8.0 as planned. BUG-109 (empty-state help) drops from blocking-release to normal-priority; ship it whenever convenient.
+  created_at: 2026-05-16T00:12:07.249598803Z
+  modified_at: 2026-05-16T00:12:07.249598803Z
