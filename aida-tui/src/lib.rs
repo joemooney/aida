@@ -11,16 +11,19 @@
 //! a bottom status strip, prefix-key routing, and a clean prefix-key
 //! exit. STORY-133 added the `prefix o` status overlay; STORY-134 the
 //! `prefix n` multi-tab picker; STORY-135 crash recovery via
-//! `.aida/tui-state.json`. BUG-109 made the empty shell discoverable —
-//! a welcome panel, a `prefix ?` keybinding cheatsheet, a rotating
-//! status-strip hint — and turned the shell persistent (a hosted
-//! session ending drops back to the welcome panel, not exit).
+//! `.aida/tui-state.json`. BUG-109 made the empty shell discoverable.
+//! STORY-241 turned that empty shell into mission control — a live
+//! dashboard of the role's queue, session leases and open PRs that
+//! drives the implementer → reviewer → merge loop with one-keystroke
+//! transitions (`[Enter]` launch, `prefix r` role switch, `prefix m`
+//! merge).
 //!
 //! trace:STORY-132 | ai:claude
 
 mod actions;
 mod app;
 mod config;
+mod dashboard;
 mod event;
 mod help;
 mod overlay;
@@ -30,7 +33,6 @@ mod state;
 mod statusbar;
 mod tab;
 mod term;
-mod welcome;
 
 pub use app::{App, ExitKind};
 pub use config::TuiConfig;
@@ -41,8 +43,9 @@ use std::path::{Path, PathBuf};
 /// Options for one `aida tui` invocation.
 pub struct TuiOptions {
     /// Optional scope (an EPIC / STORY / … id) to host in the first tab.
-    /// `None` opens an empty shell — exit it cleanly, or populate it via
-    /// the `prefix n` picker (STORY-134).
+    /// `None` opens the mission-control dashboard (STORY-241) — launch a
+    /// queued item from there, or populate the shell via the `prefix n`
+    /// picker (STORY-134).
     pub scope: Option<String>,
     /// Skip crash-recovery re-attach on launch (STORY-135): start clean
     /// and discard any stale `.aida/tui-state.json`.

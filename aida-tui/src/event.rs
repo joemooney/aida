@@ -12,8 +12,11 @@
 ///     a final [`TuiEvent::PtyExited`] when the child closes the PTY;
 ///   * the overlay's background refresh thread — one [`TuiEvent::Overlay
 ///     Refresh`] when the `gh`-backed `aida status --json` lands;
-///   * the strip-rotation ticker — one [`TuiEvent::Tick`] every ~3s
-///     (BUG-109).
+///   * the dashboard's background refresh thread — one [`TuiEvent::Dash
+///     boardRefresh`] when a mission-control snapshot lands (STORY-241);
+///   * the timer ticker — one [`TuiEvent::Tick`] every ~2s, driving the
+///     status-strip hint rotation (BUG-109) and the dashboard's
+///     cache-staleness poll (STORY-241).
 pub enum TuiEvent {
     /// A keystroke / resize / paste from the real terminal.
     Input(crossterm::event::Event),
@@ -27,7 +30,13 @@ pub enum TuiEvent {
     /// refresh completed — repaint the overlay if it is still open
     /// (STORY-133). Boxed to keep the enum small. trace:STORY-133
     OverlayRefresh(Box<crate::overlay::OverlayModel>),
-    /// A ~3s timer tick — advances the status strip's rotating
-    /// discovery hint (BUG-109). trace:BUG-109 | ai:claude
+    /// A background mission-control refresh landed — repaint the
+    /// dashboard if it is still showing and the snapshot's role still
+    /// matches the active one. Boxed to keep the enum small.
+    /// trace:STORY-241 | ai:claude
+    DashboardRefresh(Box<crate::dashboard::DashboardModel>),
+    /// A ~2s timer tick — advances the status strip's rotating
+    /// discovery hint (BUG-109) and triggers the dashboard's
+    /// cache-staleness poll (STORY-241). trace:BUG-109 STORY-241
     Tick,
 }

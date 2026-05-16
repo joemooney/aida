@@ -5,7 +5,12 @@ sessions** (EPIC-26). It owns the terminal, reserves a one-row status
 strip at the bottom, and runs each Claude session as a PTY child. You
 drop out of a live conversation to a status overlay, take a
 one-keystroke action, and drop back into the *same* conversation — "tmux
-for AIDA workflows," not a dashboard.
+for AIDA workflows."
+
+With no session hosted the shell is **mission control** — a dashboard of
+the active role's queue, live session leases and open PRs that drives
+the implementer → reviewer → merge loop with one-keystroke transitions
+(STORY-241).
 
 It is intentionally shallow on first sight. The depth — the requirement
 graph, queue routing, lifecycle, `/goal` composition — surfaces through
@@ -14,7 +19,7 @@ use. See `OVERVIEW.md` → "Public face: the TUI is the product."
 ## Launching
 
 ```bash
-aida tui                 # empty shell — a welcome panel shows the keys
+aida tui                 # open mission control (the empty-shell dashboard)
 aida tui EPIC-26         # host a session working EPIC-26 in the first tab
 aida tui --no-recover    # skip crash-recovery re-attach (see below)
 ```
@@ -32,7 +37,7 @@ all lease / worktree / manifest / permission-mode logic is inherited.
   the background so the screen can be repainted on tab-switch or
   overlay-close.
 - The bottom row is a status strip: the tab list, a notification badge,
-  and a key hint that rotates (~3s) through the command vocabulary so
+  and a key hint that rotates (~2s) through the command vocabulary so
   the prefix keys are discoverable without a busy strip.
 
 ## Keybindings
@@ -48,26 +53,57 @@ keystrokes pass straight through to the focused Claude session.
 | `prefix` `?` | open the **keybinding cheatsheet** |
 | `prefix` `[` / `]` | focus the previous / next tab |
 | `prefix` `1`…`9` | focus tab N |
+| `prefix` `r` / `R` | **dashboard:** switch role — cycle / pick from a list |
+| `prefix` `m` | **dashboard:** merge the selected open PR |
+| `prefix` `g` | **dashboard:** refresh mission control |
 | `prefix` `d` | **detach** — quit the TUI; conversations persist and are re-attached next launch |
 | `prefix` `q` | **quit** — confirms first when sessions are live |
 | `prefix` `prefix` | send one literal prefix byte to the focused child |
 
-`prefix` `?` opens a grouped cheatsheet (Sessions / Tabs / Overlays /
-Lifecycle) of every binding; `Esc` / `q` / `?` close it. In the empty
-shell a bare `?` opens it too — there is no hosted child to receive the
-keystroke.
+The `r` / `R` / `m` / `g` commands act on mission control and are
+no-ops while a session is hosted (the `prefix o` overlay is the
+dashboard then). `prefix` `?` opens a grouped cheatsheet (Sessions /
+Tabs / Overlays / Mission control / Lifecycle) of every binding; `Esc` /
+`q` / `?` close it. In the dashboard a bare `?` opens it too — there is
+no hosted child to receive the keystroke.
 
-## Empty shell
+## Mission control (the empty shell)
 
-With no scope (and nothing recovered) the TUI opens an **empty shell**:
-a centered welcome panel naming the prefix key and the top five
-bindings, plus a hint to relaunch as `aida tui <SCOPE>`. The rotating
-status-strip hint reinforces the same vocabulary. This is the persistent
-home of the TUI — it is *not* a dead-end black screen.
+With no scope hosted (and nothing recovered) `aida tui` opens **mission
+control** — a live dashboard, not a dead-end black screen:
 
-The TUI is a persistent shell: when the last hosted session ends, the
-supervisor drops back to this welcome panel rather than exiting. `prefix
-q` quits; `prefix d` detaches.
+- **Queue** — the active role's top queued items, head selected. `Enter`
+  launches the selected item as a hosted session. When the queue is
+  empty it shows an "all clear" panel with next-step hints.
+- **Sessions** — live `aida session leases` across the project.
+- **Open PRs** — open pull requests, with mergeable + review state.
+- **Suggested** — the two or three most useful next keystrokes given
+  what's queued and open.
+
+It refreshes on a 2s cache-staleness poll (a tick re-fetches only when
+`.aida/cache.db` actually moved) and on `prefix g`. When a hosted session
+ends the dashboard auto-refreshes, so the now-empty queue and any
+freshly-opened PR appear without a keypress. `↑/↓` (or `j/k`) move the
+cursor; `Tab` switches between the Queue and Open PRs panels.
+
+### Workflow loop
+
+Mission control drives the implementer → reviewer → merge loop:
+
+1. `Enter` on the queue head launches a session; it implements and opens
+   a PR, then ends — the TUI returns to mission control.
+2. `prefix r` switches role (implementer → reviewer → dialog cycle;
+   `prefix R` opens a picker). The queue panel re-fetches for the new
+   role — a TUI-only view change, no hosted session is touched.
+3. `Enter` on the reviewer's queued review task launches a review
+   session.
+4. `prefix m` on a mergeable PR opens a confirmation modal (PR title +
+   the specs the merge auto-bumps to Completed); `y` runs `gh pr merge
+   --squash --delete-branch` then `aida pull`.
+
+The TUI is a persistent shell: when the last hosted session ends it
+drops back to mission control rather than exiting. `prefix q` quits;
+`prefix d` detaches.
 
 ## Tabs (multi-session)
 
@@ -157,7 +193,7 @@ The `aida-tui` workspace crate (`aida tui` dispatches into it before
 storage init). Modules: `term` (raw-mode + panic-safe teardown), `pty`
 (PTY host), `tab` (tab manager), `statusbar`, `app` (event loop +
 routing), `overlay`, `actions`, `picker`, `state` (crash recovery),
-`welcome` (empty-shell panel), `help` (keybinding cheatsheet). The crate
+`dashboard` (mission control), `help` (keybinding cheatsheet). The crate
 ships in release binaries as of STORY-137.
 
 Implementation plan: `docs/plans/2026-05-15-epic-26-tui.md`.

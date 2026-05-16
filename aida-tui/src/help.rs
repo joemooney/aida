@@ -1,9 +1,9 @@
 //! `prefix ?` keybinding cheatsheet — the discoverability modal (BUG-109).
 //!
-//! The empty-state welcome panel ([`crate::welcome`]) shows the top five
-//! keys; this is the full reference. It is a ratatui modal, opened by
-//! `prefix ?` (and by a bare `?` in the empty shell, where there is no
-//! hosted child to pass the keystroke to). Esc / `q` / `?` close it.
+//! The mission-control dashboard ([`crate::dashboard`]) carries the key
+//! hints inline; this is the full reference. It is a ratatui modal,
+//! opened by `prefix ?` (and by a bare `?` in the dashboard, where there
+//! is no hosted child to pass the keystroke to). Esc / `q` / `?` close it.
 //!
 //! The content is static — unlike the `prefix o` status overlay there is
 //! no model to fetch, so there is no background refresh.
@@ -76,6 +76,31 @@ pub fn cheatsheet(prefix: &str) -> Vec<Group> {
                     keys: k("?"),
                     action: "keybindings",
                     desc: "this screen",
+                },
+            ],
+        },
+        Group {
+            title: "Mission control",
+            bindings: vec![
+                Binding {
+                    keys: k("r"),
+                    action: "switch role",
+                    desc: "cycle implementer → reviewer → dialog",
+                },
+                Binding {
+                    keys: format!("{prefix} Shift-R"),
+                    action: "role picker",
+                    desc: "pick the dashboard role from a list",
+                },
+                Binding {
+                    keys: k("M"),
+                    action: "merge PR",
+                    desc: "squash-merge the selected open PR",
+                },
+                Binding {
+                    keys: k("G"),
+                    action: "refresh",
+                    desc: "re-fetch mission control now",
                 },
             ],
         },
@@ -198,7 +223,16 @@ mod tests {
     #[test]
     fn cheatsheet_is_grouped_by_purpose() {
         let titles: Vec<_> = cheatsheet("Ctrl-A").iter().map(|g| g.title).collect();
-        assert_eq!(titles, ["Sessions", "Tabs", "Overlays", "Lifecycle"]);
+        assert_eq!(
+            titles,
+            [
+                "Sessions",
+                "Tabs",
+                "Overlays",
+                "Mission control",
+                "Lifecycle"
+            ]
+        );
     }
 
     #[test]
@@ -216,6 +250,10 @@ mod tests {
             "Ctrl-A 1-9",
             "Ctrl-A O",
             "Ctrl-A ?",
+            "Ctrl-A r",
+            "Ctrl-A Shift-R",
+            "Ctrl-A M",
+            "Ctrl-A G",
             "Ctrl-A D",
             "Ctrl-A Q",
             "Ctrl-A Ctrl-A",
