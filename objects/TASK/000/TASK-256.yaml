@@ -58,3 +58,7 @@ tags:
 - ratatui-styles
 - theming
 - tui
+relationships:
+- rel_type: Child
+  target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
+  created_at: 2026-05-16T04:24:01.422062349Z
