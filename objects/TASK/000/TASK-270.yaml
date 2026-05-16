@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:39:28.243433899Z
-modified_at: 2026-05-16T21:14:45.765283536Z
+modified_at: 2026-05-16T21:27:51.324955215Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -70,6 +70,19 @@ tags:
 - first-users
 - positional-arg
 - queue-work
+comments:
+- id: 019e32b0-3d1c-7341-a987-ba42aa5cf647
+  author: joe
+  content: |-
+    Implemented on branch task-270 (commit 531b5d28):
+
+    - `aida queue work batch:NAME` is now accepted as a positional id, equivalent to `--batch NAME` — the preferred fix. New helpers strip_batch_prefix / normalize_batch_name / resolve_queue_work_batch route a `batch:`-prefixed positional into the batch slot.
+    - Sibling commands `aida queue list` and `aida queue progress` strip a redundant `batch:` prefix off the `--batch` flag value, so `--batch batch:NAME` == `--batch NAME` everywhere.
+    - Two guards on the positional form: empty-name bail (`aida queue work batch:`) and a `--type`-conflict bail (clap rejects `--batch`+`--type`; the positional form bypassed that rule).
+
+    Test status: 493/493 aida-cli tests green; cargo fmt --check clean. 3 new unit tests in queue_progress_tests.
+  created_at: 2026-05-16T21:27:51.324955215Z
+  modified_at: 2026-05-16T21:27:51.324955215Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T21:14:45.765283536Z
