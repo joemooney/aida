@@ -11,7 +11,10 @@
 //! a bottom status strip, prefix-key routing, and a clean prefix-key
 //! exit. STORY-133 added the `prefix o` status overlay; STORY-134 the
 //! `prefix n` multi-tab picker; STORY-135 crash recovery via
-//! `.aida/tui-state.json`.
+//! `.aida/tui-state.json`. BUG-109 made the empty shell discoverable —
+//! a welcome panel, a `prefix ?` keybinding cheatsheet, a rotating
+//! status-strip hint — and turned the shell persistent (a hosted
+//! session ending drops back to the welcome panel, not exit).
 //!
 //! trace:STORY-132 | ai:claude
 
@@ -19,6 +22,7 @@ mod actions;
 mod app;
 mod config;
 mod event;
+mod help;
 mod overlay;
 mod picker;
 mod pty;
@@ -26,6 +30,7 @@ mod state;
 mod statusbar;
 mod tab;
 mod term;
+mod welcome;
 
 pub use app::{App, ExitKind};
 pub use config::TuiConfig;

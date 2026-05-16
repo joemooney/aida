@@ -14,7 +14,7 @@ use. See `OVERVIEW.md` → "Public face: the TUI is the product."
 ## Launching
 
 ```bash
-aida tui                 # empty shell — populate it with the prefix-n picker
+aida tui                 # empty shell — a welcome panel shows the keys
 aida tui EPIC-26         # host a session working EPIC-26 in the first tab
 aida tui --no-recover    # skip crash-recovery re-attach (see below)
 ```
@@ -32,7 +32,8 @@ all lease / worktree / manifest / permission-mode logic is inherited.
   the background so the screen can be repainted on tab-switch or
   overlay-close.
 - The bottom row is a status strip: the tab list, a notification badge,
-  and the current key hint.
+  and a key hint that rotates (~3s) through the command vocabulary so
+  the prefix keys are discoverable without a busy strip.
 
 ## Keybindings
 
@@ -42,13 +43,31 @@ keystrokes pass straight through to the focused Claude session.
 
 | Keys | Action |
 |------|--------|
-| `prefix` `o` | open the **status overlay** |
 | `prefix` `n` | open the **new-session picker** |
+| `prefix` `o` | open the **status overlay** |
+| `prefix` `?` | open the **keybinding cheatsheet** |
 | `prefix` `[` / `]` | focus the previous / next tab |
 | `prefix` `1`…`9` | focus tab N |
 | `prefix` `d` | **detach** — quit the TUI; conversations persist and are re-attached next launch |
 | `prefix` `q` | **quit** — confirms first when sessions are live |
 | `prefix` `prefix` | send one literal prefix byte to the focused child |
+
+`prefix` `?` opens a grouped cheatsheet (Sessions / Tabs / Overlays /
+Lifecycle) of every binding; `Esc` / `q` / `?` close it. In the empty
+shell a bare `?` opens it too — there is no hosted child to receive the
+keystroke.
+
+## Empty shell
+
+With no scope (and nothing recovered) the TUI opens an **empty shell**:
+a centered welcome panel naming the prefix key and the top five
+bindings, plus a hint to relaunch as `aida tui <SCOPE>`. The rotating
+status-strip hint reinforces the same vocabulary. This is the persistent
+home of the TUI — it is *not* a dead-end black screen.
+
+The TUI is a persistent shell: when the last hosted session ends, the
+supervisor drops back to this welcome panel rather than exiting. `prefix
+q` quits; `prefix d` detaches.
 
 ## Tabs (multi-session)
 
@@ -137,7 +156,8 @@ never blocks launching the TUI.
 The `aida-tui` workspace crate (`aida tui` dispatches into it before
 storage init). Modules: `term` (raw-mode + panic-safe teardown), `pty`
 (PTY host), `tab` (tab manager), `statusbar`, `app` (event loop +
-routing), `overlay`, `actions`, `picker`, `state` (crash recovery). The
-crate ships in release binaries as of STORY-137.
+routing), `overlay`, `actions`, `picker`, `state` (crash recovery),
+`welcome` (empty-shell panel), `help` (keybinding cheatsheet). The crate
+ships in release binaries as of STORY-137.
 
 Implementation plan: `docs/plans/2026-05-15-epic-26-tui.md`.

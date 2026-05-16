@@ -15,6 +15,7 @@
 use crate::actions::{self, ActivityEntry, QuickAction};
 use crate::config::TuiConfig;
 use crate::event::TuiEvent;
+use crate::help;
 use crate::overlay::{self, OverlayModel};
 use crate::picker::{self, PickerState};
 use crate::pty::PtyHost;
@@ -22,6 +23,7 @@ use crate::state::{self, TabRecord, TuiState};
 use crate::statusbar;
 use crate::tab::{SessionTab, TabManager};
 use crate::term::pty_rows;
+use crate::welcome;
 use anyhow::{Context, Result};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::{cursor, terminal, QueueableCommand};
@@ -53,6 +55,11 @@ pub enum Mode {
     /// child's PTY output is buffered until the picker closes.
     /// trace:STORY-134 | ai:claude
     Picker,
+    /// The `prefix ?` keybinding cheatsheet is open — keystrokes either
+    /// close it (Esc / `q` / `?`) or are ignored, and like the other
+    /// modals the focused child's PTY output is buffered until it
+    /// closes. trace:BUG-109 | ai:claude
+    Help,
 }
 
 /// The outcome of routing one keystroke through [`App::route_key`].
@@ -94,6 +101,13 @@ pub enum Routing {
     PickerRedraw,
     /// `enter` in the picker — spawn the selected session in a new tab.
     SpawnSelected,
+    /// `prefix ?` (or a bare `?` in the empty shell) — open the
+    /// keybinding cheatsheet (BUG-109).
+    OpenHelp,
+    /// `esc` / `q` / `?` from the cheatsheet — close it, repaint beneath.
+    CloseHelp,
+    /// A cheatsheet keystroke with no binding — an idempotent redraw.
+    HelpRedraw,
 }
 
 /// How a new tab's hosted `aida queue work` child should launch.
@@ -115,9 +129,9 @@ pub struct App {
     badge: Option<String>,
     /// Terminal size as `(cols, rows)`.
     term_size: (u16, u16),
-    /// True once a tab has existed — distinguishes the no-scope empty
-    /// shell (stay open) from a hosted session that exited (quit).
-    had_tabs: bool,
+    /// Index into the status strip's rotating discovery hints, advanced
+    /// by [`TuiEvent::Tick`] every ~3s. trace:BUG-109 | ai:claude
+    hint_index: usize,
     /// Monotonic source of stable tab ids.
     next_tab_id: usize,
     /// Armed by `prefix q` while children are live — the next keystroke
@@ -198,7 +212,7 @@ impl App {
             config,
             badge: None,
             term_size: (80, 24),
-            had_tabs: false,
+            hint_index: 0,
             next_tab_id: 0,
             quit_armed: false,
             exit_sessions: Vec::new(),
@@ -218,10 +232,11 @@ impl App {
         &self.exit_sessions
     }
 
-    /// Route one keystroke. Pure state machine over `self.mode` +
-    /// `self.overlay` — touches no tabs and performs no I/O, so it is
-    /// exhaustively unit-testable. I/O actions are deferred: the routing
-    /// it returns names them and [`App::handle_routing`] performs them.
+    /// Route one keystroke. Near-pure state machine over `self.mode` +
+    /// `self.overlay` (plus a read of the tab count, for the empty-shell
+    /// `?` shortcut) — performs no I/O, so it is exhaustively
+    /// unit-testable. I/O actions are deferred: the routing it returns
+    /// names them and [`App::handle_routing`] performs them.
     pub fn route_key(&mut self, key: KeyEvent) -> Routing {
         let prefix = self.config.prefix_key;
         match self.mode {
@@ -229,6 +244,13 @@ impl App {
                 if key_matches(key, prefix) {
                     self.mode = Mode::Command;
                     Routing::EnteredCommand
+                } else if self.tabs.is_empty() && is_help_key(key) {
+                    // Empty shell — no hosted child to receive the `?`,
+                    // so a bare `?` opens the cheatsheet (BUG-109). With
+                    // a session focused, `?` belongs to the child and
+                    // only `prefix ?` opens help.
+                    self.mode = Mode::Help;
+                    Routing::OpenHelp
                 } else {
                     Routing::Passthrough(encode_key(key))
                 }
@@ -250,6 +272,10 @@ impl App {
                         self.mode = Mode::Picker;
                         Routing::OpenPicker
                     }
+                    KeyCode::Char('?') => {
+                        self.mode = Mode::Help;
+                        Routing::OpenHelp
+                    }
                     KeyCode::Char('[') => Routing::PrevTab,
                     KeyCode::Char(']') => Routing::NextTab,
                     KeyCode::Char(c @ '1'..='9') => Routing::SwitchTab(c as usize - '1' as usize),
@@ -258,6 +284,21 @@ impl App {
             }
             Mode::Overlay => self.route_overlay_key(key),
             Mode::Picker => self.route_picker_key(key),
+            Mode::Help => self.route_help_key(key),
+        }
+    }
+
+    /// Route a keystroke while the `prefix ?` keybinding cheatsheet is
+    /// open: Esc / `q` / `?` close it, every other key is an idempotent
+    /// redraw. trace:BUG-109 | ai:claude
+    fn route_help_key(&mut self, key: KeyEvent) -> Routing {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') => {
+                self.mode = Mode::Focused;
+                Routing::CloseHelp
+            }
+            // Any other key is a no-op; an idempotent redraw is harmless.
+            _ => Routing::HelpRedraw,
         }
     }
 
@@ -378,6 +419,7 @@ impl App {
         }
 
         spawn_input_thread(tx.clone());
+        spawn_tick_thread(tx.clone());
 
         let mut out = std::io::stdout();
         self.full_repaint(&mut out)?;
@@ -392,11 +434,11 @@ impl App {
             .map(|t| (t.scope.clone(), t.session_id.clone()))
             .collect();
 
-        // STORY-135: a clean quit / session-end has nothing to recover —
+        // STORY-135: a clean `prefix q` quit has nothing to recover —
         // drop the state file. A `prefix d` detach leaves it in place so
         // the next launch re-attaches the conversations.
         match exit {
-            ExitKind::Quit | ExitKind::SessionEnded => state::clear(&self.project_root),
+            ExitKind::Quit => state::clear(&self.project_root),
             ExitKind::Detached => {}
         }
 
@@ -466,13 +508,23 @@ impl App {
                         // STORY-135: the recoverable tab set just shrank.
                         self.persist_state();
                     }
-                    // A hosted session that has ended takes the TUI with
-                    // it; the no-scope empty shell (never had a tab)
-                    // stays open until the user exits.
-                    if self.had_tabs && self.tabs.is_empty() {
-                        return Ok(ExitKind::SessionEnded);
-                    }
+                    // BUG-109: a hosted session ending no longer takes
+                    // the TUI with it — the supervisor drops back to the
+                    // welcome shell, a persistent home the user leaves
+                    // with `prefix q`. `repaint` renders the welcome
+                    // panel once `tabs` is empty.
                     self.repaint(out)?;
+                }
+                TuiEvent::Tick => {
+                    // Rotate the status strip's discovery hint (~3s
+                    // cadence, BUG-109). Paused whenever the strip is
+                    // showing something else — a modal owns the screen,
+                    // the prefix is armed (`Command`), or a quit confirm
+                    // is pending.
+                    if self.mode == Mode::Focused && !self.quit_armed {
+                        self.hint_index = self.hint_index.wrapping_add(1);
+                        self.paint_strip(out)?;
+                    }
                 }
                 TuiEvent::OverlayRefresh(model) => {
                     // The `gh`-backed refresh landed — repaint only if the
@@ -557,22 +609,30 @@ impl App {
             Routing::ClosePicker => self.full_repaint(out)?,
             Routing::PickerRedraw => self.draw_picker()?,
             Routing::SpawnSelected => self.spawn_from_picker(tx.clone(), out)?,
+            Routing::OpenHelp => self.open_help()?,
+            // Repaint whatever was beneath the cheatsheet — the focused
+            // child, or the welcome panel in the empty shell.
+            Routing::CloseHelp => self.full_repaint(out)?,
+            Routing::HelpRedraw => self.draw_help()?,
         }
         Ok(None)
     }
 
-    /// Whether a full-screen modal (overlay or picker) currently owns the
-    /// screen — when true, hosted children's PTY output is buffered.
+    /// Whether a full-screen modal (overlay, picker or help) currently
+    /// owns the screen — when true, hosted children's PTY output is
+    /// buffered.
     fn is_modal(&self) -> bool {
-        matches!(self.mode, Mode::Overlay | Mode::Picker)
+        matches!(self.mode, Mode::Overlay | Mode::Picker | Mode::Help)
     }
 
     /// Repaint whatever owns the screen for the current mode — the active
-    /// modal, or the focused tab.
+    /// modal, or (in `Focused` / `Command`) the focused tab or, when no
+    /// tab is hosted, the welcome panel.
     fn repaint(&mut self, out: &mut Stdout) -> Result<()> {
         match self.mode {
             Mode::Overlay => self.draw_overlay(),
             Mode::Picker => self.draw_picker(),
+            Mode::Help => self.draw_help(),
             Mode::Focused | Mode::Command => self.full_repaint(out),
         }
     }
@@ -634,7 +694,33 @@ impl App {
         }
     }
 
-    /// Build the `ratatui` terminal on first use (overlay or picker).
+    /// Open the `prefix ?` keybinding cheatsheet (BUG-109). Static
+    /// content — no model to fetch, unlike the status overlay; `clear()`
+    /// forces a full redraw over whatever was on screen.
+    fn open_help(&mut self) -> Result<()> {
+        self.ensure_ratatui_term()?;
+        if let Some(term) = self.ratatui_term.as_mut() {
+            term.clear()?;
+            term.hide_cursor()?;
+        }
+        self.draw_help()
+    }
+
+    /// Draw the keybinding cheatsheet into the `ratatui` terminal. The
+    /// prefix label is resolved before the terminal is borrowed mutably,
+    /// so the draw closure and the terminal don't alias.
+    fn draw_help(&mut self) -> Result<()> {
+        self.ensure_ratatui_term()?;
+        let prefix = describe_key_long(self.config.prefix_key);
+        let term = self
+            .ratatui_term
+            .as_mut()
+            .expect("ratatui terminal initialized above");
+        term.draw(|frame| help::render(frame, &prefix))?;
+        Ok(())
+    }
+
+    /// Build the `ratatui` terminal on first use (overlay, picker, help).
     fn ensure_ratatui_term(&mut self) -> Result<()> {
         if self.ratatui_term.is_none() {
             self.ratatui_term = Some(Terminal::new(CrosstermBackend::new(std::io::stdout()))?);
@@ -778,7 +864,6 @@ impl App {
             title: scope.to_string(),
         };
         self.tabs.add(tab)?;
-        self.had_tabs = true;
         // STORY-135: the recoverable tab set just changed.
         self.persist_state();
         Ok(())
@@ -819,14 +904,22 @@ impl App {
         self.full_repaint(out)
     }
 
-    /// Clear the screen, blit the focused child's snapshot, paint the
-    /// strip. Used on launch, resize, focus change.
+    /// Clear the screen, blit the focused child's snapshot (or the
+    /// welcome panel when no session is hosted), paint the strip. Used on
+    /// launch, resize, focus change, and when a modal closes.
     fn full_repaint(&mut self, out: &mut Stdout) -> Result<()> {
         out.queue(terminal::Clear(terminal::ClearType::All))?;
         out.queue(cursor::MoveTo(0, 0))?;
         if let Some(tab) = self.tabs.focused() {
             let snapshot = tab.pty.snapshot();
             out.write_all(&snapshot)?;
+        } else {
+            // Empty shell — no hosted child to blit. Render the welcome
+            // panel so a first-time user sees the key vocabulary instead
+            // of a blank black screen. trace:BUG-109 | ai:claude
+            let (cols, rows) = self.term_size;
+            let prefix = describe_key_long(self.config.prefix_key);
+            welcome::render(out, cols, rows.saturating_sub(1), &prefix)?;
         }
         self.paint_strip(out)
     }
@@ -838,13 +931,18 @@ impl App {
         let strip_row = rows.saturating_sub(1);
         let chips: Vec<String> = self.tabs.iter().map(|t| t.title.clone()).collect();
         let hint = match self.mode {
-            Mode::Focused => format!("{} = command", describe_key(self.config.prefix_key)),
-            Mode::Command => "command: o overlay · n new · q quit · d detach · [ ] tab".to_string(),
-            // The overlay and picker paint their own full-screen chrome;
-            // the strip is only ever drawn in Focused / Command, but the
-            // arms are needed for the match to stay exhaustive.
+            // A rotating discovery hint (BUG-109) — advanced by `Tick`.
+            Mode::Focused => rotating_hint(self.config.prefix_key, self.hint_index),
+            Mode::Command => {
+                "command: n new · o overlay · ? help · d detach · q quit · [ ] tab".to_string()
+            }
+            // The overlay, picker and help modals paint their own
+            // full-screen chrome; the strip is only ever drawn in
+            // Focused / Command, but the arms are needed for the match
+            // to stay exhaustive.
             Mode::Overlay => "overlay open".to_string(),
             Mode::Picker => "picker open".to_string(),
+            Mode::Help => "help open".to_string(),
         };
         statusbar::render(
             out,
@@ -880,14 +978,16 @@ impl App {
 }
 
 /// How an `aida tui` run ended — drives the post-exit notice.
+///
+/// Since BUG-109 the TUI is a persistent shell: a hosted session ending
+/// drops back to the welcome panel rather than exiting, so the only ways
+/// out are `prefix q` and `prefix d`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitKind {
-    /// `prefix q` (or quitting an empty shell).
+    /// `prefix q` — quitting the welcome shell or ending hosted sessions.
     Quit,
     /// `prefix d` — conversations persist on disk.
     Detached,
-    /// The last hosted session's child exited on its own.
-    SessionEnded,
 }
 
 impl ExitKind {
@@ -898,7 +998,6 @@ impl ExitKind {
             ExitKind::Detached => {
                 "aida tui: detached — Claude conversations persist (resume with `aida queue work --resume`)"
             }
-            ExitKind::SessionEnded => "aida tui: hosted session ended",
         }
     }
 }
@@ -936,6 +1035,19 @@ fn spawn_input_thread(tx: Sender<TuiEvent>) {
     });
 }
 
+/// Spawn the strip-rotation ticker: one [`TuiEvent::Tick`] every ~3s,
+/// driving the status strip's rotating discovery hint (BUG-109).
+/// Detached and fire-and-forget — it ends once the supervisor's receiver
+/// is dropped. trace:BUG-109 | ai:claude
+fn spawn_tick_thread(tx: Sender<TuiEvent>) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        if tx.send(TuiEvent::Tick).is_err() {
+            break;
+        }
+    });
+}
+
 /// Compare two key events by code + modifiers only — `KeyEvent`'s derived
 /// equality also covers `kind`/`state`, which would make a configured
 /// prefix (always `Press`) miss a `Repeat`.
@@ -957,6 +1069,54 @@ fn describe_key(key: KeyEvent) -> String {
         other => s.push_str(&format!("{:?}", other)),
     }
     s
+}
+
+/// A long human label for a key (`Ctrl-A`, `Alt-B`) — for the welcome
+/// panel and help cheatsheet, where `describe_key`'s terse `^a` reads
+/// worse. trace:BUG-109 | ai:claude
+pub(crate) fn describe_key_long(key: KeyEvent) -> String {
+    let mut s = String::new();
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        s.push_str("Ctrl-");
+    }
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        s.push_str("Alt-");
+    }
+    match key.code {
+        KeyCode::Char(c) => s.push(c.to_ascii_uppercase()),
+        other => s.push_str(&format!("{:?}", other)),
+    }
+    s
+}
+
+/// Whether `key` is a bare `?` (Shift permitted; Ctrl / Alt not) — the
+/// empty-shell help shortcut. With a session focused `?` belongs to the
+/// hosted child, so only `prefix ?` opens help there. trace:BUG-109
+fn is_help_key(key: KeyEvent) -> bool {
+    key.code == KeyCode::Char('?')
+        && !key.modifiers.contains(KeyModifiers::CONTROL)
+        && !key.modifiers.contains(KeyModifiers::ALT)
+}
+
+/// The verbs the status strip's right-side hint rotates through — a
+/// small set so a first-time user discovers the key vocabulary without
+/// a busy, static strip. trace:BUG-109 | ai:claude
+const HINT_VERBS: [&str; 4] = [
+    "N new session",
+    "O status overlay",
+    "? keybindings",
+    "Q quit",
+];
+
+/// The status strip's right-side discovery hint for `Focused` mode —
+/// the prefix label plus one of [`HINT_VERBS`], selected by `index`
+/// (advanced ~3s by [`TuiEvent::Tick`]). trace:BUG-109 | ai:claude
+fn rotating_hint(prefix: KeyEvent, index: usize) -> String {
+    format!(
+        "{} {}",
+        describe_key(prefix),
+        HINT_VERBS[index % HINT_VERBS.len()]
+    )
 }
 
 /// Encode a key event into the byte sequence a PTY child expects. Covers
@@ -1218,6 +1378,66 @@ mod tests {
         // Enter routes a spawn of the highlighted entry.
         let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         assert!(matches!(app.route_key(enter), Routing::SpawnSelected));
+    }
+
+    #[test]
+    fn bare_question_opens_help_in_the_empty_shell() {
+        // No tabs hosted — a bare `?` has no child to receive it, so it
+        // opens the keybinding cheatsheet (BUG-109).
+        let mut app = App::new(TuiConfig::default());
+        assert!(app.tabs.is_empty());
+        match app.route_key(plain('?')) {
+            Routing::OpenHelp => {}
+            other => panic!("expected OpenHelp, got {:?}", other),
+        }
+        assert_eq!(app.mode, Mode::Help);
+
+        // Esc closes the cheatsheet back to Focused.
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(matches!(app.route_key(esc), Routing::CloseHelp));
+        assert_eq!(app.mode, Mode::Focused);
+    }
+
+    #[test]
+    fn prefix_question_opens_help_and_question_closes_it() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+
+        // `prefix ?` enters Help mode.
+        app.route_key(prefix);
+        assert!(matches!(app.route_key(plain('?')), Routing::OpenHelp));
+        assert_eq!(app.mode, Mode::Help);
+
+        // A no-op key keeps the cheatsheet open and just redraws.
+        assert!(matches!(app.route_key(plain('z')), Routing::HelpRedraw));
+        assert_eq!(app.mode, Mode::Help);
+
+        // `?` again closes it back to Focused.
+        assert!(matches!(app.route_key(plain('?')), Routing::CloseHelp));
+        assert_eq!(app.mode, Mode::Focused);
+    }
+
+    #[test]
+    fn rotating_hint_cycles_and_wraps() {
+        let prefix = config::default_prefix_key();
+        // Consecutive indices give different hints.
+        assert_ne!(rotating_hint(prefix, 0), rotating_hint(prefix, 1));
+        // The index wraps modulo the verb count.
+        assert_eq!(
+            rotating_hint(prefix, 0),
+            rotating_hint(prefix, HINT_VERBS.len())
+        );
+        // Each hint carries the short prefix label.
+        assert!(rotating_hint(prefix, 0).starts_with("^a "));
+    }
+
+    #[test]
+    fn describe_key_long_is_human_readable() {
+        assert_eq!(describe_key_long(config::default_prefix_key()), "Ctrl-A");
+        assert_eq!(
+            describe_key_long(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT)),
+            "Alt-B"
+        );
     }
 
     #[test]
