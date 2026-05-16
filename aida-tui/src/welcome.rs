@@ -38,7 +38,11 @@ fn body(prefix: &str) -> Vec<String> {
         format!("{prefix}  Q    quit"),
         String::new(),
         format!("Press {prefix} then N to pick one — or"),
-        "relaunch as  aida tui EPIC-26.".to_string(),
+        // Generic `<SCOPE>` placeholder, never a real spec id: a
+        // first-user has no EPIC-26 (that's AIDA's own TUI epic), and an
+        // internal id with no context is noise on a welcome screen.
+        // trace:TASK-268 | ai:claude
+        "relaunch as  aida tui <SCOPE>.".to_string(),
     ]
 }
 
@@ -131,9 +135,10 @@ mod tests {
         assert!(text.contains("Ctrl-A  ?    all keybindings"));
         assert!(text.contains("Ctrl-A  D    detach"));
         assert!(text.contains("Ctrl-A  Q    quit"));
-        // The relaunch-with-scope banner.
+        // The relaunch-with-scope banner — a generic placeholder, not a
+        // real (internal) spec id. trace:TASK-268
         assert!(text.contains("Press Ctrl-A then N to pick one"));
-        assert!(text.contains("aida tui EPIC-26"));
+        assert!(text.contains("aida tui <SCOPE>"));
     }
 
     #[test]
