@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:53:25.986865011Z
-modified_at: 2026-05-16T22:57:32.238657223Z
+modified_at: 2026-05-16T23:04:16.040685974Z
 req_type: Bug
 tags:
 - approved-state
@@ -54,3 +54,9 @@ tags:
 - reconcile-status
 - review-story
 - workflow-state
+comments:
+- id: 019e3308-81a8-7d31-be8d-4191f7ef7828
+  author: joe
+  content: Commit 8d15a3b8 references this requirement
+  created_at: 2026-05-16T23:04:16.040685974Z
+  modified_at: 2026-05-16T23:04:16.040685974Z
