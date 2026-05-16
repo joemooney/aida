@@ -1,0 +1,58 @@
+id: 019e31ad-8f05-76c2-a840-ba8f4c3966a9
+spec_id: TASK-264
+agreed_id: TASK-264
+title: 'aida session forget <id>: explicit removal of a specific tracked Claude session from aida session list'
+description: |-
+  \`aida session list\` shows tracked Claude sessions (e.g., \`1bf450af\`, \`7b6f91d2\`). There's no command to **remove a specific session by ID from that list** when the user is done with it. \`aida session prune\` is disk-cleanup by age/orphan-ness, not display-management.
+
+  For a returning user looking at a list of stale sessions, the natural verb is \`forget\`:
+
+  \`\`\`
+  $ aida session forget 7b6f91d2
+  ℹ Forgetting session 7b6f91d2 (implementer, spec TASK-112, age 22h, last active 22h ago)
+     - Deleting Claude project dir: ~/.claude/projects/<encoded>/7b6f91d2.jsonl
+     - Spec TASK-112 status: Completed (already done — safe)
+  Continue? [y/N] y
+  ✓ session 7b6f91d2 forgotten
+  \`\`\`
+
+  ## Acceptance
+
+  - [ ] \`aida session forget <id>\` deletes the Claude \`.jsonl\` file matching the given prefix/full ID
+  - [ ] Refuses to forget the currently-active session (the one running \`aida session forget\`) unless \`--force\`
+  - [ ] Refuses to forget sessions whose anchor spec is in active state (In Progress, Done-not-merged) unless \`--force\` — protect mid-work artifacts
+  - [ ] Confirmation prompt shows: role, anchor spec + status, age, last activity (so user can verify they're not deleting something important)
+  - [ ] \`--dry-run\` shows what would be forgotten without acting
+  - [ ] \`--yes\` skips confirmation (for scripting / autonomous flows)
+  - [ ] Logs to \`.aida/session-prune.log\` (same audit trail as \`session prune\`)
+  - [ ] Composes with \`aida session list\` — after \`forget\`, the entry disappears from the list
+
+  ## Out of scope (could be follow-up filings)
+
+  - **Batch forget by spec status** — \`aida session forget --completed\` to bulk-remove all sessions whose spec is Completed. Useful for end-of-iteration cleanup. Probably its own TASK.
+  - **Forget by age threshold** — overlaps with existing \`aida session prune --days\`; not needed here.
+  - **Forget by role / scope** — same family of bulk filters; follow-up.
+
+  ## Composes with
+
+  - **\`aida session prune\`** — sibling command, different scope (prune = bulk age-based; forget = single-target). Both share the \`.aida/session-prune.log\` audit trail.
+  - **BUG-112** (INITIAL TOPIC stale display) — same family: improving \`aida session list\` for returning users. Often used together: \`list\` → identify stale → \`forget\` to clean up.
+  - **feedback_failed_flag_attempts_are_ux_signals.md** memory — this filing is downstream of the user's \`--completed\` / \`--interactive\` attempts on \`prune\`, both of which revealed the missing display-management primitive.
+
+  ## Origin
+
+  User attempted \`aida session prune --completed\` and \`aida session prune --interactive\` 2026-05-16 looking for a way to clean up stale tracked sessions. Both flags don't exist; \`prune\` is the wrong surface. The real missing primitive is \`forget\` — explicit per-session removal.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T16:45:18.469713543Z
+modified_at: 2026-05-16T16:45:18.469713543Z
+req_type: Task
+tags:
+- alpha-readiness
+- cleanup
+- failed-flag-signal
+- returning-user
+- session-forget
+- session-list
