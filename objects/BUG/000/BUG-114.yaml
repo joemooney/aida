@@ -64,7 +64,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:14:30.632335051Z
-modified_at: 2026-05-16T17:54:57.342796168Z
+modified_at: 2026-05-16T17:59:29.234898944Z
 req_type: Bug
 tags:
 - auto-complete
@@ -77,3 +77,25 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-16T17:14:34.637181543Z
+comments:
+- id: 019e31f1-78d2-7f31-8762-763276de1068
+  author: joe
+  content: |-
+    Root cause (differs from the hypothesis in the description): not lease-set
+    races. `RealPhaseDriver::lease_snapshot` counted `.aida/sessions/*.toml`
+    excluding only `*.activity.toml` — but the `<id>.manifest.toml` companion
+    also matches. The orchestrator always passes `--session-id`, which makes
+    `aida queue work` always write a manifest (`claude_session_id.is_some()`),
+    so the phase-1 set-diff always saw two new files (`<id>.toml` +
+    `<id>.manifest.toml`) and bailed. `--auto-complete` would fail phase 1
+    every run, not just under concurrency.
+
+    Fix: phase 1 and phase 3 now pin the orchestrated session by the
+    `claude_session_id` the orchestrator mints into `--session-id` and
+    `aida queue work` records in the manifest — a deterministic lookup
+    (`find_orchestrated_lease`), no set diff. Immune to concurrent leases,
+    nested /aida-pickup, and the companion-file miscount. On a genuine miss
+    the failure names the candidate lease ids. Regression test:
+    `find_orchestrated_lease_pins_session_by_claude_id`.
+  created_at: 2026-05-16T17:59:29.234898944Z
+  modified_at: 2026-05-16T17:59:29.234898944Z
