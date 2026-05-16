@@ -1,0 +1,57 @@
+id: 019e32f9-46b5-79c0-93ee-95feb15eb74f
+spec_id: TASK-288
+agreed_id: TASK-288
+title: 'TUI prior-art study: git-clone + analyze Claude Squad / crystal / vibe-kanban / vibe-tree / cmux / Conductor (prereq for STORY-244)'
+description: |-
+  Before STORY-244's TUI launcher pivot is implemented, study the mature parallel-session-manager TUIs in the marketplace: **Claude Squad, crystal, vibe-kanban, vibe-tree, cmux, Conductor**. They have years of UX investment; AIDA's TUI just landed. Don't reinvent an inferior wheel.
+
+  ## Acceptance
+
+  - [ ] Clone each of the 6 projects into a sandbox (\`/tmp/tui-prior-art/\` or similar)
+  - [ ] For each, document in \`docs/competitive-analysis/tui-prior-art.md\`:
+    - **Hosting model** — pty-host, tmux, window manager, web?
+    - **Layout** — panels, tabs, sidebars; how is hierarchy presented?
+    - **Keybindings** — mode prefixes (Ctrl-A like tmux?), direct keys, vim-style?
+    - **Session state** — how persisted? how shown to user?
+    - **Multi-agent management** — how does the user pick which session to focus, switch, kill?
+    - **What's GOOD** — patterns AIDA should adopt
+    - **What's MISSING** — gaps AIDA's spec-graph backbone fills
+  - [ ] Summarize 3-5 concrete design recommendations for STORY-244 in \`docs/competitive-analysis/tui-prior-art.md\`'s conclusion section
+  - [ ] Update STORY-244's description (or comment) with the prior-art findings + which recommendations to incorporate
+
+  ## Out of scope
+
+  - Forking or vendoring code from the prior-art projects — pure study only
+  - Performance benchmarks — read-the-code understanding, not measurements
+  - Web-only tools (we're focused on terminal/TUI patterns)
+
+  ## Composes with
+
+  - **STORY-244** (TUI architecture pivot — launcher + bash-wrapper) — prerequisite study; informs the design
+  - **STORY-NEW** (maintained competitive-analysis doc) — this TASK feeds its tui-prior-art.md section
+  - **TASK-256** (TUI theming) — prior-art may surface theme conventions worth adopting
+  - **EPIC-26** (TUI Trojan-horse) — strategic parent
+
+  ## Why this matters
+
+  The marketplace's parallel-session TUIs have validated UX patterns AIDA can learn from. Specifically: how do they handle the \"I have 5 agents working; show me what's happening\" problem? AIDA's mission-control concept (refined dashboard from STORY-241) can incorporate their patterns where appropriate.
+
+  Equally important: knowing what AIDA does DIFFERENTLY (spec-graph backbone, identity stability) clarifies what the TUI should surface that they CAN'T — informing the differentiation rather than imitation.
+
+  ## Origin
+
+  User asked 2026-05-16: *\"For TUI I think we should git clone other projects and figure out what we can learn from them, we do not want to reinvent the wheel or an inferior wheel.\"*
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T22:47:37.909197709Z
+modified_at: 2026-05-16T22:47:37.909197709Z
+req_type: Task
+tags:
+- batch:strategic-docs
+- competitive-analysis
+- prior-art
+- research
+- story-244-prereq
+- tui
