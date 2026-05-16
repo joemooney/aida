@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:31:13.138421089Z
-modified_at: 2026-05-16T20:54:38.376875586Z
+modified_at: 2026-05-16T20:59:37.598167727Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -80,6 +80,20 @@ comments:
   content: Commit e069cd74 references this requirement
   created_at: 2026-05-16T20:54:27.091682013Z
   modified_at: 2026-05-16T20:54:27.091682013Z
+- id: 019e3296-64fe-7b41-be7b-a11bfe7b93d5
+  author: joe
+  content: |-
+    Implemented via PR-53 (commit e069cd74):
+
+    - aida-tui/src/welcome.rs: TUI welcome panel `aida tui EPIC-26` → generic `aida tui <SCOPE>` placeholder (EPIC-26 is AIDA's own internal epic).
+    - docs/user-facing-text-conventions.md (new): rule that SPEC-IDs stay in developer artifacts, never user-facing output.
+    - CLAUDE.md: pointer to the convention from the traceability section.
+    - Audit found this as the only live println/eprintln/format! instance; the session-end hint was already clean (TASK-267).
+
+    Test status: 793/793 workspace tests green; cargo fmt --check clean.
+    Follow-up: child TASK-287 filed for the clap `--help` doc-comment leak (~250 cli.rs lines).
+  created_at: 2026-05-16T20:59:37.598167727Z
+  modified_at: 2026-05-16T20:59:37.598167727Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T20:54:38.376875586Z
