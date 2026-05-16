@@ -1,0 +1,61 @@
+id: 019e32f9-4f9c-7283-b20c-19da0f27d1da
+spec_id: SPIKE-6
+agreed_id: SPIKE-6
+title: 'Spike: skillfold compatibility — can AIDA''s skill templates compile to skillfold YAML for cross-platform (Cursor, Codex)?'
+description: |-
+  **skillfold** (per 2026-05 marketplace survey) compiles YAML skill definitions to Claude Code, Cursor, Codex, etc. If it becomes the standard for cross-platform skill definition, AIDA's Claude-Code-only \`.claude/skills/\` becomes a competitive limitation — the discipline AIDA ships via scaffolding wouldn't reach non-Claude-Code users.
+
+  This SPIKE investigates: can AIDA's skill templates compile to skillfold output? At what cost? Is the investment worth it for alpha+1?
+
+  ## Investigation questions
+
+  - [ ] What's skillfold's YAML schema? How expressive vs AIDA's markdown skill templates?
+  - [ ] Does skillfold support: glyphs, multi-section skills, code-block hints, role-based skill variants?
+  - [ ] Could AIDA's skill templates be auto-converted (markdown → skillfold YAML) or would they need redesign?
+  - [ ] What's skillfold's adoption trajectory? Is it gaining momentum or one-of-many?
+  - [ ] What's the ecosystem cost: maintaining a markdown→YAML compiler for every skill update?
+  - [ ] Is there an inverse approach — skillfold compiles its YAML to markdown skills, AIDA stays markdown-native?
+
+  ## Deliverable
+
+  \`docs/competitive-analysis/skillfold-spike.md\` documenting:
+
+  - skillfold's current state (schema, adoption, supported platforms)
+  - Gap analysis: AIDA skill features that don't map cleanly
+  - 3 options ranked: (a) stay markdown-only, (b) compile to skillfold, (c) accept skillfold YAML as input alongside markdown
+  - Recommendation + rationale
+  - Effort estimate for the recommended option
+
+  ## Out of scope
+
+  - Implementing any compilation — pure investigation
+  - Forking skillfold or contributing to it
+  - Decisions about other cross-platform tools (e.g., Continue, Aider) — focus on skillfold specifically
+
+  ## Composes with
+
+  - **STORY-NEW** (maintained competitive-analysis doc) — output lives in \`docs/competitive-analysis/skillfold-spike.md\`
+  - **STORY-255** (scaffolding pack) — if skillfold becomes a target, the pack's output expands beyond Claude Code
+  - **EPIC-27** (MCP modernization) — same family of cross-platform exposure concerns
+
+  ## Why post-alpha
+
+  Alpha is Claude Code-only by design (your stated audience). skillfold is a question for after alpha ships and you observe whether non-Claude-Code users want to consume AIDA's discipline.
+
+  ## Origin
+
+  Identified in the 2026-05-16 competitive-analysis dialog as the longer-term strategic exposure: \"AIDA's Claude-Code-only `.claude/skills/` becomes a limitation. The discipline AIDA ships via scaffolding wouldn't reach Cursor/Codex users without a skillfold-style compilation layer.\"
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T22:47:40.188887884Z
+modified_at: 2026-05-16T22:47:40.188887884Z
+req_type: Spike
+tags:
+- competitive-analysis
+- cross-platform
+- investigation
+- post-alpha
+- skillfold
+- spike
