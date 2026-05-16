@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:29:17.082223638Z
-modified_at: 2026-05-16T20:32:55.718740790Z
+modified_at: 2026-05-16T20:37:50.315867518Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -95,6 +95,21 @@ comments:
     The shape mismatch (parallel vs sequential UI patterns) is a recurring trap. Worth a memory entry so dialog-role doesn't re-conflate them when filing future polish work.
   created_at: 2026-05-16T20:25:18.089680565Z
   modified_at: 2026-05-16T20:25:18.089680565Z
+- id: 019e3282-726b-75c3-bb2a-bbb694d59e5c
+  author: joe
+  content: |-
+    Implemented via PR-52 (commit 4904e33e): https://github.com/joemooney/aida/pull/52
+
+    - after_session_end_with_pr now renders the full review → merge → pull sequence as a numbered step list (▶ primary / ↓ flow), with an indented self-merge sidebar for solo developers
+    - Non-TTY output degrades to a single-line summary
+    - AutoQueueOutcome gains covered_specs (replaces review_story_id) so the auto-bump line names the specs
+    - Rendering factored into a pure, unit-tested session_end_pr_hint_lines helper
+
+    Format is a numbered sequential step list, NOT TASK-260's parallel-choice table — acceptance criterion 2 corrected on the spec accordingly.
+
+    Test status: 14/14 tests green (workflow_hints 12/12 incl. 4 new, auto_queue 2/2); cargo fmt --all --check clean
+  created_at: 2026-05-16T20:37:50.315867518Z
+  modified_at: 2026-05-16T20:37:50.315867518Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T20:32:55.718740790Z
