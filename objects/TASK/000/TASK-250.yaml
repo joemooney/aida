@@ -48,12 +48,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-15: *\"the review is in progress, not sure if the queue list shows that to be ongoing?\"* — confirmed gap.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:30:35.541902232Z
-modified_at: 2026-05-16T17:32:12.025674761Z
+modified_at: 2026-05-16T18:47:53.905582207Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
