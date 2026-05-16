@@ -42075,23 +42075,31 @@ fn read_verdict_file(
     path: &std::path::Path,
 ) -> Result<auto_complete::Verdict, auto_complete::PhaseFailure> {
     let body = std::fs::read_to_string(path).map_err(|_| {
-        auto_complete::PhaseFailure::new(
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
             "the reviewer session produced no verdict file — the review did not complete",
         )
     })?;
     let value: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
-        auto_complete::PhaseFailure::new(format!("the verdict file is not valid JSON: {e}"))
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!("the verdict file is not valid JSON: {e}"),
+        )
     })?;
     let raw = value
         .get("verdict")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            auto_complete::PhaseFailure::new("the verdict file has no `verdict` field")
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoVerdict,
+                "the verdict file has no `verdict` field",
+            )
         })?;
     auto_complete::Verdict::parse(raw).ok_or_else(|| {
-        auto_complete::PhaseFailure::new(format!(
-            "unrecognised verdict `{raw}` in the verdict file"
-        ))
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!("unrecognised verdict `{raw}` in the verdict file"),
+        )
     })
 }
 
@@ -42298,9 +42306,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             cmd.args(["--permission-mode", pm]);
         }
         let status = cmd.status().map_err(|e| {
-            auto_complete::PhaseFailure::new(format!(
-                "could not launch the implementer session: {e}"
-            ))
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not launch the implementer session: {e}"),
+            )
         })?;
         if !status.success() {
             return Err(auto_complete::PhaseFailure::new(format!(
@@ -42325,11 +42334,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 self.pr_number = Some(pr.number as u32);
                 Ok(())
             }
-            PrLookup::NoOpenPr => Err(auto_complete::PhaseFailure::new(
+            PrLookup::NoOpenPr => Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoPr,
                 "the implementer session exited cleanly but opened no PR — \
                  run `/aida-pr` inside the session before exiting",
             )),
-            PrLookup::GhMissing => Err(auto_complete::PhaseFailure::new(
+            PrLookup::GhMissing => Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::MissingTool,
                 "`gh` is not on PATH — auto-complete needs it to track the PR",
             )),
             PrLookup::GhFailed(why) => Err(auto_complete::PhaseFailure::new(format!(
@@ -42340,7 +42351,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         let branch = self.branch.clone().ok_or_else(|| {
-            auto_complete::PhaseFailure::new("internal: branch not resolved before the CI phase")
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Internal,
+                "internal: branch not resolved before the CI phase",
+            )
         })?;
 
         // Probe, then block until CI is terminal. `PrNoChecks` is treated as
@@ -42369,9 +42383,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             } => {
                 self.pr_number = Some(pr_number);
                 self.ci_run_id = latest_run_id_for_branch(&branch);
-                return Err(auto_complete::PhaseFailure::new(format!(
-                    "CI is red on PR-{pr_number}: {failed_summary}"
-                )));
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiRed,
+                    format!("CI is red on PR-{pr_number}: {failed_summary}"),
+                ));
             }
             CiProbe::PrNoChecks { pr_number } => {
                 self.pr_number = Some(pr_number);
@@ -42381,9 +42396,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 );
             }
             CiProbe::InProgress { pr_number } => {
-                return Err(auto_complete::PhaseFailure::new(format!(
-                    "CI on PR-{pr_number} did not reach a terminal state in time"
-                )));
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiTimeout,
+                    format!("CI on PR-{pr_number} did not reach a terminal state in time"),
+                ));
             }
             CiProbe::NoSignal(reason) => {
                 // We confirmed a PR in phase 1, so this is an environment
@@ -42399,14 +42415,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // CI cleared — end the implementer session. This removes the
         // worktree and auto-queues the `Review PR-N` item for the reviewer.
         let lease = self.implementer_lease.clone().ok_or_else(|| {
-            auto_complete::PhaseFailure::new("internal: implementer lease not recorded")
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Internal,
+                "internal: implementer lease not recorded",
+            )
         })?;
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .args(["session", "end", &lease, "--yes", "--skip-ci"])
             .status()
+            // A spawn failure here is local subprocess plumbing, not red CI —
+            // tag it `Spawn` so the hint says so. trace:BUG-218 | ai:claude
             .map_err(|e| {
-                auto_complete::PhaseFailure::new(format!("could not run `aida session end`: {e}"))
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Spawn,
+                    format!("could not run `aida session end`: {e}"),
+                )
             })?;
         if !status.success() {
             return Err(auto_complete::PhaseFailure::new(
@@ -42419,7 +42443,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn run_reviewer(&mut self) -> Result<auto_complete::Verdict, auto_complete::PhaseFailure> {
         let pr = self.pr_number.ok_or_else(|| {
-            auto_complete::PhaseFailure::new(
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Internal,
                 "internal: PR number not resolved before the review phase",
             )
         })?;
@@ -42454,7 +42479,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             cmd.args(["--permission-mode", pm]);
         }
         let status = cmd.status().map_err(|e| {
-            auto_complete::PhaseFailure::new(format!("could not launch the reviewer session: {e}"))
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not launch the reviewer session: {e}"),
+            )
         })?;
         if !status.success() {
             return Err(auto_complete::PhaseFailure::new(format!(
@@ -42482,12 +42510,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         let pr = self.pr_number.ok_or_else(|| {
-            auto_complete::PhaseFailure::new(
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Internal,
                 "internal: PR number not resolved before the merge phase",
             )
         })?;
         let gh = resolve_gh_binary().ok_or_else(|| {
-            auto_complete::PhaseFailure::new("`gh` is not on PATH — cannot merge the PR")
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::MissingTool,
+                "`gh` is not on PATH — cannot merge the PR",
+            )
         })?;
         let status = std::process::Command::new(gh)
             .current_dir(&self.project_root)
@@ -42500,7 +42532,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             ])
             .status()
             .map_err(|e| {
-                auto_complete::PhaseFailure::new(format!("could not run `gh pr merge`: {e}"))
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Spawn,
+                    format!("could not run `gh pr merge`: {e}"),
+                )
             })?;
         if !status.success() {
             return Err(auto_complete::PhaseFailure::new(format!(
@@ -42516,7 +42551,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             .arg("pull")
             .status()
             .map_err(|e| {
-                auto_complete::PhaseFailure::new(format!("could not run `aida pull`: {e}"))
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Spawn,
+                    format!("could not run `aida pull`: {e}"),
+                )
             })?;
         if !status.success() {
             return Err(auto_complete::PhaseFailure::new(
@@ -42532,7 +42570,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             .args(["build", "--release"])
             .status()
             .map_err(|e| {
-                auto_complete::PhaseFailure::new(format!("could not run `cargo build`: {e}"))
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Spawn,
+                    format!("could not run `cargo build`: {e}"),
+                )
             })?;
         if !status.success() {
             return Err(auto_complete::PhaseFailure::new(
