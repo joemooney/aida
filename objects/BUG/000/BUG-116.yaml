@@ -1,0 +1,63 @@
+id: 019e3282-ded9-7f61-b2fb-2b4296c17a59
+spec_id: BUG-116
+agreed_id: BUG-116
+title: 'Skill templates: apply the ⇒ and ⏸ glyphs uniformly (TASK-260 design-refinement didn''t propagate)'
+description: |-
+  TASK-260 shipped Path/Action/Why tables with the ORIGINAL glyph set (\`▶ ⏵ 🚪\`), not the refined set (\`▶ ⇒ ⏸\`) specified in the design-refinement comment on TASK-260. The refinement reasoning:
+
+  - \`▶\` (continue) — kept, correct
+  - \`⏵\` (right-pointing pointer) → **`⇒` (double arrow / implies)** — clearer that \"submits → for review\"
+  - \`🚪\` (door — implies abandon) → **`⏸` (double-bar pause)** — pause semantics, not exit
+
+  ## Observed (2026-05-16)
+
+  After TASK-267 shipped via \`--auto-complete\`, the implementer's end-of-session menu rendered \`▶ ⏵ 🚪\` — the OLD glyphs, not the refined ones. Grep confirms: \`⇒\` and \`⏸\` don't appear in any skill template; \`⏵\` and \`🚪\` appear ~13 times across \`aida-pickup.md\`, \`aida-pr.md\`, \`aida-review.md\`.
+
+  The refinement comment on TASK-260 was descriptive (here's the refined glyph set) but not formally part of acceptance criteria, so the implementer correctly followed the original spec's glyphs.
+
+  ## Acceptance
+
+  - [ ] Replace all \`⏵\` with \`⇒\` in:
+    - \`aida-core/templates/skills/aida-pickup.md\`
+    - \`aida-core/templates/skills/aida-pr.md\`
+    - \`aida-core/templates/skills/aida-review.md\`
+    - Any other skill template using the alternate-path glyph
+  - [ ] Replace all \`🚪\` with \`⏸\` in the same templates AND any others showing stop/pause paths
+  - [ ] Update each template's \"Glyph convention\" prose section to specify the new set: \`▶\` primary, \`⇒\` alternative, \`⏸\` pause/stop
+  - [ ] CLAUDE.md / OVERVIEW.md if they reference the old glyphs — update for consistency
+  - [ ] Run \`make sync-templates\` to verify symlinks in \`.claude/skills/\` reflect the changes
+  - [ ] Tests: snapshot test for one skill template's rendered Path/Action/Why table; assert the new glyphs
+
+  ## Composes with
+
+  - **TASK-260** (Path/Action/Why tables) — already shipped, but with old glyphs. This BUG closes the gap.
+  - **batch:workflow-hint-polish** — tagged accordingly
+  - **TASK-279** (advisor user-facing identity) — same family of skill-template-text consistency
+  - **feedback_parallel_vs_sequential_ui.md** memory — both rendering polish + content polish are dialog-role's responsibility to verify before considering shipped
+
+  ## Why this matters for alpha
+
+  The glyphs are visible in EVERY skill end-of-session menu. First-users will see them dozens of times. Wrong glyph = wrong semantic signal (`🚪` says \"abandon\"; `⏸` says \"resume later\"). The refinement matters for alpha UX.
+
+  ## Lesson captured for memory
+
+  Design-refinement comments on a spec are NOT acceptance criteria unless the comment explicitly says \"this replaces criterion N\" or the user edits the original acceptance list. Otherwise the implementer correctly follows the original spec — the refinement is invisible.
+
+  The fix going forward: refinements either become explicit acceptance bullets (additive or replacing-by-number) OR they're filed as follow-up TASKs that supersede the original behavior.
+
+  ## Origin
+
+  User observed 2026-05-16: *\"For that table displayed, the glyphs look like the ones we have previously, I thought we updated those or was that a different table?\"* — caught the gap; TASK-260 shipped without applying the refined glyphs.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T20:38:18.073686442Z
+modified_at: 2026-05-16T20:38:18.073686442Z
+req_type: Bug
+tags:
+- batch:workflow-hint-polish
+- design-refinement
+- glyph
+- skill
+- task-260-followup
