@@ -1,0 +1,76 @@
+id: 019e319d-19b1-7dc0-b753-198848c86f0e
+spec_id: TASK-260
+agreed_id: TASK-260
+title: 'Skill next-steps: render multi-option prompts as Path/Action/Why tables, not numbered bullets'
+description: |-
+  End-of-session prompts from \`/aida-pickup\`, \`/aida-pr\`, \`/aida-review\` etc. currently render as numbered-bullet lists with arrow glyphs:
+
+  \`\`\`
+  Next steps:
+    1. ▶ Hand off to review → end this session, then aida queue work PR-46 in a reviewer session
+    2. ⏵ Keep implementing → /aida-pickup (next up: STORY-244, TUI launcher pivot)
+    3. 🚪 Stop here → Ctrl+D, then aida session end 019e2f42 from the parent shell
+  \`\`\`
+
+  For multi-option prompts, a tabular **Path / Action / Why** rendering is more scannable and surfaces the *why* of each option — which is where the user's decision-making attention lands:
+
+  \`\`\`
+  ┌────────────────┬────────────────────────────────┬─────────────────────────────────────────────┐
+  │      Path      │          What happens          │                  Why                        │
+  ├────────────────┼────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Hand off to    │ Ctrl+D → aida session end →    │ Different role (reviewer), different lease  │
+  │ review         │ aida queue work PR-46          │ scope, different worktree → fresh session   │
+  ├────────────────┼────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Keep           │ /aida-pickup inside this same  │ Same role, same lease, same worktree →      │
+  │ implementing   │ Claude session                 │ reuse the current session                   │
+  ├────────────────┼────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Stop here      │ Ctrl+D → aida session end      │ Pause; resume later with same primitives    │
+  └────────────────┴────────────────────────────────┴─────────────────────────────────────────────┘
+  \`\`\`
+
+  The table renders well in Claude Code's terminal UI (uses box-drawing chars) and pairs naturally with the banner UX from TASK-259.
+
+  ## Acceptance
+
+  - [ ] All skill templates that emit multi-option end-of-session prompts use the Path / Action / Why table
+  - [ ] Affected templates (in \`aida-core/templates/skills/\`):
+    - \`aida-pickup.md\`
+    - \`aida-pr.md\`
+    - \`aida-review.md\`
+    - \`aida-handoff.md\` (if/when filed)
+    - Any other skill that ends with a \"Next steps\" choice
+  - [ ] Skill instruction explicitly says: *\"When presenting 2+ paths forward, render as a markdown table with columns Path / What happens / Why. Use ▶ ⏵ 🚪 glyphs in the Path cell for the primary / alternate / exit semantics.\"*
+  - [ ] Single-option / linear next-step output stays compact (numbered or bulleted) — table is for multi-option only
+  - [ ] The Why column should be the load-bearing differentiator — describe the role/lease/worktree implication, not just rephrase the action
+  - [ ] Update \`docs/skills-convention.md\` (or create it) noting the next-steps rendering convention
+
+  ## Composes with
+
+  - **TASK-259** (\`/aida-pr\` banner) — banner is PRE-action, table is POST-action. Same family of UX polish; both are skill-template surface improvements.
+  - **user_likes_emoji.md** memory — preserves ▶ ⏵ 🚪 glyphs in Path cells (don't ASCII-degrade by default)
+  - **STORY-246** (\`--auto-complete\` orchestrator) — when orchestrator drives the workflow, this table never renders because there's no decision point; tables are for human-driven flow only
+
+  ## Why this matters for alpha
+
+  The Path / Why columns surface the *reasoning behind the asymmetry* — that one path can reuse the session and another can't. First-users learning the workflow benefit from seeing *why* the multi-step nature exists, not just the steps. Dialog-style explanations baked into the skill's own output.
+
+  ## Origin
+
+  User observed 2026-05-16 that the implementer Claude's \"Next steps\" output presented options as a numbered list with arrows. Contrasted it with the tabular Path/What happens/Why format dialog Claude rendered in the same conversation: *\"when providing the prompt to the user claude should present it more in the form\"* + the example table.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T16:27:19.857342230Z
+modified_at: 2026-05-16T16:27:19.857342230Z
+req_type: Task
+tags:
+- aida-pickup
+- aida-pr
+- aida-review
+- consistency
+- first-users
+- next-steps
+- skill
+- table-format
+- ux
