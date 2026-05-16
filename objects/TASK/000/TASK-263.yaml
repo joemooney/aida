@@ -1,0 +1,56 @@
+id: 019e31ab-f1fd-7a53-bd8f-f6bcac08ff4b
+spec_id: TASK-263
+agreed_id: TASK-263
+title: 'aida session prune: add --completed flag to clean up sessions whose specs are already Completed'
+description: |-
+  \`aida session prune\` accepts \`--orphans\` (worktree gone) but no \`--completed\` (spec status = Completed). For users returning after a stretch of shipped work, the most natural cleanup mental model is *\"prune anything I've already finished\"* — i.e., sessions whose anchor spec has reached Completed status.
+
+  ## Observed (2026-05-16)
+
+  After v0.8.0 shipped + 12 specs Completed across the day, user ran:
+
+  \`\`\`
+  $ aida session prune --completed
+  error: unexpected argument '--completed' found
+  \`\`\`
+
+  The flag doesn't exist. Per the failed-flag-attempts UX signal pattern, this is exactly the kind of agent-mental-model-meets-CLI-surface mismatch worth filing.
+
+  ## Acceptance
+
+  - [ ] \`aida session prune --completed\` walks active sessions and prunes those whose anchor SPEC has status \`Completed\` (and presumably the lease's worktree is already gone, or the session is dormant)
+  - [ ] Composes with existing \`--orphans\`: \`--completed --orphans\` prunes the union (worktree-gone OR spec-completed)
+  - [ ] \`--dry-run\` lists which sessions would be pruned without acting
+  - [ ] Tests: integration test creating Completed-spec sessions and verifying \`--completed\` collects them
+  - [ ] Updates to \`aida session prune --help\` documenting the new flag
+
+  ## Related useful flags worth considering in the same TASK
+
+  - \`--older-than <duration>\` — prune sessions older than 24h, 7d, etc. (handles the \"22h dormant TASK-112\" case in the user's session-list output)
+  - \`--rejected\` — prune sessions for Rejected specs (rarer but symmetric with --completed)
+  - \`--all-terminal\` — shortcut for \`--completed --rejected\` (any terminal status)
+
+  If file scope creeps, focus on \`--completed\` first; the rest can be follow-up filings.
+
+  ## Composes with
+
+  - **BUG-112** (INITIAL TOPIC stale) — same surface (\`aida session\` family); both fixes improve returning-user UX
+  - **feedback_failed_flag_attempts_are_ux_signals.md** memory — this filing is the pattern in action
+  - **Alpha cleanup story** — first users will run \`aida session prune\` after their first multi-day rhythm; \`--completed\` should Just Work
+
+  ## Origin
+
+  User attempted \`aida session prune --completed\` 2026-05-16 (suggested by dialog Claude as a session-cleanup option, then discovered the flag doesn't exist). The error is the signal.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T16:43:32.733116866Z
+modified_at: 2026-05-16T16:43:32.733116866Z
+req_type: Task
+tags:
+- alpha-readiness
+- cleanup
+- failed-flag-signal
+- returning-user
+- session-prune
