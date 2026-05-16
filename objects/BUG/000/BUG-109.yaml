@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:03:23.325463299Z
-modified_at: 2026-05-16T01:04:16.626152321Z
+modified_at: 2026-05-16T01:04:21.802750464Z
 req_type: Bug
 tags:
 - default-on
@@ -47,6 +47,11 @@ tags:
 - empty-state
 - tui
 - ux
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e2e50-0cb8-7ed2-b923-06465219507e
+  created_at: 2026-05-16T01:04:21.802740438Z
+  created_by: joe
 comments:
 - id: 019e2e50-04f2-7791-9e71-f43d2b087b3c
   author: joe
