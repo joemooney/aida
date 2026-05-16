@@ -250,6 +250,49 @@ EOF
 )"
 ```
 
+### 7a. Auto-complete handshake — verdict file + early stop (STORY-246)
+
+`aida queue work <SPEC> --auto-complete` drives the whole implementer → CI →
+reviewer → merge → pull → build lifecycle. When the reviewer session is
+launched by that orchestrator, the environment variable
+`AIDA_REVIEW_VERDICT_FILE` is set to an absolute path — and in that mode the
+reviewer's job ends at the verdict. The orchestrator owns the merge, pull,
+and build.
+
+Check for it:
+
+```bash
+echo "${AIDA_REVIEW_VERDICT_FILE:-}"
+```
+
+- **If `AIDA_REVIEW_VERDICT_FILE` is empty / unset** → normal review.
+  Continue to step 8 (confirm + merge + hand-off) as usual.
+
+- **If `AIDA_REVIEW_VERDICT_FILE` is set** → write the verdict JSON to that
+  path and **STOP**. Do NOT merge, do NOT mark specs Completed, do NOT do the
+  hand-off — the `--auto-complete` orchestrator performs phases 4-6 itself.
+
+  Derive the verdict from the per-spec verdicts recorded in step 3:
+
+  - every spec ✅ PASS → `Approved`
+  - any ⚠️ PARTIAL (acceptance not fully met, but fixable) → `RequestChanges`
+  - any ❌ FAIL (a spec is fundamentally unmet / broken) → `Rejected`
+
+  Write the file (create its parent dir first):
+
+  ```bash
+  mkdir -p "$(dirname "$AIDA_REVIEW_VERDICT_FILE")"
+  cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
+  {"verdict": "Approved", "summary": "<one-line rationale>"}
+  EOF
+  ```
+
+  The `verdict` field must be exactly `Approved`, `RequestChanges`, or
+  `Rejected`; `summary` is a one-line rationale. The orchestrator reads this
+  file after the session exits: `Approved` → it merges; anything else → it
+  stops at phase 3 with exit code 3 and prints the recovery hint. After
+  writing the file, exit the session — you're done.
+
 ### 8. Confirm with the user before merge
 
 Show the verdict table. Ask explicitly: "All green — `gh pr merge <N> --squash`?" The user can:

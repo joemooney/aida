@@ -1,3 +1,4 @@
+mod auto_complete;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
@@ -39626,9 +39627,37 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             fresh,
             list_sessions,
             session_id,
+            auto_complete,
+            json,
             user,
         } => {
             let user_id = get_user(user);
+            // STORY-246: `--auto-complete` drives the full
+            // implementer→CI→reviewer→merge→pull→build lifecycle. It is a
+            // sibling orchestrator, not a decoration of the exec path —
+            // `handle_auto_complete` spawns each phase, waits, and never
+            // returns (it always terminates the process with a phase-keyed
+            // exit code), so the `queue work` logic below is reached only
+            // when `--auto-complete` is absent. trace:STORY-246 | ai:claude
+            if auto_complete.is_some() {
+                let mode = auto_complete.as_deref().unwrap_or("full");
+                let variant = auto_complete::AutoCompleteVariant::parse(mode)
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                let spec = id.clone().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "`aida queue work --auto-complete` requires a SPEC id \
+                         (e.g. `aida queue work TASK-247 --auto-complete`)"
+                    )
+                })?;
+                handle_auto_complete(
+                    storage,
+                    &user_id,
+                    &spec,
+                    variant,
+                    *json,
+                    permission_mode.as_deref(),
+                );
+            }
             // TASK-229: --batch NAME picks the head of the items tagged
             // `batch:NAME`. --dry-run lists the batch instead of acting.
             // The standard handle_queue_work path takes a spec id; we
@@ -41493,6 +41522,504 @@ fn handle_queue_work(
                 .cyan()
             );
             session::exec_claude_with_session(&permission_mode, name.as_deref(), &prompt, &id)
+        }
+    }
+}
+
+// ===========================================================================
+// STORY-246: `aida queue work --auto-complete` — full lifecycle orchestrator.
+// The phase-sequencing logic lives in `auto_complete.rs`; this is the real
+// `PhaseDriver` — it spawns Claude sessions, polls CI, and shells out to
+// `gh` / `aida` / `cargo`. trace:STORY-246 | ai:claude
+// ===========================================================================
+
+/// Partial view of a `SessionLease` TOML — just the fields the orchestrator
+/// needs to discover after spawning a session. trace:STORY-246 | ai:claude
+#[derive(serde::Deserialize)]
+struct LeasePeek {
+    id: String,
+    branch: String,
+}
+
+/// Entry point for `aida queue work <SPEC> --auto-complete`. Never returns:
+/// always terminates the process with an exit code (0 success, 1-6 = the
+/// 1-based index of the phase that failed). trace:STORY-246 | ai:claude
+fn handle_auto_complete(
+    storage: &Storage,
+    user_id: &str,
+    spec: &str,
+    variant: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<&str>,
+) -> ! {
+    // Preflight: `aida queue work <spec>` can only pick up a spec that's
+    // queued for the implementer. Queue it if it isn't — so a fresh
+    // `aida add` flows straight into `--auto-complete`.
+    if let Err(e) = ensure_queued_for_implementer(storage, user_id, spec) {
+        eprintln!("{} {}", "✗".red().bold(), e);
+        std::process::exit(1);
+    }
+
+    let project_root = match find_main_worktree_root() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!(
+                "{} could not resolve the project root: {}",
+                "✗".red().bold(),
+                e
+            );
+            std::process::exit(1);
+        }
+    };
+
+    let mut driver = RealPhaseDriver::new(
+        project_root,
+        spec.to_string(),
+        permission_mode.map(|s| s.to_string()),
+        json,
+    );
+    let code = auto_complete::orchestrate(&mut driver, spec, variant, json);
+    std::process::exit(code);
+}
+
+/// Queue `spec` for the implementer role if it isn't already queued for the
+/// current user — the preflight that lets `--auto-complete` accept a
+/// freshly-added spec. trace:STORY-246 | ai:claude
+fn ensure_queued_for_implementer(storage: &Storage, user_id: &str, spec: &str) -> Result<()> {
+    let store = storage.load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, spec))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
+    let already = storage
+        .queue_list(user_id, false)?
+        .iter()
+        .any(|e| e.requirement_id == req.id);
+    if already {
+        return Ok(());
+    }
+    eprintln!(
+        "  {} {} is not queued — queueing it for the implementer",
+        "ℹ".cyan(),
+        spec
+    );
+    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let status = std::process::Command::new(exe)
+        .args(["queue", "add", spec, "--for", "implementer"])
+        .status()
+        .context("failed to run `aida queue add`")?;
+    if !status.success() {
+        anyhow::bail!("`aida queue add {spec} --for implementer` failed");
+    }
+    Ok(())
+}
+
+/// Best-effort lookup of the most recent workflow run id for `branch`, used
+/// to enrich the CI-failure recovery hint. trace:STORY-246 | ai:claude
+fn latest_run_id_for_branch(branch: &str) -> Option<String> {
+    let gh = resolve_gh_binary()?;
+    let out = std::process::Command::new(gh)
+        .args([
+            "run",
+            "list",
+            "--branch",
+            branch,
+            "--limit",
+            "1",
+            "--json",
+            "databaseId",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    first_run_id_from_gh_json(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Read + parse a `.aida/review-verdicts/PR-N.json` verdict file written by
+/// the `/aida-review` skill. trace:STORY-246 | ai:claude
+fn read_verdict_file(
+    path: &std::path::Path,
+) -> Result<auto_complete::Verdict, auto_complete::PhaseFailure> {
+    let body = std::fs::read_to_string(path).map_err(|_| {
+        auto_complete::PhaseFailure::new(
+            "the reviewer session produced no verdict file — the review did not complete",
+        )
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+        auto_complete::PhaseFailure::new(format!("the verdict file is not valid JSON: {e}"))
+    })?;
+    let raw = value
+        .get("verdict")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            auto_complete::PhaseFailure::new("the verdict file has no `verdict` field")
+        })?;
+    auto_complete::Verdict::parse(raw).ok_or_else(|| {
+        auto_complete::PhaseFailure::new(format!(
+            "unrecognised verdict `{raw}` in the verdict file"
+        ))
+    })
+}
+
+/// The real [`auto_complete::PhaseDriver`]. Holds the project root + the
+/// state discovered as phases run (branch, lease id, PR number).
+/// trace:STORY-246 | ai:claude
+struct RealPhaseDriver {
+    project_root: std::path::PathBuf,
+    spec: String,
+    permission_mode: Option<String>,
+    json: bool,
+    branch: Option<String>,
+    implementer_lease: Option<String>,
+    pr_number: Option<u32>,
+    ci_run_id: Option<String>,
+}
+
+impl RealPhaseDriver {
+    fn new(
+        project_root: std::path::PathBuf,
+        spec: String,
+        permission_mode: Option<String>,
+        json: bool,
+    ) -> Self {
+        Self {
+            project_root,
+            spec,
+            permission_mode,
+            json,
+            branch: None,
+            implementer_lease: None,
+            pr_number: None,
+            ci_run_id: None,
+        }
+    }
+
+    fn sessions_dir(&self) -> std::path::PathBuf {
+        self.project_root.join(".aida").join("sessions")
+    }
+
+    fn aida_exe(&self) -> std::path::PathBuf {
+        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"))
+    }
+
+    /// Filenames of the current lease files (`<id>.toml`, excluding the
+    /// `<id>.activity.toml` companion).
+    fn lease_snapshot(&self) -> std::collections::HashSet<String> {
+        let mut set = std::collections::HashSet::new();
+        if let Ok(rd) = std::fs::read_dir(self.sessions_dir()) {
+            for entry in rd.flatten() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.ends_with(".toml") && !name.ends_with(".activity.toml") {
+                        set.insert(name.to_string());
+                    }
+                }
+            }
+        }
+        set
+    }
+
+    /// Find the single lease file created since `before`; return its
+    /// `(id, branch)`. trace:STORY-246 | ai:claude
+    fn discover_new_lease(
+        &self,
+        before: &std::collections::HashSet<String>,
+    ) -> Result<(String, String), auto_complete::PhaseFailure> {
+        let after = self.lease_snapshot();
+        let mut fresh: Vec<String> = after.difference(before).cloned().collect();
+        fresh.sort();
+        match fresh.len() {
+            1 => {
+                let path = self.sessions_dir().join(&fresh[0]);
+                let body = std::fs::read_to_string(&path).map_err(|e| {
+                    auto_complete::PhaseFailure::new(format!(
+                        "could not read the new session lease {}: {e}",
+                        path.display()
+                    ))
+                })?;
+                let peek: LeasePeek = toml::from_str(&body).map_err(|e| {
+                    auto_complete::PhaseFailure::new(format!(
+                        "could not parse the new session lease: {e}"
+                    ))
+                })?;
+                Ok((peek.id, peek.branch))
+            }
+            0 => Err(auto_complete::PhaseFailure::new(
+                "no new session lease appeared — `aida queue work` did not start a session",
+            )),
+            _ => Err(auto_complete::PhaseFailure::new(
+                "multiple new session leases appeared — cannot disambiguate the orchestrated session",
+            )),
+        }
+    }
+}
+
+impl auto_complete::PhaseDriver for RealPhaseDriver {
+    fn run_implementer(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        let before = self.lease_snapshot();
+        let session_uuid = uuid::Uuid::now_v7().to_string();
+
+        let mut cmd = std::process::Command::new(self.aida_exe());
+        cmd.current_dir(&self.project_root)
+            .args(["queue", "work", &self.spec, "--session-id", &session_uuid])
+            .env("AIDA_AUTO_COMPLETE", "1");
+        if let Some(pm) = &self.permission_mode {
+            cmd.args(["--permission-mode", pm]);
+        }
+        let status = cmd.status().map_err(|e| {
+            auto_complete::PhaseFailure::new(format!(
+                "could not launch the implementer session: {e}"
+            ))
+        })?;
+        if !status.success() {
+            return Err(auto_complete::PhaseFailure::new(format!(
+                "the implementer session exited {} — it was aborted or errored",
+                status
+                    .code()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "with a signal".to_string())
+            )));
+        }
+
+        // Discover the session `queue work` created.
+        let (lease_id, branch) = self.discover_new_lease(&before)?;
+        self.implementer_lease = Some(lease_id);
+        self.branch = Some(branch.clone());
+
+        // The pipeline has nothing to review or merge without a PR — verify
+        // the implementer opened one before exiting.
+        match detect_open_pr_for_branch(&self.project_root, &branch) {
+            PrLookup::Found(pr) => {
+                self.pr_number = Some(pr.number as u32);
+                Ok(())
+            }
+            PrLookup::NoOpenPr => Err(auto_complete::PhaseFailure::new(
+                "the implementer session exited cleanly but opened no PR — \
+                 run `/aida-pr` inside the session before exiting",
+            )),
+            PrLookup::GhMissing => Err(auto_complete::PhaseFailure::new(
+                "`gh` is not on PATH — auto-complete needs it to track the PR",
+            )),
+            PrLookup::GhFailed(why) => Err(auto_complete::PhaseFailure::new(format!(
+                "could not look up the PR for `{branch}`: {why}"
+            ))),
+        }
+    }
+
+    fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        let branch = self.branch.clone().ok_or_else(|| {
+            auto_complete::PhaseFailure::new("internal: branch not resolved before the CI phase")
+        })?;
+
+        // Probe, then block until CI is terminal. `PrNoChecks` is treated as
+        // "proceed" — matches `aida session end`'s CI semantics.
+        let mut probe = probe_ci_state_for_branch(&branch);
+        if matches!(probe, CiProbe::InProgress { .. }) {
+            eprintln!(
+                "  {} waiting for CI on `{}` to finish…",
+                "◐".yellow(),
+                branch
+            );
+            probe = if self.json {
+                wait_for_ci_terminal(&branch)
+            } else {
+                watch_ci_terminal(&branch)
+            };
+        }
+
+        match probe {
+            CiProbe::Green { pr_number } => {
+                self.pr_number = Some(pr_number);
+            }
+            CiProbe::Red {
+                pr_number,
+                failed_summary,
+            } => {
+                self.pr_number = Some(pr_number);
+                self.ci_run_id = latest_run_id_for_branch(&branch);
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "CI is red on PR-{pr_number}: {failed_summary}"
+                )));
+            }
+            CiProbe::PrNoChecks { pr_number } => {
+                self.pr_number = Some(pr_number);
+                eprintln!(
+                    "  {} PR-{pr_number} has no CI checks — nothing to gate on.",
+                    "ⓘ".cyan()
+                );
+            }
+            CiProbe::InProgress { pr_number } => {
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "CI on PR-{pr_number} did not reach a terminal state in time"
+                )));
+            }
+            CiProbe::NoSignal(reason) => {
+                // We confirmed a PR in phase 1, so this is an environment
+                // issue (gh missing / lookup failed), not "no PR". Can't
+                // gate on CI — proceed with a warning.
+                eprintln!(
+                    "  {} CI state unavailable ({reason}) — proceeding without a CI gate.",
+                    "ⓘ".cyan()
+                );
+            }
+        }
+
+        // CI cleared — end the implementer session. This removes the
+        // worktree and auto-queues the `Review PR-N` item for the reviewer.
+        let lease = self.implementer_lease.clone().ok_or_else(|| {
+            auto_complete::PhaseFailure::new("internal: implementer lease not recorded")
+        })?;
+        let status = std::process::Command::new(self.aida_exe())
+            .current_dir(&self.project_root)
+            .args(["session", "end", &lease, "--yes", "--skip-ci"])
+            .status()
+            .map_err(|e| {
+                auto_complete::PhaseFailure::new(format!("could not run `aida session end`: {e}"))
+            })?;
+        if !status.success() {
+            return Err(auto_complete::PhaseFailure::new(
+                "could not end the implementer session — it may have uncommitted \
+                 changes; commit or discard them, then re-run",
+            ));
+        }
+        Ok(())
+    }
+
+    fn run_reviewer(&mut self) -> Result<auto_complete::Verdict, auto_complete::PhaseFailure> {
+        let pr = self.pr_number.ok_or_else(|| {
+            auto_complete::PhaseFailure::new(
+                "internal: PR number not resolved before the review phase",
+            )
+        })?;
+
+        // Verdict handshake: the `/aida-review` skill writes the verdict
+        // JSON to AIDA_REVIEW_VERDICT_FILE and stops before merge.
+        let verdict_dir = self.project_root.join(".aida").join("review-verdicts");
+        std::fs::create_dir_all(&verdict_dir).map_err(|e| {
+            auto_complete::PhaseFailure::new(format!(
+                "could not create {}: {e}",
+                verdict_dir.display()
+            ))
+        })?;
+        let verdict_path = verdict_dir.join(format!("PR-{pr}.json"));
+        let _ = std::fs::remove_file(&verdict_path); // clear any stale verdict
+
+        let before = self.lease_snapshot();
+        let session_uuid = uuid::Uuid::now_v7().to_string();
+        let scope = format!("PR-{pr}");
+        let mut cmd = std::process::Command::new(self.aida_exe());
+        cmd.current_dir(&self.project_root)
+            .args([
+                "queue",
+                "work",
+                &scope,
+                "--session-id",
+                &session_uuid,
+                "--no-pull",
+            ])
+            .env("AIDA_AUTO_COMPLETE", "1")
+            .env("AIDA_REVIEW_VERDICT_FILE", &verdict_path);
+        if let Some(pm) = &self.permission_mode {
+            cmd.args(["--permission-mode", pm]);
+        }
+        let status = cmd.status().map_err(|e| {
+            auto_complete::PhaseFailure::new(format!("could not launch the reviewer session: {e}"))
+        })?;
+        if !status.success() {
+            return Err(auto_complete::PhaseFailure::new(format!(
+                "the reviewer session exited {}",
+                status
+                    .code()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "with a signal".to_string())
+            )));
+        }
+
+        let verdict = read_verdict_file(&verdict_path)?;
+
+        // End the reviewer session (best-effort — the verdict is already in
+        // hand, so a stuck reviewer worktree must not block the merge).
+        if let Ok((reviewer_lease, _)) = self.discover_new_lease(&before) {
+            let _ = std::process::Command::new(self.aida_exe())
+                .current_dir(&self.project_root)
+                .args(["session", "end", &reviewer_lease, "--yes", "--skip-ci"])
+                .status();
+        }
+
+        Ok(verdict)
+    }
+
+    fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        let pr = self.pr_number.ok_or_else(|| {
+            auto_complete::PhaseFailure::new(
+                "internal: PR number not resolved before the merge phase",
+            )
+        })?;
+        let gh = resolve_gh_binary().ok_or_else(|| {
+            auto_complete::PhaseFailure::new("`gh` is not on PATH — cannot merge the PR")
+        })?;
+        let status = std::process::Command::new(gh)
+            .current_dir(&self.project_root)
+            .args([
+                "pr",
+                "merge",
+                &pr.to_string(),
+                "--squash",
+                "--delete-branch",
+            ])
+            .status()
+            .map_err(|e| {
+                auto_complete::PhaseFailure::new(format!("could not run `gh pr merge`: {e}"))
+            })?;
+        if !status.success() {
+            return Err(auto_complete::PhaseFailure::new(format!(
+                "`gh pr merge {pr}` failed"
+            )));
+        }
+        Ok(())
+    }
+
+    fn pull(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        let status = std::process::Command::new(self.aida_exe())
+            .current_dir(&self.project_root)
+            .arg("pull")
+            .status()
+            .map_err(|e| {
+                auto_complete::PhaseFailure::new(format!("could not run `aida pull`: {e}"))
+            })?;
+        if !status.success() {
+            return Err(auto_complete::PhaseFailure::new(
+                "`aida pull` failed — the branch may have diverged",
+            ));
+        }
+        Ok(())
+    }
+
+    fn build(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        let status = std::process::Command::new("cargo")
+            .current_dir(&self.project_root)
+            .args(["build", "--release"])
+            .status()
+            .map_err(|e| {
+                auto_complete::PhaseFailure::new(format!("could not run `cargo build`: {e}"))
+            })?;
+        if !status.success() {
+            return Err(auto_complete::PhaseFailure::new(
+                "`cargo build --release` failed",
+            ));
+        }
+        Ok(())
+    }
+
+    fn hint_context(&self) -> auto_complete::HintContext {
+        auto_complete::HintContext {
+            spec: self.spec.clone(),
+            branch: self.branch.clone(),
+            pr_number: self.pr_number,
+            implementer_session: self.implementer_lease.clone(),
+            ci_run_id: self.ci_run_id.clone(),
         }
     }
 }
