@@ -379,12 +379,11 @@ aida queue done <review-story-id> --yes
 
 Never silently leave a review story in In Progress when the PR was closed without merge — the next session would see it as still-active work. (BUG-34)
 
-### 11. Hand off + Next steps — trace:TASK-87 trace:TASK-110
+### 11. Hand off + Next steps — trace:TASK-87 trace:TASK-110 trace:TASK-260
 
-After the merge lands, surface a structured `Next steps (recommended order):`
-block so the post-merge moment is self-guiding instead of relying on
-improvised "want to cut a release?" prompts. Don't auto-execute — the user
-picks.
+After the merge lands, surface a structured next-steps table so the
+post-merge moment is self-guiding instead of relying on improvised "want to
+cut a release?" prompts. Don't auto-execute — the user picks.
 
 **Ordering rationale (TASK-110):** end-reviewer comes FIRST — the merge has
 landed, the review-story scope is closed, and the lease on it is now stale.
@@ -410,37 +409,46 @@ aida queue list --role implementer 2>/dev/null | head -5             # is there 
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
 `/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
 `🚪` = stop/exit. Recommendations must be CONCRETE — name the next cluster,
-the release script, the session ID. In this block the three rows are
-sequential steps to perform in order (▶ first, then ⏵, then 🚪), not
-alternatives — "recommended order" is literal.
+the release script, the session ID.
 
-**Templates:**
+**Render multi-option prompts as a table.** When presenting 2+ paths
+forward, render as a markdown table with columns Path / What happens / Why.
+Use ▶ ⏵ 🚪 glyphs in the Path cell for the primary / alternate / exit
+semantics. Emit it as a real GFM markdown table — *not* wrapped in a code
+fence — so Claude Code's terminal draws the box-rule grid instead of raw
+pipes. The **Why** column is load-bearing: it explains the role / lease /
+worktree implication of each path, never just restates the action. The
+rows are listed in recommended order — top-to-bottom is the sequence to
+follow, with 🚪 the stop alternative. Full convention:
+`docs/skills-convention.md`.
+
+**Templates.** Each shows a prose lead-in line followed by the next-steps
+table — print the lead-in as normal text, then the table as a real GFM
+markdown table (no surrounding code fence):
 
 *Standard "next batch" path:*
 
-```
 ✓ PR-<N> merged, <M> specs marked Completed. Review story <STORY-X> closed.
 
-Next steps (recommended order):
-  1. ▶ End reviewer session → Ctrl+D + `aida session end <session-id>` from parent shell (releases the PR-<N>/STORY-<X> lease — merge is done, lease is stale)
-  2. ⏵ Sync + decide next batch (from parent shell) → `aida pull && cargo build --release && aida queue work <EPIC-M>`
-  3. 🚪 Stop here, pick up later → just end the session; the merge is done, next batch can wait
-```
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ End reviewer session | Ctrl+D, then `aida session end <session-id>` from the parent shell | The merge landed — the PR-<N>/STORY-<X> scope is closed and the lease is stale; release it before anything else claims the scope |
+| ⏵ Sync + decide next batch | From the parent shell: `aida pull && cargo build --release && aida queue work <EPIC-M>` | New scope → new lease + worktree; `aida pull` fast-forwards local main past the merge first |
+| 🚪 Stop here, pick up later | Just end the session | The merge is done — no lease held, the next batch can wait |
 
 *Release-ready path (>5 commits since last tag, or PR carried a major feature):*
 
-```
 ✓ PR-<N> merged. ⚠ <K> commits since v<X.Y.Z> — release-ready.
 
-Next steps (recommended order):
-  1. ▶ End reviewer session → Ctrl+D + `aida session end <session-id>` from parent shell
-  2. ▶ Sync local main (from parent shell, after end) → `aida pull` (fast-forwards local main to the merge commit AND auto-bumps any Done specs the merge referenced — without this, `make release-patch` would tag the wrong HEAD)
-  3. ⏵ Verify auto-bump fired → `aida show <one-of-the-merged-specs>` (expect Completed; if still Done, run `aida db reconcile-status` once it ships per TASK-226, or `aida edit <id> --status completed` as a manual recovery)
-  4. ⏵ Cut release (from parent shell) → `make release-patch YES=1` (or `release-minor` for new features)
-  5. 🚪 Stop here, cut release later → the merge is done, the tag can wait until you're ready
-```
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ End reviewer session | Ctrl+D, then `aida session end <session-id>` from the parent shell | The merge landed — release the stale PR-<N>/STORY-<X> lease before cutting a release |
+| ▶ Sync local main | From the parent shell, after the end: `aida pull` | Fast-forwards local main to the merge commit AND auto-bumps the Done specs it referenced — skip it and `make release-patch` tags the pre-merge HEAD |
+| ⏵ Verify auto-bump fired | `aida show <one-of-the-merged-specs>` | Expect Completed; if still Done, `aida db reconcile-status` (TASK-226) or `aida edit <id> --status completed` recovers it |
+| ⏵ Cut release | From the parent shell: `make release-patch YES=1` (or `release-minor` for new features) | Tags + pushes; the release workflow then builds and publishes the binary tarballs |
+| 🚪 Stop here, cut release later | Just end the session | The merge is done — the tag can wait until you're ready |
 
-Don't skip step 2 — local main is behind origin/main immediately after the merge, and `make release-patch` would tag the pre-merge HEAD. trace:BUG-101 | ai:claude
+Don't skip the "Sync local main" row — local main is behind origin/main immediately after the merge, and `make release-patch` would tag the pre-merge HEAD. trace:BUG-101 | ai:claude
 
 Print exactly one block — don't dump both templates.
 
