@@ -1,0 +1,48 @@
+id: 019e3235-1208-72f3-b776-0b199332df96
+spec_id: TASK-280
+agreed_id: TASK-280
+title: 'aida queue move: support --to <position> and --to-front flags (matching mental model from edit/list)'
+description: |-
+  \`aida queue move\` currently accepts \`--before <id>\` and \`--after <id>\` for relative positioning, but not absolute positioning. Natural mental models that fail today:
+
+  \`\`\`
+  aida queue move TASK-N --to-front
+    → unexpected argument
+
+  aida queue move TASK-N --to 1
+    → unexpected argument
+  \`\`\`
+
+  Both are first-instinct from users wanting to elevate an item to head of queue, especially when the item just became urgent (e.g., \"this BUG just got reported, move it to slot 1\").
+
+  ## Acceptance
+
+  - [ ] \`aida queue move <ID> --to-front\` moves the item to slot 1 (equivalent to \`--before <current-slot-1-id>\`)
+  - [ ] \`aida queue move <ID> --to <N>\` moves the item to absolute position N (1-indexed)
+  - [ ] \`--to-back\` symmetric form moves to last slot
+  - [ ] Existing \`--before\` and \`--after\` continue to work (no breaking change)
+  - [ ] Error case: \`--to 99\` when queue has only 5 items → silently moves to end (or error with hint)
+  - [ ] Test: each flag form moves the item to the expected position
+
+  ## Composes with
+
+  - **TASK-270** (\`aida queue work batch:NAME\` positional) — same family: \"accept the natural mental-model form, or surface a better error\"
+  - **failed-flag-attempts-are-ux-signals memory** — this filing is the pattern in action
+  - **batch:workflow-hint-polish** — tagged accordingly
+
+  ## Origin
+
+  Dialog session 2026-05-15 to 2026-05-16: I attempted \`aida queue move --to-front\` and \`--to <N>\` several times to reorder the queue; both errored. Eventually fell back to \`--before <head-id>\`. Captured during \`/aida-capture\` sweep.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T19:13:19.368962045Z
+modified_at: 2026-05-16T19:13:19.368962045Z
+req_type: Task
+tags:
+- batch:workflow-hint-polish
+- failed-flag-signal
+- first-users
+- positional-arg
+- queue-move
