@@ -1,0 +1,101 @@
+id: 019e2e32-f673-73b2-87c6-aa7f962a832b
+spec_id: STORY-241
+agreed_id: STORY-241
+title: 'TUI workflow loop: mission control + role switch + return-from-session + merge action'
+description: |-
+  The TUI's empty state needs to be **mission control** — a dashboard showing AIDA state and driving the implementer→reviewer→merge ping-pong loop with one-keystroke transitions. This is the alpha-gating STORY for the TUI side: without it, the TUI is just \"a black screen with keybindings\" rather than the workflow surface users came for.
+
+  BUG-109 fixes the immediate bounce trap (welcome panel with keybindings). This STORY makes the TUI *actually drive the workflow* — which is the user's stated mental model:
+
+  > *\"I imagine that there is a task I select to have worked, claude launches, it completes task in claude and probably opens a PR, when I exit back to the tui, if I go under the review role, I see in their queue a review task, I select that and it goes into claude and performs the review and if all is well it is available for merge.\"*
+
+  ## The MVP loop
+
+  \`\`\`
+  TUI mission control (role:implementer, queue:3)
+    → [Enter] on queue head → Claude PTY tab launches → implements → /aida-pr → session ends
+  TUI mission control refreshes (role:implementer, queue:2, PRs awaiting review: PR-43)
+    → [r] switch role → role:reviewer
+  TUI mission control (role:reviewer, queue:1: PR-43)
+    → [Enter] → Claude PTY tab → /aida-review → approve
+  TUI mission control (PR-43 approved, awaiting merge)
+    → [m] → gh pr merge 43 --squash --delete-branch → aida pull
+  TUI mission control (everything Completed)
+  \`\`\`
+
+  ## Acceptance — four sub-features
+
+  ### (1) Mission control empty state
+
+  - [ ] When TUI launches with no hosted session, main area renders a dashboard panel (replaces the BUG-109 welcome banner once both ship):
+    - **Queue panel**: top 3-5 items in the current role's queue, head highlighted with [Enter] hint
+    - **Active sessions panel**: any live or dormant leases (id, scope, role, state)
+    - **Open PRs panel**: PRs awaiting review (for reviewer role) or recent open PRs (for implementer role)
+    - **Suggested actions** at bottom: top 3 keystroke hints based on state
+  - [ ] Refresh model: poll \`.aida/cache.db\` stale-detection on a 2s tick OR on explicit \`Ctrl-A G\` refresh
+  - [ ] When a session is hosted (Mode B), the dashboard moves to the \`Ctrl-A O\` overlay (STORY-133 already shipped this; just route the same data structure)
+
+  ### (2) Role switching
+
+  - [ ] \`Ctrl-A R\` rotates through known roles (implementer → reviewer → dialog → implementer cycle)
+  - [ ] Role change updates: status strip's role indicator, mission control's queue panel (re-fetches \`aida queue list --role <new>\`), suggested actions
+  - [ ] No claude session affected — switching role is a TUI-only view change (matches the CLI: \`aida role enter <name>\` is a shell state change, not a process change)
+  - [ ] Single-letter \`r\` in command mode is the keybinding; \`Ctrl-A R\` (uppercase) sets explicitly via a small picker if multiple roles known
+
+  ### (3) Return-from-session
+
+  - [ ] When a hosted Claude session exits (user types \`exit\`, the child PTY returns, or \`/aida-pickup\` ends the conversation), TUI returns to mission control cleanly — no hung tab, no \"session ended\" modal limbo
+  - [ ] On session exit, the mission control auto-refreshes so the user sees the now-empty queue + new reviewer-queue item without manually pressing \`G\`
+  - [ ] If the session ended via \`aida session end\` from inside the Claude session, the lease is gone and the dashboard reflects that immediately
+
+  ### (4) One-keystroke merge
+
+  - [ ] \`Ctrl-A M\` from the dashboard when a PR is highlighted and in MERGEABLE state runs \`gh pr merge <N> --squash --delete-branch\` then \`aida pull\` automatically
+  - [ ] Confirmation prompt: shows PR title + the N specs that will auto-bump to Completed, asks [y/N]
+  - [ ] No \"merge role\" — merge is an action from the reviewer's mission control after approval, or from any role's dashboard for an approved PR
+
+  ## Out of scope
+
+  - **Multi-tab workflow** — STORY-134 shipped tabs; this STORY doesn't add tab-management UI in the dashboard, just uses existing tab primitives
+  - **/goal autonomous panel** — STORY-136 already shipped; if the autonomous drain is running, mission control just shows the queue depth shrinking, no new UI
+  - **Notifications** — surfacing PR merge events / CI green events as toasts is a follow-up STORY (\"TUI notifications\")
+  - **Cross-role queue display** — only shows current role's queue; \"see all queues at once\" is post-alpha
+
+  ## Design checkpoints
+
+  When implementing, pause and surface these decisions to the user:
+
+  1. **Dashboard refresh model** — 2s polling vs explicit refresh key vs cache-stale-detection hook. The cleanest is to subscribe to the cache.db's stale-detection trigger, but if that's too tangled, 2s polling is fine for alpha.
+  2. **Role rotation UX** — fixed cycle (impl→rev→dialog→impl) vs picker overlay vs single-letter codes (\`i\`, \`r\`, \`d\`)? Cycle is simplest.
+  3. **Merge confirmation UX** — inline prompt vs modal overlay vs auto-merge-with-undo. Confirmation prompt is least surprising.
+  4. **What happens when the queue is empty in all roles** — celebrate state? Onboarding hint? Just empty panels?
+
+  ## Composes with
+
+  - **BUG-109** (empty-state welcome) — this STORY supersedes the welcome panel with a richer dashboard. Order: BUG-109 ships first (minimal welcome), this STORY replaces with dashboard.
+  - **STORY-133** (status overlay) — reuses the overlay's data structure for the main-area render
+  - **STORY-134** (multi-tab) — tabs are the hosting mechanism for sessions launched from the dashboard
+  - **STORY-135** (crash recovery) — mission control surfaces orphaned-session re-attach prompts
+  - **TASK-249** (\`/aida-drain-queue\` skill) — mission control gets a \`Ctrl-A D\` autonomous-drain shortcut that dispatches to this skill
+
+  ## Why alpha-gating
+
+  The user's stated alpha wow is the CLI workflow (\`aida init → add → /aida-pickup → ship PR\`). The TUI is \"nice to have in preliminary form, assuming we can do something with it.\" This STORY is what makes the TUI fall into the \"can do something with it\" bucket. Without it, the TUI is a black screen with keybindings — interesting but not useful. With it, the TUI surfaces AIDA's full workflow as a coherent visual loop.
+
+  ## Origin
+
+  User articulated the workflow loop 2026-05-15 after BUG-109's implementer paused on welcome-panel design decisions. They wanted the broader mental model captured before iterating on the minimal fix.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T00:32:32.371630658Z
+modified_at: 2026-05-16T00:32:32.371630658Z
+req_type: Story
+tags:
+- alpha-gating
+- first-vertical-alpha
+- mission-control
+- role-switch
+- tui
+- workflow-loop
