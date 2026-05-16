@@ -62,12 +62,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:27:19.857342230Z
-modified_at: 2026-05-16T16:27:19.857342230Z
+modified_at: 2026-05-16T17:32:13.904306542Z
 req_type: Task
 tags:
 - aida-pickup
 - aida-pr
 - aida-review
+- batch:workflow-hint-polish
 - consistency
 - first-users
 - next-steps
