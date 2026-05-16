@@ -1,0 +1,16 @@
+id: 019e2f42-3f7a-76b1-a77f-32b12b4e619f
+spec_id: TASK-258
+agreed_id: TASK-258
+title: aida-review skill step 10 documents nonexistent 'aida queue remove --yes' flag
+description: 'The aida-review skill (.claude/skills/aida-review.md, step 10 and the pre-flight in step 0) instructs ''aida queue remove <id> --yes''. The command takes no --yes flag (errors with ''For more information, try --help'') and does not prompt for confirmation anyway. Fix: drop ''--yes'' from the two occurrences in the skill template (aida-core/templates/skills/aida-review.md). Hit during the PR-45 review 2026-05-15. trace:STORY-91 | ai:claude'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T05:28:51.322323109Z
+modified_at: 2026-05-16T05:28:51.322323109Z
+req_type: Task
+tags:
+- aida-review
+- cli-docs
+- skill-drift
