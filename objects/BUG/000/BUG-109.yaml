@@ -35,11 +35,11 @@ description: |-
 
   User reported 2026-05-15 immediately after PR-43 merged and TUI flipped default-on. Screenshot in prior message.
 status: Approved
-priority: High
+priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:03:23.325463299Z
-modified_at: 2026-05-16T00:03:23.325463299Z
+modified_at: 2026-05-16T00:12:08.166624727Z
 req_type: Bug
 tags:
 - default-on
