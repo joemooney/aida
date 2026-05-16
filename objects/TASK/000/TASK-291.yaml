@@ -63,12 +63,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16 after PR-57's reviewer rendered its verdict: *\"I have not exited the session yet, should I do that?\"* — the handoff message lacked an explicit \"Press Ctrl+D to exit\" instruction; the user had to ask.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:22:57.960825348Z
-modified_at: 2026-05-16T23:22:57.960825348Z
+modified_at: 2026-05-16T23:26:42.233643705Z
 req_type: Task
 tags:
 - aida-review
