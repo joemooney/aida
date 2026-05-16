@@ -1,0 +1,70 @@
+id: 019e32f9-3d90-7ae3-95a8-98633f511f5e
+spec_id: STORY-260
+agreed_id: STORY-260
+title: Maintained competitive-analysis doc — docs/competitive-analysis/ with cadence + initial 2026-05-16 snapshot
+description: |-
+  The agent-collaboration marketplace moves fast. Today's analysis (claude-flow, gastown, Claude Squad, vibe-kanban, agent-orchestrator, swarm-protocol, wit, skillfold, etc.) is a snapshot — without a maintained living doc, it goes stale within months.
+
+  This STORY establishes \`docs/competitive-analysis/\` as a maintained surface: initial content from today's analysis, a refresh cadence, and a discipline for when to update.
+
+  ## Structure
+
+  \`\`\`
+  docs/competitive-analysis/
+    README.md                              # purpose, cadence, contribution guide
+    positioning.md                         # AIDA's defensible niche (referenced from README.md)
+    2026-05-16-market-snapshot.md          # dated record of today's analysis
+    tui-prior-art.md                       # focused TUI study (TASK-NEW)
+    category-summaries/                    # per-category deep-dives
+      swarm-orchestrators.md
+      parallel-session-managers.md
+      coordination-protocols.md
+      agent-libraries.md
+    signals-to-watch.md                    # triggers for refresh — new releases, Anthropic announcements
+  \`\`\`
+
+  ## Acceptance
+
+  ### Initial content (this STORY's scope)
+
+  - [ ] \`docs/competitive-analysis/2026-05-16-market-snapshot.md\` — verbatim capture of the dialog-session analysis from 2026-05-16 (claude-flow / gastown / Claude Squad / agent-orchestrator / swarm-protocol / wit / skillfold / wshobson/agents / barkain breakdown + AIDA's categorical positioning)
+  - [ ] \`docs/competitive-analysis/positioning.md\` — AIDA's defensible niche extracted as a standalone statement: spec graph backbone, identity stability, trace-comment enforcement, discipline-first, lifecycle roles, Trojan-horse surface, git-native, single-user-first
+  - [ ] \`docs/competitive-analysis/README.md\` — describes the doc's purpose, refresh cadence, and contribution guide
+
+  ### Cadence + maintenance discipline
+
+  - [ ] Refresh trigger documented: re-survey marketplace **quarterly** OR on any signal (Anthropic Agent Teams ships, new heavyweight reaches 10k stars, skillfold-class cross-platform tool emerges)
+  - [ ] Each refresh writes a new dated snapshot (\`YYYY-MM-DD-market-snapshot.md\`); old snapshots retained as historical record
+  - [ ] \`signals-to-watch.md\` lists named projects/categories to monitor; updated as the landscape evolves
+  - [ ] CLAUDE.md / OVERVIEW.md reference \`docs/competitive-analysis/\` as the canonical positioning surface
+
+  ### Composes with
+
+  - **STORY-255** (scaffolding pack) — generic discipline about \"maintain competitive analysis\" propagates to AIDA-using projects via the pack
+  - **TASK-276** (surface positioning docs in README) — README links to \`docs/competitive-analysis/positioning.md\`
+  - **TASK-NEW** (TUI prior-art study) — feeds \`docs/competitive-analysis/tui-prior-art.md\`
+  - **SPIKE-NEW** (skillfold compatibility) — feeds the category summary for coordination protocols
+
+  ## Why this matters for alpha
+
+  First-users hitting AIDA's README ask \"why AIDA instead of claude-flow / Claude Squad / etc.?\" Without a positioning doc + competitive analysis, they bounce or assume AIDA is just another swarm. The positioning extracted from today's analysis (Trojan-horse, structured graph, identity stability, discipline-first) is the answer — but it needs to LIVE in a doc, not in a transient dialog session.
+
+  ## Origin
+
+  User asked 2026-05-16 after the dialog session produced a comparative market analysis: *\"I also want an on-going market analysis... AIDA's defensible niche may need to go in a readme. All of this may need to go in some document that we maintain.\"*
+
+  The analysis itself was substantive enough to warrant durable capture; the maintenance discipline is what keeps it alive over time.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T22:47:35.568291884Z
+modified_at: 2026-05-16T22:47:35.568291884Z
+req_type: Story
+tags:
+- alpha-readiness
+- competitive-analysis
+- documentation
+- living-doc
+- positioning
+- strategic
