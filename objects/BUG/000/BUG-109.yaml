@@ -1,0 +1,49 @@
+id: 019e2e18-463d-7052-b1c8-db384ac25226
+spec_id: BUG-109
+agreed_id: BUG-109
+title: 'TUI empty state is undiscoverable: black screen, no help text, no key hints — users kill the process'
+description: |-
+  \`aida tui\` (no scope) opens a black screen with \"(no sessions)\" left + \"^a = command\" right. No further hints, no help text, no way to discover that Ctrl-A is the prefix key or what commands exist. Users reflexively press normal keys (q, Ctrl-C, arrow keys) — none of which do anything — and end up killing the process from another terminal.
+
+  This is critical now because STORY-137 flipped \`default = [\"tui\"]\`, so v0.8.0 will ship the TUI on by default. New users running \`aida tui\` for the first time will hit this immediately.
+
+  ## Observed (2026-05-15)
+
+  User invoked \`aida tui\` on the freshly-built post-PR-43 binary (sha 5c83302f). Screenshot shows a fully black window with the minimal status strip. User reported: *\"a blank window with (no sessions) footer appears. No key strokes work. I have to kill the process.\"*
+
+  The TUI is technically not broken — Ctrl-A then Q quits, Ctrl-A then N opens the new-session picker. But these are invisible to first-time users.
+
+  ## Acceptance
+
+  - [ ] Empty-state TUI renders a centered welcome panel with the top 4-6 keybindings:
+    - \`Ctrl-A N\` — new session
+    - \`Ctrl-A O\` — status overlay
+    - \`Ctrl-A Q\` — quit
+    - \`Ctrl-A D\` — detach
+    - \`Ctrl-A ?\` — full keybinding reference
+  - [ ] \`?\` (or \`Ctrl-A ?\`) overlay shows the complete keybinding table
+  - [ ] Status strip's right side rotates between hints: \`^a Q quit\`, \`^a N new\`, \`^a O overlay\`
+  - [ ] First-launch banner offers to host a session via \`aida tui SCOPE\` syntax: *\"No sessions yet. Press Ctrl-A N to pick one, or relaunch with \`aida tui EPIC-26\`.\"*
+
+  ## Related
+
+  - STORY-137 (default-flip) — landing this without empty-state UX is the root cause; **propose temporary revert of \`default = [\"tui\"]\`** until this BUG is fixed
+  - TASK-250 (workflow state-aware display) — same family
+  - STORY-127 (workflow state-aware guidance) — strategic parent
+
+  ## Origin
+
+  User reported 2026-05-15 immediately after PR-43 merged and TUI flipped default-on. Screenshot in prior message.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T00:03:23.325463299Z
+modified_at: 2026-05-16T00:03:23.325463299Z
+req_type: Bug
+tags:
+- default-on
+- discoverability
+- empty-state
+- tui
+- ux
