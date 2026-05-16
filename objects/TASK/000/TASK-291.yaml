@@ -1,0 +1,79 @@
+id: 019e3319-a028-73e0-b21f-b1cc30df905e
+spec_id: TASK-291
+agreed_id: TASK-291
+title: '/aida-review: surface ''Press Ctrl+D to exit and let --auto-complete proceed'' loudly at end of orchestrator-driven review'
+description: |-
+  When \`/aida-review\` runs under \`--auto-complete\` (\`AIDA_REVIEW_VERDICT_FILE\` set), the skill writes the verdict file and prints \"Session is done.\" But the user has to INFER that they should now Ctrl+D to let the orchestrator proceed. The orchestrator can't advance until the reviewer Claude exits, but nothing tells the user that.
+
+  ## Observed (2026-05-16)
+
+  After PR-57 review, reviewer Claude printed:
+
+  \`\`\`
+  Handoff: Per Step 7a I did not merge, mark specs Completed, or run the hand-off — the orchestrator reads PR-57.json (Approved) and merges. STORY-261 stays at In Progress; the merge will trigger the very BUG-219 auto-bump shipped in this PR to flip it InProgress→Completed (clean dogfood). Session is done.
+  \`\`\`
+
+  User asked: *\"I have not exited the session yet, should I do that?\"* — the answer wasn't obvious from the output.
+
+  ## Proposed handoff text under \`--auto-complete\`
+
+  After the verdict file is written, end the reviewer Claude's message with a distinct, visually-loud final block:
+
+  \`\`\`
+  ✓ Verdict written: Approved
+  ✓ Session is done.
+
+  ▶ Press Ctrl+D to exit — the orchestrator will then:
+    - Merge PR-57 (gh pr merge --squash --delete-branch)
+    - Pull + auto-bump BUG-219 and STORY-261 to Completed
+    - Build verify (cargo build --release)
+  \`\`\`
+
+  If verdict is RequestChanges:
+
+  \`\`\`
+  ⚠ Verdict written: RequestChanges
+  ✓ Session is done.
+
+  ▶ Press Ctrl+D to exit — the orchestrator will stop at phase 3
+    and surface the recovery hint.
+  \`\`\`
+
+  The arrow glyph \`▶\` matches the workflow-hint-polish convention (TASK-260 family); the explicit \"Press Ctrl+D\" tells the user what to do.
+
+  ## Acceptance
+
+  - [ ] \`/aida-review\` skill template detects orchestrator-driven mode (\`AIDA_REVIEW_VERDICT_FILE\` env var set) and renders the explicit exit instruction at end of session
+  - [ ] Approved verdict path shows what the orchestrator will do next
+  - [ ] RequestChanges verdict path shows the orchestrator will stop + the recovery context
+  - [ ] Manual-mode reviewer (no --auto-complete) keeps existing handoff (the orchestrator doesn't own the merge there)
+  - [ ] Composes with TASK-286 (orchestrator-aware end-of-session menus) — sibling change in adjacent skill
+
+  ## Composes with
+
+  - **TASK-286** (orchestrator-aware skill menus — implementer side) — direct sibling; same family
+  - **TASK-267** (workflow hint completeness in \`aida session end\`) — same family of \"surface the full next-action path, don't stop one step short\"
+  - **batch:workflow-hint-polish** — tagged accordingly
+  - **STORY-246** (\`--auto-complete\` orchestrator) — this TASK polishes the user-facing handoff
+
+  ## Why this matters
+
+  The orchestrator workflow is genuinely new. Even after BUG-217/BUG-218/BUG-219 made it reliable, the human-in-the-loop moments (Ctrl+D the reviewer, sometimes Ctrl+D the implementer) are unclear unless the skill output is explicit. First-users dogfooding \`--auto-complete\` will hit confusion here every time until this lands.
+
+  ## Origin
+
+  User asked 2026-05-16 after PR-57's reviewer rendered its verdict: *\"I have not exited the session yet, should I do that?\"* — the handoff message lacked an explicit \"Press Ctrl+D to exit\" instruction; the user had to ask.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T23:22:57.960825348Z
+modified_at: 2026-05-16T23:22:57.960825348Z
+req_type: Task
+tags:
+- aida-review
+- auto-complete
+- batch:workflow-hint-polish
+- reviewer-handoff
+- user-action
+- workflow-hint
