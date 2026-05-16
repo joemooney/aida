@@ -85,12 +85,12 @@ description: |-
   ## Origin
 
   User articulated the workflow loop 2026-05-15 after BUG-109's implementer paused on welcome-panel design decisions. They wanted the broader mental model captured before iterating on the minimal fix.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:32:32.371630658Z
-modified_at: 2026-05-16T00:32:32.371630658Z
+modified_at: 2026-05-16T04:15:24.851412510Z
 req_type: Story
 tags:
 - alpha-gating
