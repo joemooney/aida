@@ -59,12 +59,12 @@ description: |-
   ## Origin
 
   2026-05-16 first dogfood of \`aida queue work TASK-259 --auto-complete\` on the freshly-merged orchestrator. Phase 1 disambiguation failed despite the implementer session completing successfully. The work shipped to a local branch but the orchestrator bailed before pushing.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:14:30.632335051Z
-modified_at: 2026-05-16T17:59:29.234898944Z
+modified_at: 2026-05-16T17:59:45.098238597Z
 req_type: Bug
 tags:
 - auto-complete
@@ -99,3 +99,7 @@ comments:
     `find_orchestrated_lease_pins_session_by_claude_id`.
   created_at: 2026-05-16T17:59:29.234898944Z
   modified_at: 2026-05-16T17:59:29.234898944Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-16T17:59:45.098238597Z
+  implemented_by: joe
