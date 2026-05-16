@@ -1,0 +1,63 @@
+id: 019e3287-84b7-78a0-9240-21a6a50415ba
+spec_id: BUG-217
+agreed_id: BUG-217
+title: 'aida queue work --auto-complete phase 2: ENOENT spawning ''aida session end'' — orchestrator subprocess PATH issue'
+description: |-
+  \`aida queue work --auto-complete\` at phase 2 fails with:
+
+  \`\`\`
+  ✗ phase 2 (end + wait for CI) failed: could not run \`aida session end\`: No such file or directory (os error 2)
+  \`\`\`
+
+  The orchestrator can't spawn \`aida session end\` even when the user's parent shell can run \`aida\` fine. This is the same family as BUG-107 (\`gh\` spawn failed in \`aida session end\` auto-queue): a subprocess inheriting a different PATH than the parent, OR a hardcoded path that doesn't exist.
+
+  ## Observed (2026-05-16)
+
+  Parent shell has \`(aida-debug)\` active — \`which aida\` returns \`/home/joe/ai/aida/target/debug/aida\`, \`aida --version\` works. User ran \`aida queue work TASK-267 --auto-complete\`. Phase 1 succeeded; phase 2 failed with ENOENT trying to spawn \`aida session end\`. The orchestrator IS itself an \`aida\` process; its child should inherit PATH.
+
+  CI actually went GREEN during phase 2 (\`Run CI (25972330958) completed with 'success'\` visible in the orchestrator output) — the failure was specifically in spawning the next-step command after CI finished, not in CI itself.
+
+  ## Hypothesis
+
+  The orchestrator's subprocess invocation uses \`Command::new(\"aida\")\` with either:
+  1. A modified env that strips PATH or
+  2. \`Command::new\` with a constructed absolute path that doesn't exist at runtime
+
+  Or — alternative — the orchestrator is invoking via \`/usr/local/bin/aida\` (or similar absolute path) which doesn't exist when \`aida-debug\` is the active binary (\`/home/joe/ai/aida/target/debug/aida\`).
+
+  ## Acceptance
+
+  - [ ] Orchestrator's subprocess spawning resolves \`aida\` via the same PATH the parent process has (inherits env by default; doesn't strip PATH)
+  - [ ] If the orchestrator hardcodes a path, it uses \`std::env::current_exe()\` or argv[0] to find ITS OWN binary location, not a system path
+  - [ ] Regression test: simulate \`aida-debug\` active, invoke \`--auto-complete\`, verify phase 2's \`aida session end\` succeeds
+  - [ ] Composes with BUG-107: both bugs share the \"subprocess-PATH\" root cause; the fix should solve both surfaces
+
+  ## Why this matters
+
+  The orchestrator is the headline alpha CLI wow. Every \`--auto-complete\` invocation that hits this bug fails at phase 2 with a confusing message. The fix is one-time and unblocks the entire orchestrator workflow.
+
+  ## Composes with
+
+  - **BUG-107** (\`aida session end\` auto-queue spawning gh fails with ENOENT) — same root cause: subprocess PATH mismatch
+  - **STORY-246** (\`--auto-complete\` orchestrator) — bug surfaces in its core mechanism
+  - **BUG-114** (\`--auto-complete\` phase-1 lease disambiguation) — same family of orchestrator-correctness BUGs surfaced through dogfood
+  - **TASK-266** (orchestrator failure telemetry) — when shipped, would log this failure pattern automatically
+
+  ## Origin
+
+  User attempted \`aida queue work TASK-267 --auto-complete\` 2026-05-16. Phase 1 succeeded, phase 2's \`aida session end --wait-ci\` subprocess failed with ENOENT despite parent shell having \`aida\` resolvable.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T20:43:22.679784440Z
+modified_at: 2026-05-16T20:43:22.679784440Z
+req_type: Bug
+tags:
+- auto-complete
+- bug-107-family
+- enoent
+- first-dogfood
+- orchestrator
+- phase-2
+- subprocess-path
