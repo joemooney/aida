@@ -41,12 +41,12 @@ description: |-
   ## Origin
 
   User attempted \`aida session prune --completed\` 2026-05-16 (suggested by dialog Claude as a session-cleanup option, then discovered the flag doesn't exist). The error is the signal.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:43:32.733116866Z
-modified_at: 2026-05-16T16:45:15.599257383Z
+modified_at: 2026-05-16T16:45:16.731728501Z
 req_type: Task
 tags:
 - alpha-readiness
