@@ -31,12 +31,19 @@ set -euo pipefail
 # EOF immediately on a closed stdin and the prompt falls through to
 # "cancelled" without ever pausing. trace:TASK-79 | ai:claude
 auto_yes=${AIDA_RELEASE_YES:-0}
+# TASK-257: by default the release is gated on a recent, green cross-platform
+# CI run — PR CI is Linux-only during the alpha, so Windows + macOS are only
+# validated by the nightly cross-platform.yml workflow. --skip-xplat-check /
+# AIDA_SKIP_XPLAT_CHECK=1 bypasses the gate (not recommended for a published
+# release). trace:TASK-257 | ai:claude
+skip_xplat=${AIDA_SKIP_XPLAT_CHECK:-0}
 bump=
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) auto_yes=1 ;;
+        --skip-xplat-check) skip_xplat=1 ;;
         -h|--help)
-            echo "usage: $0 [--yes] {major|minor|patch|<explicit-version>}"
+            echo "usage: $0 [--yes] [--skip-xplat-check] {major|minor|patch|<explicit-version>}"
             exit 0
             ;;
         -*)
@@ -54,7 +61,7 @@ for arg in "$@"; do
 done
 
 if [ -z "$bump" ]; then
-    echo "usage: $0 [--yes] {major|minor|patch|<explicit-version>}" >&2
+    echo "usage: $0 [--yes] [--skip-xplat-check] {major|minor|patch|<explicit-version>}" >&2
     exit 1
 fi
 
@@ -201,6 +208,32 @@ EOM
         exit 1
         ;;
 esac
+
+# TASK-257: gate the tag on a recent, green cross-platform CI run. PR CI is
+# Linux-only during the alpha, so Windows + macOS are only validated by the
+# nightly cross-platform.yml workflow — block the release until that's green
+# (pre-release-check.sh reuses a <24h green run or dispatches a fresh one and
+# blocks on it). Runs after the confirmation prompt so the user is not made to
+# wait on CI before deciding to release. trace:TASK-257 | ai:claude
+if [ "$skip_xplat" = "1" ]; then
+    echo "skipping cross-platform pre-release check (--skip-xplat-check / AIDA_SKIP_XPLAT_CHECK=1)."
+else
+    echo
+    echo "─── Cross-platform pre-release check ───"
+    if ! "$(dirname "$0")/pre-release-check.sh"; then
+        cat <<EOM >&2
+
+error: cross-platform CI is not green — refusing to tag v$new.
+
+The version bump is in your working tree but not committed. Once
+cross-platform CI is green, re-run this script. To tag without the check
+(not recommended for a published release), pass --skip-xplat-check.
+
+Tag notes saved at: $notes_file
+EOM
+        exit 1
+    fi
+fi
 
 git add Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
 git commit -m "chore: release v$new"
