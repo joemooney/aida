@@ -1,0 +1,168 @@
+id: 019e3232-c973-7c03-889b-81c3ff0ef9c1
+spec_id: STORY-252
+agreed_id: STORY-252
+title: '/aida-digest skill: advisor-curated narrative report of project work (customer / team / self perspectives)'
+description: |-
+  The advisor role (\`role:dialog\`) gains a \`/aida-digest\` skill that produces a **curated narrative report** of project work in a time window. Distinguishes meaningful achievement from churn — drops typos, rejected-then-superseded specs, internal vocabulary noise; surfaces releases, EPIC progress, strategic filings, codified learnings. Shareable / reviewable across audiences.
+
+  Maps perfectly onto the advisor role's responsibilities:
+  - **Friction-to-spec translator** → knows what was filed vs achieved
+  - **Strategic gap detector** → knows what's strategic vs incidental
+  - **Memory curator** → filters meaningful learnings from noise
+  - **Queue gardener** → can surface \"what's next\" forward-looking section
+
+  ## What's IN vs OUT (editorial logic)
+
+  **IN:**
+  - Completed specs in the time window
+  - Merged PRs with their feature descriptions
+  - Release tags (v0.X.Y) with summarized contents
+  - Notable plans archived under \`docs/plans/\`
+  - Memory entries written that codify learnings (filtered: public-worthy only)
+  - Rejected specs WITH \`supersedes\` / \`pivoted-from\` links (e.g., architectural pivots ARE news)
+  - New strategic filings (EPICs, foundational STORYs) introduced
+
+  **OUT:**
+  - Typo fixes / trivial commits
+  - Rejected specs that were just wrong/mistakes (no successor)
+  - Internal SPEC-ID citations (in \`--audience customer\` mode)
+  - Dialog meta-discussion (e.g., \"discussed how to phrase X\")
+  - Abandoned approaches that didn't lead to a filed pivot
+  - Process telemetry / housekeeping (block claims, lease cleanups)
+
+  ## Acceptance
+
+  ### CLI surface
+
+  - [ ] \`/aida-digest\` skill at \`aida-core/templates/skills/aida-digest.md\` — invocable from any role (especially \`role:dialog\`)
+  - [ ] \`/aida-digest\` slash command at \`aida-core/templates/commands/aida-digest.md\`
+  - [ ] Backing CLI: \`aida digest [OPTIONS]\` for programmatic use
+
+  ### Flags
+
+  - [ ] \`--since <window>\` — \`24h\`, \`7d\`, \`30d\`, \`v0.7.0\` (tag), \`2026-05-15\` (date). Default: since last digest marker, else 24h.
+  - [ ] \`--audience customer\` (default) — feature framing, no SPEC IDs, release-centric
+  - [ ] \`--audience team\` — SPEC IDs included, technical depth, cluster-PR shape visible
+  - [ ] \`--audience self\` — everything including process artifacts, useful for retrospectives
+  - [ ] \`--format markdown\` (default) / \`plain\` / \`json\` / \`brief\` (single-paragraph TL;DR)
+  - [ ] \`--include-next\` (default true) — forward-looking section: queued batches, in-flight items, upcoming releases
+  - [ ] \`--include-process\` — include memory entries / process learnings (default true for team/self, false for customer)
+  - [ ] \`--out <path>\` — write to file (default stdout)
+
+  ### Cadence + marker
+
+  - [ ] Writes \`.aida/last-digest.toml\` with the window-end timestamp
+  - [ ] On next \`/aida-digest\` without \`--since\`, picks up from the marker
+  - [ ] \`/aida-digest --reset\` clears the marker
+
+  ### Output structure (markdown, customer audience)
+
+  \`\`\`
+  # AIDA — work digest <date-range>
+
+  ## Released
+  - **v0.X.Y** (date): one-line summary of feature additions
+
+  ## Major progress
+  - **<EPIC-or-theme>**: narrative description of what was achieved
+
+  ## Strategic direction
+  - New initiatives filed and how they connect
+
+  ## Next iteration
+  - What's queued for the next window
+  \`\`\`
+
+  For \`--audience team\`, include SPEC IDs in parentheses. For \`--audience self\`, also include process artifacts (memory entries, EPIC pivots, lessons codified).
+
+  ### Sample output (today's session, --audience team)
+
+  \`\`\`
+  # AIDA — work digest 2026-05-15 → 2026-05-16
+
+  ## Released
+  - **v0.7.0** (May 15, morning): friction-fixes, \`aida fetch\`,
+    plan tooling + verb surface polish
+  - **v0.8.0** (May 15, evening): EPIC-26 TUI Trojan-horse —
+    \`aida tui\` default-on, autonomous-drain orchestrator,
+    8 workflow primitives + bug fixes
+
+  ## EPIC progress
+  - **EPIC-26** (TUI Trojan-horse): feature-complete via PR-43
+  - **EPIC-23** (Session orchestration): + \`--auto-complete\` orchestrator
+    (STORY-246), + claude session resume primitive (TASK-112)
+
+  ## Strategic direction
+  - **EPIC-27** (MCP modernization) filed — current MCP exposes
+    basic CRUD only; misses 30+ workflow tools. First-vertical
+    STORY-1-084 scoped.
+
+  ## Process artifacts (when --include-process)
+  - 7 memory entries codifying dialog/advisor role discipline,
+    workflow phrasing, verification habits
+  - Architecture pivot: TUI launcher model (STORY-244) supersedes
+    PTY-tab (STORY-241/242)
+
+  ## Next iteration (queued)
+  - batch:workflow-hint-polish (5 items): clearer hints + state detection
+  - batch:display-polish (2 items): color-coded status, pretty-print
+  - batch:alpha-docs (6 items): README onboarding + advisor naming
+  - STORY-244: TUI launcher architecture pivot (alpha-gating)
+  \`\`\`
+
+  ### Editorial logic specifics
+
+  - [ ] Cluster-PR detection: when N specs landed in one PR, surface the PR's theme not each spec individually (unless \`--audience self\`)
+  - [ ] Release boundary handling: split digest by release tag if the window crosses one
+  - [ ] Rejected-but-strategic: include rejections that have a \`supersedes\` link, named by the successor (\"STORY-241 → STORY-244 launcher pivot\")
+  - [ ] Memory entries: parsed from \`MEMORY.md\` index; filtered by file's frontmatter \`audience: public\` (or similar flag)
+
+  ## Composes with
+
+  - **EPIC-24** (Living docs / \`aida doc\`) — natural parent; digests are time-window-bounded narrative docs
+  - **\`role:dialog\` / advisor responsibilities** — natural home for the editorial judgment
+  - **\`aida usage\`** — same telemetry-style data sources; complementary surface
+  - **\`feedback_precise_lifecycle_vocabulary.md\` memory** — digest uses the precise verbs (merged, released, etc.) consistently
+  - **batch:alpha-docs** — digest could become a release-time artifact for the project itself
+
+  ## Out of scope (file separately if useful later)
+
+  - **Automatic posting to external surfaces** (Slack/email) — digest produces output, doesn't push
+  - **Cross-project digests** — single project only
+  - **AI-rewriting the digest** for tone/style — initial digest is structured-from-data; tone-rewriting is a follow-up
+  - **Sentiment analysis** — no \"highlights\" detection beyond explicit Importance markers
+  - **\`/aida-daily-digest\` cron** — could be filed as a sibling skill that just runs daily; this STORY ships the underlying primitive
+
+  ## Why this matters for alpha
+
+  - Alpha rollout demands a way to **summarize for friends/colleagues** \"here's what AIDA does this week\" — digest is that artifact
+  - Project lifetime needs a recurring story-of-progress — digest is the unit
+  - The advisor role's value becomes **demonstrable** — running \`/aida-digest\` and seeing a curated narrative is the tangible \"my AIDA advisor watches what I'm doing\"
+  - Composes with release process: cut release → run digest since previous tag → use output as release notes
+
+  ## Origin
+
+  User asked 2026-05-16 about advisor-role tooling: *\"A command that the advisor could run may be /aida-digest or /aida-daily-digest, I am thinking that I want a report of all the work that has occurred, perhaps with nuance, but something that we could share or review that explains everything that has transpired. I am not so much interested in minor details or diversions or wrong paths, but more from a customer perspective a story of what has been achieved.\"*
+
+  Design discussion converged on:
+  - Customer-first as default audience
+  - Forward-looking \"next iteration\" section included
+  - Editorial logic filters rejected-without-supersedes, typos, abandoned approaches
+  - Memory entries surfaced when public-worthy
+  - Cadence-aware via \`.aida/last-digest.toml\` marker
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T19:10:49.715594843Z
+modified_at: 2026-05-16T19:10:49.715594843Z
+req_type: Story
+tags:
+- advisor
+- aida-digest
+- alpha-readiness
+- customer-perspective
+- dialog-role
+- editorial
+- living-docs
+- narrative-report
