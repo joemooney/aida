@@ -1,0 +1,71 @@
+id: 019e3268-e7eb-79b2-a54f-151407ed3257
+spec_id: TASK-284
+agreed_id: TASK-284
+title: 'pre-release-check.sh: use portable date parsing (date -d is GNU-only; falls back to always-dispatch on BSD/macOS)'
+description: |-
+  \`scripts/pre-release-check.sh\` uses \`date -d \"\$created_at\" +%s\` to parse the timestamp of the prior cross-platform run. \`date -d\` is GNU-only. On a BSD/macOS host, that call fails silently (or with a different error), \`created_epoch\` falls back to 0, and the script ALWAYS dispatches a fresh run instead of accepting a recent green one. Currently fine in practice because \`scripts/release.sh\` runs locally on Linux, but the portability assumption is implicit.
+
+  ## Fix options
+
+  ### (a) Detect GNU vs BSD and branch
+
+  \`\`\`bash
+  if date --version 2>/dev/null | grep -q 'GNU'; then
+      created_epoch=\$(date -d \"\$created_at\" +%s 2>/dev/null || echo 0)
+  else
+      # BSD/macOS: date -j -f \"%Y-%m-%dT%H:%M:%SZ\" \"\$created_at\" +%s
+      created_epoch=\$(date -j -f \"%Y-%m-%dT%H:%M:%SZ\" \"\$created_at\" +%s 2>/dev/null || echo 0)
+  fi
+  \`\`\`
+
+  ### (b) Use python or another portable tool
+
+  \`\`\`bash
+  created_epoch=\$(python3 -c \"import sys, datetime; print(int(datetime.datetime.fromisoformat(sys.argv[1].rstrip('Z')).replace(tzinfo=datetime.timezone.utc).timestamp()))\" \"\$created_at\" 2>/dev/null || echo 0)
+  \`\`\`
+
+  ### (c) Use gh's --json conversion to epoch
+
+  If gh CLI offers an epoch-conversion option (unlikely), use that.
+
+  ### (d) Document the GNU-only assumption and bail out cleanly on non-GNU
+
+  \`\`\`bash
+  if ! date --version 2>/dev/null | grep -q 'GNU'; then
+      echo \"warning: GNU date required for freshness gate; always dispatching.\" >&2
+  fi
+  \`\`\`
+
+  Option (a) is most accurate; option (d) is smallest change.
+
+  ## Acceptance
+
+  - [ ] Script works correctly on Linux (GNU date) AND macOS (BSD date) — at minimum: doesn't silently always-dispatch
+  - [ ] Tests: run-with-stubbed-date for both GNU and BSD argument forms
+  - [ ] Documented in script comments which approach is taken
+
+  ## Origin
+
+  Non-blocking note from PR-51's adversarial review 2026-05-16. Reviewer noted: *\"date -d is GNU-only; on a BSD/macOS host the age-parse falls back to always-dispatch. release.sh runs locally on Linux, so fine in practice.\"*
+
+  Currently fine because the script runs on Linux, but: (1) macOS contributors might run it; (2) once cross-platform release validation expands, the portability matters.
+
+  ## Composes with
+
+  - **TASK-257** (CI split) — same script; ship as part of fixup PR or follow-up
+  - **STORY-254** (review of PR-51) — explicit follow-up
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T20:09:56.459386325Z
+modified_at: 2026-05-16T20:09:56.459386325Z
+req_type: Task
+tags:
+- bsd
+- follow-up
+- gnu-date
+- macos
+- non-blocking
+- portability
+- release-tooling
