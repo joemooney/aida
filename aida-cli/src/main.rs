@@ -24559,61 +24559,490 @@ fn classify_in_flight_specs(
     }
 }
 
+/// TASK-250: a PR's review sub-state, derived from AIDA-local signals
+/// only — session leases and the `Review PR-N:` story status. The gh
+/// `reviewDecision` probe that promotes a row to State 3 (Approved)
+/// layers on top in the render path. trace:TASK-250 | ai:claude
+#[derive(Debug, PartialEq)]
+enum LocalReviewState {
+    /// State 1: no reviewer lease, no In-Progress review story.
+    NotStarted,
+    /// State 2: a reviewer session lease owns this PR — carries the
+    /// short session id + a humanized start time for the hint.
+    InProgressLease { session_id: String, since: String },
+    /// State 2 (no scoped session): the `Review PR-N:` story is
+    /// In Progress — a reviewer picked the queue item up.
+    InProgressStory { story_id: String },
+}
+
+/// TASK-250: classify a PR's review state from session leases + the
+/// `Review PR-N:` story. gh-free by design — it only reads lease TOML
+/// and the in-memory requirement set, so it is unit-testable against a
+/// temp project root. The render path adds the gh `reviewDecision`
+/// probe (State 3) on top. trace:TASK-250 | ai:claude
+fn detect_local_review_state(
+    project_root: &std::path::Path,
+    all_reqs: &[aida_core::Requirement],
+    pr_number: u64,
+) -> LocalReviewState {
+    // Leg 1 — an active session lease scoped to this PR. The strongest
+    // signal: a reviewer shell is open on it right now. `list_leases`
+    // returns oldest-first, so the last match is the most recent.
+    let mut lease_hit: Option<(String, String)> = None;
+    for lease in list_leases(project_root) {
+        if let Some((ReviewForge::GitHub, n)) = parse_review_scope(&lease.scope) {
+            if n == pr_number {
+                lease_hit = Some((lease.id.clone(), humanize_relative(lease.started_at)));
+            }
+        }
+    }
+    if let Some((session_id, since)) = lease_hit {
+        return LocalReviewState::InProgressLease { session_id, since };
+    }
+    // Leg 2 — an In-Progress `Review PR-N:` story: the reviewer picked
+    // the queue item up but isn't in a PR-scoped session.
+    for r in all_reqs {
+        if r.status == RequirementStatus::InProgress
+            && parse_review_story_pr_number(&r.title) == Some(pr_number)
+        {
+            let story_id = r
+                .agreed_id
+                .as_deref()
+                .or(r.spec_id.as_deref())
+                .unwrap_or("")
+                .to_string();
+            return LocalReviewState::InProgressStory { story_id };
+        }
+    }
+    LocalReviewState::NotStarted
+}
+
+/// TASK-250: gh's `reviewDecision` for a PR plus the approving
+/// reviewer's login — the State 3 ("reviewed + approved") signal.
+/// trace:TASK-250 | ai:claude
+struct PrReviewDecision {
+    /// gh `reviewDecision`: "APPROVED" / "CHANGES_REQUESTED" /
+    /// "REVIEW_REQUIRED" / "" (no reviews).
+    decision: String,
+    /// login of the most recent APPROVED review, when resolvable.
+    approver: Option<String>,
+}
+
+/// TASK-250: parse `gh pr view --json reviewDecision,latestReviews`
+/// output. Pure — unit-tested against captured gh JSON without
+/// spawning gh. trace:TASK-250 | ai:claude
+fn parse_review_decision_json(stdout: &str) -> Option<PrReviewDecision> {
+    let json: serde_json::Value = serde_json::from_str(stdout).ok()?;
+    let decision = json
+        .get("reviewDecision")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let approver = json
+        .get("latestReviews")
+        .and_then(|v| v.as_array())
+        .and_then(|reviews| {
+            reviews
+                .iter()
+                .filter(|r| r.get("state").and_then(|s| s.as_str()) == Some("APPROVED"))
+                .filter_map(|r| {
+                    r.get("author")
+                        .and_then(|a| a.get("login"))
+                        .and_then(|l| l.as_str())
+                })
+                .last()
+                .map(|s| s.to_string())
+        });
+    Some(PrReviewDecision { decision, approver })
+}
+
+/// TASK-250: probe gh for a PR's review decision. `None` when gh is
+/// missing or the call fails — the caller degrades to the local review
+/// state. trace:TASK-250 | ai:claude
+fn detect_pr_review_decision(
+    project_root: &std::path::Path,
+    pr_number: u64,
+) -> Option<PrReviewDecision> {
+    let gh_bin = resolve_gh_binary()?;
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "view",
+            &pr_number.to_string(),
+            "--json",
+            "reviewDecision,latestReviews",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    parse_review_decision_json(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// TASK-250: parse `gh pr list --state merged --json number,mergedAt`
+/// output into (pr_number, humanized merge time). Pure — unit-tested
+/// against captured gh JSON. trace:TASK-250 | ai:claude
+fn parse_merged_pr_json(stdout: &str) -> Option<(u64, Option<String>)> {
+    let json: serde_json::Value = serde_json::from_str(stdout).ok()?;
+    let first = json.as_array()?.first()?;
+    let number = first.get("number")?.as_u64()?;
+    let merged = first
+        .get("mergedAt")
+        .and_then(|v| v.as_str())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| humanize_relative(dt.with_timezone(&chrono::Utc)));
+    Some((number, merged))
+}
+
+/// TASK-250: State-4 probe — was `branch` the head of a now-MERGED PR,
+/// and when did it merge? Distinct from `detect_merged_pr_for_branch`
+/// because it also pulls `mergedAt` for the "Merged {time}" hint.
+/// `None` when gh is missing / fails / reports no merged PR.
+/// trace:TASK-250 | ai:claude
+fn detect_merged_pr_with_time(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Option<(u64, Option<String>)> {
+    let gh_bin = resolve_gh_binary()?;
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "merged",
+            "--limit",
+            "1",
+            "--json",
+            "number,mergedAt",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    parse_merged_pr_json(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// TASK-250: unit coverage for the four-state classification behind
+/// `aida queue list`'s "Done — awaiting merge" section. The lease /
+/// review-story leg (`detect_local_review_state`) is exercised against
+/// a temp project root; the gh-JSON parsers are exercised against
+/// captured `gh` output. trace:TASK-250 | ai:claude
+#[cfg(test)]
+mod task_250_review_state_tests {
+    use super::*;
+
+    fn write_lease(project_root: &std::path::Path, id: &str, scope: &str) {
+        let dir = project_root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let lease = SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".into(),
+            worktree_path: project_root.to_path_buf(),
+            branch: scope.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("reviewer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+        };
+        std::fs::write(
+            dir.join(format!("{}.toml", id)),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn review_story(pr: u64, status: RequirementStatus) -> aida_core::Requirement {
+        let mut r =
+            aida_core::Requirement::new(format!("Review PR-{}: some batch", pr), String::new());
+        r.spec_id = Some(format!("STORY-{}", 900 + pr));
+        r.status = status;
+        r
+    }
+
+    /// State 1: no lease, no In-Progress review story → NotStarted.
+    #[test]
+    fn local_state_not_started_with_no_signals() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(
+            detect_local_review_state(tmp.path(), &[], 42),
+            LocalReviewState::NotStarted
+        );
+    }
+
+    /// State 1: a `Review PR-42:` story still at Approved (queued, not
+    /// picked up) does NOT count as in-progress — the status the
+    /// auto-queue files it at is "ready to work", not a verdict.
+    #[test]
+    fn local_state_approved_review_story_is_not_in_progress() {
+        let tmp = tempfile::tempdir().unwrap();
+        let reqs = [review_story(42, RequirementStatus::Approved)];
+        assert_eq!(
+            detect_local_review_state(tmp.path(), &reqs, 42),
+            LocalReviewState::NotStarted
+        );
+    }
+
+    /// State 2: an active session lease scoped to PR-42 → InProgressLease.
+    #[test]
+    fn local_state_in_progress_via_lease() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_lease(tmp.path(), "abc123def456", "PR-42");
+        match detect_local_review_state(tmp.path(), &[], 42) {
+            LocalReviewState::InProgressLease { session_id, .. } => {
+                assert_eq!(session_id, "abc123def456");
+            }
+            other => panic!("expected InProgressLease, got {:?}", other),
+        }
+    }
+
+    /// State 2: a lease scoped to a DIFFERENT PR is ignored.
+    #[test]
+    fn local_state_lease_for_other_pr_ignored() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_lease(tmp.path(), "abc123def456", "PR-99");
+        assert_eq!(
+            detect_local_review_state(tmp.path(), &[], 42),
+            LocalReviewState::NotStarted
+        );
+    }
+
+    /// State 2: an In-Progress `Review PR-42:` story (no scoped session)
+    /// → InProgressStory carrying the story id.
+    #[test]
+    fn local_state_in_progress_via_review_story() {
+        let tmp = tempfile::tempdir().unwrap();
+        let reqs = [review_story(42, RequirementStatus::InProgress)];
+        match detect_local_review_state(tmp.path(), &reqs, 42) {
+            LocalReviewState::InProgressStory { story_id } => {
+                assert_eq!(story_id, "STORY-942");
+            }
+            other => panic!("expected InProgressStory, got {:?}", other),
+        }
+    }
+
+    /// State 2: the lease leg wins over the review-story leg when both
+    /// fire — a live scoped session is the stronger signal.
+    #[test]
+    fn local_state_lease_takes_precedence_over_story() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_lease(tmp.path(), "abc123def456", "PR-42");
+        let reqs = [review_story(42, RequirementStatus::InProgress)];
+        assert!(matches!(
+            detect_local_review_state(tmp.path(), &reqs, 42),
+            LocalReviewState::InProgressLease { .. }
+        ));
+    }
+
+    /// State 3: gh `reviewDecision` APPROVED with a latestReviews entry
+    /// → decision + approver login parsed.
+    #[test]
+    fn parse_review_decision_approved_with_reviewer() {
+        let json = r#"{
+            "reviewDecision": "APPROVED",
+            "latestReviews": [
+                {"author": {"login": "alice"}, "state": "APPROVED"}
+            ]
+        }"#;
+        let d = parse_review_decision_json(json).expect("parses");
+        assert_eq!(d.decision, "APPROVED");
+        assert_eq!(d.approver.as_deref(), Some("alice"));
+    }
+
+    /// State 1/edge: a PR with no reviews → empty decision, no approver.
+    #[test]
+    fn parse_review_decision_no_reviews() {
+        let json = r#"{"reviewDecision": "", "latestReviews": []}"#;
+        let d = parse_review_decision_json(json).expect("parses");
+        assert_eq!(d.decision, "");
+        assert!(d.approver.is_none());
+    }
+
+    /// CHANGES_REQUESTED parses but is not APPROVED — the render path
+    /// treats it as "not State 3" and falls back to the local state.
+    #[test]
+    fn parse_review_decision_changes_requested() {
+        let json = r#"{
+            "reviewDecision": "CHANGES_REQUESTED",
+            "latestReviews": [
+                {"author": {"login": "bob"}, "state": "CHANGES_REQUESTED"}
+            ]
+        }"#;
+        let d = parse_review_decision_json(json).expect("parses");
+        assert_eq!(d.decision, "CHANGES_REQUESTED");
+        assert!(d.approver.is_none(), "no APPROVED review → no approver");
+    }
+
+    /// State 4: a merged PR with a `mergedAt` timestamp → number + a
+    /// humanized merge time.
+    #[test]
+    fn parse_merged_pr_with_timestamp() {
+        let json = r#"[{"number": 43, "mergedAt": "2026-05-15T10:00:00Z"}]"#;
+        let (number, merged) = parse_merged_pr_json(json).expect("parses");
+        assert_eq!(number, 43);
+        assert!(merged.is_some(), "mergedAt → humanized time");
+    }
+
+    /// State 4: a merged PR row missing `mergedAt` still yields the
+    /// number — the hint just drops the time.
+    #[test]
+    fn parse_merged_pr_without_timestamp() {
+        let json = r#"[{"number": 43}]"#;
+        let (number, merged) = parse_merged_pr_json(json).expect("parses");
+        assert_eq!(number, 43);
+        assert!(merged.is_none());
+    }
+
+    /// No merged PR (empty gh array) → None, so the render path keeps
+    /// the "no PR opened yet" hint.
+    #[test]
+    fn parse_merged_pr_empty_is_none() {
+        assert!(parse_merged_pr_json("[]").is_none());
+    }
+}
+
 /// TASK-234: render the "Done — awaiting merge" body grouped by PR +
 /// state instead of as a flat list. [`classify_in_flight_specs`] does
-/// the git-only bucketing; this adds one `gh` open-PR lookup per
-/// awaiting branch and prints each bucket with a concrete `▶ Next`
-/// action. trace:TASK-234 | ai:claude
-fn render_in_flight_grouped(specs: &[&aida_core::Requirement], project_root: &std::path::Path) {
+/// the git-only bucketing; this adds the `gh` PR-state lookups and
+/// prints each bucket with a concrete `▶ Next` action.
+///
+/// TASK-250: each open-PR branch is sub-classified into one of four
+/// PR-lifecycle states — review not started / in progress / approved /
+/// merged-awaiting-pull — so the next-action hint matches reality
+/// instead of a blanket "merge PR-N". trace:TASK-234 TASK-250 | ai:claude
+fn render_in_flight_grouped(
+    specs: &[&aida_core::Requirement],
+    all_reqs: &[aida_core::Requirement],
+    project_root: &std::path::Path,
+) {
     let InFlightBuckets {
         stuck,
         awaiting,
         no_commit,
     } = classify_in_flight_specs(specs, project_root);
 
-    // ---- Awaiting merge, grouped by branch (one gh lookup per branch) ----
+    // ---- Awaiting merge, grouped by branch ----
+    // TASK-250: an open-PR branch is sub-classified into State 1/2/3
+    // (review not started / in progress / approved); a branch with no
+    // open PR is checked for a merged PR (State 4) before falling back
+    // to the "no PR opened yet" hint. trace:TASK-250 | ai:claude
     for (branch, ids) in &awaiting {
-        let pr = match detect_open_pr_for_branch(project_root, branch) {
-            PrLookup::Found(pr) => Some(pr),
-            _ => None,
-        };
-        match &pr {
-            Some(pr) => println!(
-                "  {} {} — {} spec{}:",
-                format!("PR-{}", pr.number).cyan().bold(),
-                "(open)".dimmed(),
-                ids.len(),
-                if ids.len() == 1 { "" } else { "s" }
-            ),
-            None => println!(
-                "  {} {} — {} spec{}:",
-                branch.cyan().bold(),
-                "(no PR opened yet)".dimmed(),
-                ids.len(),
-                if ids.len() == 1 { "" } else { "s" }
-            ),
-        }
-        println!(
-            "    {} {}",
-            "◐".bright_green(),
-            ids.iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>()
-                .join("  ")
-        );
-        match &pr {
-            Some(pr) => println!(
-                "    {} merge {}, then `{}`",
-                "▶ Next:".bold(),
-                format!("PR-{}", pr.number).cyan(),
-                "aida pull".cyan()
-            ),
-            None => println!(
-                "    {} open a PR (`{}`), then merge → `{}`",
-                "▶ Next:".bold(),
-                "/aida-pr".cyan(),
-                "aida pull".cyan()
-            ),
+        let count = ids.len();
+        let plural = if count == 1 { "" } else { "s" };
+        let ids_line = ids
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("  ");
+
+        match detect_open_pr_for_branch(project_root, branch) {
+            PrLookup::Found(pr) => {
+                println!(
+                    "  {} {} — {} spec{}:",
+                    format!("PR-{}", pr.number).cyan().bold(),
+                    "(open)".dimmed(),
+                    count,
+                    plural
+                );
+                println!("    {} {}", "◐".bright_green(), ids_line);
+
+                // State 3 first: gh's `reviewDecision` is the
+                // authoritative "safe to merge" signal and supersedes a
+                // lingering reviewer lease.
+                let approved = detect_pr_review_decision(project_root, pr.number)
+                    .filter(|d| d.decision == "APPROVED");
+                match approved {
+                    Some(decision) => {
+                        let by = decision
+                            .approver
+                            .map(|a| format!(" by {}", a))
+                            .unwrap_or_default();
+                        println!(
+                            "    {} Review approved{} — Next: merge (`{}`)",
+                            "▶".bold(),
+                            by,
+                            format!("gh pr merge {} --squash", pr.number).cyan()
+                        );
+                    }
+                    None => match detect_local_review_state(project_root, all_reqs, pr.number) {
+                        LocalReviewState::InProgressLease { session_id, since } => println!(
+                            "    {} {}",
+                            "⏳".yellow(),
+                            format!(
+                                "Review in progress (reviewer session {} since {})",
+                                session_id, since
+                            )
+                            .yellow()
+                        ),
+                        LocalReviewState::InProgressStory { story_id } => println!(
+                            "    {} {}",
+                            "⏳".yellow(),
+                            format!("Review in progress (review story {})", story_id).yellow()
+                        ),
+                        LocalReviewState::NotStarted => println!(
+                            "    {} start review (`{}`)",
+                            "▶ Next:".bold(),
+                            format!("aida queue work PR-{}", pr.number).cyan()
+                        ),
+                    },
+                }
+            }
+            _ => {
+                // No open PR for this branch. Either it merged and the
+                // local clone hasn't pulled yet (State 4), or no PR was
+                // ever opened.
+                match detect_merged_pr_with_time(project_root, branch) {
+                    Some((number, merged_at)) => {
+                        println!(
+                            "  {} {} — {} spec{}:",
+                            format!("PR-{}", number).cyan().bold(),
+                            "(merged)".dimmed(),
+                            count,
+                            plural
+                        );
+                        println!("    {} {}", "◐".bright_green(), ids_line);
+                        let when = merged_at
+                            .map(|t| format!("Merged {}", t))
+                            .unwrap_or_else(|| "Merged".to_string());
+                        println!(
+                            "    {} {} — Next: `{}` (auto-bumps {} spec{} to Completed)",
+                            "▶".bold(),
+                            when,
+                            "aida pull".cyan(),
+                            count,
+                            plural
+                        );
+                    }
+                    None => {
+                        println!(
+                            "  {} {} — {} spec{}:",
+                            branch.cyan().bold(),
+                            "(no PR opened yet)".dimmed(),
+                            count,
+                            plural
+                        );
+                        println!("    {} {}", "◐".bright_green(), ids_line);
+                        println!(
+                            "    {} open a PR (`{}`), then merge → `{}`",
+                            "▶ Next:".bold(),
+                            "/aida-pr".cyan(),
+                            "aida pull".cyan()
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -38659,7 +39088,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .parent()
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                render_in_flight_grouped(&in_flight_specs, &project_root);
+                render_in_flight_grouped(&in_flight_specs, &store.requirements, &project_root);
                 if !*in_flight_only {
                     println!(
                         "{}",
