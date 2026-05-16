@@ -57,12 +57,12 @@ description: |-
   ## Origin
 
   User observed 2026-05-16 that the implementer Claude's \"Next steps\" output presented options as a numbered list with arrows. Contrasted it with the tabular Path/What happens/Why format dialog Claude rendered in the same conversation: *\"when providing the prompt to the user claude should present it more in the form\"* + the example table.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:27:19.857342230Z
-modified_at: 2026-05-16T17:32:13.904306542Z
+modified_at: 2026-05-16T17:40:03.450235616Z
 req_type: Task
 tags:
 - aida-pickup
