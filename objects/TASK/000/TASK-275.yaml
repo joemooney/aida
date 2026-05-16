@@ -1,0 +1,63 @@
+id: 019e3220-fa5d-7d42-9727-bef2ab568043
+spec_id: TASK-275
+agreed_id: TASK-275
+title: 'README: install instructions for prebuilt binary tarball + build-from-source paths'
+description: |-
+  README needs clear install instructions for the two alpha install paths:
+
+  1. **Prebuilt tarball** from GitHub releases (https://github.com/joemooney/aida/releases) — primary alpha path
+  2. **Build from source** — backup path for users on platforms not covered by the matrix, or who want to dev locally
+
+  ## Acceptance
+
+  ### Prebuilt tarball section
+
+  \`\`\`
+  # Linux (Tier 1 — primary alpha target)
+  curl -L https://github.com/joemooney/aida/releases/latest/download/aida-x86_64-linux.tar.gz | tar xz
+  ./aida --version
+  mv aida ~/.local/bin/    # or /usr/local/bin/ with sudo
+  \`\`\`
+
+  - [ ] One subsection per platform: Linux (Tier 1), macOS (Tier 2 — nightly-validated per TASK-257), Windows (Tier 2)
+  - [ ] Tier explanation links to TASK-257's cross-platform CI doc
+  - [ ] Verification step: \`aida --version\` confirms install
+  - [ ] Cleanup step: \`aida-on\` shell integration if desired
+
+  ### Build from source section
+
+  \`\`\`
+  git clone https://github.com/joemooney/aida.git
+  cd aida
+  make build-release
+  ./target/release/aida --version
+  \`\`\`
+
+  - [ ] One paragraph for prerequisites (Rust 1.X+, protoc if using server features)
+  - [ ] \`cargo install --path aida-cli\` as alternate
+  - [ ] Link to CLAUDE.md for AIDA-developer workflow
+
+  ## Composes with
+
+  - **TASK-257** (CI cross-platform split) — defines Linux as Tier 1; this doc surfaces the tier story
+  - **TASK-273** (lifecycle diagram) — install precedes the lifecycle
+  - **\"Getting started\" sibling TASK** — install → getting-started flow
+
+  ## Origin
+
+  User stated 2026-05-16 alpha targets: tech-savvy friends/colleagues; install paths: prebuilt tarball OR build from source. README must surface both clearly for the audience.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T18:51:22.589954018Z
+modified_at: 2026-05-16T18:51:22.589954018Z
+req_type: Task
+tags:
+- alpha-readiness
+- batch:alpha-docs
+- build-from-source
+- documentation
+- install
+- prebuilt-binary
+- readme
