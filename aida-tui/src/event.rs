@@ -11,7 +11,9 @@
 ///   * each PTY host's reader thread — [`TuiEvent::PtyOutput`] chunks and
 ///     a final [`TuiEvent::PtyExited`] when the child closes the PTY;
 ///   * the overlay's background refresh thread — one [`TuiEvent::Overlay
-///     Refresh`] when the `gh`-backed `aida status --json` lands.
+///     Refresh`] when the `gh`-backed `aida status --json` lands;
+///   * the strip-rotation ticker — one [`TuiEvent::Tick`] every ~3s
+///     (BUG-109).
 pub enum TuiEvent {
     /// A keystroke / resize / paste from the real terminal.
     Input(crossterm::event::Event),
@@ -25,4 +27,7 @@ pub enum TuiEvent {
     /// refresh completed — repaint the overlay if it is still open
     /// (STORY-133). Boxed to keep the enum small. trace:STORY-133
     OverlayRefresh(Box<crate::overlay::OverlayModel>),
+    /// A ~3s timer tick — advances the status strip's rotating
+    /// discovery hint (BUG-109). trace:BUG-109 | ai:claude
+    Tick,
 }
