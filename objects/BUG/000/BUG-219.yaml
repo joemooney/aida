@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:53:25.986865011Z
-modified_at: 2026-05-16T23:04:27.415290503Z
+modified_at: 2026-05-16T23:07:02.287860804Z
 req_type: Bug
 tags:
 - approved-state
@@ -60,6 +60,18 @@ comments:
   content: Commit 8d15a3b8 references this requirement
   created_at: 2026-05-16T23:04:16.040685974Z
   modified_at: 2026-05-16T23:04:16.040685974Z
+- id: 019e330b-0b0f-7b62-8802-513c597eda73
+  author: joe
+  content: |-
+    Implemented via PR-57 (commit 8d15a3b8):
+
+    - New shared helper `collect_stale_review_story_flips` + `stale_review_audit_comment` wording helper.
+    - `auto_bump_done_to_completed` (aida pull) and `handle_db_reconcile_status` (manual replay) now flip review stories at Approved OR InProgress to Completed once their `(#N)` PR merges, with an audit comment naming why review was skipped.
+    - reconcile-status now covers the full {Approved, InProgress, Done} review-story set.
+
+    Test status: 508/508 tests green (4 new BUG-219 tests; TASK-246 tests unchanged)
+  created_at: 2026-05-16T23:07:02.287860804Z
+  modified_at: 2026-05-16T23:07:02.287860804Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T23:04:27.415290503Z
