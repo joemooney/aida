@@ -1,0 +1,26 @@
+id: 019e3282-8495-7f21-95e7-c02c549b3c8b
+spec_id: STORY-256
+agreed_id: STORY-256
+title: 'Review PR-52: TASK-267: session-end hint shows full review→merge→pull path + self-merge'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3273`) for branch `task-267`.
+
+  - PR: <https://github.com/joemooney/aida/pull/52>
+  - Branch: `task-267` → `main`
+
+  ## Covers
+
+  - TASK-267
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 52` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T20:37:54.965934500Z
+modified_at: 2026-05-16T20:37:54.965934500Z
+req_type: Story
