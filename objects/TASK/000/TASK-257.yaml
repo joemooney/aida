@@ -115,12 +115,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-15: *\"I will have no immediate Windows or MacOS users. I wonder if we should just continue to support but stop building them in the CI to cut down cycle time.\"* Pattern (b) chosen — split into nightly + dispatch workflows.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:55:58.012552109Z
-modified_at: 2026-05-16T19:48:50.306365553Z
+modified_at: 2026-05-16T19:51:10.476620001Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -128,3 +128,7 @@ tags:
 - cross-platform
 - cycle-time
 - workflow-split
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-16T19:51:10.476620001Z
+  implemented_by: joe
