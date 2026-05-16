@@ -80,12 +80,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:40:34.651717351Z
-modified_at: 2026-05-16T18:40:34.651717351Z
+modified_at: 2026-05-16T18:40:39.562701934Z
 req_type: Task
 tags:
 - aida-pickup
 - alpha-readiness
 - batch-drain
+- batch:workflow-hint-polish
 - cluster-mode
 - next-steps
 - workflow-automation
