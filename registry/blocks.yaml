@@ -231,3 +231,11 @@ blocks:
   range_end: 414
   next: 315
   allocated_at: 2026-05-16T19:34:03.868877688Z
+- node_id: '1'
+  owner: joe
+  hostname: imac
+  type_prefix: BUG
+  range_start: 517
+  range_end: 616
+  next: 517
+  allocated_at: 2026-05-16T20:38:49.330503240Z
