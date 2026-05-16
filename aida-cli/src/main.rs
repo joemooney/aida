@@ -24448,6 +24448,49 @@ fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
     found.into_iter().next()
 }
 
+/// TASK-270: strip a redundant leading `batch:` prefix off a string,
+/// returning `Some(rest)` only when the prefix was present
+/// (case-insensitive). `batch:` is the literal tag printed by `aida
+/// queue list`; first-users reflexively copy that whole token back into
+/// `--batch` or a positional id. trace:TASK-270 | ai:claude
+fn strip_batch_prefix(s: &str) -> Option<&str> {
+    let prefix = "batch:";
+    s.get(..prefix.len())
+        .filter(|p| p.eq_ignore_ascii_case(prefix))
+        .map(|_| &s[prefix.len()..])
+}
+
+/// TASK-270: normalize a `--batch` flag value so `--batch NAME` and the
+/// redundant `--batch batch:NAME` (the literal tag from `aida queue
+/// list`) both resolve to `NAME`. trace:TASK-270 | ai:claude
+fn normalize_batch_name(s: &str) -> &str {
+    strip_batch_prefix(s).unwrap_or(s)
+}
+
+/// TASK-270: resolve the effective positional id and batch name for
+/// `aida queue work`. Accepts `batch:NAME` as a positional id
+/// (equivalent to `--batch NAME`) and strips a redundant `batch:`
+/// prefix off the `--batch` flag value. At most one element of the
+/// returned `(id, batch)` pair is `Some` — clap's
+/// `conflicts_with(batch, id)` already rejects passing both, and a
+/// `batch:`-prefixed positional is rerouted to the batch slot.
+/// trace:TASK-270 | ai:claude
+fn resolve_queue_work_batch<'a>(
+    id: Option<&'a str>,
+    batch: Option<&'a str>,
+) -> (Option<&'a str>, Option<&'a str>) {
+    if let Some(b) = batch {
+        return (None, Some(normalize_batch_name(b)));
+    }
+    if let Some(i) = id {
+        if let Some(name) = strip_batch_prefix(i) {
+            return (None, Some(name));
+        }
+        return (Some(i), None);
+    }
+    (None, None)
+}
+
 /// TASK-234: the three in-flight buckets, split out of
 /// [`render_in_flight_grouped`] so the classification — which only ever
 /// touches git (`log` / `merge-base` / `branch --contains`), never gh —
@@ -38380,6 +38423,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             by_batch,
         } => {
             let user_id = get_user(user);
+            // TASK-270: tolerate a redundant `batch:` prefix on `--batch`
+            // (the value this very command prints), so `--batch batch:NAME`
+            // and `--batch NAME` resolve identically. trace:TASK-270
+            let batch_filter: Option<String> = batch_filter
+                .as_deref()
+                .map(|n| normalize_batch_name(n).to_string());
             let raw_entries = if *global {
                 Vec::new()
             } else {
@@ -40063,6 +40112,22 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             user,
         } => {
             let user_id = get_user(user);
+            // TASK-270: accept `batch:NAME` as a positional id (equivalent
+            // to `--batch NAME`) and strip a redundant `batch:` prefix off
+            // the `--batch` flag value. `batch:` is the literal tag printed
+            // by `aida queue list`; first-users reflexively copy that whole
+            // token back as an identifier. trace:TASK-270 | ai:claude
+            let (effective_id, effective_batch) =
+                resolve_queue_work_batch(id.as_deref(), batch.as_deref());
+            // TASK-270: clap rejects `--batch` alongside `--type`; the
+            // positional `batch:NAME` form bypasses that rule, so enforce
+            // the same conflict here rather than silently dropping
+            // `--type`. trace:TASK-270 | ai:claude
+            if effective_batch.is_some() && type_filter.is_some() {
+                anyhow::bail!(
+                    "`--type` does not apply to batch pickup — drop it, or pass an EPIC/STORY id for a typed cluster"
+                );
+            }
             // STORY-246: `--auto-complete` drives the full
             // implementer→CI→reviewer→merge→pull→build lifecycle. It is a
             // sibling orchestrator, not a decoration of the exec path —
@@ -40074,7 +40139,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 let mode = auto_complete.as_deref().unwrap_or("full");
                 let variant = auto_complete::AutoCompleteVariant::parse(mode)
                     .map_err(|e| anyhow::anyhow!(e))?;
-                let spec = id.clone().ok_or_else(|| {
+                let spec = effective_id.map(|s| s.to_string()).ok_or_else(|| {
                     anyhow::anyhow!(
                         "`aida queue work --auto-complete` requires a SPEC id \
                          (e.g. `aida queue work TASK-247 --auto-complete`)"
@@ -40096,7 +40161,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // invocation drains one item (head-pickup loop semantics —
             // re-run after each session exits to advance).
             // trace:TASK-229 | ai:claude
-            let resolved_id: Option<String> = if let Some(name) = batch {
+            let resolved_id: Option<String> = if let Some(name) = effective_batch {
+                if name.is_empty() {
+                    anyhow::bail!(
+                        "batch name is empty — pass `--batch NAME` or `aida queue work batch:NAME`"
+                    );
+                }
                 let store_for_batch = storage.load()?;
                 let user_id_for_batch = user_id.clone();
                 let entries = storage.queue_list(&user_id_for_batch, false)?;
@@ -40184,12 +40254,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if *dry_run {
                     anyhow::bail!("--dry-run currently only applies with --batch");
                 }
-                id.clone()
+                effective_id.map(|s| s.to_string())
             };
             handle_queue_work(
                 storage,
                 &user_id,
-                resolved_id.as_deref().or(id.as_deref()),
+                resolved_id.as_deref().or(effective_id),
                 permission_mode.as_deref(),
                 *no_launch,
                 role.as_deref(),
@@ -40216,7 +40286,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             handle_queue_progress(
                 storage,
                 session.as_deref(),
-                batch.as_deref(),
+                // TASK-270: strip a redundant `batch:` prefix off `--batch`
+                // so `--batch batch:NAME` == `--batch NAME`. trace:TASK-270
+                batch.as_deref().map(normalize_batch_name),
                 since.as_deref(),
                 *verbose,
             )?;
@@ -40755,6 +40827,75 @@ mod queue_progress_tests {
 
         let want_miss = "batch:elsewhere";
         assert!(!tags.iter().any(|t| t.eq_ignore_ascii_case(want_miss)));
+    }
+
+    // TASK-270: `batch:NAME` is the literal tag printed by `aida queue
+    // list`; first-users copy-paste it back. Accept it as a positional id
+    // and tolerate the redundant prefix on `--batch`. trace:TASK-270
+    #[test]
+    fn strip_batch_prefix_only_matches_the_prefix() {
+        assert_eq!(
+            strip_batch_prefix("batch:plan-tooling"),
+            Some("plan-tooling")
+        );
+        // Case-insensitive on the prefix.
+        assert_eq!(strip_batch_prefix("BATCH:Plan"), Some("Plan"));
+        assert_eq!(strip_batch_prefix("Batch:x"), Some("x"));
+        // Empty name after the prefix is still a (degenerate) match.
+        assert_eq!(strip_batch_prefix("batch:"), Some(""));
+        // Non-batch identifiers are left alone.
+        assert_eq!(strip_batch_prefix("TASK-270"), None);
+        assert_eq!(strip_batch_prefix("batchx"), None);
+        assert_eq!(strip_batch_prefix(""), None);
+        // A multi-byte leading char must not panic the byte-slice.
+        assert_eq!(strip_batch_prefix("日本語"), None);
+    }
+
+    #[test]
+    fn normalize_batch_name_strips_redundant_prefix() {
+        // `--batch batch:NAME` and `--batch NAME` collapse to the same name.
+        assert_eq!(
+            normalize_batch_name("batch:workflow-hint-polish"),
+            "workflow-hint-polish"
+        );
+        assert_eq!(
+            normalize_batch_name("workflow-hint-polish"),
+            "workflow-hint-polish"
+        );
+        assert_eq!(normalize_batch_name("BATCH:x"), "x");
+    }
+
+    #[test]
+    fn queue_work_positional_batch_equals_batch_flag() {
+        // The whole point of TASK-270: `aida queue work batch:NAME` and
+        // `aida queue work --batch NAME` resolve to the identical
+        // (effective_id, effective_batch) pair — None id, Some(name).
+        let from_positional = resolve_queue_work_batch(Some("batch:workflow-hint-polish"), None);
+        let from_flag = resolve_queue_work_batch(None, Some("workflow-hint-polish"));
+        assert_eq!(from_positional, (None, Some("workflow-hint-polish")));
+        assert_eq!(from_positional, from_flag);
+
+        // A redundant `batch:` on the flag value is tolerated too.
+        assert_eq!(
+            resolve_queue_work_batch(None, Some("batch:workflow-hint-polish")),
+            (None, Some("workflow-hint-polish"))
+        );
+
+        // A plain SPEC-ID positional stays an id, not a batch.
+        assert_eq!(
+            resolve_queue_work_batch(Some("TASK-270"), None),
+            (Some("TASK-270"), None)
+        );
+
+        // Bare positional `batch:` resolves to an empty batch name — the
+        // Work handler bails on it with a clear message.
+        assert_eq!(
+            resolve_queue_work_batch(Some("batch:"), None),
+            (None, Some(""))
+        );
+
+        // No id, no flag → nothing resolved (head-pickup path).
+        assert_eq!(resolve_queue_work_batch(None, None), (None, None));
     }
 }
 

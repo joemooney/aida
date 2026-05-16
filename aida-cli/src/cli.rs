@@ -2362,7 +2362,10 @@ pub enum QueueCommand {
     Work {
         /// Queued requirement ID (UUID, SPEC-ID, or agreed-id) for item
         /// pickup, OR an EPIC/STORY id with queued children for cluster
-        /// pickup. Omit to pick up the head of the active role's queue.
+        /// pickup, OR `batch:NAME` for batch pickup (the positional
+        /// equivalent of `--batch NAME` — accepts the literal tag printed
+        /// by `aida queue list`). Omit to pick up the head of the active
+        /// role's queue.
         id: Option<String>,
         /// Permission mode for the launched claude. Resolution order:
         ///   1. this flag
