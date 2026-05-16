@@ -1,0 +1,56 @@
+id: 019e32fe-9662-7633-9390-34fab753f3e3
+spec_id: BUG-219
+agreed_id: BUG-219
+title: 'auto-bump: complete review stories at Approved when their PR merges without ever being In Progress (BUG-113 sibling)'
+description: |-
+  \`aida pr\` auto-queues a \`Review PR-N\` story at status \`Approved\` (ready-to-work, not approved-verdict). If the user self-merges the PR WITHOUT ever spawning a reviewer session, the review story stays at \`Approved\` forever — accumulating stale entries in the reviewer queue.
+
+  BUG-113 covers the \"review story at Done, PR merged\" case via the BUG-106 Covers-chain. This BUG is the **sibling** case: review story at Approved, PR merged. Different state, same outcome (stale entry).
+
+  ## Observed (2026-05-16)
+
+  After 4 PRs shipped via \`--auto-complete\` (PR-52, PR-53, PR-54, PR-56) and were self-merged in dialog-session recovery (orchestrator failed at phase 2; never spawned reviewer), all 4 review stories (STORY-256, 257, 258, 259) sat at status Approved. Reviewer queue showed 4 stale items:
+
+  \`\`\`
+  PR-52 (STORY-256) ... [Approved] ...
+  PR-53 (STORY-257) ... [Approved] ...
+  PR-54 (STORY-258) ... [Approved] ...
+  PR-56 (STORY-259) ... [Approved] ...
+  \`\`\`
+
+  Per-spec \`aida db reconcile-status --spec STORY-256 --dry-run\` returns: *\"No eligible flips for STORY-256. Either it's not at status Done, or no commit in the scan range references it.\"* — confirming reconcile only handles Done.
+
+  Manual fix: \`aida edit STORY-256..259 --status completed\` for each.
+
+  ## Acceptance
+
+  - [ ] Auto-bump on \`aida pull\` detects this case: review story at status Approved + its referenced PR (\`About: PR-N\` field or similar) is MERGED → flip to Completed
+  - [ ] Same logic in \`aida db reconcile-status\` (the manual replay tool) — extend it to scan Approved review stories whose PR has merged
+  - [ ] Composes with BUG-113's chain logic: both Approved-cycle-skipped AND Done-cycle-completed paths handled
+  - [ ] Audit comment on the flipped review story: *\"auto-completed: PR-N merged without a reviewer session (self-merge or orchestrator skipped phase 3)\"* — so the user knows it didn't go through review
+  - [ ] Regression test: 4 review stories at Approved, PR merged, \`aida pull\` → all 4 flipped to Completed in one pass
+
+  ## Composes with
+
+  - **BUG-113** (auto-bump + reconcile-status review-story chain — Done state) — direct sibling; this is the Approved-state case
+  - **BUG-106** (cluster-PR auto-bump via review-story linkage) — same auto-bump infrastructure
+  - **TASK-246** (auto-complete review story when implementer fixes pass + user self-merges) — overlapping intent; this BUG extends it to cover the never-touched case
+  - **STORY-246** (\`--auto-complete\` orchestrator) — orchestrator-driven flows skip phase 3 if BUG-217 (now fixed) hit at phase 2; this BUG closes the loop
+
+  ## Origin
+
+  User observed 2026-05-16: *\"would \`aida work\` clean these up or what should I do?\"* — after seeing 4 stale Approved review stories in the reviewer queue. \`aida queue work\` isn't the right cleanup tool (merged PRs can't be reviewed); manual flip works; the underlying auto-bump should handle this case.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T22:53:25.986865011Z
+modified_at: 2026-05-16T22:53:25.986865011Z
+req_type: Bug
+tags:
+- approved-state
+- auto-bump
+- bug-113-sibling
+- reconcile-status
+- review-story
+- workflow-state
