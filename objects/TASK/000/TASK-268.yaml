@@ -1,0 +1,70 @@
+id: 019e31d7-9772-7090-8eda-45d2d67e6e9b
+spec_id: TASK-268
+agreed_id: TASK-268
+title: Strip internal SPEC-ID citations from user-facing workflow hints (e.g., 'per TASK-85')
+description: |-
+  AIDA's workflow hints occasionally cite internal SPEC IDs in user-facing output:
+
+  \`\`\`
+  ⓘ Workflow hint: PR #47 has a reviewer story in the queue.
+    Start the review with \`aida queue work STORY-249\` (or \`aida queue work PR-47\` per TASK-85).
+  \`\`\`
+
+  The phrase **\"per TASK-85\"** cites the TASK that implemented PR-N → review-story routing. To AIDA developers it's a useful breadcrumb; to first-users it's noise — a SPEC-ID with no surrounding context, meaningless without knowing the project's history.
+
+  ## Pattern to audit
+
+  Grep the codebase + skill templates for patterns like \`per (TASK|BUG|STORY)-N\` and \`(see (TASK|BUG|STORY)-N)\` in user-facing strings (println, eprintln, banner text, hint emitters). These should:
+
+  - **Stay** in: commit messages, code comments, changelog entries, plan files, spec descriptions
+  - **Leave** in user-facing strings: workflow hints, banners, error messages, CLI output
+
+  ## Specific instance — \`aida session end\`'s post-CI hint
+
+  Current:
+  \`\`\`
+  ⓘ Workflow hint: PR #47 has a reviewer story in the queue.
+    Start the review with \`aida queue work STORY-249\` (or \`aida queue work PR-47\` per TASK-85).
+  \`\`\`
+
+  Better:
+  \`\`\`
+  ⓘ Workflow hint: PR #47 ready for review.
+    Start the review:  aida queue work PR-47
+    (or by spec id:    aida queue work STORY-249)
+  \`\`\`
+
+  Or, even cleaner, drop the alt form entirely — \`PR-47\` is more intuitive and matches \`gh pr view N\` vocabulary that users already know.
+
+  ## Acceptance
+
+  - [ ] Audit \`aida-cli/src/\` for \`per <SPEC-ID>\`, \`see <SPEC-ID>\`, \`(trace:<SPEC-ID>)\` patterns in println/eprintln/format! strings emitted as user-facing output
+  - [ ] Strip the citations from user-facing text; keep them in code comments and structured logs (telemetry) where useful for AIDA developers
+  - [ ] Specific fix: \`aida session end\`'s post-CI hint — recommend ONE command (\`aida queue work PR-N\`) without the alt-form + citation
+  - [ ] If alternative ID forms are genuinely useful to surface, present them as \`(or by spec id: ...)\` not \`(or ... per <SPEC>)\`
+  - [ ] Update CLAUDE.md or a new \`docs/user-facing-text-conventions.md\` with the rule: SPEC citations are for developer artifacts (commits, comments, plans, telemetry), not user-facing output
+
+  ## Composes with
+
+  - **TASK-267** (workflow hint stops short — merge step missing) — same family of session-end hint quality
+  - **TASK-260** (Path/Action/Why next-steps tables) — same family of polished UX surfaces
+  - **TASK-259** (\`/aida-pr\` banner) — same family
+  - **First-users alpha readiness** — internal citations are jargon for outsiders
+
+  ## Origin
+
+  User asked 2026-05-16: *\"why \`Start the review with aida queue work STORY-249 (or aida queue work PR-47 per TASK-85).\`? why not just \`aida queue work PR-47\`? What does \`per TASK-85\` mean?\"* — confirmed the SPEC-ID citation as a user-facing wart.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T17:31:13.138421089Z
+modified_at: 2026-05-16T17:31:13.138421089Z
+req_type: Task
+tags:
+- alpha-readiness
+- first-users
+- internal-citations
+- polish
+- user-facing-text
+- workflow-hint
