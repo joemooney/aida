@@ -46,12 +46,12 @@ description: |-
   ## Origin
 
   User attempted \`aida queue work TASK-267 --auto-complete\` 2026-05-16. Phase 1 succeeded, phase 2's \`aida session end --wait-ci\` subprocess failed with ENOENT despite parent shell having \`aida\` resolvable.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:43:22.679784440Z
-modified_at: 2026-05-16T20:43:22.679784440Z
+modified_at: 2026-05-16T22:58:33.574009264Z
 req_type: Bug
 tags:
 - auto-complete
