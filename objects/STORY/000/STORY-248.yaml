@@ -1,0 +1,106 @@
+id: 019e31d1-687d-70d1-97f2-f02a19f093cc
+spec_id: STORY-248
+agreed_id: STORY-248
+title: 'Stacked-branch awareness: aida queue work --stack + auto-rebase on pull for parallel implementation pipelining'
+description: |-
+  Enable the **parallel implementation pipelining** workflow: while spec X's PR is in CI/review/merge cycle, start spec Y in parallel on a branch stacked atop X's branch. When X merges, Y rebases onto the new main automatically. Eliminates the ~15-30 min \"dead time\" per spec between work completion and the next pickup.
+
+  Today, \`aida queue work\` always branches from \`origin/main\`. If you pick up spec Y while X is unmerged, Y doesn't see X's commits — you risk duplicate work on shared files. If you branch manually from X's branch (\`git checkout task-x && git checkout -b task-y\`), AIDA doesn't track the dependency, so rebases when X merges are manual.
+
+  ## The shipped primitives this builds on
+
+  | | What it does |
+  |---|---|
+  | \`aida rebase --dry-run --json\` | Fetches origin, classifies (clean / ahead-only / behind-only / diverged-safe / diverged-risky) |
+  | \`aida rebase --auto\` | Executes the rebase if classified safe |
+  | \`/aida-rebase\` skill | Conversational walkthrough (shipped today as TASK-103/104/105) |
+  | \`aida pull\` | Fast-forward main + auto-bump |
+
+  The PRIMITIVES are solid. What's missing is **stack-context tracking** so AIDA knows which branches depend on which.
+
+  ## Acceptance — three sub-features
+
+  ### (1) \`aida queue work --stack\` / \`--base <branch>\`
+
+  - [ ] \`aida queue work TASK-Y --stack\` auto-detects the most recent un-merged in-flight implementer branch and uses it as the base for Y's branch (instead of \`origin/main\`)
+  - [ ] \`aida queue work TASK-Y --base <branch>\` explicit form, takes a specific branch name (must exist locally and pass a safety check: branch tip's PR is still open OR --force)
+  - [ ] Without either flag, behavior unchanged: branches from \`origin/main\` (default)
+  - [ ] Refuse if the named base branch has been merged + auto-removed (suggest the user pull and branch from main)
+  - [ ] Session manifest at \`.aida/sessions/<id>.toml\` records the base branch (\`parent_branch = \"task-x\"\`) so other tooling can detect the stack
+
+  ### (2) Stack tracking
+
+  - [ ] AIDA maintains \`.aida/stacks.json\` (or similar) with the dependency graph: \`{ \"task-y\": \"task-x\", \"task-z\": \"task-y\" }\` — chain of branches
+  - [ ] Stack entries are added on \`aida queue work --stack\` / \`--base\` and removed when the dependent branch is merged or deleted
+  - [ ] \`aida stack show\` prints the current stack tree (\`task-x → task-y → task-z\`) with each branch's PR + CI + lease state
+  - [ ] \`aida stack list\` lists all known stacks (multi-stack scenarios)
+
+  ### (3) Auto-rebase on \`aida pull\`
+
+  - [ ] When \`aida pull\` runs and detects that \`origin/main\` has new commits AND there are tracked stacked branches behind, it offers (or executes, with --auto) \`aida rebase --auto\` for each
+  - [ ] Order: rebases bottom-of-stack first (the branch closest to main), then propagates up the chain
+  - [ ] If any rebase fails (diverged-risky classification), aborts the cascade and surfaces a clear error: \"task-y can't auto-rebase; conflicts in <file>. Run \`/aida-rebase\` interactively.\"
+  - [ ] Safe by default: prompts before rebasing unless \`--auto\` is passed
+  - [ ] Composes with \`/aida-rebase\` skill — if auto-rebase fails, the user is dropped into the conversational walkthrough
+
+  ## Workflow example
+
+  \`\`\`
+  # Currently shipped TASK-X as PR-N; awaiting CI/review/merge
+  $ aida queue work TASK-Y --stack
+    ▶ detected current branch task-x (PR-N open); using as base
+    ▶ created branch task-y from task-x at <sha>
+    ✓ session 019e... started
+
+  # Work on TASK-Y in parallel...
+
+  # Meanwhile PR-N merges + autonomous pull elsewhere
+  $ aida pull
+    ▶ main moved 3 commits ahead
+    ▶ rebasing tracked stacked branches:
+        task-y (was based on task-x, now merged into main)
+          ✓ rebased onto main cleanly (5 commits, no conflicts)
+    ✓ pull + rebase complete
+  \`\`\`
+
+  ## Out of scope
+
+  - **\`--auto-complete --pipelined\`** — autonomous flavor where the orchestrator picks up the NEXT spec at phase 4 (merge), not phase 6 (build done). Bigger surface; follow-up STORY.
+  - **Multi-stack** — multiple parallel stacks rebasing simultaneously. The MVP handles single-stack; multi-stack is an extension.
+  - **Stack-aware reviewer UI** — reviewing PR-N+1 with awareness of PR-N's state. Reviewer-side concern; follow-up.
+  - **\`git rebase\` strategies** (interactive, autosquash, etc.) — out of scope; uses default rebase semantics.
+
+  ## Composes with
+
+  - **STORY-246** (\`--auto-complete\` orchestrator, just shipped) — natural sibling. \`--auto-complete --pipelined\` would call this workflow.
+  - **TASK-249** (\`/aida-drain-queue\` skill, not yet shipped) — drain becomes faster when pipelining is available
+  - **BUG-114** (\`--auto-complete\` disambiguation) — must fix first; otherwise stack-aware pickup hits the same lease-tracking bug
+  - **\`/aida-rebase\` skill** (shipped earlier today) — already handles the rebase mechanics; this STORY adds the stack context
+  - **\`aida pull\`** — extends its responsibility to include stacked-branch rebase
+
+  ## Why post-alpha, not alpha-gating
+
+  First users (tech-savvy friends/colleagues) won't pipeline on day one — they'll do one spec at a time, see how it goes. Pipelining is a power-user workflow that pays off after the user has done 5-10 specs sequentially and notices the dead time.
+
+  But YOU specifically will benefit immediately. Today's session shipped ~10 specs sequentially with ~15 min CI gaps each = 2-3 hours of dead time that could have been parallel work. Worth filing now even if it ships after alpha.
+
+  ## Origin
+
+  User asked 2026-05-16 (mid-alpha-prep): *\"say I want to get a jump start on work so that I don't need to wait on the CI and merge to complete. Let's assume I am optimistic that the CI, /aida-review and pull all work as expected, I would then need to rebase if I prematurely started work on another task. I want to know how to make that an easier task, maybe an /aida-rebase?\"*
+
+  The \`/aida-rebase\` skill exists; the missing layer is stack context, which this STORY provides.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T17:24:27.901638768Z
+modified_at: 2026-05-16T17:24:27.901638768Z
+req_type: Story
+tags:
+- advanced-user
+- dead-time-elimination
+- parallel-pipelining
+- post-alpha
+- rebase
+- stacked-branches
+- workflow-automation
