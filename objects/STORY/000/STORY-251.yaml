@@ -1,0 +1,26 @@
+id: 019e3232-407d-7b90-afd9-593de92e46c2
+spec_id: STORY-251
+agreed_id: STORY-251
+title: 'Review PR-49: feat(cli): subdivide queue-list Done section into 4 PR-review states (TASK-250)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3217`) for branch `task-250`.
+
+  - PR: <https://github.com/joemooney/aida/pull/49>
+  - Branch: `task-250` → `main`
+
+  ## Covers
+
+  - TASK-250
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 49` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T19:10:14.653893327Z
+modified_at: 2026-05-16T19:10:14.653893327Z
+req_type: Story
