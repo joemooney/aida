@@ -8,10 +8,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:29:17.082223638Z
-modified_at: 2026-05-16T17:29:17.082223638Z
+modified_at: 2026-05-16T17:32:15.625540875Z
 req_type: Task
 tags:
 - alpha-readiness
+- batch:workflow-hint-polish
 - first-users
 - merge
 - self-merge
