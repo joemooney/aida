@@ -41664,6 +41664,49 @@ fn read_verdict_file(
     })
 }
 
+/// Lease ids present in `.aida/sessions/` — `<id>.toml` files only, *not*
+/// the `<id>.activity.toml` / `<id>.manifest.toml` companions. A lease id is
+/// a dot-free UUID, so a real lease file's name has exactly one `.`; every
+/// companion file has two. (The old set-diff filter excluded only
+/// `.activity.toml`, so it miscounted `.manifest.toml` as a lease — BUG-114.)
+/// trace:BUG-114 | ai:claude
+fn lease_ids_in(sessions_dir: &std::path::Path) -> Vec<String> {
+    let mut ids = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(sessions_dir) {
+        for entry in rd.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if let Some(stem) = name.strip_suffix(".toml") {
+                    if !stem.contains('.') {
+                        ids.push(stem.to_string());
+                    }
+                }
+            }
+        }
+    }
+    ids.sort();
+    ids
+}
+
+/// Find the session lease that `aida queue work --session-id <uuid>` created,
+/// by matching the orchestrator-minted `claude_session_id` against the value
+/// `aida queue work` records in each session manifest. This is the
+/// deterministic replacement for the lease-set-diff heuristic: it pins the
+/// orchestrated session by id, so concurrent leases (parallel user sessions,
+/// nested `/aida-pickup`) and the `.manifest.toml` companion file cannot
+/// confuse it. Returns `(lease_id, branch)`. trace:BUG-114 | ai:claude
+fn find_orchestrated_lease(
+    project_root: &std::path::Path,
+    claude_session_id: &str,
+) -> Option<(String, String)> {
+    let manifest = session_manifest::list_all(project_root)
+        .into_iter()
+        .find(|m| m.claude_session_id.as_deref() == Some(claude_session_id))?;
+    let lease_path = leases_dir(project_root).join(format!("{}.toml", manifest.session_id));
+    let body = std::fs::read_to_string(&lease_path).ok()?;
+    let peek: LeasePeek = toml::from_str(&body).ok()?;
+    Some((peek.id, peek.branch))
+}
+
 /// The real [`auto_complete::PhaseDriver`]. Holds the project root + the
 /// state discovered as phases run (branch, lease id, PR number).
 /// trace:STORY-246 | ai:claude
@@ -41705,60 +41748,40 @@ impl RealPhaseDriver {
         std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"))
     }
 
-    /// Filenames of the current lease files (`<id>.toml`, excluding the
-    /// `<id>.activity.toml` companion).
-    fn lease_snapshot(&self) -> std::collections::HashSet<String> {
-        let mut set = std::collections::HashSet::new();
-        if let Ok(rd) = std::fs::read_dir(self.sessions_dir()) {
-            for entry in rd.flatten() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.ends_with(".toml") && !name.ends_with(".activity.toml") {
-                        set.insert(name.to_string());
-                    }
-                }
-            }
-        }
-        set
-    }
-
-    /// Find the single lease file created since `before`; return its
-    /// `(id, branch)`. trace:STORY-246 | ai:claude
-    fn discover_new_lease(
+    /// Locate the session lease `aida queue work --session-id <uuid>` created
+    /// for this orchestrator phase, pinned by the `claude_session_id` the
+    /// orchestrator minted. Deterministic — unaffected by concurrent leases
+    /// from parallel user sessions or nested `/aida-pickup`, and immune to
+    /// the `.manifest.toml` companion file that the old lease-set diff
+    /// miscounted as a second lease (the BUG-114 phase-1 failure). On a miss,
+    /// the error names the candidate lease ids so the user can resume one.
+    /// trace:BUG-114 | ai:claude
+    fn discover_orchestrated_lease(
         &self,
-        before: &std::collections::HashSet<String>,
+        claude_session_id: &str,
     ) -> Result<(String, String), auto_complete::PhaseFailure> {
-        let after = self.lease_snapshot();
-        let mut fresh: Vec<String> = after.difference(before).cloned().collect();
-        fresh.sort();
-        match fresh.len() {
-            1 => {
-                let path = self.sessions_dir().join(&fresh[0]);
-                let body = std::fs::read_to_string(&path).map_err(|e| {
-                    auto_complete::PhaseFailure::new(format!(
-                        "could not read the new session lease {}: {e}",
-                        path.display()
-                    ))
-                })?;
-                let peek: LeasePeek = toml::from_str(&body).map_err(|e| {
-                    auto_complete::PhaseFailure::new(format!(
-                        "could not parse the new session lease: {e}"
-                    ))
-                })?;
-                Ok((peek.id, peek.branch))
+        find_orchestrated_lease(&self.project_root, claude_session_id).ok_or_else(|| {
+            let candidates = lease_ids_in(&self.sessions_dir());
+            if candidates.is_empty() {
+                auto_complete::PhaseFailure::new(
+                    "no session lease appeared — `aida queue work` did not start a session",
+                )
+            } else {
+                auto_complete::PhaseFailure::new(format!(
+                    "could not match the orchestrated session (claude id {}) to a \
+                     session lease. Candidate lease(s): {}. Resume one manually with \
+                     `aida queue work {} --resume <session-id>`.",
+                    &claude_session_id[..claude_session_id.len().min(8)],
+                    candidates.join(", "),
+                    self.spec,
+                ))
             }
-            0 => Err(auto_complete::PhaseFailure::new(
-                "no new session lease appeared — `aida queue work` did not start a session",
-            )),
-            _ => Err(auto_complete::PhaseFailure::new(
-                "multiple new session leases appeared — cannot disambiguate the orchestrated session",
-            )),
-        }
+        })
     }
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn run_implementer(&mut self) -> Result<(), auto_complete::PhaseFailure> {
-        let before = self.lease_snapshot();
         let session_uuid = uuid::Uuid::now_v7().to_string();
 
         let mut cmd = std::process::Command::new(self.aida_exe());
@@ -41783,8 +41806,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )));
         }
 
-        // Discover the session `queue work` created.
-        let (lease_id, branch) = self.discover_new_lease(&before)?;
+        // Locate the session `queue work` created — pinned by the id we
+        // minted into `--session-id`, not a lease-set diff (BUG-114).
+        let (lease_id, branch) = self.discover_orchestrated_lease(&session_uuid)?;
         self.implementer_lease = Some(lease_id);
         self.branch = Some(branch.clone());
 
@@ -41906,7 +41930,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let verdict_path = verdict_dir.join(format!("PR-{pr}.json"));
         let _ = std::fs::remove_file(&verdict_path); // clear any stale verdict
 
-        let before = self.lease_snapshot();
         let session_uuid = uuid::Uuid::now_v7().to_string();
         let scope = format!("PR-{pr}");
         let mut cmd = std::process::Command::new(self.aida_exe());
@@ -41941,7 +41964,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         // End the reviewer session (best-effort — the verdict is already in
         // hand, so a stuck reviewer worktree must not block the merge).
-        if let Ok((reviewer_lease, _)) = self.discover_new_lease(&before) {
+        if let Ok((reviewer_lease, _)) = self.discover_orchestrated_lease(&session_uuid) {
             let _ = std::process::Command::new(self.aida_exe())
                 .current_dir(&self.project_root)
                 .args(["session", "end", &reviewer_lease, "--yes", "--skip-ci"])
@@ -42423,6 +42446,70 @@ mod queue_work_resume_tests {
         let err =
             resolve_queue_work_launch("EPIC-26", None, false, Some("not-a-uuid")).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("uuid"));
+    }
+
+    #[test]
+    fn lease_ids_in_excludes_companion_files() {
+        // BUG-114: `.manifest.toml` (always written when `--session-id` is
+        // passed — which `--auto-complete` always does) and `.activity.toml`
+        // are companions, not leases. Counting them was the phase-1
+        // disambiguation failure.
+        let dir = tempfile::tempdir().unwrap();
+        let s = dir.path();
+        let lease = "019e0000-0000-7000-8000-000000000001";
+        std::fs::write(s.join(format!("{lease}.toml")), "id = \"x\"\n").unwrap();
+        std::fs::write(s.join(format!("{lease}.activity.toml")), "").unwrap();
+        std::fs::write(s.join(format!("{lease}.manifest.toml")), "").unwrap();
+        std::fs::write(s.join("not-a-lease.txt"), "").unwrap();
+        assert_eq!(lease_ids_in(s), vec![lease.to_string()]);
+    }
+
+    #[test]
+    fn find_orchestrated_lease_pins_session_by_claude_id() {
+        // BUG-114 regression: with several concurrent leases on disk — plus
+        // the orchestrated session's own `.manifest.toml` companion — the
+        // orchestrator must still resolve its session by the claude id it
+        // minted, not by diffing the lease set.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let sessions = root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+
+        let mint = |lease_id: &str, branch: &str, claude_id: Option<&str>| {
+            std::fs::write(
+                sessions.join(format!("{lease_id}.toml")),
+                format!("id = \"{lease_id}\"\nbranch = \"{branch}\"\n"),
+            )
+            .unwrap();
+            let manifest = session_manifest::SessionManifest {
+                session_id: lease_id.to_string(),
+                planned_at: chrono::Utc::now(),
+                plan_source: "queue work".to_string(),
+                claude_session_id: claude_id.map(str::to_string),
+                plan: None,
+                items: vec![],
+            };
+            session_manifest::save(&session_manifest::manifest_path(root, lease_id), &manifest)
+                .unwrap();
+        };
+
+        // Two unrelated concurrent sessions + the orchestrated one.
+        mint(
+            "019e1111-aaaa",
+            "feature-a",
+            Some("aaaaaaaa-1111-7000-8000-000000000000"),
+        );
+        mint("019e2222-bbbb", "feature-b", None);
+        let orchestrated = "019e3333-7000-8000-9000-000000000099";
+        mint("019e9999-cccc", "task-259", Some(orchestrated));
+
+        assert_eq!(
+            find_orchestrated_lease(root, orchestrated),
+            Some(("019e9999-cccc".to_string(), "task-259".to_string())),
+        );
+        // An unknown claude id resolves to nothing — the caller turns that
+        // into a candidate-naming failure message.
+        assert!(find_orchestrated_lease(root, "no-such-id").is_none());
     }
 }
 

@@ -324,11 +324,11 @@ The exit code is non-zero on this path. STOP — do not pretend the hand-off suc
 
 Step 12's "Next steps" template branches on whether step 11 succeeded — the *auto-queue skipped/failed* variant is for the by-design and needs-attention paths.
 
-### 12. Output the URL + Next steps — trace:TASK-87 trace:TASK-110
+### 12. Output the URL + Next steps — trace:TASK-87 trace:TASK-110 trace:TASK-260
 
-Print the URL `gh` returned. Then surface a structured
-`Next steps (recommended order):` block so the implementer→reviewer hand-off
-is explicit rather than improvised. Don't auto-execute — the user picks.
+Print the URL `gh` returned. Then surface a structured next-steps table so
+the implementer→reviewer hand-off is explicit rather than improvised. Don't
+auto-execute — the user picks.
 
 **Ordering rationale (TASK-110 + TASK-111):** end-implementer comes BEFORE
 start-reviewer. The implementer's lease owns the PR/STORY scope; a reviewer
@@ -355,33 +355,43 @@ Combine with step 11's auto-queue outcome (✓ filed / ⓘ already exists /
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
 `/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
 `🚪` = stop/exit. Recommendations must be CONCRETE — name the PR, the
-review story, the session ID. In this block the three rows are sequential
-steps to perform in order (▶ first, then ⏵, then 🚪), not alternatives —
-"recommended order" is literal.
+review story, the session ID.
 
-**Templates:**
+**Render multi-option prompts as a table.** When presenting 2+ paths
+forward, render as a markdown table with columns Path / What happens / Why.
+Use ▶ ⏵ 🚪 glyphs in the Path cell for the primary / alternate / exit
+semantics. Emit it as a real GFM markdown table — *not* wrapped in a code
+fence — so Claude Code's terminal draws the box-rule grid instead of raw
+pipes. The **Why** column is load-bearing: it explains the role / lease /
+worktree implication of each path, never just restates the action. Here
+the two rows are sequential steps (end the implementer session, *then*
+start the reviewer) — the table's row order is the recommended order, and
+the second row's Why states the dependency explicitly. Full convention:
+`docs/skills-convention.md`.
+
+**Templates.** Each shows prose lead-in lines followed by the next-steps
+table — print the lead-ins as normal text, then the table as a real GFM
+markdown table (no surrounding code fence):
 
 *Auto-queue succeeded (✓ filed or ⓘ already exists):*
 
-```
 PR-<N> opened: <url>
 <STORY-X> filed as review story; reviewer queue has it at head.
 
-Next steps (recommended order):
-  1. ▶ End implementer session (CI-aware) → Ctrl+D + `aida session end <session-id>` from parent shell — auto-probes CI; refuses if red so you can push fixups without re-claiming the lease; pass `--wait-ci` to block until green, `--skip-ci` to release immediately
-  2. ⏵ Start review session → from parent shell: `aida queue work <STORY-X>` (or `aida queue work PR-<N>`)
-```
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ End implementer session (CI-aware) | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the implementer lease; auto-probes CI and refuses if red so fixups land here without re-claiming the lease — `--wait-ci` blocks until green, `--skip-ci` releases now |
+| ⏵ Start review session | From the parent shell: `aida queue work <STORY-X>` (or `aida queue work PR-<N>`) | Reviewer role on the PR scope — needs the implementer lease released first (the ▶ row) or the two leases conflict |
 
 *Auto-queue skipped/failed (⚠ outcome from step 11):*
 
-```
 PR-<N> opened: <url>
 ⚠ Auto-queue review didn't fire (gh unauthenticated or PATH-broken).
 
-Next steps (recommended order):
-  1. ▶ End implementer session (CI-aware) → Ctrl+D + `aida session end <session-id>` from parent shell (probes CI; pass `--wait-ci`/`--skip-ci` as needed)
-  2. ⏵ Open reviewer manually (or merge inline) → from parent shell: `eval "$(aida role enter reviewer --owns PR-<N>)"` + `/aida-review --pr <N>`, or just `gh pr merge <N> --squash` if you're the sole reviewer
-```
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ End implementer session (CI-aware) | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the implementer lease; probes CI — pass `--wait-ci` / `--skip-ci` as needed |
+| ⏵ Open reviewer manually (or merge inline) | From the parent shell: `eval "$(aida role enter reviewer --owns PR-<N>)"` + `/aida-review --pr <N>` — or `gh pr merge <N> --squash` if you're the sole reviewer | Auto-queue filed no review story, so the reviewer hand-off is manual; still needs the implementer lease released first |
 
 Print exactly one block — don't dump both templates.
 
