@@ -193,7 +193,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:45:16.445271126Z
-modified_at: 2026-05-16T05:25:49.176665798Z
+modified_at: 2026-05-16T05:28:21.770138241Z
 req_type: Story
 tags:
 - alpha-gating
@@ -235,3 +235,8 @@ comments:
     Filed memory note \`feedback_check_in_flight_before_rejecting.md\` 2026-05-15: dialog role must check for active implementer leases before rejecting a STORY. PR-45 is the demonstration case — an in-flight session shipped the rejected spec in good faith, requiring the close-and-restart we're doing now.
   created_at: 2026-05-16T05:25:49.176665798Z
   modified_at: 2026-05-16T05:25:49.176665798Z
+- id: 019e2f41-cc0a-7e00-966a-4566f4ece1d1
+  author: joe
+  content: 'Salvage note from PR-45 review (closed without merge): the rejected PTY-host PR e1c67591 on branch `epic-26-4` contains architecture-independent code worth lifting into the launcher implementation — the merge-confirmation modal UX, and the `gh pr list` / `aida session leases` parsing helpers (`PrRow`, `LeaseRow`, `DashboardModel` in aida-tui/src/dashboard.rs). The Mode::Dashboard host-routing and Enter→spawn_tab paths are NOT reusable — they are the rejected model. trace:STORY-244 | ai:claude'
+  created_at: 2026-05-16T05:28:21.770138241Z
+  modified_at: 2026-05-16T05:28:21.770138241Z
