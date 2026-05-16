@@ -1,0 +1,64 @@
+id: 019e330f-772c-7c43-ab6a-998390cc8303
+spec_id: TASK-290
+agreed_id: TASK-290
+title: 'CI: upgrade actions to Node.js 24-compatible versions (actions/checkout v4→v5, arduino/setup-protoc) before Sep 2026 deadline'
+description: |-
+  GitHub Actions deprecated Node.js 20 (per the 2025-09-19 changelog). Two actions in AIDA's workflows currently run on Node.js 20:
+
+  - \`actions/checkout@v4\` — used in \`.github/workflows/ci.yml\` and \`cross-platform.yml\`
+  - \`arduino/setup-protoc@v3\` — used to install protoc for the gRPC build
+
+  CI annotations on every run flag this with:
+
+  \`\`\`
+  ! Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: actions/checkout@v4, arduino/setup-protoc@v3.
+  \`\`\`
+
+  ## Timeline
+
+  - **2026-06-02**: Node.js 24 becomes default; old actions still work via opt-out
+  - **2026-09-16**: Node.js 20 removed; old actions break
+
+  So roughly **4 months** of headroom; this is maintenance work, not an emergency.
+
+  ## Acceptance
+
+  - [ ] Audit all \`.github/workflows/*.yml\` for actions still on Node.js 20
+  - [ ] Upgrade \`actions/checkout@v4\` → \`actions/checkout@v5\` (Node.js 24-compatible; released summer 2025; drop-in replacement)
+  - [ ] Check \`arduino/setup-protoc\` for a Node.js 24-compatible version (likely \`@v4\` or a new release); if none exists yet, document the gap and revisit closer to the deadline OR switch to a different protoc installer
+  - [ ] Verify CI still passes on a test PR after the upgrades
+  - [ ] Annotations should clear from new CI runs
+  - [ ] If no compatible \`arduino/setup-protoc\` available, consider: installing protoc directly via apt/brew/curl in a step instead of using the action
+
+  ## Composes with
+
+  - **TASK-257** (CI Linux-only on PRs + cross-platform.yml) — both workflows need the upgrade; ship in one PR
+  - **STORY-260** (competitive analysis doc) — upstream-ecosystem deprecations are a category of signal worth tracking in \`signals-to-watch.md\`
+  - **BUG-103** (rustup-init flake) — sibling CI-maintenance concern
+
+  ## Why this matters
+
+  If left unaddressed past 2026-09-16, CI breaks across all platforms. Fixing now is cheap (probably 1 line per workflow file); fixing in 4 months under deadline pressure is dumb.
+
+  ## Out of scope
+
+  - Opt-in to Node.js 24 ahead of the deadline via \`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true\` — only useful for testing; the upstream upgrade is the proper fix
+  - Migrating away from arduino/setup-protoc to a custom protoc-install step — only if no v4 exists by deadline
+
+  ## Origin
+
+  User observed 2026-05-16 in CI annotations after PR-55's merge: *\"unsure what to do about those annotations?\"* — the warnings appeared on every recent CI run; filing as maintenance to address before the Sep 2026 deadline.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-16T23:11:52.108506671Z
+modified_at: 2026-05-16T23:11:52.108506671Z
+req_type: Task
+tags:
+- actions-checkout
+- ci
+- maintenance
+- nodejs-deprecation
+- setup-protoc
+- upstream-dependency
