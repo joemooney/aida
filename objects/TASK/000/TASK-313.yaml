@@ -1,0 +1,31 @@
+id: 019e36e7-e4c9-7a82-af7e-a12572390f32
+spec_id: TASK-313
+agreed_id: TASK-313
+title: Optionally render the plan brief inside the aida show --card box
+description: |
+  TASK-265's acceptance criteria listed "plan brief if any" as a card display
+  element. PR-69 deliberately deferred it: the card box does not render the
+  plan brief, because boxing it would mean reimplementing `aida queue work`'s
+  plan-discovery logic. The /aida-pickup skill's existing `## Plan brief` block
+  still surfaces it at session start, so the user-visible outcome is intact —
+  this is a polish follow-up, not a gap.
+
+  Follow-up: teach `render_spec_card` (aida-cli/src/main.rs) to include the
+  owning plan's brief (Critical Files / Followups / Verification) inside the
+  card box when a plan file owns the spec, reusing `aida queue work`'s plan
+  discovery rather than duplicating it. Lower priority — the skill already
+  covers the session-start visibility need.
+
+  Raised in review of PR-69. Called out as "a clean follow-up" in the PR body.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T17:07:07.593034385Z
+modified_at: 2026-05-17T17:07:07.593034385Z
+req_type: Task
+tags:
+- aida-pickup
+- enhancement
+- from-review:PR-69
+- severity:minor
