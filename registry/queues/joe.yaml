@@ -1,451 +1,451 @@
 - user_id: joe
-  requirement_id: 019e3235-1208-72f3-b776-0b199332df96
-  position: 1000
-  added_by: joe
-  added_at: 2026-05-16T19:13:26.170362704Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e36fb-2dbb-7121-81f4-3ad6c905a559
-  position: 2000
+  position: 1000
   added_by: joe
   added_at: 2026-05-17T17:28:16.475478265Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e34ef-304a-7ed1-b66f-9cc90bdf5259
-  position: 2500
+  position: 2000
   added_by: joe
   added_at: 2026-05-17T07:56:06.463111810Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e36de-0682-7f43-b6f7-972b60f9b0b9
-  position: 2750
+  position: 3000
   added_by: joe
   added_at: 2026-05-17T16:56:23.798262621Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e345e-123b-70e3-9ae9-1ba23e7ca064
-  position: 2875
+  position: 4000
   added_by: joe
   added_at: 2026-05-17T18:49:27.324794248Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e1a4d-8d9c-7a00-8539-364579481756
-  position: 3000
+  position: 5000
   added_by: joe
   added_at: 2026-05-12T03:49:21.783878892Z
   for_role: implementer
   for_scope: EPIC-23
 - user_id: joe
   requirement_id: 019e1af9-a4a3-74a0-a7de-a337983a9c44
-  position: 7000
+  position: 6000
   added_by: joe
   added_at: 2026-05-12T06:57:12.246716051Z
   for_role: implementer
   for_scope: EPIC-23
 - user_id: joe
   requirement_id: 019e1afc-fc7a-7fd1-b0e4-5113c6ce3dc8
-  position: 8000
+  position: 7000
   added_by: joe
   added_at: 2026-05-12T07:00:51.864924409Z
   for_role: implementer
   for_scope: EPIC-23
 - user_id: joe
   requirement_id: 019e1ffb-f472-7641-9684-11cd5332553f
-  position: 23000
+  position: 8000
   added_by: joe
   note: auto-queued by `aida pr` (019e1fd1); covers 1 spec
   added_at: 2026-05-13T06:17:50.851180255Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e2bcb-fa1e-79f1-b150-9a24600af7bb
-  position: 24000
+  position: 9000
   added_by: joe
   note: auto-queued by `aida pr` ((no-sess); covers 10 specs
   added_at: 2026-05-15T13:21:15.999623276Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e33b9-fa9e-7911-953c-df8f54877525
-  position: 27484
+  position: 10000
   added_by: joe
   added_at: 2026-05-17T02:18:09.990590568Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e33c2-dca2-7b40-9b73-421fff4261c6
-  position: 27554
+  position: 11000
   added_by: joe
   added_at: 2026-05-17T02:27:54.074450678Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e31ab-6d46-7373-a6fe-bd6c3f2bd3e5
-  position: 27750
+  position: 12000
   added_by: joe
   added_at: 2026-05-16T16:43:01.411734882Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e31ad-8f05-76c2-a840-ba8f4c3966a9
-  position: 27875
+  position: 13000
   added_by: joe
   added_at: 2026-05-16T16:45:20.983419025Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e31d1-687d-70d1-97f2-f02a19f093cc
-  position: 29000
+  position: 14000
   added_by: joe
   added_at: 2026-05-16T17:24:32.997019033Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e327c-5b4a-7743-b1dd-f40e9ec04c53
-  position: 35999
+  position: 15000
   added_by: joe
   added_at: 2026-05-16T20:31:13.985401820Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3220-fa5d-7d42-9727-bef2ab568043
-  position: 36000
+  position: 16000
   added_by: joe
   added_at: 2026-05-16T18:51:34.327960228Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e321f-7066-7522-962a-6edd619b31ac
-  position: 36500
+  position: 17000
   added_by: joe
   added_at: 2026-05-16T18:51:39.360678399Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3220-f160-7413-af64-a030e84c99ff
-  position: 36750
+  position: 18000
   added_by: joe
   added_at: 2026-05-16T18:51:37.243909858Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3221-0371-7023-9bd4-4df177b0a1f9
-  position: 37750
+  position: 19000
   added_by: joe
   added_at: 2026-05-16T18:51:32.315848712Z
   for_role: implementer
 - user_id: joe
+  requirement_id: 019e3235-1208-72f3-b776-0b199332df96
+  position: 20000
+  added_by: joe
+  added_at: 2026-05-16T19:13:26.170362704Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 019e3221-0dd6-7973-94d6-39f3296461eb
-  position: 38750
+  position: 21000
   added_by: joe
   added_at: 2026-05-16T18:51:30.465403623Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e322b-5d30-72a1-8c0a-f1a8733c1d79
-  position: 39750
+  position: 22000
   added_by: joe
   added_at: 2026-05-16T19:02:46.089555522Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e32f9-58f9-7191-a5ae-bb9f9adf6d0f
-  position: 40750
+  position: 23000
   added_by: joe
   added_at: 2026-05-16T22:47:53.819190359Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3232-c973-7c03-889b-81c3ff0ef9c1
-  position: 41750
+  position: 24000
   added_by: joe
   added_at: 2026-05-16T19:10:55.148365392Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e34a9-3935-7170-b05d-dad3023597d1
-  position: 42250
+  position: 25000
   added_by: joe
   added_at: 2026-05-17T06:39:29.127796519Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3235-1c32-7a40-8e26-1d43ced66812
-  position: 43750
+  position: 26000
   added_by: joe
   added_at: 2026-05-16T19:13:29.545128590Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3249-9709-7750-b6ce-440a8887f1f5
-  position: 45750
+  position: 27000
   added_by: joe
   added_at: 2026-05-16T19:35:47.941696410Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e325a-9454-7b33-a7da-d3808d6196df
-  position: 46750
+  position: 28000
   added_by: joe
   note: auto-queued by `aida pr` (019e3252); covers 1 spec
   added_at: 2026-05-16T19:54:22.881052730Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e3268-dd71-7370-b9c9-145bf672d855
-  position: 48750
+  position: 29000
   added_by: joe
   added_at: 2026-05-16T20:09:59.215277701Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3268-e7eb-79b2-a54f-151407ed3257
-  position: 49750
+  position: 30000
   added_by: joe
   added_at: 2026-05-16T20:10:01.222495189Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3282-8495-7f21-95e7-c02c549b3c8b
-  position: 50750
+  position: 31000
   added_by: joe
   note: auto-queued by `aida pr` (019e3273); covers 1 spec
   added_at: 2026-05-16T20:38:00.930190819Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e3282-ded9-7f61-b2fb-2b4296c17a59
-  position: 51750
+  position: 32000
   added_by: joe
   added_at: 2026-05-16T20:38:21.769326669Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3296-b62a-7f43-9d0c-e9c87f0fc70a
-  position: 54750
+  position: 33000
   added_by: joe
   note: auto-queued by `aida pr` (019e328a); covers 1 spec
   added_at: 2026-05-16T21:00:03.123961040Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e32b1-0665-7f31-97a9-2e568ea4dfb0
-  position: 55750
+  position: 34000
   added_by: joe
   note: auto-queued by `aida pr` (019e329b); covers 1 spec
   added_at: 2026-05-16T21:28:47.586147190Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e32f4-d81b-7260-9459-4d4395e4d220
-  position: 56750
+  position: 35000
   added_by: joe
   note: auto-queued by `aida pr` (019e32e6); covers 1 spec
   added_at: 2026-05-16T22:42:52.869720492Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e32f9-3d90-7ae3-95a8-98633f511f5e
-  position: 57750
+  position: 36000
   added_by: joe
   added_at: 2026-05-16T22:47:47.556082081Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e32f9-46b5-79c0-93ee-95feb15eb74f
-  position: 58750
+  position: 37000
   added_by: joe
   added_at: 2026-05-16T22:47:49.804407360Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e2f1a-591d-7583-9637-dff9bb7fc89c
-  position: 59250
+  position: 38000
   added_by: joe
   added_at: 2026-05-16T04:45:27.121015196Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e2e1d-cf4e-76a1-873e-a4e729be0dbd
-  position: 59500
+  position: 39000
   added_by: joe
   added_at: 2026-05-16T00:09:32.667782887Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e32f9-4f9c-7283-b20c-19da0f27d1da
-  position: 59750
+  position: 40000
   added_by: joe
   added_at: 2026-05-16T22:47:51.767127855Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3390-c205-7c52-8921-c3a947323295
-  position: 60250
+  position: 41000
   added_by: joe
   added_at: 2026-05-17T01:33:08.275460915Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e330b-1859-7990-b293-6249e0ff4d0a
-  position: 60750
+  position: 42000
   added_by: joe
   note: auto-queued by `aida pr` (019e32ff); covers 1 spec
   added_at: 2026-05-16T23:07:10.670945657Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e330f-772c-7c43-ab6a-998390cc8303
-  position: 61750
+  position: 43000
   added_by: joe
   added_at: 2026-05-16T23:11:55.023960843Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e336c-bbac-7500-8e24-c2f3644d58e7
-  position: 62750
+  position: 44000
   added_by: joe
   note: auto-queued by `aida pr` (019e331b); covers 1 spec
   added_at: 2026-05-17T00:53:49.598668786Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e3376-689a-7c90-99c3-ee3813de8dfd
-  position: 63750
+  position: 45000
   added_by: joe
   added_at: 2026-05-17T01:04:21.354711445Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3378-66a9-7fd1-b292-c73696d435fe
-  position: 64250
+  position: 46000
   added_by: joe
   added_at: 2026-05-17T01:06:31.939668223Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e338e-53b4-7782-85b0-15aa8c2fe25a
-  position: 65250
+  position: 47000
   added_by: joe
   note: auto-queued by `aida pr` (019e3378); covers 1 spec
   added_at: 2026-05-17T01:30:31.521613140Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e33a6-fe7e-7b41-b277-709978688dc9
-  position: 66250
+  position: 48000
   added_by: joe
   note: auto-queued by `aida pr` (019e3398); covers 1 spec
   added_at: 2026-05-17T01:57:27.788619953Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e33bf-f41b-7d10-a3ae-159e750a674f
-  position: 67250
+  position: 49000
   added_by: joe
   note: auto-queued by `aida pr` (019e33af); covers 1 spec
   added_at: 2026-05-17T02:24:43.492453451Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e3450-2c4e-7862-8434-b515846f29ce
-  position: 68250
+  position: 50000
   added_by: joe
   note: auto-queued by `aida pr` (019e33c7); covers 1 spec
   added_at: 2026-05-17T05:02:15.905420791Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e34a0-71e3-7093-8c54-64be18bbc58a
-  position: 69250
+  position: 51000
   added_by: joe
   note: auto-queued by `aida pr` (019e345a); covers 1 spec
   added_at: 2026-05-17T06:29:56.272218501Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e34c9-d23f-7ef1-b543-24ff376fbca8
-  position: 73250
+  position: 52000
   added_by: joe
   added_at: 2026-05-17T07:20:30.319888313Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e34ef-8188-76c3-87fd-778245d483ee
-  position: 75250
+  position: 53000
   added_by: joe
   note: auto-queued by `aida pr` (019e34d3); covers 1 spec
   added_at: 2026-05-17T07:56:17.425013083Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e3675-0925-7453-95ac-c013209fe0f8
-  position: 76250
+  position: 54000
   added_by: joe
   note: auto-queued by `aida pr` (019e34f6); covers 1 spec
   added_at: 2026-05-17T15:01:45.227307289Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e367c-1d88-70a3-8998-e9a0a5fef7cd
-  position: 77250
+  position: 55000
   added_by: joe
   added_at: 2026-05-17T15:09:27.202524390Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e368b-3f02-7ea0-9776-129d74768a36
-  position: 78249
+  position: 56000
   added_by: joe
   added_at: 2026-05-17T15:26:00.491664699Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3682-d0e8-70d0-994b-5f16af39fcf5
-  position: 78250
+  position: 57000
   added_by: joe
   added_at: 2026-05-17T15:16:53.728985934Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3686-6bd1-71e0-a9f0-104663df1d29
-  position: 79250
+  position: 58000
   added_by: joe
   note: auto-queued by `aida pr` (019e367a); covers 1 spec
   added_at: 2026-05-17T15:20:44.760410974Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e369e-ae93-74b2-a580-89c6ac635e8b
-  position: 81250
+  position: 59000
   added_by: joe
   note: auto-queued by `aida pr` ((no-sess); covers 1 spec
   added_at: 2026-05-17T15:47:14.814812223Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e36a7-2c8f-7ec2-a53f-6b78d3011cdc
-  position: 82250
+  position: 60000
   added_by: joe
   added_at: 2026-05-17T15:56:29.162067459Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e36ac-6828-7353-a2b5-00e2e92e2dd3
-  position: 83250
+  position: 61000
   added_by: joe
   added_at: 2026-05-17T16:02:16.599903795Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e36af-ce78-7b31-bdf7-25c8830961a2
-  position: 84250
+  position: 62000
   added_by: joe
   added_at: 2026-05-17T16:05:54.894106388Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e36cc-8ab4-77a1-9d7f-f2a41b1dc772
-  position: 85250
+  position: 63000
   added_by: joe
   added_at: 2026-05-17T16:37:18.459637118Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e36dd-4253-7f81-9198-428b90faf04e
-  position: 87250
+  position: 64000
   added_by: joe
   added_at: 2026-05-17T16:56:26.020748250Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e36df-df6b-7f20-aeab-26198e6c3ce6
-  position: 88250
+  position: 65000
   added_by: joe
   note: auto-queued by `aida pr` (019e36af); covers 1 spec
   added_at: 2026-05-17T16:58:27.112090394Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e36f2-54a9-7543-ab7f-142e0c6f3b51
-  position: 89250
+  position: 66000
   added_by: joe
   added_at: 2026-05-17T17:18:35.544764509Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3701-beb9-7951-871b-7bd85fcd55c5
-  position: 91250
+  position: 67000
   added_by: joe
   note: auto-queued by `aida pr` (019e36e9); covers 1 spec
   added_at: 2026-05-17T17:35:27.151730345Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e3720-f429-7e23-80ad-c59b1bc9e8ee
-  position: 92250
+  position: 68000
   added_by: joe
   note: auto-queued by `aida pr` (019e370c); covers 1 spec
   added_at: 2026-05-17T18:09:32.750398293Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e372f-80e1-7a50-ade8-376e4de5a069
-  position: 93250
+  position: 69000
   added_by: joe
   added_at: 2026-05-17T18:25:23.795629334Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3746-595b-7682-b198-916fca4c71b3
-  position: 94250
+  position: 70000
   added_by: joe
   note: auto-queued by `aida pr` (019e3731); covers 1 spec
   added_at: 2026-05-17T18:50:23.082731927Z
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e375c-91bc-7610-9d0f-bf655ab9d5d0
-  position: 95250
+  position: 71000
   added_by: joe
   note: auto-queued by `aida pr` (019e374f); covers 1 spec
   added_at: 2026-05-17T19:14:39.045640132Z
