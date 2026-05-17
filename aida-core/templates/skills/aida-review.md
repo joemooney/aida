@@ -290,8 +290,45 @@ echo "${AIDA_REVIEW_VERDICT_FILE:-}"
   The `verdict` field must be exactly `Approved`, `RequestChanges`, or
   `Rejected`; `summary` is a one-line rationale. The orchestrator reads this
   file after the session exits: `Approved` → it merges; anything else → it
-  stops at phase 3 with exit code 3 and prints the recovery hint. After
-  writing the file, exit the session — you're done.
+  stops at phase 3 with exit code 3 and prints the recovery hint.
+
+  **End the session with a loud, explicit exit instruction.** The
+  orchestrator cannot advance until this reviewer Claude exits — but nothing
+  about writing a verdict file tells the user that. Don't end on a vague
+  "Session is done."; the user should never have to *infer* that they should
+  now press Ctrl+D. After writing the verdict file, make the final block of
+  your message a distinct, visually-loud hand-off that names the exact key
+  to press and what happens after. Pick the block by the verdict you wrote,
+  and substitute the real PR number + covered spec IDs — a concrete
+  "PR-57 / BUG-219, STORY-261" is the point; placeholders defeat it.
+
+  *Verdict `Approved`:*
+
+  ```
+  ✓ Verdict written: Approved
+  ✓ Reviewer session is done — nothing left for this Claude to do.
+
+  ▶ Press Ctrl+D to exit. The --auto-complete orchestrator then runs:
+    - Phase 4/6  Merge PR-<N>      (gh pr merge <N> --squash --delete-branch)
+    - Phase 5/6  Pull + auto-bump  (<SPEC-IDS> Done → Completed)
+    - Phase 6/6  Build verify      (cargo build --release)
+  ```
+
+  *Verdict `RequestChanges` or `Rejected`:*
+
+  ```
+  ⚠ Verdict written: <RequestChanges|Rejected>
+  ✓ Reviewer session is done — nothing left for this Claude to do.
+
+  ▶ Press Ctrl+D to exit. The --auto-complete orchestrator then stops at
+    phase 3/6 (exit code 3) and surfaces the recovery hint — it will NOT
+    merge. The implementer iterates from there.
+  ```
+
+  This loud exit block fires **only** in orchestrator mode
+  (`AIDA_REVIEW_VERDICT_FILE` set). In manual review the reviewer owns the
+  merge, so step 11's hand-off table stays the end-of-session surface —
+  don't render the Ctrl+D block there. trace:TASK-291 | ai:claude
 
 ### 8. Confirm with the user before merge
 
