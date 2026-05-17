@@ -48,12 +48,12 @@ description: |-
   User observed 2026-05-16 while watching the implementer statusline: *\"impl@TASK-257, it seems a little redundant having sess:TASK-257 but I am conflicted. I also wonder if the worktree name is worth showing if it differs from the task?\"*
 
   The conflict resolves naturally: hide when redundant, show when divergent.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:55:26.351418339Z
-modified_at: 2026-05-17T18:09:31.374635384Z
+modified_at: 2026-05-17T18:25:42.820861185Z
 req_type: Task
 tags:
 - batch:display-polish
@@ -91,3 +91,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T18:05:47.774735502Z
   implemented_by: joe
+  completed_at: 2026-05-17T18:25:42.820861185Z
+  completion_sha: 58e08fd6dff5417b62248d76c94b8db498027536
