@@ -370,6 +370,7 @@ without a lease re-claim.
 **Detect state first:**
 
 ```bash
+echo "${AIDA_AUTO_COMPLETE:-}"         # non-empty → spawned by the --auto-complete orchestrator
 gh run list --branch <pr-branch> --limit 1 --json status,conclusion 2>/dev/null
 aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
 ```
@@ -377,10 +378,22 @@ aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id
 Combine with step 11's auto-queue outcome (✓ filed / ⓘ already exists /
 ⚠ skipped).
 
+**Check orchestrator mode first** — it overrides both templates below. If
+`echo "${AIDA_AUTO_COMPLETE:-}"` printed a non-empty value, `/aida-pr` ran
+inside an `aida queue work --auto-complete` session (STORY-246): the
+orchestrator owns phases 2-6 and is waiting for this session to exit so it
+can continue. Render the *orchestrator mode* template — the manual "End
+implementer session / Start review session" rows are wrong under the
+orchestrator (it ends the session itself as phase 2 and runs the reviewer
+as phase 3). trace:TASK-286
+
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
 `/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
 `🚪` = stop/exit. Recommendations must be CONCRETE — name the PR, the
-review story, the session ID.
+review story, the session ID. The *orchestrator mode* template uses two
+distinct glyphs — `⇒` (exit so the orchestrator continues) and `⏏` (abort
+the orchestrator chain) — because under `--auto-complete` the moves differ
+from the manual menu.
 
 **Render multi-option prompts as a table.** When presenting 2+ paths
 forward, render as a markdown table with columns Path / What happens / Why.
@@ -397,6 +410,26 @@ the second row's Why states the dependency explicitly. Full convention:
 **Templates.** Each shows prose lead-in lines followed by the next-steps
 table — print the lead-ins as normal text, then the table as a real GFM
 markdown table (no surrounding code fence):
+
+*Orchestrator mode (`AIDA_AUTO_COMPLETE` non-empty) — TASK-286:*
+
+PR-<N> opened: <url>
+
+Print the `ⓘ` note as a normal line above the table:
+
+ⓘ Under `--auto-complete` the orchestrator now drives phases 2-6 (end
+session → wait CI → review → merge → pull → build). Don't run `aida session
+end` yourself — that is the orchestrator's phase 2; just exit cleanly.
+
+| Path | What happens | Why |
+|------|--------------|-----|
+| ⇒ Exit — let the orchestrator continue | Ctrl+D | The orchestrator detects the open PR when this session exits and runs phases 2-6 automatically; this is the whole point of `--auto-complete` |
+| ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — PR-<N> stays open but CI / review / merge will not run |
+
+Render this block instead of the two below whenever `AIDA_AUTO_COMPLETE` is
+set. The reviewer-queue story still gets filed (step 11) — the orchestrator
+runs the reviewer itself as phase 3, so the queued story is the
+manual-recovery fallback if the chain is later aborted. trace:TASK-286
 
 *Auto-queue succeeded (✓ filed or ⓘ already exists):*
 
@@ -418,7 +451,7 @@ PR-<N> opened: <url>
 | ▶ End implementer session (CI-aware) | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the implementer lease; probes CI — pass `--wait-ci` / `--skip-ci` as needed |
 | ⏵ Open reviewer manually (or merge inline) | From the parent shell: `eval "$(aida role enter reviewer --owns PR-<N>)"` + `/aida-review --pr <N>` — or `gh pr merge <N> --squash` if you're the sole reviewer | Auto-queue filed no review story, so the reviewer hand-off is manual; still needs the implementer lease released first |
 
-Print exactly one block — don't dump both templates.
+Print exactly one block — don't dump all three templates.
 
 ## Composes With
 
