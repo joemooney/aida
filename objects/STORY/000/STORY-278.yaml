@@ -1,0 +1,88 @@
+id: 019e34ae-345d-7dd2-bdfd-1bc292dd0903
+spec_id: STORY-278
+agreed_id: STORY-278
+title: Headless reviewer findings reach advisor for triage and follow-up filing
+description: |-
+  ## Problem
+
+  Under \`--no-human\` (STORY-263 headless reviewer, future STORY-276 headless implementer), the reviewer surfaces findings the **advisor** would normally triage and file as follow-up TASKs. With no human in the loop, the findings live only as a GitHub PR comment + verdict JSON pass/fail bit. The drain moves on. **Nobody files the follow-ups.**
+
+  ## Concrete instance (self-test, 2026-05-16)
+
+  PR-64 / STORY-263 (the headless reviewer itself, shipping by reviewing itself headless) raised four findings:
+
+  1. Clippy warnings (cosmetic) → TASK-303 filed manually
+  2. \`aida plan verify\` drifted ref → BUG-224 filed manually
+  3. \`--no-launch\` hint mismatch → BUG-225 filed manually
+  4. STORY-263 acceptance-list strike (post-merge bookkeeping) → pending
+
+  **All four required the human (user) to feed the reviewer's PR comment back to dialog role for filing.** In \`--no-human\` overnight drain that wouldn't have happened — the four follow-ups would be lost.
+
+  ## Smallest valuable slice
+
+  Just close the data-flow gap. Don't build a triage pipeline yet.
+
+  1. **Reviewer writes structured findings to verdict JSON** beyond just pass/fail:
+     \`\`\`json
+     {
+       "spec": "STORY-263",
+       "verdict": "Approved",
+       "findings": [
+         {"severity": "cosmetic", "summary": "...", "suggested_action": "file follow-up TASK"},
+         {"severity": "bookkeeping", "summary": "...", "suggested_action": "edit acceptance"},
+         ...
+       ],
+       "pr_comment_url": "..."
+     }
+     \`\`\`
+
+  2. **\`aida findings list\`** — shows pending findings across all merged-but-untriaged verdict files
+  3. **Surface at session start** — \`/aida-pickup\` and dialog-role session start runs \`aida findings list\`; if non-empty, leads with "N findings from recent merges awaiting triage."
+
+  That's it. The advisor (interactive human dialog session) does the triage + filing as usual. The data-flow is closed. Headless advisor is **not** in scope.
+
+  ## Acceptance
+
+  - [ ] Reviewer's verdict-file schema extended with \`findings: [{severity, summary, suggested_action, file_refs}]\`
+  - [ ] Headless reviewer populates findings from its PR comment (parse from its own structured output, NOT from re-fetching the GH comment)
+  - [ ] \`aida findings list\` shows pending findings: \`{PR, spec, severity, summary, age}\`
+  - [ ] \`aida findings show PR-N\` shows full verdict + findings detail
+  - [ ] \`aida findings dismiss PR-N\` marks all triaged (so they stop appearing)
+  - [ ] \`aida findings file-task PR-N --idx 0\` opens \`aida add\` pre-filled from finding 0
+  - [ ] \`/aida-pickup\` and dialog role session start checks \`aida findings list\` and surfaces pending count
+  - [ ] Test: simulated \`--no-human\` drain produces verdict files with findings; next interactive session surfaces them
+
+  ## Out of scope (explicit non-goals)
+
+  - **Headless advisor that triages and files automatically.** Defer until findings-volume justifies. Risk: skips advisor discipline (dedup, severity calibration, pushback). Filed as TASK-XXX placeholder for later consideration if the data-flow alone proves insufficient.
+  - **Auto-file every finding.** Would over-file cosmetic issues that the human-advisor would have decided weren't worth a TASK.
+  - **NeedsAttention auto-flagging.** Different surface — that's about spec health, this is about merge-time review residue.
+
+  ## Composes with
+
+  - **STORY-263** (this PR — established headless reviewer + verdict file pattern; exposed the gap)
+  - **STORY-276** (headless implementer — same gap applies to implementer-side feedback; same channel can carry it)
+  - **TASK-298** (stream-json watchdog — also reads reviewer's headless output; might share parsing path)
+  - \`feedback_dialog_role_responsibilities.md\` (memory curation + filing is dialog's role; this preserves it under headless reviewer)
+
+  ## Origin
+
+  User caught the gap 2026-05-16 immediately after STORY-263's self-test merge:
+
+  > \"In this instance I fed the feedback to you and you opened more tasks. So the question is, in --no-human how do we get this feedback to the advisor for analysis?\"
+
+  This is the same question that motivated EPIC-28 NeedsAttention (spec health needs surfacing, not silence) — but for review residue rather than spec lifecycle.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T06:44:52.445178527Z
+modified_at: 2026-05-17T06:44:52.445178527Z
+req_type: Story
+tags:
+- advisor-triage
+- feedback-loop
+- from-self-test:STORY-263
+- headless
+- no-human
+- reviewer-findings
