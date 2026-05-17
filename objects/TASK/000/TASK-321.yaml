@@ -1,0 +1,40 @@
+id: 019e37ca-67f5-75a3-840a-8e02c7d6611c
+spec_id: TASK-321
+agreed_id: TASK-321
+title: TASK-292 acceptance criterion 5 lists --no-launch, but --auto-complete clap-conflicts with it
+description: |
+  TASK-292's acceptance criterion 5 reads "Composes naturally with `--no-launch`
+  (prep without starting), `--batch X` (head of batch), etc."
+
+  The `--batch X` half holds. The `--no-launch` half does not and cannot:
+  `aida-cli/src/cli.rs:2511` declares the `--auto-complete` arg with
+  `conflicts_with_all = ["no_launch", "resume", "fresh", "list_sessions", ...]`,
+  so `aida queue work --no-launch --auto-complete` is a hard clap error, never a
+  silent no-op. This is a STORY-246 design constraint — `--auto-complete` drives
+  the entire implementer→CI→reviewer→merge lifecycle, which is structurally
+  incompatible with "prep without starting" — and it predates PR-76. The PR-76
+  implementer correctly did NOT claim `--no-launch` composition (the PR
+  description scopes the claim to `--auto-complete=through-ci`, `--no-human`,
+  `--batch`).
+
+  No code defect — TASK-292's head-resolution feature is fully correct and
+  shipped (PR-76). This is a spec-text accuracy gap: the `--no-launch` clause of
+  criterion 5 over-specified an unsatisfiable composition.
+
+  Suggested resolution (advisor's call): either correct TASK-292's acceptance
+  text to drop the `--no-launch` clause, or add a one-line note that
+  `--auto-complete` and `--no-launch` are mutually exclusive by design. Likely a
+  quick edit-or-dismiss.
+
+  Raised in review of PR-76 (TASK-292).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T21:14:32.309131776Z
+modified_at: 2026-05-17T21:14:32.309131776Z
+req_type: Task
+tags:
+- acceptance-text
+- from-review:PR-76
+- severity:minor
