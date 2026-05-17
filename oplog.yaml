@@ -6171,5 +6171,13 @@ operations:
       > "In this instance I fed the feedback to you and you opened more tasks. So the question is, in --no-human how do we get this feedback to the advisor for analysis?"
 
       Design discussion 2026-05-16: floated ATTN type vs TASK auto-file vs TASK-draft-tagged; chose option 3 (TASK + draft + tag) as smallest valuable slice. ATTN promotion deferred until data justifies it.
-clock: 704
+- id: 019e34d5-1a14-78d3-9609-cd7d142a2f40
+  target_id: 019e34ab-7813-73e3-9ae0-b2a2088add75
+  author: aida
+  node_id: '1'
+  lamport: 705
+  timestamp: 2026-05-17T07:27:21.620240715Z
+  kind: !SetStatus
+    status: In Progress
+clock: 705
 node_id: '1'
