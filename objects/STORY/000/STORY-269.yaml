@@ -1,0 +1,43 @@
+id: 019e3385-7893-7661-b5c8-7c55d62341af
+spec_id: STORY-269
+agreed_id: STORY-269
+title: '[EPIC-29 4/5] Migrate existing TUI specs (STORY-244, BUG-110, TASK-256, TASK-288) to aida-tui repo'
+description: |-
+  Fourth child STORY of EPIC-29. Move the existing TUI work-items from AIDA's spec store to the aida-tui repo's issue tracker. Preserve cross-links.
+
+  ## Specs to migrate
+
+  | AIDA spec | Becomes | Disposition in AIDA |
+  |---|---|---|
+  | STORY-244 (TUI launcher pivot) | aida-tui issue | Rejected with comment linking to new issue |
+  | BUG-110 (SIGTERM handler) | aida-tui issue | Rejected with comment |
+  | TASK-256 (theming) | aida-tui issue | Rejected with comment |
+  | TASK-288 (TUI prior-art study) | aida-tui issue | Rejected with comment |
+  | TASK-254 (default-flip revert) | (subsumed by STORY 3) | Rejected |
+
+  ## Acceptance
+
+  - [ ] Each migrated spec gets a new issue in aida-tui repo with original description
+  - [ ] AIDA-side specs flipped to Rejected with comment: "Migrated to aida-tui repo: <link>. See EPIC-29."
+  - [ ] EPIC-26 (TUI Trojan-horse) reframed as "aida-tui's product roadmap, tracked in the companion repo" — could be rejected at AIDA-side too (with link), or kept as a strategic reference
+
+  ## Cross-link convention
+
+  - aida-core side: prefix `aida-tui-repo:#N` when referencing the companion repo's issues
+  - aida-tui side: prefix `aida-core-spec:TASK-N` when referencing AIDA specs that need to land first
+
+  ## Depends on
+
+  - STORY 2 (aida-tui repo exists)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:20:45.715685241Z
+modified_at: 2026-05-17T01:20:45.715685241Z
+req_type: Story
+tags:
+- cross-repo
+- issue-tracking
+- spec-migration
+- tui-cluster
