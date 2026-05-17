@@ -41,3 +41,7 @@ tags:
 - issue-tracking
 - spec-migration
 - tui-cluster
+relationships:
+- rel_type: Child
+  target_id: 019e3383-3b25-78c2-b59c-f06bd6b44c07
+  created_at: 2026-05-17T01:20:48.760571994Z
