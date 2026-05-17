@@ -1,0 +1,56 @@
+id: 019e36af-ce78-7b31-bdf7-25c8830961a2
+spec_id: TASK-310
+agreed_id: TASK-310
+title: 'aida queue work --batches A,B,C: chain multiple batches in one auto-complete drain'
+description: |-
+  \`aida queue work --batch X --auto-complete\` drains one batch then stops. Running multiple batches in sequence requires the user to manually kick off each one. For overnight drains that span multiple coherent batches (e.g., polish work then docs work then bug cleanup), this means waking up partway through to start the next.
+
+  ## Proposed surface
+
+  \`\`\`bash
+  aida queue work --batches display-polish,workflow-hint-polish --auto-complete --no-human
+  \`\`\`
+
+  Drains \`batch:display-polish\` to empty, then \`batch:workflow-hint-polish\` to empty, then exits. Each batch's members ship through the full 6-phase orchestrator; when one batch drops to zero, the next picks up its head.
+
+  Alternatively: \`--batch\` could accept comma-separated values directly (\`--batch display-polish,workflow-hint-polish\`), preserving the existing flag while extending semantics.
+
+  ## Acceptance
+
+  - [ ] \`--batches A,B,C\` (or \`--batch A,B,C\`) drains each batch in order, exhausting one before advancing to the next
+  - [ ] Failure in one batch (CI red, reviewer NeedsChanges) stops the chain at that spec; doesn't auto-advance to the next batch
+  - [ ] \`--batches\` is parsed as ordered (left-to-right); not alphabetical
+  - [ ] Empty intermediate batch (already drained) is silently skipped; doesn't error
+  - [ ] Status output names which batch is currently active: \`drain: batch:display-polish (2/3)\` → \`drain: batch:workflow-hint-polish (1/6)\`
+  - [ ] Composes with \`--max N\` (existing flag): \`--batches A,B --max 5\` drains up to 5 specs total across both batches
+  - [ ] Tests: 2-batch chain; empty middle batch; failure mid-batch stops chain; max cap across batches
+
+  ## Out of scope
+
+  - **Dependency-graph drains** (e.g., \"drain everything blocking STORY-X\") — different problem
+  - **Parallel batches** — auto-complete is sequential by design; parallel needs stacked-branch infrastructure (STORY-248)
+  - **Tag-expression batch picker** (\`--batch 'polish OR cleanup'\`) — over-scoped; named batches are enough
+
+  ## Composes with
+
+  - **TASK-285** (\`--batch\` with \`--auto-complete\` — this TASK extends to plural)
+  - **STORY-276** (headless implementer — once shipped, multi-batch overnight drains become genuinely unattended)
+  - **TASK-292/293** (queue-head pickup semantics — same family of "what to drain" flag composition)
+  - **STORY-248** (stacked branches — if batches could ever drain in parallel, that's the foundation)
+
+  ## Origin
+
+  2026-05-17 dialog session: user wanted to queue \`batch:display-polish\` followed by \`batch:workflow-hint-polish\`. No way to chain them; user has to run two commands back-to-back, supervising the gap. With \`--batches\` flag, one kickoff drains both — useful for overnight cycles, especially once STORY-276 lands and the drain is fully unattended.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T16:05:51.864898347Z
+modified_at: 2026-05-17T16:05:51.864898347Z
+req_type: Task
+tags:
+- auto-complete
+- batch-chain
+- composition
+- first-users
+- overnight-drain
