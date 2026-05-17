@@ -1,0 +1,32 @@
+id: 019e37ae-e5e3-75b3-bfa5-67ae39695ebb
+spec_id: TASK-320
+agreed_id: TASK-320
+title: Widen test_skill_template_glyphs to guard all embedded skill templates
+description: |
+  The BUG-116 regression test `test_skill_template_glyphs` (aida-core/src/templates.rs:377)
+  hardcodes a 3-element skill list — ["aida-pickup.md", "aida-pr.md", "aida-review.md"] —
+  when asserting the retired `⏵`/`🚪` glyphs are absent.
+
+  That list is exactly the set of skills carrying end-of-session Path/What happens/Why
+  tables today, so BUG-116's acceptance is fully met (the criterion asked for "one skill
+  template"; the PR delivers three). This is not a bug in shipped behavior.
+
+  The gap is narrower-than-ideal regression coverage: if a future skill template adds an
+  end-of-session menu table and uses a stale glyph, the guard won't catch it. The fix is a
+  ~2-line change — iterate over every embedded `skills/*.md` key in EMBEDDED_TEMPLATES
+  instead of the hardcoded triple — closing the gap with no downside. The two concrete
+  row-snapshot assertions can stay aida-pickup-specific.
+
+  Raised in adversarial deep-pass (probe 3, multiplicity) during review of PR-75:
+  https://github.com/joemooney/aida/pull/75
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T20:44:29.539954621Z
+modified_at: 2026-05-17T20:44:29.539954621Z
+req_type: Task
+tags:
+- from-review:PR-75
+- severity:cosmetic
+- test
