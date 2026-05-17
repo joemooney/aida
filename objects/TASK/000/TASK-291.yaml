@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:22:57.960825348Z
-modified_at: 2026-05-16T23:29:04.874908193Z
+modified_at: 2026-05-17T00:52:34.100802297Z
 req_type: Task
 tags:
 - aida-review
@@ -77,6 +77,19 @@ tags:
 - reviewer-handoff
 - user-action
 - workflow-hint
+comments:
+- id: 019e336b-a8b4-70b0-9b0c-819c1d50a025
+  author: joe
+  content: |-
+    Implemented via commit 3e3cf4cd (branch task-291):
+
+    - /aida-review section 7a now instructs a distinct, visually-loud final block under --auto-complete (AIDA_REVIEW_VERDICT_FILE set): a "▶ Press Ctrl+D to exit" line plus what the orchestrator does next.
+    - Branched by verdict — Approved shows phases 4/6 merge → 5/6 pull+auto-bump → 6/6 build verify; RequestChanges/Rejected shows the orchestrator stops at phase 3/6 with the recovery hint.
+    - Manual-mode review untouched: step 11's hand-off table stays the end-of-session surface there.
+
+    Test status: skill-template (markdown) change only — no Rust touched; cargo fmt --all --check clean.
+  created_at: 2026-05-17T00:52:34.100802297Z
+  modified_at: 2026-05-17T00:52:34.100802297Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T23:29:04.874908193Z
