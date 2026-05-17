@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:04:18.586209459Z
-modified_at: 2026-05-17T20:56:34.066595912Z
+modified_at: 2026-05-17T21:05:34.612384862Z
 req_type: Task
 tags:
 - auto-complete
@@ -48,6 +48,19 @@ tags:
 - first-users
 - positional-arg
 - queue-head
+comments:
+- id: 019e37c2-3394-7821-841a-de3f696edc1e
+  author: joe
+  content: |-
+    Implemented via commit 9cc522a6:
+
+    - `aida queue work --auto-complete` with no positional SPEC now resolves the active role's queue head, inheriting the no-arg "pick the head" semantics instead of erroring "requires a SPEC id".
+    - New `resolve_auto_complete_head` walks the role's queue in pickup order and returns the first orchestrator-drivable spec (Draft / Approved / Planned); In Progress / Done / terminal items are skipped with a note. `pick_auto_complete_head` is the unit-tested pure resolver.
+    - Empty queue -> "queue is empty for <role>; nothing to drive"; all-in-flight queue gets a distinct capped message.
+
+    Test status: 5/5 new unit tests green; cargo fmt + clippy clean
+  created_at: 2026-05-17T21:05:34.612384862Z
+  modified_at: 2026-05-17T21:05:34.612384862Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T20:56:34.066595912Z
