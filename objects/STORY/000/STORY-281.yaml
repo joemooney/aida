@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:16:43.368789467Z
-modified_at: 2026-05-17T15:25:58.883511302Z
+modified_at: 2026-05-17T15:26:02.124547593Z
 req_type: Story
 tags:
 - auto-complete
@@ -93,3 +93,9 @@ tags:
 - rebase
 - reviewer-phase
 - stale-base
+comments:
+- id: 019e368b-578c-7330-a879-41c4ab5039ea
+  author: joe
+  content: 'Split decision 2026-05-17: `aida pr rebase <N>` CLI carved out as TASK-308 (independent ship). This STORY now scoped to orchestrator pre-flight integration only; depends on TASK-308.'
+  created_at: 2026-05-17T15:26:02.124547593Z
+  modified_at: 2026-05-17T15:26:02.124547593Z
