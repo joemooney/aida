@@ -69,7 +69,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:23:01.412995598Z
-modified_at: 2026-05-17T05:02:13.828614373Z
+modified_at: 2026-05-17T05:02:17.706176014Z
 req_type: Spike
 tags:
 - claude-headless
@@ -88,6 +88,16 @@ comments:
   content: 'Spike complete — deliverable: docs/spikes/2026-05-16-claude-headless.md (committed 197290dc). Verdict: headless claude -p WORKS for AIDA skills, with caveats -> STORY-263 proceeds, scoped, with a watchdog (decision-tree branch: ''works but with caveats''). Full empirical suite run (~16 invocations, ~$3.80). Headline findings: (1) bypassPermissions mandatory — default mode auto-denies every tool; (2) exit 0 is a liar — a run that bailed at a human gate still exits 0/is_error:false, so permission_denials is the real completion signal; (3) pauses (AskUserQuestion) fail fast+clean (~10s), never hang or silently default; (4) no built-in timeout — caller must impose one; (5) SIGTERM-killed sessions resume cleanly; (6) ~$3 per implementer->reviewer lifecycle is a real STORY-263 cost input. AIDA-specific constraints surfaced: fresh worktrees lack .aida-store/cache wiring; interactive aida prompts (queue done) cancel silently headless. Test artifacts (PR-62, branch, TASK-296, STORY-274) created + cleaned up.'
   created_at: 2026-05-17T03:05:45.771242751Z
   modified_at: 2026-05-17T03:05:45.771242751Z
+- id: 019e3450-4a6a-7ba3-a463-edeb40f3340a
+  author: joe
+  content: |-
+    Shipped via PR-63 (commit 197290dc): https://github.com/joemooney/aida/pull/63
+
+    - Adds docs/spikes/2026-05-16-claude-headless.md — full empirical findings on headless claude -p for AIDA skill patterns (Q1–Q9), a detection model, watchdog recommendations, cost analysis, and the scoped STORY-263 recommendation.
+
+    Test status: empirical suite (~16 headless runs); no unit tests — deliverable is a markdown spike report. cargo fmt --check clean.
+  created_at: 2026-05-17T05:02:17.706176014Z
+  modified_at: 2026-05-17T05:02:17.706176014Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T03:05:51.813226171Z
