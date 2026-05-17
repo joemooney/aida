@@ -365,3 +365,10 @@
   added_by: joe
   added_at: 2026-05-17T15:16:53.728985934Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e3686-6bd1-71e0-a9f0-104663df1d29
+  position: 79250
+  added_by: joe
+  note: auto-queued by `aida pr` (019e367a); covers 1 spec
+  added_at: 2026-05-17T15:20:44.760410974Z
+  for_role: reviewer
