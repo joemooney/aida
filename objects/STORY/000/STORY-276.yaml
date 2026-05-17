@@ -42,3 +42,7 @@ tags:
 - implementer-phase
 - no-human
 - post-spike-7-followup
+relationships:
+- rel_type: Child
+  target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
+  created_at: 2026-05-17T05:17:23.668386062Z
