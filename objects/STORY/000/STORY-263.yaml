@@ -72,12 +72,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16: *\"if we could take the human out of the loop that would be great but I doubt claude code is going to allow that.\"* — actually Claude Code DOES support headless via \`claude -p\`, so this is feasible. User followed up: *\"file the autonomy STORY, but TASK-291 may be the default. We may want a different option like --no-human.\"*
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:25:44.957144080Z
-modified_at: 2026-05-17T06:29:54.651546189Z
+modified_at: 2026-05-17T06:41:03.740923569Z
 req_type: Story
 tags:
 - advanced-user
@@ -286,3 +286,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T05:35:39.632979129Z
   implemented_by: joe
+  completed_at: 2026-05-17T06:41:03.740923569Z
+  completion_sha: 188dbee63fb454725873b5cc4324cc78393de0d9
