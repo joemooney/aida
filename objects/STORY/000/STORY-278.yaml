@@ -101,7 +101,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:44:52.445178527Z
-modified_at: 2026-05-17T07:11:07.886161203Z
+modified_at: 2026-05-17T07:15:16.085937185Z
 req_type: Story
 tags:
 - advisor-triage
@@ -126,3 +126,8 @@ comments:
   content: 'Correction: the reconciliation TASK referenced in the previous comment is **TASK-305**.'
   created_at: 2026-05-17T07:11:07.886161203Z
   modified_at: 2026-05-17T07:11:07.886161203Z
+- id: 019e34ca-07f5-7e62-9c88-c46d4bfbadca
+  author: joe
+  content: STORY-278's web-/ultraplan-produced PR (when it lands) is a candidate **C-condition data point** for SPIKE-8 (empirical /ultraplan comparison). Fold the metrics into the SPIKE without re-running condition C for this spec — already-running cost is sunk.
+  created_at: 2026-05-17T07:15:16.085937185Z
+  modified_at: 2026-05-17T07:15:16.085937185Z
