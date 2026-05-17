@@ -2431,7 +2431,10 @@ pub enum QueueCommand {
         /// session exits independently; the next pickup picks the new
         /// head). Mutually exclusive with positional `id` and
         /// `--type`. `--dry-run --batch NAME` lists members in pickup
-        /// order without acting. trace:TASK-229 | ai:claude
+        /// order without acting. Composes with `--auto-complete` (TASK-285):
+        /// `--batch NAME --auto-complete` drains the whole batch
+        /// autonomously — one full lifecycle per member — instead of one
+        /// session per re-invocation. trace:TASK-229 | ai:claude
         #[clap(long, value_name = "NAME", conflicts_with_all = ["id", "type_filter"])]
         batch: Option<String>,
         /// With `--batch`: print the matching queue entries in pickup
@@ -2483,14 +2486,17 @@ pub enum QueueCommand {
         ///   skip-build    — phases 1-5 (skip the final build verify)
         /// Exit code is 0 on success, else the 1-based index of the phase
         /// that failed (1 implementer, 2 CI, 3 review, 4 merge, 5 pull,
-        /// 6 build). Requires a SPEC id. trace:STORY-246 | ai:claude
+        /// 6 build). Requires a SPEC id, OR `--batch NAME` to drain a whole
+        /// batch (TASK-285): `--batch NAME --auto-complete` runs one full
+        /// lifecycle per batch member until the batch is empty, `--max` is
+        /// reached, or a phase fails. trace:STORY-246, TASK-285 | ai:claude
         #[clap(
             long,
             value_name = "MODE",
             num_args = 0..=1,
             default_missing_value = "full",
             conflicts_with_all = [
-                "batch", "no_launch", "resume", "fresh", "list_sessions",
+                "no_launch", "resume", "fresh", "list_sessions",
                 "dry_run", "type_filter",
             ]
         )]
@@ -2500,6 +2506,12 @@ pub enum QueueCommand {
         /// of the human-readable progress lines. trace:STORY-246 | ai:claude
         #[clap(long, requires = "auto_complete")]
         json: bool,
+        /// With `--batch NAME --auto-complete`: stop the batch drain after
+        /// N members ship, even when the batch has more queued. Without it
+        /// the drain runs until the batch is empty for the role. Only
+        /// meaningful for a batch drain. trace:TASK-285 | ai:claude
+        #[clap(long, value_name = "N", requires = "auto_complete")]
+        max: Option<usize>,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,

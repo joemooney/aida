@@ -41027,6 +41027,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             session_id,
             auto_complete,
             json,
+            max,
             user,
         } => {
             let user_id = get_user(user);
@@ -41057,6 +41058,36 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 let mode = auto_complete.as_deref().unwrap_or("full");
                 let variant = auto_complete::AutoCompleteVariant::parse(mode)
                     .map_err(|e| anyhow::anyhow!(e))?;
+                // TASK-285: `--batch NAME --auto-complete` drains the whole
+                // batch — one full lifecycle per member, advancing the head
+                // after each — instead of one session per re-invocation.
+                // `--max` bounds the drain. trace:TASK-285 | ai:claude
+                if let Some(batch_name) = effective_batch {
+                    if batch_name.is_empty() {
+                        anyhow::bail!(
+                            "batch name is empty — pass `--batch NAME` or `aida queue work batch:NAME`"
+                        );
+                    }
+                    handle_auto_complete_batch(
+                        storage,
+                        &user_id,
+                        batch_name,
+                        variant,
+                        *json,
+                        permission_mode.as_deref(),
+                        role.as_deref(),
+                        *max,
+                    );
+                }
+                // `--max` only bounds a batch drain — reject it on the
+                // single-spec path so the flag never silently no-ops.
+                // trace:TASK-285 | ai:claude
+                if max.is_some() {
+                    anyhow::bail!(
+                        "`--max` bounds a batch drain — pair it with `--batch NAME` \
+                         (e.g. `aida queue work --batch NAME --auto-complete --max 3`)"
+                    );
+                }
                 let spec = effective_id.map(|s| s.to_string()).ok_or_else(|| {
                     anyhow::anyhow!(
                         "`aida queue work --auto-complete` requires a SPEC id \
@@ -41085,49 +41116,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         "batch name is empty — pass `--batch NAME` or `aida queue work batch:NAME`"
                     );
                 }
-                let store_for_batch = storage.load()?;
-                let user_id_for_batch = user_id.clone();
-                let entries = storage.queue_list(&user_id_for_batch, false)?;
                 let want = format!("batch:{}", name);
-                let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
-                let (role_filter, _only_unrouted) =
-                    resolve_queue_role_filter(role.as_deref(), false, session_role.as_deref());
-                let mut members: Vec<(
-                    aida_core::QueueEntry,
-                    String,
-                    String,
-                    aida_core::RequirementStatus,
-                )> = Vec::new();
-                for entry in entries {
-                    if !entry_matches_role_filter(
-                        entry.for_role.as_deref(),
-                        role_filter.as_deref(),
-                        false,
-                    ) {
-                        continue;
-                    }
-                    let Some(req) = store_for_batch
-                        .requirements
-                        .iter()
-                        .find(|r| r.id == entry.requirement_id)
-                    else {
-                        continue;
-                    };
-                    if !req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want)) {
-                        continue;
-                    }
-                    // Skip terminal items (Completed/Rejected); they're
-                    // already shipped and don't need draining.
-                    if is_terminal_status(&req.status) {
-                        continue;
-                    }
-                    members.push((
-                        entry,
-                        req.display_id(),
-                        req.title.clone(),
-                        req.status.clone(),
-                    ));
-                }
+                // trace:TASK-285 | ai:claude — shared with the
+                // `--auto-complete` batch drain.
+                let members = resolve_batch_members(storage, &user_id, name, role.as_deref())?;
                 if *dry_run {
                     if members.is_empty() {
                         println!(
@@ -43042,6 +43034,24 @@ fn handle_auto_complete(
     json: bool,
     permission_mode: Option<&str>,
 ) -> ! {
+    let result = run_auto_complete(storage, user_id, spec, variant, json, permission_mode);
+    std::process::exit(result.exit_code);
+}
+
+/// Run one `--auto-complete` orchestration and return its result *without*
+/// exiting the process — so a batch drain (TASK-285) can chain runs. Handles
+/// the preflight queue, the real driver, and the TASK-266 telemetry record.
+/// Hard environment errors (project root unresolvable, preflight queue-add
+/// failed) still exit the process directly — they would recur identically on
+/// every batch iteration. trace:STORY-246, TASK-285 | ai:claude
+fn run_auto_complete(
+    storage: &Storage,
+    user_id: &str,
+    spec: &str,
+    variant: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<&str>,
+) -> auto_complete::OrchestrationResult {
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
     // `aida add` flows straight into `--auto-complete`.
@@ -43087,7 +43097,301 @@ fn handle_auto_complete(
         json,
     );
 
-    std::process::exit(result.exit_code);
+    result
+}
+
+/// Resolve the queued members of a `batch:NAME` tag in pickup order, filtered
+/// to the active role. Terminal items (Completed/Rejected) are dropped — they
+/// are already shipped. Returns `(entry, display_id, title, status)` tuples.
+/// Shared by the plain `--batch` head-pickup path and the TASK-285
+/// `--batch --auto-complete` drain. trace:TASK-229, TASK-285 | ai:claude
+fn resolve_batch_members(
+    storage: &Storage,
+    user_id: &str,
+    batch_name: &str,
+    role: Option<&str>,
+) -> Result<
+    Vec<(
+        aida_core::QueueEntry,
+        String,
+        String,
+        aida_core::RequirementStatus,
+    )>,
+> {
+    let store = storage.load()?;
+    let entries = storage.queue_list(user_id, false)?;
+    let want = format!("batch:{}", batch_name);
+    let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+    let (role_filter, _only_unrouted) =
+        resolve_queue_role_filter(role, false, session_role.as_deref());
+    let mut members: Vec<(
+        aida_core::QueueEntry,
+        String,
+        String,
+        aida_core::RequirementStatus,
+    )> = Vec::new();
+    for entry in entries {
+        if !entry_matches_role_filter(entry.for_role.as_deref(), role_filter.as_deref(), false) {
+            continue;
+        }
+        let Some(req) = store
+            .requirements
+            .iter()
+            .find(|r| r.id == entry.requirement_id)
+        else {
+            continue;
+        };
+        if !req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want)) {
+            continue;
+        }
+        // Skip terminal items (Completed/Rejected); they're already shipped
+        // and don't need draining.
+        if is_terminal_status(&req.status) {
+            continue;
+        }
+        members.push((
+            entry,
+            req.display_id(),
+            req.title.clone(),
+            req.status.clone(),
+        ));
+    }
+    Ok(members)
+}
+
+/// Real [`auto_complete::BatchDriver`] — re-resolves the `batch:NAME` head
+/// against the live queue and runs each member's full `--auto-complete`
+/// lifecycle. trace:TASK-285 | ai:claude
+struct RealBatchDriver<'a> {
+    storage: &'a Storage,
+    user_id: String,
+    batch_name: String,
+    role: Option<String>,
+    variant: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<String>,
+}
+
+impl auto_complete::BatchDriver for RealBatchDriver<'_> {
+    fn next_head(&mut self) -> Option<String> {
+        match resolve_batch_members(
+            self.storage,
+            &self.user_id,
+            &self.batch_name,
+            self.role.as_deref(),
+        ) {
+            Ok(members) => members.into_iter().next().map(|m| m.1),
+            Err(e) => {
+                // A store/queue read failure is not "batch drained" — surface
+                // it and stop rather than reporting a false clean drain.
+                eprintln!(
+                    "{} could not resolve batch members: {}",
+                    "✗".red().bold(),
+                    e
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+
+    fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
+        run_auto_complete(
+            self.storage,
+            &self.user_id,
+            spec,
+            self.variant,
+            self.json,
+            self.permission_mode.as_deref(),
+        )
+    }
+}
+
+/// Entry point for `aida queue work --batch NAME --auto-complete` (TASK-285).
+/// Drains the whole batch — one full `--auto-complete` lifecycle per member,
+/// advancing the head after each — until the batch is empty, `--max` is
+/// reached, or a phase fails. Never returns: exits `0` on a clean drain, else
+/// the failed-phase index (per STORY-246's exit codes). trace:TASK-285
+#[allow(clippy::too_many_arguments)]
+fn handle_auto_complete_batch(
+    storage: &Storage,
+    user_id: &str,
+    batch_name: &str,
+    variant: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<&str>,
+    role: Option<&str>,
+    max: Option<usize>,
+) -> ! {
+    if !json {
+        eprintln!();
+        eprintln!(
+            "{} {} {}",
+            "🚀".bold(),
+            format!("auto-complete batch: batch:{batch_name}").bold(),
+            format!("({})", variant.describe()).dimmed()
+        );
+        if let Some(limit) = max {
+            eprintln!(
+                "  {} drain capped at {} item{}",
+                "ℹ".cyan(),
+                limit,
+                if limit == 1 { "" } else { "s" }
+            );
+        }
+    }
+
+    let mut driver = RealBatchDriver {
+        storage,
+        user_id: user_id.to_string(),
+        batch_name: batch_name.to_string(),
+        role: role.map(|s| s.to_string()),
+        variant,
+        json,
+        permission_mode: permission_mode.map(|s| s.to_string()),
+    };
+    let result = auto_complete::drain_batch(&mut driver, max);
+    // An empty batch (nothing shipped, nothing to drain) is a user error —
+    // the named batch tag matched no queued work. Surface it with a non-zero
+    // exit so scripts notice, even though `drain_batch` calls it `Drained`.
+    let exit_code = if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
+        && result.shipped.is_empty()
+    {
+        1
+    } else {
+        result.exit_code
+    };
+    emit_batch_drain_summary(batch_name, &result, exit_code, json);
+    std::process::exit(exit_code);
+}
+
+/// Print the closing summary of a `--batch --auto-complete` drain: what
+/// shipped, where it stopped, and what is left queued. The per-spec failure
+/// epilogue + recovery hint are already printed by `orchestrate`; this adds
+/// the batch-level framing (which members shipped, queue-intact-for-retry).
+/// `exit_code` is the process's effective exit code (see caller). trace:TASK-285
+fn emit_batch_drain_summary(
+    batch_name: &str,
+    result: &auto_complete::BatchDrainResult,
+    exit_code: i32,
+    json: bool,
+) {
+    use auto_complete::BatchDrainOutcome;
+
+    if json {
+        let outcome = match &result.outcome {
+            BatchDrainOutcome::Drained => "drained",
+            BatchDrainOutcome::MaxReached => "max-reached",
+            BatchDrainOutcome::Failed(_) => "failed",
+            BatchDrainOutcome::Stalled => "stalled",
+        };
+        let mut obj = serde_json::Map::new();
+        obj.insert(
+            "event".to_string(),
+            serde_json::Value::String("batch-drain".into()),
+        );
+        obj.insert(
+            "batch".to_string(),
+            serde_json::Value::String(format!("batch:{batch_name}")),
+        );
+        obj.insert(
+            "outcome".to_string(),
+            serde_json::Value::String(outcome.into()),
+        );
+        obj.insert(
+            "shipped".to_string(),
+            serde_json::Value::Array(
+                result
+                    .shipped
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "shipped_count".to_string(),
+            serde_json::Value::Number((result.shipped.len() as u64).into()),
+        );
+        obj.insert(
+            "stopped_at".to_string(),
+            match &result.stopped_at {
+                Some(s) => serde_json::Value::String(s.clone()),
+                None => serde_json::Value::Null,
+            },
+        );
+        obj.insert(
+            "exit_code".to_string(),
+            serde_json::Value::Number(exit_code.into()),
+        );
+        println!("{}", serde_json::Value::Object(obj));
+        return;
+    }
+
+    let shipped_list = if result.shipped.is_empty() {
+        "(none)".to_string()
+    } else {
+        result.shipped.join(", ")
+    };
+    let n = result.shipped.len();
+    let plural = if n == 1 { "" } else { "s" };
+    eprintln!();
+    match &result.outcome {
+        BatchDrainOutcome::Drained if result.shipped.is_empty() => {
+            eprintln!(
+                "{} no queued items tagged `batch:{batch_name}` — tag members \
+                 via `aida edit <id> --tags batch:{batch_name}` first",
+                "✗".red().bold()
+            );
+        }
+        BatchDrainOutcome::Drained => {
+            eprintln!(
+                "{} batch `batch:{batch_name}` drained — {n} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+        }
+        BatchDrainOutcome::MaxReached => {
+            eprintln!(
+                "{} batch `batch:{batch_name}` — `--max` reached, {n} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+            eprintln!(
+                "  {} more members remain queued — re-run to continue: \
+                 `aida queue work --batch {batch_name} --auto-complete`",
+                "→".dimmed()
+            );
+        }
+        BatchDrainOutcome::Failed(phase) => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch `batch:{batch_name}` drain stopped at {} (phase {} failed)",
+                "✗".red().bold(),
+                stopped.bold(),
+                phase.index()
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} the rest of the batch is untouched — fix {stopped} (hint above), \
+                 then re-run `aida queue work --batch {batch_name} --auto-complete`",
+                "→".dimmed()
+            );
+        }
+        BatchDrainOutcome::Stalled => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch `batch:{batch_name}` drain stopped — {} stayed at the head \
+                 after a successful run (queue did not advance)",
+                "✗".red().bold(),
+                stopped.bold()
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} check {stopped}'s status (`aida show {stopped}`) — it may not have \
+                 been dequeued",
+                "→".dimmed()
+            );
+        }
+    }
 }
 
 /// TASK-266: append this `--auto-complete` run to
