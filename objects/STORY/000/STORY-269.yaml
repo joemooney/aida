@@ -29,12 +29,12 @@ description: |-
   ## Depends on
 
   - STORY 2 (aida-tui repo exists)
-status: Approved
+status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:45.715685241Z
-modified_at: 2026-05-17T01:20:45.715685241Z
+modified_at: 2026-05-17T02:14:45.086592425Z
 req_type: Story
 tags:
 - cross-repo
