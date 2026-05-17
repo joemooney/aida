@@ -6475,5 +6475,13 @@ operations:
       User feedback: *"command finished albeit with no indication of pass/fail or what happened in that headless /aida-review session"* — clarified afterward as a standalone command (not orchestrator) so the original \"silent-exit from orchestrator\" framing was wrong; the real gap is the end-of-command summary for standalone invocations.
 
       Original dialog-role misframing 2026-05-17: assumed orchestrator context without verifying the command shape; corrected upon user pushback per \`feedback_run_help_before_suggesting_flags.md\` (verify the surface before reasoning about its behavior).
-clock: 716
+- id: 019e36cb-1830-7211-85ae-478f48ef691f
+  target_id: 019e31b6-d9ba-7d43-b77f-57a46165e034
+  author: aida
+  node_id: '1'
+  lamport: 717
+  timestamp: 2026-05-17T16:35:40.208688665Z
+  kind: !SetStatus
+    status: In Progress
+clock: 717
 node_id: '1'
