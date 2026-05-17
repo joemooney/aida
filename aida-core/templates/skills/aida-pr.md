@@ -35,6 +35,29 @@ A PR composed of commits whose REQ-IDs are still `In Progress` /
 that to the user rather than open a misleading PR. `Done` and
 `Completed` are both green-light states for opening the PR.
 
+## Autonomy mode — `$AIDA_ZEN` (STORY-287)
+
+This skill's user-facing prompts carry a `kind:` annotation in an HTML
+comment directly above each one:
+
+- `<!-- kind:confirmation -->` — a mechanical yes/no whose default
+  (option 1) is obvious: "open this PR?", "grab next item?".
+- `<!-- kind:design-fork -->` — a genuine choice between meaningful
+  alternatives, where guessing wrong has real cost.
+
+Before surfacing any prompt, check the autonomy mode (`echo "${AIDA_ZEN:-}"`):
+
+- **Non-empty** — *advisor-on-standby* mode (`aida queue work --zen`, or
+  `AIDA_ZEN=1` exported). Auto-resolve every `kind:confirmation` prompt to
+  option 1 and proceed, printing `↳ zen: auto-resolved "<prompt>" →
+  option 1`. Still surface every `kind:design-fork` prompt unchanged.
+- **Empty** — default mode: surface every prompt, no change.
+
+A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
+overrides `--zen`. An un-annotated prompt defaults to `design-fork`
+(pause-safe). Author guidance: `docs/aida-discipline/skill-prompt-kinds.md`.
+trace:STORY-287
+
 ## Workflow
 
 ### 1. Determine the base branch
@@ -77,7 +100,8 @@ Collect a status table:
 - `Rejected` — red error, this commit shouldn't be in the batch
 - not found — red error, commit references a deleted/typo'd ID
 
-If any non-`Done` / non-`Completed` items exist, STOP and report them to the user with the matching commit SHAs. Ask: "ship anyway?" — `--force` (or explicit user confirmation) bypasses; default is to refuse.
+<!-- kind:confirmation -->
+If any non-`Done` / non-`Completed` items exist, STOP and report them to the user with the matching commit SHAs. Ask: "ship anyway?" — `--force` (or explicit user confirmation) bypasses; default is to refuse. Option 1 is the safe default (refuse), so under `$AIDA_ZEN` this auto-resolves to STOP-and-report — `--zen` never ships a half-done batch unasked.
 
 ### 4. Pre-flight: cargo fmt --check (Rust only) — trace:TASK-61
 
@@ -273,6 +297,7 @@ members the commit-log walk found); no spec is dropped.
 
 ### 9. Confirm with the user
 
+<!-- kind:confirmation -->
 Show the title and the Summary paragraph. Ask explicitly: "Open this PR?"  The user can:
 - Accept (proceed to step 10)
 - Edit the title/summary inline (revise and re-confirm)
@@ -351,9 +376,16 @@ Step 12's "Next steps" template branches on whether step 11 succeeded — the *a
 
 ### 12. Output the URL + Next steps — trace:TASK-87 trace:TASK-110 trace:TASK-260
 
+<!-- kind:confirmation -->
 Print the URL `gh` returned. Then surface a structured next-steps table so
 the implementer→reviewer hand-off is explicit rather than improvised. Don't
 auto-execute — the user picks.
+
+Under `$AIDA_ZEN` (STORY-287) this menu is a `kind:confirmation` prompt:
+still render the table (the scrollback record), then proceed with the
+**primary row** automatically — `▶` in the manual templates, `⇒` in the
+*orchestrator mode* template — instead of waiting. Never auto-take a `⏏`
+abort row. Print the one-line `↳ zen:` note naming the row taken.
 
 **Ordering rationale (TASK-110 + TASK-111):** end-implementer comes BEFORE
 start-reviewer. The implementer's lease owns the PR/STORY scope; a reviewer
@@ -461,6 +493,12 @@ Print exactly one block — don't dump all three templates.
 - BUG-74 — gh detection uses an explicit PATH walk + absolute-path fallback so the auto-queue isn't fooled by a stripped child-process PATH. `AIDA_DEBUG_GH=1` prints the search trace when gh ends up not found.
 
 ## Common Failure Modes
+
+<!-- kind:design-fork -->
+The recovery prompts below (half-shipped batch, REQ-ID typo) are
+`kind:design-fork`: each is a genuine choice with real cost. Surface them
+even under `$AIDA_ZEN` — advisor-on-standby still answers the real
+questions; only mechanical confirmations auto-resolve.
 
 - **No base divergence**: `git log <base>..HEAD` is empty. Either you're on `main` or no commits have landed yet — report and exit.
 - **Stale local branch**: remote has commits we don't. Surface a `git pull --rebase` prompt before pushing.

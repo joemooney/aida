@@ -15,6 +15,41 @@ work is finished. That is what makes an unattended overnight drain possible:
 aida queue work --batch nightly --auto-complete --no-human
 ```
 
+## The three autonomy modes
+
+`--no-human` is the far end of a three-mode ladder. The middle rung,
+`--zen`, exists because "is a human present" and "what does the human want
+to be asked" are two different axes — a user can be *at the keyboard* and
+still not want to click-yes through thirty mechanical prompts.
+
+| Mode | Flag | Persona | Mechanical prompts | Design-fork prompts |
+|---|---|---|---|---|
+| **Default** | *(none)* | "Driving" — approves each step | Pause + ask | Pause + ask |
+| **Zen** | `--zen` / `AIDA_ZEN=1` | "Advisor on standby" — consulted on real questions only | **Auto-resolve** | Pause + ask |
+| **No-human** | `--no-human` / `AIDA_HEADLESS=1` | "Absent" — nobody reachable | Auto-resolve | *Punt* (follow-up slice) |
+
+Each rung is strictly more autonomy than the one above. Precedence is
+**`--no-human` > `--zen` > default** — setting both `--zen` and
+`--no-human` resolves to `--no-human` (it wins, with a warning).
+
+**When to use each:**
+
+- **Default** — you are shaping the work as it goes, or the spec has open
+  design questions you want to decide live.
+- **`--zen`** — you are watching the drain and want to stay in the loop on
+  real decisions, but the mechanical "open PR? / merge? / grab next?"
+  prompts are noise. You are still there to answer a design fork.
+- **`--no-human`** — nobody is watching (overnight, a long batch). Needs
+  the reviewer-headless cut below; the headless *implementer* and the
+  design-fork punt are tracked under STORY-276 / STORY-287's follow-up.
+
+`--zen` works today without any headless machinery — it is pure
+prompt-classification. Skill templates tag each prompt with a `kind:`
+annotation (`confirmation` vs `design-fork`); under `$AIDA_ZEN` the skill
+auto-resolves the `confirmation` prompts and still surfaces the
+`design-fork` ones. The classification rules live in
+`docs/aida-discipline/skill-prompt-kinds.md`.
+
 ## What runs headless today
 
 This is a **reviewer-first cut**. Of the two Claude phases:

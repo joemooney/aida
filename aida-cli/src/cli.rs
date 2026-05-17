@@ -2557,6 +2557,18 @@ pub enum QueueCommand {
             aliases = ["unattended", "headless"]
         )]
         no_human: Option<String>,
+        /// "Advisor on standby" autonomy mode: auto-resolve mechanical
+        /// confirmation prompts (open PR? grab next item? end session?)
+        /// without pausing, while still pausing for genuine design-fork
+        /// questions. Use it when you are at the keyboard but don't want to
+        /// click-yes through every mechanical step. Sets `AIDA_ZEN=1` in the
+        /// launched session (exporting `AIDA_ZEN=1` yourself is equivalent).
+        /// When combined with `--no-human`, `--no-human` wins (it is the
+        /// stronger mode) and a warning is printed.
+        // trace:STORY-287 | ai:claude — plain `//` so the marker stays out
+        // of `--help` output (TASK-268 user-facing-text convention).
+        #[clap(long)]
+        zen: bool,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
