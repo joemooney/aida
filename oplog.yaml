@@ -6401,5 +6401,13 @@ operations:
   timestamp: 2026-05-17T15:47:58.549607547Z
   kind: !SetStatus
     status: In Progress
-clock: 714
+- id: 019e36a8-8d81-7282-9b09-7f7023e24d56
+  target_id: 019e36a7-2c8f-7ec2-a53f-6b78d3011cdc
+  author: aida
+  node_id: '1'
+  lamport: 715
+  timestamp: 2026-05-17T15:57:56.482029914Z
+  kind: !SetTitle
+    title: Standalone aida queue work --role reviewer --no-human exits silent (no pass/fail summary)
+clock: 715
 node_id: '1'
