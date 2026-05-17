@@ -131,7 +131,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:59:46.867277094Z
-modified_at: 2026-05-17T02:14:14.825281311Z
+modified_at: 2026-05-17T02:14:16.125474423Z
 req_type: Epic
 tags:
 - advisor-worker-pattern
@@ -147,3 +147,28 @@ comments:
   content: "## Refinement 2026-05-16 — three modes + user-always-in-control\n\nCritical clarification from the user: **the user's Claude chat remains interactive regardless of worker state.** The worker doesn't take over the user's session; it spawns its OWN Claude sessions (in worktrees, headless mode, transparent to user). The user's session is the advisor surface; the worker's are the implementer/reviewer surfaces.\n\n### The three modes\n\n| Mode | What's happening |\n|---|---|\n| **Manual interactive** | No worker running; user types, drives Claude, decides everything. Today's default. |\n| **Auto-pilot ON** | Worker running; spawns headless Claudes per spec; user's interactive Claude (advisor session) is free for other thought. User can interrupt anytime. |\n| **Hybrid (advisor triage)** | Worker paused / focused on subset; user works through punted/shelved items with advisor; advisor issues directives back to worker. |\n\nUser can SWITCH between modes freely:\n- \\`aida queue worker pause\\` → mode becomes manual interactive\n- \\`aida queue worker resume\\` → back to auto-pilot\n- Advisor session works in any mode; never blocked by worker state\n\n### Worker → User's Claude relationship\n\n```\n┌─ User's terminal: interactive Claude session (ALWAYS) ───────────┐\n│   role:dialog / advisor                                          │\n│   - reads worker state                                           │\n│   - discusses punted specs with user                             │\n│   - files REQUEST items to direct the worker                     │\n│   - can also do everything dialog does today (friction-to-spec,  │\n│     queue gardening, etc.) regardless of worker state            │\n└──────────────────────────────────────────────────────────────────┘\n\n      [REQUEST items in queue OR control socket]\n\n┌─ Background process: aida queue worker ──────────────────────────┐\n│   - polls queue                                                  │\n│   - spawns headless Claudes per spec (its own subprocesses)      │\n│   - those Claudes run in their own worktrees, exit cleanly       │\n│   - reports state to .aida/worker.state.toml                     │\n│   - never reads or writes the user's interactive Claude          │\n└──────────────────────────────────────────────────────────────────┘\n```\n\nThe user's Claude is independent of the worker. Worker spawns its own children. State is shared via the spec graph + queue + worker.state.toml.\n\n### Punted-work triage flow (the key pattern)\n\n\\`\\`\\`\nWorker punts BUG-X (reason: design-ambiguity in spec wording)\n   → BUG-X transitions to NeedsAttention\n   → Worker continues to next spec\n\n[time passes; user returns]\n\nUser: \\\"what's pending?\\\"\nAdvisor (in user's interactive Claude): \n   queries .aida/worker.state.toml + aida queue list --needs-attention\n   surfaces:\n     BUG-X — punt:design-ambiguity — \\\"unclear whether the API should support N-to-N relationships\\\"\n     STORY-Y — punt:rework-needs-human — \\\"reviewer flagged 3 changes\\\"\n\nUser + Advisor discuss BUG-X\nAdvisor: \\\"the implementer punted because the spec doesn't say whether N-to-N support is required. \n         Looking at the parent EPIC and recent comments, M-to-N seems sufficient. \n         Should I update the spec and direct the worker to retry?\\\"\nUser: \\\"yes, M-to-N\\\"\nAdvisor: \n   - aida comment add BUG-X \\\"resolved ambiguity: M-to-N is the model; N-to-N is a follow-up\\\"\n   - files REQUEST item: {cmd: unshelve, spec: BUG-X}\n   - reports back: \\\"Spec updated, REQUEST queued; worker will retry BUG-X next iteration\\\"\n\nWorker (next iteration): consumes REQUEST → un-punts BUG-X → drives via --auto-complete\n\\`\\`\\`\n\nThis is the cleanest expression of **advisor-worker collaboration**: human decides, advisor mediates+structures, worker executes. The advisor's role isn't replaced by the worker; the two pair to cover different responsibilities.\n\n### Acceptance addition (informs STORY 4)\n\n- [ ] User's interactive Claude session is NEVER stolen / mutated by the worker\n- [ ] Worker reads spec graph + queue + REQUEST items; writes state file + log file + (occasionally) the orphan store via spec status flips\n- [ ] Advisor session has a stable surface for: reading worker state, surfacing punted items, filing REQUEST items, recommending control actions\n- [ ] User can always pause/resume the worker without affecting their interactive Claude\n- [ ] Switching from auto-pilot to manual is one command (\\`aida queue worker pause\\`); no Claude-session disruption\n\n### Advisor role gains a seventh responsibility\n\nThe advisor's 6 responsibilities (per memory file \\`feedback_dialog_role_responsibilities.md\\`):\n1. Friction-to-spec translator\n2. Mental model articulator\n3. Strategic gap detector\n4. Queue gardener\n5. Workflow orchestrator\n6. Memory curator\n\nPlus, when EPIC-30 ships, an extension of #5 (workflow orchestrator):\n\n- **Worker triage + directive issuance** — read worker state, triage punted/shelved specs with user, file REQUEST items to direct the worker\n\nThis is the OPERATIONAL extension of strategic-counsel-during-overnight-drain. Worth a memory-entry refinement once EPIC-30 ships."
   created_at: 2026-05-17T02:04:57.283608256Z
   modified_at: 2026-05-17T02:04:57.283608256Z
+- id: 019e33b6-753d-7821-91b5-da32c806f0d5
+  author: joe
+  content: |-
+    ## Moved to backlog 2026-05-16 — yak-shaving risk
+
+    User asked dialog to push back on over-engineering. Honest assessment: the persistent-daemon architecture (Unix sockets, REQUEST items, state files, signal handling, crash recovery) is **3+ months of infrastructure for a problem an 80-line bash loop already solves**:
+
+    \`\`\`bash
+    while true; do
+        aida queue work next --auto-complete --no-human || break
+        sleep 30
+    done
+    \`\`\`
+
+    Once STORY-263 (\`--no-human\`) and TASK-292/293 (\`next\` keyword) ship, that loop IS the worker. Pause = Ctrl+C. Resume = re-run. The 90% case is covered.
+
+    **Revisit triggers** (when to promote back to Approved):
+    - The bash-loop pattern reveals concrete inadequacies in real use
+    - Multi-machine workflow becomes important (worker on machine A, advisor on machine B)
+    - User wants programmatic control plane that signals can't satisfy
+    - Telemetry from TASK-266 shows specific failure modes the bash loop can't recover from
+
+    Until any of those: STAY HERE. Captured for posterity, not blocking the alpha critical path.
+  created_at: 2026-05-17T02:14:16.125474423Z
+  modified_at: 2026-05-17T02:14:16.125474423Z
