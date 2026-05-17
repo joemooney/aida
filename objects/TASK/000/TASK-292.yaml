@@ -1,0 +1,50 @@
+id: 019e3376-689a-7c90-99c3-ee3813de8dfd
+spec_id: TASK-292
+agreed_id: TASK-292
+title: aida queue work --auto-complete (no SPEC id) should pick queue head, matching no-arg behavior
+description: |-
+  \`aida queue work\` (no args) picks the queue head and runs it interactively. \`aida queue work TASK-N --auto-complete\` runs that spec through the orchestrator. **Natural composition that fails today:** \`aida queue work --auto-complete\` (no SPEC) should pick the queue head AND drive it through --auto-complete.
+
+  ## Observed (2026-05-16)
+
+  \`\`\`
+  $ aida queue work --auto-complete
+  Error: \`aida queue work --auto-complete\` requires a SPEC id (e.g. \`aida queue work TASK-247 --auto-complete\`)
+  \`\`\`
+
+  The error is helpful (gives the workaround), but the workaround is unnecessary. The no-arg form of \`aida queue work\` already has \"pick the head\" semantics; \`--auto-complete\` should inherit that.
+
+  ## Acceptance
+
+  - [ ] \`aida queue work --auto-complete\` resolves the queue head + runs it through the orchestrator
+  - [ ] Same applies to other flag combinations: \`aida queue work --auto-complete=through-ci\`, \`--auto-complete --no-human\` (STORY-263), \`--batch X --auto-complete\` (TASK-285)
+  - [ ] Empty queue → clear error: \"queue is empty for <role>; nothing to drive\"
+  - [ ] If queue head is at a state that can't be picked up (already In Progress / Done / Completed), skip to next eligible item and surface a note
+  - [ ] Composes naturally with \`--no-launch\` (prep without starting), \`--batch X\` (head of batch), etc.
+
+  ## Composes with
+
+  - **TASK-285** (\`--batch + --auto-complete\` composition) — same family of natural-composition gaps
+  - **TASK-270** (\`batch:NAME\` positional acceptance) — same family
+  - **TASK-280** (\`--to-front\` / \`--to N\` flags on queue move) — same family
+  - **batch:workflow-hint-polish** — tagged accordingly
+  - **STORY-246** (\`--auto-complete\` orchestrator) — natural extension; small change to the dispatch
+
+  ## Origin
+
+  User attempted \`aida queue work --auto-complete\` 2026-05-16. The error required an explicit SPEC id. Reasonable mental model (\"no-arg picks head; add --auto-complete to drive it\") failed; filed per the failed-flag-attempts UX pattern.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:04:18.586209459Z
+modified_at: 2026-05-17T01:04:18.586209459Z
+req_type: Task
+tags:
+- auto-complete
+- batch:workflow-hint-polish
+- composition
+- failed-flag-signal
+- first-users
+- positional-arg
+- queue-head
