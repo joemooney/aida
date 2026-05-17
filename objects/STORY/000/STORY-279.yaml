@@ -1,0 +1,26 @@
+id: 019e34ef-8188-76c3-87fd-778245d483ee
+spec_id: STORY-279
+agreed_id: STORY-279
+title: 'Review PR-66: style(session): fix 3 doc_lazy_continuation lints on claude_headless_args (TASK-303)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e34d3`) for branch `task-303`.
+
+  - PR: <https://github.com/joemooney/aida/pull/66>
+  - Branch: `task-303` → `main`
+
+  ## Covers
+
+  - TASK-303
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 66` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T07:56:12.040575740Z
+modified_at: 2026-05-17T07:56:12.040575740Z
+req_type: Story
