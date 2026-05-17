@@ -74,7 +74,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:18:06.878953098Z
-modified_at: 2026-05-17T02:18:06.878953098Z
+modified_at: 2026-05-17T02:23:08.892296202Z
 req_type: Task
 tags:
 - aida-worker
@@ -83,3 +83,39 @@ tags:
 - mvp
 - no-daemon
 - shell-init
+comments:
+- id: 019e33be-965c-7373-9bdd-e1713d46f83f
+  author: joe
+  content: |-
+    ## Watchdog / timeout addition 2026-05-16
+
+    User raised the concern: even if (or especially if) Claude runs headless, a session might hang or take unexpectedly long. Need a watchdog mechanism in the bash worker.
+
+    ### Add to TASK-294's acceptance
+
+    - [ ] Per-spec timeout: configurable via env var \`AIDA_WORKER_SPEC_TIMEOUT\` (default: 30min)
+    - [ ] Heartbeat: optionally, the spawned \`aida queue work --auto-complete\` (or the spawned Claude) touches a file periodically (e.g., \`.aida/worker.heartbeat\`); worker checks file mtime — if stale beyond threshold, kill child
+    - [ ] Implementation hint:
+      \`\`\`bash
+      # In the worker loop:
+      timeout "${AIDA_WORKER_SPEC_TIMEOUT:-1800}" aida queue work "$head" --auto-complete
+      ec=$?
+      case $ec in
+          0)   echo "aida-worker: $head shipped" ;;
+          124) echo "aida-worker: $head TIMED OUT after ${AIDA_WORKER_SPEC_TIMEOUT:-1800}s; auto-pausing" ; echo "pause" > "$cmd_file" ;;
+          *)   echo "aida-worker: $head halted (exit $ec); auto-pausing" ; echo "pause" > "$cmd_file" ;;
+      esac
+      \`\`\`
+    - [ ] On timeout kill: \`aida queue work\` and the spawned Claude all get terminated (process group kill); worker writes \`pause\` directive so user can investigate
+    - [ ] Heartbeat is OPT-IN: useful when STORY-263 ships headless mode; not strictly required
+
+    ### Why this matters before STORY-263
+
+    Watchdog applies even today with interactive Claude:
+    - A user could leave the worker running and walk away mid-session
+    - Interactive Claude waiting for Ctrl+D would block indefinitely
+    - Timeout kicks in; worker auto-pauses; user returns to investigate
+
+    So the watchdog is valuable for the current interactive flow AND the future headless flow.
+  created_at: 2026-05-17T02:23:08.892296202Z
+  modified_at: 2026-05-17T02:23:08.892296202Z
