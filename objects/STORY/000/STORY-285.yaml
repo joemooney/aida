@@ -1,0 +1,112 @@
+id: 019e36de-0682-7f43-b6f7-972b60f9b0b9
+spec_id: STORY-285
+agreed_id: STORY-285
+title: Implementer findings reach advisor under --no-human (mirror of STORY-278 for phase 1)
+description: |-
+  Under \`--no-human\` autonomous drain, the implementer (phase 1) currently emits **conversational flags** at the end of each spec — deviations from the spec, design choices, pre-existing issues spotted, suggestions for follow-up — embedded in the end-of-session prose. These flags get lost: there's no human in the loop to read them in real-time, and the orchestrator advances to phase 2 without preserving them.
+
+  **This is the implementer-side mirror of STORY-278** (reviewer findings → advisor triage). Same gap, different phase. STORY-278 covered phase 3 (reviewer); this STORY covers phase 1 (implementer).
+
+  ## Concrete instance (2026-05-17 TASK-265)
+
+  TASK-265 implementer flagged three things at session end:
+
+  1. **Non-TTY deviation** — \"the spec said non-TTY → single-line, but the box now renders always\" (approved deviation; FYI for advisor)
+  2. **Plan brief design choice** — \"the card itself doesn't render the plan brief; pulling plan-discovery into the card would mean reimplementing aida queue work's logic; left as a clean followup if you want it boxed\" (deferred-to-followup decision)
+  3. **Pre-existing BUG** — \"\`aida show --help\` leaks trace:STORY-62 / STORY-78 / TASK-241 — want me to file a BUG for it?\"
+
+  Item 3 became BUG-227 only because the user was actively watching and routed it to advisor manually. Items 1-2 are recap-grade — useful for advisor review but not file-worthy. Under \`--no-human\` overnight drain with no human watching, **all three would have vanished into conversation history**. Item 3 (a real BUG worth tracking) would be lost; items 1-2 (recap context) would never reach the advisor who needs to know what design decisions shipped.
+
+  ## Proposed solution: TASK + draft + from-implementer tag (mirrors STORY-278's option-3 approach)
+
+  Implementer files findings as **\`TASK --status draft --tags \"from-implementer:SPEC-ID,kind:<deviation|design-choice|bug-spotted|followup-suggestion>\"\`** at session end. Advisor triages via the same query surface as reviewer findings.
+
+  ### Lifecycle
+
+  \`\`\`
+  Implementer (phase 1, under --no-human)
+    └─ At session end, before /aida-pr fires:
+         For each conversational flag → aida add --type task --status draft
+           --tags \"from-implementer:SPEC-ID,kind:<category>\"
+           --title \"...\"
+           --description \"... + link to PR + commit SHA\"
+
+  Advisor (next interactive session)
+    └─ aida findings list                              # picks up BOTH from-review:* and from-implementer:*
+         ├─ aida findings promote <ID>                 → joins approved queue
+         ├─ aida findings dismiss <ID>                 → rejected + audit
+         └─ <no-op>                                    → stays in draft
+  \`\`\`
+
+  The \`aida findings\` surface from STORY-278 extends transparently — the query is \`tags ~ 'from-(review|implementer):*'\`.
+
+  ### Categorization tags
+
+  - \`kind:deviation\` — implementer deviated from spec acceptance (with reason)
+  - \`kind:design-choice\` — implementer made a non-obvious call within spec scope
+  - \`kind:bug-spotted\` — pre-existing issue found incidentally (file-worthy)
+  - \`kind:followup-suggestion\` — \"could also do X if you want\" notes
+
+  ### Severity
+
+  Reuse STORY-278's tag: \`severity:cosmetic|minor|major\`.
+
+  ## Acceptance
+
+  ### Implementer side (headless writer; under --no-human)
+
+  - [ ] \`/aida-pickup\` or \`/aida-implement\` skill template — when \`AIDA_HEADLESS=1\` (the env flag from STORY-278): at session end, file conversational flags as \`TASK --status draft\` per the lifecycle above
+  - [ ] Idempotent: re-running the implementer for the same spec doesn't double-file — check for existing \`from-implementer:SPEC-ID\` tag first
+  - [ ] Each filed TASK includes: title (one-liner), description (full flag + PR link + commit SHA when available), \`kind:*\` tag, \`severity:*\` tag, \`from-implementer:SPEC-ID\` tag
+  - [ ] Session-end summary (in JSONL or terminal under TASK-307) includes findings count and TASK IDs
+
+  ### Advisor side (shared query surface with STORY-278)
+
+  - [ ] \`aida findings list\` returns BOTH \`from-review:*\` and \`from-implementer:*\` entries, grouped by source
+  - [ ] \`aida findings list --kind bug-spotted\` filters to file-worthy items
+  - [ ] \`aida findings list --source implementer\` / \`--source review\` filter by phase source
+  - [ ] Existing \`promote\` / \`dismiss\` from STORY-278 work transparently on implementer findings
+
+  ### Session-start surfacing (extends STORY-278's pattern)
+
+  - [ ] \`/aida-pickup\` and dialog-role session start already surface pending findings count from STORY-278; this STORY just adds the implementer side to the same count
+  - [ ] No new UI; the query subsumes
+
+  ## Out of scope
+
+  - **Auto-categorize via NLP** — the implementer (claude) categorizes its own findings at filing time; no post-hoc classification
+  - **Auto-file every conversational flag** — the skill template guides which categories warrant a TASK (e.g., deviations + bugs-spotted, NOT minor design choices that are obvious from the diff)
+  - **Headless advisor that auto-triages** — same out-of-scope as STORY-278; preserves advisor discipline
+  - **Real-time streaming of findings during phase 1** — TASK-307 (tee headless output) covers visibility; this STORY covers persistence
+
+  ## Composes with
+
+  - **STORY-278** (reviewer-side mirror; this STORY extends the same \`aida findings\` query surface to phase 1)
+  - **STORY-276** (headless implementer — this STORY's implementer-side filing only fires when the implementer is headless under \`--no-human\`)
+  - **BUG-226** (standalone reviewer summary — sibling \"end-of-phase visibility\" work; the summary should mention findings filed)
+  - **TASK-307** (tee headless output — implementer findings filing should also surface to terminal via the tee)
+  - **TASK-311** (dialog spec-audit discipline — the \`kind:deviation\` category in this STORY is exactly what TASK-311 aims to reduce)
+  - \`feedback_dialog_role_responsibilities.md\` (advisor curation extends to implementer-findings triage)
+  - \`feedback_pushback_on_overengineering.md\` (kept scope tight: reuses STORY-278's surface; no new commands)
+
+  ## Origin
+
+  2026-05-17 user observation after TASK-265 shipped:
+
+  > \"we are in --no-human. This is ok but overnight we would not want to pause here. So the things to flag should be part of a recap that the advisor/human needs to consider later\"
+
+  TASK-265 implementer flagged 3 items conversationally. The user (currently watching) routed item 3 to a BUG (BUG-227) manually. Under unattended overnight drain, items 1-3 would have vanished. This STORY closes that gap by giving implementer findings the same persistent home reviewer findings already have (STORY-278).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T16:56:20.866430726Z
+modified_at: 2026-05-17T16:56:20.866430726Z
+req_type: Story
+tags:
+- advisor-triage
+- from-self-test
+- implementer-findings
+- no-human
+- phase-1
+- recap
