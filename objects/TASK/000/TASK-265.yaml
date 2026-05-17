@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-05-17T16:35:40.169280397Z
+modified_at: 2026-05-17T16:37:55.322185604Z
 req_type: Task
 tags:
 - aida-pickup
@@ -101,3 +101,8 @@ comments:
   content: 'Acceptance correction 2026-05-17 (per implementer pushback at design checkpoint): the original ''non-TTY mode: pretty-print degrades to a single-line summary'' criterion was based on a flawed mental model — the primary caller (/aida-pickup via Claude Code Bash tool) is ALWAYS non-TTY, so the degradation rule would make the card never appear in its own use case. **Corrected**: `--card` always renders the box regardless of TTY; `--brief` is the explicit single-line opposite for scripts. Implementer is shipping Option 1. Updating acceptance criteria below.'
   created_at: 2026-05-17T16:34:43.180712070Z
   modified_at: 2026-05-17T16:34:43.180712070Z
+- id: 019e36cd-27fa-7f01-91d7-b9b54c2121ad
+  author: joe
+  content: 'Cross-reference: this spec is an instance of the pattern TASK-311 is designed to catch at filing time (dialog-role criteria contradicting the feature''s primary caller environment). Comment added 2026-05-17 as part of the self-audit lesson capture.'
+  created_at: 2026-05-17T16:37:55.322185604Z
+  modified_at: 2026-05-17T16:37:55.322185604Z
