@@ -1,0 +1,26 @@
+id: 019e3686-6bd1-71e0-a9f0-104663df1d29
+spec_id: STORY-282
+agreed_id: STORY-282
+title: 'Review PR-68: fix(queue): no-launch headless hint matches the real launch argv (BUG-225)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e367a`) for branch `bug-225`.
+
+  - PR: <https://github.com/joemooney/aida/pull/68>
+  - Branch: `bug-225` → `main`
+
+  ## Covers
+
+  - BUG-225
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 68` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T15:20:39.633267954Z
+modified_at: 2026-05-17T15:20:39.633267954Z
+req_type: Story
