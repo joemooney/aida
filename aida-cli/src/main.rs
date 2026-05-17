@@ -20833,6 +20833,158 @@ mod auto_bump_done_tests {
         (review_spec_id.to_string(), covered_ids)
     }
 
+    /// BUG-113: seed a `Done` review story for PR-N that `implements` one
+    /// covered spec, with the covered spec at `covered_status`. Mirrors
+    /// what /aida-pr's auto-queue records (`## Covers` list + an
+    /// `implements` relationship per covered spec). When the covered spec
+    /// is `Completed` it is stamped with a `completion_sha` so the covers
+    /// chain has a real merge sha to propagate. Returns
+    /// `(review_spec_id, covered_spec_id)`. trace:BUG-113 | ai:claude
+    fn seed_covers_chain_review_story(
+        store_path: &std::path::Path,
+        review_spec_id: &str,
+        covered_spec_id: &str,
+        pr_number: u64,
+        covered_status: &str,
+    ) -> (String, String) {
+        let storage = Storage::new(store_path.to_path_buf());
+        let mut store = storage.load().unwrap_or_default();
+
+        let mut covered =
+            aida_core::Requirement::new(format!("test-{}", covered_spec_id), String::new());
+        covered.spec_id = Some(covered_spec_id.to_string());
+        covered.set_status_from_str(covered_status);
+        if matches!(covered.status, RequirementStatus::Completed) {
+            let info = covered
+                .implementation_info
+                .get_or_insert_with(aida_core::ImplementationInfo::default);
+            info.completed_at = Some(chrono::Utc::now());
+            info.completion_sha = Some("deadbeefcafef00ddeadbeefcafef00ddeadbeef".to_string());
+        }
+        let covered_uuid = covered.id;
+        store.requirements.push(covered);
+
+        let mut review = aida_core::Requirement::new(
+            format!("Review PR-{}: covers {}", pr_number, covered_spec_id),
+            String::new(),
+        );
+        review.spec_id = Some(review_spec_id.to_string());
+        review.req_type = aida_core::RequirementType::Story;
+        review.set_status_from_str("Done");
+        review.relationships.push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::Custom("implements".to_string()),
+            target_id: covered_uuid,
+            created_at: None,
+            created_by: None,
+        });
+        store.requirements.push(review);
+        storage.save(&store).unwrap();
+        (review_spec_id.to_string(), covered_spec_id.to_string())
+    }
+
+    /// BUG-113: a review story stranded at `Done` — its PR merged, but the
+    /// merge commit carried the *covered* spec's `(REQ-ID)` and no `(#N)`
+    /// suffix, so the BUG-102/BUG-106 `pr_to_sha` linkage never saw it.
+    /// The covers chain must still graduate the review story in the same
+    /// pass that completes its covered spec. trace:BUG-113 | ai:claude
+    #[test]
+    fn auto_bump_flips_review_story_via_covers_chain() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let (review_id, covered_id) =
+            seed_covers_chain_review_story(&store_path, "STORY-9501", "STORY-9502", 4601, "done");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        // Merge commit references the covered spec only — no `(#N)`
+        // suffix, so `pr_to_sha` stays empty and the review-story PR
+        // linkage cannot fire. The covers chain is the only path that
+        // can reach STORY-9501.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                &format!("feat: ship the work ({})", covered_id),
+            ],
+        );
+        let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+
+        assert!(
+            flips.iter().any(|(id, _)| id == &review_id),
+            "review story should flip via the covers chain, got: {:?}",
+            flips
+        );
+        let after = storage.load().unwrap();
+        let review = after.get_requirement_by_spec_id(&review_id).unwrap();
+        assert!(
+            matches!(review.status, RequirementStatus::Completed),
+            "{} should be Completed via the covers chain, was {:?}",
+            review_id,
+            review.status
+        );
+        // The covered spec flipped too (the ordinary candidate scan), and
+        // the review story inherited that spec's merge commit sha.
+        let covered = after.get_requirement_by_spec_id(&covered_id).unwrap();
+        assert!(
+            matches!(covered.status, RequirementStatus::Completed),
+            "covered spec should be Completed, was {:?}",
+            covered.status
+        );
+        assert_eq!(
+            review
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.completion_sha.as_deref()),
+            Some(merge_sha.as_str()),
+            "review story completion_sha should be the covered spec's merge commit"
+        );
+    }
+
+    /// BUG-113: `aida db reconcile-status --spec STORY-N` on a review
+    /// story stuck at `Done` — its covered spec is already `Completed`,
+    /// but the `(#N)` merge commit is outside the replay window so the
+    /// BUG-102 PR linkage can't fire. The covers chain must still graduate
+    /// the stuck review story. trace:BUG-113 | ai:claude
+    #[test]
+    fn reconcile_status_flips_stuck_review_story_via_covers_chain() {
+        let (_tmp, _project_root, store_path) = init_test_project();
+        let (review_id, _covered_id) = seed_covers_chain_review_story(
+            &store_path,
+            "STORY-9913",
+            "STORY-9914",
+            88,
+            "completed",
+        );
+
+        // No commit carries PR-88's `(#88)` suffix — the covers chain is
+        // the only path that can reach STORY-9913.
+        let r = handle_db_reconcile_status(&store_path, None, Some(&review_id), false);
+        assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&review_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "reconcile-status --spec should flip the stuck review story via \
+             the covers chain, was {:?}",
+            req.status
+        );
+        assert_eq!(
+            req.implementation_info
+                .as_ref()
+                .and_then(|i| i.completion_sha.as_deref()),
+            Some("deadbeefcafef00ddeadbeefcafef00ddeadbeef"),
+            "review story should inherit the covered spec's merge sha"
+        );
+    }
+
     /// BUG-106: a cluster-mode PR squash-merges with the PR TITLE as the
     /// commit subject — the covered specs' IDs never reach main's commit
     /// log. Auto-bump must follow the `(#N)` → review-story →
@@ -29797,6 +29949,97 @@ fn stale_review_audit_comment(prior: &RequirementStatus, pr_n: u64) -> String {
     }
 }
 
+/// BUG-113: a review story can be stranded at `Done` after its PR merges.
+/// The `(#N)`-in-`pr_to_sha` linkage (BUG-102 bumps the Done review story,
+/// BUG-106 bumps the specs it covers) only fires while the PR's `(#N)`
+/// merge commit is inside the current scan window. The common miss: the
+/// reviewer flips the story In-Progress → Done *after* the merge-carrying
+/// pull already ran, so no later pull re-scans that commit and the review
+/// story sits at `Done` forever — `reconcile-status` couldn't recover it
+/// either, since it shares the same window-bound scan.
+///
+/// The covers chain is a window-independent signal. A review story's
+/// `implements` relationships are the specs /aida-pr's auto-queue recorded
+/// from the PR's `(REQ-ID)` trailers — the `## Covers` list. A covered
+/// spec only reaches `Completed` once its commit lands on the default
+/// branch (auto-bump / reconcile graduate `Done → Completed` solely on a
+/// default-branch merge), so a `Completed` covered spec *is* the proof its
+/// PR merged. A covered spec sitting in the caller's `flips` list is being
+/// completed by a default-branch commit in this very pass — same proof.
+/// Either way the PR is merged, so a `Done` review story with ANY covered
+/// spec already (or about-to-be) `Completed` should be `Completed` too.
+/// Checking `flips` as well as the store keeps the single-pass guarantee:
+/// when the merge commit IS in the window the covered spec and its review
+/// story graduate together rather than needing a second pull.
+///
+/// Returns `(review_spec_id, completion_sha)` for each such review story,
+/// skipping ones already in `flips`. The sha is the covered spec's merge
+/// commit (its recorded `completion_sha`, else the sha it is being
+/// completed with this pass); empty only when a covered spec was completed
+/// manually and carries no sha — the caller leaves `completion_sha` unset
+/// in that case. trace:BUG-113 | ai:claude
+fn collect_covers_completed_review_flips(
+    store: &aida_core::RequirementsStore,
+    flips: &[(String, String)],
+) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for review in &store.requirements {
+        if !matches!(review.status, RequirementStatus::Done) {
+            continue;
+        }
+        // Review stories only — title shape `Review PR-<n>: ...`. The
+        // guard also stops a plain Done story that happens to `implements`
+        // a Completed spec from being mistaken for a merged review story.
+        if parse_review_story_pr_number(&review.title).is_none() {
+            continue;
+        }
+        let Some(spec_id) = review.spec_id.as_deref() else {
+            continue;
+        };
+        if flips.iter().any(|(id, _)| id == spec_id) {
+            continue;
+        }
+        if out.iter().any(|(id, _)| id == spec_id) {
+            continue;
+        }
+        // First covered spec that has merged (Completed in the store, or
+        // being completed in this pass) graduates the review story.
+        let mut flip: Option<(String, String)> = None;
+        for rel in &review.relationships {
+            if !matches!(
+                &rel.rel_type,
+                aida_core::RelationshipType::Custom(n) if n.eq_ignore_ascii_case("implements")
+            ) {
+                continue;
+            }
+            let Some(covered) = store.requirements.iter().find(|r| r.id == rel.target_id) else {
+                continue;
+            };
+            let pending_sha = covered.spec_id.as_deref().and_then(|cid| {
+                flips
+                    .iter()
+                    .find(|(id, _)| id == cid)
+                    .map(|(_, sha)| sha.clone())
+            });
+            if !matches!(covered.status, RequirementStatus::Completed) && pending_sha.is_none() {
+                continue;
+            }
+            let sha = covered
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.completion_sha.clone())
+                .or(pending_sha)
+                .unwrap_or_default();
+            flip = Some((spec_id.to_string(), sha));
+            break;
+        }
+        if let Some(f) = flip {
+            out.push(f);
+        }
+    }
+    out
+}
+
 /// STORY-86: scan the **code repo's** default branch for newly-landed
 /// commits whose subject references a spec, and flip any spec currently
 /// at `Done` to `Completed`. Stamps `implementation_info.completed_at`
@@ -30002,6 +30245,17 @@ fn auto_bump_done_to_completed(
         }
     }
 
+    // BUG-113: a `Done` review story whose covered specs have merged
+    // (`Completed`, or being completed in this very pass) but whose `(#N)`
+    // merge commit is no longer in the scan window — typically because the
+    // story flipped to `Done` *after* the merge-carrying pull. The covers
+    // chain graduates it without depending on `pr_to_sha`. Runs after the
+    // candidate + BUG-102 + BUG-106 blocks so a covered spec flipped in
+    // this same pass is already visible in `flips`. trace:BUG-113 | ai:claude
+    for (sid, sha) in collect_covers_completed_review_flips(&store, &flips) {
+        flips.push((sid, sha));
+    }
+
     // TASK-246 / BUG-219: a review story whose PR merged before the
     // review lifecycle finished — left at `InProgress` (a reviewer asked
     // for fixups, then the PR self-merged instead of a fresh /aida-review
@@ -30041,7 +30295,10 @@ fn auto_bump_done_to_completed(
                     .implementation_info
                     .get_or_insert_with(aida_core::ImplementationInfo::default);
                 info.completed_at.get_or_insert(now);
-                if info.completion_sha.is_none() {
+                // BUG-113: a covers-chain flip can carry an empty sha when
+                // the covered spec was completed manually (no merge sha) —
+                // don't stamp `Some("")`.
+                if info.completion_sha.is_none() && !sha.is_empty() {
                     info.completion_sha = Some(sha.clone());
                 }
             }
@@ -30315,6 +30572,20 @@ fn handle_db_reconcile_status(
         stale_review_flips.retain(|(sid, ..)| sid.eq_ignore_ascii_case(target));
     }
 
+    // BUG-113: the covers chain — a `Done` review story whose covered
+    // specs have merged (`Completed` in the store, or flipped earlier in
+    // this replay) — the window-independent safety net for review stories
+    // the `(#N)` scan missed because their PR's merge commit is outside
+    // the replay range. Mirrors the auto-bump path; honours `--spec`.
+    // trace:BUG-113 | ai:claude
+    let mut covers_completed_flips = collect_covers_completed_review_flips(&store, &flips);
+    if let Some(target) = spec {
+        covers_completed_flips.retain(|(sid, _)| sid.eq_ignore_ascii_case(target));
+    }
+    for flip in covers_completed_flips {
+        flips.push(flip);
+    }
+
     if flips.is_empty() && stale_review_flips.is_empty() {
         match spec {
             Some(s) => println!(
@@ -30388,7 +30659,10 @@ fn handle_db_reconcile_status(
                     .implementation_info
                     .get_or_insert_with(aida_core::ImplementationInfo::default);
                 info.completed_at.get_or_insert(now);
-                if info.completion_sha.is_none() {
+                // BUG-113: a covers-chain flip can carry an empty sha when
+                // the covered spec was completed manually (no merge sha) —
+                // don't stamp `Some("")`.
+                if info.completion_sha.is_none() && !sha.is_empty() {
                     info.completion_sha = Some(sha.clone());
                 }
             }
