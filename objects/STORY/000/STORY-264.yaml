@@ -1,0 +1,26 @@
+id: 019e336c-bbac-7500-8e24-c2f3644d58e7
+spec_id: STORY-264
+agreed_id: STORY-264
+title: 'Review PR-58: [AI:claude] feat(aida-review): surface explicit Ctrl+D exit instruction in orchestrator-driven review (TASK-291)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e331b`) for branch `task-291`.
+
+  - PR: <https://github.com/joemooney/aida/pull/58>
+  - Branch: `task-291` → `main`
+
+  ## Covers
+
+  - TASK-291
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 58` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T00:53:44.492840766Z
+modified_at: 2026-05-17T00:53:44.492840766Z
+req_type: Story
