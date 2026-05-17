@@ -1,0 +1,26 @@
+id: 019e3776-5dd9-7613-a2ed-52022a0cc6d9
+spec_id: STORY-292
+agreed_id: STORY-292
+title: 'Review PR-74: [AI:claude] feat(cli): aida queue move --to/--to-front/--to-back absolute positioning (TASK-280)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3764`) for branch `task-280`.
+
+  - PR: <https://github.com/joemooney/aida/pull/74>
+  - Branch: `task-280` → `main`
+
+  ## Covers
+
+  - TASK-280
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 74` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T19:42:44.697243387Z
+modified_at: 2026-05-17T19:42:44.697243387Z
+req_type: Story
