@@ -1,0 +1,12 @@
+id: 019e3849-0ed8-7a90-b286-26fb69d6e674
+spec_id: TASK-325
+agreed_id: TASK-325
+title: Propagate `kind:` annotations to skills beyond the core 4
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T23:32:52.568919058Z
+modified_at: 2026-05-17T23:32:52.568919058Z
+req_type: Task
