@@ -73,9 +73,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:09:24.232543827Z
-modified_at: 2026-05-17T15:09:24.232543827Z
+modified_at: 2026-05-17T18:50:53.888543144Z
 req_type: Task
 tags:
+- batch:autonomy-modes
 - first-users
 - headless
 - no-human
