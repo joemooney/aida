@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:37:48.985304743Z
-modified_at: 2026-05-17T17:29:48.202119137Z
+modified_at: 2026-05-17T17:35:19.777491680Z
 req_type: Task
 tags:
 - aida-show
@@ -98,6 +98,19 @@ comments:
     filed 2 task(s): TASK-314, TASK-315
   created_at: 2026-05-17T17:29:48.580228406Z
   modified_at: 2026-05-17T17:29:48.580228406Z
+- id: 019e3701-b6e1-7461-989c-f97710caaa06
+  author: joe
+  content: |-
+    Implemented via PR-70 (commit c33a5be5):
+
+    - New `status_display` module — shared glyph + colour palette (status_glyph / paint_status / status_badge). `aida show` color-codes Status inline and reprints it as the last line after a rule.
+    - Unified onto the shared palette: `aida show --card`, `aida queue list`, `aida list`, `aida history` (colorize_status now a thin wrapper), the `aida status` overlay.
+    - NO_COLOR / non-TTY degrade to plain text + glyphs — verified zero ANSI escapes.
+
+    Test status: 859/859 workspace tests green (incl. 5 new status_display tests)
+    Follow-up: TASK-314 (gRPC client.rs retrofit), TASK-315 (optional in-table glyph for aida list)
+  created_at: 2026-05-17T17:35:19.777491680Z
+  modified_at: 2026-05-17T17:35:19.777491680Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T17:29:32.277975169Z
