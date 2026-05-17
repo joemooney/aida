@@ -1,0 +1,72 @@
+id: 019e3378-66a9-7fd1-b292-c73696d435fe
+spec_id: TASK-293
+agreed_id: TASK-293
+title: 'aida queue work next / nextN keyword: explicit head pickup + drain-N-from-head form'
+description: |-
+  Today's queue-work syntax has three pickup forms (no-args = head, \`TASK-N\` = explicit, \`--batch X\` = batch head). A keyword form **\`next\` / \`nextN\`** sits naturally alongside, with two values: readability AND the new \"drain next N from head\" capability.
+
+  ## Proposed syntax
+
+  | Command | Picks | Notes |
+  |---|---|---|
+  | \`aida queue work next\` | Head (1 item) | Explicit equivalent of \`aida queue work\` no-args |
+  | \`aida queue work next3\` (or \`next 3\`) | Head + next 2 (3 total, in queue order) | New capability — un-pre-tagged batch |
+  | \`aida queue work next --auto-complete\` | Drive head autonomously | Same as TASK-292's no-args behavior, explicit form |
+  | \`aida queue work next3 --auto-complete\` | Drive 3 specs sequentially autonomously | New — drain-N-from-head autonomous |
+  | \`aida queue work next3 --auto-complete --no-human\` | 3-spec autonomous overnight drain | Composes with STORY-263 |
+
+  Parser supports both \`next3\` (compact) AND \`next 3\` (spaced) — equivalent.
+
+  ## Why this beats only-`--batch` for ad-hoc drains
+
+  Batches require pre-tagging (\`aida edit X --tags batch:NAME\`). \`next3\` lets you say \"the head 3 items, whatever they are, in current order\" without forcing batch declaration. Useful when:
+
+  - You've ordered the queue but haven't tagged
+  - You want a quick sprint-end push (next-3 before EOD)
+  - You want to test a few items via \`--auto-complete\` before committing to a full batch drain
+
+  ## Acceptance
+
+  - [ ] \`aida queue work next\` accepted; picks queue head; equivalent to no-args
+  - [ ] \`aida queue work next3\` (or \`next 3\` — both forms parse) picks the next 3 from head
+  - [ ] When \`N\` exceeds queue length: pick all available; surface a note (\"only 2 items queued; picking those\")
+  - [ ] \`--auto-complete\` composes: \`aida queue work nextN --auto-complete\` drains N specs sequentially; stops at first phase failure (per STORY-246 exit codes)
+  - [ ] \`--no-human\` composes (when STORY-263 ships): \`aida queue work next3 --auto-complete --no-human\` is the canonical 3-spec autonomous drain
+  - [ ] Spec-ID positionals (\`TASK-N\`, \`BUG-N\`, etc.) still work — unambiguous because they have format `TYPE-N`
+  - [ ] Tests: \`next\`, \`next1\`, \`next 1\`, \`next3\`, \`next 3\`, edge cases (empty queue, N > queue length)
+
+  ## Relationship to TASK-292
+
+  TASK-292 says \"no SPEC means head\". This TASK adds an EXPLICIT \"next\" keyword form. Both can coexist:
+
+  - No-args form (TASK-292): convenient, terse
+  - Keyword form (this TASK): explicit, readable; also unlocks \`nextN\`
+
+  If only one survives: keep BOTH. They serve different audiences (terse vs explicit).
+
+  ## Composes with
+
+  - **TASK-292** (no-SPEC means head) — direct sibling; both implementable in one PR
+  - **TASK-285** (\`--batch + --auto-complete\`) — \`nextN\` is an un-pre-tagged batch variant
+  - **STORY-263** (\`--no-human\`) — combines for overnight drain
+  - **STORY-265** (decoupled plan/implement) — \`nextN --plan-only\` plans next N specs in parallel
+  - **batch:workflow-hint-polish** — tagged accordingly
+
+  ## Origin
+
+  User proposed 2026-05-16: *\"maybe instead of \`aida queue work --auto-complete\` we should have \`aida queue work next --auto-complete\` where next is a keyword and maybe you could say next3.\"* — surfaced both the readability value of explicit keyword AND the new multi-spec drain capability.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:06:29.161825781Z
+modified_at: 2026-05-17T01:06:29.161825781Z
+req_type: Task
+tags:
+- batch:workflow-hint-polish
+- composition
+- head-pickup
+- keyword-syntax
+- multi-spec-drain
+- queue-work
+- workflow-hint-polish
