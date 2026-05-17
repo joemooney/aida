@@ -5,16 +5,18 @@ title: 'Reviewer phase: detect stale PR base + auto-rebase (or block) before hea
 description: |-
   When \`aida queue work --auto-complete\` (or any path that queues a PR for headless review) runs against a PR whose base is behind main, the reviewer reads stale code. If parallel work has merged in the meantime — common during batch drains and overnight autonomous cycles — the review is **against the wrong version** of the codebase. Worse, file-level overlap with merged-in-the-interim work may introduce silent conflicts that pass GitHub's textual-mergeability check but break compilation or tests at merge time.
 
+  This STORY is the **orchestrator pre-flight integration**. The underlying \`aida pr rebase <N>\` CLI is TASK-XXX (split out, ships independently).
+
   ## Concrete instance (2026-05-17 morning)
 
-  - **PR-65 (STORY-278)** opened 07:28 UTC, base SHA = \`188dbee6\` (yesterday's STORY-263 merge)
+  - **PR-65 (STORY-278)** opened 07:28 UTC, base SHA = \`188dbee6\`
   - Overnight: **PR-66 (TASK-303)** merged at 07:56 UTC — touched \`aida-cli/src/session.rs\`
   - Overnight: **PR-67 (BUG-224)** merged at 15:01 UTC — touched a plan file
   - **PR-65 also touches \`aida-cli/src/session.rs\`** (+6/-0)
-  - GitHub reports \`mergeable: UNKNOWN, mergeStateStatus: UNKNOWN\` (hasn't computed)
+  - GitHub reports \`mergeable: UNKNOWN, mergeStateStatus: UNKNOWN\`
   - Queuing PR-65 for headless review without rebase = reviewer reads code 2 commits stale; \`session.rs\` overlap may surface as a conflict at merge time
 
-  User flagged the concern explicitly:
+  User flagged the concern:
 
   > "Before \`aida queue work PR-65 --for reviewer --no-human\` is there a rebase needed? Do we/should we check? There seems like parallel work on-going so that could cause an issue?"
 
@@ -22,69 +24,66 @@ description: |-
 
   When orchestrator enters phase 3 (or any explicit reviewer-queue-add for a PR), before launching headless reviewer:
 
-  1. **Detect stale base**: \`gh pr view <N> --json baseRefOid\` vs \`git rev-parse origin/<default-branch>\`
-  2. **If current**: proceed immediately
-  3. **If stale**: check file overlap between PR's diff and commits-since-base
-  4. **If no file overlap**: surface a warning, proceed (review-against-stale is suboptimal but safe)
-  5. **If file overlap**: BLOCK review and:
-     - Print explicit instructions (\`gh pr checkout <N> && git rebase origin/<default> && cargo test && git push --force-with-lease\`)
-     - OR offer auto-rebase with conflict-failure handling (\`aida pr rebase <N> --no-edit\` if the PR has no conflicts, abort + report if it does)
-     - Or wait for user to rebase, then retry
+  1. **Detect stale base** via \`aida pr rebase <N> --check\` (from TASK-XXX)
+  2. **If current** (no stale base): proceed immediately to reviewer launch
+  3. **If stale with no file overlap**: surface a warning, proceed — review-against-stale is suboptimal but safe
+  4. **If stale with file overlap**: BLOCK reviewer launch and:
+     - Print the \`aida pr rebase <N>\` invocation as the suggested fix
+     - Exit with non-zero so the orchestrator pauses at phase 2/3 boundary
+     - User runs \`aida pr rebase <N>\` manually, then retries \`aida queue work\`
+     - Future improvement (sub-TASK): orchestrator auto-invokes \`aida pr rebase <N>\` if the conflicts are predicted clean — but only with user consent
 
-  The orchestrator should NEVER silently auto-rebase + force-push without user knowledge — too easy to clobber concurrent work or break a PR the user is actively editing.
+  The orchestrator should NEVER silently auto-rebase + force-push without user knowledge — too easy to clobber concurrent work or break a PR the user is actively editing. **Block-and-instruct is the right default**; auto-invoke is a follow-up.
 
-  ## CLI surface
+  ## CLI integration points
 
-  \`\`\`bash
-  aida pr rebase <N>                    # auto-rebase if clean; abort + report if conflicts
-  aida pr rebase <N> --check            # report-only: stale? overlap? conflicts predicted?
-  aida pr rebase <N> --interactive      # let the user resolve conflicts and continue
-  \`\`\`
-
-  \`aida queue work <PR-N> --for reviewer\` would gain a built-in pre-flight check:
+  \`aida queue work <PR-N> --for reviewer\` gains:
   - \`--allow-stale-base\` — opt out, proceed against stale base (with warning)
-  - Default behavior: refuse to launch reviewer if base is stale AND there's file overlap
+  - Default: refuse to launch reviewer if base is stale AND there's file overlap
+
+  \`aida queue work --auto-complete\` orchestrator gains the same pre-flight check before phase 3.
 
   ## Acceptance
 
-  - [ ] Pre-reviewer-launch hook checks PR base vs main
-  - [ ] File-overlap detection compares PR's changed paths vs union of paths in commits-since-base
-  - [ ] Auto-rebase via \`aida pr rebase <N>\` when called explicitly:
-    - [ ] Checks out the PR branch in a temporary worktree (don't mess with user's current branch)
-    - [ ] \`git rebase origin/<default>\`
-    - [ ] If clean: runs configured smoke check (\`cargo build\` minimum; \`cargo test -p\` if specified in config); on green, \`git push --force-with-lease\`; reports
-    - [ ] If conflicts: aborts the rebase, prints the conflicted files + manual instructions
-  - [ ] \`aida queue work <PR-N> --for reviewer\` refuses to launch when base is stale AND file overlap exists, unless \`--allow-stale-base\` is set
-  - [ ] Warning (not refusal) when base is stale but no file overlap — proceed but log "review against stale base"
-  - [ ] Tests: simulated stale-base + overlap scenarios; clean-rebase scenario; conflict scenario
-  - [ ] Integration: works for PRs opened by web /ultraplan (which the user does not own locally until \`gh pr checkout\`)
+  - [ ] Pre-reviewer-launch hook in the orchestrator: calls \`aida pr rebase <N> --check\` (from TASK-XXX) before launching headless reviewer
+  - [ ] If \`--check\` reports stale + overlap: orchestrator pauses, prints the \`aida pr rebase <N>\` invocation, exits with informative non-zero
+  - [ ] If \`--check\` reports stale but no overlap: warning logged, reviewer proceeds (review-against-stale)
+  - [ ] If \`--check\` reports current: proceed silently
+  - [ ] \`--allow-stale-base\` flag on \`aida queue work <PR-N> --for reviewer\` opts out of the refusal (warning only)
+  - [ ] Same hook applies to direct \`aida queue work --for reviewer\` invocations, not just \`--auto-complete\`
+  - [ ] Tests: simulated stale + overlap → orchestrator pauses; stale + no overlap → warning only; current → silent proceed
+  - [ ] Integration test: full \`--auto-complete --no-human\` cycle that hits a stale-base block and surfaces actionable next steps
 
   ## Out of scope
 
-  - **Auto-resolve conflicts** — never. Conflict resolution always needs human judgment
-  - **Cross-fork rebase** — if a PR is from a contributor fork, the orchestrator can't \`git push --force-with-lease\` to the contributor's branch; surface manual instructions
-  - **Continuous rebase during long PR review** — single pre-flight check at queue-add time is enough for autonomous-drain cadence
+  - **\`aida pr rebase <N>\` CLI itself** — TASK-XXX (this STORY depends on it)
+  - **Auto-resolve conflicts** — never (same principle as TASK-XXX)
+  - **Cross-fork rebase** — TASK-XXX surfaces manual instructions; this STORY just propagates them
+  - **Continuous rebase during long PR review** — single pre-flight check at queue-add time is enough
+  - **Auto-invoke \`aida pr rebase <N>\`** without user consent — explicit follow-up sub-TASK if needed after manual-invoke pattern is proven
+
+  ## Depends on
+
+  - **TASK-XXX (\`aida pr rebase <N>\` CLI)** — load-bearing dependency; this STORY's pre-flight hook is meaningless without the CLI
 
   ## Composes with
 
   - **STORY-263** (headless reviewer; this STORY makes the review correct against current main)
-  - **STORY-276** (headless implementer; phase 1 also benefits — implementer wakes up on stale base, so this check applies there too)
-  - **TASK-285** (\`--batch\` with \`--auto-complete\`; batch drains are exactly the scenario where parallel merges fly past, making this STORY load-bearing)
-  - **BUG-223** (orchestrator phase-1 false-negative on branch swap — sibling reliability concern in the same auto-complete loop)
-  - **TASK-305** (web /ultraplan plan-archival — same web-flow PRs are most likely to need this rebase since they branched from a snapshot when assembled)
-  - **TASK-307** (tee headless output — once stale-base detection fires, surfaces in the same orchestrator stream)
+  - **STORY-276** (headless implementer; phase 1 also benefits from base-currency on pickup, though scope is different — implementer starts work, doesn't review a static PR)
+  - **TASK-285** (\`--batch\` with \`--auto-complete\`; batch drains are where parallel merges fly past)
+  - **BUG-223** (orchestrator phase-1 branch-swap; sibling reliability concern)
+  - **TASK-305** (web /ultraplan plan-archival — same web-flow PRs are most likely to need rebase)
+  - **TASK-307** (tee headless output — stale-base detection messages surface via the same orchestrator stream)
 
   ## Origin
 
-  2026-05-17 morning. User about to queue PR-65 (web /ultraplan output for STORY-278) for headless review; correctly identified that 2 PRs merged overnight could cause issues. Concrete data: \`session.rs\` overlap between PR-65 (+6 lines, headless-reviewer findings-filing additions) and PR-66 (clippy fix on \`claude_headless_args\` doc comment in the same file). Without this STORY, the workflow gap is: headless reviewer would read stale code and either approve a version that no longer reflects shipping state, or fail to surface a merge-time conflict that breaks compilation.
-
-  User-perception framing: parallel auto-complete drains + web /ultraplan + manual reviews are all converging on the same files. The "everything's merging concurrently" pattern is exactly where this kind of check earns its keep.
+  2026-05-17 morning. User about to queue PR-65 (web /ultraplan output for STORY-278) for headless review; identified that 2 PRs merged overnight could cause issues. Concrete data: \`session.rs\` overlap between PR-65 and PR-66. Split decision (user 2026-05-17): the CLI ships first as a manual tool (new TASK), the orchestrator pre-flight integration (this STORY) lands once the CLI has been used manually for a stretch and we have empirical evidence about which scenarios warrant blocking vs warning.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:16:43.368789467Z
-modified_at: 2026-05-17T15:16:43.368789467Z
+modified_at: 2026-05-17T15:25:58.883511302Z
 req_type: Story
 tags:
 - auto-complete
