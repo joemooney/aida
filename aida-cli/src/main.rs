@@ -42050,7 +42050,9 @@ mod headless_hint_tests {
             let hint = headless_launch_hint(prompt, sid);
             let parsed = split_shell_words(&hint);
 
-            let mut expected = vec!["claude".to_string()];
+            // STORY-278: hint prefixes `AIDA_HEADLESS=1` to mirror the env
+            // `exec_claude_headless` sets via `.env(...)`.
+            let mut expected = vec!["AIDA_HEADLESS=1".to_string(), "claude".to_string()];
             expected.extend(session::claude_headless_args(prompt, sid));
             assert_eq!(parsed, expected, "hint did not round-trip: {hint}");
 
@@ -42859,10 +42861,12 @@ fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
 /// `session::claude_headless_args` — the exact argv `exec_claude_headless`
 /// feeds to `claude` — so the printed hint can never drift from the real
 /// launch (correct flag order, `--session-id` included, prompt last).
+/// STORY-278: prefix `AIDA_HEADLESS=1` so the copy-paste hint also sets
+/// the env var `exec_claude_headless` puts on the child via `.env(...)`.
 /// trace:BUG-225 | ai:claude
 fn headless_launch_hint(prompt: &str, session_id: &str) -> String {
     let argv = session::claude_headless_args(prompt, session_id);
-    format!("claude {}", shell_join_display(&argv))
+    format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv))
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
@@ -43226,6 +43230,9 @@ fn handle_queue_work(
             // `claude_headless_args` (via `headless_launch_hint`) so the
             // copy-pasteable command can't drift from `exec_claude_headless`
             // — same flag order, `--session-id` included, prompt last.
+            // STORY-278: helper also prefixes `AIDA_HEADLESS=1` to match
+            // the env `exec_claude_headless` sets, so the copy-pasted hint
+            // launches an equivalent process.
             let sid = claude_session_id.as_deref().unwrap_or_default();
             eprintln!("  {}", headless_launch_hint(&prompt, sid).cyan());
         } else {

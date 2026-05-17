@@ -634,6 +634,11 @@ pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
 /// to `log_path` so the orchestrator's own stdout stays clean (it carries
 /// `--json` phase events) and TASK-298's watchdog has a file to tail; stderr
 /// stays inherited so Claude errors still surface. trace:STORY-263 | ai:claude
+///
+/// Sets `AIDA_HEADLESS=1` in the launched environment so skills can tell
+/// they are running unattended — the `/aida-review` skill keys its
+/// finding-filing step on it, since there is no human to triage the
+/// reviewer's findings. trace:STORY-278 | ai:claude
 pub fn exec_claude_headless(prompt: &str, session_id: &str, log_path: &Path) -> Result<()> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -644,6 +649,7 @@ pub fn exec_claude_headless(prompt: &str, session_id: &str, log_path: &Path) -> 
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let mut cmd = Command::new("claude");
     cmd.args(claude_headless_args(prompt, session_id))
+        .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log));
     #[cfg(unix)]
     {
