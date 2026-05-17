@@ -1,0 +1,26 @@
+id: 019e369e-ae93-74b2-a580-89c6ac635e8b
+spec_id: STORY-283
+agreed_id: STORY-283
+title: 'Review PR-65: Headless reviewer findings reach the advisor for triage (STORY-278)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/plan-findings-triage-F2f3V`.
+
+  - PR: <https://github.com/joemooney/aida/pull/65>
+  - Branch: `claude/plan-findings-triage-F2f3V` → `main`
+
+  ## Covers
+
+  - STORY-278
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 65` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T15:47:09.587395890Z
+modified_at: 2026-05-17T15:47:09.587395890Z
+req_type: Story
