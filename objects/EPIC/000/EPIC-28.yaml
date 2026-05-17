@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-05-17T01:36:58.277341695Z
+modified_at: 2026-05-17T02:14:35.463888412Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -197,3 +197,26 @@ comments:
     This is the **completion of the autonomy story**: combined with STORY-263 (no human), TASK-285 (batch), EPIC-28's dependency awareness, the orchestrator can drive overnight drains that gracefully handle BOTH technical failures AND design-decision-required cases.
   created_at: 2026-05-17T01:36:58.277341695Z
   modified_at: 2026-05-17T01:36:58.277341695Z
+- id: 019e33b6-c0c7-7861-94f8-be1e28f31e1e
+  author: joe
+  content: |-
+    ## Scope shrunk 2026-05-16 — start with shelving-on-failure only
+
+    User pushed back on over-engineering. The original EPIC scope (5 sub-STORYs: formal \`depends-on\` relationship type, dependency inference from trace graph, shelving mechanism, dependency-aware batch drain, patch-release integration) is **months of work** before any of it ships value.
+
+    **Revised first-vertical scope**:
+
+    Single sub-STORY: \"shelve-on-failure mechanism\" only. Specs:
+    - Failed specs (any phase failure under \`--auto-complete\`) flip to a new \`NeedsAttention\` status with a reason category
+    - \`aida queue list --needs-attention\` shows them
+    - \`aida queue unshelve <SPEC>\` re-queues at Approved
+    - Composes with STORY-263's \`--no-human\` punt-on-ambiguity (per earlier EPIC-28 comment)
+
+    **Deferred** to subsequent EPIC-28 STORYs (file when needed):
+    - Formal \`depends-on\` relationship type (postponed — manual sequencing works fine for now)
+    - Dependency inference from trace graph (yagni until users actually trip on file conflicts during drains)
+    - Patch-release integration (`make release-patch` after each spec — this is itself overhead; do it manually for now)
+
+    Ships the meaningful 30% of EPIC-28 in 2-3 days; defers the rest until proven needed.
+  created_at: 2026-05-17T02:14:35.463888412Z
+  modified_at: 2026-05-17T02:14:35.463888412Z
