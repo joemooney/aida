@@ -72,12 +72,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16: *\"if we could take the human out of the loop that would be great but I doubt claude code is going to allow that.\"* — actually Claude Code DOES support headless via \`claude -p\`, so this is feasible. User followed up: *\"file the autonomy STORY, but TASK-291 may be the default. We may want a different option like --no-human.\"*
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:25:44.957144080Z
-modified_at: 2026-05-17T05:18:02.493799971Z
+modified_at: 2026-05-17T05:35:39.632979129Z
 req_type: Story
 tags:
 - advanced-user
@@ -264,3 +264,7 @@ comments:
     This matches SPIKE-7's verbatim recommendation: *\"the headless REVIEWER phase is so much safer than headless implementer — could ship reviewer-only as a first cut even pre-alpha.\"*
   created_at: 2026-05-17T05:17:19.766190515Z
   modified_at: 2026-05-17T05:17:19.766190515Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-17T05:35:39.632979129Z
+  implemented_by: joe
