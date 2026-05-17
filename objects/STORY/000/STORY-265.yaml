@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:03:43.330261877Z
-modified_at: 2026-05-17T02:14:29.913271465Z
+modified_at: 2026-05-17T02:14:33.340265641Z
 req_type: Story
 tags:
 - advisor-vision
@@ -113,3 +113,19 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-17T01:03:45.869091818Z
+comments:
+- id: 019e33b6-b87c-73d1-a14a-aec6e2551f60
+  author: joe
+  content: |-
+    ## Moved to backlog 2026-05-16 — no concrete failure mode
+
+    User asked dialog to push back on over-engineering. Splitting plan and implement phases adds orchestrator complexity (new modes, new lifecycle transitions, plan-file enforcement) for a hypothetical benefit. **No observed failure** — the implementer Claude does design-during-implementation fine; we have no examples where a plan-first phase would have caught a wrong call.
+
+    The pipelining argument (\"plan ahead while other work is in flight\") was theoretical; the actual implementer + reviewer cycle already pipelines through CI wait time.
+
+    **Revisit triggers**:
+    - An implementer ships substantively wrong design that a plan-first phase would have caught
+    - The user observes themselves wanting to plan multiple specs while one is in flight (and the manual workaround — \`aida ultraplan <SPEC>\` for each — feels insufficient)
+    - A specific class of spec (EPIC-shaped?) consistently benefits from the split
+  created_at: 2026-05-17T02:14:33.340265641Z
+  modified_at: 2026-05-17T02:14:33.340265641Z
