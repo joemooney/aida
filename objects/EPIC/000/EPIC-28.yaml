@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-05-17T01:03:47.918352578Z
+modified_at: 2026-05-17T01:36:58.277341695Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -145,3 +145,55 @@ comments:
     This won't be filed as a separate STORY now; it's scoped here for when EPIC-28's first child STORY (`depends-on` relationship type) lands and a population mechanism becomes valuable.
   created_at: 2026-05-17T01:03:47.918352578Z
   modified_at: 2026-05-17T01:03:47.918352578Z
+- id: 019e3394-4fa5-70a2-8bd1-a2af873fd53d
+  author: joe
+  content: |-
+    ## Unify shelving + punt — one mechanism, multiple reason categories
+
+    User discussion 2026-05-16 surfaced a sibling use case for the EPIC-28 shelving mechanism: **punt on design ambiguity**, not just on failure. Both belong to the same lifecycle state with different reason categories.
+
+    ### Unified state model
+
+    New status: \`NeedsAttention\` (sibling to In Progress, Done; recoverable terminal-like)
+
+    Reason categories (recorded as spec metadata):
+
+    | Reason | Trigger | Set by |
+    |---|---|---|
+    | \`failure:phase-1\` | Implementer session aborted abnormally | Orchestrator on phase 1 fail |
+    | \`failure:phase-2-ci\` | CI red | Orchestrator on phase 2 |
+    | \`failure:phase-3-rejected\` | Reviewer verdict = RequestChanges | Orchestrator on phase 3 |
+    | \`failure:phase-4-merge-conflict\` | gh pr merge failed | Orchestrator on phase 4 |
+    | \`failure:phase-5-pull\` | aida pull failed (divergent main) | Orchestrator on phase 5 |
+    | \`failure:phase-6-build\` | cargo build --release failed | Orchestrator on phase 6 |
+    | \`punt:design-ambiguity\` | Implementer can't auto-decide under --no-human | Implementer skill (`/aida-punt`) |
+    | \`punt:external-dep\` | Waiting on upstream | Manual via `aida queue punt --reason external-dep` |
+    | \`punt:rework-needs-human\` | Reviewer requested changes; no human to address | Reviewer skill under --no-human |
+
+    ### Surface (single \`aida queue list --needs-attention\`)
+
+    \`\`\`
+    Specs needing attention (4):
+      TASK-X  punt:design-ambiguity — \"unclear whether DB schema should support N-to-N\"  (2h ago)
+      BUG-Y   failure:phase-2-ci    — \"Windows test 'auto_bump_dedup_replays' panicked\"  (4h ago)
+      STORY-Z punt:external-dep     — \"waiting on upstream actions/checkout v5\"           (1d ago)
+      TASK-W  failure:phase-3-rejected — \"reviewer requested 3 changes; reverse iteration\" (3h ago)
+    \`\`\`
+
+    ### Recovery paths (un-shelve, un-punt)
+
+    Same primitive in both cases: \`aida queue unshelve <SPEC>\` (or \`unpunt\`) re-queues the spec at status Approved/Planned (depending on prior state).
+
+    ### Acceptance update for EPIC-28 STORY 3
+
+    The existing \"Shelving mechanism\" child STORY should explicitly include:
+
+    1. \`NeedsAttention\` status + reason categories listed above
+    2. \`/aida-punt\` skill (or sub-command of /aida-pickup) for implementer + reviewer to invoke explicit punts
+    3. Orchestrator integration: when implementer/reviewer punts, orchestrator records + continues to next item
+    4. Surface: \`aida queue list --needs-attention\` + count in dashboard surfaces
+    5. Composes with STORY-263 (\`--no-human\`) — under that mode, all design-checkpoint-pauses become punts
+
+    This is the **completion of the autonomy story**: combined with STORY-263 (no human), TASK-285 (batch), EPIC-28's dependency awareness, the orchestrator can drive overnight drains that gracefully handle BOTH technical failures AND design-decision-required cases.
+  created_at: 2026-05-17T01:36:58.277341695Z
+  modified_at: 2026-05-17T01:36:58.277341695Z
