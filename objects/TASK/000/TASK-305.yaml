@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:57.919405229Z
-modified_at: 2026-05-17T07:10:57.919405229Z
+modified_at: 2026-05-17T07:15:14.856761972Z
 req_type: Task
 tags:
 - archival
@@ -69,3 +69,9 @@ tags:
 - pr-extraction
 - ultraplan
 - web-flow
+comments:
+- id: 019e34ca-0328-7bb1-bdf0-cdd754ca7fc9
+  author: joe
+  content: Build justification gated on SPIKE-8 evidence. If SPIKE-8 finds web /ultraplan yields measurably better implementations, TASK-305's plan-archival is worth the effort. If SPIKE-8 finds web /ultraplan is no better than local or no-plan, TASK-305 may be deprioritized or rescoped — no point archiving plans from a workflow we're stepping back from.
+  created_at: 2026-05-17T07:15:14.856761972Z
+  modified_at: 2026-05-17T07:15:14.856761972Z
