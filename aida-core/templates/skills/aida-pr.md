@@ -388,16 +388,16 @@ orchestrator (it ends the session itself as phase 2 and runs the reviewer
 as phase 3). trace:TASK-286
 
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
-`/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
-`🚪` = stop/exit. Recommendations must be CONCRETE — name the PR, the
-review story, the session ID. The *orchestrator mode* template uses two
-distinct glyphs — `⇒` (exit so the orchestrator continues) and `⏏` (abort
-the orchestrator chain) — because under `--auto-complete` the moves differ
-from the manual menu.
+`/aida-review`): `▶` = primary recommended action, `⇒` = alternative path,
+`⏸` = pause/stop. Recommendations must be CONCRETE — name the PR, the
+review story, the session ID. The *orchestrator mode* template uses `⇒`
+for its forward move (exit so the orchestrator continues) and the
+orchestrator-specific `⏏` (abort the orchestrator chain) — because under
+`--auto-complete` the moves differ from the manual menu. trace:BUG-116
 
 **Render multi-option prompts as a table.** When presenting 2+ paths
 forward, render as a markdown table with columns Path / What happens / Why.
-Use ▶ ⏵ 🚪 glyphs in the Path cell for the primary / alternate / exit
+Use ▶ ⇒ ⏸ glyphs in the Path cell for the primary / alternate / pause
 semantics. Emit it as a real GFM markdown table — *not* wrapped in a code
 fence — so Claude Code's terminal draws the box-rule grid instead of raw
 pipes. The **Why** column is load-bearing: it explains the role / lease /
@@ -439,7 +439,7 @@ PR-<N> opened: <url>
 | Path | What happens | Why |
 |------|--------------|-----|
 | ▶ End implementer session (CI-aware) | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the implementer lease; auto-probes CI and refuses if red so fixups land here without re-claiming the lease — `--wait-ci` blocks until green, `--skip-ci` releases now |
-| ⏵ Start review session | From the parent shell: `aida queue work <STORY-X>` (or `aida queue work PR-<N>`) | Reviewer role on the PR scope — needs the implementer lease released first (the ▶ row) or the two leases conflict |
+| ⇒ Start review session | From the parent shell: `aida queue work <STORY-X>` (or `aida queue work PR-<N>`) | Reviewer role on the PR scope — needs the implementer lease released first (the ▶ row) or the two leases conflict |
 
 *Auto-queue skipped/failed (⚠ outcome from step 11):*
 
@@ -449,7 +449,7 @@ PR-<N> opened: <url>
 | Path | What happens | Why |
 |------|--------------|-----|
 | ▶ End implementer session (CI-aware) | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the implementer lease; probes CI — pass `--wait-ci` / `--skip-ci` as needed |
-| ⏵ Open reviewer manually (or merge inline) | From the parent shell: `eval "$(aida role enter reviewer --owns PR-<N>)"` + `/aida-review --pr <N>` — or `gh pr merge <N> --squash` if you're the sole reviewer | Auto-queue filed no review story, so the reviewer hand-off is manual; still needs the implementer lease released first |
+| ⇒ Open reviewer manually (or merge inline) | From the parent shell: `eval "$(aida role enter reviewer --owns PR-<N>)"` + `/aida-review --pr <N>` — or `gh pr merge <N> --squash` if you're the sole reviewer | Auto-queue filed no review story, so the reviewer hand-off is manual; still needs the implementer lease released first |
 
 Print exactly one block — don't dump all three templates.
 
