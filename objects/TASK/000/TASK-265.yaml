@@ -79,12 +79,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16: *\"when we \`/aida-pickup TASK-259\` a task, I think we should pretty print the task at the outset so that as I look at the terminal I can see what is/was about to be worked on without having to issue a separate command to show the details of the task.\"*
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-05-17T16:58:25.731299967Z
+modified_at: 2026-05-17T17:07:51.259833621Z
 req_type: Task
 tags:
 - aida-pickup
@@ -129,3 +129,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T16:46:19.049103844Z
   implemented_by: joe
+  completed_at: 2026-05-17T17:07:51.259833621Z
+  completion_sha: 8248eb38ec1fb4f99db6e9321d4328d6656e3ce8
