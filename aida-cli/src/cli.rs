@@ -2512,6 +2512,25 @@ pub enum QueueCommand {
         /// meaningful for a batch drain. trace:TASK-285 | ai:claude
         #[clap(long, value_name = "N", requires = "auto_complete")]
         max: Option<usize>,
+        /// Run the launched Claude session headless (`claude -p`) — no Ctrl+D
+        /// needed, so an `--auto-complete` run can drain unattended. The
+        /// optional MODE picks which phases go headless: `reviewer-only`
+        /// (phase 3 only; the implementer stays interactive) or `both` (bare
+        /// default — the headless implementer is not wired yet, so phase 1
+        /// still runs interactively). Headless sessions force `--permission-mode
+        /// bypassPermissions` and log their JSON output under
+        /// `.aida/headless-logs/`. Accepts `--unattended` / `--headless` as
+        /// aliases.
+        // trace:STORY-263 | ai:claude — plain `//` so the marker stays out
+        // of `--help` output (TASK-268 user-facing-text convention).
+        #[clap(
+            long,
+            value_name = "MODE",
+            num_args = 0..=1,
+            default_missing_value = "both",
+            aliases = ["unattended", "headless"]
+        )]
+        no_human: Option<String>,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,

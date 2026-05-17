@@ -41028,6 +41028,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             auto_complete,
             json,
             max,
+            no_human,
             user,
         } => {
             let user_id = get_user(user);
@@ -41058,6 +41059,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 let mode = auto_complete.as_deref().unwrap_or("full");
                 let variant = auto_complete::AutoCompleteVariant::parse(mode)
                     .map_err(|e| anyhow::anyhow!(e))?;
+                // STORY-263: `--no-human[=MODE]` runs the orchestrator's
+                // phases headless (`claude -p`). This first cut wires the
+                // reviewer (phase 3) only; under `both` phase 1 still runs
+                // interactively with a deferral note (STORY-276).
+                let no_human_mode = match no_human.as_deref() {
+                    Some(v) => {
+                        Some(auto_complete::NoHumanMode::parse(v).map_err(|e| anyhow::anyhow!(e))?)
+                    }
+                    None => None,
+                };
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
                 // batch — one full lifecycle per member, advancing the head
                 // after each — instead of one session per re-invocation.
@@ -41077,6 +41088,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         permission_mode.as_deref(),
                         role.as_deref(),
                         *max,
+                        no_human_mode,
                     );
                 }
                 // `--max` only bounds a batch drain — reject it on the
@@ -41101,6 +41113,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     variant,
                     *json,
                     permission_mode.as_deref(),
+                    no_human_mode,
                 );
             }
             // TASK-229: --batch NAME picks the head of the items tagged
@@ -41182,6 +41195,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 *fresh,
                 *list_sessions,
                 session_id.as_deref(),
+                // STORY-263: presence of `--no-human` (any value) launches
+                // this session headless. The orchestrator appends a bare
+                // `--no-human` to its reviewer subprocess.
+                no_human.is_some(),
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -41999,6 +42016,7 @@ fn handle_queue_rework(
             /* fresh */ false,
             /* list_sessions */ false,
             /* session_id */ None,
+            /* no_human */ false,
         )?;
     } else {
         println!(
@@ -42618,6 +42636,7 @@ fn handle_queue_work(
     fresh: bool,
     list_sessions: bool,
     session_id: Option<&str>,
+    no_human: bool,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -42945,11 +42964,25 @@ fn handle_queue_work(
             "source .aida/session-env.sh".cyan(),
             "# share parent's cargo target/".dimmed()
         );
-        eprintln!(
-            "  {} {}",
-            "claude --permission-mode".cyan(),
-            format!("{} \"{}\"", permission_mode, prompt).cyan()
-        );
+        if no_human {
+            // STORY-263: mirror the headless launch the non-`--no-launch`
+            // path would have run.
+            eprintln!(
+                "  {} {}",
+                "claude -p".cyan(),
+                format!(
+                    "\"{}\" --permission-mode bypassPermissions --output-format stream-json --verbose",
+                    prompt
+                )
+                .cyan()
+            );
+        } else {
+            eprintln!(
+                "  {} {}",
+                "claude --permission-mode".cyan(),
+                format!("{} \"{}\"", permission_mode, prompt).cyan()
+            );
+        }
         return Ok(());
     }
 
@@ -42992,6 +43025,33 @@ fn handle_queue_work(
         }
         QueueWorkLaunch::Fresh(id) => {
             let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
+            if no_human {
+                // STORY-263: headless launch — `claude -p`, single-turn,
+                // exits on its own (no Ctrl+D). `bypassPermissions` is forced
+                // (SPIKE-7 Q2 — `acceptEdits` leaves Bash gated); the
+                // stream-json output goes to a log file the watchdog
+                // (TASK-298) can tail. trace:STORY-263 | ai:claude
+                let log_path = project_root
+                    .join(".aida")
+                    .join("headless-logs")
+                    .join(format!("{}-{}.jsonl", lease.branch, id));
+                eprintln!(
+                    "{} {}",
+                    "▶".green().bold(),
+                    format!(
+                        "launching claude headless in {} (claude -p, permission-mode bypassPermissions, prompt `{}`)",
+                        lease.worktree_path.display(),
+                        prompt
+                    )
+                    .cyan()
+                );
+                eprintln!(
+                    "  {} headless output → {}",
+                    "ℹ".cyan(),
+                    log_path.display().to_string().dimmed()
+                );
+                return session::exec_claude_headless(&prompt, &id, &log_path);
+            }
             eprintln!(
                 "{} {}",
                 "▶".green().bold(),
@@ -43033,8 +43093,17 @@ fn handle_auto_complete(
     variant: auto_complete::AutoCompleteVariant,
     json: bool,
     permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
 ) -> ! {
-    let result = run_auto_complete(storage, user_id, spec, variant, json, permission_mode);
+    let result = run_auto_complete(
+        storage,
+        user_id,
+        spec,
+        variant,
+        json,
+        permission_mode,
+        no_human,
+    );
     std::process::exit(result.exit_code);
 }
 
@@ -43044,6 +43113,7 @@ fn handle_auto_complete(
 /// Hard environment errors (project root unresolvable, preflight queue-add
 /// failed) still exit the process directly — they would recur identically on
 /// every batch iteration. trace:STORY-246, TASK-285 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn run_auto_complete(
     storage: &Storage,
     user_id: &str,
@@ -43051,6 +43121,7 @@ fn run_auto_complete(
     variant: auto_complete::AutoCompleteVariant,
     json: bool,
     permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
 ) -> auto_complete::OrchestrationResult {
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
@@ -43072,11 +43143,33 @@ fn run_auto_complete(
         }
     };
 
+    // STORY-263: announce headless mode. The reviewer (phase 3) runs
+    // headless; the implementer (phase 1) stays interactive in this cut, so
+    // under `both` the user is told phase 1 is unchanged (the headless
+    // implementer is STORY-276 — SPEC-ID kept out of this note per the
+    // user-facing-text convention, TASK-268). trace:STORY-263 | ai:claude
+    if let Some(mode) = no_human {
+        if !json {
+            eprintln!(
+                "  {} headless mode: the reviewer phase runs unattended (`claude -p`)",
+                "ℹ".cyan()
+            );
+            if mode.wants_headless_implementer() {
+                eprintln!(
+                    "  {} the headless implementer is not available yet — phase 1 \
+                     runs interactively",
+                    "⚠".yellow()
+                );
+            }
+        }
+    }
+
     let mut driver = RealPhaseDriver::new(
         project_root.clone(),
         spec.to_string(),
         permission_mode.map(|s| s.to_string()),
         json,
+        no_human,
     );
     let started_at = chrono::Utc::now();
     let result = auto_complete::orchestrate(&mut driver, spec, variant, json);
@@ -43170,6 +43263,9 @@ struct RealBatchDriver<'a> {
     variant: auto_complete::AutoCompleteVariant,
     json: bool,
     permission_mode: Option<String>,
+    /// STORY-263: headless mode, propagated to every member's
+    /// `run_auto_complete`.
+    no_human: Option<auto_complete::NoHumanMode>,
 }
 
 impl auto_complete::BatchDriver for RealBatchDriver<'_> {
@@ -43202,6 +43298,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             self.variant,
             self.json,
             self.permission_mode.as_deref(),
+            self.no_human,
         )
     }
 }
@@ -43221,6 +43318,7 @@ fn handle_auto_complete_batch(
     permission_mode: Option<&str>,
     role: Option<&str>,
     max: Option<usize>,
+    no_human: Option<auto_complete::NoHumanMode>,
 ) -> ! {
     if !json {
         eprintln!();
@@ -43248,6 +43346,7 @@ fn handle_auto_complete_batch(
         variant,
         json,
         permission_mode: permission_mode.map(|s| s.to_string()),
+        no_human,
     };
     let result = auto_complete::drain_batch(&mut driver, max);
     // An empty batch (nothing shipped, nothing to drain) is a user error —
@@ -43871,6 +43970,10 @@ struct RealPhaseDriver {
     /// " (deleted)" suffix, and `Command::new("<path> (deleted)").spawn()`
     /// fails with ENOENT. trace:BUG-217 | ai:claude
     aida_exe: std::path::PathBuf,
+    /// STORY-263: headless mode. `Some` → the reviewer phase is launched
+    /// headless (`claude -p`); the implementer phase stays interactive in
+    /// this cut (STORY-276 wires it). `None` → fully interactive.
+    no_human: Option<auto_complete::NoHumanMode>,
 }
 
 impl RealPhaseDriver {
@@ -43879,6 +43982,7 @@ impl RealPhaseDriver {
         spec: String,
         permission_mode: Option<String>,
         json: bool,
+        no_human: Option<auto_complete::NoHumanMode>,
     ) -> Self {
         Self {
             project_root,
@@ -43890,6 +43994,7 @@ impl RealPhaseDriver {
             pr_number: None,
             ci_run_id: None,
             aida_exe: resolve_aida_exe(),
+            no_human,
         }
     }
 
@@ -44116,6 +44221,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             .env("AIDA_REVIEW_VERDICT_FILE", &verdict_path);
         if let Some(pm) = &self.permission_mode {
             cmd.args(["--permission-mode", pm]);
+        }
+        // STORY-263: under `--no-human`, run the reviewer headless. Both
+        // NoHumanMode variants (ReviewerOnly, Both) include the reviewer, so
+        // a bare `--no-human` on the subprocess is all the orchestrator needs
+        // to pass — `handle_queue_work` then launches `claude -p`. The
+        // verdict-file handshake below is unchanged: headless or not, the
+        // reviewer writes the verdict and the orchestrator reads it.
+        // trace:STORY-263 | ai:claude
+        if self.no_human.is_some() {
+            cmd.arg("--no-human");
         }
         let status = cmd.status().map_err(|e| {
             auto_complete::PhaseFailure::of(
