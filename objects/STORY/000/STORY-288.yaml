@@ -1,0 +1,26 @@
+id: 019e3701-beb9-7951-871b-7bd85fcd55c5
+spec_id: STORY-288
+agreed_id: STORY-288
+title: 'Review PR-70: [AI:claude] feat(cli): unify status color palette + reprint in aida show (TASK-269)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e36e9`) for branch `task-269`.
+
+  - PR: <https://github.com/joemooney/aida/pull/70>
+  - Branch: `task-269` → `main`
+
+  ## Covers
+
+  - TASK-269
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 70` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T17:35:21.785624905Z
+modified_at: 2026-05-17T17:35:21.785624905Z
+req_type: Story
