@@ -1,0 +1,26 @@
+id: 019e37e0-03a9-7df0-9243-8ccec8e1e4b9
+spec_id: STORY-295
+agreed_id: STORY-295
+title: 'Review PR-77: [AI:claude] feat(cli): aida queue work next / nextN keyword for explicit head pickup + drain-N-from-head (TASK-293)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e37cb`) for branch `task-293`.
+
+  - PR: <https://github.com/joemooney/aida/pull/77>
+  - Branch: `task-293` → `main`
+
+  ## Covers
+
+  - TASK-293
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 77` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T21:38:08.425666403Z
+modified_at: 2026-05-17T21:38:08.425666403Z
+req_type: Story
