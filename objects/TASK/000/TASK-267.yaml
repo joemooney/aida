@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:29:17.082223638Z
-modified_at: 2026-05-16T20:42:00.992118274Z
+modified_at: 2026-05-17T16:37:26.372656550Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -115,6 +115,11 @@ comments:
     Test status: 14/14 tests green (workflow_hints 12/12 incl. 4 new, auto_queue 2/2); cargo fmt --all --check clean
   created_at: 2026-05-16T20:37:50.315867518Z
   modified_at: 2026-05-16T20:37:50.315867518Z
+- id: 019e36cc-b6e4-7520-912d-f2d8c69cbf29
+  author: joe
+  content: 'Cross-reference: this spec is an instance of the pattern TASK-311 is designed to catch at filing time (dialog-role criteria contradicting the feature''s primary caller environment). Comment added 2026-05-17 as part of the self-audit lesson capture.'
+  created_at: 2026-05-17T16:37:26.372656550Z
+  modified_at: 2026-05-17T16:37:26.372656550Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T20:32:55.718740790Z
