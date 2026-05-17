@@ -1,0 +1,26 @@
+id: 019e36df-df6b-7f20-aeab-26198e6c3ce6
+spec_id: STORY-286
+agreed_id: STORY-286
+title: 'Review PR-69: Boxed spec card via aida show --card at /aida-pickup start (TASK-265)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e36af`) for branch `task-265`.
+
+  - PR: <https://github.com/joemooney/aida/pull/69>
+  - Branch: `task-265` → `main`
+
+  ## Covers
+
+  - TASK-265
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 69` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T16:58:21.931751818Z
+modified_at: 2026-05-17T16:58:21.931751818Z
+req_type: Story
