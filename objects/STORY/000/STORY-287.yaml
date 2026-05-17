@@ -137,7 +137,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:28:11.451611274Z
-modified_at: 2026-05-17T17:28:11.451611274Z
+modified_at: 2026-05-17T18:49:56.181321254Z
 req_type: Story
 tags:
 - advisor-pattern
@@ -148,3 +148,9 @@ tags:
 - prompt-kinds
 - punt-behavior
 - zen-mode
+comments:
+- id: 019e3746-04d5-7842-a17c-6ad3e0bfb1ed
+  author: joe
+  content: 'Implementation slicing guidance (added 2026-05-17 per user direction): ship `--zen` mode FIRST as the smallest-valuable-slice. Reasons: (1) --zen doesn''t require headless implementer (STORY-276) — it''s pure prompt-classification + auto-resolve, implementable today; (2) --zen gives immediate value (auto-resolve mechanical confirmations) while preserving design-fork pauses; (3) --no-human=both punt behavior depends on STORY-285 (findings persistence) and STORY-276 (headless runtime to punt FROM), neither of which is shipped yet. Recommended slice for this STORY: (a) prompt `kind:` annotation convention in skill templates, (b) `--zen` flag wiring, (c) auto-resolve mechanism for kind:confirmation under --zen, (d) preserve existing pause for kind:design-fork under --zen. Defer (e) --no-human punt artifact filing, (f) --no-human auto-resolve of design-forks, both to a follow-up sub-TASK that lands after STORY-276 + STORY-285.'
+  created_at: 2026-05-17T18:49:56.181321254Z
+  modified_at: 2026-05-17T18:49:56.181321254Z
