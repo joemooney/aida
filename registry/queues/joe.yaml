@@ -429,3 +429,10 @@
   note: auto-queued by `aida pr` (019e36e9); covers 1 spec
   added_at: 2026-05-17T17:35:27.151730345Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e3720-f429-7e23-80ad-c59b1bc9e8ee
+  position: 92250
+  added_by: joe
+  note: auto-queued by `aida pr` (019e370c); covers 1 spec
+  added_at: 2026-05-17T18:09:32.750398293Z
+  for_role: reviewer
