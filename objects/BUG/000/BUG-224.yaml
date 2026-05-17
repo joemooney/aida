@@ -30,7 +30,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:41:55.755720197Z
-modified_at: 2026-05-17T14:58:37.007248327Z
+modified_at: 2026-05-17T15:00:06.198327423Z
 req_type: Bug
 tags:
 - batch:pr-64-cleanup
@@ -38,6 +38,25 @@ tags:
 - drift
 - from-review:PR-64
 - plan-verify
+comments:
+- id: 019e3673-99b6-7153-85ce-63d58e0f95c0
+  author: joe
+  content: |-
+    Implemented via commit 3be6f365 (PR pending):
+
+    - Chose Option 2 (fix the plan ref), not Option 1 (relocate the doc).
+      Updated the 2 stale refs in docs/plans/2026-05-16-story-263-no-human-reviewer.md
+      from docs/aida-discipline/autonomous-drain.md to docs/autonomous-drain.md.
+    - Rationale: relocating AIDA's own doc would NOT propagate it to aida init
+      projects (scaffolding flows from aida-core/templates/, not docs/), so
+      Option 1's stated benefit doesn't hold. CLAUDE.md:82 already pointed at
+      the correct path. Whether autonomous-drain belongs under docs/aida-discipline/
+      is left to STORY-255 (the scaffolding discipline pack owns that channel).
+
+    Verified: aida plan verify docs/plans/2026-05-16-story-263-no-human-reviewer.md
+    exits 0 (was FAIL — 1 missing-file error).
+  created_at: 2026-05-17T15:00:06.198327423Z
+  modified_at: 2026-05-17T15:00:06.198327423Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T14:58:37.007248327Z
