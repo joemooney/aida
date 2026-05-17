@@ -33,12 +33,12 @@ description: |-
   ## Origin
 
   User attempted \`aida queue work --auto-complete\` 2026-05-16. The error required an explicit SPEC id. Reasonable mental model (\"no-arg picks head; add --auto-complete to drive it\") failed; filed per the failed-flag-attempts UX pattern.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:04:18.586209459Z
-modified_at: 2026-05-17T21:06:11.138527731Z
+modified_at: 2026-05-17T21:15:11.677889225Z
 req_type: Task
 tags:
 - auto-complete
@@ -70,3 +70,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T20:56:34.066595912Z
   implemented_by: joe
+  completed_at: 2026-05-17T21:15:11.677889225Z
+  completion_sha: 9390a9812a976ddfc385acf275099c02acb26cc7
