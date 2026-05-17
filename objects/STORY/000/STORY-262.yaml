@@ -97,12 +97,12 @@ description: |-
   User asked 2026-05-16: *\"is there an advisor role task in here, maybe a schedule that periodically lands in the queue every so often to perform a task - a maintenance or research task\"*
 
   The answer was no — AIDA has reactive queueing only. This STORY fills the gap.
-status: Approved
+status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:15:28.633295104Z
-modified_at: 2026-05-16T23:15:28.633295104Z
+modified_at: 2026-05-17T02:14:17.572534377Z
 req_type: Story
 tags:
 - advisor
