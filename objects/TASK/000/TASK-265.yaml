@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-05-17T16:46:19.049103844Z
+modified_at: 2026-05-17T16:57:50.224164388Z
 req_type: Task
 tags:
 - aida-pickup
@@ -106,6 +106,20 @@ comments:
   content: 'Cross-reference: this spec is an instance of the pattern TASK-311 is designed to catch at filing time (dialog-role criteria contradicting the feature''s primary caller environment). Comment added 2026-05-17 as part of the self-audit lesson capture.'
   created_at: 2026-05-17T16:37:55.322185604Z
   modified_at: 2026-05-17T16:37:55.322185604Z
+- id: 019e36df-6390-7f80-86f2-531295d895f0
+  author: joe
+  content: |-
+    Implemented via branch task-265 (commit 775a4766):
+
+    - `aida show <ID> --card` renders a boxed spec card — header rule, id/type/priority/status one-liner, key fields (feature/tags/parent/related), lead-prose description, acceptance criteria, git linkage.
+    - `--card --brief` (single-line summary) and `--card --full` (no truncation) density variants; plain `aida show` unchanged as the canonical view.
+    - /aida-pickup skill + command templates gain Step 3c to render the card right after mark-in-progress.
+
+    Design note: the box renders whether stdout is a TTY or a pipe (the skill invokes it through the Bash tool, a captured pipe), so `--brief` is the explicit single-line mode rather than an auto-collapse-on-non-TTY.
+
+    Test status: 551/551 aida-cli tests green; cargo fmt + clippy clean.
+  created_at: 2026-05-17T16:57:50.224164388Z
+  modified_at: 2026-05-17T16:57:50.224164388Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T16:46:19.049103844Z
