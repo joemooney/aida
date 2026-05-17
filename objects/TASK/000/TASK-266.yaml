@@ -103,7 +103,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:18:43.395729318Z
-modified_at: 2026-05-17T01:26:44.850493969Z
+modified_at: 2026-05-17T01:29:22.426035727Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -117,6 +117,20 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-16T17:18:45.958400479Z
+comments:
+- id: 019e338d-5afa-76c2-8ee5-c102b8e57ef3
+  author: joe
+  content: |-
+    Implemented via commit 6b8127a0 (branch epic-23-9, PR pending):
+
+    - New `auto_complete_telemetry` module — one JSONL line per `--auto-complete` run at `~/.aida/auto-complete.jsonl`; shares the `aida usage` telemetry opt-out (AIDA_TELEMETRY=0 / [telemetry] enabled).
+    - `orchestrate` now returns `OrchestrationResult` (exit code + telemetry fields); `auto_complete.rs` stays pure, all file I/O in `main.rs`.
+    - On a phase failure the orchestrator auto-drafts a Draft BUG (parent EPIC-23, not queued — user triages); dedup on (spec, phase, kind) within 24h.
+    - `aida usage --auto-complete` views: overview / `--failures` / `--pattern`, each with `--json`.
+
+    Test status: 525/525 aida-cli tests green; cargo fmt --all --check clean.
+  created_at: 2026-05-17T01:29:22.426035727Z
+  modified_at: 2026-05-17T01:29:22.426035727Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T01:26:44.850493969Z
