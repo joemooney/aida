@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:20:13.831734961Z
-modified_at: 2026-05-17T02:20:52.867673552Z
+modified_at: 2026-05-17T02:21:00.775801328Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -83,6 +83,13 @@ comments:
   content: Commit 80292656 references this requirement
   created_at: 2026-05-17T02:20:19.390897426Z
   modified_at: 2026-05-17T02:20:19.390897426Z
+- id: 019e33bc-a34a-70c1-aa05-3e6ce1266dcb
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-16-task-285-batch-auto-complete.md
+    filed 1 task(s): TASK-295
+  created_at: 2026-05-17T02:21:01.130512180Z
+  modified_at: 2026-05-17T02:21:01.130512180Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T02:20:52.867673552Z
