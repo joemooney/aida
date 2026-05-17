@@ -609,6 +609,7 @@ fn exec_claude(
 ///     events, so a watchdog (TASK-298) can tail liveness (spike Q6).
 ///   - `--session-id <uuid>` — persistence stays ON, so a killed run stays
 ///     resumable (spike Q9).
+///
 /// Never `--bare`: it strips OAuth/keychain auth and breaks login (spike Q1).
 /// Pure — the flag set is unit-tested without spawning claude.
 /// trace:STORY-263 | ai:claude
