@@ -1,0 +1,47 @@
+id: 019e345e-2586-7be0-a3f6-464039ad844f
+spec_id: TASK-297
+agreed_id: TASK-297
+title: Audit skill templates for interactive prompts; add headless-aware paths via AIDA_NO_HUMAN env var
+description: |-
+  Audit \`aida-core/templates/skills/\` for interactive prompts (AskUserQuestion patterns, confirmations). Each skill that runs in headless mode needs an \`AIDA_NO_HUMAN=1\` env var path that either auto-confirms with safe defaults or punts via \`/aida-punt\`.
+
+  Per SPIKE-7's findings, headless Claude bails ~10s when it hits an AskUserQuestion prompt. Skills with interactive prompts will fail under \`--no-human\` unless they have a headless-aware path.
+
+  ## Skills to audit
+
+  - \`/aida-pr\` — PR confirmations, body editor prompts
+  - \`/aida-pickup\` — design-fork pauses, confirmation
+  - \`/aida-review\` — verdict-post confirmations
+  - \`/aida-commit\` — commit message confirmations
+  - \`/aida-rebase\` — rebase strategy confirmations
+  - \`/aida-pr-create\` (if separate) — same as /aida-pr
+  - \`/aida-capture\` — capture decisions
+  - Any other skill with interactive prompts
+
+  ## Acceptance per skill
+
+  - [ ] List every interactive prompt; document each
+  - [ ] Add headless-aware branch: when \`AIDA_NO_HUMAN=1\`, either:
+    - Auto-confirm with safe default (and log the decision)
+    - Skip the prompt entirely if not load-bearing
+    - Invoke \`/aida-punt\` if the prompt is genuinely unanswerable
+  - [ ] Tests: each skill verified to complete cleanly under headless mode
+
+  ## Composes with
+
+  - **STORY-263** (reviewer-only first cut) — must ship first; this TASK polishes the broader workflow surface
+  - **EPIC-28 STORY 3** (/aida-punt) — required for skills that can't auto-default
+  - **SPIKE-7** — empirical evidence backing the audit's necessity
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T05:17:25.766156033Z
+modified_at: 2026-05-17T05:17:25.766156033Z
+req_type: Task
+tags:
+- aida-no-human-env
+- audit
+- auto-complete-followup
+- headless
+- skill-templates
