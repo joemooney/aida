@@ -1,0 +1,12 @@
+id: 019e36fc-7741-7201-968b-42916bc045bb
+spec_id: TASK-314
+agreed_id: TASK-314
+title: Retrofit the gRPC `client.rs` status display onto `status_display` once the
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T17:29:35.809683805Z
+modified_at: 2026-05-17T17:29:35.809683805Z
+req_type: Task
