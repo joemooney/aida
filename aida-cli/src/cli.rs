@@ -2643,6 +2643,34 @@ pub enum QueueCommand {
     },
 }
 
+/// `aida findings` — triage review findings filed by the headless reviewer.
+// trace:STORY-278 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum FindingsCommand {
+    /// List draft findings awaiting triage, grouped by PR and severity-sorted.
+    List {
+        /// Narrow to findings raised against one PR.
+        #[clap(long, value_name = "N")]
+        pr: Option<u32>,
+
+        /// Print just the pending-finding count (for session-start surfacing).
+        #[clap(long)]
+        count: bool,
+    },
+
+    /// Dismiss a finding — sets status Rejected and records an audit comment.
+    Dismiss {
+        /// The finding's ID (UUID or SPEC-ID).
+        id: String,
+    },
+
+    /// Promote a finding — sets status Approved so it joins the work queue.
+    Promote {
+        /// The finding's ID (UUID or SPEC-ID).
+        id: String,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Add a new requirement
@@ -2883,6 +2911,11 @@ pub enum Command {
         #[clap(long, short = 'y')]
         yes: bool,
     },
+
+    /// Triage review findings filed by the headless reviewer.
+    // trace:STORY-278 | ai:claude
+    #[clap(subcommand)]
+    Findings(FindingsCommand),
 
     /// Feature management commands
     #[clap(subcommand, hide = true)]

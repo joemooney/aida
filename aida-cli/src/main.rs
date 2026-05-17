@@ -4,6 +4,7 @@ mod cli;
 #[cfg(feature = "remote")]
 mod client;
 mod docs;
+mod findings;
 mod global_queue;
 mod history;
 mod mcp;
@@ -58,11 +59,11 @@ use aida_core::{
 
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
-    DocCommand, DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand,
-    NodeCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand,
-    ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
-    ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand,
-    TraceCommand, TypeCommand,
+    DocCommand, DocsCommand, FeatureCommand, FindingsCommand, GitHubCommand, GitLabCommand,
+    JiraCommand, NodeCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand,
+    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand,
+    SessionWakeupCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -848,8 +849,126 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+        Command::Findings(_) => {
+            // `aida findings` queries the cache for `from-review:` tags; the
+            // deprecated SQLite backend has no equivalent. trace:STORY-278 | ai:claude
+            anyhow::bail!(
+                "aida findings requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
     }
 
+    Ok(())
+}
+
+/// Handle `aida findings {list,dismiss,promote}` — the advisor's triage surface
+/// over review findings the headless reviewer files as draft `from-review:`
+/// TASKs. `list` is a read-only query; `dismiss`/`promote` are status flips
+/// guarded so they only act on real findings. trace:STORY-278 | ai:claude
+fn handle_findings_command(
+    cmd: &FindingsCommand,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    match cmd {
+        FindingsCommand::List { pr, count } => {
+            // Findings are draft requirements carrying a `from-review:` tag.
+            // `aida list --tags` is exact-match, so the `from-review:` prefix
+            // glob can't be a list filter — query all drafts, then prefix-match
+            // in build_findings_view. The draft set is small. Role scope is
+            // deliberately NOT applied: the finding cohort is its own axis.
+            let filter = aida_core::ListFilter {
+                status: Some("draft".to_string()),
+                ..Default::default()
+            };
+            let summaries = backend.list_summaries(&filter)?;
+            let groups = findings::build_findings_view(&summaries, *pr);
+            let total: usize = groups.iter().map(|g| g.rows.len()).sum();
+
+            if *count {
+                println!("{total}");
+                return Ok(());
+            }
+            if total == 0 {
+                println!("{}", "No findings awaiting triage.".dimmed());
+                return Ok(());
+            }
+
+            println!("{}", format!("Findings awaiting triage ({total})").bold());
+            for group in &groups {
+                println!();
+                let pr_label = match group.pr {
+                    Some(n) => format!("PR-{n}"),
+                    None => "(no PR tag)".to_string(),
+                };
+                println!("{}", pr_label.cyan().bold());
+                for row in &group.rows {
+                    println!(
+                        "  {:<9} {:<14} {}",
+                        row.severity.label(),
+                        row.display_id,
+                        row.title
+                    );
+                }
+            }
+            println!();
+            println!(
+                "{}",
+                "Triage: `aida findings promote <ID>` joins the queue · \
+                 `aida findings dismiss <ID>` rejects it"
+                    .dimmed()
+            );
+        }
+
+        FindingsCommand::Dismiss { id } => {
+            let mut req = backend
+                .get_requirement_by_spec_id(id)?
+                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+            let tags: Vec<String> = req.tags.iter().cloned().collect();
+            if !findings::is_review_finding(&tags) {
+                anyhow::bail!(
+                    "{id} is not a review finding (no `from-review:` tag) — \
+                     `aida findings` only triages reviewer-filed findings. \
+                     Use `aida edit {id} --status rejected` for a general status change."
+                );
+            }
+            let now = chrono::Utc::now();
+            req.comments.push(Comment {
+                id: Uuid::now_v7(),
+                content: "Dismissed by advisor during findings triage.".to_string(),
+                author: get_default_author(),
+                created_at: now,
+                modified_at: now,
+                parent_id: None,
+                replies: Vec::new(),
+                reactions: Vec::new(),
+            });
+            req.status = RequirementStatus::Rejected;
+            req.modified_at = now;
+            backend.update_requirement(&req)?;
+            println!("Dismissed finding {id} — status → Rejected.");
+        }
+
+        FindingsCommand::Promote { id } => {
+            let mut req = backend
+                .get_requirement_by_spec_id(id)?
+                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+            let tags: Vec<String> = req.tags.iter().cloned().collect();
+            if !findings::is_review_finding(&tags) {
+                anyhow::bail!(
+                    "{id} is not a review finding (no `from-review:` tag) — \
+                     `aida findings` only triages reviewer-filed findings. \
+                     Use `aida edit {id} --status approved` for a general status change."
+                );
+            }
+            req.status = RequirementStatus::Approved;
+            req.modified_at = chrono::Utc::now();
+            backend.update_requirement(&req)?;
+            println!("Promoted finding {id} — status → Approved, joins the work queue.");
+        }
+    }
     Ok(())
 }
 
@@ -2774,6 +2893,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
 
             backend.delete_requirement(&req.id)?;
             println!("Deleted: {}", id);
+        }
+        Command::Findings(findings_cmd) => {
+            handle_findings_command(findings_cmd, &backend, store_path)?;
         }
         Command::Search {
             query,
@@ -41928,7 +42050,9 @@ mod headless_hint_tests {
             let hint = headless_launch_hint(prompt, sid);
             let parsed = split_shell_words(&hint);
 
-            let mut expected = vec!["claude".to_string()];
+            // STORY-278: hint prefixes `AIDA_HEADLESS=1` to mirror the env
+            // `exec_claude_headless` sets via `.env(...)`.
+            let mut expected = vec!["AIDA_HEADLESS=1".to_string(), "claude".to_string()];
             expected.extend(session::claude_headless_args(prompt, sid));
             assert_eq!(parsed, expected, "hint did not round-trip: {hint}");
 
@@ -42737,10 +42861,12 @@ fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
 /// `session::claude_headless_args` — the exact argv `exec_claude_headless`
 /// feeds to `claude` — so the printed hint can never drift from the real
 /// launch (correct flag order, `--session-id` included, prompt last).
+/// STORY-278: prefix `AIDA_HEADLESS=1` so the copy-paste hint also sets
+/// the env var `exec_claude_headless` puts on the child via `.env(...)`.
 /// trace:BUG-225 | ai:claude
 fn headless_launch_hint(prompt: &str, session_id: &str) -> String {
     let argv = session::claude_headless_args(prompt, session_id);
-    format!("claude {}", shell_join_display(&argv))
+    format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv))
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
@@ -43104,6 +43230,9 @@ fn handle_queue_work(
             // `claude_headless_args` (via `headless_launch_hint`) so the
             // copy-pasteable command can't drift from `exec_claude_headless`
             // — same flag order, `--session-id` included, prompt last.
+            // STORY-278: helper also prefixes `AIDA_HEADLESS=1` to match
+            // the env `exec_claude_headless` sets, so the copy-pasted hint
+            // launches an equivalent process.
             let sid = claude_session_id.as_deref().unwrap_or_default();
             eprintln!("  {}", headless_launch_hint(&prompt, sid).cyan());
         } else {

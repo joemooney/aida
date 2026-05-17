@@ -292,6 +292,9 @@ echo "${AIDA_REVIEW_VERDICT_FILE:-}"
   file after the session exits: `Approved` → it merges; anything else → it
   stops at phase 3 with exit code 3 and prints the recovery hint.
 
+  Under a headless drain (`AIDA_HEADLESS=1`), step 7b re-writes this file
+  afterwards to add a `findings_filed` array — see 7b. trace:STORY-278 | ai:claude
+
   **End the session with a loud, explicit exit instruction.** The
   orchestrator cannot advance until this reviewer Claude exits — but nothing
   about writing a verdict file tells the user that. Don't end on a vague
@@ -329,6 +332,86 @@ echo "${AIDA_REVIEW_VERDICT_FILE:-}"
   (`AIDA_REVIEW_VERDICT_FILE` set). In manual review the reviewer owns the
   merge, so step 11's hand-off table stays the end-of-session surface —
   don't render the Ctrl+D block there. trace:TASK-291 | ai:claude
+
+### 7b. File non-blocking findings as draft TASKs (headless drain) — trace:STORY-278
+
+Under a headless `--no-human` drain there is no human to read the
+consolidated comment and feed the reviewer's non-blocking findings back to
+the dialog/advisor role for follow-up filing. Without this step those
+follow-ups are lost the moment the drain moves on. So the headless reviewer
+files them itself — as draft TASKs the advisor triages later via
+`aida findings list`.
+
+**This step runs only when `AIDA_HEADLESS=1`** — the variable AIDA sets
+when it launches a headless `claude -p` reviewer. In an interactive review
+a human is present and triages straight from the comment; skip 7b entirely.
+
+```bash
+echo "${AIDA_HEADLESS:-}"
+```
+
+- **Empty / unset** → interactive review. Skip 7b — the human triages.
+- **`1`** → headless. Continue.
+
+**What counts as a finding.** A *finding* is a non-blocking follow-up the
+review surfaced — a ⚠️ PARTIAL row, or an adversarial deep-pass (step 4)
+observation — that did NOT sink the verdict. A ❌ FAIL is a merge *blocker*,
+not a finding: it routes through the verdict, not here. If the review found
+nothing worth a follow-up, 7b files nothing.
+
+**Idempotency — probe before filing.** A re-review of the same PR must not
+double-file. Check for findings already filed against this PR (`--all` is
+required — a finding the advisor already promoted/dismissed is
+terminal-status and hidden by default):
+
+```bash
+existing=$(aida list --tags "from-review:PR-<N>" --all | grep -cE '^[A-Z]+-[0-9]+' || true)
+```
+
+If `existing` is non-zero, **skip the rest of 7b** — this PR's findings
+were filed on an earlier review.
+
+**File each finding** — one draft TASK apiece:
+
+```bash
+aida add --type task --status draft \
+  --tags "from-review:PR-<N>,severity:<cosmetic|minor|major>" \
+  --title "<one-line summary>" \
+  --description-stdin <<'EOF'
+<full finding text — what, where (file:line), why it matters>
+
+Raised in review of PR-<N>: <PR or review-comment URL>
+EOF
+```
+
+- **Always `--type task`** — even a bug-shaped finding. The advisor can
+  `aida edit <ID> --type bug` on promote if warranted; the reviewer does
+  not expand the taxonomy.
+- **`from-review:PR-<N>`** (required) and **`severity:<level>`** (required)
+  tags. Add context tags freely (`clippy`, `docs`, `fmt`, …).
+- **Severity rubric:** `cosmetic` = fmt/clippy/comment nits; `minor` = a
+  real but small bug or gap; `major` = a design concern worth a
+  conversation. When unsure, round down — the advisor re-grades on triage.
+- Capture each printed `<ID>` (e.g. `TASK-303`).
+
+**Record what was filed in the verdict file.** If step 7a wrote a verdict
+file, re-write it now so it also carries the filed IDs — the orchestrator
+reads the file only after the session exits, so a re-write here is safe:
+
+```bash
+if [ -n "${AIDA_REVIEW_VERDICT_FILE:-}" ] && [ -f "$AIDA_REVIEW_VERDICT_FILE" ]; then
+  # Re-emit the JSON with an added "findings_filed" array, e.g.:
+  # {"verdict": "...", "summary": "...", "findings_filed": ["TASK-303","TASK-304"]}
+  :
+fi
+```
+
+`findings_filed` is for cross-reference only — the orchestrator does not
+act on it. An empty array (nothing filed, or an idempotency skip) is fine.
+
+**The advisor picks these up** on its next session: `aida findings list`
+surfaces them grouped by PR and severity-sorted, `aida findings promote
+<ID>` sends one to the work queue, `aida findings dismiss <ID>` rejects it.
 
 ### 8. Confirm with the user before merge
 
