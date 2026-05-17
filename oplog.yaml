@@ -6302,5 +6302,13 @@ operations:
       ## Origin
 
       2026-05-17 morning. User about to queue PR-65 (web /ultraplan output for STORY-278) for headless review; identified that 2 PRs merged overnight could cause issues. Concrete data: \`session.rs\` overlap between PR-65 and PR-66. Split decision (user 2026-05-17): the CLI ships first as a manual tool (new TASK), the orchestrator pre-flight integration (this STORY) lands once the CLI has been used manually for a stretch and we have empirical evidence about which scenarios warrant blocking vs warning.
-clock: 711
+- id: 019e368b-80a1-7c41-aea9-47c0bf342fd2
+  target_id: 019e3682-d0e8-70d0-994b-5f16af39fcf5
+  author: aida
+  node_id: '1'
+  lamport: 712
+  timestamp: 2026-05-17T15:26:12.641950247Z
+  kind: !SetDescription
+    description: ''
+clock: 712
 node_id: '1'
