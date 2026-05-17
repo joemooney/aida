@@ -1,0 +1,44 @@
+id: 019e345e-123b-70e3-9ae9-1ba23e7ca064
+spec_id: STORY-276
+agreed_id: STORY-276
+title: 'aida queue work --auto-complete --no-human=both: headless implementer phase (requires /aida-punt)'
+description: |-
+  After STORY-263 ships the reviewer-only first cut, this STORY extends \`--no-human\` to cover **phase 1 (implementer) headless** as well. Per SPIKE-7 this is the \"RISKIER\" case.
+
+  ## Required prerequisite
+
+  \`/aida-punt\` mechanism from EPIC-28's shelving STORY. Without it, an ambiguous spec produces a wrong implementation silently. Hard dependency.
+
+  ## Acceptance
+
+  - [ ] \`--no-human=both\` (or unflagged \`--no-human\`) enables headless phase 1
+  - [ ] Implementer Claude under headless detects design-fork ambiguity (per \`feedback_pause_for_design_input.md\`)
+  - [ ] On ambiguity: invokes \`/aida-punt <reason>\` instead of guessing
+  - [ ] Punted spec flips to NeedsAttention; orchestrator records the punt; continues to next item
+  - [ ] Tests: a known-ambiguous spec produces a punt, not a wrong implementation
+  - [ ] Tests: a known-clear spec ships through phase 1 headless cleanly
+
+  ## Out of scope
+
+  - Skill template audit (separate TASK)
+  - Watchdog mechanism (already in STORY-263)
+
+  ## Composes with
+
+  - **STORY-263** (first cut — reviewer only) — must ship first
+  - **EPIC-28 STORY 3** (shelving + /aida-punt) — required prereq
+  - **SPIKE-7** — empirical evidence for the headless-implementer risks
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T05:17:20.827435358Z
+modified_at: 2026-05-17T05:17:20.827435358Z
+req_type: Story
+tags:
+- auto-complete
+- depends-on-punt
+- headless
+- implementer-phase
+- no-human
+- post-spike-7-followup
