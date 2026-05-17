@@ -13,6 +13,7 @@ mod process_probe;
 mod prompts;
 mod session;
 mod session_manifest;
+mod status_display;
 mod usage;
 mod workflow_hints;
 
@@ -2012,9 +2013,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         } else {
                             origin_padded
                         };
+                        // TASK-269: unified status palette. Pad the plain
+                        // string to column width FIRST, then colour —
+                        // {:<10} counts ANSI escape bytes otherwise.
+                        // trace:TASK-269 | ai:claude
+                        let status_cell = status_display::paint_status(
+                            &format!("{:<10}", req.status),
+                            &req.status,
+                        );
                         println!(
-                            "{:<12} {}{:<12} {:<10} {}",
-                            display_id, origin_cell, req.req_type, req.status, req.title,
+                            "{:<12} {}{:<12} {} {}",
+                            display_id, origin_cell, req.req_type, status_cell, req.title,
                         );
                     }
                 } else {
@@ -2029,9 +2038,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             .as_deref()
                             .or(req.spec_id.as_deref())
                             .unwrap_or("?");
+                        // TASK-269: unified status palette — pad-then-colour
+                        // keeps the column aligned. trace:TASK-269 | ai:claude
+                        let status_cell = status_display::paint_status(
+                            &format!("{:<10}", req.status),
+                            &req.status,
+                        );
                         println!(
-                            "{:<14} {:<12} {:<10} {:<10} {}",
-                            display_id, req.req_type, req.status, req.priority, req.title,
+                            "{:<14} {:<12} {} {:<10} {}",
+                            display_id, req.req_type, status_cell, req.priority, req.title,
                         );
                     }
                 }
@@ -2645,7 +2660,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         println!("{}: {}", "About".bold(), about.cyan());
                     }
                     println!("{}: {:?}", "Type".bold(), req.req_type);
-                    println!("{}: {}", "Status".bold(), req.effective_status());
+                    // TASK-269: colour-code Status inline so a quick scan
+                    // catches it; the same value is reprinted at the foot
+                    // of the output below. trace:TASK-269 | ai:claude
+                    let status = req.effective_status();
+                    println!(
+                        "{}: {}",
+                        "Status".bold(),
+                        status_display::status_badge(&status)
+                    );
                     println!("{}: {}", "Priority".bold(), req.effective_priority());
                     if !req.owner.is_empty() {
                         println!("{}: {}", "Owner".bold(), req.owner);
@@ -2727,6 +2750,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
                         print_git_linkage(&project_root, &ids, *verbose);
                     }
+                    // TASK-269: `aida show` output runs 50-150 lines, so the
+                    // top Status field scrolls off-screen. Reprint it after a
+                    // rule — "what state is this in?" then sits at the cursor
+                    // when the command returns. trace:TASK-269 | ai:claude
+                    println!("\n{}", "─".repeat(40).dimmed());
+                    println!(
+                        "{}: {}",
+                        "Status".bold(),
+                        status_display::status_badge(&status)
+                    );
                 }
                 None => {
                     eprintln!("{}", not_found::requirement_not_found(id, Some(store_path)));
@@ -33063,11 +33096,12 @@ fn print_status_queue_section(ctx: &UserStatusContext, focused: bool) {
             role_label.cyan()
         );
         for (i, row) in ctx.queue_head.iter().enumerate() {
+            // TASK-269: shared status badge. trace:TASK-269 | ai:claude
             println!(
                 "  {:>2}. {} [{}] {}",
                 i + 1,
                 row.spec_id.bold(),
-                row.status.dimmed(),
+                status_display::status_badge(&row.status),
                 row.title
             );
         }
@@ -33362,7 +33396,12 @@ fn handle_status_command_distributed(
             .or(r.spec_id.as_deref())
             .unwrap_or("?");
         let modified = r.modified_at.split('T').next().unwrap_or(&r.modified_at);
-        println!("  {:<14} {:<12} {} — {}", id, r.status, modified, r.title);
+        // TASK-269: unified status palette — pad-then-colour for the column.
+        // trace:TASK-269 | ai:claude
+        let status_label = r.status.to_string();
+        let status_cell =
+            status_display::paint_status(&format!("{:<12}", status_label), &status_label);
+        println!("  {:<14} {} {} — {}", id, status_cell, modified, r.title);
     }
     if recent.is_empty() {
         println!("  (no user requirements yet — try `aida add --type vision --title \"...\"`)");
@@ -37295,10 +37334,15 @@ fn render_spec_card(
     let status = req.effective_status();
 
     // Brief: a single line, no box — for autonomous / scripted flows.
+    // TASK-269: badge the status (glyph + colour) here too. trace:TASK-269
     if density == CardDensity::Brief {
         println!(
             "{} · {} · {} · {} · {}",
-            id, req_type, priority, status, req.title
+            id,
+            req_type,
+            priority,
+            status_display::status_badge(&status),
+            req.title
         );
         return;
     }
@@ -37320,8 +37364,14 @@ fn render_spec_card(
     println!("{}", rule.dimmed());
     println!();
 
-    // One-liner: ID · type · priority · status.
-    println!("  {} · {} · {} · {}", id.bold(), req_type, priority, status);
+    // One-liner: ID · type · priority · status (badged — TASK-269).
+    println!(
+        "  {} · {} · {} · {}",
+        id.bold(),
+        req_type,
+        priority,
+        status_display::status_badge(&status)
+    );
     println!();
 
     // Key fields. "Uncategorized" is the default feature — suppress it
@@ -40214,19 +40264,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             let status = req
                                 .map(|r| format!("{}", r.status))
                                 .unwrap_or_else(|| "Unknown".to_string());
-                            let status_colored = match status.as_str() {
-                                "Draft" => status.dimmed(),
-                                "Approved" => status.blue(),
-                                "Planned" => status.cyan(),
-                                "In Progress" => status.yellow(),
-                                // trace:STORY-86 | ai:claude — bold bright-green
-                                // distinguishes "done on branch" from
-                                // "merged to main" (plain green).
-                                "Done" => status.bright_green().bold(),
-                                "Completed" => status.green(),
-                                "Rejected" => status.red(),
-                                _ => status.normal(),
-                            };
+                            // TASK-269: shared glyph + colour palette.
+                            // trace:TASK-269 | ai:claude
+                            let status_badge = status_display::status_badge(&status);
                             let glyph = if is_last { "└─" } else { "├─" };
                             let pad =
                                 " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
@@ -40245,7 +40285,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                                 display_id_owned.bold(),
                                 pad,
                                 title_owned,
-                                status_colored,
+                                status_badge,
                                 tag_chip,
                             );
                         };
@@ -40366,18 +40406,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     let status = req
                         .map(|r| format!("{}", r.status))
                         .unwrap_or_else(|| "Unknown".to_string());
-
-                    let status_colored = match status.as_str() {
-                        "Draft" => status.dimmed(),
-                        "Approved" => status.blue(),
-                        "Planned" => status.cyan(),
-                        "In Progress" => status.yellow(),
-                        // trace:STORY-86 | ai:claude
-                        "Done" => status.bright_green().bold(),
-                        "Completed" => status.green(),
-                        "Rejected" => status.red(),
-                        _ => status.normal(),
-                    };
+                    // TASK-269: shared glyph + colour palette.
+                    // trace:TASK-269 | ai:claude
+                    let status_badge = status_display::status_badge(&status);
 
                     print!(
                         "  {}. {} {}",
@@ -40385,7 +40416,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         display_id_owned.bold(),
                         title_owned
                     );
-                    print!("  [{}]", status_colored);
+                    print!("  [{}]", status_badge);
                     if entry.added_by != user_id {
                         print!("  {}", format!("(from @{})", entry.added_by).dimmed());
                     }
