@@ -132,12 +132,12 @@ description: |-
   That's the seed. The TASK-269 pause was correct for the actual context (user watching, advisor reachable) — under true \`--no-human\`, it would have been a punt failure (drain stalls overnight on a design question with no one to answer).
 
   The three-mode taxonomy makes the distinction first-class: human-role (driving / advisor / absent) maps to pause-behavior (every-prompt / design-forks-only / never). No more conflation.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:28:11.451611274Z
-modified_at: 2026-05-17T23:16:26.173647671Z
+modified_at: 2026-05-17T23:32:38.472239478Z
 req_type: Story
 tags:
 - advisor-pattern
@@ -155,3 +155,7 @@ comments:
   content: 'Implementation slicing guidance (added 2026-05-17 per user direction): ship `--zen` mode FIRST as the smallest-valuable-slice. Reasons: (1) --zen doesn''t require headless implementer (STORY-276) — it''s pure prompt-classification + auto-resolve, implementable today; (2) --zen gives immediate value (auto-resolve mechanical confirmations) while preserving design-fork pauses; (3) --no-human=both punt behavior depends on STORY-285 (findings persistence) and STORY-276 (headless runtime to punt FROM), neither of which is shipped yet. Recommended slice for this STORY: (a) prompt `kind:` annotation convention in skill templates, (b) `--zen` flag wiring, (c) auto-resolve mechanism for kind:confirmation under --zen, (d) preserve existing pause for kind:design-fork under --zen. Defer (e) --no-human punt artifact filing, (f) --no-human auto-resolve of design-forks, both to a follow-up sub-TASK that lands after STORY-276 + STORY-285.'
   created_at: 2026-05-17T18:49:56.181321254Z
   modified_at: 2026-05-17T18:49:56.181321254Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-17T23:32:38.472239478Z
+  implemented_by: joe
