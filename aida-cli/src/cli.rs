@@ -2644,7 +2644,7 @@ pub enum QueueCommand {
 }
 
 /// `aida findings` — triage review findings filed by the headless reviewer.
-/// trace:STORY-278 | ai:claude
+// trace:STORY-278 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum FindingsCommand {
     /// List draft findings awaiting triage, grouped by PR and severity-sorted.
@@ -2913,7 +2913,7 @@ pub enum Command {
     },
 
     /// Triage review findings filed by the headless reviewer.
-    /// trace:STORY-278 | ai:claude
+    // trace:STORY-278 | ai:claude
     #[clap(subcommand)]
     Findings(FindingsCommand),
 
