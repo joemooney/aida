@@ -30,3 +30,7 @@ tags:
 - companion-project
 - monorepo-split
 - repo-extraction
+relationships:
+- rel_type: Child
+  target_id: 019e3383-3b25-78c2-b59c-f06bd6b44c07
+  created_at: 2026-05-17T01:20:36.833787081Z
