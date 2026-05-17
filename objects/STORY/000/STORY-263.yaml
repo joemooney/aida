@@ -77,7 +77,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:25:44.957144080Z
-modified_at: 2026-05-17T05:03:16.621906253Z
+modified_at: 2026-05-17T05:17:19.766190515Z
 req_type: Story
 tags:
 - advanced-user
@@ -244,3 +244,23 @@ comments:
     User asked 2026-05-17 after SPIKE-7 shipped: *\"when we use this, will prompts like this cause failure?\"* — showed the \`/aida-pr\` confirmation prompt. Direct answer: yes, that exact prompt would fail under headless mode. The full audit + headless-aware refactor is STORY-263's actual scope.
   created_at: 2026-05-17T05:03:16.621906253Z
   modified_at: 2026-05-17T05:03:16.621906253Z
+- id: 019e345e-0e16-7a51-8f6f-4314cf404170
+  author: joe
+  content: |-
+    ## Scope clarification 2026-05-17 — REVIEWER-ONLY first cut is the authoritative ship
+
+    The 22:03 comment expanded scope (skill audit, AIDA_NO_HUMAN env var, /aida-punt mechanism). Per \`feedback_refinements_must_be_acceptance_criteria.md\`, comments aren't binding — the ## Acceptance section is.
+
+    **Authoritative scope for THIS implementer pickup**: ship the **reviewer-only first cut** per SPIKE-7's explicit recommendation:
+
+    - \`--no-human\` flag (canonical; \`--unattended\` and \`--headless\` as aliases)
+    - Headless **phase 3 (reviewer)** only — \`claude -p\` with bypassPermissions, stream-json output, watchdog timeout
+    - **Phase 1 (implementer) stays interactive** — too risky without /aida-punt mechanism
+    - \`--no-human\` and \`--no-human=reviewer-only\` are equivalent (the granular form is just for forward-compat)
+    - Composes with \`--batch + --auto-complete\` (already shipped via TASK-285)
+
+    The deferred work (headless implementer, skill template audit, /aida-punt integration, additional watchdog refinements) gets its own specs, filed by dialog as follow-ups. NOT part of STORY-263.
+
+    This matches SPIKE-7's verbatim recommendation: *\"the headless REVIEWER phase is so much safer than headless implementer — could ship reviewer-only as a first cut even pre-alpha.\"*
+  created_at: 2026-05-17T05:17:19.766190515Z
+  modified_at: 2026-05-17T05:17:19.766190515Z
