@@ -142,12 +142,10 @@ cargo test -p aida-cli --bin aida auto_complete::       # 49 pass
 
 ## Followups
 
-- End-to-end batch drain against a live 3-spec batch (real Claude sessions) —
-  the unit tests mock the driver; a smoke run would exercise `RealBatchDriver`.
-- `/aida-drain-queue` skill (TASK-249) should wrap this CLI form rather than
-  re-implement the loop.
+- End-to-end batch drain against a live 3-spec batch (real Claude sessions) — the unit tests mock the driver; a smoke run would exercise `RealBatchDriver`.
 
 ## Related
 
 - Builds on: STORY-246 (`--auto-complete` orchestrator), TASK-229 (batch tag).
-- See also: TASK-249 (`/aida-drain-queue` skill), TASK-266 (failure telemetry).
+- See also: TASK-249 (`/aida-drain-queue` skill — should wrap this CLI form
+  rather than re-implement the loop), TASK-266 (failure telemetry).
