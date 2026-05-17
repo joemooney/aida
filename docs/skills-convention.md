@@ -53,9 +53,38 @@ a GFM table reads as a decision surface, not a recipe.
 
 A **single linear next-step** stays a compact one-liner or short bullet — a
 table for one row is overhead. The table earns its keep only at 2+ options.
-Likewise, autonomous flows (`/goal`, `aida queue work --auto-complete`) drive
-the workflow themselves and never reach a human decision point, so they emit
-no next-steps prompt at all — tables are for human-driven flow only.
+Fully-headless flows (`/goal`, `aida queue work --no-human`) drive the
+workflow with no human at the keyboard, reach no decision point, and emit no
+next-steps prompt at all.
+
+## Orchestrator-mode menu — `aida queue work --auto-complete`
+
+`aida queue work --auto-complete` (without `--no-human`) is the in-between
+case: a human *is* at the keyboard during the implementer and reviewer
+phases, so a menu still renders — but the **orchestrator-aware** one, not
+the manual menu. The orchestrator (STORY-246) owns phases 2-6 (end session →
+wait CI → review → merge → pull → build), so the manual menu's "keep
+working" / "stop here" rows are actively wrong: they break the chain.
+
+**Detection.** The orchestrator sets `AIDA_AUTO_COMPLETE=1` on every session
+it launches. A skill's end-of-session step checks `echo
+"${AIDA_AUTO_COMPLETE:-}"` — non-empty → orchestrator mode, which overrides
+every other state-aware template. The reviewer skill additionally keys off
+`AIDA_REVIEW_VERDICT_FILE` (set alongside `AIDA_AUTO_COMPLETE`) because that
+var also carries *where* to write the verdict.
+
+**The menu.** Two rows, with two distinct glyphs — `⇒` for the forward move
+(submit the PR / exit so the orchestrator continues) and `⏏` for the abort
+(hard-stop the orchestrator chain). No "grab the next item" (the
+orchestrator picks the next spec up only after the current one's *full*
+lifecycle) and no plain "stop here" (`aida session end` is the
+orchestrator's own phase 2). trace:TASK-286
+
+| Skill | Orchestrator-mode end-of-session |
+|-------|----------------------------------|
+| `/aida-pickup` | `⇒ Submit the PR` (`/aida-pr`) · `⏏ Abort the chain` |
+| `/aida-pr` | `⇒ Exit — let the orchestrator continue` (Ctrl+D) · `⏏ Abort the chain` |
+| `/aida-review` | Write the verdict file, render the loud Ctrl+D exit block, stop — never the manual hand-off table |
 
 ### The one-line rule for skill authors
 
@@ -68,9 +97,9 @@ block so the rule travels with the template.
 
 ### Skills that follow this convention
 
-- `aida-pickup.md` — Step 6, four state-aware templates
-- `aida-pr.md` — Step 12, two auto-queue-outcome templates
-- `aida-review.md` — Step 11, two post-merge templates
+- `aida-pickup.md` — Step 6, six state-aware templates (incl. orchestrator mode)
+- `aida-pr.md` — Step 12, three templates (orchestrator mode + two auto-queue outcomes)
+- `aida-review.md` — Step 11, two post-merge templates; Step 7a orchestrator-mode early stop
 
 Any new skill that ends with a multi-option hand-off prompt should adopt the
 same table. Pairs with the pre-action banner convention in `/aida-pr` (TASK-259)

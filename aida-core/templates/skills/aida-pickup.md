@@ -256,15 +256,30 @@ prompts. Don't auto-execute — the user picks.
 **Detect state first.** These signals decide which template to render:
 
 ```bash
+echo "${AIDA_AUTO_COMPLETE:-}"         # non-empty → spawned by the --auto-complete orchestrator
 aida session show --plan 2>/dev/null   # manifest rows + ✓/◐/○ status + `batch:` line
 aida queue work --batch <NAME> --dry-run 2>/dev/null   # batch members still queued
 aida queue next 2>/dev/null            # is there another item routed to this role?
 aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
 ```
 
-Check **batch context first** — it takes precedence over the manifest-row
-modes (a batch session's manifest carries only the head item it picked
-up, so the cluster checks below would misfire on it):
+Check **orchestrator mode first of all** — it overrides every template
+below. If `echo "${AIDA_AUTO_COMPLETE:-}"` printed a non-empty value, this
+session was spawned by the `aida queue work --auto-complete` orchestrator
+(STORY-246), which sets `AIDA_AUTO_COMPLETE=1` on the implementer session
+it launches. The orchestrator owns phases 2-6 (end session → wait CI →
+review → merge → pull → build); a manual `/aida-pickup` or `aida session
+end` here would break the chain. Render the *orchestrator mode* template
+and skip the batch / cluster / simple detection entirely. The env var
+reflects a *live* orchestrator parent — a session resumed by hand later
+won't carry it, and correctly so: a hand-resumed session is no longer
+orchestrator-driven. trace:TASK-286
+
+- **`AIDA_AUTO_COMPLETE` non-empty** → orchestrator mode (overrides all below)
+
+Otherwise check **batch context** next — it takes precedence over the
+manifest-row modes (a batch session's manifest carries only the head item
+it picked up, so the cluster checks below would misfire on it):
 
 - **`batch:` line present, `--batch <NAME> --dry-run` lists ≥1 queued
   member** → batch mode
@@ -279,7 +294,10 @@ up, so the cluster checks below would misfire on it):
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
 `/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
 `🚪` = stop/exit. Recommendations must be CONCRETE — name the command, name
-the IDs. "You might want to consider…" is not a Next step.
+the IDs. "You might want to consider…" is not a Next step. The *orchestrator
+mode* template below uses two distinct glyphs — `⇒` (submit the PR → the
+orchestrator continues) and `⏏` (abort the orchestrator chain) — because
+under `--auto-complete` the available moves differ from the manual menu.
 
 **Render multi-option prompts as a table.** When presenting 2+ paths
 forward, render as a markdown table with columns Path / What happens / Why.
@@ -295,6 +313,31 @@ options only. Full convention: `docs/skills-convention.md`.
 from detection above). Each shows a prose lead-in line followed by the
 next-steps table — print the lead-in as a normal sentence, then the table
 as a real GFM markdown table (no surrounding code fence):
+
+*Orchestrator mode (`AIDA_AUTO_COMPLETE` non-empty) — TASK-286:*
+
+✓ <SPEC-ID> done. This session runs under `--auto-complete` — the
+orchestrator drives the rest.
+
+Print the `ⓘ` note as a normal line above the table:
+
+ⓘ Under `--auto-complete` the orchestrator handles phases 2-6 (end session
+→ wait CI → review → merge → pull → build) automatically. The only correct
+move here is to open the PR, then exit — a manual `/aida-pickup` or `aida
+session end` would break the chain.
+
+| Path | What happens | Why |
+|------|--------------|-----|
+| ⇒ Submit the PR | `/aida-pr` | Opens the PR for <SPEC-ID>; the orchestrator detects it when this session exits and continues with CI → review → merge → pull → build |
+| ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — ends this spec and bails; phases 2-6 will not run |
+
+Orchestrator mode shows only these two rows on purpose: there is no "grab
+the next item" (the orchestrator picks up the next spec only after this
+one's *full* lifecycle completes, never mid-chain) and no plain "stop here"
+(`aida session end` is the orchestrator's phase 2 — it runs it for you, so
+a manual one would race it). This template overrides batch / cluster /
+simple mode — when `AIDA_AUTO_COMPLETE` is set, render it and nothing else.
+trace:TASK-286
 
 *Batch mode (`batch:<NAME>` still has queued members) — TASK-272:*
 
@@ -353,7 +396,7 @@ Drained <N> items from <cluster-id>.
 | ⏵ Switch hats and queue more | `eval "$(aida role enter dialog)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; dialog is the producer seat that refills the queue |
 | 🚪 Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; nothing is queued, so it's a clean stopping point |
 
-Print exactly one block — don't dump all five templates. Don't auto-loop
+Print exactly one block — don't dump all six templates. Don't auto-loop
 without confirmation: the user may want to break, review, switch roles, or
 call it for the day.
 
