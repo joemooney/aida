@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-05-17T05:17:30.992359279Z
+modified_at: 2026-05-17T05:22:28.705243643Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -236,3 +236,41 @@ comments:
     - \`punt:design-ambiguity\` — invoked by implementer Claude under headless mode when input is required
   created_at: 2026-05-17T05:17:30.992359279Z
   modified_at: 2026-05-17T05:17:30.992359279Z
+- id: 019e3462-c4e1-7bc1-874d-df54a410d70c
+  author: joe
+  content: |-
+    ## Refinement 2026-05-17 — punt primitive must post comment on the spec
+
+    User observation during STORY-263 pickup: the design-checkpoint pause that fired interactively would have been a /aida-punt under headless mode. The **comment-on-spec is the discoverability mechanism** — without it, user-on-return sees opaque \"NeedsAttention\" with only a reason category.
+
+    ### Adding to EPIC-28 STORY 3's acceptance (when filed)
+
+    The /aida-punt primitive (and the parallel failure-shelving on orchestrator failure) MUST:
+
+    1. Flip spec status to NeedsAttention
+    2. Record reason category in spec metadata (\`punt:design-ambiguity\`, \`failure:phase-2-ci\`, etc.)
+    3. **Post a comment on the spec with the human-readable reason**
+
+    The third element is what makes triage actually possible. Two specs at NeedsAttention with different reasons need DIFFERENT human responses — the comment is what tells the user which response.
+
+    ### Comment shape
+
+    \`\`\`
+    [2026-05-17 03:42 UTC] punt:design-ambiguity — phase 1 (implementer)
+      Implementer Claude blocked: \"Scope contested between ## Acceptance section
+      (reviewer-only first cut) and 22:03 comment (skill audit + AIDA_NO_HUMAN env var
+      + /aida-punt mechanism). Not safe to auto-default. Please clarify which scope
+      to implement.\"
+    \`\`\`
+
+    Or for failures:
+
+    \`\`\`
+    [2026-05-17 04:15 UTC] failure:phase-2-ci — phase 2 (CI)
+      CI red on PR-N (run 12345): \"Build (ubuntu-latest) — 47 tests failed: panic
+      at git init --initial-branch=main with empty stderr.\"
+    \`\`\`
+
+    Both produce machine-state (NeedsAttention + reason category) AND human-readable triage context (the comment).
+  created_at: 2026-05-17T05:22:28.705243643Z
+  modified_at: 2026-05-17T05:22:28.705243643Z
