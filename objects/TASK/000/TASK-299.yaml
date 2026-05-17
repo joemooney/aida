@@ -1,0 +1,115 @@
+id: 019e34a9-3935-7170-b05d-dad3023597d1
+spec_id: TASK-299
+agreed_id: TASK-299
+title: Auto-generated CHANGELOG.md from spec graph + git tag boundaries
+description: |-
+  Generate \`CHANGELOG.md\` mechanically from the spec graph + git tags. Each version section lists specs that shipped between that tag and the previous, categorized by type (features, bugs, docs, infrastructure).
+
+  Avoids the manual-changelog tax + the prematurely-granular-patch-versioning trap. Replaces \"what's in this release?\" guesswork with deterministic output.
+
+  ## Generation logic
+
+  For each release tag (chronologically):
+
+  1. Walk commits between previous tag and this tag
+  2. Extract \`(SPEC-ID)\` references from commit subjects
+  3. For each unique spec, fetch its title + type from AIDA
+  4. Group by type: Features (story, task with type tag), Bugs (bug), Docs (task with docs tag), Infrastructure (ci, release-tooling tags), etc.
+  5. Output a markdown section per release
+
+  ## Proposed output shape
+
+  \`\`\`markdown
+  # Changelog
+
+  All notable changes to AIDA are documented here. Generated from the spec graph; do not edit manually.
+
+  ## [Unreleased]
+
+  Specs merged to main since v0.8.0 (3):
+
+  ### Features
+  - **TASK-285** — \`aida queue work --batch\` composes with \`--auto-complete\` (#61)
+
+  ### Fixes
+  - **BUG-219** — Auto-bump completes review stories stuck at Approved on PR self-merge (#57)
+  - **BUG-217** — Orchestrator phase-2 ENOENT after dev binary rebuild (#55)
+
+  ## [v0.8.0] — 2026-05-15
+
+  EPIC-26 feature-complete (TUI Trojan-horse default-on); orchestrator triad + auto-bump chain (BUG-114/217/218 + BUG-106/113/219).
+
+  ### Features
+  - **STORY-132** — TUI shell: PTY-host a Claude session + status strip + prefix-key exit (#41)
+  - **STORY-133** — Status overlay + 3 quick actions (#43)
+  - **STORY-246** — \`aida queue work --auto-complete\` lifecycle orchestrator (#46)
+  ... [continue]
+
+  ### Fixes
+  - **BUG-114** — Phase-1 lease disambiguation (#48)
+  - ... [continue]
+
+  ### Documentation
+  - ... [continue]
+  \`\`\`
+
+  ## CLI surface
+
+  \`\`\`bash
+  aida changelog generate [--since <tag>] [--until <tag>] [--out CHANGELOG.md]
+  aida changelog refresh        # writes CHANGELOG.md with all releases
+  aida changelog preview        # stdout-only preview of [Unreleased] section
+  \`\`\`
+
+  ## Acceptance
+
+  - [ ] \`aida changelog generate\` walks git tags and produces structured markdown
+  - [ ] Specs grouped by type with sensible categorization (Features / Fixes / Documentation / Infrastructure / Internal)
+  - [ ] PR numbers extracted from commit messages (\`(#NN)\` suffix)
+  - [ ] \`[Unreleased]\` section shows specs since the most recent tag
+  - [ ] \`aida changelog refresh\` overwrites CHANGELOG.md (idempotent — same git state produces same output)
+  - [ ] \`release.sh\` runs \`aida changelog refresh\` automatically before tagging — CHANGELOG.md commits with the version bump
+  - [ ] Tests: dummy spec store + dummy git history → expected output
+  - [ ] Handles edge cases: commits with no \`(SPEC-ID)\` reference (group as \"Other\"), specs that span multiple PRs
+
+  ## Composes with
+
+  - **\`release.sh\`** — runs \`aida changelog refresh\` as part of the release flow; CHANGELOG commits with the version bump
+  - **\`aida show\`** (could surface \"shipped in v0.X.Y\" when relevant) — sibling capability; not in scope here
+  - **STORY-252** (\`/aida-digest\`) — different surface: digest is narrative customer-facing; CHANGELOG is structured developer-facing. Both consume the same spec graph.
+
+  ## Out of scope
+
+  - **Per-PR patch-version-bump automation** — explicitly rejected (per pushback discipline). CHANGELOG works fine with milestone-cadence releases.
+  - **Conventional-commits parsing** — AIDA's \`[AI:tool] type(scope): description (SPEC-ID)\` format is already structured; no need to add Conventional Commits on top
+  - **HTML / web rendering** — markdown is the canonical output
+  - **Cross-project changelog aggregation** — single project
+
+  ## Why this matters
+
+  After alpha, users need to answer:
+  - \"What's in this version?\" → CHANGELOG.md
+  - \"Where did this fix ship?\" → grep CHANGELOG for SPEC-ID
+  - \"Should I upgrade?\" → read CHANGELOG diff
+
+  Manual CHANGELOG.md curation is friction at every release. Spec-graph generation is automatic + accurate.
+
+  Combined with the discipline of \"meaningful milestone releases (not patch-per-PR),\" the CHANGELOG has signal-to-noise that patch-per-PR would have ruined.
+
+  ## Origin
+
+  User asked 2026-05-17 whether patch-per-PR versioning made sense. Pushback recommended against patch granularity at this stage; CHANGELOG.md from spec graph is the higher-leverage prerequisite to making version granularity useful when alpha users actually start tracking versions.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T06:39:26.005961879Z
+modified_at: 2026-05-17T06:39:26.005961879Z
+req_type: Task
+tags:
+- alpha-readiness
+- automation
+- changelog
+- documentation
+- release-tooling
+- spec-graph
