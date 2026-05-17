@@ -101,7 +101,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:44:52.445178527Z
-modified_at: 2026-05-17T06:52:16.593421640Z
+modified_at: 2026-05-17T06:52:22.727372067Z
 req_type: Story
 tags:
 - advisor-triage
@@ -110,3 +110,9 @@ tags:
 - headless
 - no-human
 - reviewer-findings
+comments:
+- id: 019e34b5-1347-7163-b12e-21301cb3c98e
+  author: joe
+  content: 'Acceptance revised 2026-05-16: scoped to option 3 (TASK --status draft --tags ''from-review:PR-N,severity:*'') after design discussion. ATTN/FINDING new-type option deferred until volume metrics justify the taxonomy cost. `aida findings list` is a query alias, not a new lifecycle. Composes with feedback_pushback_on_overengineering.md (smallest-valuable-slice discipline).'
+  created_at: 2026-05-17T06:52:22.727372067Z
+  modified_at: 2026-05-17T06:52:22.727372067Z
