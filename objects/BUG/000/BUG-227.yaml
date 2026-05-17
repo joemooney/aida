@@ -1,0 +1,38 @@
+id: 019e36dd-4253-7f81-9198-428b90faf04e
+spec_id: BUG-227
+agreed_id: BUG-227
+title: aida show --help leaks trace:STORY-62 / STORY-78 / TASK-241 SPEC-IDs into --tree/--sync/--no-git/--verbose help text
+description: |-
+  \`aida show --help\` exposes SPEC-IDs in the help text for several flags — specifically \`--tree\` / \`--sync\` / \`--no-git\` / \`--verbose\` carry \`trace:STORY-62\`, \`trace:STORY-78\`, \`trace:TASK-241\` markers. Violates TASK-268's user-facing-text convention (SPEC-IDs are developer breadcrumbs, never user-facing).
+
+  Root cause (per TASK-268): \`///\` doc comments on clap fields appear in \`--help\` output. The trace markers on those fields need to be plain \`//\` comments so they stay code-only.
+
+  ## Acceptance
+
+  - [ ] \`aida show --help\` carries no \`trace:\` markers in any flag's description
+  - [ ] Audit \`aida show\`'s clap derive for \`///\` doc-comments containing \`trace:\` and demote them to plain \`//\`
+  - [ ] Same audit pattern applied across other \`aida\` subcommands (if leaks exist elsewhere — likely they do per the TASK-268 origin pattern)
+  - [ ] Test: \`aida <subcmd> --help\` output greps clean for \`trace:\`
+
+  ## Composes with
+
+  - **TASK-268** (user-facing-text convention — this BUG is a direct violation of its rule)
+  - **TASK-265** (the implementer that spotted this during its own work)
+  - **TASK-311** (dialog-role spec audit — primary-caller-environment check would catch \`/// trace:\` on clap fields since the primary caller is users reading --help)
+
+  ## Origin
+
+  Spotted by the TASK-265 implementer (2026-05-17) during incidental \`aida show --help\` review while implementing the \`--card\` flag. Pre-existing — predates TASK-265's diff. Filed via the dialog role rather than as a TASK-265 followup because it's an independent BUG with its own audit scope.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T16:55:30.643881256Z
+modified_at: 2026-05-17T16:55:30.643881256Z
+req_type: Bug
+tags:
+- from-implementer:TASK-265
+- help-text
+- spec-id-leak
+- user-facing-text
+- violates:TASK-268
