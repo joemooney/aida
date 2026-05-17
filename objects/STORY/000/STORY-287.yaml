@@ -1,0 +1,150 @@
+id: 019e36fb-2dbb-7121-81f4-3ad6c905a559
+spec_id: STORY-287
+agreed_id: STORY-287
+title: 'Three-mode autonomy taxonomy: default / --zen / --no-human (with prompt kind classification + punt behavior)'
+description: |-
+  AIDA's current autonomy modes conflate two orthogonal axes: \"is a human present\" and \"what does the human want to be asked.\" The result is uncomfortable for users who are AT the keyboard but don't want to click-yes on 30 mechanical pauses, AND incorrect for users who are ABSENT and need the drain to keep moving instead of stalling on every design fork.
+
+  This STORY introduces a **three-mode autonomy ladder** that aligns the human's *role* with the implementer's *pause behavior*. It composes with TASK-306 (mode-flag clarity), STORY-276 (headless implementer), and STORY-285 (implementer findings persistence) — those three are load-bearing dependencies.
+
+  ## The three modes
+
+  | Mode | Persona | Mechanical prompts | Design-fork prompts |
+  |---|---|---|---|
+  | **Default** (no flag) | \"Driving\" — human approves each step | Pause + ask | Pause + ask |
+  | **\`--zen\`** | \"Advisor on standby\" — human consults on real questions only | **Auto-resolve** (pick the obvious next step) | Pause + ask |
+  | **\`--no-human\`** | \"Absent\" — nobody reachable | Auto-resolve | **Punt** — pick defensible default, file the deferred decision as a finding, continue |
+
+  Progressive ladder: each level is \"more autonomy than the previous.\" \`--zen\` works without headless Claude (it's just prompt-categorization). \`--no-human\` needs the headless implementer (STORY-276) AND the findings-persistence surface (STORY-285).
+
+  ## The discriminator: \`kind\` on every AskUserQuestion prompt
+
+  Skill templates label their prompts by \`kind\` so the runtime can route by mode:
+
+  \`\`\`
+  kind:confirmation   — mechanical yes/no; default action is obvious
+                      (\"open PR?\", \"merge?\", \"grab next item?\", \"end session?\")
+  kind:design-fork    — genuine choice between meaningful alternatives
+                      (\"scope to A only or unify across surfaces?\",
+                       \"option 1 or option 2 for non-TTY behavior?\")
+  kind:bug-spotted    — implementer found something during work; \"file as BUG?\"
+                      → routes through STORY-285 in headless mode
+  \`\`\`
+
+  Skill author guidance: **most prompts are confirmation**. Design-fork is reserved for choices the implementer genuinely can't decide alone (the spec is ambiguous, callers diverge, the cost of guessing wrong is real). When in doubt, mark confirmation — design-fork should be sparse and meaningful.
+
+  ## Punt behavior (\`--no-human\` design-fork landing)
+
+  When the implementer hits a design-fork prompt under \`--no-human\`:
+
+  1. Pick the **defensible default** — the choice the skill template names as the smallest-valuable-slice (\"option 1\" in the convention; the skill author's pre-declared fallback)
+  2. File a finding via STORY-285's surface: \`TASK --status draft --tags \"from-implementer:SPEC-ID,kind:design-fork-punted,severity:minor\"\`
+  3. The finding's description includes: the original prompt text, all options the implementer considered, the option picked, the rationale (\"under --no-human, picked smallest-valuable-slice\"), the deferred work for the alternatives
+  4. Continue drain to phase 2
+
+  Advisor (next interactive session) reviews the punted findings via \`aida findings list\` and either:
+  - Accepts the punted choice (dismiss the finding — \"good call\")
+  - Promotes the alternative (file a follow-up TASK to do the deferred work)
+  - Reverses the call (riskier; may require revert + re-implementation)
+
+  This is the same triage queue as reviewer findings (STORY-278) and implementer-spotted bugs (STORY-285). Unified surface.
+
+  ## Defensible-default heuristic
+
+  For \`kind:design-fork\` under \`--no-human\`, the implementer can't always know which option is \"defensible default.\" The skill template carries it:
+
+  \`\`\`markdown
+  <!-- in /aida-pickup.md or skill prompt template -->
+  When asking a kind:design-fork question, the FIRST option listed
+  must be the smallest-valuable-slice / lowest-risk default. Subsequent
+  options expand scope or accept more risk. Under --no-human, the
+  implementer picks the first option.
+  \`\`\`
+
+  Convention: **option 1 = ship the smallest correct thing; defer the rest as a follow-up**. Same shape as the \`feedback_pushback_on_overengineering.md\` discipline.
+
+  ## Acceptance
+
+  ### Mode flag (composes with TASK-306)
+
+  - [ ] \`--zen\` flag on \`aida queue work\` (and aliases on \`aida session start\`, anywhere skill-driven sessions launch). Equivalent: \`AIDA_ZEN=1\` env var.
+  - [ ] \`--no-human\` extends to include design-fork punt behavior (currently only auto-resolves the headless reviewer; this STORY extends it to phase 1 implementer when STORY-276 lands)
+  - [ ] Mode precedence: \`--no-human\` > \`--zen\` > default; setting both \`--zen\` and \`--no-human\` means \`--no-human\` wins (with a warning logged)
+  - [ ] TASK-306's pre-launch banner extends to describe all three modes
+
+  ### Prompt classification
+
+  - [ ] All AskUserQuestion-style prompts in skill templates carry a \`kind:\` annotation (in HTML comment, frontmatter, or wrapped in a sentinel like \`<!-- kind:confirmation -->\` directly above)
+  - [ ] Default kind when missing: \`design-fork\` (safer to err on the pause side — better to over-ask than to wrongly auto-resolve a real question)
+  - [ ] Skill template lint (sub-TASK if needed): warn when a kind annotation is missing on an AskUserQuestion prompt
+
+  ### Runtime routing
+
+  - [ ] Under \`--zen\`: kind:confirmation prompts auto-resolve to option 1; kind:design-fork prompts surface for user
+  - [ ] Under \`--no-human\`: ALL prompts auto-resolve to option 1; kind:design-fork choices ALSO file a punt finding via STORY-285's surface
+  - [ ] Default mode: all prompts surface (no change from today)
+  - [ ] Auto-resolve doesn't run interactive UI — it picks option 1 and proceeds; the JSONL log under TASK-307 records \"auto-resolved: kind=X, picked=option 1\"
+
+  ### Punt-finding shape (composes with STORY-285)
+
+  - [ ] Punt finding TASK includes: \`from-implementer:SPEC-ID\` tag, \`kind:design-fork-punted\` tag, \`severity:minor\` default, title summarizing the deferred choice, description with full prompt context
+  - [ ] Idempotent: same SPEC-ID prompt re-encountered (e.g., on re-run after recovery) doesn't double-file
+  - [ ] Advisor surface: \`aida findings list --kind design-fork-punted\` filters to deferred decisions specifically
+
+  ### Tests
+
+  - [ ] Simulated drain with each mode: default surfaces all prompts; --zen auto-resolves confirmations; --no-human punts on design-forks + files finding
+  - [ ] Mode-flag composition: \`--no-human --zen\` warns + picks --no-human
+  - [ ] Skill-template lint test: prompt missing \`kind:\` annotation warns
+
+  ### Documentation
+
+  - [ ] \`docs/autonomous-drain.md\` extends with the three-mode table + when to use each
+  - [ ] \`docs/aida-discipline/skill-prompt-kinds.md\` (new) — guidance for skill template authors on classifying prompts
+  - [ ] Memory entry: \`feedback_three_mode_autonomy_taxonomy.md\` with \`propagation: scaffolding-pack\` — codifies the human-role-vs-pause-behavior distinction for AIDA-using projects
+
+  ## Out of scope
+
+  - **Programmatic \"which option is the defensible default\" inference** — that's the skill template author's job, not runtime inference. Skills declare it via option-1 convention.
+  - **\"Maybe-pause\" middle category** — only two kinds. Adding nuance defeats the simplicity of the discriminator.
+  - **Cross-skill auto-correction** — start with /aida-pickup, /aida-implement, /aida-pr, /aida-review; propagate to other skills as a follow-up
+  - **GUI/TUI mode toggle UI** — CLI flag is enough; TUI integration is EPIC-26 territory
+  - **Per-prompt override** (\"this prompt is design-fork even though it looks mechanical\") — not needed; skill author classifies at template-write time
+
+  ## Composes with
+
+  - **TASK-306** (mode-flag clarity + statusline — extends to three modes; this STORY's three modes are TASK-306's value set)
+  - **STORY-276** (headless implementer — load-bearing for \`--no-human\` covering phase 1; without it, the implementer can't punt because there's no implementer-side runtime to punt FROM)
+  - **STORY-285** (implementer findings → advisor — load-bearing for the punt artifact; the punt FILES a finding via STORY-285's surface)
+  - **TASK-307** (tee headless output — visibility into auto-resolve decisions during drain)
+  - **STORY-278** (reviewer findings → advisor — sibling pattern; design-fork punts use the same triage queue)
+  - **BUG-226** (standalone reviewer summary — sibling end-of-phase visibility)
+  - **TASK-311** (dialog spec-audit — well-classified \`kind:\` annotations help spec authors think about which questions are real)
+  - \`feedback_pause_for_design_input.md\` (the existing discipline that says implementer should pause — this STORY adds the \`--no-human\` exception: under it, pause becomes punt)
+  - \`feedback_pushback_on_overengineering.md\` (option-1 = smallest-valuable-slice convention matches this)
+
+  ## Origin
+
+  2026-05-17 user observation during TASK-269 batch:display-polish drain. Implementer paused on a scope-fork (option 1 = \`aida show\` only vs option 2 = unify all CLI status display). Dialog (me) was reachable; consultation resolved the question with Option 2 + reasoning; drain continued.
+
+  User reflection: *\"it seems like we have a possible --zen mode in addition to --no-human. In this case where we can resolve with dialog with the advisor role, it would be okay to pause (--zen) but for overnight (--no-human) I think this was a case of punting?\"*
+
+  That's the seed. The TASK-269 pause was correct for the actual context (user watching, advisor reachable) — under true \`--no-human\`, it would have been a punt failure (drain stalls overnight on a design question with no one to answer).
+
+  The three-mode taxonomy makes the distinction first-class: human-role (driving / advisor / absent) maps to pause-behavior (every-prompt / design-forks-only / never). No more conflation.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T17:28:11.451611274Z
+modified_at: 2026-05-17T17:28:11.451611274Z
+req_type: Story
+tags:
+- advisor-pattern
+- alpha-readiness
+- autonomy-modes
+- first-users
+- no-human
+- prompt-kinds
+- punt-behavior
+- zen-mode
