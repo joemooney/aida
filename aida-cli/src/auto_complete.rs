@@ -76,6 +76,50 @@ impl AutoCompleteVariant {
     }
 }
 
+/// Which phases an `--auto-complete --no-human` run drives headless.
+///
+/// `--no-human` makes the orchestrator launch a phase's Claude session with
+/// `claude -p` (headless, single-turn, no Ctrl+D) instead of the interactive
+/// `exec claude`. This first cut wires the *reviewer* (phase 3) only — the
+/// SPIKE-7 "safe first cut"; the headless implementer (phase 1) is STORY-276.
+/// Under [`NoHumanMode::Both`] the orchestrator still runs phase 1
+/// interactively and prints a note pointing at STORY-276 — the flag grammar
+/// is forward-compatible, STORY-276 only has to wire the phase-1 launch.
+/// trace:STORY-263 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NoHumanMode {
+    /// Headless reviewer (phase 3) only; the implementer (phase 1) stays
+    /// interactive. The explicit `--no-human=reviewer-only`.
+    ReviewerOnly,
+    /// Headless implementer + reviewer. Bare `--no-human` resolves here. The
+    /// implementer half is STORY-276 — until it lands, phase 1 runs
+    /// interactively with a deferral note.
+    Both,
+}
+
+impl NoHumanMode {
+    /// Parse the `--no-human[=MODE]` value. Bare `--no-human` arrives as
+    /// `"both"` (clap `default_missing_value`).
+    pub(crate) fn parse(s: &str) -> Result<Self, String> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "" | "both" => Ok(Self::Both),
+            "reviewer-only" | "reviewer_only" | "revieweronly" | "reviewer" => {
+                Ok(Self::ReviewerOnly)
+            }
+            other => Err(format!(
+                "unknown --no-human mode `{other}` (expected: both, reviewer-only)"
+            )),
+        }
+    }
+
+    /// Does this mode *request* a headless implementer (phase 1)? True for
+    /// [`Both`](Self::Both). The phase-1 headless launch itself is STORY-276;
+    /// until then the orchestrator reads this only to print the deferral note.
+    pub(crate) fn wants_headless_implementer(self) -> bool {
+        matches!(self, Self::Both)
+    }
+}
+
 /// One lifecycle phase. The integer value doubles as the process exit code
 /// for a failure in that phase (success is always 0).
 /// trace:STORY-246 | ai:claude
@@ -1383,6 +1427,35 @@ mod tests {
         ] {
             assert_eq!(AutoCompleteVariant::parse(v.slug()), Ok(v));
         }
+    }
+
+    // --- NoHumanMode (STORY-263) ------------------------------------------
+
+    #[test]
+    fn no_human_mode_parse_accepts_all_forms() {
+        // Bare `--no-human` arrives as "both".
+        assert_eq!(NoHumanMode::parse(""), Ok(NoHumanMode::Both));
+        assert_eq!(NoHumanMode::parse("both"), Ok(NoHumanMode::Both));
+        assert_eq!(NoHumanMode::parse("BOTH"), Ok(NoHumanMode::Both));
+        assert_eq!(
+            NoHumanMode::parse("reviewer-only"),
+            Ok(NoHumanMode::ReviewerOnly)
+        );
+        assert_eq!(
+            NoHumanMode::parse("reviewer_only"),
+            Ok(NoHumanMode::ReviewerOnly)
+        );
+        assert_eq!(
+            NoHumanMode::parse("  reviewer "),
+            Ok(NoHumanMode::ReviewerOnly)
+        );
+        assert!(NoHumanMode::parse("bogus").is_err());
+    }
+
+    #[test]
+    fn no_human_mode_only_both_wants_headless_implementer() {
+        assert!(NoHumanMode::Both.wants_headless_implementer());
+        assert!(!NoHumanMode::ReviewerOnly.wants_headless_implementer());
     }
 
     // --- OrchestrationResult telemetry fields (TASK-266) ------------------
