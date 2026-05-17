@@ -19,12 +19,12 @@ description: |
 
   Raised in adversarial deep-pass (probe 3, multiplicity) during review of PR-75:
   https://github.com/joemooney/aida/pull/75
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T20:44:29.539954621Z
-modified_at: 2026-05-17T20:44:29.539954621Z
+modified_at: 2026-05-17T21:26:35.315623815Z
 req_type: Task
 tags:
 - from-review:PR-75
