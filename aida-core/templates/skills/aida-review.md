@@ -254,10 +254,15 @@ EOF
 
 `aida queue work <SPEC> --auto-complete` drives the whole implementer → CI →
 reviewer → merge → pull → build lifecycle. When the reviewer session is
-launched by that orchestrator, the environment variable
-`AIDA_REVIEW_VERDICT_FILE` is set to an absolute path — and in that mode the
-reviewer's job ends at the verdict. The orchestrator owns the merge, pull,
-and build.
+launched by that orchestrator, two environment variables are set:
+`AIDA_AUTO_COMPLETE=1` (the family-wide orchestrator signal — `/aida-pickup`
+and `/aida-pr` key their end-of-session menus off the same var, TASK-286)
+and `AIDA_REVIEW_VERDICT_FILE`, set to an absolute path. For the reviewer
+the verdict file is the precise signal: it both marks orchestrator mode AND
+says where to write the verdict — so this skill checks it directly. In that
+mode the reviewer's job ends at the verdict; the orchestrator owns the
+merge, pull, and build, and the only correct end-of-session move is "write
+the verdict and exit" — never "keep reviewing" or "stop here". trace:TASK-286
 
 Check for it:
 
