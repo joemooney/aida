@@ -1,0 +1,33 @@
+id: 019e345e-2fc3-7d03-95a9-29fb040d0248
+spec_id: TASK-298
+agreed_id: TASK-298
+title: 'Headless orchestrator watchdog: parse stream-json for permission_denials; detect ''is_error'' false-positive'
+description: |-
+  SPIKE-7's findings: \`claude -p\` exit code is unreliable (exits 0 even when bailing); the actual completion signal lives in stream-json output's \`permission_denials\` array and \`is_error\` flag. Orchestrator's headless mode must parse this rather than trust exit code.
+
+  ## Acceptance
+
+  - [ ] Orchestrator parses \`claude -p --output-format stream-json --verbose\` output
+  - [ ] Detects \`is_error\`-truthy OR non-empty \`permission_denials\` as failure signal even when exit code is 0
+  - [ ] Surfaces specific failure: \"headless Claude bailed at permission gate for tool X\" or \"is_error reported with message Y\"
+  - [ ] Integrates with TASK-266 (orchestrator failure telemetry) — log the specific failure mode
+  - [ ] Tests: simulated headless Claude with permission denial → orchestrator detects + reports correctly
+
+  ## Composes with
+
+  - **STORY-263** (reviewer-only) — extends its basic watchdog (timeout-based)
+  - **TASK-266** (orchestrator failure telemetry, shipped) — logs the failure
+  - **SPIKE-7** — empirical evidence backing the requirement
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T05:17:28.387939696Z
+modified_at: 2026-05-17T05:17:28.387939696Z
+req_type: Task
+tags:
+- auto-complete-followup
+- headless
+- is-error-detection
+- permission-denials
+- watchdog
