@@ -1,0 +1,12 @@
+id: 019e3848-e3ba-7be0-ad2c-d3583d97aad3
+spec_id: TASK-323
+agreed_id: TASK-323
+title: '`--no-human` design-fork punt behavior — auto-resolve design-forks under'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T23:32:41.530792557Z
+modified_at: 2026-05-17T23:32:41.530792557Z
+req_type: Task
