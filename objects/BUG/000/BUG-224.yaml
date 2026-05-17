@@ -30,7 +30,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:41:55.755720197Z
-modified_at: 2026-05-17T15:07:01.550928775Z
+modified_at: 2026-05-17T16:37:20.097572510Z
 req_type: Bug
 tags:
 - batch:pr-64-cleanup
@@ -62,6 +62,11 @@ comments:
     exits 0 (was FAIL — 1 missing-file error).
   created_at: 2026-05-17T15:00:06.198327423Z
   modified_at: 2026-05-17T15:00:06.198327423Z
+- id: 019e36cc-9e61-7f33-a2b8-b3c52a957b39
+  author: joe
+  content: 'Cross-reference: this spec is an instance of the pattern TASK-311 is designed to catch at filing time (dialog-role criteria contradicting the feature''s primary caller environment). Comment added 2026-05-17 as part of the self-audit lesson capture.'
+  created_at: 2026-05-17T16:37:20.097572510Z
+  modified_at: 2026-05-17T16:37:20.097572510Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T14:58:37.007248327Z
