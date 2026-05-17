@@ -101,7 +101,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:44:52.445178527Z
-modified_at: 2026-05-17T07:11:00.357843498Z
+modified_at: 2026-05-17T07:11:07.886161203Z
 req_type: Story
 tags:
 - advisor-triage
@@ -121,3 +121,8 @@ comments:
   content: 'Plan flow note: this spec went through the **web /ultraplan** variant on 2026-05-17 (claude.ai approve → remote session → PR). The web flow lands a PR directly without producing a `docs/plans/YYYY-MM-DD-*.md` archive, so the canonical AIDA plan record for STORY-278 will live in the PR description + commit history rather than under `docs/plans/`. Reconciliation tracked in TASK-X (plan-archival reconciliation: extract web /ultraplan plan from PR back to docs/plans/) — once shipped, `aida plan capture <PR>` will retroactively archive this one.'
   created_at: 2026-05-17T07:11:00.357843498Z
   modified_at: 2026-05-17T07:11:00.357843498Z
+- id: 019e34c6-3e6e-7d40-a617-9d89fcc71e37
+  author: joe
+  content: 'Correction: the reconciliation TASK referenced in the previous comment is **TASK-305**.'
+  created_at: 2026-05-17T07:11:07.886161203Z
+  modified_at: 2026-05-17T07:11:07.886161203Z
