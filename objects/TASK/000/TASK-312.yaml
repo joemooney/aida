@@ -1,0 +1,45 @@
+id: 019e36e7-d8f7-7b01-8bc3-be83b2477bf7
+spec_id: TASK-312
+agreed_id: TASK-312
+title: Amend TASK-265 acceptance criteria to match what PR-69 shipped
+description: |
+  PR-69 (TASK-265, boxed spec card) shipped with two documented, defensible
+  divergences from TASK-265's acceptance criteria. The code is correct — but
+  the spec's acceptance bullets now describe behaviour that does not exist,
+  which will mislead any future reader of TASK-265. The criteria should be
+  amended to match (per the "design refinements must edit acceptance criteria"
+  discipline).
+
+  Two bullets to amend:
+
+  1. Bullet 9 — "Non-TTY mode: pretty-print degrades to a single-line summary".
+     The shipped card renders the box on a TTY *and* through a pipe. This is
+     deliberate and correct: the /aida-pickup skill invokes `aida show --card`
+     through Claude Code's Bash tool (a captured pipe), so auto-collapse would
+     hide the card in its own primary flow. `--card --brief` is the explicit
+     single-line mode instead. Rewrite bullet 9 to describe the `--brief`
+     opt-in rather than non-TTY auto-collapse.
+
+  2. Bullet 2 — lists "status transition" and "plan brief if any" as card
+     elements. The shipped card shows current status only (a generic
+     `aida show` command can't know the pickup transition), and does not box
+     the plan brief (the /aida-pickup skill's existing `## Plan brief` block
+     surfaces it at session start instead — see the separate plan-brief-in-card
+     follow-up). Drop or reword those two sub-elements.
+
+  This is spec bookkeeping, not a code change — PR-69's implementation is
+  sound and was reviewed PASS.
+
+  Raised in review of PR-69.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T17:07:04.567676713Z
+modified_at: 2026-05-17T17:07:04.567676713Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-69
+- severity:minor
+- spec-hygiene
