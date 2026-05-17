@@ -132,12 +132,12 @@ description: |-
   That's the seed. The TASK-269 pause was correct for the actual context (user watching, advisor reachable) — under true \`--no-human\`, it would have been a punt failure (drain stalls overnight on a design question with no one to answer).
 
   The three-mode taxonomy makes the distinction first-class: human-role (driving / advisor / absent) maps to pause-behavior (every-prompt / design-forks-only / never). No more conflation.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:28:11.451611274Z
-modified_at: 2026-05-17T23:39:47.731096169Z
+modified_at: 2026-05-17T23:48:33.832170697Z
 req_type: Story
 tags:
 - advisor-pattern
@@ -197,3 +197,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T23:32:38.472239478Z
   implemented_by: joe
+  completed_at: 2026-05-17T23:48:33.832170697Z
+  completion_sha: 7073ad68127bbd39db5fb4d97e317e0646845779
