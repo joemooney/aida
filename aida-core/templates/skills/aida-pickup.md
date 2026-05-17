@@ -146,6 +146,37 @@ it. If a session manifest exists (step 3a), `aida edit --status` also
 stamps the manifest row's `started_at`, so the cluster's `◐ In progress`
 column flips automatically.
 
+### Step 3c: Render the spec card
+
+Right after marking in-progress, render the picked-up spec as a boxed
+card so its contract sits at the top of the terminal scrollback for the
+whole working session — no separate `aida show` in another shell:
+
+```bash
+aida show <spec_id> --card
+```
+
+The card prints a header rule, the `id · type · priority · status`
+one-liner, key fields (feature, tags, parent, related specs), the
+description trimmed to its lead summary, the acceptance criteria, and
+the git-linkage summary. The user can scroll up at any point to re-read
+the goal, and can catch a mismatch between the spec and how you're
+interpreting it early.
+
+Pick the density to match the situation:
+
+- **(default) balanced** — the boxed layout above; the normal pickup.
+- **`--card --brief`** — a single-line `id · type · priority · status ·
+  title` summary, no box. Use it in autonomous / `--auto-first` drains
+  where the full card is more ceremony than the flow needs.
+- **`--card --full`** — the complete description, no truncation. Use it
+  when the spec is dense and every section is worth having in scrollback.
+
+The full `aida show <spec_id>` stays the canonical detail view — the
+card is a convenience snapshot, not a replacement. Reach for plain
+`aida show` (or `--card --full`) whenever the trimmed summary isn't
+enough. trace:TASK-265
+
 ### Step 4: Do the work
 
 Drive the actual implementation. Read the requirement (`aida show <spec_id>`),
