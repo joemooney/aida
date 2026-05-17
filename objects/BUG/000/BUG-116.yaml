@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:38:18.073686442Z
-modified_at: 2026-05-17T20:16:10.982740475Z
+modified_at: 2026-05-17T20:26:03.935476172Z
 req_type: Bug
 tags:
 - batch:workflow-hint-polish
@@ -61,6 +61,19 @@ tags:
 - glyph
 - skill
 - task-260-followup
+comments:
+- id: 019e379e-071f-7e61-a231-55bc4e2a33d2
+  author: joe
+  content: |-
+    Implemented via commit 8e3abfad (branch bug-116):
+
+    - Replaced ⏵ → ⇒ (alternative path) and 🚪 → ⏸ (pause/stop) across aida-pickup.md, aida-pr.md, aida-review.md
+    - Updated each "Glyph convention" prose block to the refined set (▶ primary, ⇒ alternative, ⏸ pause/stop); reworded orchestrator-mode prose so ⇒ is the shared forward/submit glyph and ⏏ remains the orchestrator-specific abort
+    - Updated docs/skills-convention.md to match; added test_skill_template_glyphs regression guard in aida-core/src/templates.rs
+
+    Test status: cargo test -p aida-core --lib templates:: 4/4 green
+  created_at: 2026-05-17T20:26:03.935476172Z
+  modified_at: 2026-05-17T20:26:03.935476172Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T20:16:10.982740475Z
