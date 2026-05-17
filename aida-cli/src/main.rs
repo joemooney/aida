@@ -32351,6 +32351,37 @@ mod queue_work_tests {
         assert_eq!(o, "aida-worktree default");
     }
 
+    // --- AutonomyMode (STORY-287) -----------------------------------------
+
+    /// No flags → the human is driving; every prompt pauses.
+    /// trace:STORY-287 | ai:claude
+    #[test]
+    fn autonomy_mode_default_when_no_flags() {
+        assert_eq!(resolve_autonomy_mode(false, false), AutonomyMode::Default);
+    }
+
+    /// `--zen` alone → advisor-on-standby mode.
+    /// trace:STORY-287 | ai:claude
+    #[test]
+    fn autonomy_mode_zen_flag_alone() {
+        assert_eq!(resolve_autonomy_mode(true, false), AutonomyMode::Zen);
+    }
+
+    /// `--no-human` alone → the headless drain mode.
+    /// trace:STORY-287 | ai:claude
+    #[test]
+    fn autonomy_mode_no_human_alone() {
+        assert_eq!(resolve_autonomy_mode(false, true), AutonomyMode::NoHuman);
+    }
+
+    /// Precedence: `--no-human --zen` resolves to `NoHuman` — the stronger
+    /// mode wins (the dispatch also warns and clears `AIDA_ZEN`).
+    /// trace:STORY-287 | ai:claude
+    #[test]
+    fn autonomy_mode_no_human_beats_zen() {
+        assert_eq!(resolve_autonomy_mode(true, true), AutonomyMode::NoHuman);
+    }
+
     /// `read_behavior_permission_mode` parses `[behavior]
     /// permission_mode = "..."` and ignores other sections.
     /// trace:TASK-84 | ai:claude
@@ -42073,9 +42104,39 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             json,
             max,
             no_human,
+            zen,
             user,
         } => {
             let user_id = get_user(user);
+            // STORY-287: resolve the three-mode autonomy ladder up front,
+            // before either the `--auto-complete` orchestrator or the plain
+            // `handle_queue_work` path runs. `--zen` works purely through
+            // the `AIDA_ZEN` env var — skill templates auto-resolve their
+            // `kind:confirmation` prompts when it is set. Setting it here
+            // means every downstream child inherits it: the direct
+            // `exec_claude`, and the orchestrator's spawned `aida queue
+            // work` phase subprocesses (which re-exec `claude`). Same
+            // shape as the `AIDA_SESSION_ROLE` propagation below.
+            // Precedence: `--no-human` > `--zen` > default — when
+            // `--no-human` is effective we actively clear `AIDA_ZEN` so a
+            // stale flag (or an inherited env var) never reaches a headless
+            // session. trace:STORY-287 | ai:claude
+            match resolve_autonomy_mode(*zen, no_human.is_some()) {
+                AutonomyMode::Zen => {
+                    std::env::set_var("AIDA_ZEN", "1");
+                }
+                AutonomyMode::NoHuman => {
+                    if *zen {
+                        eprintln!(
+                            "  {} --zen and --no-human both set; --no-human wins (it is the \
+                             stronger autonomy mode — nobody is reachable to consult)",
+                            "⚠".yellow().bold()
+                        );
+                    }
+                    std::env::remove_var("AIDA_ZEN");
+                }
+                AutonomyMode::Default => {}
+            }
             // TASK-270: accept `batch:NAME` as a positional id (equivalent
             // to `--batch NAME`) and strip a redundant `batch:` prefix off
             // the `--batch` flag value. `batch:` is the literal tag printed
@@ -43953,6 +44014,24 @@ fn handle_queue_work(
         ),
     );
     line("skill", prompt.cyan().to_string());
+    // STORY-287: surface the `--zen` autonomy mode in the pre-flight so the
+    // user sees the flag took. Read straight off `AIDA_ZEN` (set by the
+    // dispatch when `--zen` is effective) rather than threading a parameter
+    // — the env var is the propagation mechanism. The full three-mode
+    // pre-launch banner is TASK-306's job. trace:STORY-287 | ai:claude
+    if std::env::var("AIDA_ZEN")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false)
+    {
+        line(
+            "autonomy",
+            format!(
+                "{} {}",
+                "zen".cyan(),
+                "(mechanical confirmations auto-resolve; design-forks still pause)".dimmed()
+            ),
+        );
+    }
     // TASK-112: surface a resume in the pre-flight summary.
     if let Some(QueueWorkLaunch::Resume(id)) = &launch {
         line(
@@ -46072,6 +46151,34 @@ fn resolve_queue_work_permission_mode(
         return ("bypassPermissions".to_string(), "aida-worktree default");
     }
     ("acceptEdits".to_string(), "non-aida default")
+}
+
+/// STORY-287: the three-mode autonomy ladder for `aida queue work`. Aligns
+/// the human's role with the implementer's pause behavior:
+///   - `Default`  — human is driving; every prompt pauses.
+///   - `Zen`      — advisor on standby; mechanical `kind:confirmation`
+///                  prompts auto-resolve, `kind:design-fork` prompts pause.
+///   - `NoHuman`  — nobody reachable; the headless drain (STORY-263).
+/// trace:STORY-287 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AutonomyMode {
+    Default,
+    Zen,
+    NoHuman,
+}
+
+/// Resolve the effective autonomy mode from the `--zen` flag and the
+/// presence of `--no-human`. Precedence is `--no-human` > `--zen` >
+/// default — when both `--zen` and `--no-human` are set, `--no-human`
+/// wins because it is the strictly stronger mode (it removes the human
+/// entirely). Pure, so the precedence rule is unit-testable without
+/// spawning a session. trace:STORY-287 | ai:claude
+fn resolve_autonomy_mode(zen_flag: bool, no_human: bool) -> AutonomyMode {
+    match (no_human, zen_flag) {
+        (true, _) => AutonomyMode::NoHuman,
+        (false, true) => AutonomyMode::Zen,
+        (false, false) => AutonomyMode::Default,
+    }
 }
 
 /// TASK-84: quote-aware strip of an inline TOML comment.
