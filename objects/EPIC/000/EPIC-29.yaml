@@ -1,0 +1,133 @@
+id: 019e3383-3b25-78c2-b59c-f06bd6b44c07
+spec_id: EPIC-29
+agreed_id: EPIC-29
+title: Split aida-tui into a companion project — separate repo, depends on aida-core's public API
+description: |-
+  Extract \`aida-tui\` from the AIDA monorepo into a standalone companion project. AIDA core (workflow, graph, queue, CLI, MCP) ships independently; \`aida-tui\` ships as a separate project consuming AIDA's public API. Cross-repo issue flow when TUI needs new core capabilities.
+
+  ## Why this is right architecturally
+
+  ### STORY-244's launcher pivot already proved the model
+
+  The TUI launcher architecture (filed after the PTY-host render-contention failure) makes the TUI a SUBPROCESS-DRIVER of \`aida\` — not an in-process extension. The TUI launches \`aida queue work\`, \`gh pr merge\`, etc. as child processes. That's the textbook companion-project pattern; this EPIC makes the repo structure match the actual architecture.
+
+  ### Aligns with Trojan-horse positioning
+
+  The OVERVIEW.md / TUI Trojan-horse framing: \"TUI is what people will think AIDA is; the platform is what AIDA actually is.\" The repo split makes this **literally true** — the platform is a separate repo (aida core), the TUI is a separate repo (aida-tui companion). Visitors to \`github.com/joemooney/aida\` see the platform; visitors to \`github.com/joemooney/aida-tui\` see the visualization. Both link to each other.
+
+  ### Composes with EPIC-27 (MCP modernization)
+
+  Three consumers of the core platform after both EPICs ship:
+
+  1. \`aida\` CLI — workflow primitives, human-typing
+  2. MCP server (EPIC-27) — Claude Code sessions, structured tool calls
+  3. \`aida-tui\` companion — terminal visualization
+
+  All three consume \`aida-core\`'s public API. **The agent-collaboration layer becomes visible AS an API**, not just as a CLI.
+
+  ### Releases independently
+
+  - AIDA core: workflow-cadence releases (v0.9, v0.10, ...)
+  - aida-tui: TUI-iteration cadence (probably faster initially while UX matures)
+  - Users on prebuilt binaries: install \`aida\` alone; opt-in to \`aida-tui\` if they want the visualization
+  - Smaller core binary (drop ratatui, crossterm, portable-pty, vt100 deps from aida-cli)
+
+  ## Candidate child STORYs
+
+  ### STORY 1 — Define aida-core public API contract
+  - Audit \`aida-core/src/\` for what \`aida-tui\` currently consumes (queue, leases, specs, session manifests)
+  - Mark those types/methods explicitly \`pub\`
+  - Document the API surface in \`docs/api/aida-core.md\` (or similar)
+  - Test: a separate Rust project depending only on \`aida-core\` can implement a minimal TUI
+
+  ### STORY 2 — Extract aida-tui to new repo
+  - Create \`joemooney/aida-tui\` repo (or similar name)
+  - Push current \`aida-tui/\` crate's git history (via \`git filter-repo\` or fresh squash)
+  - Depend on \`aida-core\` via git path (dev) → crates.io once aida-core is published
+  - Ship its own \`aida-tui\` binary; not part of \`aida\` CLI anymore
+  - CI workflow in the new repo
+
+  ### STORY 3 — Remove tui feature from aida-cli
+  - \`aida-cli/Cargo.toml\` drops \`aida-tui = optional\` dep
+  - \`aida-cli/src/cli.rs\` removes \`Tui\` subcommand variant
+  - \`aida-cli/src/main.rs\` removes \`handle_tui_command\` (both feature-gated arms)
+  - Workspace \`Cargo.toml\` drops \`aida-tui\` member
+  - TASK-254 (default-flip revert) becomes ~automatic via this STORY
+
+  ### STORY 4 — Migrate existing TUI specs
+  - STORY-244 (TUI launcher pivot) → aida-tui repo issue
+  - BUG-110 (SIGTERM handler) → aida-tui repo issue
+  - TASK-256 (theming) → aida-tui repo issue
+  - TASK-288 (TUI prior-art study) → aida-tui repo issue
+  - TASK-254 (revert default-flip) → SUBSUMED by STORY 3 above
+  - Keep AIDA-core-side reference cards (\`aida-tui-repo:#N\`) for cross-linkage
+  - Reject the AIDA-side specs with \"migrated to aida-tui repo, see <link>\" comments
+
+  ### STORY 5 — Cross-repo coordination + docs
+  - aida-tui's CONTRIBUTING.md describes when to file aida-core API-needs issues
+  - aida-core's CONTRIBUTING.md notes the TUI dependency
+  - Version compatibility matrix in both READMEs (\"aida-tui v0.3 requires aida-core ≥ v0.9\")
+  - OVERVIEW.md updated: TUI is a companion project
+  - CLAUDE.md updated: mention of TUI moves to a section about ecosystem/companion projects
+
+  ## Acceptance (EPIC-level)
+
+  - [ ] All 5 child STORYs filed with concrete scope
+  - [ ] aida-cli no longer has \`tui\` feature; no aida-tui dep in core's workspace
+  - [ ] \`github.com/joemooney/aida-tui\` exists as standalone repo with its own CI + release pipeline
+  - [ ] AIDA core's CHANGELOG notes the migration; v0.9.0 (or 0.10) marks the split
+  - [ ] First-users in alpha install \`aida\` from core's release tarballs; \`aida-tui\` is post-alpha opt-in
+  - [ ] Documentation in BOTH repos cross-references the other
+
+  ## Out of scope (future)
+
+  - **WASM client / web UI** — another companion project category; same pattern applies but separate
+  - **\`aida-desktop\` native client** — was extracted on 2026-05-02 per CLAUDE.md; precedent for this split
+  - **Crates.io publication of aida-core** — could happen post-split; not required to ship the split
+  - **API versioning policy / semver discipline for aida-core** — important but separable
+
+  ## Composes with
+
+  - **STORY-244** (TUI launcher pivot) — proved the consumer-of-core model is right; this EPIC formalizes it
+  - **EPIC-27** (MCP modernization) — sibling architectural surface; both expose core platform to consumers
+  - **EPIC-26** (TUI Trojan-horse) — once this EPIC ships, EPIC-26 effectively becomes \"the aida-tui companion project's roadmap.\" Could parent or sibling.
+  - **TASK-254** (revert default-flip) — subsumed by removing the tui feature entirely
+  - **STORY-260** (competitive analysis doc) — split changes positioning narrative; positioning.md gets a section on \"companion projects\"
+  - **Precedent**: aida-desktop + aida-wasm were extracted from monorepo 2026-05-02 (per CLAUDE.md) — established the pattern
+
+  ## Risks + mitigations
+
+  | Risk | Mitigation |
+  |---|---|
+  | Version skew between core and aida-tui | Compatibility matrix in docs; aida-tui's Cargo.toml pins core's version |
+  | Cross-repo issues hard to track | Cross-link in both directions; mention `aida-tui-repo:#N` in core's specs and vice versa |
+  | Bigger overhead for small changes | Most changes are TUI-only (separate); only API-surface changes need core changes |
+  | Discoverability — \"how do I get the TUI?\" | README of core links to aida-tui prominently; install docs (TASK-275) explain the two-binary install |
+
+  ## Why now (or near now)
+
+  - The TUI is still small enough to extract cleanly (one crate, one PTY/launcher pattern)
+  - Alpha is CLI-focused — the split removes TUI from alpha's critical path entirely
+  - STORY-244's launcher architecture is the right time to formalize the consumer-of-core model
+  - Doing it BEFORE the TUI accretes more deep integrations into aida-cli is much cheaper than after
+
+  ## Origin
+
+  User proposed 2026-05-16: *\"I am inclined to think that tui is a separate crate/project - a companion project that relies on the core aida project. I should be able to work on it separately and it relies on a feature set provided by the core and adjusts accordingly. If there are features it needs in the core we can open issues for the core to consider and implement.\"*
+
+  The proposal aligns with how STORY-244's TUI launcher pivot already shapes the TUI (subprocess driver of aida, not in-process extension), makes the Trojan-horse positioning literal (separate repos for surface vs platform), and reduces the core's binary size + dep tree for the alpha audience.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:18:18.917955429Z
+modified_at: 2026-05-17T01:18:18.917955429Z
+req_type: Epic
+tags:
+- aida-tui
+- architectural-pivot
+- companion-project
+- monorepo-split
+- post-alpha-strategic
+- public-api
+- strategic
