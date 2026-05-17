@@ -565,19 +565,19 @@ aida queue list --role implementer 2>/dev/null | head -5             # is there 
 - **Otherwise** → standard "next batch" path
 
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
-`/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
-`🚪` = stop/exit. Recommendations must be CONCRETE — name the next cluster,
-the release script, the session ID.
+`/aida-review`): `▶` = primary recommended action, `⇒` = alternative path,
+`⏸` = pause/stop. Recommendations must be CONCRETE — name the next cluster,
+the release script, the session ID. trace:BUG-116
 
 **Render multi-option prompts as a table.** When presenting 2+ paths
 forward, render as a markdown table with columns Path / What happens / Why.
-Use ▶ ⏵ 🚪 glyphs in the Path cell for the primary / alternate / exit
+Use ▶ ⇒ ⏸ glyphs in the Path cell for the primary / alternate / pause
 semantics. Emit it as a real GFM markdown table — *not* wrapped in a code
 fence — so Claude Code's terminal draws the box-rule grid instead of raw
 pipes. The **Why** column is load-bearing: it explains the role / lease /
 worktree implication of each path, never just restates the action. The
 rows are listed in recommended order — top-to-bottom is the sequence to
-follow, with 🚪 the stop alternative. Full convention:
+follow, with ⏸ the pause alternative. Full convention:
 `docs/skills-convention.md`.
 
 **Templates.** Each shows a prose lead-in line followed by the next-steps
@@ -591,8 +591,8 @@ markdown table (no surrounding code fence):
 | Path | What happens | Why |
 |------|--------------|-----|
 | ▶ End reviewer session | Ctrl+D, then `aida session end <session-id>` from the parent shell | The merge landed — the PR-<N>/STORY-<X> scope is closed and the lease is stale; release it before anything else claims the scope |
-| ⏵ Sync + decide next batch | From the parent shell: `aida pull && cargo build --release && aida queue work <EPIC-M>` | New scope → new lease + worktree; `aida pull` fast-forwards local main past the merge first |
-| 🚪 Stop here, pick up later | Just end the session | The merge is done — no lease held, the next batch can wait |
+| ⇒ Sync + decide next batch | From the parent shell: `aida pull && cargo build --release && aida queue work <EPIC-M>` | New scope → new lease + worktree; `aida pull` fast-forwards local main past the merge first |
+| ⏸ Stop here, pick up later | Just end the session | The merge is done — no lease held, the next batch can wait |
 
 *Release-ready path (>5 commits since last tag, or PR carried a major feature):*
 
@@ -602,9 +602,9 @@ markdown table (no surrounding code fence):
 |------|--------------|-----|
 | ▶ End reviewer session | Ctrl+D, then `aida session end <session-id>` from the parent shell | The merge landed — release the stale PR-<N>/STORY-<X> lease before cutting a release |
 | ▶ Sync local main | From the parent shell, after the end: `aida pull` | Fast-forwards local main to the merge commit AND auto-bumps the Done specs it referenced — skip it and `make release-patch` tags the pre-merge HEAD |
-| ⏵ Verify auto-bump fired | `aida show <one-of-the-merged-specs>` | Expect Completed; if still Done, `aida db reconcile-status` (TASK-226) or `aida edit <id> --status completed` recovers it |
-| ⏵ Cut release | From the parent shell: `make release-patch YES=1` (or `release-minor` for new features) | Tags + pushes; the release workflow then builds and publishes the binary tarballs |
-| 🚪 Stop here, cut release later | Just end the session | The merge is done — the tag can wait until you're ready |
+| ⇒ Verify auto-bump fired | `aida show <one-of-the-merged-specs>` | Expect Completed; if still Done, `aida db reconcile-status` (TASK-226) or `aida edit <id> --status completed` recovers it |
+| ⇒ Cut release | From the parent shell: `make release-patch YES=1` (or `release-minor` for new features) | Tags + pushes; the release workflow then builds and publishes the binary tarballs |
+| ⏸ Stop here, cut release later | Just end the session | The merge is done — the tag can wait until you're ready |
 
 Don't skip the "Sync local main" row — local main is behind origin/main immediately after the merge, and `make release-patch` would tag the pre-merge HEAD. trace:BUG-101 | ai:claude
 

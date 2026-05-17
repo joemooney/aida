@@ -370,4 +370,52 @@ mod tests {
             missing_skills
         );
     }
+
+    /// Glyph-convention regression guard — the skill end-of-session
+    /// Path/What happens/Why tables must render the refined glyph set
+    /// (`▶` primary, `⇒` alternative, `⏸` pause/stop), never the original
+    /// `▶ ⏵ 🚪` set. The glyphs are visible in every skill's
+    /// end-of-session menu, so a stale glyph is a wrong semantic signal
+    /// (`🚪` reads "abandon"; `⏸` reads "resume later"). trace:BUG-116 | ai:claude
+    #[test]
+    fn test_skill_template_glyphs() {
+        // The retired glyphs must not reappear in any skill template.
+        const RETIRED: &[(char, &str)] = &[
+            ('⏵', "alternate-path glyph ⏵ — use ⇒ instead"),
+            ('🚪', "stop/exit glyph 🚪 — use ⏸ instead"),
+        ];
+        for skill in ["aida-pickup.md", "aida-pr.md", "aida-review.md"] {
+            let key = format!("skills/{skill}");
+            let content = EMBEDDED_TEMPLATES
+                .get(key.as_str())
+                .unwrap_or_else(|| panic!("missing embedded template: {key}"));
+            for &(glyph, why) in RETIRED {
+                assert!(!content.contains(glyph), "{key} still uses retired {why}");
+            }
+            // Every skill carries a Path/What happens/Why table, so both
+            // refined glyphs must be present after the BUG-116 swap.
+            assert!(
+                content.contains('⇒'),
+                "{key} is missing the ⇒ alternative-path glyph"
+            );
+            assert!(
+                content.contains('⏸'),
+                "{key} is missing the ⏸ pause/stop glyph"
+            );
+        }
+
+        // Snapshot two concrete rendered rows so the glyphs are asserted
+        // inside a real Path/What happens/Why table, not just anywhere.
+        let pickup = EMBEDDED_TEMPLATES
+            .get("skills/aida-pickup.md")
+            .expect("aida-pickup.md embedded");
+        assert!(
+            pickup.contains("| ⇒ Wrap the batch as one PR |"),
+            "aida-pickup.md batch-mode table should render the ⇒ alternative row"
+        );
+        assert!(
+            pickup.contains("| ⏸ Stop here |"),
+            "aida-pickup.md should render the ⏸ pause/stop row"
+        );
+    }
 }

@@ -16,7 +16,7 @@ with three columns:
 
 | Column | Holds |
 |--------|-------|
-| **Path** | The choice, led by a glyph — `▶` primary, `⏵` alternate, `🚪` stop/exit |
+| **Path** | The choice, led by a glyph — `▶` primary, `⇒` alternate, `⏸` pause/stop |
 | **What happens** | The concrete command(s) — name the spec, PR, session ID; no "you might consider…" |
 | **Why** | The *reason the path is shaped this way* — the role / lease / worktree implication |
 
@@ -29,7 +29,7 @@ another needs a fresh one — baked into the skill's own output.
 
 ### Why a table, not a numbered list
 
-A numbered list (`1. ▶ … 2. ⏵ …`) buries the *why* in a parenthetical at the
+A numbered list (`1. ▶ … 2. ⇒ …`) buries the *why* in a parenthetical at the
 end of a long line, or omits it. A table puts the reasoning in its own column,
 aligned and scannable. The box-drawing grid Claude Code's terminal renders for
 a GFM table reads as a decision surface, not a recipe.
@@ -40,8 +40,8 @@ a GFM table reads as a decision surface, not a recipe.
   a code fence. A fenced table renders as literal pipes; an unfenced one
   renders as the box-rule grid. The skill templates show the table unfenced
   for exactly this reason.
-- **Glyphs live in the Path cell.** `▶` = primary recommended action, `⏵` =
-  alternative path, `🚪` = stop/exit. Keep them — they carry the semantics and
+- **Glyphs live in the Path cell.** `▶` = primary recommended action, `⇒` =
+  alternative path, `⏸` = pause/stop. Keep them — they carry the semantics and
   AIDA's CLI output uses them deliberately. Don't ASCII-degrade by default.
 - **Print exactly one table.** Skills with several state-dependent templates
   (cluster drained / partial / simple) pick one based on detected state and
@@ -73,12 +73,12 @@ every other state-aware template. The reviewer skill additionally keys off
 `AIDA_REVIEW_VERDICT_FILE` (set alongside `AIDA_AUTO_COMPLETE`) because that
 var also carries *where* to write the verdict.
 
-**The menu.** Two rows, with two distinct glyphs — `⇒` for the forward move
-(submit the PR / exit so the orchestrator continues) and `⏏` for the abort
+**The menu.** Two rows — `⇒` for the forward move (submit the PR / exit so
+the orchestrator continues) and the orchestrator-specific `⏏` for the abort
 (hard-stop the orchestrator chain). No "grab the next item" (the
 orchestrator picks the next spec up only after the current one's *full*
 lifecycle) and no plain "stop here" (`aida session end` is the
-orchestrator's own phase 2). trace:TASK-286
+orchestrator's own phase 2). trace:TASK-286 trace:BUG-116
 
 | Skill | Orchestrator-mode end-of-session |
 |-------|----------------------------------|
@@ -89,8 +89,8 @@ orchestrator's own phase 2). trace:TASK-286
 ### The one-line rule for skill authors
 
 > When presenting 2+ paths forward, render as a markdown table with columns
-> Path / What happens / Why. Use ▶ ⏵ 🚪 glyphs in the Path cell for the
-> primary / alternate / exit semantics.
+> Path / What happens / Why. Use ▶ ⇒ ⏸ glyphs in the Path cell for the
+> primary / alternate / pause semantics.
 
 This sentence is repeated verbatim in each affected skill's glyph-convention
 block so the rule travels with the template.
@@ -105,4 +105,4 @@ Any new skill that ends with a multi-option hand-off prompt should adopt the
 same table. Pairs with the pre-action banner convention in `/aida-pr` (TASK-259)
 — banner is pre-action, the table is post-action.
 
-trace:TASK-260 | ai:claude
+trace:TASK-260 trace:BUG-116 | ai:claude
