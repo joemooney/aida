@@ -33,12 +33,12 @@ description: |-
   ## Origin
 
   Dialog session 2026-05-15 to 2026-05-16: I attempted \`aida queue move --to-front\` and \`--to <N>\` several times to reorder the queue; both errored. Eventually fell back to \`--before <head-id>\`. Captured during \`/aida-capture\` sweep.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:13:19.368962045Z
-modified_at: 2026-05-17T19:42:48.563056414Z
+modified_at: 2026-05-17T19:52:06.008145365Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
@@ -69,3 +69,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T19:36:48.256666388Z
   implemented_by: joe
+  completed_at: 2026-05-17T19:52:06.008145365Z
+  completion_sha: b66e3ba492d0abcdd3a59c38be8a01169cdc5d32
