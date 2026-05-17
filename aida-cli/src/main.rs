@@ -20835,6 +20835,91 @@ mod terminal_status_guard_tests {
     }
 }
 
+/// TASK-292 — `aida queue work --auto-complete` with no positional SPEC id
+/// inherits the no-arg "pick the queue head" semantics. These cover the pure
+/// pickup-order resolver: drivable-status classification, skipping in-flight
+/// heads, and the empty-vs-all-in-flight error split.
+#[cfg(test)]
+mod auto_complete_head_tests {
+    use super::*;
+    use aida_core::RequirementStatus::*;
+
+    /// Only pre-implementation statuses are drivable by the orchestrator from
+    /// scratch — In Progress / Done are mid-flight, Completed / Rejected are
+    /// terminal. trace:TASK-292 | ai:claude
+    #[test]
+    fn drivable_statuses_are_pre_implementation_only() {
+        assert!(auto_complete_head_drivable(&Draft));
+        assert!(auto_complete_head_drivable(&Approved));
+        assert!(auto_complete_head_drivable(&Planned));
+        assert!(!auto_complete_head_drivable(&InProgress));
+        assert!(!auto_complete_head_drivable(&Done));
+        assert!(!auto_complete_head_drivable(&Completed));
+        assert!(!auto_complete_head_drivable(&Rejected));
+    }
+
+    /// The common case: the head is drivable, so it is picked with no skips.
+    #[test]
+    fn picks_drivable_head_with_no_skips() {
+        let candidates = vec![
+            ("TASK-1".to_string(), Approved),
+            ("TASK-2".to_string(), Draft),
+        ];
+        let (spec, skipped) = pick_auto_complete_head(&candidates).expect("a drivable head");
+        assert_eq!(spec, "TASK-1");
+        assert!(skipped.is_empty());
+    }
+
+    /// Acceptance criterion: an in-flight head is skipped to the next eligible
+    /// item, and every skipped item is reported back to the caller so it can
+    /// surface a note. trace:TASK-292 | ai:claude
+    #[test]
+    fn skips_in_flight_head_to_next_eligible() {
+        let candidates = vec![
+            ("TASK-1".to_string(), InProgress),
+            ("TASK-2".to_string(), Done),
+            ("TASK-3".to_string(), Approved),
+        ];
+        let (spec, skipped) = pick_auto_complete_head(&candidates).expect("a drivable item");
+        assert_eq!(spec, "TASK-3");
+        assert_eq!(
+            skipped,
+            vec![
+                ("TASK-1".to_string(), InProgress),
+                ("TASK-2".to_string(), Done),
+            ]
+        );
+    }
+
+    /// Acceptance criterion: a genuinely empty queue yields an empty skip
+    /// list — the caller renders "queue is empty … nothing to drive".
+    #[test]
+    fn empty_queue_yields_empty_skip_list() {
+        let candidates: Vec<(String, RequirementStatus)> = Vec::new();
+        let skipped = pick_auto_complete_head(&candidates).expect_err("no drivable item");
+        assert!(skipped.is_empty());
+    }
+
+    /// A queue holding only in-flight / terminal items is not drivable: the
+    /// error carries every skipped item so the caller can name them — a
+    /// distinct case from the empty queue. trace:TASK-292 | ai:claude
+    #[test]
+    fn all_in_flight_queue_is_not_drivable() {
+        let candidates = vec![
+            ("TASK-1".to_string(), InProgress),
+            ("TASK-2".to_string(), Completed),
+        ];
+        let skipped = pick_auto_complete_head(&candidates).expect_err("nothing drivable");
+        assert_eq!(
+            skipped,
+            vec![
+                ("TASK-1".to_string(), InProgress),
+                ("TASK-2".to_string(), Completed),
+            ]
+        );
+    }
+}
+
 /// STORY-86 — env-flag opt-out + colorize_status coverage for the new
 /// `Done` variant. Integration coverage (set up git+store, exercise the
 /// helper end-to-end) lives in the verification script in the plan; the
@@ -41943,12 +42028,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                          (e.g. `aida queue work --batch NAME --auto-complete --max 3`)"
                     );
                 }
-                let spec = effective_id.map(|s| s.to_string()).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "`aida queue work --auto-complete` requires a SPEC id \
-                         (e.g. `aida queue work TASK-247 --auto-complete`)"
-                    )
-                })?;
+                // TASK-292: with no positional SPEC, inherit the no-arg
+                // `aida queue work` "pick the queue head" semantics instead of
+                // demanding an explicit id — `--auto-complete` composes with
+                // head pickup the same way the interactive form already does.
+                // trace:TASK-292 | ai:claude
+                let spec = match effective_id {
+                    Some(s) => s.to_string(),
+                    None => resolve_auto_complete_head(storage, &user_id)?,
+                };
                 handle_auto_complete(
                     storage,
                     &user_id,
@@ -44054,6 +44142,120 @@ fn handle_queue_work(
 struct LeasePeek {
     id: String,
     branch: String,
+}
+
+/// Statuses the `--auto-complete` orchestrator can drive from scratch
+/// (TASK-292). The orchestrator runs a full implementer → CI → reviewer →
+/// merge lifecycle starting at phase 1, so it can only begin a spec that
+/// hasn't started: Draft / Approved / Planned. In Progress and Done are
+/// mid-flight (someone is on it / it sits on a branch awaiting merge);
+/// Completed and Rejected are terminal. trace:TASK-292 | ai:claude
+fn auto_complete_head_drivable(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned
+    )
+}
+
+/// Pure pickup-order resolution for the `aida queue work --auto-complete` head
+/// (TASK-292): given queued `(display_id, status)` pairs already in pickup
+/// order, return the first orchestrator-drivable spec together with the items
+/// skipped to reach it, or `Err(skipped)` when none is drivable. Split out of
+/// [`resolve_auto_complete_head`] so the skip / empty-queue logic is
+/// unit-testable without a storage fixture. trace:TASK-292 | ai:claude
+#[allow(clippy::type_complexity)]
+fn pick_auto_complete_head(
+    candidates: &[(String, RequirementStatus)],
+) -> std::result::Result<(String, Vec<(String, RequirementStatus)>), Vec<(String, RequirementStatus)>>
+{
+    let mut skipped: Vec<(String, RequirementStatus)> = Vec::new();
+    for (id, status) in candidates {
+        if auto_complete_head_drivable(status) {
+            return Ok((id.clone(), skipped));
+        }
+        skipped.push((id.clone(), status.clone()));
+    }
+    Err(skipped)
+}
+
+/// Resolve the queue head for `aida queue work --auto-complete` invoked with no
+/// positional SPEC id (TASK-292) — the natural composition of the no-arg "pick
+/// the head" semantics with `--auto-complete`. Walks the active role's queue in
+/// pickup order (queue position ascending, same as `aida queue next`) and
+/// returns the first item the orchestrator can drive from scratch, skipping —
+/// with a note — any item already In Progress / Done / terminal. Errors when
+/// nothing drivable remains. trace:TASK-292 | ai:claude
+fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String> {
+    let entries = storage.queue_list(user_id, /* include_completed */ false)?;
+    let store = storage.load()?;
+    let role_filter: Option<String> = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let role_label = role_filter.as_deref().unwrap_or("any role");
+
+    let mut ordered: Vec<&aida_core::QueueEntry> = entries
+        .iter()
+        .filter(|e| match &role_filter {
+            Some(r) => e.for_role.as_deref() == Some(r.as_str()),
+            None => true,
+        })
+        .collect();
+    ordered.sort_by_key(|e| e.position);
+
+    let candidates: Vec<(String, RequirementStatus)> = ordered
+        .iter()
+        .filter_map(|e| {
+            store
+                .requirements
+                .iter()
+                .find(|r| r.id == e.requirement_id)
+                .map(|r| (r.display_id(), r.status.clone()))
+        })
+        .collect();
+
+    match pick_auto_complete_head(&candidates) {
+        Ok((spec, skipped)) => {
+            // Acceptance criterion: name each item skipped to reach the
+            // drivable head so the pickup is never silently surprising.
+            for (id, status) in &skipped {
+                eprintln!(
+                    "  {} skipping {} ({}) — the orchestrator drives a full \
+                     lifecycle from scratch and cannot resume it",
+                    "ℹ".cyan(),
+                    id,
+                    status
+                );
+            }
+            Ok(spec)
+        }
+        Err(skipped) if skipped.is_empty() => {
+            anyhow::bail!("queue is empty for {role_label}; nothing to drive")
+        }
+        Err(skipped) => {
+            // The queue has items, but every one is in-flight or terminal —
+            // name the first few so it's clear *why* there's nothing to
+            // drive, without dumping a long stale list.
+            const SHOWN: usize = 5;
+            let detail = skipped
+                .iter()
+                .take(SHOWN)
+                .map(|(id, status)| format!("{id} ({status})"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let more = skipped.len().saturating_sub(SHOWN);
+            let suffix = if more > 0 {
+                format!(", +{more} more")
+            } else {
+                String::new()
+            };
+            anyhow::bail!(
+                "no drivable item in the queue for {role_label}; nothing to drive — \
+                 {} queued item{} in-flight or terminal: {detail}{suffix}",
+                skipped.len(),
+                if skipped.len() == 1 { "" } else { "s" },
+            )
+        }
+    }
 }
 
 /// Entry point for `aida queue work <SPEC> --auto-complete`. Never returns:
