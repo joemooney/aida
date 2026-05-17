@@ -1,0 +1,26 @@
+id: 019e338e-53b4-7782-85b0-15aa8c2fe25a
+spec_id: STORY-271
+agreed_id: STORY-271
+title: 'Review PR-59: EPIC-23 batch 9: --auto-complete failure telemetry + auto-draft BUG'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3378`) for branch `epic-23-9`.
+
+  - PR: <https://github.com/joemooney/aida/pull/59>
+  - Branch: `epic-23-9` → `main`
+
+  ## Covers
+
+  - TASK-266
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 59` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:30:26.100860293Z
+modified_at: 2026-05-17T01:30:26.100860293Z
+req_type: Story
