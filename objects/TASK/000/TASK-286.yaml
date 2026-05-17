@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:35:52.273878859Z
-modified_at: 2026-05-17T19:10:43.884361620Z
+modified_at: 2026-05-17T19:13:51.142734033Z
 req_type: Task
 tags:
 - auto-complete
@@ -17,6 +17,23 @@ tags:
 - orchestrator-aware
 - skill
 - workflow-hint
+comments:
+- id: 019e375b-ea26-7ce1-9039-4ac8f791cf8b
+  author: joe
+  content: |-
+    Implemented via PR (commit 34f51c55):
+
+    - Skill end-of-session menus now detect AIDA_AUTO_COMPLETE=1 (set by the STORY-246 orchestrator on every session it launches) and render an orchestrator-aware menu instead of the manual continuation rows
+    - /aida-pickup Step 6: new orchestrator-mode template (⇒ Submit the PR / ⏏ Abort the chain), checked first and overriding batch/cluster/simple detection
+    - /aida-pr Step 12: new orchestrator-mode template (⇒ Exit / ⏏ Abort) replacing the manual end-implementer/start-reviewer table
+    - /aida-review: step 7a already stopped at the verdict file under orchestrator mode — clarified the cross-skill AIDA_AUTO_COMPLETE signal
+    - docs/skills-convention.md: documents the orchestrator-mode menu, corrects the stale "--auto-complete emits no menu" claim
+
+    Detection keys off the existing AIDA_AUTO_COMPLETE env var — no Rust change needed. Glyph migration across all menus stays BUG-116's job.
+
+    Test status: pure-markdown change (skill templates + docs); no Rust code touched. cargo fmt --all --check clean.
+  created_at: 2026-05-17T19:13:51.142734033Z
+  modified_at: 2026-05-17T19:13:51.142734033Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T19:10:43.884361620Z
