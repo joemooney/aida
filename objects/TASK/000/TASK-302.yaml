@@ -1,0 +1,12 @@
+id: 019e34aa-e8f5-7861-b1d0-298425a5e831
+spec_id: TASK-302
+agreed_id: TASK-302
+title: 'TASK-298 — stream-json watchdog: parse `permission_denials` / `is_error`'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T06:41:16.533656867Z
+modified_at: 2026-05-17T06:41:16.533656867Z
+req_type: Task
