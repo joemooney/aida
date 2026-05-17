@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-17T07:55:54.034802479Z
+modified_at: 2026-05-17T17:28:20.280676353Z
 req_type: Story
 tags:
 - auto-complete
@@ -90,3 +90,8 @@ comments:
   content: 'Statusline + flag-clarity TASK filed today (2026-05-17) to close the discoverability gap users hit when `--no-human` doesn''t behave as expected. When STORY-276 lands, the statusline indicators + banner messaging from that TASK update to reflect both-phase autonomy. The two compose: STORY-276 makes the autonomy real, the clarity TASK makes it discoverable.'
   created_at: 2026-05-17T07:55:54.034802479Z
   modified_at: 2026-05-17T07:55:54.034802479Z
+- id: 019e36fb-5038-7763-b331-44858eadfb5c
+  author: joe
+  content: 'STORY-286 (three-mode autonomy taxonomy) filed 2026-05-17 — depends on this STORY for the headless implementer that enables `--no-human` to actually cover phase 1. Until STORY-276 lands, `--no-human` design-fork punt behavior can''t execute (no headless implementer runtime to punt FROM). The two compose: STORY-276 makes phase 1 headless; STORY-286 makes it auto-resolve / punt correctly.'
+  created_at: 2026-05-17T17:28:20.280676353Z
+  modified_at: 2026-05-17T17:28:20.280676353Z
