@@ -23,7 +23,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:42:05.664799627Z
-modified_at: 2026-05-17T15:17:41.367345751Z
+modified_at: 2026-05-17T15:19:34.964856323Z
 req_type: Bug
 tags:
 - batch:pr-64-cleanup
@@ -32,6 +32,19 @@ tags:
 - from-review:PR-64
 - headless
 - hint
+comments:
+- id: 019e3685-6f34-72e0-90dc-c1da37a4a670
+  author: joe
+  content: |-
+    Implemented on branch bug-225 (commit c585708b):
+
+    - The `--no-launch --no-human` hint is now rendered from `session::claude_headless_args` — the exact argv `exec_claude_headless` feeds to `claude` — so it can't drift again. Fixes the missing `--session-id` and the prompt being placed mid-argv instead of last.
+    - New helpers: `headless_launch_hint` (claude + argv) and `shell_join_display` (quotes only the elements that need it).
+    - `--no-launch --no-human` now mints a session id when the caller didn't pass `--session-id`, so the hint is a complete, round-trippable command and the manifest records the id.
+
+    Test status: 540/540 aida-cli tests green; added a round-trip test asserting the printed hint shell-splits back to `claude` + `claude_headless_args(...)`.
+  created_at: 2026-05-17T15:19:34.964856323Z
+  modified_at: 2026-05-17T15:19:34.964856323Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T15:17:41.367345751Z
