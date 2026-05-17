@@ -13,12 +13,12 @@ description: |-
   ## Origin
 
   Reviewer finding 1 on PR-64 (https://github.com/joemooney/aida/pull/64#issuecomment-4469626716). Reviewer chose not to fix-forward to avoid desyncing CI from the merged HEAD; deferred as a tiny follow-up commit or fold-into-next-fmt-pass.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:41:53.171908309Z
-modified_at: 2026-05-17T07:56:15.888810466Z
+modified_at: 2026-05-17T08:02:55.757073523Z
 req_type: Task
 tags:
 - batch:pr-64-cleanup
@@ -48,3 +48,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T07:29:45.769193684Z
   implemented_by: joe
+  completed_at: 2026-05-17T08:02:55.757073523Z
+  completion_sha: c7a497076c813ef88fa49802e3952dc7d347abb8
