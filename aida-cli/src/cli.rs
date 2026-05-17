@@ -2375,9 +2375,19 @@ pub enum QueueCommand {
         /// pickup, OR an EPIC/STORY id with queued children for cluster
         /// pickup, OR `batch:NAME` for batch pickup (the positional
         /// equivalent of `--batch NAME` — accepts the literal tag printed
-        /// by `aida queue list`). Omit to pick up the head of the active
+        /// by `aida queue list`), OR the `next` keyword: `next` picks the
+        /// queue head (explicit form of the no-arg pickup), and `nextN`
+        /// (e.g. `next3`) paired with `--auto-complete` drains the next N
+        /// items from the head. Omit to pick up the head of the active
         /// role's queue.
+        // trace:TASK-293 | ai:claude — plain `//` so the marker stays out
+        // of `--help` output (TASK-268 user-facing-text convention).
         id: Option<String>,
+        /// Count for the `next` keyword's spaced form — `aida queue work
+        /// next 3` is equivalent to the compact `aida queue work next3`.
+        /// Only meaningful directly after the `next` keyword.
+        // trace:TASK-293 | ai:claude — plain `//` keeps the marker out of `--help`.
+        count: Option<String>,
         /// Permission mode for the launched claude. Resolution order:
         ///   1. this flag
         ///   2. `AIDA_PERMISSION_MODE` env var
@@ -2502,7 +2512,10 @@ pub enum QueueCommand {
         /// does. Or pass `--batch NAME` to drain a whole batch (TASK-285):
         /// `--batch NAME --auto-complete` runs one full lifecycle per batch
         /// member until the batch is empty, `--max` is reached, or a phase
-        /// fails. trace:STORY-246, TASK-285 | ai:claude
+        /// fails. The `nextN` keyword (e.g. `aida queue work next3
+        /// --auto-complete`) is the un-pre-tagged equivalent — it drains the
+        /// next N items from the queue head in order. trace:STORY-246,
+        /// TASK-285, TASK-293 | ai:claude
         #[clap(
             long,
             value_name = "MODE",
