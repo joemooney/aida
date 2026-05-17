@@ -1,0 +1,85 @@
+id: 019e372f-80e1-7a50-ade8-376e4de5a069
+spec_id: BUG-229
+agreed_id: BUG-229
+title: aida queue list confuses reviewer-snapshot pr-N branch with implementer's PR-source branch; reports 'no PR opened yet' for an actively-reviewed PR
+description: |-
+  \`aida queue list --in-flight-only\` reports a spec's PR-source branch as the reviewer's local snapshot branch (\`pr-N\`), then declares \"no PR opened yet\" — even when the PR is actively under headless review in the orchestrator's phase 3. The display gives misleading state for any spec currently in the autonomous-drain pipeline.
+
+  ## Concrete instance (2026-05-17 batch:display-polish drain)
+
+  State at observation:
+  - TASK-282 — Status: Done ✓
+  - PR-71 — OPEN, head branch \`task-282\` ✓
+  - Orchestrator — phase 3/6 (reviewer launching headless against \`/home/joe/ai/aida-pr-71\` worktree) ✓
+  - Local branches: \`pr-71\` (reviewer snapshot, fresh from \`git fetch origin pull/71/head\`), \`task-282\` (implementer's PR-source), \`remotes/origin/task-282\` ✓
+
+  Queue display:
+  \`\`\`
+  Done — awaiting merge (1 item)
+    pr-71 (no PR opened yet) — 1 spec:
+      ◐ TASK-282
+      ▶ Next: open a PR (\`/aida-pr\`), then merge → \`aida pull\`
+  \`\`\`
+
+  **Wrong**: it shows \`pr-71 (no PR opened yet)\` but PR-71 was opened ~30 minutes earlier and is being reviewed RIGHT NOW.
+
+  **Right**: it should show \`PR-71 (TASK-282) — under review\` or similar.
+
+  ## Root cause hypothesis
+
+  The in-flight detector walks local branches and asks \"is there a PR open from this branch?\" When it finds \`pr-71\` (the reviewer-worktree snapshot branch, which exists locally because the orchestrator fetched it via \`git fetch origin pull/71/head:pr-71\`), it queries \`gh pr list --head pr-71\` and gets no result — true, because no PR was opened FROM the \`pr-71\` branch (that branch IS the PR's head, not a divergent source). The detector then bucket the spec into \"no PR opened yet.\"
+
+  The fix is to recognize \`pr-N\` as a reviewer-snapshot convention, not a candidate-for-PR-creation branch. Possible approaches:
+
+  1. **Skip \`pr-N\` branches in the detector**: they're snapshots, not source branches. The spec's actual PR-source branch is named after the spec (e.g., \`task-282\`).
+  2. **Cross-reference with active reviewer session leases**: if a \`pr-N\` branch has a live reviewer lease (\`.aida/sessions/*.toml\` with \`scope: PR-N\`), the spec is being reviewed, not awaiting PR.
+  3. **Query GitHub for the spec's PR directly**: \`gh pr list --search \"(SPEC-ID)\"\` finds the actual PR regardless of branch shenanigans.
+
+  Option 2 composes naturally with the existing lease system. Option 1 is the cheapest fix. Either resolves the immediate display bug.
+
+  ## Acceptance
+
+  - [ ] \`aida queue list --in-flight-only\` correctly reports specs whose PR is open and under review: \`PR-71 (TASK-282) — under review\` (or similar; preserves the \"this is mid-pipeline\" framing)
+  - [ ] \`pr-N\` local branches (reviewer-worktree snapshots) are recognized as such and don't drive the \"no PR opened yet\" classification
+  - [ ] When a spec has an active reviewer-session lease, the queue display reflects the in-progress review state
+  - [ ] Display matrix accurate across the full drain pipeline state machine:
+    - Done locally, no PR yet → \"awaiting /aida-pr\"
+    - Done locally, PR open, CI running → \"PR-N — CI running\"
+    - Done locally, PR open, under review → \"PR-N — under review\"
+    - Done locally, PR open, review complete, awaiting merge → \"PR-N — review complete, awaiting merge\"
+    - Done locally, PR merged, awaiting auto-bump → \"PR-N — merged, awaiting pull\"
+  - [ ] Tests: synthesized fixtures for each pipeline state produce the expected display
+  - [ ] Test: \`pr-N\` reviewer-snapshot branch present + actual PR open from spec branch → display reports PR-N status, NOT \"no PR opened yet\"
+
+  ## Out of scope
+
+  - **Per-spec phase indicator in non-in-flight sections** — this BUG is scoped to in-flight display correctness; the main queue list view stays simple
+  - **Reviewer-worktree cleanup** (the \`pr-N\` branches accumulate locally) — separate concern; file as follow-up if it becomes noisy
+
+  ## Composes with
+
+  - **TASK-285** (\`--batch\` with \`--auto-complete\` — this BUG surfaces during batch drains where multiple PRs cycle through phase 3 in close succession)
+  - **STORY-263** (headless reviewer + worktree convention that introduces the \`pr-N\` local branch — root cause is the convention's naming collision with the queue's branch-walking heuristic)
+  - **BUG-223** (orchestrator phase-1 branch-swap — sibling \"queue display vs branch-state\" inconsistency)
+  - **STORY-287** (three-mode autonomy taxonomy — correct in-flight visibility matters more under \`--zen\` and \`--no-human\` modes where users glance at queue list to see drain progress)
+  - \`feedback_precise_lifecycle_vocabulary.md\` (don't conflate committed/pushed/PR-opened/merged — this BUG is exactly the conflation between \"PR not opened\" and \"PR opened, under review\")
+
+  ## Origin
+
+  2026-05-17 batch:display-polish drain. User noticed \`aida queue list\` showing TASK-282 as \"pr-71 (no PR opened yet)\" simultaneous with the orchestrator's phase-3 reviewer banner saying \"launching claude headless ... prompt \`/aida-review --pr 71\`\". User flag: *\"the queue does not reflect the work in progress?\"*
+
+  Drain itself is unaffected (orchestrator correctly advanced through phases). Only the queue display gives misleading state to users glancing at \`aida queue list\` during a drain.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T18:25:20.609292583Z
+modified_at: 2026-05-17T18:25:20.609292583Z
+req_type: Bug
+tags:
+- branch-confusion
+- first-users
+- from-self-test:TASK-282
+- in-flight
+- queue-list
+- reviewer-worktree
