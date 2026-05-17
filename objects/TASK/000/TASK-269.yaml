@@ -67,12 +67,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16 after running \`aida show TASK-259\` and noticing Status was the most-glance-worthy field but buried near the top: *\"should we color code Status, or maybe better as the last line in the output reprint the status color coded.\"*
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:37:48.985304743Z
-modified_at: 2026-05-17T17:35:25.830270443Z
+modified_at: 2026-05-17T17:45:46.919860404Z
 req_type: Task
 tags:
 - aida-show
@@ -119,3 +119,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T17:29:32.277975169Z
   implemented_by: joe
+  completed_at: 2026-05-17T17:45:46.919860404Z
+  completion_sha: 1a19aed74a543517c2c937f801a1e53c92809f0f
