@@ -72,10 +72,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:42:58.758955507Z
-modified_at: 2026-05-16T16:42:58.758955507Z
+modified_at: 2026-05-17T18:51:02.644770852Z
 req_type: Bug
 tags:
 - alpha-readiness
+- batch:session-hygiene
 - initial-topic
 - returning-user
 - session-list
