@@ -1,0 +1,26 @@
+id: 019e3861-3667-71e2-8861-aa0582ee3fb9
+spec_id: STORY-297
+agreed_id: STORY-297
+title: 'Review PR-79: fix(cli): stop --after doc comment leaking trace:STORY-72 into queue move --help (TASK-318)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e385b`) for branch `task-318`.
+
+  - PR: <https://github.com/joemooney/aida/pull/79>
+  - Branch: `task-318` → `main`
+
+  ## Covers
+
+  - TASK-318
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 79` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T23:59:15.559529389Z
+modified_at: 2026-05-17T23:59:15.559529389Z
+req_type: Story
