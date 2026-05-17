@@ -1,0 +1,27 @@
+id: 019e34ab-7813-73e3-9ae0-b2a2088add75
+spec_id: TASK-303
+agreed_id: TASK-303
+title: Fix 3 new clippy::doc_lazy_continuation warnings on claude_headless_args
+description: |-
+  PR-64 (STORY-263) introduced 3 new \`clippy::doc_lazy_continuation\` warnings on the \`claude_headless_args\` doc comment. The PR's "no new lints" claim is slightly off — purely cosmetic, didn't block the reviewer verdict (Approved).
+
+  ## Acceptance
+
+  - [ ] Fix the doc comment formatting so \`cargo clippy --all-targets\` is clean
+  - [ ] CI \`clippy\` check stays green
+
+  ## Origin
+
+  Reviewer finding 1 on PR-64 (https://github.com/joemooney/aida/pull/64#issuecomment-4469626716). Reviewer chose not to fix-forward to avoid desyncing CI from the merged HEAD; deferred as a tiny follow-up commit or fold-into-next-fmt-pass.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T06:41:53.171908309Z
+modified_at: 2026-05-17T06:41:53.171908309Z
+req_type: Task
+tags:
+- cleanup
+- clippy
+- fmt
+- from-review:PR-64
