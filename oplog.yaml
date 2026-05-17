@@ -6070,5 +6070,106 @@ operations:
   timestamp: 2026-05-17T06:33:51.514322184Z
   kind: !SetStatus
     status: In Progress
-clock: 703
+- id: 019e34b4-fb75-70e3-809a-c541ec589c84
+  target_id: 019e34ae-345d-7dd2-bdfd-1bc292dd0903
+  author: aida
+  node_id: '1'
+  lamport: 704
+  timestamp: 2026-05-17T06:52:16.629413320Z
+  kind: !SetDescription
+    description: |-
+      ## Problem
+
+      Under \`--no-human\` (STORY-263 headless reviewer, future STORY-276 headless implementer), the reviewer surfaces findings the **advisor** would normally triage and file as follow-up TASKs. With no human in the loop, the findings live only as a GitHub PR comment + verdict JSON pass/fail bit. The drain moves on. **Nobody files the follow-ups.**
+
+      ## Concrete instance (self-test, 2026-05-16)
+
+      PR-64 / STORY-263 (the headless reviewer itself, shipping by reviewing itself headless) raised four findings:
+
+      1. Clippy warnings (cosmetic) → TASK-303 filed manually
+      2. \`aida plan verify\` drifted ref → BUG-224 filed manually
+      3. \`--no-launch\` hint mismatch → BUG-225 filed manually
+      4. STORY-263 acceptance-list strike (post-merge bookkeeping) → pending
+
+      **All four required the human (user) to feed the reviewer's PR comment back to dialog role for filing.** In \`--no-human\` overnight drain that wouldn't have happened — the four follow-ups would be lost.
+
+      ## Solution: TASK + draft + from-review tag (option 3)
+
+      The reviewer files findings as **\`TASK --status draft --tags "from-review:PR-N,severity:..."\`** directly. Advisor triage = a status flip. No new type, no new CLI surface, no taxonomy expansion. "Findings" becomes a *query*, not a taxonomy.
+
+      ### Lifecycle
+
+      \`\`\`
+      Reviewer (headless)
+        └─ aida add --type task --status draft
+             --tags "from-review:PR-N,severity:cosmetic|minor|major"
+             --title "..."  --description "..."
+
+      Advisor (next interactive session)
+        └─ aida list --status draft --tags 'from-review:*'   # the triage view
+             ├─ aida edit <ID> --status approved   → joins queue (file-for-real)
+             ├─ aida edit <ID> --status rejected   → dismissed (audit trail kept)
+             └─ <no-op>                            → stays in draft (deferred)
+      \`\`\`
+
+      ### Why option 3 over alternatives
+
+      - **Auto-file as approved**: would over-file cosmetic noise as committed work; bypasses advisor triage discipline
+      - **New ATTN/FINDING type**: clean lifecycle separation but adds taxonomy cost; collides with EPIC-28 NeedsAttention *state* naming; not worth it until volume justifies
+      - **Option 3 (chosen)**: reuses existing status (\`draft\` already means "not yet actionable") + tag machinery; \`aida findings list\` is a query alias; advisor discipline preserved via the manual status flip
+
+      Can be promoted to a dedicated ATTN type later as a refactor *with data* (e.g., findings/PR ratio, dismiss/promote ratio) if option 3 proves insufficient. Don't add taxonomy on speculation.
+
+      ## Acceptance
+
+      ### Reviewer side (headless writer)
+
+      - [ ] Headless reviewer, after writing the verdict file, files one \`TASK --status draft\` per non-blocking finding via \`aida add\`
+      - [ ] Each TASK carries tags: \`from-review:PR-N\` (required), \`severity:cosmetic|minor|major\` (required), plus any context tags (e.g., \`clippy\`, \`docs\`)
+      - [ ] Title is a one-line summary; description includes the full finding + PR comment URL
+      - [ ] Idempotent: re-running the reviewer for the same PR (e.g., after a re-review) doesn't double-file — check for existing tag \`from-review:PR-N\` first
+      - [ ] Findings count appended to the verdict JSON for cross-reference: \`{ "findings_filed": ["TASK-303", "BUG-224", ...] }\`
+
+      ### Advisor side (query + triage)
+
+      - [ ] \`aida findings list\` — alias for \`aida list --status draft --tags 'from-review:*'\`, formatted as a triage view with severity sorted (major → minor → cosmetic) and PR grouping
+      - [ ] \`aida findings list --pr N\` — narrow to one PR's findings
+      - [ ] \`aida findings dismiss <ID>\` — alias for \`aida edit <ID> --status rejected\` with a "dismissed-by-advisor" comment auto-added
+      - [ ] \`aida findings promote <ID>\` — alias for \`aida edit <ID> --status approved\` (joins the queue)
+
+      ### Session-start surfacing
+
+      - [ ] \`/aida-pickup\` and dialog-role session start run \`aida findings list\` and surface the pending count: *"N findings from recent merges awaiting triage (use \`aida findings list\` to review)"*
+      - [ ] Non-zero count is the only trigger to show the line — silent when clean
+
+      ### Tests
+
+      - [ ] Simulated \`--no-human\` drain produces \`TASK --status draft\` per finding
+      - [ ] \`aida findings list\` returns expected set across multiple PRs
+      - [ ] Promote/dismiss round-trip works
+      - [ ] Idempotency: re-running reviewer on same PR doesn't duplicate
+
+      ## Out of scope
+
+      - **New ATTN/FINDING type** — option 3 reuses TASK + draft; revisit only if option 3's metrics surface a clear need
+      - **Headless advisor auto-triage** — preserves advisor discipline; headless triage skips dedup + severity calibration. Filed as TASK-XXX placeholder if the data-flow alone proves insufficient.
+      - **Auto-promote any finding category** — every finding goes through human triage; no shortcuts
+      - **NeedsAttention spec-state integration** (EPIC-28) — different surface; this is review-residue, that's spec health
+
+      ## Composes with
+
+      - **STORY-263** (established headless reviewer + verdict file pattern; exposed the gap)
+      - **STORY-276** (headless implementer — same gap applies; same pattern carries it)
+      - **TASK-298** (stream-json watchdog — shares parsing path for headless output)
+      - \`feedback_dialog_role_responsibilities.md\` (memory curation + filing is dialog's role; this preserves it under headless reviewer)
+      - \`feedback_pushback_on_overengineering.md\` (chose option 3 over new-type option per smallest-valuable-slice discipline)
+
+      ## Origin
+
+      User caught the gap 2026-05-16 immediately after STORY-263's self-test merge:
+
+      > "In this instance I fed the feedback to you and you opened more tasks. So the question is, in --no-human how do we get this feedback to the advisor for analysis?"
+
+      Design discussion 2026-05-16: floated ATTN type vs TASK auto-file vs TASK-draft-tagged; chose option 3 (TASK + draft + tag) as smallest valuable slice. ATTN promotion deferred until data justifies it.
+clock: 704
 node_id: '1'
