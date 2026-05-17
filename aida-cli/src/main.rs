@@ -15467,6 +15467,30 @@ fn position_after(anchor: i64, successor: Option<i64>) -> i64 {
     }
 }
 
+/// Compute the queue order after `aida queue move X --to N` — moving
+/// `moved_id` to the 1-indexed absolute slot `requested`.
+///
+/// `entries` is the queue in display order (position-sorted) and must
+/// include `moved_id`. The moved id is dropped, then re-inserted at the
+/// clamped slot, so `--to 3` lands the item at the third slot of the
+/// *final* queue regardless of where it started. `requested` is clamped
+/// to `1..=entries.len()`: an out-of-range N moves the item to the
+/// nearest end rather than erroring (the callsite surfaces a hint). The
+/// caller renumbers the returned id list with the standard 1000-gap.
+/// trace:TASK-280 | ai:claude
+fn move_to_absolute_position(
+    entries: &[uuid::Uuid],
+    moved_id: uuid::Uuid,
+    requested: usize,
+) -> (Vec<uuid::Uuid>, usize) {
+    let queue_len = entries.len();
+    let mut order: Vec<uuid::Uuid> = entries.iter().copied().filter(|&e| e != moved_id).collect();
+    let slot = requested.clamp(1, queue_len.max(1));
+    let insert_idx = (slot - 1).min(order.len());
+    order.insert(insert_idx, moved_id);
+    (order, slot)
+}
+
 fn humanize_age_secs(secs: u64) -> String {
     if secs < 86_400 {
         format!("{}h", secs / 3600)
@@ -18202,6 +18226,101 @@ mod statusline_tests {
         assert_eq!(position_after(i64::MAX, None), i64::MAX);
         assert_eq!(position_after(i64::MAX, Some(i64::MAX)), i64::MAX);
         assert_eq!(position_after(i64::MAX - 1, None), i64::MAX);
+    }
+
+    /// TASK-280: `aida queue move X --to N` absolute positioning. The
+    /// helper drops the moved id, then re-inserts it at the clamped
+    /// 1-indexed slot; the caller renumbers the returned order. Cover
+    /// front / middle / back and the out-of-range clamp on both ends.
+    /// trace:TASK-280 | ai:claude
+    #[test]
+    fn move_to_absolute_position_places_at_requested_slot() {
+        let a = uuid::Uuid::from_u128(1);
+        let b = uuid::Uuid::from_u128(2);
+        let c = uuid::Uuid::from_u128(3);
+        let d = uuid::Uuid::from_u128(4);
+        let queue = [a, b, c, d];
+
+        // Move C to the front (--to 1 / --to-front equivalent).
+        assert_eq!(
+            move_to_absolute_position(&queue, c, 1),
+            (vec![c, a, b, d], 1)
+        );
+        // Move A to the third slot — the moved item is excluded before
+        // the index is applied, so slot 3 lands it between C and D.
+        assert_eq!(
+            move_to_absolute_position(&queue, a, 3),
+            (vec![b, c, a, d], 3)
+        );
+        // Move A to the last slot (--to 4 / --to-back equivalent).
+        assert_eq!(
+            move_to_absolute_position(&queue, a, 4),
+            (vec![b, c, d, a], 4)
+        );
+        // Out-of-range high (--to 99 on a 4-item queue) clamps to the
+        // last slot rather than erroring.
+        assert_eq!(
+            move_to_absolute_position(&queue, a, 99),
+            (vec![b, c, d, a], 4)
+        );
+        // Out-of-range low (--to 0) clamps to the front.
+        assert_eq!(
+            move_to_absolute_position(&queue, d, 0),
+            (vec![d, a, b, c], 1)
+        );
+        // Single-item queue: any N is a no-op landing at slot 1.
+        assert_eq!(move_to_absolute_position(&[a], a, 5), (vec![a], 1));
+    }
+
+    /// TASK-280: `aida queue move` accepts the absolute-positioning forms
+    /// — the `--to-front` / `--to-back` aliases and `--to <N>` — alongside
+    /// the existing relative flags, and `--to` conflicts with them.
+    /// trace:TASK-280 | ai:claude
+    #[test]
+    fn queue_move_absolute_flags_parse() {
+        // --to-front is a visible alias of --top.
+        let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-front"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Queue(QueueCommand::Move { top: true, .. })
+        ));
+        // --to-back is a visible alias of --bottom.
+        let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-back"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Queue(QueueCommand::Move { bottom: true, .. })
+        ));
+        // --to <N> parses an absolute slot.
+        let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to", "3"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Queue(QueueCommand::Move { to: Some(3), .. })
+        ));
+        // Existing relative flags still parse (no breaking change).
+        let cli =
+            Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--before", "TASK-2"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Queue(QueueCommand::Move {
+                before: Some(_),
+                ..
+            })
+        ));
+        // --to conflicts with the end / relative flags.
+        assert!(Cli::try_parse_from([
+            "aida",
+            "queue",
+            "move",
+            "TASK-1",
+            "--to",
+            "2",
+            "--to-front",
+        ])
+        .is_err());
+        assert!(Cli::try_parse_from([
+            "aida", "queue", "move", "TASK-1", "--to", "2", "--before", "TASK-2",
+        ])
+        .is_err());
     }
 
     /// STORY-60: age formatter for the prune candidate list. Resolution
@@ -41041,6 +41160,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             id,
             top,
             bottom,
+            to,
             before,
             after,
         } => {
@@ -41072,6 +41192,65 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .collect();
                 storage.queue_reorder(&user_id, &renumber)?;
                 entries = storage.queue_list(&user_id, true)?;
+            }
+            // TASK-280: `--to <N>` absolute positioning. The slot counts
+            // among the queue's live (non-terminal) entries — the same
+            // items `aida queue list` numbers — so Completed/Rejected
+            // entries lingering in the queue file don't throw the slot
+            // number off. Only those live entries are renumbered (with a
+            // fresh 1000-gap); terminal entries keep their positions and,
+            // being hidden, don't affect the visible order.
+            // trace:TASK-280 | ai:claude
+            if let Some(requested) = to {
+                let live: Vec<&aida_core::QueueEntry> = entries
+                    .iter()
+                    .filter(|e| {
+                        store
+                            .requirements
+                            .iter()
+                            .find(|r| r.id == e.requirement_id)
+                            .map(|r| !is_terminal_status(&r.status))
+                            .unwrap_or(true)
+                    })
+                    .collect();
+                if !live.iter().any(|e| e.requirement_id == req.id) {
+                    anyhow::bail!(
+                        "{} is not an active item in the queue — --to positions live (non-terminal) entries",
+                        id
+                    );
+                }
+                let ids: Vec<uuid::Uuid> = live.iter().map(|e| e.requirement_id).collect();
+                let (order, slot) = move_to_absolute_position(&ids, req.id, *requested);
+                let renumber: Vec<(uuid::Uuid, i64)> = order
+                    .iter()
+                    .enumerate()
+                    .map(|(i, uid)| (*uid, (i as i64 + 1) * 1000))
+                    .collect();
+                storage.queue_reorder(&user_id, &renumber)?;
+                let display_id = req
+                    .agreed_id
+                    .as_deref()
+                    .or(req.spec_id.as_deref())
+                    .unwrap_or("???");
+                if *requested != slot {
+                    println!(
+                        "{} Moved {} to slot {} — --to {} is out of range (queue has {} item{})",
+                        "✓".green(),
+                        display_id.bold(),
+                        slot,
+                        requested,
+                        ids.len(),
+                        if ids.len() == 1 { "" } else { "s" },
+                    );
+                } else {
+                    println!(
+                        "{} Moved {} to slot {} in queue",
+                        "✓".green(),
+                        display_id.bold(),
+                        slot,
+                    );
+                }
+                return Ok(());
             }
             let new_position = if *top {
                 entries.first().map(|e| e.position - 1000).unwrap_or(0)
@@ -41121,7 +41300,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .map(|e| e.position);
                 position_after(anchor_pos, successor_pos)
             } else {
-                anyhow::bail!("Specify --top, --bottom, --before <ID>, or --after <ID>");
+                anyhow::bail!(
+                    "Specify a destination: --to-front, --to-back, --to <N>, --before <ID>, or --after <ID>"
+                );
             };
 
             storage.queue_reorder(&user_id, &[(req.id, new_position)])?;
