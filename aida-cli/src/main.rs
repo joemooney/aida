@@ -13192,6 +13192,26 @@ fn shell_single_quote(s: &str) -> String {
     out
 }
 
+/// Render an argv slice as a copy-pasteable shell command line: an
+/// element with shell-special characters (whitespace, quotes, globs, …)
+/// is wrapped in POSIX single quotes; a plain word is left bare so the
+/// output stays readable. trace:BUG-225 | ai:claude
+fn shell_join_display(args: &[String]) -> String {
+    args.iter()
+        .map(|a| {
+            let bare = !a.is_empty()
+                && a.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "_./=:-+@".contains(c));
+            if bare {
+                a.clone()
+            } else {
+                shell_single_quote(a)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn session_end(
     id_query: Option<&str>,
     yes: bool,
@@ -41826,6 +41846,104 @@ mod queue_progress_tests {
     }
 }
 
+/// trace:BUG-225 | ai:claude
+#[cfg(test)]
+mod headless_hint_tests {
+    use super::*;
+
+    /// Minimal POSIX-ish shell tokenizer for the round-trip test: splits
+    /// on unquoted whitespace, treats single-quoted spans as literal, and
+    /// `\` as a one-char escape — enough to reverse `shell_join_display`.
+    fn split_shell_words(s: &str) -> Vec<String> {
+        let mut words = Vec::new();
+        let mut cur = String::new();
+        let mut in_word = false;
+        let mut it = s.chars();
+        while let Some(c) = it.next() {
+            match c {
+                ' ' | '\t' => {
+                    if in_word {
+                        words.push(std::mem::take(&mut cur));
+                        in_word = false;
+                    }
+                }
+                '\'' => {
+                    in_word = true;
+                    for q in it.by_ref() {
+                        if q == '\'' {
+                            break;
+                        }
+                        cur.push(q);
+                    }
+                }
+                '\\' => {
+                    in_word = true;
+                    if let Some(esc) = it.next() {
+                        cur.push(esc);
+                    }
+                }
+                other => {
+                    in_word = true;
+                    cur.push(other);
+                }
+            }
+        }
+        if in_word {
+            words.push(cur);
+        }
+        words
+    }
+
+    #[test]
+    fn shell_join_display_quotes_only_what_needs_it() {
+        // Bare words (flags, uuids, slugs) survive unquoted; an argument
+        // with whitespace is single-quoted.
+        let joined = shell_join_display(&[
+            "-p".to_string(),
+            "019e0000-0000-7000-8000-000000000000".to_string(),
+            "/aida-review --pr 7".to_string(),
+        ]);
+        assert_eq!(
+            joined,
+            "-p 019e0000-0000-7000-8000-000000000000 '/aida-review --pr 7'"
+        );
+        // An embedded single quote round-trips through the '\'' escape.
+        assert_eq!(shell_join_display(&["it's".to_string()]), "'it'\\''s'");
+        // An empty element still produces a token, not a gap.
+        assert_eq!(shell_join_display(&[String::new()]), "''");
+    }
+
+    /// BUG-225 acceptance: the `--no-launch --no-human` hint, copied and
+    /// pasted, must invoke exactly what `exec_claude_headless` runs.
+    /// `headless_launch_hint` is built from `claude_headless_args`, so the
+    /// printed string shell-splits back to `claude` + that exact argv.
+    #[test]
+    fn headless_launch_hint_round_trips_to_real_argv() {
+        for prompt in [
+            "/aida-review --pr 7",
+            "/aida-pickup --auto-first",
+            "it's a prompt",
+        ] {
+            let sid = "019e34ab-a8e0-7530-9569-e8ea6783af4a";
+            let hint = headless_launch_hint(prompt, sid);
+            let parsed = split_shell_words(&hint);
+
+            let mut expected = vec!["claude".to_string()];
+            expected.extend(session::claude_headless_args(prompt, sid));
+            assert_eq!(parsed, expected, "hint did not round-trip: {hint}");
+
+            // The two drift bugs BUG-225 names, asserted directly: the
+            // hint carries `--session-id`, and the prompt is the LAST
+            // argv element (a positional, mirroring the real launch).
+            assert!(
+                parsed.contains(&"--session-id".to_string()),
+                "missing --session-id: {hint}"
+            );
+            assert_eq!(parsed.last().unwrap().as_str(), prompt);
+        }
+    }
+}
+
 /// TASK-218: shared implementation backing both `aida queue rework SPEC`
 /// and the top-level `aida rework SPEC` alias. Encapsulates the three-
 /// command rework sequence (status flip + queue add + optional session
@@ -42614,6 +42732,17 @@ fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
     "/aida-pickup --auto-first".to_string()
 }
 
+/// BUG-225: render the copy-pasteable `claude` command line for a
+/// headless launch deferred by `--no-launch`. Built from
+/// `session::claude_headless_args` — the exact argv `exec_claude_headless`
+/// feeds to `claude` — so the printed hint can never drift from the real
+/// launch (correct flag order, `--session-id` included, prompt last).
+/// trace:BUG-225 | ai:claude
+fn headless_launch_hint(prompt: &str, session_id: &str) -> String {
+    let argv = session::claude_headless_args(prompt, session_id);
+    format!("claude {}", shell_join_display(&argv))
+}
+
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
 /// runs session_start in non-launch mode (so we can write the manifest
 /// from the freshly minted lease), then either prints next-steps or
@@ -42918,6 +43047,11 @@ fn handle_queue_work(
         // --no-launch + caller-minted id: record it so the manifest
         // carries it (already validated as a UUID at function entry).
         (None, Some(sid)) => Some(sid.to_string()),
+        // BUG-225: --no-launch --no-human defers a headless launch, and
+        // `claude -p` requires a `--session-id`. Mint one when the caller
+        // didn't supply it so the manifest carries the id and the printed
+        // hint is a complete, round-trippable command.
+        (None, None) if no_human => Some(uuid::Uuid::now_v7().to_string()),
         (None, None) => None,
     };
     // Write the manifest when there are planned cluster items, a plan
@@ -42931,7 +43065,7 @@ fn handle_queue_work(
             &lease,
             &plan,
             plan_context.clone(),
-            claude_session_id,
+            claude_session_id.clone(),
         )?;
         if plan.mode == QueueWorkMode::Cluster {
             eprintln!(
@@ -42966,16 +43100,12 @@ fn handle_queue_work(
         );
         if no_human {
             // STORY-263: mirror the headless launch the non-`--no-launch`
-            // path would have run.
-            eprintln!(
-                "  {} {}",
-                "claude -p".cyan(),
-                format!(
-                    "\"{}\" --permission-mode bypassPermissions --output-format stream-json --verbose",
-                    prompt
-                )
-                .cyan()
-            );
+            // path would have run. BUG-225: render it from
+            // `claude_headless_args` (via `headless_launch_hint`) so the
+            // copy-pasteable command can't drift from `exec_claude_headless`
+            // — same flag order, `--session-id` included, prompt last.
+            let sid = claude_session_id.as_deref().unwrap_or_default();
+            eprintln!("  {}", headless_launch_hint(&prompt, sid).cyan());
         } else {
             eprintln!(
                 "  {} {}",
