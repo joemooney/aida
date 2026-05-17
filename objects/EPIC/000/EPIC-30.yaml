@@ -126,12 +126,12 @@ description: |-
   User proposed 2026-05-16: *\"I am thinking of something like \`aida queue worker\` this is a server loop (like the shell loop with we had in mind for the tui). We can send it messages like pause-immediate (maybe sleep the process), exit-gracefully (after current work has completed its current step) etc. But basically it can be set in motion to drain the queue with/without human involvement. It is the a terminal process or bash loop that receives requests from somewhere, (maybe the queue can have a REQUEST type task). Perhaps it is a mechanism for the advisor to communicate with this worker. This is just a rough idea - a server process/loop.\"*
 
   The mental model is novel — most autonomous-execution tools either run one-shot (like cron) or as full swarms. The advisor + worker split (one strategic human-paired session + one autonomous executor with clear control plane) is a different shape that fits AIDA's positioning cleanly.
-status: Approved
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:59:46.867277094Z
-modified_at: 2026-05-17T02:04:57.283608256Z
+modified_at: 2026-05-17T02:14:14.825281311Z
 req_type: Epic
 tags:
 - advisor-worker-pattern
