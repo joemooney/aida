@@ -446,7 +446,7 @@
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e3235-1208-72f3-b776-0b199332df96
-  position: 71000
+  position: 72000
   added_by: joe
   added_at: 2026-05-16T19:13:26.170362704Z
   for_role: implementer
