@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-17T05:17:20.827435358Z
+modified_at: 2026-05-17T05:22:27.757032083Z
 req_type: Story
 tags:
 - auto-complete
@@ -46,3 +46,42 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-17T05:17:23.668386062Z
+comments:
+- id: 019e3462-c12d-7580-acaf-bfa57c69df1c
+  author: joe
+  content: |-
+    ## Refinement 2026-05-17 — punt-reason-as-comment is the discoverability mechanism
+
+    User observed (after dialog-driven STORY-263 scope discussion): the implementer's pause-for-design-input that just happened interactively *would have* been a /aida-punt under headless mode. The punt's discoverability story matters as much as the mechanism itself.
+
+    ### Required: post the implementer's punt reason as a comment on the spec
+
+    When the headless implementer Claude invokes \`/aida-punt <reason>\`:
+
+    1. Spec flips to NeedsAttention status (machine-readable state)
+    2. Spec metadata records the reason category (machine-readable: \`punt:design-ambiguity\`)
+    3. **A comment is added to the spec containing the implementer's full reason text** (human-readable)
+
+    The comment is what makes the punt USEFUL for the user-on-return. Without it, they see opaque \"NeedsAttention\" and can't triage. With it, they see exactly what blocked the implementer.
+
+    ### Acceptance addition
+
+    - [ ] \`/aida-punt <full-reason>\` primitive (or equivalent) posts a comment on the punted spec
+    - [ ] Comment includes: the reason text, the phase (which Claude was working when blocked), timestamp
+    - [ ] \`aida show <SPEC>\` displays the punt comment prominently (similar to how it shows status)
+    - [ ] \`aida queue list --needs-attention\` surfaces the reason category + comment preview
+
+    ### Example output the user would see
+
+    \`\`\`
+    $ aida queue list --needs-attention
+    Specs needing attention (1):
+      STORY-263 — punt:design-ambiguity — \"Scope contested between ## Acceptance section
+                  (reviewer-only first cut) and 22:03 comment (skill audit + AIDA_NO_HUMAN
+                  env var + /aida-punt mechanism). Not safe to auto-default. Please
+                  clarify which scope to implement.\"  (2h ago)
+    \`\`\`
+
+    That's actionable; just the reason category alone wouldn't be.
+  created_at: 2026-05-17T05:22:27.757032083Z
+  modified_at: 2026-05-17T05:22:27.757032083Z
