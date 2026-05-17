@@ -1,0 +1,39 @@
+id: 019e34ab-822b-76a3-92ca-2b78f1424922
+spec_id: BUG-224
+agreed_id: BUG-224
+title: aida plan verify FAILs on STORY-263 plan — stale ref to docs/aida-discipline/autonomous-drain.md
+description: |-
+  \`aida plan verify\` reports a missing-file failure on STORY-263's plan: it references \`docs/aida-discipline/autonomous-drain.md\` but the doc landed at \`docs/autonomous-drain.md\` (root of docs/, not under the discipline subdir).
+
+  Two possible fixes:
+  1. Move the doc to \`docs/aida-discipline/autonomous-drain.md\` (matches the scaffolding-pack channel structure)
+  2. Update the plan ref to the actual location \`docs/autonomous-drain.md\`
+
+  Option 1 is probably correct given the propagation-via-scaffolding pattern — \`docs/aida-discipline/\` is Channel A in \`feedback_propagate_generic_discipline_via_scaffolding.md\`. Moving the file means future projects get the discipline automatically.
+
+  ## Acceptance
+
+  - [ ] Decide: relocate doc to \`docs/aida-discipline/\` or fix plan ref to point at current location
+  - [ ] \`aida plan verify docs/plans/<story-263-plan>.md\` exits 0
+  - [ ] If relocated: link path updates across any other plan/docs cross-refs
+
+  ## Composes with
+
+  - \`feedback_propagate_generic_discipline_via_scaffolding.md\` (Channel A is \`docs/aida-discipline/\`)
+  - STORY-255 (scaffolding pack — would pick up the doc once it's under \`docs/aida-discipline/\`)
+
+  ## Origin
+
+  Reviewer finding 2 on PR-64.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T06:41:55.755720197Z
+modified_at: 2026-05-17T06:41:55.755720197Z
+req_type: Bug
+tags:
+- docs
+- drift
+- from-review:PR-64
+- plan-verify
