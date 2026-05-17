@@ -1,10 +1,4 @@
 - user_id: joe
-  requirement_id: 019e3235-1208-72f3-b776-0b199332df96
-  position: 0
-  added_by: joe
-  added_at: 2026-05-16T19:13:26.170362704Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e36fb-2dbb-7121-81f4-3ad6c905a559
   position: 1000
   added_by: joe
@@ -29,6 +23,12 @@
   added_at: 2026-05-17T18:49:27.324794248Z
   for_role: implementer
 - user_id: joe
+  requirement_id: 019e3235-1208-72f3-b776-0b199332df96
+  position: 5000
+  added_by: joe
+  added_at: 2026-05-16T19:13:26.170362704Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 019e1a4d-8d9c-7a00-8539-364579481756
   position: 5000
   added_by: joe
@@ -37,7 +37,7 @@
   for_scope: EPIC-23
 - user_id: joe
   requirement_id: 019e33b9-fa9e-7911-953c-df8f54877525
-  position: 5000
+  position: 6000
   added_by: joe
   added_at: 2026-05-17T02:18:09.990590568Z
   for_role: implementer
@@ -50,7 +50,7 @@
   for_scope: EPIC-23
 - user_id: joe
   requirement_id: 019e33c2-dca2-7b40-9b73-421fff4261c6
-  position: 6000
+  position: 7000
   added_by: joe
   added_at: 2026-05-17T02:27:54.074450678Z
   for_role: implementer
@@ -63,7 +63,7 @@
   for_scope: EPIC-23
 - user_id: joe
   requirement_id: 019e31ab-6d46-7373-a6fe-bd6c3f2bd3e5
-  position: 7000
+  position: 8000
   added_by: joe
   added_at: 2026-05-16T16:43:01.411734882Z
   for_role: implementer
@@ -76,7 +76,7 @@
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e31ad-8f05-76c2-a840-ba8f4c3966a9
-  position: 8000
+  position: 9000
   added_by: joe
   added_at: 2026-05-16T16:45:20.983419025Z
   for_role: implementer
@@ -89,67 +89,67 @@
   for_role: reviewer
 - user_id: joe
   requirement_id: 019e31d1-687d-70d1-97f2-f02a19f093cc
-  position: 9000
+  position: 10000
   added_by: joe
   added_at: 2026-05-16T17:24:32.997019033Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e327c-5b4a-7743-b1dd-f40e9ec04c53
-  position: 10000
+  position: 11000
   added_by: joe
   added_at: 2026-05-16T20:31:13.985401820Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3220-fa5d-7d42-9727-bef2ab568043
-  position: 11000
+  position: 12000
   added_by: joe
   added_at: 2026-05-16T18:51:34.327960228Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e321f-7066-7522-962a-6edd619b31ac
-  position: 12000
+  position: 13000
   added_by: joe
   added_at: 2026-05-16T18:51:39.360678399Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3220-f160-7413-af64-a030e84c99ff
-  position: 13000
+  position: 14000
   added_by: joe
   added_at: 2026-05-16T18:51:37.243909858Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3221-0371-7023-9bd4-4df177b0a1f9
-  position: 14000
+  position: 15000
   added_by: joe
   added_at: 2026-05-16T18:51:32.315848712Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3221-0dd6-7973-94d6-39f3296461eb
-  position: 15000
+  position: 16000
   added_by: joe
   added_at: 2026-05-16T18:51:30.465403623Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e322b-5d30-72a1-8c0a-f1a8733c1d79
-  position: 16000
+  position: 17000
   added_by: joe
   added_at: 2026-05-16T19:02:46.089555522Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e32f9-58f9-7191-a5ae-bb9f9adf6d0f
-  position: 17000
+  position: 18000
   added_by: joe
   added_at: 2026-05-16T22:47:53.819190359Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3232-c973-7c03-889b-81c3ff0ef9c1
-  position: 18000
+  position: 19000
   added_by: joe
   added_at: 2026-05-16T19:10:55.148365392Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e34a9-3935-7170-b05d-dad3023597d1
-  position: 19000
+  position: 20000
   added_by: joe
   added_at: 2026-05-17T06:39:29.127796519Z
   for_role: implementer
