@@ -66,9 +66,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:56:26.127208719Z
-modified_at: 2026-05-17T15:57:59.032462838Z
+modified_at: 2026-05-17T18:50:52.411163576Z
 req_type: Bug
 tags:
+- batch:autonomy-modes
 - first-users
 - from-self-test:STORY-278
 - headless
