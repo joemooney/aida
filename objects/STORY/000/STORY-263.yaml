@@ -77,7 +77,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:25:44.957144080Z
-modified_at: 2026-05-17T02:23:10.122330175Z
+modified_at: 2026-05-17T03:05:46.747202457Z
 req_type: Story
 tags:
 - advanced-user
@@ -167,3 +167,8 @@ comments:
     So we're not blocked on STORY-263 to get useful autonomy progress — we have the worker MVP + watchdog as the immediate step.
   created_at: 2026-05-17T02:23:10.122330175Z
   modified_at: 2026-05-17T02:23:10.122330175Z
+- id: 019e33e5-9dfb-7713-b359-b7acee8da76b
+  author: joe
+  content: 'SPIKE-7 (gating spike) is complete — see docs/spikes/2026-05-16-claude-headless.md. Verdict: headless claude -p is viable for --no-human; STORY-263 proceeds, scoped. Design must absorb: (a) launch with --permission-mode bypassPermissions --output-format stream-json --verbose --session-id <uuid>, never --bare; (b) the orchestrator''s completion check is the detection model — exit code is insufficient, parse the final result event and treat non-empty permission_denials as ''needs human -> re-queue/escalate''; (c) human gates (reviewer merge decision, any AskUserQuestion skill pause) cannot be answered headless — they become clean no-ops, so compose the headless reviewer with --auto-complete''s autonomous-merge path rather than an AskUserQuestion gate; (d) caller-side timeout is mandatory (no built-in wall-clock limit); (e) ~$3/spec — design in --max-budget-usd caps + a --model knob; (f) worktree store-provisioning + non-interactive aida flags must be solved for a worktree-per-task drain. The watchdog is for genuinely-stuck long runs, NOT pauses — pauses fail fast.'
+  created_at: 2026-05-17T03:05:46.747202457Z
+  modified_at: 2026-05-17T03:05:46.747202457Z
