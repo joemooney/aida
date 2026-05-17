@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:37:48.985304743Z
-modified_at: 2026-05-17T17:29:32.277975169Z
+modified_at: 2026-05-17T17:29:48.202119137Z
 req_type: Task
 tags:
 - aida-show
@@ -90,6 +90,14 @@ relationships:
 - rel_type: Parent
   target_id: 019e36fc-9078-72b3-9561-2808bb2adc97
   created_at: 2026-05-17T17:29:45.870242725Z
+comments:
+- id: 019e36fc-a924-7453-9b63-aefdd8bd3e3c
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-17-task-269-status-color-coding.md
+    filed 2 task(s): TASK-314, TASK-315
+  created_at: 2026-05-17T17:29:48.580228406Z
+  modified_at: 2026-05-17T17:29:48.580228406Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T17:29:32.277975169Z
