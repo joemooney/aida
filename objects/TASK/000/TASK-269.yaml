@@ -83,6 +83,10 @@ tags:
 - first-users
 - status
 - visibility
+relationships:
+- rel_type: Parent
+  target_id: 019e36fc-7741-7201-968b-42916bc045bb
+  created_at: 2026-05-17T17:29:39.095723858Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T17:29:32.277975169Z
