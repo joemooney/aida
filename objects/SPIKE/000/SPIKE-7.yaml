@@ -1,0 +1,79 @@
+id: 019e33be-7925-7321-b5bf-4b1667a25769
+spec_id: SPIKE-7
+agreed_id: SPIKE-7
+title: 'Spike: investigate headless Claude behavior with AIDA skills (claude -p) — does it work, what breaks, how to detect stuck?'
+description: |-
+  Before committing STORY-263 (\`--no-human\`) to the orchestrator, **test whether headless Claude (\`claude -p\` or \`claude --print\`) actually works for AIDA's specific skill patterns**. Today's assumption (headless just works) is unverified.
+
+  ## Investigation questions
+
+  1. **Basic invocation**: \`claude -p \"/aida-pickup TASK-X\"\` — does it complete the pickup workflow + exit cleanly?
+  2. **Tool permissions**: do tools requiring approval (Edit, Write, Bash) work in headless mode under \`--permission-mode bypassPermissions\`?
+  3. **Skill output**: does \`/aida-pr\` produce its banner + open the PR + render the next-steps table when headless?
+  4. **Mid-task pauses**: when \`/aida-pickup\` would normally pause for design input (per \`feedback_pause_for_design_input.md\`), what does headless Claude do? Does it pick a default silently, error out, or hang?
+  5. **Long-running operations**: if a Claude session is supposed to take 15-20 min (real implementation work), does headless mode complete it or time out?
+  6. **Streaming output**: does \`claude -p\` stream output we can monitor, or does it buffer until exit?
+  7. **Exit codes**: what exit codes does \`claude -p\` use? Can we distinguish \"completed successfully\" from \"errored\" from \"hung-timeout-killed\"?
+  8. **Verdict file behavior**: does \`/aida-review\` headless write the verdict file correctly?
+  9. **Resume semantics**: if a headless Claude is killed mid-task, can it be resumed with \`claude --resume <id>\`?
+
+  ## Empirical tests
+
+  - [ ] Test 1: \`claude -p \"echo hello\" --permission-mode bypassPermissions\` — baseline; does headless work at all?
+  - [ ] Test 2: \`claude -p \"/aida-pickup TASK-N\"\` on a trivial spec (e.g., a doc-fix TASK). Observe: does the work complete? PR opened?
+  - [ ] Test 3: \`claude -p \"/aida-review --pr N\"\` on a known-good PR. Observe: verdict file written? Exit clean?
+  - [ ] Test 4: Spawn a headless Claude that intentionally requires design-fork input (e.g., an ambiguous spec). Observe: how does it fail / what does it pick?
+  - [ ] Test 5: Spawn a headless Claude, wait 30 min, kill it with SIGTERM. Observe: did anything important persist (commits, partial work)? Can \`claude --resume\` pick up?
+
+  ## Outcomes (decision tree)
+
+  After tests:
+
+  - **If headless works cleanly for AIDA skills**: STORY-263 proceeds as scoped; add watchdog mechanism (see TASK-294 comment) for the edge cases
+  - **If headless works but with caveats** (e.g., needs specific flags, certain skills don't work): document the constraints; STORY-263 ships only the variants that work
+  - **If headless is unreliable**: STORY-263 reframes — instead of \`--no-human\`, build a \"reduced human interaction\" mode that minimizes prompts but keeps interactive for real fallbacks
+  - **If headless is unusable**: STORY-263 stays Approved but waits on upstream Claude Code maturity; meanwhile the bash worker (TASK-294) does what it can with interactive Claude
+
+  ## Out of scope
+
+  - Building any of STORY-263's implementation — pure investigation
+  - Modifying Claude Code itself — assume current behavior
+  - Multi-session headless coordination — single session at a time
+
+  ## Deliverable
+
+  \`docs/spikes/2026-05-16-claude-headless.md\` documenting:
+
+  - What worked
+  - What didn't (with reproduction commands)
+  - Watchdog/timeout recommendations
+  - Recommendation: STORY-263 scope as filed / with modifications / deferred
+
+  ## Composes with
+
+  - **STORY-263** (\`--no-human\`) — this spike gates its acceptance; STORY-263's design adjusts based on findings
+  - **TASK-294** (aida-worker bash MVP) — even without STORY-263, the worker may need watchdog/timeout (see TASK-294 comment)
+  - **\`feedback_pause_for_design_input.md\` memory** — headless mode can't honor pauses; spike investigates how the implementer Claude DOES behave when pause is the natural response
+
+  ## Time-box
+
+  2-4 hours. If empirical answers aren't clear in that window, the spike output is \"insufficient evidence; STORY-263 deferred until Claude Code's headless surface matures.\"
+
+  ## Origin
+
+  User asked 2026-05-16: *\"I don't know if claude will run headless or likes to run headless. That is a curiosity for me... I just don't know whether it will be nice to not have interactive mode enabled for times when it decides for whatever reason it needs a human and we maybe have a timeout of 30 minutes or something. We can see how it works headless.\"*
+
+  Honest pushback: my prior framing assumed headless works. Spike verifies before STORY-263's implementation commits.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T02:23:01.412995598Z
+modified_at: 2026-05-17T02:23:01.412995598Z
+req_type: Spike
+tags:
+- claude-headless
+- empirical-test
+- investigation
+- spike
+- story-263-prereq
