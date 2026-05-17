@@ -1,0 +1,75 @@
+id: 019e34c6-0d76-7020-8d71-d7426ad092f6
+spec_id: TASK-304
+agreed_id: TASK-304
+title: Config + heuristic for aida ultraplan invocation cadence (.aida/config.toml [ultraplan] mode)
+description: |-
+  \`aida ultraplan <SPEC>\` is currently always opt-in (user runs it explicitly when they decide a spec is chunky). Add a config knob + lightweight heuristic so AIDA can either suggest \`aida ultraplan\` for chunky specs or stay quiet, per user preference.
+
+  ## Why now
+
+  /ultraplan and /ultrareview both require a claude.ai web "Accept" click before remote execution — they are **inherently interactive** by design. So the realistic config shape is \`never | on-demand | suggested\`, never a "frequently auto-pull" mode. This TASK codifies that constraint into the config surface so the feature is honest about what it can and can't do.
+
+  ## Proposed config shape
+
+  \`.aida/config.toml\`:
+
+  \`\`\`toml
+  [ultraplan]
+  mode = "on-demand"           # never | on-demand | suggested
+  suggest_threshold = "story-with-design-forks"   # heuristic when mode=suggested
+  \`\`\`
+
+  ### Modes
+
+  - **never**: \`aida ultraplan\` exits with an explanation message; no clipboard write. Useful for projects that don't want this integration.
+  - **on-demand** (default): current behavior — user runs \`aida ultraplan SPEC\` explicitly.
+  - **suggested**: at queue-pickup time (\`/aida-pickup\`, \`aida queue work\`, \`aida queue list\` head), if the head spec passes the threshold heuristic, surface a one-line hint: *"STORY-XXX looks chunky — \`aida ultraplan STORY-XXX\` to assemble a planning prompt before implementing."*
+
+  ### Threshold heuristic candidates (keep simple)
+
+  - **story-with-design-forks** — spec is a STORY *and* its description contains a phrase like "design fork," "alternatives," "out of scope," "trade-off"
+  - **acceptance-bullets>8** — \`## Acceptance\` section has more than N bullets (rough complexity proxy)
+  - **always** — every STORY suggests it
+  - **never** — same as mode=never (redundant; useful for testing)
+
+  Pick **acceptance-bullets>8** as the default — mechanical, no NLP, falsifiable.
+
+  ## Acceptance
+
+  - [ ] \`.aida/config.toml\` \`[ultraplan]\` block parses with \`mode\` + \`suggest_threshold\` fields
+  - [ ] \`mode = "never"\` makes \`aida ultraplan\` exit with a configured-off message
+  - [ ] \`mode = "on-demand"\` (default) preserves current behavior
+  - [ ] \`mode = "suggested"\` surfaces a hint in \`/aida-pickup\`, \`aida queue work\` (no-arg head pickup), \`aida queue list\` head row, when the threshold matches
+  - [ ] Threshold \`acceptance-bullets>8\` counts the \`- [ ]\` bullets in the spec's \`## Acceptance\` section
+  - [ ] Hint format: *"STORY-XXX has N acceptance bullets — \`aida ultraplan STORY-XXX\` to assemble a planning prompt before implementing."*
+  - [ ] Tests: each mode + threshold combination behaves as documented
+  - [ ] \`aida init\` scaffolds the block with \`mode = "on-demand"\` and a comment explaining the trade-off
+
+  ## Out of scope
+
+  - **"frequently" / "auto-pull" mode** — /ultraplan is interactive (web approval); can't be invoked autonomously. Don't pretend otherwise in the config.
+  - **/ultrareview cadence config** — sibling TASK if the same UX surfaces (see Composes with)
+  - **Heuristic learning / cost-vs-benefit metrics** — start with one simple threshold; add complexity if needed
+
+  ## Composes with
+
+  - \`aida ultraplan\` (TASK-113 — the assembler command this gates)
+  - \`/aida-pickup\` (the surface where suggestions appear)
+  - **Sibling TASK suggested**: config + cadence for \`/ultrareview\` invocation (same shape, different command)
+
+  ## Origin
+
+  2026-05-17 user discussion: floated "never/sometimes/frequently" cadence; recognized "frequently" is incompatible with \`--no-human\` because /ultraplan requires claude.ai web approval. This TASK codifies the realistic surface (never / on-demand / suggested).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T07:10:55.350844429Z
+modified_at: 2026-05-17T07:10:55.350844429Z
+req_type: Task
+tags:
+- alpha-readiness
+- cadence
+- config
+- heuristic
+- ultraplan
