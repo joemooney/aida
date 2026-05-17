@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:06:29.161825781Z
-modified_at: 2026-05-17T21:32:09.496005633Z
+modified_at: 2026-05-17T21:34:34.591776785Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
@@ -105,6 +105,19 @@ comments:
     This composes naturally with TASK-272 (cluster-mode batch awareness) — batches have cluster-mode option, nextN doesn't.
   created_at: 2026-05-17T01:09:35.811643363Z
   modified_at: 2026-05-17T01:09:35.811643363Z
+- id: 019e37dc-c05f-7a90-99f8-d160c67fdbfe
+  author: joe
+  content: |-
+    Implemented via PR-77 (commit 6ef87e33):
+
+    - `next` / `nextN` keyword for `aida queue work` — `next` is an explicit alias for the no-arg head pickup; `nextN` / `next N` resolves a drain count.
+    - `nextN --auto-complete` drains N specs from the queue head sequentially via the existing `drain_batch` machinery (`RealNextNDriver` yields the live head, `--max` pinned to N). Composes with `--no-human`.
+    - `nextN` (N>1) without `--auto-complete` is rejected with a directive message; N > queue length drains all available with a note.
+    - Spec-ID positionals unchanged — the `TYPE-N` hyphen disambiguates from `next`.
+
+    Test status: 579/579 aida-cli tests green (10 new `next_keyword` unit tests; 64 `auto_complete` tests green — no regression from the shared-helper extraction).
+  created_at: 2026-05-17T21:34:34.591776785Z
+  modified_at: 2026-05-17T21:34:34.591776785Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T21:32:09.496005633Z
