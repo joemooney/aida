@@ -44,11 +44,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:18:31.593593468Z
-modified_at: 2026-05-17T17:18:31.593593468Z
+modified_at: 2026-05-17T18:51:06.344621439Z
 req_type: Bug
 tags:
 - activity-log
 - aida-role-show
+- batch:session-hygiene
 - from-implementer:TASK-269
 - role-state
 - toml-corruption
