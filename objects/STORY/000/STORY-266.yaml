@@ -22,12 +22,12 @@ description: |-
 
   - **EPIC-27** (MCP modernization) — the MCP server also consumes aida-core; the audit should consider its needs too for consistency
   - **`aida ultraplan` / plan tooling** — already public API; this audit just formalizes
-status: Approved
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:28.523267521Z
-modified_at: 2026-05-17T01:20:28.523267521Z
+modified_at: 2026-05-17T02:14:37.001729846Z
 req_type: Story
 tags:
 - aida-core
