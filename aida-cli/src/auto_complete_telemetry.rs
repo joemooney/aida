@@ -1,0 +1,268 @@
+//! TASK-266: per-invocation telemetry for `aida queue work --auto-complete`.
+//!
+//! Local-only, append-only JSONL log at `~/.aida/auto-complete.jsonl`. One
+//! line per orchestrator run records the phase outcome — never argument
+//! values or file contents (the same privacy floor as `aida usage`,
+//! STORY-122). The data powers `aida usage --auto-complete`, and on a phase
+//! failure `handle_auto_complete` also auto-drafts a Draft BUG so the
+//! friction surfaces back to the project instead of dying in scrollback.
+//!
+//! Opt-out shares the `aida usage` switch — `AIDA_TELEMETRY=0` or
+//! `[telemetry] enabled = false` in `.aida/config.toml` (see
+//! [`crate::usage::is_enabled`]).
+//!
+//! trace:TASK-266 | ai:claude
+
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+/// Wall time spent in one lifecycle phase of an `--auto-complete` run.
+/// trace:TASK-266 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PhaseDuration {
+    /// 1-based phase index (1 = implementer … 6 = build).
+    pub phase: u8,
+    /// Stable phase slug (`implementer`, `ci`, `reviewer`, `merge`, `pull`,
+    /// `build`).
+    pub slug: String,
+    /// Wall time the phase took.
+    pub elapsed_ms: u64,
+}
+
+/// One `aida queue work --auto-complete` invocation — appended one-per-run
+/// to `~/.aida/auto-complete.jsonl`. trace:TASK-266 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AutoCompleteEvent {
+    /// The spec the orchestrator was driving.
+    pub spec_id: String,
+    /// RFC3339 — when the orchestrator started.
+    pub started_at: String,
+    /// RFC3339 — when it finished (success or failure).
+    pub completed_at: String,
+    /// `success` or `failed`.
+    pub outcome: String,
+    /// Which variant ran (`full`, `through-ci`, `through-merge`,
+    /// `skip-build`).
+    pub variant: String,
+    /// 1-based index of the phase that failed; `None` on success.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failed_phase: Option<u8>,
+    /// Stable failure-kind slug (`ci-red`, `no-pr`, `spawn`, …); `None` on
+    /// success.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_kind: Option<String>,
+    /// The one-line failure reason; `None` on success.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_message: Option<String>,
+    /// Per-phase wall time, in run order.
+    pub phase_durations: Vec<PhaseDuration>,
+    /// Total wall time of the run.
+    pub total_ms: u64,
+    /// Spec-id of the Draft BUG auto-filed for this failure, if one was
+    /// filed. Set after the BUG is drafted, so the verbatim copy embedded
+    /// in that BUG's own description carries `None` here — that is not a
+    /// circular reference, it is the pre-draft snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drafted_bug: Option<String>,
+    /// Short build SHA of the aida binary (release tracking).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binary_sha: Option<String>,
+}
+
+impl AutoCompleteEvent {
+    /// Whether this run did not succeed.
+    pub fn is_failure(&self) -> bool {
+        self.outcome != "success"
+    }
+}
+
+/// Resolve `~/.aida/auto-complete.jsonl`. Returns `None` when the home dir
+/// can't be located (treat as "telemetry off" — never error out).
+pub fn log_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
+}
+
+/// Append a single event as JSONL. Errors are intentionally swallowed —
+/// telemetry must never break the foreground command.
+pub fn append_event(event: &AutoCompleteEvent) {
+    let Some(path) = log_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        if std::fs::create_dir_all(parent).is_err() {
+            return;
+        }
+    }
+    let Ok(json) = serde_json::to_string(event) else {
+        return;
+    };
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = writeln!(f, "{json}");
+    }
+}
+
+/// Read every event from the log (insertion order — oldest first).
+/// Best-effort: malformed lines are skipped silently.
+pub fn read_events() -> Vec<AutoCompleteEvent> {
+    let Some(path) = log_path() else {
+        return Vec::new();
+    };
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str::<AutoCompleteEvent>(l).ok())
+        .collect()
+}
+
+/// Success / failure tallies over a slice of events.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Summary {
+    pub total: usize,
+    pub success: usize,
+    pub failed: usize,
+}
+
+impl Summary {
+    /// Fraction of runs that succeeded, in `0.0..=1.0`. `0.0` when empty.
+    pub fn success_rate(&self) -> f64 {
+        if self.total == 0 {
+            0.0
+        } else {
+            self.success as f64 / self.total as f64
+        }
+    }
+}
+
+/// Tally outcomes across `events`.
+pub fn summarize(events: &[AutoCompleteEvent]) -> Summary {
+    let mut s = Summary::default();
+    for ev in events {
+        s.total += 1;
+        if ev.is_failure() {
+            s.failed += 1;
+        } else {
+            s.success += 1;
+        }
+    }
+    s
+}
+
+/// Count failures per phase, descending by count then ascending phase
+/// index. The signal for "which phases of the orchestrator break most
+/// often" — used by `aida usage --auto-complete --pattern`.
+pub fn failure_histogram(events: &[AutoCompleteEvent]) -> Vec<(u8, usize)> {
+    let mut counts: std::collections::HashMap<u8, usize> = std::collections::HashMap::new();
+    for ev in events {
+        if let Some(phase) = ev.failed_phase {
+            *counts.entry(phase).or_insert(0) += 1;
+        }
+    }
+    let mut rows: Vec<(u8, usize)> = counts.into_iter().collect();
+    rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    rows
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ev(spec: &str, outcome: &str, failed_phase: Option<u8>) -> AutoCompleteEvent {
+        AutoCompleteEvent {
+            spec_id: spec.to_string(),
+            started_at: "2026-05-16T14:20:00Z".to_string(),
+            completed_at: "2026-05-16T14:23:00Z".to_string(),
+            outcome: outcome.to_string(),
+            variant: "full".to_string(),
+            failed_phase,
+            failure_kind: failed_phase.map(|_| "ci-red".to_string()),
+            failure_message: failed_phase.map(|_| "CI red".to_string()),
+            phase_durations: vec![PhaseDuration {
+                phase: 1,
+                slug: "implementer".to_string(),
+                elapsed_ms: 1000,
+            }],
+            total_ms: 5000,
+            drafted_bug: failed_phase.map(|_| "BUG-200".to_string()),
+            binary_sha: Some("abc1234".to_string()),
+        }
+    }
+
+    #[test]
+    fn event_round_trips_through_json() {
+        let original = ev("TASK-259", "failed", Some(2));
+        let line = serde_json::to_string(&original).unwrap();
+        let parsed: AutoCompleteEvent = serde_json::from_str(&line).unwrap();
+        assert_eq!(original, parsed);
+    }
+
+    #[test]
+    fn success_event_omits_failure_fields_from_json() {
+        let line = serde_json::to_string(&ev("TASK-1", "success", None)).unwrap();
+        // `skip_serializing_if = Option::is_none` keeps success lines lean.
+        assert!(!line.contains("failed_phase"));
+        assert!(!line.contains("failure_kind"));
+        assert!(!line.contains("drafted_bug"));
+    }
+
+    #[test]
+    fn is_failure_distinguishes_outcome() {
+        assert!(ev("X", "failed", Some(1)).is_failure());
+        assert!(!ev("X", "success", None).is_failure());
+    }
+
+    #[test]
+    fn summarize_tallies_success_and_failure() {
+        let events = vec![
+            ev("A", "success", None),
+            ev("B", "failed", Some(2)),
+            ev("C", "success", None),
+            ev("D", "failed", Some(2)),
+        ];
+        let s = summarize(&events);
+        assert_eq!(s.total, 4);
+        assert_eq!(s.success, 2);
+        assert_eq!(s.failed, 2);
+        assert!((s.success_rate() - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn summary_success_rate_is_zero_when_empty() {
+        assert_eq!(summarize(&[]).success_rate(), 0.0);
+    }
+
+    #[test]
+    fn failure_histogram_ranks_phases_by_count() {
+        let events = vec![
+            ev("A", "failed", Some(2)),
+            ev("B", "failed", Some(2)),
+            ev("C", "failed", Some(1)),
+            ev("D", "success", None),
+        ];
+        let hist = failure_histogram(&events);
+        // phase 2 (×2) ranks above phase 1 (×1); successes are ignored.
+        assert_eq!(hist, vec![(2, 2), (1, 1)]);
+    }
+
+    #[test]
+    fn failure_histogram_breaks_count_ties_by_phase_index() {
+        let events = vec![ev("A", "failed", Some(5)), ev("B", "failed", Some(3))];
+        // Equal counts → lower phase index first.
+        assert_eq!(failure_histogram(&events), vec![(3, 1), (5, 1)]);
+    }
+
+    #[test]
+    fn log_path_ends_with_auto_complete_jsonl() {
+        if let Some(p) = log_path() {
+            assert!(p.ends_with("auto-complete.jsonl"));
+            assert!(p.to_string_lossy().contains(".aida"));
+        }
+    }
+}

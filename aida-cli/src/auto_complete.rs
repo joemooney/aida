@@ -63,6 +63,17 @@ impl AutoCompleteVariant {
             Self::SkipBuild => "skip build",
         }
     }
+
+    /// Stable machine slug for telemetry — the same spelling `parse`
+    /// accepts. trace:TASK-266 | ai:claude
+    pub(crate) fn slug(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::ThroughCi => "through-ci",
+            Self::ThroughMerge => "through-merge",
+            Self::SkipBuild => "skip-build",
+        }
+    }
 }
 
 /// One lifecycle phase. The integer value doubles as the process exit code
@@ -91,8 +102,23 @@ impl Phase {
         }
     }
 
-    /// Stable machine slug for `--json` events.
-    fn slug(self) -> &'static str {
+    /// Inverse of [`Phase::index`] — resolve a 1-based phase number back to
+    /// its variant. Used by the `--auto-complete` telemetry views to name a
+    /// logged failed-phase integer. trace:TASK-266 | ai:claude
+    pub(crate) fn from_index(i: i32) -> Option<Self> {
+        match i {
+            1 => Some(Self::Implementer),
+            2 => Some(Self::Ci),
+            3 => Some(Self::Reviewer),
+            4 => Some(Self::Merge),
+            5 => Some(Self::Pull),
+            6 => Some(Self::Build),
+            _ => None,
+        }
+    }
+
+    /// Stable machine slug for `--json` events and telemetry.
+    pub(crate) fn slug(self) -> &'static str {
         match self {
             Self::Implementer => "implementer",
             Self::Ci => "ci",
@@ -152,7 +178,7 @@ pub(crate) enum FailureKind {
 impl FailureKind {
     /// Stable machine slug for `--json` failure events (failure-pattern
     /// telemetry — TASK-266 refines hints from these). trace:BUG-218 | ai:claude
-    fn slug(self) -> &'static str {
+    pub(crate) fn slug(self) -> &'static str {
         match self {
             Self::Spawn => "spawn",
             Self::MissingTool => "missing-tool",
@@ -247,6 +273,26 @@ pub(crate) struct HintContext {
     pub(crate) pr_number: Option<u32>,
     pub(crate) implementer_session: Option<String>,
     pub(crate) ci_run_id: Option<String>,
+}
+
+/// Outcome of an [`orchestrate`] run — the process exit code plus the
+/// telemetry the caller needs to log the run and, on failure, auto-draft a
+/// BUG. Returning this instead of a bare `i32` keeps `orchestrate` pure: it
+/// computes the result, and `handle_auto_complete` does the file I/O.
+/// trace:TASK-266 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct OrchestrationResult {
+    /// Process exit code: `0` on success, else the 1-based failed-phase index.
+    pub(crate) exit_code: i32,
+    /// The phase that failed; `None` on success.
+    pub(crate) failed_phase: Option<Phase>,
+    /// The failure detail; `None` on success.
+    pub(crate) failure: Option<PhaseFailure>,
+    /// Per-phase wall time, in run order — includes the failed phase, and
+    /// stops at the variant's last phase or the first failure.
+    pub(crate) phase_durations: Vec<(Phase, u128)>,
+    /// Total wall time of the run, in milliseconds.
+    pub(crate) total_ms: u128,
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -471,8 +517,13 @@ fn emit_done(phase: Phase, spec: &str, json: bool, elapsed: u128) {
     }
 }
 
-/// Print the success epilogue and return exit code 0.
-fn finish_success(spec: &str, json: bool, start: &Instant) -> i32 {
+/// Print the success epilogue and build the success [`OrchestrationResult`].
+fn finish_success(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+) -> OrchestrationResult {
     let elapsed = start.elapsed().as_millis();
     if json {
         println!(
@@ -488,11 +539,17 @@ fn finish_success(spec: &str, json: bool, start: &Instant) -> i32 {
             fmt_duration(elapsed)
         );
     }
-    0
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: durations,
+        total_ms: elapsed,
+    }
 }
 
-/// Print the failure epilogue (reason + recovery hint) and return the
-/// phase's exit code.
+/// Print the failure epilogue (reason + recovery hint) and build the
+/// failure [`OrchestrationResult`] (exit code = the phase's 1-based index).
 fn finish_failure(
     driver: &dyn PhaseDriver,
     phase: Phase,
@@ -500,7 +557,8 @@ fn finish_failure(
     json: bool,
     start: &Instant,
     failure: &PhaseFailure,
-) -> i32 {
+    durations: Vec<(Phase, u128)>,
+) -> OrchestrationResult {
     let code = phase.index();
     let elapsed = start.elapsed().as_millis();
     let hint = recovery_hint(phase, failure.kind, &driver.hint_context());
@@ -543,20 +601,31 @@ fn finish_failure(
             fmt_duration(elapsed)
         );
     }
-    code
+    OrchestrationResult {
+        exit_code: code,
+        failed_phase: Some(phase),
+        failure: Some(failure.clone()),
+        phase_durations: durations,
+        total_ms: elapsed,
+    }
 }
 
 /// Drive the phases in order, stopping at the variant's last phase or at the
-/// first failure. Returns the process exit code: `0` on success, otherwise
-/// the 1-based index of the phase that failed.
+/// first failure. Returns an [`OrchestrationResult`] — the process exit code
+/// (`0` on success, else the 1-based index of the phase that failed) plus
+/// the per-phase timing the telemetry layer (TASK-266) records.
 /// trace:STORY-246 | ai:claude
+/// trace:TASK-266 | ai:claude
 pub(crate) fn orchestrate(
     driver: &mut dyn PhaseDriver,
     spec: &str,
     variant: AutoCompleteVariant,
     json: bool,
-) -> i32 {
+) -> OrchestrationResult {
     let start = Instant::now();
+    // Per-phase wall time, captured as each phase runs so a failure carries
+    // the timing of the phases that did complete. trace:TASK-266 | ai:claude
+    let mut durations: Vec<(Phase, u128)> = Vec::new();
     if !json {
         eprintln!();
         eprintln!(
@@ -569,64 +638,93 @@ pub(crate) fn orchestrate(
 
     // Phase 1 — implementer session.
     emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
+    let phase_start = Instant::now();
     if let Err(f) = driver.run_implementer() {
-        return finish_failure(driver, Phase::Implementer, spec, json, &start, &f);
+        durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+        return finish_failure(
+            driver,
+            Phase::Implementer,
+            spec,
+            json,
+            &start,
+            &f,
+            durations,
+        );
     }
+    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
     emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
 
     // Phase 2 — end + wait for CI.
     emit_start(Phase::Ci, spec, json, start.elapsed().as_millis());
+    let phase_start = Instant::now();
     if let Err(f) = driver.finish_ci() {
-        return finish_failure(driver, Phase::Ci, spec, json, &start, &f);
+        durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
+        return finish_failure(driver, Phase::Ci, spec, json, &start, &f, durations);
     }
+    durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
     emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 2 {
-        return finish_success(spec, json, &start);
+        return finish_success(spec, json, &start, durations);
     }
 
     // Phase 3 — reviewer session.
     emit_start(Phase::Reviewer, spec, json, start.elapsed().as_millis());
+    let phase_start = Instant::now();
     match driver.run_reviewer() {
-        Err(f) => return finish_failure(driver, Phase::Reviewer, spec, json, &start, &f),
+        Err(f) => {
+            durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+            return finish_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
+        }
         Ok(verdict) if verdict != Verdict::Approved => {
+            durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
             let f = PhaseFailure::new(format!(
                 "reviewer verdict is {} — not Approved",
                 verdict.label()
             ));
-            return finish_failure(driver, Phase::Reviewer, spec, json, &start, &f);
+            return finish_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
         }
         Ok(_) => {}
     }
+    durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
     emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
 
     // Phase 4 — merge.
     emit_start(Phase::Merge, spec, json, start.elapsed().as_millis());
+    let phase_start = Instant::now();
     if let Err(f) = driver.merge() {
-        return finish_failure(driver, Phase::Merge, spec, json, &start, &f);
+        durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
+        return finish_failure(driver, Phase::Merge, spec, json, &start, &f, durations);
     }
+    durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
     emit_done(Phase::Merge, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 4 {
-        return finish_success(spec, json, &start);
+        return finish_success(spec, json, &start, durations);
     }
 
     // Phase 5 — pull + auto-bump.
     emit_start(Phase::Pull, spec, json, start.elapsed().as_millis());
+    let phase_start = Instant::now();
     if let Err(f) = driver.pull() {
-        return finish_failure(driver, Phase::Pull, spec, json, &start, &f);
+        durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
+        return finish_failure(driver, Phase::Pull, spec, json, &start, &f, durations);
     }
+    durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
     emit_done(Phase::Pull, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 5 {
-        return finish_success(spec, json, &start);
+        return finish_success(spec, json, &start, durations);
     }
 
     // Phase 6 — build verify.
     emit_start(Phase::Build, spec, json, start.elapsed().as_millis());
+    let phase_start = Instant::now();
     if let Err(f) = driver.build() {
-        return finish_failure(driver, Phase::Build, spec, json, &start, &f);
+        durations.push((Phase::Build, phase_start.elapsed().as_millis()));
+        return finish_failure(driver, Phase::Build, spec, json, &start, &f, durations);
     }
+    durations.push((Phase::Build, phase_start.elapsed().as_millis()));
     emit_done(Phase::Build, spec, json, start.elapsed().as_millis());
 
-    finish_success(spec, json, &start)
+    finish_success(spec, json, &start, durations)
 }
 
 #[cfg(test)]
@@ -714,7 +812,7 @@ mod tests {
     #[test]
     fn orchestrate_full_pipeline_runs_all_six_phases() {
         let mut driver = MockPhaseDriver::all_ok();
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 0);
         assert_eq!(
             driver.calls,
@@ -741,7 +839,8 @@ mod tests {
             "TASK-247",
             AutoCompleteVariant::ThroughCi,
             false,
-        );
+        )
+        .exit_code;
         assert_eq!(code, 0);
         assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
     }
@@ -754,7 +853,8 @@ mod tests {
             "TASK-247",
             AutoCompleteVariant::ThroughMerge,
             false,
-        );
+        )
+        .exit_code;
         assert_eq!(code, 0);
         assert_eq!(
             driver.calls,
@@ -770,7 +870,8 @@ mod tests {
             "TASK-247",
             AutoCompleteVariant::SkipBuild,
             false,
-        );
+        )
+        .exit_code;
         assert_eq!(code, 0);
         assert_eq!(
             driver.calls,
@@ -789,7 +890,7 @@ mod tests {
     #[test]
     fn failure_injection_implementer_exits_1() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Implementer);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 1);
         assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
@@ -797,7 +898,7 @@ mod tests {
     #[test]
     fn failure_injection_reviewer_exits_3() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Reviewer);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 3);
         assert_eq!(
             driver.calls,
@@ -808,21 +909,21 @@ mod tests {
     #[test]
     fn failure_injection_merge_exits_4() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Merge);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 4);
     }
 
     #[test]
     fn failure_injection_pull_exits_5() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Pull);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 5);
     }
 
     #[test]
     fn failure_injection_build_exits_6() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Build);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 6);
     }
 
@@ -831,7 +932,7 @@ mod tests {
     #[test]
     fn ci_red_stops_at_phase_2() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Ci);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 2);
         // The reviewer phase must NOT have run.
         assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
@@ -842,7 +943,7 @@ mod tests {
     #[test]
     fn reviewer_rejected_stops_at_phase_3() {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::Rejected);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 3);
         // Reviewer ran; merge did not.
         assert_eq!(
@@ -854,14 +955,14 @@ mod tests {
     #[test]
     fn reviewer_request_changes_stops_at_phase_3() {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::RequestChanges);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 3);
     }
 
     #[test]
     fn reviewer_approved_proceeds_to_merge() {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::Approved);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 0);
     }
 
@@ -1145,5 +1246,94 @@ mod tests {
         assert_eq!(Phase::Merge.index(), 4);
         assert_eq!(Phase::Pull.index(), 5);
         assert_eq!(Phase::Build.index(), 6);
+    }
+
+    #[test]
+    fn phase_from_index_round_trips() {
+        for phase in [
+            Phase::Implementer,
+            Phase::Ci,
+            Phase::Reviewer,
+            Phase::Merge,
+            Phase::Pull,
+            Phase::Build,
+        ] {
+            assert_eq!(Phase::from_index(phase.index()), Some(phase));
+        }
+        assert_eq!(Phase::from_index(0), None);
+        assert_eq!(Phase::from_index(7), None);
+    }
+
+    #[test]
+    fn variant_slug_matches_parse_spelling() {
+        for v in [
+            AutoCompleteVariant::Full,
+            AutoCompleteVariant::ThroughCi,
+            AutoCompleteVariant::ThroughMerge,
+            AutoCompleteVariant::SkipBuild,
+        ] {
+            assert_eq!(AutoCompleteVariant::parse(v.slug()), Ok(v));
+        }
+    }
+
+    // --- OrchestrationResult telemetry fields (TASK-266) ------------------
+
+    #[test]
+    fn result_success_records_every_phase_duration_in_order() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failed_phase.is_none());
+        assert!(result.failure.is_none());
+        let phases: Vec<Phase> = result.phase_durations.iter().map(|(p, _)| *p).collect();
+        assert_eq!(
+            phases,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
+    }
+
+    #[test]
+    fn result_variant_caps_phase_durations_at_last_phase() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::ThroughCi,
+            false,
+        );
+        let phases: Vec<Phase> = result.phase_durations.iter().map(|(p, _)| *p).collect();
+        assert_eq!(phases, vec![Phase::Implementer, Phase::Ci]);
+    }
+
+    #[test]
+    fn result_failure_carries_failed_phase_and_reason() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Reviewer);
+        let result = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        let failure = result.failure.expect("failure detail should be set");
+        assert!(failure.reason.contains("Reviewer"));
+        // Durations stop at the failed phase — they include it, not beyond.
+        let phases: Vec<Phase> = result.phase_durations.iter().map(|(p, _)| *p).collect();
+        assert_eq!(phases, vec![Phase::Implementer, Phase::Ci, Phase::Reviewer]);
+    }
+
+    #[test]
+    fn result_rejected_verdict_records_reviewer_as_failed_phase() {
+        let mut driver = MockPhaseDriver::with_verdict(Verdict::Rejected);
+        let result = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        assert!(result
+            .failure
+            .expect("failure set")
+            .reason
+            .contains("not Approved"));
     }
 }
