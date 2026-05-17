@@ -55,12 +55,12 @@ description: |-
   ## Origin
 
   User proposed 2026-05-16: *\"maybe instead of \`aida queue work --auto-complete\` we should have \`aida queue work next --auto-complete\` where next is a keyword and maybe you could say next3.\"* — surfaced both the readability value of explicit keyword AND the new multi-spec drain capability.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:06:29.161825781Z
-modified_at: 2026-05-17T21:16:27.162528845Z
+modified_at: 2026-05-17T21:32:09.496005633Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
@@ -105,3 +105,7 @@ comments:
     This composes naturally with TASK-272 (cluster-mode batch awareness) — batches have cluster-mode option, nextN doesn't.
   created_at: 2026-05-17T01:09:35.811643363Z
   modified_at: 2026-05-17T01:09:35.811643363Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-17T21:32:09.496005633Z
+  implemented_by: joe
