@@ -47,10 +47,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:45:18.469713543Z
-modified_at: 2026-05-16T16:45:18.469713543Z
+modified_at: 2026-05-17T18:51:04.858794095Z
 req_type: Task
 tags:
 - alpha-readiness
+- batch:session-hygiene
 - cleanup
 - failed-flag-signal
 - returning-user
