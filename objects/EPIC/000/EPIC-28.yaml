@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-05-16T20:53:56.520309864Z
+modified_at: 2026-05-17T01:03:47.918352578Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -110,3 +110,38 @@ tags:
 - resilient-drain
 - shelving
 - strategic
+comments:
+- id: 019e3375-f0ce-77b3-b32b-6610e5ead95c
+  author: joe
+  content: |-
+    ## Add child STORY scope: Queue dependency sweep (advisor activity)
+
+    Discussion 2026-05-16 surfaced a sibling pattern that complements EPIC-28's dependency-aware drain: a sweep that POPULATES dependencies rather than just CONSUMING them.
+
+    ### Sweep-activity scope
+
+    - Advisor-role activity (could be a STORY-262 scheduled task on a 14d cadence)
+    - Walks the queue + all Approved specs
+    - Identifies likely dependencies via:
+      - **File overlap** — specs whose `// trace:` comments touch the same files
+      - **Trace graph** — specs that share function/symbol targets (similar to `aida plan helpers`)
+      - **Parent/sibling** — specs under the same parent EPIC/STORY (weak signal but worth flagging)
+      - **Plan content** — specs whose plans reference each other's specs explicitly
+    - Output: dependency graph + per-spec recommendations to declare `--depends-on` relationships
+    - Could surface in `aida show <SPEC>` as "Likely depends on: TASK-N (confidence: high)" — user confirms or rejects
+    - Composes with EPIC-28's `--depends-on` relationship (this sweep POPULATES; EPIC-28 USES)
+
+    ### Why a child of EPIC-28
+
+    - Same family (dependency-aware workflow)
+    - Needs EPIC-28's relationship type to exist before its output is actionable
+    - Different mechanism (inference vs declaration) but same end goal
+
+    ### Composes with
+
+    - **STORY-262** (advisor scheduled tasks) — sweep is a natural recurring task template (`audit-spec-graph`)
+    - **STORY-NEW** (decoupled plan/implement) — plans surface dependencies; sweep harvests them
+
+    This won't be filed as a separate STORY now; it's scoped here for when EPIC-28's first child STORY (`depends-on` relationship type) lands and a population mechanism becomes valuable.
+  created_at: 2026-05-17T01:03:47.918352578Z
+  modified_at: 2026-05-17T01:03:47.918352578Z
