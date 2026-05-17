@@ -55,7 +55,7 @@ impl AutoCompleteVariant {
         }
     }
 
-    fn describe(self) -> &'static str {
+    pub(crate) fn describe(self) -> &'static str {
         match self {
             Self::Full => "full pipeline",
             Self::ThroughCi => "through CI",
@@ -727,6 +727,115 @@ pub(crate) fn orchestrate(
     finish_success(spec, json, &start, durations)
 }
 
+// --- Batch drain (TASK-285) -------------------------------------------------
+//
+// `aida queue work --batch NAME --auto-complete` chains one `orchestrate` run
+// per batch member: resolve the batch head, run its full lifecycle, advance to
+// the new head, repeat. The *sequencing* lives here behind a [`BatchDriver`]
+// trait — the same shape as [`PhaseDriver`] — so the loop (head advance, the
+// `--max` cap, the failure-stops-the-drain rule, the non-advancing-queue
+// guard) is unit-tested with a mock instead of spawning real orchestrations.
+// trace:TASK-285 | ai:claude
+
+/// Why a [`drain_batch`] run stopped. trace:TASK-285 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BatchDrainOutcome {
+    /// The batch is empty for the role — every queued member shipped.
+    Drained,
+    /// The `--max N` cap was reached with members still queued.
+    MaxReached,
+    /// A phase failed; the drain stopped at the spec in [`BatchDrainResult::stopped_at`].
+    Failed(Phase),
+    /// A run reported success but the head did not advance — stopped to
+    /// avoid an infinite loop on the same spec.
+    Stalled,
+}
+
+/// Outcome of a [`drain_batch`] run — what shipped, where it stopped, and the
+/// process exit code (`0` drained / max-reached, else the failed phase index
+/// or `1` for a stall). trace:TASK-285 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct BatchDrainResult {
+    /// Spec-ids that completed their full `--auto-complete` lifecycle, in
+    /// drain order.
+    pub(crate) shipped: Vec<String>,
+    /// The spec the drain stopped on — set for `Failed` / `Stalled`, `None`
+    /// for a clean `Drained` / `MaxReached`.
+    pub(crate) stopped_at: Option<String>,
+    /// Why the drain stopped.
+    pub(crate) outcome: BatchDrainOutcome,
+    /// Process exit code: `0` on a clean stop, else the failed-phase index
+    /// (per STORY-246's exit codes) or `1` for a stall.
+    pub(crate) exit_code: i32,
+}
+
+/// Drives a batch drain: yields the current batch head and runs one spec's
+/// full `--auto-complete` orchestration. The real implementation re-resolves
+/// the `batch:NAME` tag against the queue and calls `run_auto_complete`; the
+/// mock stands in for both so the loop is testable. trace:TASK-285 | ai:claude
+pub(crate) trait BatchDriver {
+    /// The current batch head spec-id, or `None` when the batch is drained.
+    /// Re-resolved each call — a completed spec leaves the queue, so the head
+    /// advances naturally.
+    fn next_head(&mut self) -> Option<String>;
+    /// Run one spec's full `--auto-complete` orchestration.
+    fn run_spec(&mut self, spec: &str) -> OrchestrationResult;
+}
+
+/// Drain a batch: run `orchestrate` per member until the batch is empty, the
+/// `--max` cap is hit, or a phase fails. A phase failure stops the drain at
+/// that spec — the remaining members stay queued, intact for a retry. Pure
+/// sequencing; the I/O lives in the [`BatchDriver`]. trace:TASK-285 | ai:claude
+pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> BatchDrainResult {
+    let mut shipped: Vec<String> = Vec::new();
+    loop {
+        // Resolve the head first: a `--max` of exactly the batch size should
+        // report `Drained` (the batch genuinely emptied), not `MaxReached`.
+        let Some(head) = driver.next_head() else {
+            return BatchDrainResult {
+                shipped,
+                stopped_at: None,
+                outcome: BatchDrainOutcome::Drained,
+                exit_code: 0,
+            };
+        };
+        if let Some(limit) = max {
+            if shipped.len() >= limit {
+                return BatchDrainResult {
+                    shipped,
+                    stopped_at: None,
+                    outcome: BatchDrainOutcome::MaxReached,
+                    exit_code: 0,
+                };
+            }
+        }
+        // A spec we already shipped resurfacing as the head means the queue
+        // did not advance — its run reported success but it never left the
+        // queue, so it was not really shipped. Drop it from `shipped` and
+        // stop rather than loop forever on it.
+        if shipped.iter().any(|s| s == &head) {
+            shipped.retain(|s| s != &head);
+            return BatchDrainResult {
+                shipped,
+                stopped_at: Some(head),
+                outcome: BatchDrainOutcome::Stalled,
+                exit_code: 1,
+            };
+        }
+        let result = driver.run_spec(&head);
+        if result.exit_code != 0 {
+            let phase = result.failed_phase.unwrap_or(Phase::Implementer);
+            return BatchDrainResult {
+                shipped,
+                stopped_at: Some(head),
+                outcome: BatchDrainOutcome::Failed(phase),
+                exit_code: result.exit_code,
+            };
+        }
+        shipped.push(head);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1335,5 +1444,173 @@ mod tests {
             .expect("failure set")
             .reason
             .contains("not Approved"));
+    }
+
+    // --- Batch drain (TASK-285) -------------------------------------------
+
+    /// A success / failure [`OrchestrationResult`] without the timing detail,
+    /// for exercising [`drain_batch`].
+    fn ok_result() -> OrchestrationResult {
+        OrchestrationResult {
+            exit_code: 0,
+            failed_phase: None,
+            failure: None,
+            phase_durations: Vec::new(),
+            total_ms: 0,
+        }
+    }
+
+    fn fail_result(phase: Phase) -> OrchestrationResult {
+        OrchestrationResult {
+            exit_code: phase.index(),
+            failed_phase: Some(phase),
+            failure: Some(PhaseFailure::new(format!("mock failure at {phase:?}"))),
+            phase_durations: Vec::new(),
+            total_ms: 0,
+        }
+    }
+
+    /// Mock batch driver: a FIFO of batch-head spec-ids. `run_spec` consumes
+    /// the head on success (mirroring a real completed spec leaving the
+    /// queue); a `fail_at` spec returns a failure result *without* consuming
+    /// the head; a `stall` spec succeeds but is left at the head (the
+    /// non-advancing-queue case).
+    struct MockBatchDriver {
+        heads: Vec<String>,
+        fail_at: Option<(String, Phase)>,
+        stall_spec: Option<String>,
+        runs: Vec<String>,
+    }
+
+    impl MockBatchDriver {
+        fn new(heads: &[&str]) -> Self {
+            Self {
+                heads: heads.iter().map(|s| s.to_string()).collect(),
+                fail_at: None,
+                stall_spec: None,
+                runs: Vec::new(),
+            }
+        }
+
+        fn failing(mut self, spec: &str, phase: Phase) -> Self {
+            self.fail_at = Some((spec.to_string(), phase));
+            self
+        }
+
+        fn stalling(mut self, spec: &str) -> Self {
+            self.stall_spec = Some(spec.to_string());
+            self
+        }
+    }
+
+    impl BatchDriver for MockBatchDriver {
+        fn next_head(&mut self) -> Option<String> {
+            self.heads.first().cloned()
+        }
+
+        fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
+            self.runs.push(spec.to_string());
+            if let Some((fail_spec, phase)) = &self.fail_at {
+                if fail_spec == spec {
+                    // Failure leaves the spec queued — head does not advance.
+                    return fail_result(*phase);
+                }
+            }
+            if self.stall_spec.as_deref() == Some(spec) {
+                // "Success" but the head is intentionally not consumed.
+                return ok_result();
+            }
+            // Normal success — the completed spec leaves the queue.
+            self.heads.retain(|h| h != spec);
+            ok_result()
+        }
+    }
+
+    /// Acceptance: a 3-item batch with every phase green ships all three via
+    /// the auto-complete chain.
+    #[test]
+    fn drain_batch_three_green_ships_all_three() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]);
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-2", "TASK-3"]);
+        assert_eq!(result.stopped_at, None);
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
+    }
+
+    /// Acceptance: a 3-item batch where phase 1 fails on item 2 — item 1
+    /// shipped, item 2 stopped the drain, item 3 never ran (queue intact).
+    #[test]
+    fn drain_batch_phase1_failure_on_item2_leaves_item3_untouched() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"])
+            .failing("TASK-2", Phase::Implementer);
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 1, "phase 1 → exit code 1");
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::Failed(Phase::Implementer)
+        );
+        assert_eq!(result.shipped, vec!["TASK-1"]);
+        assert_eq!(result.stopped_at, Some("TASK-2".to_string()));
+        // TASK-3 was never run — the queue is intact for a retry.
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2"]);
+    }
+
+    /// A mid-batch phase-3 failure stops the drain with that phase's exit code.
+    #[test]
+    fn drain_batch_failure_carries_failed_phase_exit_code() {
+        let mut driver =
+            MockBatchDriver::new(&["TASK-1", "TASK-2"]).failing("TASK-1", Phase::Reviewer);
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Reviewer));
+        assert!(result.shipped.is_empty());
+    }
+
+    /// `--max N` stops the drain after N items even when the batch has more.
+    #[test]
+    fn drain_batch_max_caps_the_drain() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3", "TASK-4"]);
+        let result = drain_batch(&mut driver, Some(2));
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::MaxReached);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-2"]);
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2"]);
+    }
+
+    /// `--max` equal to the batch size reports `Drained`, not `MaxReached` —
+    /// the batch genuinely emptied.
+    #[test]
+    fn drain_batch_max_equal_to_size_reports_drained() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]);
+        let result = drain_batch(&mut driver, Some(2));
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-2"]);
+    }
+
+    /// An empty batch drains immediately with nothing shipped.
+    #[test]
+    fn drain_batch_empty_batch_is_a_clean_drain() {
+        let mut driver = MockBatchDriver::new(&[]);
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert!(result.shipped.is_empty());
+    }
+
+    /// A "successful" run that leaves the head in place is caught by the
+    /// non-advancing-queue guard rather than looping forever.
+    #[test]
+    fn drain_batch_stall_guard_stops_a_non_advancing_queue() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).stalling("TASK-2");
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 1);
+        assert_eq!(result.outcome, BatchDrainOutcome::Stalled);
+        assert_eq!(result.shipped, vec!["TASK-1"]);
+        assert_eq!(result.stopped_at, Some("TASK-2".to_string()));
+        // TASK-2 ran once, was re-yielded as the head, and the guard fired
+        // before a second run.
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2"]);
     }
 }
