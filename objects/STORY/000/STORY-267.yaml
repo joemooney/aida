@@ -1,0 +1,32 @@
+id: 019e3385-4ab6-7961-b21c-ce21a46d9087
+spec_id: STORY-267
+agreed_id: STORY-267
+title: '[EPIC-29 2/5] Extract aida-tui to standalone repo (joemooney/aida-tui)'
+description: |-
+  Second child STORY of EPIC-29. Create the standalone aida-tui repo; push current aida-tui/ crate (preserving useful git history); set up its own CI; configure aida-core dependency.
+
+  ## Acceptance
+
+  - [ ] Create `github.com/joemooney/aida-tui` repo
+  - [ ] Push aida-tui crate contents (consider `git filter-repo` to preserve TUI-only history)
+  - [ ] `Cargo.toml` depends on aida-core (path during local dev; git ref during transition; crates.io once published)
+  - [ ] Ships its own `aida-tui` binary (not part of `aida` CLI anymore)
+  - [ ] CI workflow in the new repo — Linux-only initial PR matrix matching TASK-257 pattern
+  - [ ] README points back to aida core with relationship explanation
+  - [ ] Initial release: aida-tui v0.1.0 once it builds + tests pass
+
+  ## Depends on
+
+  - STORY 1 (Define aida-core public API) — must land first
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:20:33.974890900Z
+modified_at: 2026-05-17T01:20:33.974890900Z
+req_type: Story
+tags:
+- aida-tui
+- companion-project
+- monorepo-split
+- repo-extraction
