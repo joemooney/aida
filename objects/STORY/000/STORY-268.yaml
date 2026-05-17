@@ -1,0 +1,35 @@
+id: 019e3385-60c6-7e20-8989-7441a5fe970b
+spec_id: STORY-268
+agreed_id: STORY-268
+title: '[EPIC-29 3/5] Remove tui feature from aida-cli (Tui subcommand, optional dep, workspace member)'
+description: |-
+  Third child STORY of EPIC-29. Remove aida-tui from aida-cli entirely — feature flag, subcommand, dispatch, workspace membership.
+
+  ## Acceptance
+
+  - [ ] `aida-cli/Cargo.toml` drops `aida-tui = optional` dep and `tui = ["aida-tui"]` feature
+  - [ ] `aida-cli/src/cli.rs` removes the `Tui` enum variant
+  - [ ] `aida-cli/src/main.rs` removes both `handle_tui_command` arms (`#[cfg(feature = "tui")]` real + stub)
+  - [ ] Workspace `Cargo.toml` drops `aida-tui` from `members`
+  - [ ] `aida-cli/src/main.rs` 3 `unreachable!("tui is dispatched before storage init")` references removed
+  - [ ] CLAUDE.md / OVERVIEW.md references to TUI in-core updated
+  - [ ] aida binary size reduction visible (ratatui + crossterm + portable-pty + vt100 drop out)
+  - [ ] CI green; full workspace test suite passes
+  - [ ] Subsumes TASK-254 (default-flip revert) — no `tui` feature means no default flip to revert
+
+  ## Depends on
+
+  - STORY 2 (extraction) — TUI must exist in the new repo before this STORY removes it from core
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:20:39.622646152Z
+modified_at: 2026-05-17T01:20:39.622646152Z
+req_type: Story
+tags:
+- aida-cli
+- cleanup
+- feature-removal
+- tui-extraction
+- workspace
