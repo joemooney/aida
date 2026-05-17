@@ -98,12 +98,12 @@ description: |-
   ## Origin
 
   User observed 2026-05-16 after BUG-114 was hand-filed for the first \`--auto-complete\` dogfood failure: *\"track --auto-complete dogfood failures so we can recurse-fix the orchestrator using itself.\"* This TASK makes that pattern operational.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:18:43.395729318Z
-modified_at: 2026-05-17T01:15:10.125641774Z
+modified_at: 2026-05-17T01:26:44.850493969Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -117,3 +117,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-16T17:18:45.958400479Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-17T01:26:44.850493969Z
+  implemented_by: joe
