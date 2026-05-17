@@ -102,7 +102,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:15:28.633295104Z
-modified_at: 2026-05-17T02:14:17.572534377Z
+modified_at: 2026-05-17T02:14:28.517461505Z
 req_type: Story
 tags:
 - advisor
@@ -117,3 +117,14 @@ relationships:
 - rel_type: Child
   target_id: 019e1cca-9950-78a0-bf56-b1393eacdcc5
   created_at: 2026-05-16T23:15:31.454291568Z
+comments:
+- id: 019e33b6-a5a5-7000-b766-da3267946448
+  author: joe
+  content: |-
+    ## Moved to backlog 2026-05-16 — premature
+
+    User asked dialog to push back on over-engineering. The 6 candidate schedule templates (\`refresh-competitive-analysis 90d\`, \`audit-spec-graph 14d\`, etc.) were filed **without evidence that recurring fires are needed**. No cadence has been observed late; no friction surfaced from \"I forgot to do X.\" Pure speculation.
+
+    **Revisit trigger**: when a specific recurring activity is observed to slip (e.g., competitive analysis goes 6 months stale, or a friend asks \"when did you last review X?\"), file the specific schedule then. Don't pre-build infrastructure for hypothetical cadences.
+  created_at: 2026-05-17T02:14:28.517461505Z
+  modified_at: 2026-05-17T02:14:28.517461505Z
