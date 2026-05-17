@@ -1,0 +1,26 @@
+id: 019e33d9-422c-7d11-857d-133f94676a9e
+spec_id: STORY-274
+agreed_id: STORY-274
+title: 'Review PR-62: docs(spikes): SPIKE-7 Test 2 headless pickup scratch file (TASK-296)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `spike7-headless-test`.
+
+  - PR: <https://github.com/joemooney/aida/pull/62>
+  - Branch: `spike7-headless-test` → `main`
+
+  ## Covers
+
+  - TASK-296
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 62` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T02:52:16.812022391Z
+modified_at: 2026-05-17T02:52:16.812022391Z
+req_type: Story
