@@ -18,7 +18,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:41:53.171908309Z
-modified_at: 2026-05-17T07:29:45.769193684Z
+modified_at: 2026-05-17T07:55:24.467368410Z
 req_type: Task
 tags:
 - batch:pr-64-cleanup
@@ -26,6 +26,19 @@ tags:
 - clippy
 - fmt
 - from-review:PR-64
+comments:
+- id: 019e34ee-c7b3-71b2-a848-742312b6280f
+  author: joe
+  content: |-
+    Implemented on branch task-303 (commit ad16a00b):
+
+    - Inserted a blank `///` separator in the `claude_headless_args` doc comment (aida-cli/src/session.rs) so the trailing prose/trace lines form their own paragraph instead of reading as un-indented bullet-list continuations.
+    - Codebase-wide clippy::doc_lazy_continuation count dropped 57 → 54 — exactly the 3 warnings PR-64 introduced.
+
+    Test status: cargo fmt --all -- --check clean; clippy verified (session.rs:6xx clear).
+    Follow-up: 54 pre-existing doc_lazy_continuation warnings remain across the workspace, tracked by the CI `TODO: change back to -D warnings` — out of this task's scope.
+  created_at: 2026-05-17T07:55:24.467368410Z
+  modified_at: 2026-05-17T07:55:24.467368410Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T07:29:45.769193684Z
