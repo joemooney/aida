@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:51:37.511646683Z
-modified_at: 2026-05-17T01:50:16.871878016Z
+modified_at: 2026-05-17T01:54:17.700492843Z
 req_type: Bug
 tags:
 - auto-bump
@@ -61,3 +61,9 @@ tags:
 - covers-chain
 - reconcile-status
 - review-story
+comments:
+- id: 019e33a4-2be4-74d3-8e5f-8ebcb3d3c688
+  author: joe
+  content: Commit a4948745 references this requirement
+  created_at: 2026-05-17T01:54:17.700492843Z
+  modified_at: 2026-05-17T01:54:17.700492843Z
