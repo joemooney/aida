@@ -10463,6 +10463,13 @@ fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
 /// trace:STORY-55 | ai:claude
 const SCOPE_LABEL_MAX: usize = 12;
 
+/// Max display width for the `sess:` statusline label (scope + batch
+/// suffix). Slightly wider than SCOPE_LABEL_MAX so common `epic-N#batchM`
+/// shapes don't truncate the scope when the suffix is the new signal.
+/// Shared by the standalone `sess:` segment and the `[sess:]` anchor
+/// annotation folded into `@SPEC`. trace:TASK-60 trace:TASK-282 | ai:claude
+const SESS_LABEL_MAX: usize = 20;
+
 fn lease_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
     leases_dir(project_root).join(format!("{}.toml", id))
 }
@@ -17643,6 +17650,75 @@ mod statusline_tests {
         assert!(!got.contains("@really"));
     }
 
+    // ── sess_anchor_annotation / wt_divergence_segment ──
+    // TASK-282: trace:TASK-282 | ai:claude
+
+    /// No-divergence default: `@<scope>` and the session anchor are the
+    /// same scope with no batch suffix → the `[sess:]` annotation is
+    /// suppressed (the redundancy this task removes).
+    #[test]
+    fn sess_anchor_hidden_when_redundant() {
+        assert_eq!(sess_anchor_annotation("TASK-282", "TASK-282", ""), None);
+    }
+
+    /// Divergence — the role is touching a child spec while the session
+    /// is anchored elsewhere → the annotation names the anchor.
+    #[test]
+    fn sess_anchor_shown_on_scope_divergence() {
+        assert_eq!(
+            sess_anchor_annotation("TASK-280", "TASK-257", "").as_deref(),
+            Some("[sess:TASK-257]")
+        );
+    }
+
+    /// Same scope but a batch suffix is present → still shown, so TASK-60's
+    /// batch disambiguation (epic-20 batch3 vs batch7) isn't lost when the
+    /// role's @SPEC happens to equal the bare session scope.
+    #[test]
+    fn sess_anchor_shown_when_batch_suffix_present() {
+        assert_eq!(
+            sess_anchor_annotation("EPIC-20", "EPIC-20", "#batch7").as_deref(),
+            Some("[sess:EPIC-20#batch7]")
+        );
+    }
+
+    /// Auto-named worktree (`<repo>-<slug>`) carries the scope slug → no
+    /// `wt:` segment. Covers a plain repo name, a dashed repo name, and a
+    /// bare `<slug>` directory — all of which "match" the scope.
+    #[test]
+    fn wt_segment_hidden_for_auto_named_worktree() {
+        assert_eq!(
+            wt_divergence_segment(
+                std::path::Path::new("/home/joe/ai/aida-task-257"),
+                "task-257"
+            ),
+            None
+        );
+        assert_eq!(
+            wt_divergence_segment(
+                std::path::Path::new("/home/joe/ai/aida-web-react-task-257"),
+                "task-257"
+            ),
+            None
+        );
+        assert_eq!(
+            wt_divergence_segment(std::path::Path::new("/tmp/task-257"), "task-257"),
+            None
+        );
+    }
+
+    /// An explicit `--path` worktree whose name doesn't carry the slug →
+    /// `wt:<name>` renders so the divergence is visible (the compose case
+    /// from the spec: `@TASK-280 [sess:TASK-257] · wt:hot-fix`).
+    #[test]
+    fn wt_segment_shown_on_divergence() {
+        assert_eq!(
+            wt_divergence_segment(std::path::Path::new("/home/joe/ai/hot-fix"), "task-280")
+                .as_deref(),
+            Some("wt:hot-fix")
+        );
+    }
+
     // ── classify_lease_state ──
     // TASK-55: trace:TASK-55 | ai:claude
 
@@ -24218,14 +24294,35 @@ fn handle_statusline_command(color: &str) -> Result<()> {
             (Some(l), None, p) => p.filter(|p| p.at >= l.started_at),
             (None, _, p) => p,
         };
-        let label: Option<String> = match (latest, lease.as_ref()) {
+        // Raw (untruncated) @SPEC value — the scope/spec the active role
+        // is anchored to. Kept raw so the TASK-282 redundancy check
+        // compares scopes, not their truncated display forms (a long
+        // scope truncated to SCOPE_LABEL_MAX vs SESS_LABEL_MAX would
+        // otherwise false-positive as divergence). trace:STORY-55 | ai:claude
+        let at_spec: Option<String> = match (latest, lease.as_ref()) {
             (Some(act), Some(l)) if act.at >= l.started_at => Some(act.spec_id.clone()),
-            (_, Some(l)) => Some(truncate(&l.scope, SCOPE_LABEL_MAX)),
+            (_, Some(l)) => Some(l.scope.clone()),
             (Some(act), None) => Some(act.spec_id.clone()),
             (None, None) => None,
         };
-        if let Some(label) = label {
-            parts.push(format!("@{}", label).cyan().bold().to_string());
+        if let Some(at_spec) = &at_spec {
+            let mut segment = format!("@{}", truncate(at_spec, SCOPE_LABEL_MAX))
+                .cyan()
+                .bold()
+                .to_string();
+            // TASK-282: fold the session anchor into the @SPEC segment.
+            // When the anchor is redundant with @<scope> — same scope and
+            // no batch suffix, the common case — nothing is appended; on
+            // divergence it appends ` [sess:<anchor>]` so the prompt still
+            // names the owning session. trace:TASK-282 | ai:claude
+            if let Some(l) = lease.as_ref() {
+                let suffix = derive_session_branch_suffix(&l.scope, &l.branch);
+                if let Some(anno) = sess_anchor_annotation(at_spec, &l.scope, &suffix) {
+                    segment.push(' ');
+                    segment.push_str(&anno.yellow().bold().to_string());
+                }
+            }
+            parts.push(segment);
         }
     }
     if queue_depth > 0 {
@@ -24247,28 +24344,32 @@ fn handle_statusline_command(color: &str) -> Result<()> {
             parts.push(colored);
         }
     }
-    // sess:<scope> segment — emitted whenever cwd resolves into an active
-    // session lease's worktree, regardless of role. Coexists with @SPEC:
-    // @SPEC answers "which spec am I touching", sess: answers "which
-    // session-scope owns this shell" (the latter sticks even when the
-    // role's recent activity is on a child spec). Same color as role:
-    // since both answer "what context am I in". Scope is truncated to the
-    // same budget as @SPEC so the line stays scannable.
-    // trace:STORY-53 | ai:claude
+    // sess:<scope> segment — emitted when cwd resolves into an active
+    // session lease's worktree. TASK-282: this standalone segment now
+    // renders only when there is NO @SPEC segment to fold into (no active
+    // role). With a role active, the session anchor lives inside
+    // `@<scope> [sess:…]` (rendered above) and a separate `sess:` segment
+    // would just repeat it. The TASK-60 batch/branch suffix is preserved
+    // either way — without it, three sessions on EPIC-20 (batch3, batch4,
+    // batch5) would all render `sess:EPIC-20`, losing the only thing
+    // distinguishing them. trace:STORY-53 trace:TASK-60 trace:TASK-282 | ai:claude
+    if role.is_none() {
+        if let Some(l) = lease.as_ref() {
+            let suffix = derive_session_branch_suffix(&l.scope, &l.branch);
+            let label = sess_label_with_suffix(&l.scope, &suffix, SESS_LABEL_MAX);
+            parts.push(format!("sess:{}", label).yellow().bold().to_string());
+        }
+    }
+    // wt:<name> segment — emitted only when the session worktree's
+    // directory name diverges from the scope-derived slug. `aida session
+    // start` auto-names worktrees `<repo>-<slug>`, so the common case
+    // renders nothing rather than echoing @<scope>; an explicit `--path`
+    // that names the worktree something else is the divergence this
+    // segment exists to surface. trace:TASK-282 | ai:claude
     if let Some(l) = lease.as_ref() {
-        // TASK-60: append a batch/branch indicator when the lease's
-        // branch differs meaningfully from the slugified scope.
-        // Without this, three sessions on EPIC-20 (batch3, batch4,
-        // batch5) all render as `sess:EPIC-20`, losing the batch
-        // context that's the only thing distinguishing them. The
-        // segment uses a slightly larger budget than SCOPE_LABEL_MAX
-        // (16 vs 12) so common `epic-N#batchM` shapes don't truncate
-        // the scope when the suffix is the new signal.
-        // trace:TASK-60 | ai:claude
-        const SESS_LABEL_MAX: usize = 20;
-        let suffix = derive_session_branch_suffix(&l.scope, &l.branch);
-        let label = sess_label_with_suffix(&l.scope, &suffix, SESS_LABEL_MAX);
-        parts.push(format!("sess:{}", label).yellow().bold().to_string());
+        if let Some(seg) = wt_divergence_segment(&l.worktree_path, &l.slug) {
+            parts.push(seg.yellow().bold().to_string());
+        }
     }
     println!("{}", parts.join(&separator));
     Ok(())
@@ -24311,6 +24412,46 @@ fn sess_label_with_suffix(scope: &str, suffix: &str, max_total: usize) -> String
     let scope_budget = max_total - suffix_len;
     let scope_part = truncate(scope, scope_budget);
     format!("{}{}", scope_part, suffix)
+}
+
+/// TASK-282: the `[sess:<anchor>]` annotation folded into the `@SPEC`
+/// statusline segment. Returns `None` when the session anchor is
+/// redundant with the `@<scope>` label — identical scope AND no
+/// batch/branch suffix, the boring common case where a separate `sess:`
+/// segment would only repeat `@`. Returns `Some("[sess:<label>]")` on
+/// divergence: a child-spec `@` (current scope ≠ session anchor) or a
+/// batch suffix the bare `@<scope>` can't carry. Keeping the suffix as a
+/// divergence trigger preserves TASK-60's batch disambiguation (three
+/// EPIC-20 batches stay distinguishable even when `@` equals the scope).
+/// trace:TASK-282 | ai:claude
+fn sess_anchor_annotation(at_spec: &str, sess_scope: &str, suffix: &str) -> Option<String> {
+    if at_spec == sess_scope && suffix.is_empty() {
+        return None;
+    }
+    let label = sess_label_with_suffix(sess_scope, suffix, SESS_LABEL_MAX);
+    Some(format!("[sess:{}]", label))
+}
+
+/// TASK-282: the `wt:<name>` statusline segment. Returns `Some` only when
+/// the session worktree's directory name diverges from the scope slug.
+/// `aida session start` auto-names worktrees `<repo>-<slug>` (and a bare
+/// `<slug>` dir also counts as matching), so the common case renders
+/// nothing rather than echoing `@<scope>`. An explicit `--path` that
+/// names the worktree something else (e.g. `hot-fix`) is the divergence
+/// the segment exists to surface. The matched name is truncated to the
+/// `sess:` budget so a long path doesn't blow the line width.
+/// trace:TASK-282 | ai:claude
+fn wt_divergence_segment(worktree_path: &std::path::Path, slug: &str) -> Option<String> {
+    let basename = worktree_path.file_name().and_then(|s| s.to_str())?;
+    if slug.is_empty() {
+        return None;
+    }
+    let matches = basename == slug || basename.ends_with(&format!("-{}", slug));
+    if matches {
+        None
+    } else {
+        Some(format!("wt:{}", truncate(basename, SESS_LABEL_MAX)))
+    }
 }
 
 // ============================================================================
