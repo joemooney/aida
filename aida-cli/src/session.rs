@@ -599,6 +599,64 @@ fn exec_claude(
     }
 }
 
+/// STORY-263: build the argv (after the `claude` program name) for a headless
+/// `claude -p` launch. The flag set is SPIKE-7's mandatory list — see
+/// `docs/spikes/2026-05-16-claude-headless.md`:
+///   - `-p` — print mode: single turn, exits on its own, no Ctrl+D.
+///   - `--permission-mode bypassPermissions` — mandatory; `acceptEdits`
+///     leaves `Bash` gated and `default` auto-denies silently (spike Q2).
+///   - `--output-format stream-json --verbose` — newline-delimited JSON
+///     events, so a watchdog (TASK-298) can tail liveness (spike Q6).
+///   - `--session-id <uuid>` — persistence stays ON, so a killed run stays
+///     resumable (spike Q9).
+/// Never `--bare`: it strips OAuth/keychain auth and breaks login (spike Q1).
+/// Pure — the flag set is unit-tested without spawning claude.
+/// trace:STORY-263 | ai:claude
+pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
+    vec![
+        "-p".to_string(),
+        "--permission-mode".to_string(),
+        "bypassPermissions".to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--session-id".to_string(),
+        session_id.to_string(),
+        // Prompt last — a positional, mirroring `exec_claude`.
+        prompt.to_string(),
+    ]
+}
+
+/// STORY-263: replace this process with a headless `claude -p` run — the
+/// launch path behind `aida queue work --no-human` (the `--auto-complete`
+/// orchestrator's reviewer phase). Claude's stream-json stdout is redirected
+/// to `log_path` so the orchestrator's own stdout stays clean (it carries
+/// `--json` phase events) and TASK-298's watchdog has a file to tail; stderr
+/// stays inherited so Claude errors still surface. trace:STORY-263 | ai:claude
+pub fn exec_claude_headless(prompt: &str, session_id: &str, log_path: &Path) -> Result<()> {
+    use std::process::{Command, Stdio};
+    if let Some(dir) = log_path.parent() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("failed to create {}", dir.display()))?;
+    }
+    let log = std::fs::File::create(log_path)
+        .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
+    let mut cmd = Command::new("claude");
+    cmd.args(claude_headless_args(prompt, session_id))
+        .stdout(Stdio::from(log));
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = cmd.exec();
+        anyhow::bail!("failed to exec claude: {}", err);
+    }
+    #[cfg(not(unix))]
+    {
+        let status = cmd.status().context("failed to spawn claude")?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
+}
+
 /// One line of `~/.aida/session-launches.log` matching the current cwd,
 /// parsed back into structured form so `aida session list` can correlate
 /// by timestamp. (The cwd field is dropped after the filter — every
@@ -1430,6 +1488,48 @@ mod tests {
         assert_eq!(
             derive_session_name("feature:auth", "feature-auth-login", "implementer"),
             Some("impl@feature:auth".to_string())
+        );
+    }
+
+    // --- Headless launch (STORY-263) --------------------------------------
+
+    /// SPIKE-7's mandatory flag set must all be present — a headless run that
+    /// is missing any of these silently does nothing or hangs.
+    #[test]
+    fn claude_headless_args_has_spike7_mandatory_flags() {
+        let args = claude_headless_args(
+            "/aida-review --pr 7",
+            "019e0000-0000-7000-8000-000000000000",
+        );
+        assert!(args.contains(&"-p".to_string()), "print mode: {args:?}");
+        assert!(
+            args.contains(&"bypassPermissions".to_string()),
+            "permission mode (spike Q2): {args:?}"
+        );
+        assert!(
+            args.contains(&"stream-json".to_string()),
+            "stream-json output (spike Q6): {args:?}"
+        );
+        assert!(args.contains(&"--verbose".to_string()), "verbose: {args:?}");
+        assert!(
+            args.contains(&"--session-id".to_string()),
+            "session id (spike Q9): {args:?}"
+        );
+        // The prompt and the session id both survive into the argv.
+        assert!(args.contains(&"/aida-review --pr 7".to_string()));
+        assert!(args.contains(&"019e0000-0000-7000-8000-000000000000".to_string()));
+    }
+
+    /// `--bare` strips OAuth/keychain auth and breaks login (spike Q1) — the
+    /// headless launch must never use it.
+    #[test]
+    fn claude_headless_args_never_uses_bare() {
+        let args = claude_headless_args("/aida-review --pr 7", "sid");
+        assert!(!args.iter().any(|a| a == "--bare"), "{args:?}");
+        // Persistence stays ON — no `--no-session-persistence` either (Q9).
+        assert!(
+            !args.iter().any(|a| a == "--no-session-persistence"),
+            "{args:?}"
         );
     }
 }
