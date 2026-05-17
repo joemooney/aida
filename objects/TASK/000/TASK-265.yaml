@@ -79,12 +79,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16: *\"when we \`/aida-pickup TASK-259\` a task, I think we should pretty print the task at the outset so that as I look at the terminal I can see what is/was about to be worked on without having to issue a separate command to show the details of the task.\"*
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-05-17T16:37:55.322185604Z
+modified_at: 2026-05-17T16:46:19.049103844Z
 req_type: Task
 tags:
 - aida-pickup
@@ -106,3 +106,7 @@ comments:
   content: 'Cross-reference: this spec is an instance of the pattern TASK-311 is designed to catch at filing time (dialog-role criteria contradicting the feature''s primary caller environment). Comment added 2026-05-17 as part of the self-audit lesson capture.'
   created_at: 2026-05-17T16:37:55.322185604Z
   modified_at: 2026-05-17T16:37:55.322185604Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-17T16:46:19.049103844Z
+  implemented_by: joe
