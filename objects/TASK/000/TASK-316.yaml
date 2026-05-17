@@ -1,0 +1,12 @@
+id: 019e373e-4f18-7641-90c9-638fa6bca4d0
+spec_id: TASK-316
+agreed_id: TASK-316
+title: Grow the manifest `items` list as `/aida-pickup --batch` picks up each member
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T18:41:30.904932170Z
+modified_at: 2026-05-17T18:41:30.904932170Z
+req_type: Task
