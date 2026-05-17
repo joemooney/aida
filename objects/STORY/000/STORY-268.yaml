@@ -20,12 +20,12 @@ description: |-
   ## Depends on
 
   - STORY 2 (extraction) — TUI must exist in the new repo before this STORY removes it from core
-status: Approved
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:39.622646152Z
-modified_at: 2026-05-17T01:20:39.622646152Z
+modified_at: 2026-05-17T02:14:43.241024663Z
 req_type: Story
 tags:
 - aida-cli
