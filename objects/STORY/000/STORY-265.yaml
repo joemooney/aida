@@ -94,12 +94,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16: *\"is --with-plan a step to just plan and not implement? I am thinking that I could start work provisionally on a new task if I just plan and then once a task that is implemented completes we could proceed to work that plan.\"* — surfaced the pipelining opportunity AIDA's lifecycle already supports informally; this STORY formalizes it.
-status: Approved
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:03:43.330261877Z
-modified_at: 2026-05-17T01:03:43.330261877Z
+modified_at: 2026-05-17T02:14:29.913271465Z
 req_type: Story
 tags:
 - advisor-vision
