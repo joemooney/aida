@@ -1,0 +1,51 @@
+id: 019e3696-1dd9-7132-84dc-9504ddd8f07c
+spec_id: TASK-309
+agreed_id: TASK-309
+title: 'Recover stashed WIP: v0.7.0→v0.8.0 version bump + README positioning polish'
+description: |-
+  A partial-release-prep WIP was autostashed during the PR-65 (STORY-278) rebase on 2026-05-17. Contents:
+
+  - Workspace Cargo.toml: \`0.7.0 → 0.8.0\`
+  - aida-cli/Cargo.toml: \`aida-core = "0.7" → "0.8"\`, \`aida-tui = "0.7" → "0.8"\`
+  - aida-crate/Cargo.toml: \`version = "0.7.0" → "0.8.0"\`, \`aida-core = "0.7" → "0.8"\`
+  - Cargo.lock: 12-line diff matching the version bump
+  - README.md: strategic-wording polish ("hidden kernel" → "background kernel"; added "butler of sorts" framing)
+
+  Origin unknown — last released version on \`ec85eaed\` is 0.7.0; no commit anywhere has 0.8.0. Possibly:
+  - Manual release prep started but not committed
+  - \`scripts/release.sh\` invoked but bailed before commit
+  - Web /ultraplan or other session edited but didn't include in its PR
+
+  Stashed during PR-65 push prep so PR-65 stayed scoped to findings triage. **Do NOT lose this work — the README diff in particular looks deliberate**.
+
+  ## Acceptance
+
+  - [ ] \`git stash list\` shows the entry; identify it by message *"WIP: v0.7.0→v0.8.0 bump + README positioning polish (pre-PR-65 autostash)"*
+  - [ ] \`git stash show -p stash@{N}\` to inspect the full diff before any decision
+  - [ ] Decide: is this the right moment to cut v0.8.0?
+    - YES → put the bump + README polish on a release branch; pair with TASK-299's CHANGELOG draft if available; tag via \`scripts/release.sh\`
+    - NO (premature) → restore the README polish separately on a doc-polish branch; abandon or defer the version bump until the next milestone
+  - [ ] Stash entry removed when handled (\`git stash drop\`)
+
+  ## Composes with
+
+  - **TASK-299** (auto-generated CHANGELOG.md from spec graph + git tag boundaries — v0.8.0 release wants CHANGELOG entries; TASK-299 can produce them mechanically)
+  - **TASK-289** (README defensible-niche statement — overlaps with the "background kernel" wording polish in the stash)
+  - **BUG-111** (release-script generic dep pin — relevant if the stash came from a release.sh mid-flight)
+
+  ## Origin
+
+  2026-05-17 mid-rebase: \`gh pr checkout 65\` autostashed 5 modified files (\`Cargo.toml\`, \`Cargo.lock\`, \`README.md\`, \`aida-cli/Cargo.toml\`, \`aida-crate/Cargo.toml\`); rebase restored them. Investigation showed they were a partial release prep, not part of PR-65. Stashed to keep PR-65 clean; this TASK preserves the recovery path.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T15:37:48.249754232Z
+modified_at: 2026-05-17T15:37:48.249754232Z
+req_type: Task
+tags:
+- changelog
+- release
+- stash-recovery
+- version-bump
+- wip-rescue
