@@ -91,11 +91,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:25:55.842080480Z
-modified_at: 2026-05-17T15:26:04.383825576Z
+modified_at: 2026-05-17T18:51:08.109084780Z
 req_type: Task
 tags:
 - aida-pr
 - alpha-readiness
+- batch:pr-flow
 - cli
 - first-users
 - force-with-lease
