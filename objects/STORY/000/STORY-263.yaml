@@ -77,7 +77,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:25:44.957144080Z
-modified_at: 2026-05-17T03:05:46.747202457Z
+modified_at: 2026-05-17T05:03:16.621906253Z
 req_type: Story
 tags:
 - advanced-user
@@ -172,3 +172,75 @@ comments:
   content: 'SPIKE-7 (gating spike) is complete — see docs/spikes/2026-05-16-claude-headless.md. Verdict: headless claude -p is viable for --no-human; STORY-263 proceeds, scoped. Design must absorb: (a) launch with --permission-mode bypassPermissions --output-format stream-json --verbose --session-id <uuid>, never --bare; (b) the orchestrator''s completion check is the detection model — exit code is insufficient, parse the final result event and treat non-empty permission_denials as ''needs human -> re-queue/escalate''; (c) human gates (reviewer merge decision, any AskUserQuestion skill pause) cannot be answered headless — they become clean no-ops, so compose the headless reviewer with --auto-complete''s autonomous-merge path rather than an AskUserQuestion gate; (d) caller-side timeout is mandatory (no built-in wall-clock limit); (e) ~$3/spec — design in --max-budget-usd caps + a --model knob; (f) worktree store-provisioning + non-interactive aida flags must be solved for a worktree-per-task drain. The watchdog is for genuinely-stuck long runs, NOT pauses — pauses fail fast.'
   created_at: 2026-05-17T03:05:46.747202457Z
   modified_at: 2026-05-17T03:05:46.747202457Z
+- id: 019e3451-308d-78a2-836b-5065050238dc
+  author: joe
+  content: |-
+    ## Critical scope refinement from SPIKE-7 + dialog discussion 2026-05-17
+
+    The SPIKE-7 finding that \"pauses fail fast\" reveals that STORY-263's scope is **larger than just spawning \`claude -p\`**. Every interactive surface in the AIDA workflow needs a headless-mode path or it'll bail when headless Claude hits the prompt.
+
+    ### Three classes of prompts to handle
+
+    **(1) Skill prompts** — Claude rendering AskUserQuestion in markdown skill templates:
+
+    Example: \`/aida-pr\` prompts \"Open this PR against main?\" — headless Claude bails ~10s.
+
+    Fix: skill templates detect \`AIDA_NO_HUMAN=1\` env var and auto-confirm (or skip the prompt step entirely).
+
+    Affected skills to audit:
+    - \`/aida-pr\` — multiple confirmations (PR creation, body, base branch)
+    - \`/aida-pickup\` — design-fork pauses (per \`feedback_pause_for_design_input.md\`); under --no-human, MUST not pause
+    - \`/aida-review\` — confirmations before posting verdict (writes verdict file already; needs to skip post-confirm)
+    - \`/aida-commit\` — message confirmations
+    - Any skill ending with \"continue? [Y/n]\" or similar
+
+    **(2) CLI prompts** — \`aida\` binary itself asking \"Continue? [y/N]\":
+
+    Example: \`aida session end\` asks before deleting the lease. Has \`--yes\` flag.
+
+    Fix: skills running under \`AIDA_NO_HUMAN=1\` ALWAYS pass \`--yes\` to underlying commands. Audit:
+    - \`aida session end\` — has \`--yes\`
+    - \`aida queue work\` — probably no prompt
+    - \`aida db reconcile-status\` — check
+    - \`aida queue work TASK-X --auto-complete\` — orchestrator itself shouldn't prompt; verify
+    - \`aida edit\` — does it confirm on status changes? Audit.
+
+    **(3) Subprocess prompts** — gh, git, cargo:
+
+    Example: \`gh pr create\` (without \`--fill\`) opens editor for body; \`git push\` may prompt for credentials; \`cargo install\` confirms overwrites.
+
+    Fix: skills under \`AIDA_NO_HUMAN=1\` use non-interactive variants of every subprocess invocation. Audit each call site.
+
+    ### Required environment for headless mode
+
+    \`AIDA_NO_HUMAN=1\` env var (set by orchestrator when spawning headless Claude) signals:
+    - Skills auto-confirm AskUserQuestion-style prompts (default to safe answer)
+    - Skills pass \`--yes\` to aida CLI invocations
+    - Skills use non-interactive subprocess flags
+    - If a prompt is genuinely unanswerable (e.g., requires design judgment), invoke \`/aida-punt\` instead of silently picking wrong
+
+    ### Implementation strategy (additive to STORY-263's existing scope)
+
+    - [ ] Audit all skill templates in \`aida-core/templates/skills/\` for AskUserQuestion / interactive prompts; document each
+    - [ ] Add \`{{#if env.AIDA_NO_HUMAN}}...{{/if}}\` template logic (or equivalent Claude-instruction pattern) for headless paths
+    - [ ] Each skill's headless branch either: (a) auto-answer with safe default + log decision, OR (b) call \`/aida-punt\` if genuinely ambiguous
+    - [ ] Orchestrator under \`--no-human\` sets \`AIDA_NO_HUMAN=1\` in the spawned Claude's env
+    - [ ] Tests: each skill verified to complete cleanly under headless mode (exit 0 + permission_denials empty)
+    - [ ] Tests: each skill verified to punt cleanly when ambiguity is genuine (verdict file or punt record)
+
+    ### Composes with
+
+    - **SPIKE-7** (just shipped) — empirical evidence backs every requirement above
+    - **EPIC-28 STORY 3** (shelving + punting) — \`/aida-punt\` mechanism this STORY uses
+    - **\`feedback_pause_for_design_input.md\`** memory — pauses become punts under headless
+    - **TASK-294** (aida-worker bash MVP) — invokes \`--auto-complete --no-human\`; this STORY's scope makes that invocation reliable
+
+    ### Why this scope expansion matters
+
+    The original STORY-263 framing was \"add a flag, spawn claude -p\". The real work is \"make AIDA's entire interactive surface have a headless-safe path.\" That's substantially more scope but unavoidable — without it, every other improvement we made today (orchestrator hardening, batch composition, scheduled drains) is bottlenecked on the user's Ctrl+D between phases.
+
+    ### Origin
+
+    User asked 2026-05-17 after SPIKE-7 shipped: *\"when we use this, will prompts like this cause failure?\"* — showed the \`/aida-pr\` confirmation prompt. Direct answer: yes, that exact prompt would fail under headless mode. The full audit + headless-aware refactor is STORY-263's actual scope.
+  created_at: 2026-05-17T05:03:16.621906253Z
+  modified_at: 2026-05-17T05:03:16.621906253Z
