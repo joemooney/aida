@@ -80,7 +80,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:40:34.651717351Z
-modified_at: 2026-05-17T18:49:33.917237600Z
+modified_at: 2026-05-17T18:50:21.550368097Z
 req_type: Task
 tags:
 - aida-pickup
@@ -94,6 +94,10 @@ relationships:
 - rel_type: Parent
   target_id: 019e373e-4f18-7641-90c9-638fa6bca4d0
   created_at: 2026-05-17T18:41:34.477877363Z
+- rel_type: !Custom implemented-by
+  target_id: 019e3746-595b-7682-b198-916fca4c71b3
+  created_at: 2026-05-17T18:50:21.550360395Z
+  created_by: joe
 comments:
 - id: 019e373e-66c9-70d3-a61a-990c01494f5c
   author: joe
