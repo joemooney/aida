@@ -1,0 +1,26 @@
+id: 019e3675-0925-7453-95ac-c013209fe0f8
+spec_id: STORY-280
+agreed_id: STORY-280
+title: 'Review PR-67: fix(plans): correct stale autonomous-drain.md ref in STORY-263 plan (BUG-224)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e34f6`) for branch `bug-224`.
+
+  - PR: <https://github.com/joemooney/aida/pull/67>
+  - Branch: `bug-224` → `main`
+
+  ## Covers
+
+  - BUG-224
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 67` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T15:01:40.261491989Z
+modified_at: 2026-05-17T15:01:40.261491989Z
+req_type: Story
