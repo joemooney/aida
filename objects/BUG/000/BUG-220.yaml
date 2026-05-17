@@ -1,0 +1,76 @@
+id: 019e3390-c205-7c52-8921-c3a947323295
+spec_id: BUG-220
+agreed_id: BUG-220
+title: 'Multi-node queue identity: queue appears empty from a second node despite same shell user (joe)'
+description: |-
+  User observed 2026-05-16: when working from a different node (work machine vs home), \`aida queue list\` showed an empty queue despite the orphan-store having queued items.
+
+  This is potentially in BUG-89's family (queue identity = shell's \`\$USER\`) but could be a different sync gap. Need investigation.
+
+  ## Observed
+
+  User has two nodes: home (\`joe@imac\`) and work (different hostname, same \`\$USER=joe\` presumed). Filed and worked specs from home; switched to work; \`aida queue list\` showed empty.
+
+  User's priority guidance: *\"this is low priority, it is important that the single user/node setup is solid first.\"*
+
+  ## Investigation hypotheses
+
+  ### Hypothesis A: Different \`\$USER\` across machines
+  - Work machine's shell \`\$USER\` might differ (joseph, joe-work, etc.)
+  - \`current_user_id()\` (per BUG-89 memory) resolves to different value
+  - Queue stored under one user_id; lookup under another → empty result
+  - Verifiable: \`echo \$USER\` on both nodes
+
+  ### Hypothesis B: Orphan-store sync gap
+  - Queue items live in the orphan-store as YAML objects (git-tracked)
+  - Work machine hadn't pulled (\`aida db sync --pull\`) recent state
+  - Verifiable: \`aida cache status\` shows HEAD mismatch; \`aida db sync --pull\` then re-check
+
+  ### Hypothesis C: Queue items stored per-node somehow
+  - Maybe queue routing includes node identity (from \`~/.aida/node.toml\`)
+  - Cross-node references would resolve to different storage paths
+  - Verifiable: read aida-cli's queue-store code for node-id touch points
+
+  ### Hypothesis D: Cache state vs store state mismatch
+  - \`.aida/cache.db\` is rebuildable read-projection (per CLAUDE.md storage model)
+  - Work machine's cache might be stale/empty even though store has items
+  - Verifiable: \`aida cache rebuild\` then re-check
+
+  ## Acceptance
+
+  - [ ] Diagnostic: from each node, run \`echo \$USER\`, \`aida cache status\`, \`aida queue list --all\`, capture which hypothesis applies
+  - [ ] Once root cause identified:
+    - (A) \`\$USER\` differs → document the override (\`AIDA_USER=joe\` env or \`--user joe\` flag) per BUG-89
+    - (B) Sync gap → confirm \`aida db sync --pull\` resolves it; possibly improve \`aida queue list\` to flag stale-cache state
+    - (C) Per-node routing → fix the routing OR document the workaround
+    - (D) Cache rebuild → \`aida queue list\` should auto-rebuild stale cache silently
+  - [ ] Multi-node test strategy: clone AIDA repo to two paths on the same machine, simulate as two nodes (different paths), reproduce the symptom or confirm it's resolved
+  - [ ] Document the multi-node setup pattern in \`docs/multi-node.md\` or sibling: how to ensure queue/state consistency across machines
+
+  ## Composes with
+
+  - **BUG-89** (queue identity = shell \$USER, not node identity) — possible root cause
+  - **\`aida cache status\` / \`aida cache rebuild\`** — diagnostic tooling
+  - **\`aida db sync --pull\`** — sync mechanism
+
+  ## Why low priority
+
+  User's alpha audience is single-user/single-node tech-savvy friends. Multi-node is power-user pattern (one developer with multiple machines, eventual team-of-N). Stabilize the single-node path first; multi-node is post-alpha unless a friend hits it.
+
+  ## Origin
+
+  User observed 2026-05-16: *\"note: when I was at work (a different node) the queue was empty. I am not sure if this is still an issue. I think I should be able to make another local clone of aida on this machine as a different node and see how that works, but this is low priority, it is important that the single user/node setup is solid first.\"*
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:33:05.413783730Z
+modified_at: 2026-05-17T01:33:05.413783730Z
+req_type: Bug
+tags:
+- bug-89-family
+- cross-machine
+- multi-node
+- post-alpha
+- queue-identity
+- sync
