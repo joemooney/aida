@@ -137,12 +137,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:28:11.451611274Z
-modified_at: 2026-05-17T18:49:56.181321254Z
+modified_at: 2026-05-17T18:50:46.371581077Z
 req_type: Story
 tags:
 - advisor-pattern
 - alpha-readiness
 - autonomy-modes
+- batch:autonomy-modes
 - first-users
 - no-human
 - prompt-kinds
