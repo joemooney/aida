@@ -1,0 +1,12 @@
+id: 019e3848-f752-7200-9d2c-1af56e7653e0
+spec_id: TASK-324
+agreed_id: TASK-324
+title: Skill-template lint — warn when an `AskUserQuestion`-style prompt lacks a
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T23:32:46.546395454Z
+modified_at: 2026-05-17T23:32:46.546395454Z
+req_type: Task
