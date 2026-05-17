@@ -18,12 +18,12 @@ description: |-
   ## Depends on
 
   - STORY 1 (Define aida-core public API) — must land first
-status: Approved
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:33.974890900Z
-modified_at: 2026-05-17T01:20:33.974890900Z
+modified_at: 2026-05-17T02:14:41.125780298Z
 req_type: Story
 tags:
 - aida-tui
