@@ -55,12 +55,12 @@ description: |-
   ## Origin
 
   User attempted \`aida queue work --batch workflow-hint-polish --auto-complete\` 2026-05-16 immediately after PR-51 (TASK-257, the CI cycle-time multiplier) merged. Wanted to drain the workflow-hint-polish batch autonomously now that subsequent PRs benefit from Linux-only CI. The flag-combination error is exactly the friction this filing captures.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:20:13.831734961Z
-modified_at: 2026-05-16T20:20:13.831734961Z
+modified_at: 2026-05-17T02:10:38.971618372Z
 req_type: Task
 tags:
 - alpha-readiness
