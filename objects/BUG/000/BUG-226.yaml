@@ -2,13 +2,71 @@ id: 019e36a7-2c8f-7ec2-a53f-6b78d3011cdc
 spec_id: BUG-226
 agreed_id: BUG-226
 title: Standalone aida queue work --role reviewer --no-human exits silent (no pass/fail summary)
-description: "The headless reviewer (\\`claude -p\\` running \\`/aida-review --pr 65\\`) completed a full review of PR-65 — posted a substantive consolidated comment with verdict PASS, evidence per acceptance area, recommendation \\\"merge\\\" — but **did NOT write \\`.aida/review-verdicts/PR-65.json\\`**. The orchestrator (phase 3) read no verdict file and exited silently without surfacing why.\n\n## Symptoms\n\n1. **Verdict file missing**: \\`.aida/review-verdicts/PR-65.json\\` absent. Every other recent PR has one (PR-66, 67, 68 from same morning all have verdict files).\n2. **Reviewer's \\`result\\` text**: *\"I'll pause here for your decision — the review is complete and PR-65 is ready, but I won't merge without your go-ahead.\"* — the reviewer-as-claude decided to defer the merge step itself rather than write the verdict and let the orchestrator advance.\n3. **Orchestrator silent exit**: returned to shell prompt with no pass/fail indication, no \"verdict missing — manual review required\" message. User had to inspect the JSONL by hand to learn what happened.\n4. **JSONL shows successful completion**: \\`is_error: false, num_turns: 25, total_cost_usd: $1.45, stop_reason: end_turn\\`. So from the orchestrator's surface view, the headless session \"succeeded\" — but the contract (verdict file) wasn't fulfilled.\n5. **PR-65 stayed OPEN**: \\`state: OPEN, mergedAt: null, mergeStateStatus: CLEAN\\` — phase 4 (merge) never ran.\n\n## Two distinct issues\n\n### Issue A: Reviewer skipped verdict-file write under specific conditions\n\nPR-65 had **7 commits**, all subject STORY-278, large diff (+809 lines). The reviewer ran 25 turns. Other PRs reviewed today (PR-66/67/68) were smaller — 1-2 commits, narrow scope.\n\nPossible causes:\n- \\`/aida-review\\` skill prompt didn't make verdict-writing mandatory before declaring \"done\"\n- Long-context reviewer ran out of energy on the verdict-write step\n- Reviewer interpreted \"PASS, but ask user before merging\" as a NeedsAttention case and chose to pause rather than write Approved\n- Skill template wording allows \"pause for user decision\" as a valid termination — that's incompatible with autonomous-drain mode\n\nInvestigation needed: read \\`/aida-review\\` skill template (\\`aida-core/templates/skills/aida-review.md\\`) to find the exit path; check whether verdict-file write is guaranteed before completion or only on Approve/NeedsChanges/Reject paths (and not on a soft \"pause\").\n\n### Issue B: Orchestrator silent exit on missing verdict file\n\nWhen phase 3 completes (headless reviewer exits with \\`is_error: false\\`) but the verdict file is missing, the orchestrator should surface this loudly:\n\n\\`\\`\\`\n✗ phase 3 headless reviewer exited cleanly (cost $1.45, 25 turns) but produced\n  NO verdict file at .aida/review-verdicts/PR-65.json\n  \n  The reviewer may have paused for human decision instead of writing the verdict.\n  Check the posted PR comment and the JSONL log:\n    https://github.com/joemooney/aida/pull/65#issuecomment-...\n    /home/joe/ai/aida/.aida/headless-logs/pr-65-019e369e-....jsonl\n  \n  Verdict-file-missing → orchestrator bailing. Decide manually:\n    gh pr merge 65 --squash --delete-branch    # if you trust the posted comment\n    aida queue work PR-65 --role reviewer       # to retry the review\n\\`\\`\\`\n\nThis converts a silent failure into an actionable next step. Composes naturally with TASK-307 (tee high-signal events).\n\n## Acceptance\n\n### Reviewer side (Issue A)\n\n- [ ] \\`/aida-review\\` skill template guarantees a verdict-file write before any termination path — including soft-pause / \"ask user before merging\" outcomes. If the reviewer wants to pause, the verdict should still be written with \\`verdict: NeedsAttention\\` (or similar) + a \\`reason: \"Reviewer-deferred merge decision\"\\` so the orchestrator can route correctly.\n- [ ] Or: under \\`AIDA_HEADLESS=1\\`, the skill template removes the \"pause for user decision\" outcome entirely; either write Approved/NeedsChanges/Rejected verdict + post the comment, or fail with explicit \\`is_error: true\\` and a reason.\n- [ ] Round-trip test: simulated long review (25-turn budget, large diff) reliably writes a verdict file before exit.\n\n### Orchestrator side (Issue B)\n\n- [ ] Post-phase-3 check: if headless reviewer exit code is 0 AND verdict file is missing, print a structured warning (per the example above) instead of silent-exit\n- [ ] If verdict file present: read it, route accordingly (Approved → phase 4 merge; NeedsChanges/Rejected → halt with appropriate message)\n- [ ] If verdict file missing: orchestrator exits with non-zero AND prints the recovery options\n- [ ] Update \\`docs/autonomous-drain.md\\` with the verdict-file-missing recovery path\n\n## Composes with\n\n- **STORY-263** (the headless reviewer + verdict-file pattern this BUG names a regression in)\n- **TASK-307** (tee high-signal events — would have surfaced the reviewer's \"I'll pause here\" message to the terminal in real-time, making this less surprising)\n- **STORY-281** (orchestrator pre-flight rebase — sibling reliability work)\n- **TASK-298** (stream-json watchdog — sister parser for the JSONL; \\`is_error: false\\` without verdict-file is another \\\"clean exit, broken contract\\\" pattern it could catch)\n- \\`feedback_self_test_via_dogfood_merge.md\\` — STORY-278's review surfaced its own headless-reviewer regression; the system tested itself and found a real issue\n\n## Data point for SPIKE-8\n\nPR-65 (web /ultraplan condition C output): \\`total_cost_usd: $1.45\\` for one headless review, 25 turns, 4m38s wall-clock. By comparison, PR-66 verdict file was 189 bytes — implying a shorter review session. Cost-per-review correlates with diff size and commit count. Worth capturing in SPIKE-8's metric set.\n\n## Origin\n\n2026-05-17 morning: user kicked off \\`aida queue work PR-65 --role reviewer --no-human\\` after rebasing PR-65. Headless reviewer ran for 4m38s, posted a real consolidated review comment on PR-65 with PASS verdict + merge recommendation, then exited. Orchestrator returned to prompt silently. User inspected JSONL by hand to learn the outcome.\n\nUser feedback: *\"command finished albeit with no indication of pass/fail or what happened in that headless /aida-review session.\"*"
+description: |-
+  The standalone command \`aida queue work PR-65 --role reviewer --no-human\` (no \`--auto-complete\`, no orchestrator) ran a headless reviewer to completion, posted a substantive consolidated review comment on PR-65 with verdict PASS, and **exited silently to the shell prompt** with no terminal indication of pass/fail, cost, duration, or where the review artifact landed. The user had to inspect the JSONL log by hand to learn the outcome.
+
+  This is **separate from the orchestrator-driven phase-3 path** (\`--auto-complete --no-human\`) — that path has its own \"verdict file → phase 4 merge\" handshake that worked correctly for PR-66/67/68 last night. The standalone path doesn't have that handshake; it lacks ANY end-of-command summary at all.
+
+  ## Symptoms (observed 2026-05-17)
+
+  After \`aida queue work PR-65 --role reviewer --no-human\` exited:
+  - Terminal returned to shell prompt with no summary line
+  - No \"review complete: verdict=PASS, cost=$1.45, see PR-65 comment X\"
+  - No \"verdict file written / not written\"
+  - User had to: \`cat .aida/headless-logs/pr-65-*.jsonl | jq 'select(.type==\"result\")'\` to learn anything
+
+  Meanwhile, the JSONL showed a successful completion: \`is_error: false, num_turns: 25, total_cost_usd: $1.45, stop_reason: end_turn\`, with a verbose \`result\` text explaining the verdict. **All the information existed; none of it surfaced.**
+
+  ## Open question: should standalone reviewer write a verdict file?
+
+  Orchestrator-driven phase 3 writes \`.aida/review-verdicts/PR-N.json\` as part of the handshake to phase 4. Standalone reviewer commands don't produce one (verified: no \`PR-65.json\` despite a successful review).
+
+  Two valid stances:
+  - **Yes, always write** — uniform artifact regardless of invocation context. The user can then \`aida findings list\`-style query verdicts after the fact. Simpler model.
+  - **No, only orchestrator-mode writes** — standalone is "user invokes for one-off review"; verdict-file is an orchestrator-specific handshake. Document the distinction.
+
+  Recommend **yes, always write** — uniform artifact is simpler. The standalone-mode reviewer's verdict is still useful evidence (which PR was reviewed, when, with what cost, by which model).
+
+  ## Acceptance
+
+  - [ ] End-of-command summary printed on \`aida queue work <PR-N> --role reviewer\` (with or without \`--no-human\`):
+    \`\`\`
+    ✓ review complete (4m38s, 25 turns, $1.45)
+      verdict: PASS
+      comment: https://github.com/joemooney/aida/pull/65#issuecomment-...
+      verdict file: .aida/review-verdicts/PR-65.json
+      JSONL log: .aida/headless-logs/pr-65-019e369e-....jsonl
+    \`\`\`
+  - [ ] \`/aida-review\` skill always writes \`.aida/review-verdicts/PR-N.json\` regardless of orchestrator vs standalone context (uniform artifact)
+  - [ ] Verdict file schema preserved (same shape as orchestrator-mode); add \`mode: \"standalone\"|\"orchestrator-phase-3\"\` field so consumers can distinguish
+  - [ ] End-of-command summary reads from the verdict file; if absent (skill regressed), summary prints \`verdict: UNKNOWN (no verdict file)\` with a recovery hint
+  - [ ] Failure summary on \`is_error: true\` or non-zero exit: same shape, replace verdict line with the error reason
+  - [ ] Test: standalone reviewer invocation produces verdict file + summary; \`--quiet\` flag suppresses summary for scripted consumers
+
+  ## Composes with
+
+  - **TASK-307** (tee high-signal events to terminal during headless phases — sister UX work; tee gives live updates, summary gives the final tally)
+  - **STORY-263** (headless reviewer + verdict-file pattern — this BUG extends the pattern to standalone-mode invocations)
+  - **TASK-298** (stream-json watchdog — same JSONL is the source for both \"watch for errors\" and \"summarize at end\")
+  - \`feedback_failed_flag_attempts_are_ux_signals.md\` (silent-exit on command completion is a UX signal worth filing — applied here)
+
+  ## Data point for SPIKE-8
+
+  PR-65 (web /ultraplan condition C output) standalone review: \`total_cost_usd: $1.45\` for one headless review, 25 turns, 4m38s wall-clock. Captures: cost-per-review correlates with diff size + commit count (PR-65 had 7 commits, +809 lines). Compare to PR-66 verdict file (189 bytes) — smaller PR = shorter review = lower cost.
+
+  ## Origin
+
+  2026-05-17 morning: user invoked \`aida queue work PR-65 --role reviewer --no-human\` as a one-shot standalone command (no \`--auto-complete\`, no orchestrator) to get PR-65 reviewed after the rebase. Headless reviewer ran for 4m38s, posted a real consolidated review comment with PASS verdict, then exited. Terminal returned to prompt silently.
+
+  User feedback: *"command finished albeit with no indication of pass/fail or what happened in that headless /aida-review session"* — clarified afterward as a standalone command (not orchestrator) so the original \"silent-exit from orchestrator\" framing was wrong; the real gap is the end-of-command summary for standalone invocations.
+
+  Original dialog-role misframing 2026-05-17: assumed orchestrator context without verifying the command shape; corrected upon user pushback per \`feedback_run_help_before_suggesting_flags.md\` (verify the surface before reasoning about its behavior).
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:56:26.127208719Z
-modified_at: 2026-05-17T15:57:56.445554868Z
+modified_at: 2026-05-17T15:57:57.924150744Z
 req_type: Bug
 tags:
 - first-users
