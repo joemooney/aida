@@ -80,7 +80,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:40:34.651717351Z
-modified_at: 2026-05-17T18:41:36.579154647Z
+modified_at: 2026-05-17T18:49:33.917237600Z
 req_type: Task
 tags:
 - aida-pickup
@@ -102,6 +102,17 @@ comments:
     filed 1 task(s): TASK-316
   created_at: 2026-05-17T18:41:36.969653794Z
   modified_at: 2026-05-17T18:41:36.969653794Z
+- id: 019e3745-addd-7081-8afd-6be08c3f0c54
+  author: joe
+  content: |-
+    Implemented via branch task-272 (commit c21b4707):
+
+    - Persisted `batch_name` on the session manifest, threaded from `aida queue work --batch` through `handle_queue_work` / `write_queue_work_manifest`; manifest always written for a batch pickup.
+    - `aida session show --plan` surfaces the `batch:` marker; `/aida-pickup` + `/aida-pr` skills detect batch context and offer cluster-mode continuation.
+
+    Test status: 562/562 aida-cli tests green; cargo fmt --check clean
+  created_at: 2026-05-17T18:49:33.917237600Z
+  modified_at: 2026-05-17T18:49:33.917237600Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T18:41:27.605548069Z
