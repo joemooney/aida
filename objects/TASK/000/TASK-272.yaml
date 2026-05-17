@@ -80,7 +80,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:40:34.651717351Z
-modified_at: 2026-05-17T18:41:27.605548069Z
+modified_at: 2026-05-17T18:41:36.579154647Z
 req_type: Task
 tags:
 - aida-pickup
@@ -94,6 +94,14 @@ relationships:
 - rel_type: Parent
   target_id: 019e373e-4f18-7641-90c9-638fa6bca4d0
   created_at: 2026-05-17T18:41:34.477877363Z
+comments:
+- id: 019e373e-66c9-70d3-a61a-990c01494f5c
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-17-task-272-batch-cluster-pickup.md
+    filed 1 task(s): TASK-316
+  created_at: 2026-05-17T18:41:36.969653794Z
+  modified_at: 2026-05-17T18:41:36.969653794Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T18:41:27.605548069Z
