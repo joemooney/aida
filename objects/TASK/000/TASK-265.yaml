@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-05-16T17:38:07.650237922Z
+modified_at: 2026-05-17T16:34:43.180712070Z
 req_type: Task
 tags:
 - aida-pickup
@@ -95,3 +95,9 @@ tags:
 - spec-display
 - terminal-context
 - ux
+comments:
+- id: 019e36ca-396c-7340-bdaf-4cf859291d28
+  author: joe
+  content: 'Acceptance correction 2026-05-17 (per implementer pushback at design checkpoint): the original ''non-TTY mode: pretty-print degrades to a single-line summary'' criterion was based on a flawed mental model — the primary caller (/aida-pickup via Claude Code Bash tool) is ALWAYS non-TTY, so the degradation rule would make the card never appear in its own use case. **Corrected**: `--card` always renders the box regardless of TTY; `--brief` is the explicit single-line opposite for scripts. Implementer is shipping Option 1. Updating acceptance criteria below.'
+  created_at: 2026-05-17T16:34:43.180712070Z
+  modified_at: 2026-05-17T16:34:43.180712070Z
