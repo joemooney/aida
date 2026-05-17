@@ -1,0 +1,12 @@
+id: 019e34aa-d643-71e1-a00c-3c50f1d98daa
+spec_id: TASK-301
+agreed_id: TASK-301
+title: TASK-297 — skill-template audit + `AIDA_NO_HUMAN` env var
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T06:41:11.747567200Z
+modified_at: 2026-05-17T06:41:11.747567200Z
+req_type: Task
