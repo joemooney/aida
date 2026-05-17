@@ -121,7 +121,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:18:18.917955429Z
-modified_at: 2026-05-17T01:18:18.917955429Z
+modified_at: 2026-05-17T02:14:49.313085125Z
 req_type: Epic
 tags:
 - aida-tui
@@ -147,3 +147,16 @@ relationships:
 - rel_type: Parent
   target_id: 019e3385-8d62-7893-8e5f-fd79c8673e26
   created_at: 2026-05-17T01:20:54.007458944Z
+comments:
+- id: 019e33b6-f6e1-7450-a97c-ee090d957ba5
+  author: joe
+  content: |-
+    ## Children deferred post-alpha 2026-05-16
+
+    User pushed back on over-engineering. EPIC-29's architectural split is RIGHT, but executing it now (~3-5 days of yak shaving) is premature for an alpha audience that won't notice. The 5 sub-STORYs (STORY-266..270) are moved to Draft status — captured but not queued.
+
+    **Revisit trigger**: after alpha launches and stabilizes, OR when the in-monorepo TUI starts adding deep coupling into \`aida-cli\` internals (which it currently doesn't), or when a third-party shows interest in building an alternate visualization.
+
+    EPIC-29 itself stays at Approved as a captured architectural commitment; just don't execute the children until post-alpha.
+  created_at: 2026-05-17T02:14:49.313085125Z
+  modified_at: 2026-05-17T02:14:49.313085125Z
