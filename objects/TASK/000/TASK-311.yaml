@@ -1,0 +1,93 @@
+id: 019e36cc-8ab4-77a1-9d7f-f2a41b1dc772
+spec_id: TASK-311
+agreed_id: TASK-311
+title: 'Dialog-role spec audit: verify acceptance criteria match the primary caller''s environment before filing'
+description: |-
+  Repeated pattern: dialog role files a spec with acceptance criteria that are **logically consistent in isolation but contradict the feature's primary caller environment**. The implementer hits the contradiction at design-checkpoint pause, surfaces it, dialog corrects the spec, work proceeds. The correction is preserved (per \`feedback_refinements_must_be_acceptance_criteria.md\`) — but the *filing-time discipline* that would have caught it earlier isn't yet codified.
+
+  ## Concrete instances (in chronological order)
+
+  1. **TASK-260** (2026-05-16): refinement to Path/Action/Why glyphs lived in comment, not acceptance — implementer correctly shipped original glyphs. Surfaced \`feedback_refinements_must_be_acceptance_criteria.md\`.
+  2. **TASK-267** (2026-05-16): \"use Path/Action/Why table format from TASK-260\" criterion, but TASK-267 was sequential-steps not parallel-choices. Surfaced \`feedback_parallel_vs_sequential_ui.md\`.
+  3. **BUG-224** (2026-05-17 morning): spec lean toward Option 1 (relocate doc) based on a flawed mental model of the scaffolding propagation channel. Implementer caught it; shipped Option 2.
+  4. **TASK-265** (2026-05-17): \"non-TTY mode: pretty-print degrades to a single-line summary\" criterion — but the primary caller (\`/aida-pickup\` via Claude Code Bash tool) is **always** non-TTY, so the criterion would make the card never appear in its own use case.
+
+  In all four, the implementer surfaced the contradiction at the design-checkpoint pause. **The system worked** — the pushback discipline (\`feedback_pause_for_design_input.md\`) caught what dialog filing didn't. But the pattern of *dialog filing criteria that don't match primary-caller reality* keeps recurring.
+
+  ## The discriminator
+
+  A spec criterion is **environment-coupled** when its truth depends on the runtime context the feature operates in. Examples:
+  - TTY vs piped stdout
+  - Headless (claude -p) vs interactive Claude Code
+  - First-time user vs returning user (re memory + state)
+  - Solo node vs multi-node sync
+  - Same worktree vs cross-worktree
+
+  Filing-time discipline: **before declaring criteria done, name the primary caller (or top 2-3 callers) and verify each criterion holds in their environment**.
+
+  ## Proposed work
+
+  ### 1. Dialog-role skill template update (load-bearing)
+
+  Add a "before filing" step to \`aida-core/templates/skills/aida-req.md\` (or wherever dialog filing lives):
+
+  > Before completing this spec, name the **primary caller(s)** (the feature's top 1-3 invocation paths — user-typed CLI, skill-via-Bash-tool, hook, MCP). For each acceptance criterion, ask: *does this criterion hold in those caller environments?* If a criterion would degrade the feature in its primary caller's environment, the criterion is wrong — fix it before filing.
+
+  ### 2. Memory entry (propagation channel)
+
+  File a new feedback memory: \`feedback_spec_criteria_environment_check.md\` with \`propagation: scaffolding-pack\` marker. Includes the four examples above. Distills the discipline as a one-paragraph rule + the discriminator list.
+
+  ### 3. Discipline doc (Channel A)
+
+  Section in \`docs/aida-discipline/spec-shaping.md\` (create if absent; otherwise extend) titled \"Verify acceptance criteria against primary callers.\" Lists the four examples with short before/after.
+
+  ### 4. Stretch: \`aida spec audit <ID>\` command (defer)
+
+  Programmatic check that runs heuristic red-flag detection on acceptance bullets: TTY-conditional language, \"interactive\" / \"manual\" / \"non-headless\" branching, \"the user will...\" verb-mood without naming the user-vs-script. Reports candidates for review.
+
+  This is **out of scope** for this TASK. File as a separate sub-TASK only if the discipline-only approach (1-3) doesn't reduce recurrence. Tools without discipline don't fix discipline gaps.
+
+  ## Acceptance
+
+  - [ ] Dialog skill template (\`aida-core/templates/skills/aida-req.md\` or equivalent) updated with the \"name primary callers, verify each criterion against their environment\" step before filing
+  - [ ] \`feedback_spec_criteria_environment_check.md\` memory created with \`propagation: scaffolding-pack\` frontmatter; indexed in dialog-project's MEMORY.md
+  - [ ] \`docs/aida-discipline/spec-shaping.md\` adds (or extends) the section with examples
+  - [ ] Scaffolding test (post-STORY-255): \`aida init --with-memories\` includes the new memory in the starter pack
+  - [ ] Cross-references: comments on TASK-260, TASK-267, BUG-224, TASK-265 reference this TASK so future readers see the pattern
+
+  ## Out of scope
+
+  - **\`aida spec audit <ID>\` programmatic checker** — separate sub-TASK if discipline alone proves insufficient
+  - **Retroactive audit of existing specs** — old specs stay as-is; discipline is forward-looking
+  - **Implementer-side audit at pickup time** — pause-for-design-input pattern already catches these (proven in 4/4 cases); duplicating dialog discipline at implementer pickup is over-engineering
+
+  ## Composes with
+
+  - **\`feedback_refinements_must_be_acceptance_criteria.md\`** — sibling discipline (criterion fixes BELONG in acceptance, not comments); this TASK adds the upstream check (don't file flawed criteria in the first place)
+  - **\`feedback_parallel_vs_sequential_ui.md\`** — same family: wrong mental model at spec time
+  - **\`feedback_pause_for_design_input.md\`** — the implementer-side pattern this TASK reduces dependency on (still valuable as last line of defense; this TASK aims to reduce frequency)
+  - **\`feedback_propagate_generic_discipline_via_scaffolding.md\`** — this TASK ITSELF must propagate via scaffolding (Channels A + B); this TASK applies its own discipline to itself
+  - **STORY-255** (scaffolding pack — Channel B consumer of the new memory)
+  - **TASK-289** (defensible-niche statement — same shape: a spec criterion that needs primary-caller awareness)
+
+  ## Origin
+
+  2026-05-17 dialog session: implementer hit the 4th instance of dialog-filed-criterion-contradicting-primary-caller (TASK-265's non-TTY degradation rule vs the skill being always non-TTY). User feedback: *"file the self-audit TASK."*
+
+  Pattern observed across 4 specs in 36 hours. The implementer-side pause-for-design pattern caught all 4, but the filing-time discipline that would have prevented the contradiction in the first place isn't yet codified as a checkable step in dialog's workflow. This TASK closes that loop.
+
+  Discipline-first approach (no new tooling): the value is in the dialog role's filing habits, not in a programmatic checker. Adding tooling without the habit reproduces the gap one layer down.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T16:37:15.060027836Z
+modified_at: 2026-05-17T16:37:15.060027836Z
+req_type: Task
+tags:
+- advisor-discipline
+- dialog-discipline
+- propagation
+- scaffolding-pack
+- self-audit
+- spec-shaping
