@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:56:26.127208719Z
-modified_at: 2026-05-17T15:57:57.924150744Z
+modified_at: 2026-05-17T15:57:59.032462838Z
 req_type: Bug
 tags:
 - first-users
@@ -75,3 +75,9 @@ tags:
 - orchestrator
 - silent-exit
 - verdict-file
+comments:
+- id: 019e36a8-9778-7b32-96aa-272edc0776bc
+  author: joe
+  content: 'Reframed 2026-05-17: original framing assumed orchestrator-driven phase-3 silent-exit, but command was standalone (`aida queue work PR-65 --role reviewer --no-human` — no `--auto-complete`). Real gap is end-of-command summary for standalone reviewer invocations + decision on whether standalone writes verdict file. User correction; dialog-role apology noted.'
+  created_at: 2026-05-17T15:57:59.032462838Z
+  modified_at: 2026-05-17T15:57:59.032462838Z
