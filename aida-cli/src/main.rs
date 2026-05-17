@@ -16226,6 +16226,11 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
         "source:".dimmed(),
         manifest.plan_source.cyan()
     );
+    // TASK-272: surface the batch marker so /aida-pickup and /aida-pr can
+    // detect batch context from this view. trace:TASK-272 | ai:claude
+    if let Some(batch) = &manifest.batch_name {
+        println!("  {} {}", "batch:".dimmed(), batch.cyan());
+    }
     println!();
     println!(
         "  {:<3} {:<14} {:<14} {}",
@@ -16782,16 +16787,26 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
         display_ids.push(display_id);
     }
 
+    // TASK-272: preserve a batch marker recorded by `aida queue work
+    // --batch` — rewriting the planned cluster (e.g. /aida-pickup Step 3a
+    // recording a user-confirmed multi-item batch) must not silently drop
+    // the batch context /aida-pickup keys its next-steps menu off.
+    // trace:TASK-272 | ai:claude
+    let path = session_manifest::manifest_path(&project_root, &lease.id);
+    let batch_name = session_manifest::load(&path)
+        .ok()
+        .and_then(|m| m.batch_name);
+
     let manifest = session_manifest::SessionManifest {
         session_id: lease.id.clone(),
         planned_at: now,
         plan_source: source.to_string(),
         claude_session_id: None,
+        batch_name,
         plan: None,
         items: manifest_items,
     };
 
-    let path = session_manifest::manifest_path(&project_root, &lease.id);
     session_manifest::save(&path, &manifest)?;
 
     println!(
@@ -41846,6 +41861,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // this session headless. The orchestrator appends a bare
                 // `--no-human` to its reviewer subprocess.
                 no_human.is_some(),
+                // TASK-272: the resolved `--batch NAME` (None for a plain
+                // or item-mode pickup) — recorded on the session manifest.
+                effective_batch,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -42764,6 +42782,7 @@ fn handle_queue_rework(
             /* list_sessions */ false,
             /* session_id */ None,
             /* no_human */ false,
+            /* batch_name */ None,
         )?;
     } else {
         println!(
@@ -43397,6 +43416,10 @@ fn handle_queue_work(
     list_sessions: bool,
     session_id: Option<&str>,
     no_human: bool,
+    // TASK-272: the batch this pickup belongs to, when resolved from
+    // `aida queue work --batch NAME`. Recorded on the session manifest so
+    // /aida-pickup can detect batch context. `None` for a plain pickup.
+    batch_name: Option<&str>,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -43686,10 +43709,14 @@ fn handle_queue_work(
         (None, None) => None,
     };
     // Write the manifest when there are planned cluster items, a plan
-    // brief was discovered, or there's a claude session id to record so
-    // a later `--resume` can find this conversation.
-    // trace:STORY-98, TASK-95, TASK-112 | ai:claude
-    if plan.mode == QueueWorkMode::Cluster || plan_context.is_some() || claude_session_id.is_some()
+    // brief was discovered, there's a claude session id to record so
+    // a later `--resume` can find this conversation, or this is a batch
+    // pickup whose batch marker /aida-pickup needs.
+    // trace:STORY-98, TASK-95, TASK-112, TASK-272 | ai:claude
+    if plan.mode == QueueWorkMode::Cluster
+        || plan_context.is_some()
+        || claude_session_id.is_some()
+        || batch_name.is_some()
     {
         write_queue_work_manifest(
             &project_root,
@@ -43697,6 +43724,7 @@ fn handle_queue_work(
             &plan,
             plan_context.clone(),
             claude_session_id.clone(),
+            batch_name,
         )?;
         if plan.mode == QueueWorkMode::Cluster {
             eprintln!(
@@ -45258,6 +45286,7 @@ fn write_queue_work_manifest(
     plan: &QueueWorkPlan,
     plan_context: Option<session_manifest::PlanContext>,
     claude_session_id: Option<String>,
+    batch_name: Option<&str>,
 ) -> Result<()> {
     use crate::session_manifest::{ManifestItem, SessionManifest};
 
@@ -45279,6 +45308,9 @@ fn write_queue_work_manifest(
         planned_at: chrono::Utc::now(),
         plan_source: "queue work".to_string(),
         claude_session_id,
+        // TASK-272: record the batch when set up via `aida queue work
+        // --batch NAME` so /aida-pickup detects batch context.
+        batch_name: batch_name.map(str::to_string),
         plan: plan_context,
         items,
     };
@@ -45551,6 +45583,7 @@ mod queue_work_resume_tests {
                 planned_at: chrono::Utc::now(),
                 plan_source: "queue work".to_string(),
                 claude_session_id: claude_id.map(str::to_string),
+                batch_name: None,
                 plan: None,
                 items: vec![],
             };

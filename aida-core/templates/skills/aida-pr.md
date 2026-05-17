@@ -47,9 +47,20 @@ that to the user rather than open a misleading PR. `Done` and
 
 ```bash
 git log <base>..HEAD --oneline
+aida session show --plan 2>/dev/null | grep -iE '^[[:space:]]*batch:' || true
 ```
 
 For each commit subject, extract the trailing `(REQ-ID)` (e.g. `(STORY-78)`, `(TASK-44)`, `(BUG-67)`). Multiple IDs in one subject (e.g. `(TASK-45/46/47)`) all count. Commits without a REQ-ID are fine for `chore`/`docs` types but should be called out if a `feat`/`fix` is missing one.
+
+**Batch context** (TASK-272). If the second command emitted a `batch:` line,
+this branch was built by a `aida queue work --batch NAME` drain — the
+implementer accumulated several batch members as commits on one branch
+(`/aida-pickup --batch NAME` per member). The commit-log walk already
+covers them: every batch member shipped so far is a commit in
+`<base>..HEAD`, so step 3 verifies all of them and steps 6/8 cover all of
+them automatically. The only batch-specific change is framing — step 8's
+title and Summary name the batch instead of an EPIC. Note the batch name
+for step 8.
 
 ### 3. Verify status on each REQ-ID
 
@@ -223,6 +234,20 @@ EPIC-N batch M: <one-line summary>
 ```
 
 Derive `N` from the dominant `@EPIC-N` chip across the batch's requirements; derive `M` from the branch name (`epic-20-batch5` → `batch 5`); summary is a 3–6 word description of the cluster.
+
+**Batch-context title** (TASK-272). When step 2 found a `batch:` line, the
+branch is a `batch:NAME` drain rather than an EPIC batch — title it after
+the batch instead:
+
+```
+batch:<NAME>: <one-line summary>
+```
+
+The Summary paragraph then opens by naming the drain — e.g. "Drains the
+`workflow-hint-polish` batch: <SPEC-1>, <SPEC-2>, …" — so a reviewer sees
+up front that the PR bundles every batch member shipped on the branch.
+The `## Per-spec` section still has one entry per REQ-ID (all batch
+members the commit-log walk found); no spec is dropped.
 
 **Body sections:**
 
