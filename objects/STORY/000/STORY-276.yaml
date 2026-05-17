@@ -33,10 +33,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-17T17:28:20.280676353Z
+modified_at: 2026-05-17T18:50:50.974622451Z
 req_type: Story
 tags:
 - auto-complete
+- batch:autonomy-modes
 - depends-on-punt
 - headless
 - implementer-phase
