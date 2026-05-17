@@ -83,10 +83,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:16:43.368789467Z
-modified_at: 2026-05-17T15:27:03.186510561Z
+modified_at: 2026-05-17T18:51:09.665913980Z
 req_type: Story
 tags:
 - auto-complete
+- batch:pr-flow
 - first-users
 - from-self-test
 - parallel-work
