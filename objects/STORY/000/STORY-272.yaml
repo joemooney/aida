@@ -1,0 +1,26 @@
+id: 019e33a6-fe7e-7b41-b277-709978688dc9
+spec_id: STORY-272
+agreed_id: STORY-272
+title: 'Review PR-60: [AI:claude] fix(auto-bump): graduate Done review stories via the covers chain (BUG-113)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3398`) for branch `bug-113`.
+
+  - PR: <https://github.com/joemooney/aida/pull/60>
+  - Branch: `bug-113` → `main`
+
+  ## Covers
+
+  - BUG-113
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 60` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:57:22.686622383Z
+modified_at: 2026-05-17T01:57:22.686622383Z
+req_type: Story
