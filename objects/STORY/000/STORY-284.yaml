@@ -1,0 +1,108 @@
+id: 019e36ac-6828-7353-a2b5-00e2e92e2dd3
+spec_id: STORY-284
+agreed_id: STORY-284
+title: Configurable spec-store push cadence (manual / session-end / per-write / periodic)
+description: |-
+  \`aida push\` for the spec store is manual-only today. Active sessions easily accumulate **20-30+ commits of store divergence** between pushes (observed: 26 commits on 2026-05-17 across a 2-day session). For solo use this is just a disaster-recovery hazard (laptop loss = lost spec writes). For team use this is **actively broken** — teammates can't see filings, comments don't propagate, multi-node identity collisions widen.
+
+  ## Proposed solution: config-driven push cadence
+
+  \`.aida/config.toml\`:
+
+  \`\`\`toml
+  [store.sync]
+  auto_push = "manual"            # manual | session-end | per-write | periodic
+  periodic_threshold = 10         # if periodic: push when ≥N commits ahead
+  periodic_interval = "30m"       # if periodic: also push every N minutes regardless
+  \`\`\`
+
+  Default \`manual\` (preserves current behavior, no surprise for existing users). Teams flip to \`session-end\` or \`per-write\` per their tolerance for divergence vs latency.
+
+  ## Mode trade-offs (captured for the spec-shape audit)
+
+  | Mode | Trigger | Latency | Cost | When right |
+  |---|---|---|---|---|
+  | **manual** (default) | \`aida push\` | High | None | Solo work; bandwidth-constrained |
+  | **session-end** | \`aida session end\` fires push | Medium | One push per session | Most team scenarios; aligns with existing lifecycle |
+  | **per-write** | After \`aida add\` / \`edit\` / \`comment\` / \`queue *\` | Real-time | One push per CLI write | High-coordination teams; CI/CD pipelines |
+  | **periodic** | Background loop (depends on EPIC-30 daemon) | Configurable | Constant low-level | Mixed solo + occasional team coordination |
+
+  \`session-end\` is the recommended team default — sane divergence bound, no new daemon, no CLI latency tax on every write.
+
+  \`per-write\` is recommended only when network is fast (sub-second push) AND teams are highly synchronized.
+
+  \`periodic\` ships **after EPIC-30** (\`aida-worker\` daemon); this STORY just reserves the config slot.
+
+  ## Acceptance
+
+  ### Mode wiring
+
+  - [ ] \`.aida/config.toml\` \`[store.sync] auto_push\` field parses with values \`manual | session-end | per-write | periodic\`
+  - [ ] Default \`manual\` preserves current behavior (no behavior change for existing projects)
+  - [ ] \`aida session end\` checks \`auto_push\` config and pushes when set to \`session-end\` (best-effort; log push failures but don't fail the session-end)
+  - [ ] All write paths (\`aida add\`, \`aida edit\`, \`aida comment add\`, \`aida queue add/work/done/remove/move\`, \`aida findings *\` from BUG-226) check \`auto_push\` and push when set to \`per-write\`
+  - [ ] Push failures in auto mode: log warning, don't abort the command; user sees \"stored locally; push deferred (origin unreachable)\" message
+  - [ ] \`periodic\` mode: \`auto_push = "periodic"\` parses but emits \"requires aida-worker (EPIC-30); falling back to manual until shipped\" warning at startup. Reserved config; not load-bearing.
+
+  ### UX
+
+  - [ ] \`aida config show store.sync\` (or similar) prints the active mode
+  - [ ] \`aida push --dry-run\` (or \`aida sync status\`) shows the gap: \"N commits ahead of origin\"; usable as a sanity check for any mode
+  - [ ] First-time scaffold: \`aida init\` writes \`[store.sync]\` block with \`auto_push = "manual"\` and a commented-out \`# auto_push = "session-end"  # recommended for team mode\` hint
+
+  ### Performance
+
+  - [ ] \`per-write\` mode must not add more than +500ms latency to write commands on a typical fast network (target — informative, not strict)
+  - [ ] Network-unreachable shouldn't block writes: push attempts time out at 5s and degrade gracefully
+
+  ### Tests
+
+  - [ ] Each mode round-trips with a fixture: \`manual\` → no push; \`session-end\` → one push after \`aida session end\`; \`per-write\` → push after each write
+  - [ ] Push failure under \`session-end\` / \`per-write\` doesn't fail the user command
+  - [ ] Config parse: invalid values produce a clear error pointing at the file:line
+
+  ## Out of scope
+
+  - **Background daemon for periodic mode** — EPIC-30 / TASK-294 territory; this STORY reserves the config slot only
+  - **Conflict resolution on push** — store branch is orphan; rebase-pull-on-conflict is already handled in \`aida db sync\`. This STORY just calls the existing sync path.
+  - **Cross-node identity coordination** — different problem; BUG-220 territory
+  - **Throttling / batching** — per-write means literally per-write; users who need throttling pick \`session-end\` or \`periodic\` mode
+  - **CHANGELOG-style \"what synced\" log** — over-scoped; the push itself is the record (git log on the store branch)
+
+  ## Composes with
+
+  - **EPIC-30** (\`aida-worker\` daemon — backs the \`periodic\` mode once shipped)
+  - **TASK-294** (aida-worker bash MVP — proves the daemon shape that \`periodic\` will hook into)
+  - **BUG-220** (multi-node queue identity — sibling team-mode concern; same family of \"multi-user assumes synchronized state\")
+  - **\`aida session end\`** (the hook for \`session-end\` mode — existing lifecycle event)
+  - **\`aida db sync --pull --push\`** (the underlying sync path this STORY's modes call into; no duplication, just triggering)
+  - **TASK-307** (tee headless output — same UX-during-auto-action family; auto-push should also produce visible feedback per its mode)
+
+  ## Open questions for spec refinement
+
+  1. **Should \`session-end\` push BOTH legs (code + store) or store-only?** Code-leg push is \`git push\` against the project repo — different mental model. Recommend store-only for now; code-leg pushes stay manual (user's call).
+  2. **What about \`aida pull\` cadence?** Mirror image of this STORY. Worth a sibling TASK once this lands.
+  3. **Should \`per-write\` mode batch writes within a 1s window?** Avoids 5-push storms during a multi-edit script. Probably yes; treat as implementation detail, not config.
+
+  ## Origin
+
+  2026-05-17 user observation. After a 2-day session of dialog/advisor work (filing dozens of TASKs/BUGs/STORYs, comments, status flips), \`aida push\` reported **26 commits ahead of origin** for the store branch. User flagged the team-environment implication:
+
+  > \"maybe we are not doing \`aida push\` enough, in a team environment we would need to be regularly pushing\"
+
+  Solo-mode hazard: laptop drive failure during this window = lost spec writes. Team-mode breakage: teammates blind to filings until manual sync. Both addressable by config-driven cadence.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T16:02:09.064260047Z
+modified_at: 2026-05-17T16:02:09.064260047Z
+req_type: Story
+tags:
+- alpha-readiness
+- config
+- divergence
+- multi-user
+- push-cadence
+- store-sync
+- team-mode
