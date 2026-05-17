@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-05-17T02:14:35.463888412Z
+modified_at: 2026-05-17T05:17:30.992359279Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -220,3 +220,19 @@ comments:
     Ships the meaningful 30% of EPIC-28 in 2-3 days; defers the rest until proven needed.
   created_at: 2026-05-17T02:14:35.463888412Z
   modified_at: 2026-05-17T02:14:35.463888412Z
+- id: 019e345e-39f0-7c22-8f53-9554a88ea98d
+  author: joe
+  content: |-
+    ## /aida-punt mechanism is a required prerequisite for STORY-NEW (headless implementer)
+
+    Per STORY-263's clarification: the reviewer-only first cut doesn't need \`/aida-punt\`. But the **headless implementer** extension (STORY-NEW, just filed as follow-up to STORY-263) requires it.
+
+    Specifically: when headless implementer Claude detects design-fork ambiguity, it must \`/aida-punt <reason>\` rather than guess. This requires the punt primitive from EPIC-28 STORY 3 (shelving mechanism, scope-shrunk to shelving-on-failure-only earlier today; punt-on-ambiguity is the symmetric case).
+
+    When EPIC-28 STORY 3 is filed/picked up: ensure the \`/aida-punt\` primitive is exposed as a skill (not just a status flip) so implementer Claudes can invoke it during phase 1 work.
+
+    This adds a SECOND trigger for the NeedsAttention state:
+    - \`failure:phase-N\` — auto-set by orchestrator on phase failures
+    - \`punt:design-ambiguity\` — invoked by implementer Claude under headless mode when input is required
+  created_at: 2026-05-17T05:17:30.992359279Z
+  modified_at: 2026-05-17T05:17:30.992359279Z
