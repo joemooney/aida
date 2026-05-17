@@ -1,0 +1,26 @@
+id: 019e384f-566d-7641-895f-25dd014b14dc
+spec_id: STORY-296
+agreed_id: STORY-296
+title: 'Review PR-78: STORY-287: --zen advisor-on-standby autonomy mode'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e37e9`) for branch `story-287`.
+
+  - PR: <https://github.com/joemooney/aida/pull/78>
+  - Branch: `story-287` → `main`
+
+  ## Covers
+
+  - STORY-287
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 78` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T23:39:44.109695342Z
+modified_at: 2026-05-17T23:39:44.109695342Z
+req_type: Story
