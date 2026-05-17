@@ -1,0 +1,26 @@
+id: 019e37c2-b2ad-7b11-84b4-4a565298bfe6
+spec_id: STORY-294
+agreed_id: STORY-294
+title: 'Review PR-76: [AI:claude] feat(cli): aida queue work --auto-complete picks queue head when no SPEC id given (TASK-292)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e37b0`) for branch `task-292`.
+
+  - PR: <https://github.com/joemooney/aida/pull/76>
+  - Branch: `task-292` → `main`
+
+  ## Covers
+
+  - TASK-292
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 76` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T21:06:07.149733795Z
+modified_at: 2026-05-17T21:06:07.149733795Z
+req_type: Story
