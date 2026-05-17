@@ -65,7 +65,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:55.350844429Z
-modified_at: 2026-05-17T07:10:55.350844429Z
+modified_at: 2026-05-17T07:15:13.783738810Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -73,3 +73,9 @@ tags:
 - config
 - heuristic
 - ultraplan
+comments:
+- id: 019e34c9-fef7-77f1-9689-80f6f870c97a
+  author: joe
+  content: Defaults for `mode` field gated on SPIKE-8 evidence. If SPIKE-8 supports the planning-improves-output hypothesis, `mode = "on-demand"` (current default) is correct. If SPIKE-8 refutes or is ambiguous, default may shift to `mode = "never"` with explicit per-project opt-in. Don't ship TASK-304 defaults until SPIKE-8 report lands.
+  created_at: 2026-05-17T07:15:13.783738810Z
+  modified_at: 2026-05-17T07:15:13.783738810Z
