@@ -122,7 +122,7 @@ and (b) TASK-298's watchdog has a concrete file to tail. The watchdog *logic*
 - Orchestrator entry: when `no_human == Some(Both)`, print the STORY-276
   deferral note.
 
-### `docs/aida-discipline/autonomous-drain.md` — new doc
+### `docs/autonomous-drain.md` — new doc
 
 - When `--no-human` is appropriate (small specs, clear acceptance) vs not.
 - Reviewer-only cut today; implementer phase tracked as STORY-276.
@@ -138,7 +138,7 @@ and (b) TASK-298's watchdog has a concrete file to tail. The watchdog *logic*
 - `aida-cli/src/session.rs`
 - `aida-cli/src/cli.rs`
 - `aida-cli/src/main.rs`
-- `docs/aida-discipline/autonomous-drain.md`
+- `docs/autonomous-drain.md`
 - `CLAUDE.md`
 
 ## Reusable helpers (do not reimplement)
