@@ -2497,10 +2497,12 @@ pub enum QueueCommand {
         ///   skip-build    — phases 1-5 (skip the final build verify)
         /// Exit code is 0 on success, else the 1-based index of the phase
         /// that failed (1 implementer, 2 CI, 3 review, 4 merge, 5 pull,
-        /// 6 build). Requires a SPEC id, OR `--batch NAME` to drain a whole
-        /// batch (TASK-285): `--batch NAME --auto-complete` runs one full
-        /// lifecycle per batch member until the batch is empty, `--max` is
-        /// reached, or a phase fails. trace:STORY-246, TASK-285 | ai:claude
+        /// 6 build). Takes a SPEC id; with no id it picks the head of the
+        /// active role's queue, the same way the no-arg `aida queue work`
+        /// does. Or pass `--batch NAME` to drain a whole batch (TASK-285):
+        /// `--batch NAME --auto-complete` runs one full lifecycle per batch
+        /// member until the batch is empty, `--max` is reached, or a phase
+        /// fails. trace:STORY-246, TASK-285 | ai:claude
         #[clap(
             long,
             value_name = "MODE",
