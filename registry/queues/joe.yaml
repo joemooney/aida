@@ -306,7 +306,7 @@
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3378-66a9-7fd1-b292-c73696d435fe
-  position: 64750
+  position: 64250
   added_by: joe
   added_at: 2026-05-17T01:06:31.939668223Z
   for_role: implementer
