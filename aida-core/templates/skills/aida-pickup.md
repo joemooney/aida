@@ -47,9 +47,26 @@ and pulls the next. Pairs with the `dialog` role on the producer side
 
 !`aida session show --plan 2>/dev/null | sed -n '/Plan brief:/,$p' || true`
 
+## Batch context
+
+!`aida session show --plan 2>/dev/null | grep -iE '^[[:space:]]*batch:' || true`
+
 ## Pending findings
 
 !`c=$(aida findings list --count 2>/dev/null || echo 0); [ "${c:-0}" -gt 0 ] && echo "$c findings from recent merges awaiting triage — run: aida findings list" || true`
+
+## Argument forms
+
+`/aida-pickup` takes an optional argument:
+
+- **(no argument)** — pick up the queue head routed to the active role.
+- **`<SPEC-ID>`** — confirm and pick up that specific spec.
+- **`--batch <NAME>`** — *batch continuation*: pick up the next queued
+  member of `batch:NAME` as additional commits on the **current branch**,
+  without spawning a new worktree. Use it from inside an active batch
+  session to drain the next item — see Step 1's *Batch continuation*
+  path. It's the interactive counterpart of `aida queue work --batch NAME
+  --auto-complete` (the autonomous drain). trace:TASK-272
 
 ## Workflow
 
@@ -78,6 +95,32 @@ radius), and the Verification script (the definition of done). The
 implementer should not have to grep for the plan. The Followups list is
 informational here; the `aida queue done` handler offers to file those as
 TASKs at completion time (TASK-96).
+
+**If the Batch context block above emitted a `batch:` line** (TASK-272) —
+`aida queue work --batch NAME` set this session up to drain a batch.
+Two things follow: (a) Step 6's next-steps menu uses the *Batch mode*
+template so cluster-mode continuation is the primary option, and
+(b) `/aida-pickup --batch <NAME>` is how you advance to the next member
+without leaving this session.
+
+#### Batch continuation (`/aida-pickup --batch <NAME>`)
+
+When `/aida-pickup` is invoked with `--batch <NAME>` from inside an
+already-active batch session, do **not** run `aida queue work` — that
+spawns a sibling worktree and breaks the one-branch / one-PR cluster
+shape. Instead:
+
+1. Resolve the next queued member: `aida queue work --batch <NAME>
+   --dry-run` prints the batch in pickup order; the head of that list is
+   the next item. (`aida queue list --batch <NAME>` is the equivalent
+   view.)
+2. If the dry-run reports **no queued items**, the batch is exhausted —
+   tell the user, render Step 6's *batch exhausted* path, and stop.
+3. Otherwise take that head spec as `<spec_id>` and proceed through
+   Steps 3b–5 (mark in-progress, render the card, do the work, commit on
+   the **current branch**, `aida queue done`). Skip Step 3a — the batch
+   marker is already on the manifest; there's no new cluster to record,
+   and there's no per-item confirm (the batch IS the consent record).
 
 ### Step 2: Confirm pickup
 
@@ -210,14 +253,25 @@ After step 5 succeeds, surface a structured next-steps table so the
 workflow self-guides instead of relying on improvised "want me to push?"
 prompts. Don't auto-execute — the user picks.
 
-**Detect state first.** Three signals decide which template to render:
+**Detect state first.** These signals decide which template to render:
 
 ```bash
-aida session show --plan 2>/dev/null   # manifest rows + ✓/◐/○ status
+aida session show --plan 2>/dev/null   # manifest rows + ✓/◐/○ status + `batch:` line
+aida queue work --batch <NAME> --dry-run 2>/dev/null   # batch members still queued
 aida queue next 2>/dev/null            # is there another item routed to this role?
 aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
 ```
 
+Check **batch context first** — it takes precedence over the manifest-row
+modes (a batch session's manifest carries only the head item it picked
+up, so the cluster checks below would misfire on it):
+
+- **`batch:` line present, `--batch <NAME> --dry-run` lists ≥1 queued
+  member** → batch mode
+- **`batch:` line present, dry-run lists none** → batch exhausted → the
+  batch is done, so fall through to the *simple mode* templates and treat
+  it like any single-spec pickup (TASK-272: when the batch empties, the
+  menu reverts to the single-spec form)
 - **Manifest exists, all rows ✓ Done** → cluster drained
 - **Manifest exists, some ◐ / ○** → cluster partial (mid-drain)
 - **No manifest** (single-item pickup) → simple mode
@@ -237,10 +291,27 @@ worktree implication of each path, never just restates the action. A
 single linear next-step stays a compact one-liner — the table is for 2+
 options only. Full convention: `docs/skills-convention.md`.
 
-**Templates** (substitute `<session-id>`, `<cluster-id>`, etc. from
-detection above). Each shows a prose lead-in line followed by the
+**Templates** (substitute `<session-id>`, `<cluster-id>`, `<NAME>`, etc.
+from detection above). Each shows a prose lead-in line followed by the
 next-steps table — print the lead-in as a normal sentence, then the table
 as a real GFM markdown table (no surrounding code fence):
+
+*Batch mode (`batch:<NAME>` still has queued members) — TASK-272:*
+
+✓ <SPEC-ID> done. Batch `<NAME>` has <N> more queued (next: <NEXT-SPEC>).
+
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ Continue the batch | `/aida-pickup --batch <NAME>` | Same branch + session — the next batch member accumulates as commits in this cluster; one PR at the end |
+| ⏵ Wrap the batch as one PR | `/aida-pr` | Ships every batch member committed so far as a single cluster PR; the remaining queued members wait for a later session |
+| ⏵ Pause the drain | Ctrl+D | Step out to test / debug; the batch marker is on the manifest — resume later with `aida queue work --batch <NAME>` from the parent shell |
+| 🚪 Ship just this spec, drop the batch | `/aida-pr`, then `aida session end <session-id>` from the parent shell | Solo PR for <SPEC-ID> only; abandons the rest of the batch — pick the remaining members up individually later |
+
+The ▶/⏵ ordering is the point (TASK-272): cluster-mode continuation is
+the *primary* option and the cluster PR is option 2 — ahead of the solo
+PR-and-exit, which drops the batch. When the batch empties, use the
+*simple mode* templates below instead (the menu reverts to single-spec
+form).
 
 *Cluster drained:*
 
@@ -282,7 +353,7 @@ Drained <N> items from <cluster-id>.
 | ⏵ Switch hats and queue more | `eval "$(aida role enter dialog)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; dialog is the producer seat that refills the queue |
 | 🚪 Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; nothing is queued, so it's a clean stopping point |
 
-Print exactly one block — don't dump all four templates. Don't auto-loop
+Print exactly one block — don't dump all five templates. Don't auto-loop
 without confirmation: the user may want to break, review, switch roles, or
 call it for the day.
 

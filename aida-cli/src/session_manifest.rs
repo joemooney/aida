@@ -90,6 +90,16 @@ pub struct SessionManifest {
     /// ahead of the `[plan]` table and `[[items]]` array-of-tables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_session_id: Option<String>,
+    /// TASK-272: the batch this session is draining — the bare `NAME` from
+    /// `aida queue work --batch NAME` (no `batch:` prefix). Recorded when the
+    /// session was set up via `--batch`; lets `/aida-pickup` detect batch
+    /// context and offer cluster-mode continuation as the primary next-step,
+    /// and `/aida-pr` frame the PR as the batch. `None` for non-batch
+    /// sessions. Declared as a scalar before `plan`/`items` so TOML
+    /// serializes it ahead of the `[plan]` table and `[[items]]` array.
+    /// trace:TASK-272 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_name: Option<String>,
     /// TASK-95: plan brief pre-populated from a matching `docs/plans/` file
     /// at `aida queue work` time. `None` when no plan file was found.
     /// Declared before `items` so TOML serialization emits the `[plan]`
@@ -308,6 +318,7 @@ mod tests {
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
             claude_session_id: None,
+            batch_name: None,
             plan: None,
             items: specs.iter().map(|(s, p)| item(s, *p)).collect(),
         }
@@ -406,6 +417,7 @@ mod tests {
             planned_at: chrono::Utc::now(),
             plan_source: "user prompt".to_string(),
             claude_session_id: None,
+            batch_name: None,
             plan: None,
             items: vec![item("STORY-1", 1), item("BUG-2", 2)],
         };
@@ -417,6 +429,59 @@ mod tests {
     }
 
     #[test]
+    fn batch_name_survives_roundtrip() {
+        // TASK-272: `aida queue work --batch NAME` records the batch on the
+        // manifest so /aida-pickup can detect batch context. Verify the
+        // field round-trips and that a missing key deserializes to None.
+        let dir = tempfile::tempdir().unwrap();
+
+        // With a batch name set.
+        let path = dir.path().join("batched.manifest.toml");
+        let mut m = manifest("s-batch", &[("TASK-260", 1)]);
+        m.batch_name = Some("workflow-hint-polish".to_string());
+        save(&path, &m).unwrap();
+        let serialized = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            serialized.contains("batch_name = \"workflow-hint-polish\""),
+            "serialized manifest should carry batch_name:\n{serialized}"
+        );
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded.batch_name.as_deref(), Some("workflow-hint-polish"));
+
+        // Without one — the skip_serializing_if Option means the key is
+        // absent on disk and deserializes back to None.
+        let plain = dir.path().join("plain.manifest.toml");
+        save(&plain, &manifest("s-plain", &[("TASK-1", 1)])).unwrap();
+        let plain_text = std::fs::read_to_string(&plain).unwrap();
+        assert!(
+            !plain_text.contains("batch_name"),
+            "non-batch manifest must not emit a batch_name key:\n{plain_text}"
+        );
+        assert_eq!(load(&plain).unwrap().batch_name, None);
+
+        // batch_name is a scalar; it MUST serialize before the `[plan]`
+        // table — a scalar emitted after a table is invalid TOML and would
+        // fail to round-trip. Exercise the field-order constraint with a
+        // PlanContext present alongside the batch name. trace:TASK-272
+        let with_plan = dir.path().join("with-plan.manifest.toml");
+        let mut mp = manifest("s-plan", &[("TASK-260", 1)]);
+        mp.batch_name = Some("display-polish".to_string());
+        mp.plan = Some(PlanContext {
+            plan_file: "docs/plans/x.md".to_string(),
+            critical_files: vec!["aida-cli/src/main.rs".to_string()],
+            followups: vec![],
+            verification: None,
+        });
+        save(&with_plan, &mp).unwrap();
+        let reloaded = load(&with_plan).unwrap();
+        assert_eq!(reloaded.batch_name.as_deref(), Some("display-polish"));
+        assert_eq!(
+            reloaded.plan.as_ref().map(|p| p.plan_file.as_str()),
+            Some("docs/plans/x.md")
+        );
+    }
+
+    #[test]
     fn mark_started_is_idempotent() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("t.manifest.toml");
@@ -425,6 +490,7 @@ mod tests {
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
             claude_session_id: None,
+            batch_name: None,
             plan: None,
             items: vec![item("X", 1)],
         };
@@ -455,6 +521,7 @@ mod tests {
             planned_at: chrono::Utc::now(),
             plan_source: "test".to_string(),
             claude_session_id: None,
+            batch_name: None,
             plan: None,
             items: vec![item("X", 1)],
         };
