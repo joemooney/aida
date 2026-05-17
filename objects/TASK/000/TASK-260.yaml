@@ -62,7 +62,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:27:19.857342230Z
-modified_at: 2026-05-16T18:34:49.445504972Z
+modified_at: 2026-05-17T16:37:22.556027558Z
 req_type: Task
 tags:
 - aida-pickup
@@ -185,6 +185,11 @@ comments:
     - \`aida session end\` as a fourth path — let users invoke \`session end\` explicitly when they're done, not as an option in the post-session menu
   created_at: 2026-05-16T18:27:55.014342414Z
   modified_at: 2026-05-16T18:27:55.014342414Z
+- id: 019e36cc-a7fc-75c0-9b9c-81a8188c03f2
+  author: joe
+  content: 'Cross-reference: this spec is an instance of the pattern TASK-311 is designed to catch at filing time (dialog-role criteria contradicting the feature''s primary caller environment). Comment added 2026-05-17 as part of the self-audit lesson capture.'
+  created_at: 2026-05-17T16:37:22.556027558Z
+  modified_at: 2026-05-17T16:37:22.556027558Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T17:47:12.311286211Z
