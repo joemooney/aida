@@ -1,0 +1,33 @@
+id: 019e34ab-a8e0-7530-9569-e8ea6783af4a
+spec_id: BUG-225
+agreed_id: BUG-225
+title: no-launch headless hint omits --session-id and reorders prompt vs real launch
+description: |-
+  The \`--no-launch\` printed command (the one a user can copy-paste to invoke claude headless manually) doesn't match the actual launch path that \`exec_claude_headless\` invokes:
+
+  - Missing \`--session-id\` in the hint
+  - Prompt position reordered vs the real launch
+
+  Cosmetic but a footgun for anyone copying the hint command to reproduce a headless invocation.
+
+  ## Acceptance
+
+  - [ ] \`--no-launch\` printed command exactly matches what \`exec_claude_headless\` would invoke
+  - [ ] Round-trip test: copy the hint, paste it, behavior matches the real launch
+
+  ## Origin
+
+  Reviewer finding 3 on PR-64.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T06:42:05.664799627Z
+modified_at: 2026-05-17T06:42:05.664799627Z
+req_type: Bug
+tags:
+- cli
+- cosmetic
+- from-review:PR-64
+- headless
+- hint
