@@ -403,3 +403,9 @@
   added_by: joe
   added_at: 2026-05-17T16:05:54.894106388Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e36cc-8ab4-77a1-9d7f-f2a41b1dc772
+  position: 85250
+  added_by: joe
+  added_at: 2026-05-17T16:37:18.459637118Z
+  for_role: implementer
