@@ -89,11 +89,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:55:51.242806850Z
-modified_at: 2026-05-17T17:28:18.494880399Z
+modified_at: 2026-05-17T18:50:47.998966938Z
 req_type: Task
 tags:
 - alpha-readiness
 - auto-complete
+- batch:autonomy-modes
 - discoverability
 - no-human
 - overnight-drain
