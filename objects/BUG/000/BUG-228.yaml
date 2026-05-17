@@ -1,0 +1,54 @@
+id: 019e36f2-54a9-7543-ab7f-142e0c6f3b51
+spec_id: BUG-228
+agreed_id: BUG-228
+title: '~/.aida/roles/implementer.toml: stray quote at line 58 from corrupted activity-log append makes aida role show fail'
+description: |-
+  \`~/.aida/roles/implementer.toml\` contains a stray \`\"\` at line 58 — looks like a corrupted activity-log append. \`aida role show\` fails to parse the file as a result, and \`aida edit <SPEC> --status in-progress\` (or any role-state write) may hit the same failure.
+
+  ## Symptoms (observed 2026-05-17, mid TASK-269 pickup)
+
+  TASK-269's implementer reported: *\"⚠️ ~/.aida/roles/implementer.toml has a TOML parse error (a stray \" at line 58, looks like a corrupted activity-log append). aida role show fails because of it. I may need to fix that local file to mark TASK-269 in-progress — I'll handle it if it blocks me, and it's worth a separate BUG.\"*
+
+  ## Hypothesis
+
+  The activity-log append path (the code that writes to the \`[[activity]]\` table-array in role TOML files) doesn't TOML-escape strings containing \`\"\` characters. If a spec title, commit subject, or some other appended field contains a quote, the resulting TOML is malformed.
+
+  ## Acceptance
+
+  - [ ] Reproduce: identify the specific append path that wrote the malformed line 58. Likely candidates: \`aida queue work\` activity log, \`aida session end\` activity log, \`aida edit --status in-progress\` activity log
+  - [ ] Fix: use a proper TOML serializer (toml crate's serialize) for activity-log appends, not string concatenation. Hand-built TOML is the root cause class.
+  - [ ] Recovery: \`aida role repair\` (or similar) command that detects and quarantines unparseable activity-log entries, preserving the rest of the file
+  - [ ] Defensive parse: \`aida role show\` and any role-state read paths should fall back gracefully (\`Warning: activity log entry N skipped due to parse error\`) rather than fail-stop on a corrupted entry
+  - [ ] Test: append an entry whose string field contains \`\"\`; round-trip through serialize → parse must succeed
+  - [ ] Test: synthesized malformed entry on disk → \`aida role show\` reports the issue and continues to render valid entries
+  - [ ] Backfill: the user's currently-corrupted \`~/.aida/roles/implementer.toml\` line 58 — provide a manual recovery recipe in the BUG comments for users who hit this before the fix lands
+
+  ## Out of scope
+
+  - **Centralized activity log across roles** — this BUG is about per-role TOML; cross-role aggregation is a different surface
+  - **Activity log as a separate file** (not embedded in role state) — refactor candidate; not in scope here
+  - **TUI surface for activity log review** — that's STORY-244 / EPIC-26 territory
+
+  ## Composes with
+
+  - **BUG-89** (queue identity / multi-node) — same family of \"local TOML state can corrupt\"
+  - **TASK-269** (incidental find during pickup — implementer flagged this, then proceeded)
+  - **STORY-285** (implementer findings → advisor — this BUG is exactly the kind of \"pre-existing issue spotted incidentally\" that STORY-285's \`kind:bug-spotted\` lifecycle is designed to capture under autonomous drain)
+  - \`feedback_failed_flag_attempts_are_ux_signals.md\` (a failing parse on read is a UX signal worth filing — applied)
+
+  ## Origin
+
+  2026-05-17 TASK-269 pickup, mid-batch:display-polish drain. Implementer flagged the issue while orienting; routed to dialog (me) via the conversational housekeeping channel rather than the (not-yet-built) STORY-285 persistence layer. Once STORY-285 ships, this kind of incidental find files automatically under \`from-implementer:SPEC-ID + kind:bug-spotted\` without a dialog intermediary.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T17:18:31.593593468Z
+modified_at: 2026-05-17T17:18:31.593593468Z
+req_type: Bug
+tags:
+- activity-log
+- aida-role-show
+- from-implementer:TASK-269
+- role-state
+- toml-corruption
