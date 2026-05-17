@@ -683,22 +683,14 @@ fn display_type_name(s: &str) -> String {
     }
 }
 
+/// Colourise an already-padded status cell for the `aida history` table.
+/// TASK-269 unified the per-command palettes — this delegates to the shared
+/// `status_display` module. `status` arrives column-padded; `paint_status`
+/// normalises the trailing spaces away when picking the colour. No glyph is
+/// added here: a 2-char glyph prefix would break the fixed-width column.
+/// trace:TASK-269 | ai:claude
 fn colorize_status(status: &str) -> String {
-    match status {
-        "Draft" => status.yellow().to_string(),
-        "Approved" => status.blue().to_string(),
-        "Planned" => status.cyan().to_string(),
-        "InProgress" | "In Progress" => status.magenta().to_string(),
-        // STORY-86: Done is bold-bright-green so it visibly pops in
-        // `aida history` against plain-green Completed. Picks "almost
-        // there" without competing with Completed's settled palette.
-        // trace:STORY-86 | ai:claude
-        "Done" => status.bright_green().bold().to_string(),
-        "Completed" => status.green().to_string(),
-        "Rejected" => status.red().to_string(),
-        "(deleted)" => status.red().dimmed().to_string(),
-        _ => status.normal().to_string(),
-    }
+    crate::status_display::paint_status(status, status).to_string()
 }
 
 fn parse_log_line(line: &str) -> Option<CommitMeta> {
