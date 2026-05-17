@@ -2272,12 +2272,23 @@ pub enum QueueCommand {
     Move {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
-        /// Move to top of queue
-        #[clap(long)]
+        /// Move to the front of the queue (slot 1). `--to-front` is an
+        /// accepted alias for the same action.
+        // trace:TASK-280 | ai:claude
+        #[clap(long, visible_alias = "to-front")]
         top: bool,
-        /// Move to bottom of queue
-        #[clap(long)]
+        /// Move to the back of the queue (last slot). `--to-back` is an
+        /// accepted alias for the same action.
+        // trace:TASK-280 | ai:claude
+        #[clap(long, visible_alias = "to-back")]
         bottom: bool,
+        /// Move to an absolute 1-indexed slot, counting among the live
+        /// items `aida queue list` shows — `--to 1` is the front, `--to
+        /// 3` the third slot. An N past the end of the queue clamps to
+        /// the last slot rather than erroring.
+        // trace:TASK-280 | ai:claude
+        #[clap(long, value_name = "N", conflicts_with_all = ["top", "bottom", "before", "after"])]
+        to: Option<usize>,
         /// Move before this requirement ID
         #[clap(long)]
         before: Option<String>,
