@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:06:29.161825781Z
-modified_at: 2026-05-17T01:06:29.161825781Z
+modified_at: 2026-05-17T01:09:35.811643363Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
@@ -70,3 +70,38 @@ tags:
 - multi-spec-drain
 - queue-work
 - workflow-hint-polish
+comments:
+- id: 019e337b-3fc3-7470-8665-de3289052a23
+  author: joe
+  content: |-
+    ## Cohesion semantics: nextN vs --batch
+
+    Discussion 2026-05-16 surfaced an important distinction worth baking into the implementation + docs:
+
+    ### `nextN` semantics
+
+    - **Cohesion not assumed**: items are just the queue head + next N-1 in order; whatever they are
+    - **Always separate PRs**: cluster mode (sharing a branch / one PR for the batch) doesn't make sense for non-cohesive items
+    - **No conflict-check**: orchestrator trusts the user's queue ordering; if specs overlap on files, merge conflicts surface naturally (or via EPIC-28's dependency-awareness when shipped)
+    - **Use case**: \"the next few in my queue; I haven't tagged them; just drive them sequentially\"
+
+    ### `--batch X` semantics
+
+    - **Cohesion by user intent**: batch tag was deliberately set; convention is the items relate
+    - **Cluster PR option**: when the items cohere, can ship as one cluster PR (TASK-272)
+    - **Independent PRs option**: when cohesion is loose, separate PRs (default)
+    - **Use case**: \"the items I've grouped under \`batch:workflow-hint-polish\` — drive them together; ship as cluster or separate based on cluster-mode flag\"
+
+    ### Implementation implication
+
+    - `aida queue work nextN --auto-complete` always produces N separate PRs
+    - `aida queue work --batch X --auto-complete` defaults to N separate PRs; cluster mode is opt-in (composes with TASK-272's batch-aware pickup)
+    - Both refuse cluster mode with `nextN` — explicit error: \"cluster mode requires --batch; nextN implies non-cohesive items\"
+
+    ### Docs
+
+    The TASK-293 implementation should add a brief section in user-facing skill template OR docs/aida-discipline/ explaining the two forms + when each is appropriate.
+
+    This composes naturally with TASK-272 (cluster-mode batch awareness) — batches have cluster-mode option, nextN doesn't.
+  created_at: 2026-05-17T01:09:35.811643363Z
+  modified_at: 2026-05-17T01:09:35.811643363Z
