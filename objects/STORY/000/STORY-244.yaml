@@ -193,7 +193,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:45:16.445271126Z
-modified_at: 2026-05-16T22:58:47.867417904Z
+modified_at: 2026-05-17T18:05:08.542125772Z
 req_type: Story
 tags:
 - alpha-gating
@@ -241,3 +241,8 @@ comments:
   content: 'Salvage note from PR-45 review (closed without merge): the rejected PTY-host PR e1c67591 on branch `epic-26-4` contains architecture-independent code worth lifting into the launcher implementation — the merge-confirmation modal UX, and the `gh pr list` / `aida session leases` parsing helpers (`PrRow`, `LeaseRow`, `DashboardModel` in aida-tui/src/dashboard.rs). The Mode::Dashboard host-routing and Enter→spawn_tab paths are NOT reusable — they are the rejected model. trace:STORY-244 | ai:claude'
   created_at: 2026-05-16T05:28:21.770138241Z
   modified_at: 2026-05-16T05:28:21.770138241Z
+- id: 019e371d-023e-7b13-a02c-2b10890b2223
+  author: joe
+  content: 'TASK-282 consistency hook (criterion 7): the launcher''s bottom status strip (''direct-key hints + role + ambient state'') must apply the same scope/session/worktree redundancy rules the CLI statusline now uses. TASK-282 added two pure helpers in aida-cli/src/main.rs — sess_anchor_annotation() (hide [sess:] when the session anchor is redundant with @<scope>; show it on a child-spec @ or a batch suffix) and wt_divergence_segment() (show wt:<name> only when the worktree dir name diverges from the scope slug). When this status strip is built, reuse those rules — promote the helpers to aida-core if the strip needs them cross-crate. TASK-282 ships criteria 1-6 (CLI statusline); criterion 7 is forward-deferred to here because no TUI status strip renders these segments yet.'
+  created_at: 2026-05-17T18:05:08.542125772Z
+  modified_at: 2026-05-17T18:05:08.542125772Z
