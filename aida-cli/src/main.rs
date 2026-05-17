@@ -20920,6 +20920,121 @@ mod auto_complete_head_tests {
     }
 }
 
+/// TASK-293 — the `next` / `nextN` keyword parser. Covers every named form
+/// in the acceptance criteria (`next`, `next1`, `next 1`, `next3`, `next 3`)
+/// plus the malformed-input edge cases. The drain machinery itself
+/// (empty-queue, N > queue-length) is the already-tested `drain_batch` /
+/// `pick_auto_complete_head` — this module only covers the pure parse.
+/// trace:TASK-293 | ai:claude
+#[cfg(test)]
+mod next_keyword_tests {
+    use super::*;
+
+    /// `next` with no count → a single head pickup (N=1).
+    #[test]
+    fn bare_next_is_count_one() {
+        assert_eq!(
+            parse_next_keyword(Some("next"), None).unwrap(),
+            NextKeyword::Count(1)
+        );
+    }
+
+    /// `next1` and `next 1` both resolve to N=1 — equivalent to bare `next`.
+    #[test]
+    fn next_one_compact_and_spaced_are_count_one() {
+        assert_eq!(
+            parse_next_keyword(Some("next1"), None).unwrap(),
+            NextKeyword::Count(1)
+        );
+        assert_eq!(
+            parse_next_keyword(Some("next"), Some("1")).unwrap(),
+            NextKeyword::Count(1)
+        );
+    }
+
+    /// Acceptance: `next3` (compact) and `next 3` (spaced) both parse to N=3.
+    #[test]
+    fn next_three_compact_and_spaced_are_count_three() {
+        assert_eq!(
+            parse_next_keyword(Some("next3"), None).unwrap(),
+            NextKeyword::Count(3)
+        );
+        assert_eq!(
+            parse_next_keyword(Some("next"), Some("3")).unwrap(),
+            NextKeyword::Count(3)
+        );
+    }
+
+    /// The keyword matches case-insensitively — a real spec-id carries a
+    /// `TYPE-N` hyphen, so there is no collision.
+    #[test]
+    fn next_keyword_is_case_insensitive() {
+        assert_eq!(
+            parse_next_keyword(Some("Next3"), None).unwrap(),
+            NextKeyword::Count(3)
+        );
+        assert_eq!(
+            parse_next_keyword(Some("NEXT"), None).unwrap(),
+            NextKeyword::Count(1)
+        );
+    }
+
+    /// Acceptance: SPEC-ID positionals still parse as `NotNext` — they are
+    /// unambiguous because of the `TYPE-N` hyphen.
+    #[test]
+    fn spec_ids_and_no_arg_are_not_next() {
+        assert_eq!(
+            parse_next_keyword(Some("TASK-293"), None).unwrap(),
+            NextKeyword::NotNext
+        );
+        assert_eq!(
+            parse_next_keyword(Some("BUG-7"), None).unwrap(),
+            NextKeyword::NotNext
+        );
+        assert_eq!(
+            parse_next_keyword(None, None).unwrap(),
+            NextKeyword::NotNext
+        );
+    }
+
+    /// `next0` drains nothing — rejected with a redirect to `next` / `next1`.
+    #[test]
+    fn next_zero_is_rejected() {
+        assert!(parse_next_keyword(Some("next0"), None).is_err());
+        assert!(parse_next_keyword(Some("next"), Some("0")).is_err());
+    }
+
+    /// `nextfoo` starts with `next` but is not a valid form.
+    #[test]
+    fn next_with_non_numeric_suffix_is_rejected() {
+        assert!(parse_next_keyword(Some("nextfoo"), None).is_err());
+        assert!(parse_next_keyword(Some("next"), Some("foo")).is_err());
+    }
+
+    /// The compact `nextN` already carries its count — a separate count
+    /// positional alongside it is contradictory.
+    #[test]
+    fn compact_next_n_plus_separate_count_is_rejected() {
+        assert!(parse_next_keyword(Some("next3"), Some("5")).is_err());
+    }
+
+    /// A trailing count only follows the `next` keyword — not a spec-id.
+    #[test]
+    fn count_after_a_non_next_positional_is_rejected() {
+        assert!(parse_next_keyword(Some("TASK-1"), Some("3")).is_err());
+    }
+
+    /// `parse_next_count` accepts whitespace-padded and zero-padded counts.
+    #[test]
+    fn parse_next_count_trims_and_accepts_zero_padding() {
+        assert_eq!(parse_next_count("3").unwrap(), 3);
+        assert_eq!(parse_next_count(" 3 ").unwrap(), 3);
+        assert_eq!(parse_next_count("03").unwrap(), 3);
+        assert!(parse_next_count("0").is_err());
+        assert!(parse_next_count("-1").is_err());
+    }
+}
+
 /// STORY-86 — env-flag opt-out + colorize_status coverage for the new
 /// `Done` variant. Integration coverage (set up git+store, exercise the
 /// helper end-to-end) lives in the verification script in the plan; the
@@ -41939,6 +42054,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
         // trace:STORY-42 | ai:claude
         QueueCommand::Work {
             id,
+            count,
             permission_mode,
             no_launch,
             role,
@@ -41976,6 +42092,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     "`--type` does not apply to batch pickup — drop it, or pass an EPIC/STORY id for a typed cluster"
                 );
             }
+            // TASK-293: resolve the `next` / `nextN` keyword. `next` (N=1) is
+            // an explicit alias for no-arg head pickup; `nextN` / `next N`
+            // (N>1) is the drain-N-from-head form. A `next*` positional is
+            // not a spec-id, so clear `effective_id` — every head-pickup path
+            // below keys off `None`. trace:TASK-293 | ai:claude
+            let next_kw = parse_next_keyword(effective_id, count.as_deref())?;
+            let effective_id: Option<&str> = match next_kw {
+                NextKeyword::Count(_) => None,
+                NextKeyword::NotNext => effective_id,
+            };
             // STORY-246: `--auto-complete` drives the full
             // implementer→CI→reviewer→merge→pull→build lifecycle. It is a
             // sibling orchestrator, not a decoration of the exec path —
@@ -42019,6 +42145,28 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         no_human_mode,
                     );
                 }
+                // TASK-293: `nextN --auto-complete` drains N specs from the
+                // queue head sequentially — one full lifecycle each, advancing
+                // the head after every ship. `next` / `next1` carries N=1 and
+                // falls through to the single-head path below. trace:TASK-293
+                if let NextKeyword::Count(n) = next_kw {
+                    if n > 1 {
+                        if max.is_some() {
+                            anyhow::bail!(
+                                "`next{n}` already bounds the drain to {n} specs — drop `--max`"
+                            );
+                        }
+                        handle_auto_complete_next_n(
+                            storage,
+                            &user_id,
+                            n,
+                            variant,
+                            *json,
+                            permission_mode.as_deref(),
+                            no_human_mode,
+                        );
+                    }
+                }
                 // `--max` only bounds a batch drain — reject it on the
                 // single-spec path so the flag never silently no-ops.
                 // trace:TASK-285 | ai:claude
@@ -42046,6 +42194,20 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     permission_mode.as_deref(),
                     no_human_mode,
                 );
+            }
+            // TASK-293: a multi-spec `nextN` has no coherent single
+            // interactive session — draining N unrelated head items into one
+            // branch/PR is wrong, so it requires the orchestrator. `next`
+            // (N=1) already had `effective_id` cleared to None above and
+            // falls through as a plain head pickup. trace:TASK-293 | ai:claude
+            if let NextKeyword::Count(n) = next_kw {
+                if n > 1 {
+                    anyhow::bail!(
+                        "`next{n}` drains {n} specs sequentially — it needs `--auto-complete`:\n  \
+                         aida queue work next{n} --auto-complete\n\
+                         For a single interactive pickup use `aida queue work next` (or just `aida queue work`)."
+                    );
+                }
             }
             // TASK-229: --batch NAME picks the head of the items tagged
             // `batch:NAME`. --dry-run lists the batch instead of acting.
@@ -44178,20 +44340,20 @@ fn pick_auto_complete_head(
     Err(skipped)
 }
 
-/// Resolve the queue head for `aida queue work --auto-complete` invoked with no
-/// positional SPEC id (TASK-292) — the natural composition of the no-arg "pick
-/// the head" semantics with `--auto-complete`. Walks the active role's queue in
-/// pickup order (queue position ascending, same as `aida queue next`) and
-/// returns the first item the orchestrator can drive from scratch, skipping —
-/// with a note — any item already In Progress / Done / terminal. Errors when
-/// nothing drivable remains. trace:TASK-292 | ai:claude
-fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String> {
+/// Build the `(display_id, status)` candidate list for the active role's
+/// queue in pickup order (queue position ascending, same as `aida queue
+/// next`) — the shared input to [`pick_auto_complete_head`] for both
+/// single-head pickup (TASK-292) and the `nextN` drain (TASK-293).
+/// trace:TASK-292 TASK-293 | ai:claude
+fn auto_complete_head_candidates(
+    storage: &Storage,
+    user_id: &str,
+) -> Result<Vec<(String, RequirementStatus)>> {
     let entries = storage.queue_list(user_id, /* include_completed */ false)?;
     let store = storage.load()?;
     let role_filter: Option<String> = std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .filter(|s| !s.is_empty());
-    let role_label = role_filter.as_deref().unwrap_or("any role");
 
     let mut ordered: Vec<&aida_core::QueueEntry> = entries
         .iter()
@@ -44202,7 +44364,7 @@ fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String
         .collect();
     ordered.sort_by_key(|e| e.position);
 
-    let candidates: Vec<(String, RequirementStatus)> = ordered
+    Ok(ordered
         .iter()
         .filter_map(|e| {
             store
@@ -44211,7 +44373,22 @@ fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String
                 .find(|r| r.id == e.requirement_id)
                 .map(|r| (r.display_id(), r.status.clone()))
         })
-        .collect();
+        .collect())
+}
+
+/// Resolve the queue head for `aida queue work --auto-complete` invoked with no
+/// positional SPEC id (TASK-292) — the natural composition of the no-arg "pick
+/// the head" semantics with `--auto-complete`. Walks the active role's queue in
+/// pickup order (queue position ascending, same as `aida queue next`) and
+/// returns the first item the orchestrator can drive from scratch, skipping —
+/// with a note — any item already In Progress / Done / terminal. Errors when
+/// nothing drivable remains. trace:TASK-292 | ai:claude
+fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String> {
+    let role_label = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "any role".to_string());
+    let candidates = auto_complete_head_candidates(storage, user_id)?;
 
     match pick_auto_complete_head(&candidates) {
         Ok((spec, skipped)) => {
@@ -44659,6 +44836,347 @@ fn emit_batch_drain_summary(
                 stopped.bold()
             );
             eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} check {stopped}'s status (`aida show {stopped}`) — it may not have \
+                 been dequeued",
+                "→".dimmed()
+            );
+        }
+    }
+}
+
+/// TASK-293 — a parsed `next` / `nextN` keyword positional for `aida queue
+/// work`. trace:TASK-293 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NextKeyword {
+    /// The positional is not a `next*` keyword — a spec-id, cluster anchor,
+    /// or (already rerouted) batch positional.
+    NotNext,
+    /// `next`, `nextN`, or `next N` — drain `N` specs from the queue head.
+    /// `N >= 1`; `N == 1` is the plain head pickup.
+    Count(usize),
+}
+
+/// Parse the `aida queue work` positional(s) for the `next` / `nextN` keyword
+/// (TASK-293). `id` is the first positional, `count` the optional second (the
+/// spaced `next 3` form). `next` and `nextN` / `next N` resolve to a drain
+/// count; anything else is `NotNext`. Malformed forms (`next0`, `nextfoo`, a
+/// count with no `next`, a count alongside the compact `nextN`) are rejected.
+/// The keyword matches case-insensitively — a real spec-id always carries a
+/// `TYPE-N` hyphen, so `next` / `nextN` never collide with one.
+/// trace:TASK-293 | ai:claude
+fn parse_next_keyword(id: Option<&str>, count: Option<&str>) -> Result<NextKeyword> {
+    let Some(raw) = id else {
+        // No positional id. A trailing count with no `next` before it is not
+        // reachable through clap's positional fill, but guard rather than
+        // silently ignore it.
+        if count.is_some() {
+            anyhow::bail!(
+                "a count positional needs the `next` keyword before it (e.g. `aida queue work next 3`)"
+            );
+        }
+        return Ok(NextKeyword::NotNext);
+    };
+    let lower = raw.to_ascii_lowercase();
+    if !lower.starts_with("next") {
+        if count.is_some() {
+            anyhow::bail!(
+                "`{}` is not the `next` keyword — a trailing count only follows `next`",
+                raw
+            );
+        }
+        return Ok(NextKeyword::NotNext);
+    }
+    let suffix = &lower["next".len()..];
+    // `next` exact: the count comes from the optional second positional.
+    if suffix.is_empty() {
+        let n = match count {
+            None => 1,
+            Some(c) => parse_next_count(c)?,
+        };
+        return Ok(NextKeyword::Count(n));
+    }
+    // `nextN` compact: the suffix must be all digits, and there must be no
+    // separate count positional (`next3 5` is contradictory).
+    if suffix.chars().all(|c| c.is_ascii_digit()) {
+        if let Some(c) = count {
+            anyhow::bail!(
+                "`{}` already carries its count — drop the extra `{}`",
+                raw,
+                c
+            );
+        }
+        return Ok(NextKeyword::Count(parse_next_count(suffix)?));
+    }
+    // `nextfoo` — starts with `next` but is not a valid form.
+    anyhow::bail!(
+        "`{}` is not a valid pickup target — use `next`, `nextN` (e.g. `next3`), or a SPEC id",
+        raw
+    )
+}
+
+/// Parse + validate the `N` of a `nextN` form: a positive whole number.
+/// trace:TASK-293 | ai:claude
+fn parse_next_count(raw: &str) -> Result<usize> {
+    let n: usize = raw.trim().parse().map_err(|_| {
+        anyhow::anyhow!(
+            "`{}` is not a whole number — `nextN` needs a count like `next3`",
+            raw
+        )
+    })?;
+    if n == 0 {
+        anyhow::bail!("`next0` drains nothing — use `next` (or `next1`) for a single pickup");
+    }
+    Ok(n)
+}
+
+/// Non-erroring queue-head resolver for the `nextN` drain (TASK-293): the
+/// drivable head of the active role's queue, or `None` when nothing drivable
+/// remains (the drain is then complete). A store/queue read failure is fatal —
+/// it is not "drained" and would recur on every iteration. trace:TASK-293
+fn resolve_next_n_head(storage: &Storage, user_id: &str) -> Option<String> {
+    match auto_complete_head_candidates(storage, user_id) {
+        Ok(candidates) => pick_auto_complete_head(&candidates)
+            .ok()
+            .map(|(spec, _skipped)| spec),
+        Err(e) => {
+            eprintln!(
+                "{} could not resolve the queue head: {}",
+                "✗".red().bold(),
+                e
+            );
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Count the orchestrator-drivable items queued for the active role — used to
+/// surface the "only K items queued" note when a `nextN` asks for more than
+/// the queue holds. trace:TASK-293 | ai:claude
+fn drivable_queued_count(storage: &Storage, user_id: &str) -> Result<usize> {
+    Ok(auto_complete_head_candidates(storage, user_id)?
+        .iter()
+        .filter(|(_, status)| auto_complete_head_drivable(status))
+        .count())
+}
+
+/// Real [`auto_complete::BatchDriver`] for a `nextN` drain (TASK-293). Unlike
+/// [`RealBatchDriver`], the "members" are not a `batch:NAME` tag — they are
+/// simply the drivable queue head, re-resolved each call. A shipped spec
+/// leaves the queue, so the head advances naturally; `drain_batch`'s `--max`
+/// cap (pinned to `N`) stops the drain after N specs. trace:TASK-293
+struct RealNextNDriver<'a> {
+    storage: &'a Storage,
+    user_id: String,
+    variant: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<String>,
+    no_human: Option<auto_complete::NoHumanMode>,
+}
+
+impl auto_complete::BatchDriver for RealNextNDriver<'_> {
+    fn next_head(&mut self) -> Option<String> {
+        resolve_next_n_head(self.storage, &self.user_id)
+    }
+
+    fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
+        run_auto_complete(
+            self.storage,
+            &self.user_id,
+            spec,
+            self.variant,
+            self.json,
+            self.permission_mode.as_deref(),
+            self.no_human,
+        )
+    }
+}
+
+/// Entry point for `aida queue work nextN --auto-complete` (TASK-293). Drains
+/// the next `N` items from the queue head — one full `--auto-complete`
+/// lifecycle per spec, advancing the head after each — until `N` specs ship,
+/// the queue is exhausted, or a phase fails. Never returns: exits `0` on a
+/// clean drain, else the failed-phase index (per STORY-246's exit codes).
+/// trace:TASK-293 | ai:claude
+fn handle_auto_complete_next_n(
+    storage: &Storage,
+    user_id: &str,
+    n: usize,
+    variant: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
+) -> ! {
+    if !json {
+        eprintln!();
+        eprintln!(
+            "{} {} {}",
+            "🚀".bold(),
+            format!("auto-complete: next {n}").bold(),
+            format!("({})", variant.describe()).dimmed()
+        );
+        // Acceptance: when N exceeds the queue length, drain all available
+        // and say so up front rather than silently shipping fewer than asked.
+        if let Ok(drivable) = drivable_queued_count(storage, user_id) {
+            if drivable < n {
+                eprintln!(
+                    "  {} only {} drivable item{} queued — draining those",
+                    "ℹ".cyan(),
+                    drivable,
+                    if drivable == 1 { "" } else { "s" }
+                );
+            }
+        }
+    }
+
+    let mut driver = RealNextNDriver {
+        storage,
+        user_id: user_id.to_string(),
+        variant,
+        json,
+        permission_mode: permission_mode.map(|s| s.to_string()),
+        no_human,
+    };
+    let result = auto_complete::drain_batch(&mut driver, Some(n));
+    // An empty queue (nothing shipped, nothing to drain) is a user error —
+    // surface it with a non-zero exit even though `drain_batch` reports it as
+    // a clean `Drained`, matching the `--batch` drain's treatment.
+    let exit_code = if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
+        && result.shipped.is_empty()
+    {
+        1
+    } else {
+        result.exit_code
+    };
+    emit_next_n_drain_summary(n, &result, exit_code, json);
+    std::process::exit(exit_code);
+}
+
+/// Print the closing summary of a `nextN --auto-complete` drain (TASK-293):
+/// what shipped, where it stopped, and what is left queued. The per-spec
+/// failure epilogue + recovery hint are already printed by `orchestrate`;
+/// this adds the drain-level framing. trace:TASK-293 | ai:claude
+fn emit_next_n_drain_summary(
+    n: usize,
+    result: &auto_complete::BatchDrainResult,
+    exit_code: i32,
+    json: bool,
+) {
+    use auto_complete::BatchDrainOutcome;
+
+    if json {
+        let outcome = match &result.outcome {
+            BatchDrainOutcome::Drained => "drained",
+            BatchDrainOutcome::MaxReached => "max-reached",
+            BatchDrainOutcome::Failed(_) => "failed",
+            BatchDrainOutcome::Stalled => "stalled",
+        };
+        let mut obj = serde_json::Map::new();
+        obj.insert(
+            "event".to_string(),
+            serde_json::Value::String("next-n-drain".into()),
+        );
+        obj.insert(
+            "requested".to_string(),
+            serde_json::Value::Number((n as u64).into()),
+        );
+        obj.insert(
+            "outcome".to_string(),
+            serde_json::Value::String(outcome.into()),
+        );
+        obj.insert(
+            "shipped".to_string(),
+            serde_json::Value::Array(
+                result
+                    .shipped
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "shipped_count".to_string(),
+            serde_json::Value::Number((result.shipped.len() as u64).into()),
+        );
+        obj.insert(
+            "stopped_at".to_string(),
+            match &result.stopped_at {
+                Some(s) => serde_json::Value::String(s.clone()),
+                None => serde_json::Value::Null,
+            },
+        );
+        obj.insert(
+            "exit_code".to_string(),
+            serde_json::Value::Number(exit_code.into()),
+        );
+        println!("{}", serde_json::Value::Object(obj));
+        return;
+    }
+
+    let shipped_list = if result.shipped.is_empty() {
+        "(none)".to_string()
+    } else {
+        result.shipped.join(", ")
+    };
+    let count = result.shipped.len();
+    let plural = if count == 1 { "" } else { "s" };
+    eprintln!();
+    match &result.outcome {
+        BatchDrainOutcome::Drained if result.shipped.is_empty() => {
+            eprintln!(
+                "{} no drivable items in the queue — nothing to drive",
+                "✗".red().bold()
+            );
+        }
+        BatchDrainOutcome::Drained => {
+            eprintln!(
+                "{} next {n} drained — queue exhausted, {count} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+        }
+        BatchDrainOutcome::MaxReached => {
+            eprintln!(
+                "{} next {n} done — {count} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+            eprintln!(
+                "  {} more items remain queued — re-run `aida queue work next{n} --auto-complete` to continue",
+                "→".dimmed()
+            );
+        }
+        BatchDrainOutcome::Failed(phase) => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} next {n} drain stopped at {} (phase {} failed)",
+                "✗".red().bold(),
+                stopped.bold(),
+                phase.index()
+            );
+            eprintln!(
+                "  {} already shipped ({count}): {}",
+                "✓".green(),
+                shipped_list
+            );
+            eprintln!(
+                "  {} the rest of the queue is untouched — fix {stopped} (hint above), then re-run",
+                "→".dimmed()
+            );
+        }
+        BatchDrainOutcome::Stalled => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} next {n} drain stopped — {} stayed at the head after a successful run \
+                 (queue did not advance)",
+                "✗".red().bold(),
+                stopped.bold()
+            );
+            eprintln!(
+                "  {} already shipped ({count}): {}",
+                "✓".green(),
+                shipped_list
+            );
             eprintln!(
                 "  {} check {stopped}'s status (`aida show {stopped}`) — it may not have \
                  been dequeued",
