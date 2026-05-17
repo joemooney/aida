@@ -1,0 +1,26 @@
+id: 019e33bf-f41b-7d10-a3ae-159e750a674f
+spec_id: STORY-273
+agreed_id: STORY-273
+title: 'Review PR-61: [AI:claude] feat(cli): compose `aida queue work --batch` with `--auto-complete` (TASK-285)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e33af`) for branch `epic-23-10`.
+
+  - PR: <https://github.com/joemooney/aida/pull/61>
+  - Branch: `epic-23-10` → `main`
+
+  ## Covers
+
+  - TASK-285
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 61` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T02:24:38.427294097Z
+modified_at: 2026-05-17T02:24:38.427294097Z
+req_type: Story
