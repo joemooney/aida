@@ -18,12 +18,12 @@ description: |-
   ## Origin
 
   Reviewer finding 3 on PR-64.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:42:05.664799627Z
-modified_at: 2026-05-17T06:42:36.166147201Z
+modified_at: 2026-05-17T15:11:50.521512160Z
 req_type: Bug
 tags:
 - batch:pr-64-cleanup
