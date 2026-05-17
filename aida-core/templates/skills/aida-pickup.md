@@ -47,6 +47,10 @@ and pulls the next. Pairs with the `dialog` role on the producer side
 
 !`aida session show --plan 2>/dev/null | sed -n '/Plan brief:/,$p' || true`
 
+## Pending findings
+
+!`c=$(aida findings list --count 2>/dev/null || echo 0); [ "${c:-0}" -gt 0 ] && echo "$c findings from recent merges awaiting triage — run: aida findings list" || true`
+
 ## Workflow
 
 ### Step 1: Check the queue
@@ -60,6 +64,12 @@ The output includes:
 
 If the queue is empty, surface that to the user and stop. Don't fabricate
 work — empty queue is a real signal.
+
+**If the Pending findings block above emitted a line** (STORY-278) — the
+headless reviewer filed review follow-ups that the advisor hasn't triaged
+yet — surface it verbatim to the user as a one-line nudge. Don't act on it
+here (triage is the `dialog` role's job); just make sure it isn't missed.
+Stay silent when the block is empty.
 
 **If a Plan brief is shown above** (TASK-95) — `aida queue work`
 pre-populated it from a matching `docs/plans/` file — lead your first

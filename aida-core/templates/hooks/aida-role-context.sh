@@ -79,9 +79,24 @@ extract_field() {
 purpose=$(extract_field purpose "$role_file")
 system_prompt=$(extract_field system_prompt "$role_file")
 
-# Build the addendum body. If neither purpose nor system_prompt is set,
-# the role provides no useful context for the model — exit silently.
-if [ -z "$purpose" ] && [ -z "$system_prompt" ]; then
+# STORY-278: the dialog (advisor) seat triages review findings the headless
+# reviewer files as draft TASKs. Surface a pending count at session start so
+# they aren't missed. Non-zero count only — silent when clean. Best-effort:
+# a missing/slow `aida` degrades to no line.
+findings_line=""
+if [ "$role" = "dialog" ]; then
+    n=$(aida findings list --count 2>/dev/null || echo 0)
+    case "$n" in
+        '' | *[!0-9]*) n=0 ;;
+    esac
+    if [ "$n" -gt 0 ]; then
+        findings_line="${n} findings from recent merges awaiting triage (use \`aida findings list\` to review)"
+    fi
+fi
+
+# Build the addendum body. If the role contributes no purpose/system_prompt
+# AND there is no findings line, there's nothing useful — exit silently.
+if [ -z "$purpose" ] && [ -z "$system_prompt" ] && [ -z "$findings_line" ]; then
     exit 0
 fi
 
@@ -95,6 +110,11 @@ if [ -n "$system_prompt" ]; then
     body="${body}
 
 ${system_prompt}"
+fi
+if [ -n "$findings_line" ]; then
+    body="${body}
+
+${findings_line}"
 fi
 
 # Emit JSON envelope so Claude Code injects body as additionalContext.
