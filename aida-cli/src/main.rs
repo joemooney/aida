@@ -1,4 +1,5 @@
 mod auto_complete;
+mod auto_complete_telemetry;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
@@ -606,8 +607,29 @@ fn run() -> Result<()> {
             errors,
             json,
             limit,
+            auto_complete,
+            failures,
+            pattern,
         } => {
-            handle_usage_command(since, unused.as_deref(), *errors, *json, *limit)?;
+            // TASK-266: only the `--auto-complete` view needs the store
+            // (to resolve drafted-BUG statuses) — keep plain `aida usage`
+            // store-load-free.
+            let store = if *auto_complete {
+                storage.load().ok()
+            } else {
+                None
+            };
+            handle_usage_command(
+                since,
+                unused.as_deref(),
+                *errors,
+                *json,
+                *limit,
+                *auto_complete,
+                *failures,
+                *pattern,
+                store.as_ref(),
+            )?;
         }
         Command::Push { .. } => {
             anyhow::bail!(
@@ -1611,8 +1633,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             errors,
             json,
             limit,
+            auto_complete,
+            failures,
+            pattern,
         } => {
-            return handle_usage_command(since, unused.as_deref(), *errors, *json, *limit);
+            // TASK-266: load the store only for the `--auto-complete` view,
+            // which resolves drafted-BUG statuses; plain usage stays cheap.
+            let store = if *auto_complete {
+                backend.load().ok()
+            } else {
+                None
+            };
+            return handle_usage_command(
+                since,
+                unused.as_deref(),
+                *errors,
+                *json,
+                *limit,
+                *auto_complete,
+                *failures,
+                *pattern,
+                store.as_ref(),
+            );
         }
         Command::Push {
             code_only,
@@ -28021,13 +28063,25 @@ fn aggregate_events(
     by_cmd
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_usage_command(
     since_raw: &str,
     unused_raw: Option<&str>,
     errors_only: bool,
     json_out: bool,
     limit: usize,
+    auto_complete: bool,
+    failures: bool,
+    pattern: bool,
+    store: Option<&RequirementsStore>,
 ) -> Result<()> {
+    // TASK-266: `--auto-complete` switches to the orchestrator telemetry
+    // log (`~/.aida/auto-complete.jsonl`) — a different source from the
+    // per-command usage log, so it gets its own handler.
+    if auto_complete {
+        return handle_auto_complete_usage(since_raw, failures, pattern, json_out, limit, store);
+    }
+
     let now = chrono::Utc::now();
     let since_window = parse_days_arg(since_raw)?;
     let since = now - since_window;
@@ -28191,6 +28245,260 @@ fn handle_usage_command(
     }
 
     Ok(())
+}
+
+// ----------------------------------------------------------------------------
+// `aida usage --auto-complete` — orchestrator telemetry views (TASK-266).
+// Reads `~/.aida/auto-complete.jsonl` (written one line per `--auto-complete`
+// run by `record_auto_complete_run`).
+// ----------------------------------------------------------------------------
+
+/// TASK-266: the `aida usage --auto-complete` view family. Bare
+/// `--auto-complete` prints a success/failure summary plus the most recent
+/// failures; `--failures` expands the full failure list; `--pattern` shows
+/// the per-phase failure histogram. trace:TASK-266 | ai:claude
+fn handle_auto_complete_usage(
+    since_raw: &str,
+    failures: bool,
+    pattern: bool,
+    json_out: bool,
+    limit: usize,
+    store: Option<&RequirementsStore>,
+) -> Result<()> {
+    let now = chrono::Utc::now();
+    let since = now - parse_days_arg(since_raw)?;
+    let events: Vec<auto_complete_telemetry::AutoCompleteEvent> =
+        auto_complete_telemetry::read_events()
+            .into_iter()
+            .filter(|ev| {
+                // Keep events whose completion falls inside the window;
+                // an unparseable timestamp is kept rather than dropped.
+                chrono::DateTime::parse_from_rfc3339(&ev.completed_at)
+                    .map(|t| t.with_timezone(&chrono::Utc) >= since)
+                    .unwrap_or(true)
+            })
+            .collect();
+
+    if events.is_empty() {
+        if json_out {
+            println!("[]");
+        } else {
+            println!(
+                "{} (no --auto-complete runs recorded in the last {})",
+                "Auto-complete:".bold(),
+                since_raw.cyan()
+            );
+            println!(
+                "  {} {}",
+                "log:".dimmed(),
+                auto_complete_telemetry::log_path()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| "<home dir unavailable>".to_string())
+                    .dimmed()
+            );
+        }
+        return Ok(());
+    }
+
+    if pattern {
+        return render_auto_complete_pattern(&events, json_out);
+    }
+    // `--failures` expands the full list; bare `--auto-complete` is the
+    // compact overview that caps the list and points at `--failures`.
+    render_auto_complete_failures(&events, json_out, limit, !failures, store, since_raw)
+}
+
+/// Render the summary header + recent-failures list. `overview` (bare
+/// `--auto-complete`) caps the list short and adds navigation hints;
+/// `--failures` shows the full list up to `limit`. trace:TASK-266 | ai:claude
+fn render_auto_complete_failures(
+    events: &[auto_complete_telemetry::AutoCompleteEvent],
+    json_out: bool,
+    limit: usize,
+    overview: bool,
+    store: Option<&RequirementsStore>,
+    since_raw: &str,
+) -> Result<()> {
+    let summary = auto_complete_telemetry::summarize(events);
+    let mut failures: Vec<&auto_complete_telemetry::AutoCompleteEvent> =
+        events.iter().filter(|e| e.is_failure()).collect();
+    // Newest first — RFC3339 sorts lexically.
+    failures.sort_by(|a, b| b.completed_at.cmp(&a.completed_at));
+    let cap = if overview { 5 } else { limit };
+
+    if json_out {
+        let arr: Vec<serde_json::Value> = failures
+            .iter()
+            .take(cap)
+            .map(|ev| {
+                serde_json::json!({
+                    "spec_id": ev.spec_id,
+                    "completed_at": ev.completed_at,
+                    "failed_phase": ev.failed_phase,
+                    "failure_kind": ev.failure_kind,
+                    "failure_message": ev.failure_message,
+                    "drafted_bug": ev.drafted_bug,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "total": summary.total,
+                "success": summary.success,
+                "failed": summary.failed,
+                "success_rate": summary.success_rate(),
+                "failures": arr,
+            }))?
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} {} runs in the last {} — {} ok, {} failed ({:.0}% success)",
+        "Auto-complete:".bold(),
+        summary.total,
+        since_raw.cyan(),
+        summary.success.to_string().green(),
+        if summary.failed == 0 {
+            summary.failed.to_string().dimmed()
+        } else {
+            summary.failed.to_string().yellow()
+        },
+        summary.success_rate() * 100.0,
+    );
+
+    if failures.is_empty() {
+        println!(
+            "  {}",
+            "no failures in the window — the orchestrator is green".green()
+        );
+        return Ok(());
+    }
+
+    println!();
+    println!("  {}", "Recent --auto-complete failures:".bold());
+    for ev in failures.iter().take(cap) {
+        let when = chrono::DateTime::parse_from_rfc3339(&ev.completed_at)
+            .map(|t| {
+                t.with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string()
+            })
+            .unwrap_or_else(|_| ev.completed_at.clone());
+        let phase_n = ev.failed_phase.unwrap_or(0);
+        let phase_label = auto_complete::Phase::from_index(i32::from(phase_n))
+            .map(|p| p.slug())
+            .unwrap_or("?");
+        let bug_cell = match &ev.drafted_bug {
+            Some(bug) => {
+                let status = store.and_then(|s| bug_status(s, bug));
+                match status {
+                    Some(st) => format!("→ {} [{}]", bug.cyan(), st),
+                    None => format!("→ {}", bug.cyan()),
+                }
+            }
+            None => "(no BUG drafted)".dimmed().to_string(),
+        };
+        println!(
+            "    {}  {:<12} phase {} ({})  {}",
+            when.dimmed(),
+            ev.spec_id.bold(),
+            phase_n,
+            phase_label,
+            bug_cell,
+        );
+    }
+
+    if failures.len() > cap {
+        let more = failures.len() - cap;
+        if overview {
+            println!(
+                "    {} {} more — `aida usage --auto-complete --failures`",
+                "…".dimmed(),
+                more
+            );
+        } else {
+            println!(
+                "    {} {} more (pass --limit N to expand)",
+                "…".dimmed(),
+                more
+            );
+        }
+    }
+
+    if overview {
+        println!();
+        println!(
+            "  {}",
+            "`aida usage --auto-complete --pattern` — which phases fail most often".dimmed()
+        );
+    }
+    Ok(())
+}
+
+/// Render the per-phase failure histogram — the signal for where to invest
+/// orchestrator fixes. trace:TASK-266 | ai:claude
+fn render_auto_complete_pattern(
+    events: &[auto_complete_telemetry::AutoCompleteEvent],
+    json_out: bool,
+) -> Result<()> {
+    let hist = auto_complete_telemetry::failure_histogram(events);
+    let summary = auto_complete_telemetry::summarize(events);
+
+    if json_out {
+        let arr: Vec<serde_json::Value> = hist
+            .iter()
+            .map(|(phase, count)| {
+                serde_json::json!({
+                    "phase": phase,
+                    "phase_slug": auto_complete::Phase::from_index(i32::from(*phase))
+                        .map(|p| p.slug()),
+                    "failures": count,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&arr)?);
+        return Ok(());
+    }
+
+    println!(
+        "{} phase-failure frequency — {} failed of {} runs",
+        "Auto-complete:".bold(),
+        summary.failed,
+        summary.total,
+    );
+    if hist.is_empty() {
+        println!("  {}", "no failures recorded — nothing to pattern".green());
+        return Ok(());
+    }
+    let max = hist.iter().map(|(_, c)| *c).max().unwrap_or(1);
+    for (phase, count) in &hist {
+        let label = auto_complete::Phase::from_index(i32::from(*phase))
+            .map(|p| p.slug())
+            .unwrap_or("?");
+        // Scale the bar to a 24-column field; never empty for a nonzero count.
+        let width = ((*count * 24) / max).max(1);
+        println!(
+            "  phase {} {:<12} {} {}",
+            phase,
+            label,
+            "█".repeat(width).red(),
+            count,
+        );
+    }
+    Ok(())
+}
+
+/// Look up the current status label of a requirement by spec-id — used to
+/// annotate the drafted BUG in the `--auto-complete` failure list.
+/// trace:TASK-266 | ai:claude
+fn bug_status(store: &RequirementsStore, spec_id: &str) -> Option<String> {
+    store
+        .requirements
+        .iter()
+        .find(|r| r.spec_id.as_deref() == Some(spec_id))
+        .map(|r| r.status.to_string())
 }
 
 // ----------------------------------------------------------------------------
@@ -42481,13 +42789,289 @@ fn handle_auto_complete(
     };
 
     let mut driver = RealPhaseDriver::new(
-        project_root,
+        project_root.clone(),
         spec.to_string(),
         permission_mode.map(|s| s.to_string()),
         json,
     );
-    let code = auto_complete::orchestrate(&mut driver, spec, variant, json);
-    std::process::exit(code);
+    let started_at = chrono::Utc::now();
+    let result = auto_complete::orchestrate(&mut driver, spec, variant, json);
+    let completed_at = chrono::Utc::now();
+
+    // TASK-266: log the run to `~/.aida/auto-complete.jsonl` and, on a phase
+    // failure, auto-draft a Draft BUG so the friction surfaces back to the
+    // project instead of dying in scrollback. Best-effort — never blocks the
+    // exit. trace:TASK-266 | ai:claude
+    record_auto_complete_run(
+        &driver,
+        &project_root,
+        spec,
+        variant,
+        &result,
+        started_at,
+        completed_at,
+        json,
+    );
+
+    std::process::exit(result.exit_code);
+}
+
+/// TASK-266: append this `--auto-complete` run to
+/// `~/.aida/auto-complete.jsonl` and, on a phase failure, auto-draft a Draft
+/// BUG for the failure. Honours the same opt-out as `aida usage`
+/// (`AIDA_TELEMETRY=0` / `[telemetry] enabled = false`). Best-effort
+/// throughout — telemetry must never break or delay the orchestrator exit.
+/// trace:TASK-266 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn record_auto_complete_run(
+    driver: &RealPhaseDriver,
+    project_root: &std::path::Path,
+    spec: &str,
+    variant: auto_complete::AutoCompleteVariant,
+    result: &auto_complete::OrchestrationResult,
+    started_at: chrono::DateTime<chrono::Utc>,
+    completed_at: chrono::DateTime<chrono::Utc>,
+    json: bool,
+) {
+    if !usage::is_enabled(Some(project_root)) {
+        return;
+    }
+
+    let phase_durations: Vec<auto_complete_telemetry::PhaseDuration> = result
+        .phase_durations
+        .iter()
+        .map(|(phase, ms)| auto_complete_telemetry::PhaseDuration {
+            phase: phase.index() as u8,
+            slug: phase.slug().to_string(),
+            elapsed_ms: *ms as u64,
+        })
+        .collect();
+
+    let mut event = auto_complete_telemetry::AutoCompleteEvent {
+        spec_id: spec.to_string(),
+        started_at: started_at.to_rfc3339(),
+        completed_at: completed_at.to_rfc3339(),
+        outcome: if result.exit_code == 0 {
+            "success".to_string()
+        } else {
+            "failed".to_string()
+        },
+        variant: variant.slug().to_string(),
+        failed_phase: result.failed_phase.map(|p| p.index() as u8),
+        failure_kind: result.failure.as_ref().map(|f| f.kind.slug().to_string()),
+        failure_message: result.failure.as_ref().map(|f| f.reason.clone()),
+        phase_durations,
+        total_ms: result.total_ms as u64,
+        drafted_bug: None,
+        binary_sha: build_sha_short(),
+    };
+
+    // On a phase failure, attach a Draft BUG. Reuse the BUG from a recent
+    // identical failure (same spec / phase / kind, within 24h) rather than
+    // spamming the backlog when a still-broken `--auto-complete` is re-run.
+    if let (Some(phase), Some(failure)) = (result.failed_phase, result.failure.as_ref()) {
+        match existing_failure_bug(spec, phase, failure) {
+            Some(existing) => {
+                if !json {
+                    eprintln!(
+                        "  {} this failure recurs — tracked in {} (no new BUG drafted)",
+                        "📋".dimmed(),
+                        existing.cyan(),
+                    );
+                }
+                event.drafted_bug = Some(existing);
+            }
+            None => {
+                let hint = auto_complete::recovery_hint(
+                    phase,
+                    failure.kind,
+                    &auto_complete::PhaseDriver::hint_context(driver),
+                );
+                if let Some(bug_id) =
+                    draft_auto_complete_failure_bug(spec, phase, failure, &hint, &event)
+                {
+                    if !json {
+                        eprintln!(
+                            "  {} auto-drafted {} for this failure — triage it: `aida show {}`",
+                            "📋".dimmed(),
+                            bug_id.cyan(),
+                            bug_id,
+                        );
+                    }
+                    event.drafted_bug = Some(bug_id);
+                }
+            }
+        }
+    }
+
+    auto_complete_telemetry::append_event(&event);
+}
+
+/// TASK-266: find the Draft BUG already auto-filed for an identical recent
+/// failure — same spec, same phase, same failure kind, within the last 24h —
+/// so re-running a still-broken `--auto-complete` reuses one BUG instead of
+/// spamming the backlog. trace:TASK-266 | ai:claude
+fn existing_failure_bug(
+    spec: &str,
+    phase: auto_complete::Phase,
+    failure: &auto_complete::PhaseFailure,
+) -> Option<String> {
+    let cutoff = chrono::Utc::now() - chrono::Duration::hours(24);
+    let phase_n = phase.index() as u8;
+    let kind = failure.kind.slug();
+    auto_complete_telemetry::read_events()
+        .into_iter()
+        .rev()
+        .filter(|ev| {
+            ev.spec_id == spec
+                && ev.failed_phase == Some(phase_n)
+                && ev.failure_kind.as_deref() == Some(kind)
+                && ev.drafted_bug.is_some()
+        })
+        .find(|ev| {
+            chrono::DateTime::parse_from_rfc3339(&ev.completed_at)
+                .map(|t| t.with_timezone(&chrono::Utc) >= cutoff)
+                .unwrap_or(false)
+        })
+        .and_then(|ev| ev.drafted_bug)
+}
+
+/// TASK-266: auto-file a Draft BUG for an `--auto-complete` phase failure.
+/// The BUG is intentionally left in Draft and NOT queued — the user triages
+/// it and promotes it to Approved only if it is a real AIDA bug (vs a user
+/// error or a local environment issue). Returns the new BUG's spec-id, or
+/// `None` if the `aida add` subprocess could not run (best-effort — the
+/// JSONL log still captures the failure either way). trace:TASK-266 | ai:claude
+fn draft_auto_complete_failure_bug(
+    spec: &str,
+    phase: auto_complete::Phase,
+    failure: &auto_complete::PhaseFailure,
+    hint: &str,
+    event: &auto_complete_telemetry::AutoCompleteEvent,
+) -> Option<String> {
+    let phase_n = phase.index();
+    let phase_name = phase.slug();
+    let title = format!("auto-complete failure: phase {phase_n} ({phase_name}) on {spec}");
+    let tags = format!("auto-complete,failure-{phase_n},auto-drafted,{phase_name}");
+    let json_line = serde_json::to_string(event).unwrap_or_default();
+    let durations = if event.phase_durations.is_empty() {
+        "  (none recorded)".to_string()
+    } else {
+        event
+            .phase_durations
+            .iter()
+            .map(|d| format!("  - phase {} ({}): {} ms", d.phase, d.slug, d.elapsed_ms))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let description = format!(
+        "Auto-drafted by `aida queue work {spec} --auto-complete` after phase {phase_n} \
+({phase_name}) failed. Review this BUG and promote it to Approved if it is a real AIDA \
+orchestrator bug — or reject it if it was a user error or a local environment issue. It \
+is intentionally left in Draft and NOT queued. (TASK-266)\n\n\
+## Failure\n\n\
+{reason}\n\n\
+Failure kind: `{kind}`\n\n\
+## Recovery hint shown to the user\n\n\
+{hint}\n\n\
+## Phase durations\n\n\
+{durations}\n\n\
+## Telemetry entry\n\n\
+The line appended to `~/.aida/auto-complete.jsonl` for this run:\n\n\
+```json\n{json_line}\n```\n\n\
+## Recurse-fix\n\n\
+Once triaged and promoted, this BUG can itself be driven by the orchestrator: \
+`aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes \
+operational.\n",
+        reason = failure.reason,
+        kind = failure.kind.slug(),
+    );
+
+    // Re-resolve the binary fresh (a phase-6 `cargo build` may have replaced
+    // the one the orchestrator started with — BUG-217). Try the EPIC-23
+    // parent first (this repo dogfoods the orchestrator); fall back to a
+    // parent-less add so the auto-draft still works in any other project
+    // that has no EPIC-23.
+    let exe = resolve_aida_exe();
+    add_draft_bug(&exe, &title, &tags, &description, Some("EPIC-23"))
+        .or_else(|| add_draft_bug(&exe, &title, &tags, &description, None))
+}
+
+/// Run `aida add` to file the Draft BUG, returning the new spec-id parsed
+/// from stdout. `NO_COLOR` is set on the child so the `ID:` line is plain
+/// text. trace:TASK-266 | ai:claude
+fn add_draft_bug(
+    exe: &std::path::Path,
+    title: &str,
+    tags: &str,
+    description: &str,
+    parent: Option<&str>,
+) -> Option<String> {
+    use std::io::Write;
+    let mut args: Vec<String> = vec![
+        "add".into(),
+        "--type".into(),
+        "bug".into(),
+        "--status".into(),
+        "draft".into(),
+        "--title".into(),
+        title.into(),
+        "--tags".into(),
+        tags.into(),
+        "--description-stdin".into(),
+    ];
+    if let Some(p) = parent {
+        args.push("--parent".into());
+        args.push(p.into());
+    }
+    let mut child = std::process::Command::new(exe)
+        .args(&args)
+        .env("NO_COLOR", "1")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .ok()?;
+    child.stdin.take()?.write_all(description.as_bytes()).ok()?;
+    let out = child.wait_with_output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    parse_added_spec_id(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Parse the `ID: <SPEC-ID>` line that `aida add` prints on success.
+/// trace:TASK-266 | ai:claude
+fn parse_added_spec_id(stdout: &str) -> Option<String> {
+    stdout
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("ID:"))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+#[cfg(test)]
+mod task_266_tests {
+    use super::parse_added_spec_id;
+
+    #[test]
+    fn parses_spec_id_from_aida_add_output() {
+        let stdout = "Requirement added successfully!\n\
+                      UUID: 019e31cc-26c3-70f3-adb6-3b20cb6d32a9\n\
+                      ID: BUG-220\n";
+        assert_eq!(parse_added_spec_id(stdout), Some("BUG-220".to_string()));
+    }
+
+    #[test]
+    fn returns_none_when_no_id_line() {
+        let stdout = "Requirement added successfully!\nUUID: abc\n";
+        assert_eq!(parse_added_spec_id(stdout), None);
+    }
+
+    #[test]
+    fn returns_none_for_empty_id_value() {
+        assert_eq!(parse_added_spec_id("ID:   \n"), None);
+    }
 }
 
 /// Queue `spec` for the implementer role if it isn't already queued for the

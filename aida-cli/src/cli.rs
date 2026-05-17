@@ -2952,6 +2952,24 @@ pub enum Command {
         /// trace:STORY-122 | ai:claude
         #[clap(long, default_value = "20")]
         limit: usize,
+        /// Switch to the `--auto-complete` orchestrator telemetry view.
+        /// Reads `~/.aida/auto-complete.jsonl` instead of the per-command
+        /// usage log: a success/failure summary plus the recent phase
+        /// failures and the Draft BUGs auto-filed for them.
+        // trace:TASK-266 | ai:claude — plain `//` so the SPEC-ID stays out
+        // of `--help` output (TASK-268).
+        #[clap(long = "auto-complete", conflicts_with_all = ["unused", "errors"])]
+        auto_complete: bool,
+        /// With `--auto-complete`: list every recent orchestrator failure
+        /// in full (date, spec, failed phase, drafted BUG + its status).
+        // trace:TASK-266 | ai:claude
+        #[clap(long, requires = "auto_complete")]
+        failures: bool,
+        /// With `--auto-complete`: show which phases fail most often — the
+        /// signal for where to invest orchestrator fixes.
+        // trace:TASK-266 | ai:claude
+        #[clap(long, requires = "auto_complete", conflicts_with = "failures")]
+        pattern: bool,
     },
 
     /// Push code branch AND orphan aida-store branch to origin. Use
