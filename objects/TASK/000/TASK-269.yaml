@@ -67,12 +67,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16 after running \`aida show TASK-259\` and noticing Status was the most-glance-worthy field but buried near the top: *\"should we color code Status, or maybe better as the last line in the output reprint the status color coded.\"*
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:37:48.985304743Z
-modified_at: 2026-05-16T17:37:53.352753758Z
+modified_at: 2026-05-17T17:22:51.502230325Z
 req_type: Task
 tags:
 - aida-show
