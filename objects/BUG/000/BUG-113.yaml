@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:51:37.511646683Z
-modified_at: 2026-05-17T01:54:26.718884724Z
+modified_at: 2026-05-17T01:56:30.064901073Z
 req_type: Bug
 tags:
 - auto-bump
@@ -67,6 +67,19 @@ comments:
   content: Commit a4948745 references this requirement
   created_at: 2026-05-17T01:54:17.700492843Z
   modified_at: 2026-05-17T01:54:17.700492843Z
+- id: 019e33a6-30f0-7c11-83c8-32528e84bd41
+  author: joe
+  content: |-
+    Implemented via PR (commit a4948745):
+
+    - Added `collect_covers_completed_review_flips` — a Done review story whose `implements` targets (the `## Covers` list) are Completed, or being completed in the same pass, graduates to Completed. Window-independent: doesn't depend on the PR's `(#N)` merge commit being in the scan range.
+    - Wired into both `auto_bump_done_to_completed` (Gap 1) and `handle_db_reconcile_status` with `--spec` support (Gap 2).
+    - Empty-sha guard on both writers for covered specs completed manually with no merge sha.
+
+    Test status: 29/29 auto-bump + reconcile-status tests green (2 new regression tests for the covers chain — acceptance criteria 3 & 4).
+    Follow-up: the misleading `aida show` hint ("Awaiting commit — no commit references the spec yet") shown for review stories is noted in BUG-113's Origin but out of scope here — could be a separate TASK.
+  created_at: 2026-05-17T01:56:30.064901073Z
+  modified_at: 2026-05-17T01:56:30.064901073Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T01:54:26.718884724Z
