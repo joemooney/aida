@@ -1,0 +1,76 @@
+id: 019e33c2-dca2-7b40-9b73-421fff4261c6
+spec_id: BUG-223
+agreed_id: BUG-223
+title: 'orchestrator phase-1 detection: false-negative when /aida-pr swaps branch (BUG-88 guard fires; lease''s recorded branch is stale)'
+description: |-
+  \`aida queue work <SPEC> --auto-complete\` records the implementer lease's branch at session-start (e.g., \`epic-23-9\`). If during the implementer phase, \`/aida-pr\` swaps the branch to avoid a merged-branch-name collision (BUG-88's guard moves commits to a fresh branch like \`epic-23-10\`), the lease's recorded branch goes STALE. Phase-1 completion check queries \`gh pr list --head <lease-branch>\` and finds nothing — reports \"no PR opened\" even though the implementer actually opened the PR on the new branch.
+
+  ## Observed (2026-05-16)
+
+  \`aida queue work TASK-285 --auto-complete\`:
+  - Phase 1 implementer Claude shipped work, ran \`/aida-pr\`
+  - BUG-88's guard detected \`epic-23-9\` was already merged (consumed by PR-59) → moved 2 commits to fresh \`epic-23-10\`
+  - PR-61 opened on \`epic-23-10\`; STORY-273 (review story) auto-queued correctly
+  - Implementer session exited
+  - Orchestrator's phase-1 check: \`gh pr list --head epic-23-9\` (stale lease branch) → empty → REPORTED FAILURE
+  - User saw: \"phase 1 failed: opened no PR\" — false negative
+  - Manual recovery merged PR-61 successfully
+
+  The orchestrator output included this misleading message:
+  \`\`\`
+  ✗ phase 1 (implementer session) failed: the implementer session exited cleanly but opened no PR — run \`/aida-pr\` inside the session before exiting
+  \`\`\`
+
+  Misleading on two counts: (1) PR was opened, (2) /aida-pr WAS run (it triggered the BUG-88 guard).
+
+  ## Acceptance
+
+  - [ ] Orchestrator's phase-1 PR-detection must follow branch swaps. Three options to consider:
+    - **(a) Lease tracks current branch**: \`/aida-pr\` updates the lease's branch field when it swaps via BUG-88 guard
+    - **(b) Orchestrator queries by spec, not branch**: \`gh pr list --search \"(<SPEC-ID>)\"\` to find PR with spec in title/body
+    - **(c) Orchestrator queries by commit**: \`gh pr list --search \"<commit-sha>\"\` using the implementer's last commit
+  - [ ] Recommended: **(a) + (b)** as defense in depth — primary path updates the lease; fallback path queries by spec ID
+  - [ ] On false-negative recovery: orchestrator finds the PR via the fallback and proceeds normally (doesn't bail)
+  - [ ] Tests: simulate /aida-pr branch swap (BUG-88 guard fires); verify orchestrator finds PR-N regardless
+
+  ## Composes with
+
+  - **BUG-88** (merged-branch-name reuse guard) — the trigger; this bug is the downstream interaction
+  - **STORY-246** (\`--auto-complete\` orchestrator) — its phase-1 logic; same family as BUG-114 (phase-1 lease disambiguation) and BUG-217 (phase-2 subprocess ENOENT)
+  - **TASK-266** (orchestrator failure telemetry) — when shipped, would log this exact false-negative pattern for analysis
+
+  ## Why this matters
+
+  False-negatives are worse than failures because they hide successful work. The user thinks the spec failed; in reality the PR exists and CI is running. Discovery requires manual investigation (\`gh pr list\`) — wasted time, mistrust of the orchestrator.
+
+  This is the fourth orchestrator bug discovered via dogfood (BUG-114, BUG-217, BUG-218, this one). Pattern of issues at the boundary between AIDA's primitives (lease, /aida-pr) and external state (gh, git). Each fix tightens the boundary.
+
+  ## Recovery for the user
+
+  In this specific incident:
+  1. PR-61 was open + MERGEABLE
+  2. \`gh pr merge 61 --squash --delete-branch\` shipped the work
+  3. \`aida pull\` triggered the auto-bump:
+     - TASK-285 → Completed (standard auto-bump on commit reference)
+     - STORY-273 → Completed (BUG-219's just-shipped auto-bump-for-Approved-review-stories)
+  4. Stale lease cleaned up via \`aida session end <lease-id> --force\`
+
+  Two auto-bumps in one pull — beautiful composition of today's earlier fixes.
+
+  ## Origin
+
+  User dogfooded TASK-285 via \`--auto-complete\` 2026-05-16. Orchestrator misreported phase-1 failure despite PR-61 being successfully open. Diagnosed via lease state vs PR state inspection.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T02:27:49.026573463Z
+modified_at: 2026-05-17T02:27:49.026573463Z
+req_type: Bug
+tags:
+- auto-complete
+- branch-swap
+- bug-88-interaction
+- false-negative
+- orchestrator
+- phase-1
