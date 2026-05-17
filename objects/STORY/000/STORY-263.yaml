@@ -77,7 +77,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:25:44.957144080Z
-modified_at: 2026-05-16T23:25:44.957144080Z
+modified_at: 2026-05-17T01:36:57.021423737Z
 req_type: Story
 tags:
 - advanced-user
@@ -92,3 +92,45 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-16T23:25:47.528385031Z
+comments:
+- id: 019e3394-4abd-7783-aae4-6756560342e7
+  author: joe
+  content: |-
+    ## Composition refinement 2026-05-16 — punt-on-ambiguity under --no-human
+
+    User asked 2026-05-16: *\"If a human is required we need a way to punt and place in some other state for when I return.\"*
+
+    Under \`--no-human\`, the implementer Claude can't pause for design input (per \`feedback_pause_for_design_input.md\`). The right behavior is **punt** — explicit deferral with a recorded reason — not silently picking wrong defaults.
+
+    ### Behavior to add to this STORY's acceptance
+
+    When the implementer (or reviewer) Claude detects under \`--no-human\` mode that human input is genuinely required:
+
+    - Call \`/aida-punt <reason>\` (new skill primitive) OR \`aida queue punt <SPEC> --reason \"...\"\` (CLI)
+    - Spec flips to status \`NeedsAttention\` (new status — see EPIC-28 STORY 3 unified scope below)
+    - Spec leaves the active queue
+    - Orchestrator records the punt with the reason in its session manifest + telemetry
+    - Orchestrator proceeds to the next queue item (drain continues)
+    - User on return: \`aida queue list --needs-attention\` surfaces the punted specs + reasons
+
+    ### Composition with EPIC-28's shelving
+
+    EPIC-28 STORY 3 already scopes a \"shelving\" mechanism for FAILED specs. The punt mechanism is the **same lifecycle state** (\`NeedsAttention\`) with a different trigger reason:
+
+    | Trigger | Reason category | Recovery |
+    |---|---|---|
+    | Phase failure (CI red, build broken) | \`failure:phase-N\` | Fix the failure, push fixup, un-shelve |
+    | Design ambiguity in spec | \`punt:design-ambiguity\` | Update spec to remove ambiguity, un-punt |
+    | Reviewer requested changes (no human to address) | \`punt:review-rework\` | Address feedback (interactive session), un-punt |
+    | External dependency (waiting on upstream) | \`punt:external\` | When upstream lands, un-punt |
+
+    One mechanism, multiple reason categories. EPIC-28 STORY 3 should be expanded to cover all these triggers; this STORY's \`--no-human\` flow uses the same plumbing.
+
+    ### Acceptance addition
+
+    - [ ] \`/aida-punt <reason>\` skill (or CLI equivalent) wired in implementer + reviewer skills
+    - [ ] Skills under \`--no-human\` default to \`/aida-punt\` when they detect ambiguity (instead of pause-for-design)
+    - [ ] \`aida queue list --needs-attention\` shows punted+shelved specs with their reason category
+    - [ ] Telemetry (TASK-266) logs each punt as a discrete event with reason
+  created_at: 2026-05-17T01:36:57.021423737Z
+  modified_at: 2026-05-17T01:36:57.021423737Z
