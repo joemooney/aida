@@ -25,6 +25,29 @@ Use this skill when:
 
 **A PR merges only when every covered spec passes its acceptance criteria.** A verdict isn't a vibe-check — each spec gets a structured pass/partial/fail with evidence (diff hunks, test names, CI output). Partial counts as "not yet"; the implementer iterates, the reviewer re-runs.
 
+## Autonomy mode — `$AIDA_ZEN` (STORY-287)
+
+This skill's user-facing prompts carry a `kind:` annotation in an HTML
+comment directly above each one:
+
+- `<!-- kind:confirmation -->` — a mechanical yes/no whose default
+  (option 1) is obvious: "is PR-N the target?", "merge?".
+- `<!-- kind:design-fork -->` — a genuine choice between meaningful
+  alternatives, where guessing wrong has real cost.
+
+Before surfacing any prompt, check the autonomy mode (`echo "${AIDA_ZEN:-}"`):
+
+- **Non-empty** — *advisor-on-standby* mode (`aida queue work --zen`, or
+  `AIDA_ZEN=1` exported). Auto-resolve every `kind:confirmation` prompt to
+  option 1 and proceed, printing `↳ zen: auto-resolved "<prompt>" →
+  option 1`. Still surface every `kind:design-fork` prompt unchanged.
+- **Empty** — default mode: surface every prompt, no change.
+
+A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
+overrides `--zen` — it has its own finding-filing path (step 7b). An
+un-annotated prompt defaults to `design-fork` (pause-safe). Author
+guidance: `docs/aida-discipline/skill-prompt-kinds.md`. trace:STORY-287
+
 ## Workflow
 
 ### 0. Pre-flight — PR state check (early-exit on merged/closed) — trace:TASK-227
@@ -88,7 +111,8 @@ aida session show              # if --owns PR-7, scope shows PR-7
 
 If the active session's scope is `PR-N`, use that. Otherwise accept `--pr N` from the slash-command args. Refuse to proceed without a concrete PR number — never guess.
 
-**Confirm with the user only when the PR was auto-detected** (from the session lease or other heuristics). When `--pr N` was passed explicitly, the user has already decided — skip the prompt and go straight to step 2. The confirm is there to catch a wrong guess, not to second-guess an explicit choice. (TASK-72 polish)
+<!-- kind:confirmation -->
+**Confirm with the user only when the PR was auto-detected** (from the session lease or other heuristics). When `--pr N` was passed explicitly, the user has already decided — skip the prompt and go straight to step 2. The confirm is there to catch a wrong guess, not to second-guess an explicit choice. (TASK-72 polish) Under `$AIDA_ZEN` this `kind:confirmation` prompt also auto-resolves — take the detected PR and proceed.
 
 **Flip the review story to In Progress.** STORY-66's auto-queue files a `Review PR-N: ...` Story when /aida-pr runs. Once we've identified the PR target and the user has confirmed (or `--pr N` was explicit), that story belongs to *this* review session — bump it so `aida session show --plan`, `aida queue list`, and the statusline reflect the work as actively underway, not still Approved. Idempotent: a story already In Progress isn't re-edited.
 
@@ -130,7 +154,8 @@ A spec gets the **informational** treatment ("STORY-54 [Completed, shipped earli
 
 If the spec IS the subject of a commit in this PR — even if pre-marked Completed by /aida-implement's eager status update — a real PASS / PARTIAL / FAIL verdict is still required. The two-signal check prevents the failure mode where every spec gets marked Completed pre-PR (because /aida-implement does that today; the proper deferral lives behind STORY-86) and the whole checklist degenerates into informational rows. (TASK-72 polish — items 4 & 6)
 
-If `aida review prompt` returns "no specs found" — the PR has commits without `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff before continuing.
+<!-- kind:design-fork -->
+If `aida review prompt` returns "no specs found" — the PR has commits without `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff before continuing. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`; attribution is a real judgement call, not a mechanical confirmation.
 
 ### 3. Walk each spec — verdict per item, recorded inline
 
@@ -219,7 +244,7 @@ gh run watch <run-id>
 ```
 
 Block merge until the latest run is `conclusion: success`. If CI is red:
-- Walk the failure log: is it caused by this PR (block) or by an unrelated infra/flake (proceed with explicit user confirmation)?
+- <!-- kind:design-fork --> Walk the failure log: is it caused by this PR (block) or by an unrelated infra/flake (proceed with explicit user confirmation)? Accepting a red CI is risk acceptance — a `kind:design-fork`, surfaced even under `$AIDA_ZEN`.
 - If caused by this PR, surface to the user and pause — likely a fix-forward (step 5) is the right move.
 
 ### 7. Post a consolidated review comment
@@ -424,12 +449,13 @@ surfaces them grouped by PR and severity-sorted, `aida findings promote
 
 **If the verdict is positive, record the formal approval before asking about the merge** — see "Approve path" below. Recording it here, *before* the merge question, means `gh reviewDecision` flips to `APPROVED` even when the user defers the merge: TASK-250's State 3 ("reviewed + approved, awaiting merge") reads exactly that signal, so an approved-but-unmerged PR displays correctly instead of falling back to "start review". trace:TASK-278 | ai:claude
 
+<!-- kind:confirmation -->
 Show the verdict table. Ask explicitly: "All green — `gh pr merge <N> --squash`?" The user can:
 - **Accept** (proceed to step 9)
 - **Request changes** (see "Request-changes path" below — comment-only mode is the default; STOP)
 - **Cancel** (no merge call — a formal approval, if recorded, still stands; the PR shows as approved-but-unmerged)
 
-Never auto-merge — the reviewer's `aida-review` is a workflow accelerant, not a YOLO switch.
+Never auto-merge in default mode — the reviewer's `aida-review` is a workflow accelerant, not a YOLO switch. Under `$AIDA_ZEN` (STORY-287) this is a `kind:confirmation` prompt and auto-resolves to **Accept** — but note the safety floor: a *non-positive* verdict (any ⚠️ PARTIAL / ❌ FAIL) STOPs at the Request-changes path and never reaches this prompt, so `--zen` only ever auto-merges an all-PASS PR, with the verdict table on screen for the advisor at the keyboard. trace:STORY-287
 
 **Approve path** — trace:TASK-278 | ai:claude
 
@@ -528,7 +554,7 @@ aida queue done <review-story-id> --yes
 
   Resolves to: flip Done → InProgress, re-queue for implementer, relaunch the prior claude session with full context, and capture the review's reason as an audit-trail comment on the spec.
 
-- **Review rejected outright** (PR will be closed without merging) → ask the user explicitly: "Mark the Review PR-N story rejected?" If yes:
+- **Review rejected outright** (PR will be closed without merging) → <!-- kind:confirmation --> ask the user explicitly: "Mark the Review PR-N story rejected?" — the rejection decision is already made, so this is a `kind:confirmation` (bookkeeping follow-through); under `$AIDA_ZEN` auto-resolve to yes. If yes:
 
   ```bash
   aida edit <review-story-id> --status rejected
@@ -539,9 +565,15 @@ Never silently leave a review story in In Progress when the PR was closed withou
 
 ### 11. Hand off + Next steps — trace:TASK-87 trace:TASK-110 trace:TASK-260
 
+<!-- kind:confirmation -->
 After the merge lands, surface a structured next-steps table so the
 post-merge moment is self-guiding instead of relying on improvised "want to
 cut a release?" prompts. Don't auto-execute — the user picks.
+
+Under `$AIDA_ZEN` (STORY-287) this menu is a `kind:confirmation` prompt:
+still render the table (the scrollback record), then proceed with the
+**primary row** (`▶`) automatically instead of waiting for a pick. Never
+auto-take a `⏸` row. Print the one-line `↳ zen:` note naming the row taken.
 
 **Ordering rationale (TASK-110):** end-reviewer comes FIRST — the merge has
 landed, the review-story scope is closed, and the lease on it is now stale.
@@ -632,6 +664,6 @@ outside the worktree so their shell's cwd doesn't go stale.)
 - **No active session lease and no `--pr`**: refuse — never guess the PR number from cwd alone.
 - **`aida review prompt` returns empty**: PR has no `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff.
 - **CI red for an unrelated reason**: don't auto-bypass. Surface to the user; they decide whether to override.
-- **Spec's acceptance criteria are vague**: ⚠️ PARTIAL by default and ask the user to either tighten the spec or accept the gap explicitly. Don't let vagueness leak through as PASS.
+- **Spec's acceptance criteria are vague**: <!-- kind:design-fork --> ⚠️ PARTIAL by default and ask the user to either tighten the spec or accept the gap explicitly. Don't let vagueness leak through as PASS. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`.
 - **Implementer pushes new commits mid-review**: re-run step 2 (`aida review prompt --pr N` again) so the checklist matches the latest range. Verdicts on stale code are worse than none.
 - **PR already merged but new commits arrive on the branch (BUG-88)**: don't treat them as extending the original PR. The commits live on `origin/<branch>` but won't reach `main` without a fresh PR. Verify with `gh pr list --head <branch> --state open` before continuing; if empty + `--state merged` returns a hit, ask the implementer to open a follow-up PR (or cherry-pick onto a new branch off `origin/main`) before reviewing further.

@@ -68,6 +68,35 @@ and pulls the next. Pairs with the `dialog` role on the producer side
   path. It's the interactive counterpart of `aida queue work --batch NAME
   --auto-complete` (the autonomous drain). trace:TASK-272
 
+## Autonomy mode — `$AIDA_ZEN` (STORY-287)
+
+This skill's user-facing prompts carry a `kind:` annotation in an HTML
+comment directly above each one:
+
+- `<!-- kind:confirmation -->` — a mechanical yes/no whose default
+  (option 1) is obvious: "open PR?", "merge?", "grab next item?".
+- `<!-- kind:design-fork -->` — a genuine choice between meaningful
+  alternatives, where guessing wrong has real cost.
+
+Before surfacing any prompt, check the autonomy mode:
+
+```bash
+echo "${AIDA_ZEN:-}"
+```
+
+- **Non-empty** — *advisor-on-standby* mode (`aida queue work --zen`, or
+  `AIDA_ZEN=1` exported). For every `kind:confirmation` prompt, do **not**
+  call `AskUserQuestion`: take option 1 (the first / recommended choice)
+  and proceed, printing one line — `↳ zen: auto-resolved "<prompt>" →
+  option 1`. Still surface every `kind:design-fork` prompt unchanged —
+  those are the real questions the advisor stays at the keyboard for.
+- **Empty** — default mode: surface every prompt, no change.
+
+A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
+overrides `--zen`. An un-annotated prompt defaults to `design-fork`
+(pause-safe). Author guidance: `docs/aida-discipline/skill-prompt-kinds.md`.
+trace:STORY-287
+
 ## Workflow
 
 ### Step 1: Check the queue
@@ -124,6 +153,7 @@ shape. Instead:
 
 ### Step 2: Confirm pickup
 
+<!-- kind:confirmation -->
 Show the user the item and ask whether to start. Examples:
 
 > Next up: **FR-1-042 — Add OAuth provider** (Approved · High · joe)
@@ -143,8 +173,12 @@ pre-flight summary. In that case, skip the "want me to start?" prompt
 and proceed straight to Step 3a/3b — re-asking inside the launched
 session is friction-without-value.
 
+Also skip it under `$AIDA_ZEN` (STORY-287) — this is a `kind:confirmation`
+prompt, so advisor-on-standby mode auto-resolves it: take "start" and
+proceed straight to Step 3a/3b, printing the one-line `↳ zen:` note.
+
 Keep the confirm for:
-- Direct `/aida-pickup` invocation (no upstream consent)
+- Direct `/aida-pickup` invocation (no upstream consent), in default mode
 - `aida queue work <ITEM-ID>` (item mode — user named one item, may
   want to verify it's the right pickup)
 
@@ -249,9 +283,17 @@ Equivalent to: `aida edit <spec_id> --status done && aida queue remove <spec_id>
 
 ### Step 6: Next steps (state-aware) — trace:TASK-87 trace:TASK-260
 
+<!-- kind:confirmation -->
 After step 5 succeeds, surface a structured next-steps table so the
 workflow self-guides instead of relying on improvised "want me to push?"
 prompts. Don't auto-execute — the user picks.
+
+Under `$AIDA_ZEN` (STORY-287) this menu is a `kind:confirmation` prompt:
+still render the table (it stays the scrollback record), then proceed
+with the **primary row** automatically — `▶` in the manual templates,
+`⇒` in the *orchestrator mode* template — instead of waiting for a pick.
+Never auto-take a `⏸` row. Print the one-line `↳ zen:` note naming the
+row taken.
 
 **Detect state first.** These signals decide which template to render:
 
@@ -397,9 +439,10 @@ Drained <N> items from <cluster-id>.
 | ⇒ Switch hats and queue more | `eval "$(aida role enter dialog)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; dialog is the producer seat that refills the queue |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; nothing is queued, so it's a clean stopping point |
 
-Print exactly one block — don't dump all six templates. Don't auto-loop
-without confirmation: the user may want to break, review, switch roles, or
-call it for the day.
+Print exactly one block — don't dump all six templates. In default mode,
+don't auto-loop without confirmation: the user may want to break, review,
+switch roles, or call it for the day. Under `$AIDA_ZEN` the user has
+pre-authorized that loop — auto-take the primary row as described above.
 
 ## Producer side reminder
 
