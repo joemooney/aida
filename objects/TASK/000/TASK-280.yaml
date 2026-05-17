@@ -38,7 +38,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:13:19.368962045Z
-modified_at: 2026-05-17T19:36:48.256666388Z
+modified_at: 2026-05-17T19:42:42.508468282Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
@@ -46,6 +46,20 @@ tags:
 - first-users
 - positional-arg
 - queue-move
+comments:
+- id: 019e3776-554c-76f0-810b-e90a1dfeaff7
+  author: joe
+  content: |-
+    Implemented via PR #74 (commit 2f15dbba):
+
+    - Added `--to-front` / `--to-back` as visible aliases of `--top` / `--bottom`.
+    - Added `--to <N>` for absolute 1-indexed positioning; counts among the queue's live (non-terminal) entries so the slot matches `aida queue list`; out-of-range N clamps to the nearest end with a hint.
+    - `--to` conflicts with the relative/end flags; existing `--before`/`--after`/`--top`/`--bottom` unchanged.
+    - Pure helper `move_to_absolute_position()` does the list reorder; caller renumbers with a fresh 1000-gap.
+
+    Test status: 564/564 aida-cli tests green; live-queue smoke test passed and queue restored.
+  created_at: 2026-05-17T19:42:42.508468282Z
+  modified_at: 2026-05-17T19:42:42.508468282Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T19:36:48.256666388Z
