@@ -53,7 +53,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:55:26.351418339Z
-modified_at: 2026-05-17T18:05:47.774735502Z
+modified_at: 2026-05-17T18:08:06.562358606Z
 req_type: Task
 tags:
 - batch:display-polish
@@ -68,6 +68,20 @@ comments:
   content: Commit 866615b0 references this requirement
   created_at: 2026-05-17T18:05:30.510939513Z
   modified_at: 2026-05-17T18:05:30.510939513Z
+- id: 019e371f-b9a2-7f91-81ff-b63ba7752804
+  author: joe
+  content: |-
+    Implemented via branch task-282 (commit 866615b0):
+
+    - Statusline folds the session anchor into the @SPEC segment as ` [sess:<anchor>]`, rendered only on divergence (child-spec @, or a TASK-60 batch suffix the bare @ can't carry). Same scope + no suffix → suppressed.
+    - New `wt:<name>` segment renders only when the worktree dir name diverges from the scope slug; auto-named `<repo>-<slug>` worktrees show nothing.
+    - Standalone `sess:` segment kept only for the no-role case (no @SPEC to fold into).
+    - Two pure helpers (sess_anchor_annotation, wt_divergence_segment).
+
+    Test status: 561/561 aida-cli tests green (5 new for the divergence cases)
+    Follow-up: criterion 7 (TUI status strip consistency) deferred to STORY-244 — its launcher status strip isn't built yet; a comment there records the rule + helper names to reuse.
+  created_at: 2026-05-17T18:08:06.562358606Z
+  modified_at: 2026-05-17T18:08:06.562358606Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T18:05:47.774735502Z
