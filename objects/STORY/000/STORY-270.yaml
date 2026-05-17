@@ -1,0 +1,44 @@
+id: 019e3385-8d62-7893-8e5f-fd79c8673e26
+spec_id: STORY-270
+agreed_id: STORY-270
+title: '[EPIC-29 5/5] Cross-repo docs + version compatibility matrix + positioning updates'
+description: |-
+  Final child STORY of EPIC-29. Documentation + coordination surface for the two-repo structure.
+
+  ## Acceptance
+
+  ### Both repos
+  - [ ] README of each repo links to the other with short relationship description
+  - [ ] CONTRIBUTING.md in each describes when to file cross-repo issues
+  - [ ] Version compatibility matrix (where aida-tui's docs say "aida-tui v0.X requires aida-core ≥ v0.Y")
+
+  ### AIDA core repo
+  - [ ] OVERVIEW.md updated: TUI moved from "core feature" to "companion project"
+  - [ ] CLAUDE.md updated: removes detailed TUI guidance; adds short pointer to aida-tui repo
+  - [ ] `docs/competitive-analysis/positioning.md` (STORY-260) gets "companion projects" section
+  - [ ] `docs/positioning/companion-projects.md` (or similar) explaining the strategy
+
+  ### aida-tui repo
+  - [ ] README explains the consumer-of-core architecture
+  - [ ] Includes the lifecycle diagram (similar to TASK-273)
+  - [ ] Install instructions assume aida-core is installed first
+
+  ### Install path docs (TASK-275 update)
+  - [ ] AIDA install docs explain the optional companion: "To use the TUI, also install aida-tui (separate binary)"
+
+  ## Depends on
+
+  - All previous STORYs (1-4) shipped
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:20:51.042943699Z
+modified_at: 2026-05-17T01:20:51.042943699Z
+req_type: Story
+tags:
+- companion-project
+- compatibility-matrix
+- cross-repo
+- documentation
+- positioning
