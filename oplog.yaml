@@ -6310,5 +6310,88 @@ operations:
   timestamp: 2026-05-17T15:26:12.641950247Z
   kind: !SetDescription
     description: ''
-clock: 712
+- id: 019e368c-4645-7e92-ae16-cda40221d805
+  target_id: 019e3682-d0e8-70d0-994b-5f16af39fcf5
+  author: aida
+  node_id: '1'
+  lamport: 713
+  timestamp: 2026-05-17T15:27:03.237522604Z
+  kind: !SetDescription
+    description: |-
+      When \`aida queue work --auto-complete\` (or any path that queues a PR for headless review) runs against a PR whose base is behind main, the reviewer reads stale code. If parallel work has merged in the meantime — common during batch drains and overnight autonomous cycles — the review is **against the wrong version** of the codebase. Worse, file-level overlap with merged-in-the-interim work may introduce silent conflicts that pass GitHub's textual-mergeability check but break compilation or tests at merge time.
+
+      This STORY is the **orchestrator pre-flight integration**. The underlying \`aida pr rebase <N>\` CLI is **TASK-308** (split out, ships independently).
+
+      ## Concrete instance (2026-05-17 morning)
+
+      - **PR-65 (STORY-278)** opened 07:28 UTC, base SHA = \`188dbee6\`
+      - Overnight: **PR-66 (TASK-303)** merged at 07:56 UTC — touched \`aida-cli/src/session.rs\`
+      - Overnight: **PR-67 (BUG-224)** merged at 15:01 UTC — touched a plan file
+      - **PR-65 also touches \`aida-cli/src/session.rs\`** (+6/-0)
+      - GitHub reports \`mergeable: UNKNOWN, mergeStateStatus: UNKNOWN\`
+      - Queuing PR-65 for headless review without rebase = reviewer reads code 2 commits stale; \`session.rs\` overlap may surface as a conflict at merge time
+
+      User flagged the concern:
+
+      > "Before \`aida queue work PR-65 --for reviewer --no-human\` is there a rebase needed? Do we/should we check? There seems like parallel work on-going so that could cause an issue?"
+
+      ## Proposed behavior
+
+      When orchestrator enters phase 3 (or any explicit reviewer-queue-add for a PR), before launching headless reviewer:
+
+      1. **Detect stale base** via \`aida pr rebase <N> --check\` (from TASK-308)
+      2. **If current** (no stale base): proceed immediately to reviewer launch
+      3. **If stale with no file overlap**: surface a warning, proceed — review-against-stale is suboptimal but safe
+      4. **If stale with file overlap**: BLOCK reviewer launch and:
+         - Print the \`aida pr rebase <N>\` invocation as the suggested fix
+         - Exit with non-zero so the orchestrator pauses at phase 2/3 boundary
+         - User runs \`aida pr rebase <N>\` manually, then retries \`aida queue work\`
+         - Future improvement (sub-TASK): orchestrator auto-invokes \`aida pr rebase <N>\` if conflicts are predicted clean — but only with user consent
+
+      The orchestrator should NEVER silently auto-rebase + force-push without user knowledge — too easy to clobber concurrent work or break a PR the user is actively editing. **Block-and-instruct is the right default**; auto-invoke is a follow-up.
+
+      ## CLI integration points
+
+      \`aida queue work <PR-N> --for reviewer\` gains:
+      - \`--allow-stale-base\` — opt out, proceed against stale base (with warning)
+      - Default: refuse to launch reviewer if base is stale AND there's file overlap
+
+      \`aida queue work --auto-complete\` orchestrator gains the same pre-flight check before phase 3.
+
+      ## Acceptance
+
+      - [ ] Pre-reviewer-launch hook in the orchestrator: calls \`aida pr rebase <N> --check\` (from TASK-308) before launching headless reviewer
+      - [ ] If \`--check\` reports stale + overlap: orchestrator pauses, prints the \`aida pr rebase <N>\` invocation, exits with informative non-zero
+      - [ ] If \`--check\` reports stale but no overlap: warning logged, reviewer proceeds (review-against-stale)
+      - [ ] If \`--check\` reports current: proceed silently
+      - [ ] \`--allow-stale-base\` flag on \`aida queue work <PR-N> --for reviewer\` opts out of the refusal (warning only)
+      - [ ] Same hook applies to direct \`aida queue work --for reviewer\` invocations, not just \`--auto-complete\`
+      - [ ] Tests: simulated stale + overlap → orchestrator pauses; stale + no overlap → warning only; current → silent proceed
+      - [ ] Integration test: full \`--auto-complete --no-human\` cycle that hits a stale-base block and surfaces actionable next steps
+
+      ## Out of scope
+
+      - **\`aida pr rebase <N>\` CLI itself** — TASK-308 (this STORY depends on it)
+      - **Auto-resolve conflicts** — never (same principle as TASK-308)
+      - **Cross-fork rebase** — TASK-308 surfaces manual instructions; this STORY just propagates them
+      - **Continuous rebase during long PR review** — single pre-flight check at queue-add time is enough
+      - **Auto-invoke \`aida pr rebase <N>\`** without user consent — explicit follow-up sub-TASK if needed after manual-invoke pattern is proven
+
+      ## Depends on
+
+      - **TASK-308** (\`aida pr rebase <N>\` CLI) — load-bearing dependency; this STORY's pre-flight hook is meaningless without the CLI
+
+      ## Composes with
+
+      - **STORY-263** (headless reviewer; this STORY makes the review correct against current main)
+      - **STORY-276** (headless implementer; phase 1 also benefits from base-currency on pickup, though scope is different — implementer starts work, doesn't review a static PR)
+      - **TASK-285** (\`--batch\` with \`--auto-complete\`; batch drains are where parallel merges fly past)
+      - **BUG-223** (orchestrator phase-1 branch-swap; sibling reliability concern)
+      - **TASK-305** (web /ultraplan plan-archival — same web-flow PRs are most likely to need rebase)
+      - **TASK-307** (tee headless output — stale-base detection messages surface via the same orchestrator stream)
+
+      ## Origin
+
+      2026-05-17 morning. User about to queue PR-65 (web /ultraplan output for STORY-278) for headless review; identified that 2 PRs merged overnight could cause issues. Concrete data: \`session.rs\` overlap between PR-65 and PR-66. Split decision (user 2026-05-17): the CLI ships first as a manual tool (TASK-308), the orchestrator pre-flight integration (this STORY) lands once the CLI has been used manually for a stretch and we have empirical evidence about which scenarios warrant blocking vs warning.
+clock: 713
 node_id: '1'
