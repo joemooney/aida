@@ -75,12 +75,12 @@ description: |-
   User asked 2026-05-16 after draining the first batch item (TASK-260): *\"As implementer the last command was aida queue work --batch workflow-hint-polish but mid stream claude suggested a PR which we are completing... does that really jive with our flow? Did I need to leave that chat in order to unlock so that the PR work review could proceed?\"*
 
   The honest answer: leaving wasn't strictly necessary (different scopes can run in parallel), but cluster-mode was the natural fit for the batch and wasn't surfaced.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:40:34.651717351Z
-modified_at: 2026-05-16T18:40:39.562701934Z
+modified_at: 2026-05-17T18:29:06.840664620Z
 req_type: Task
 tags:
 - aida-pickup
