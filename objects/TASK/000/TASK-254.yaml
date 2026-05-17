@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:03:26.376647792Z
-modified_at: 2026-05-17T01:20:56.601891864Z
+modified_at: 2026-05-17T01:21:00.106555252Z
 req_type: Task
 tags:
 - batch:tui-v2
@@ -47,3 +47,8 @@ comments:
   content: Un-rejected 2026-05-15 — user revealed first users arriving in a few days. The 'sole-user, skip the revert' framing is now invalid. Default-on with undiscoverable empty-state would bounce first users on contact. Revert is back on the critical path.
   created_at: 2026-05-16T00:12:59.249825903Z
   modified_at: 2026-05-16T00:12:59.249825903Z
+- id: 019e3385-b0ca-7f13-bc13-3e726c6ef36a
+  author: joe
+  content: Rejected 2026-05-16 — subsumed by EPIC-29 STORY 3 (Remove tui feature from aida-cli). The default-flip revert isn't needed once the tui feature is removed entirely. See EPIC-29.
+  created_at: 2026-05-17T01:21:00.106555252Z
+  modified_at: 2026-05-17T01:21:00.106555252Z
