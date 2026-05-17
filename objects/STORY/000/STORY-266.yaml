@@ -1,0 +1,37 @@
+id: 019e3385-356b-7fd3-8f1e-8a719b93c30b
+spec_id: STORY-266
+agreed_id: STORY-266
+title: '[EPIC-29 1/5] Define aida-core public API contract — audit + freeze types/methods aida-tui consumes'
+description: |-
+  First child STORY of EPIC-29 (aida-tui split). Audit aida-tui's current consumption of aida-core; mark required types/methods explicitly `pub`; document the API surface; verify a separate Rust crate can implement a minimal TUI against this API alone (no reach-into-internals).
+
+  ## Acceptance
+
+  - [ ] Audit aida-tui/src/ for all aida-core imports
+  - [ ] For each consumed type/method: ensure it's `pub` and re-exported from aida-core's lib.rs
+  - [ ] Write `docs/api/aida-core.md` listing the public API surface with one-line description per item
+  - [ ] Smoke test: a separate Rust crate (in /tmp/aida-tui-test) depending only on aida-core can call each documented API and compile
+  - [ ] No new functionality — pure API surface curation
+  - [ ] Internal types stay internal; document what's intentionally NOT public
+
+  ## Why first
+
+  Everything else in EPIC-29 depends on the API surface being stable + documented. The extraction (STORY 2) can't happen cleanly without knowing what's stable; the feature removal (STORY 3) needs the contract for what aida-tui depends on; specs migration (STORY 4) is downstream.
+
+  ## Composes with
+
+  - **EPIC-27** (MCP modernization) — the MCP server also consumes aida-core; the audit should consider its needs too for consistency
+  - **`aida ultraplan` / plan tooling** — already public API; this audit just formalizes
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T01:20:28.523267521Z
+modified_at: 2026-05-17T01:20:28.523267521Z
+req_type: Story
+tags:
+- aida-core
+- api-contract
+- architecture
+- public-api
+- tui-extraction-prereq
