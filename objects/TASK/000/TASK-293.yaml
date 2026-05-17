@@ -55,12 +55,12 @@ description: |-
   ## Origin
 
   User proposed 2026-05-16: *\"maybe instead of \`aida queue work --auto-complete\` we should have \`aida queue work next --auto-complete\` where next is a keyword and maybe you could say next3.\"* — surfaced both the readability value of explicit keyword AND the new multi-spec drain capability.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:06:29.161825781Z
-modified_at: 2026-05-17T01:09:35.811643363Z
+modified_at: 2026-05-17T21:16:27.162528845Z
 req_type: Task
 tags:
 - batch:workflow-hint-polish
