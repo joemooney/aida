@@ -1,0 +1,100 @@
+id: 019e34ef-304a-7ed1-b66f-9cc90bdf5259
+spec_id: TASK-306
+agreed_id: TASK-306
+title: Statusline + flag clarity for --no-human scope (currently reviewer-only)
+description: |-
+  \`--no-human\` advertises autonomy but currently only headless-runs phase 3 (reviewer; STORY-263). Phase 1 (implementer) still pauses for input. Users kick off \`aida queue work --auto-complete --no-human\` expecting to walk away; in practice the drain stalls at the first phase-1 "what next?" menu and ships **at most one item per kickoff**.
+
+  Until STORY-276 (headless implementer) lands, the flag needs **loud and persistent** scope clarity in three places:
+
+  ## 1. Statusline indicator
+
+  When an interactive Claude session is running **inside** an \`--auto-complete --no-human\` orchestrator context, the statusline should show this state. Proposed format:
+
+  \`\`\`
+  auto:phase 1/6 (implementer) · no-human:reviewer-only · pause-here
+  \`\`\`
+
+  Key signals to convey:
+  - This is NOT a standalone session — it's an orchestrator phase
+  - Which phase number (1/6, 2/6, etc.)
+  - That \`--no-human\` was set but DOES NOT cover this phase
+  - That the user IS expected to act here (vs the headless reviewer phase where they aren't)
+
+  The phase number alone closes 80% of the discoverability gap.
+
+  ## 2. Pre-launch banner on \`aida queue work --auto-complete --no-human\`
+
+  Before phase 1 launches, print a clear scope statement:
+
+  \`\`\`
+  ⚠ --no-human covers phase 3 (reviewer) only.
+     Phase 1 (implementer) and phase 4 (merge prompts) still require interactive input.
+     Full autonomy lands with STORY-276 (headless implementer phase).
+     The drain will pause at each phase-1 completion until you act.
+
+     Continue? [y/N]
+  \`\`\`
+
+  (Skip the prompt if \`AIDA_NO_HUMAN_ACKNOWLEDGED=1\` or \`--yes\`.)
+
+  ## 3. \`--help\` text update
+
+  Current (assumed):
+  \`\`\`
+  --no-human                  Headless reviewer phase
+  \`\`\`
+
+  Proposed:
+  \`\`\`
+  --no-human[=MODE]           Run headless. MODE = reviewer-only (default) | both
+                              reviewer-only: phase 3 headless; phase 1 still interactive
+                              both: full headless drain (REQUIRES STORY-276)
+                              Aliases: --unattended, --headless
+  \`\`\`
+
+  (The \`both\` mode is reserved for when STORY-276 ships; until then it errors with a "STORY-276 required" message.)
+
+  ## Acceptance
+
+  - [ ] Statusline shows orchestrator context: phase number, \`--no-human\` mode, pause-expected indicator, when applicable
+  - [ ] Pre-launch banner explains reviewer-only scope; requires user ack (or \`AIDA_NO_HUMAN_ACKNOWLEDGED=1\` to skip)
+  - [ ] \`--help\` text spells out scope explicitly
+  - [ ] Tests: orchestrator context detection → statusline updates correctly; banner appears once per kickoff
+  - [ ] When STORY-276 lands, statusline + help + banner update to reflect both-phase autonomy
+
+  ## Out of scope
+
+  - **Actually implementing headless phase 1** — that's STORY-276
+  - **Persisting orchestrator context across shell restarts** — phase context lives in the session lease; statusline reads from there
+  - **Per-phase configurability** (e.g., "headless reviewer but always prompt at merge") — over-scoping; STORY-276 + this TASK get us 90%
+
+  ## Composes with
+
+  - **STORY-263** (shipped headless reviewer; this TASK clarifies its scope to users)
+  - **STORY-276** (headless implementer; when it lands, the scope statements update)
+  - **TASK-282** (statusline polish — sess:/wt: divergence-aware indicators; this TASK adds orchestrator-context indicators)
+  - **BUG-116** (glyph propagation — same family: cross-surface UI consistency)
+  - \`feedback_run_help_before_suggesting_flags.md\` (the \`--help\` text fix prevents users from being misled by the flag name)
+
+  ## Origin
+
+  User caught the gap 2026-05-17 during the first overnight \`--no-human\` drain attempt:
+
+  > "kicked it on --no-human but I am prompted [implementer table at end of phase 1] do I need to have entered implementer role? ... maybe put something in the statusline as well"
+
+  The role question turned out to be a separate issue (resolved: yes, switch role) — but the deeper issue is that \`--no-human\` doesn't communicate its reviewer-only scope. User retired for the night expecting batch:pr-64-cleanup to drain; in practice only TASK-303 will land before phase 1 of BUG-224 stalls for input.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T07:55:51.242806850Z
+modified_at: 2026-05-17T07:55:51.242806850Z
+req_type: Task
+tags:
+- alpha-readiness
+- auto-complete
+- discoverability
+- no-human
+- overnight-drain
+- statusline
