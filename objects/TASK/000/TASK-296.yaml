@@ -3,12 +3,12 @@ spec_id: TASK-296
 agreed_id: TASK-296
 title: Headless spike scratch task — SPIKE-7 Test 2 (delete after)
 description: 'SCRATCH TASK for SPIKE-7 empirical Test 2 (headless /aida-pickup -> /aida-pr). Deliverable: create the file docs/spikes/headless-pickup-scratch.md containing exactly one markdown line: ''# Headless pickup scratch — created by headless claude -p as part of SPIKE-7 Test 2. Safe to delete.'' Nothing else. This spec and its PR will be cleaned up immediately after the test.'
-status: Done
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:43:56.263738485Z
-modified_at: 2026-05-17T02:52:20.374918470Z
+modified_at: 2026-05-17T03:02:05.872333108Z
 req_type: Task
 tags:
 - delete-me
