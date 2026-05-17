@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:20:13.831734961Z
-modified_at: 2026-05-17T02:21:00.775801328Z
+modified_at: 2026-05-17T02:22:45.940008578Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -90,6 +90,18 @@ comments:
     filed 1 task(s): TASK-295
   created_at: 2026-05-17T02:21:01.130512180Z
   modified_at: 2026-05-17T02:21:01.130512180Z
+- id: 019e33be-3cb4-7e50-a949-d7a53adf846e
+  author: joe
+  content: |-
+    Implemented on branch epic-23-9 (commits 80292656, 501f285f):
+
+    - `--batch NAME --auto-complete` composes — dropped `batch` from the clap `conflicts_with` set; added a re-resolving head-pickup drain loop (`drain_batch` + `BatchDriver` trait in auto_complete.rs).
+    - A phase failure stops the drain at that spec (exit = failed-phase index); the rest of the batch stays queued. `--max N` caps the drain; a stall guard breaks a non-advancing queue.
+    - `--auto-complete=through-ci` / `through-merge` variants compose; `handle_auto_complete` split into a non-exiting `run_auto_complete` so the loop can chain runs.
+
+    Test status: 534/534 aida-cli tests green (7 new drain_batch_* tests); cargo fmt + clippy clean on new code.
+  created_at: 2026-05-17T02:22:45.940008578Z
+  modified_at: 2026-05-17T02:22:45.940008578Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T02:20:52.867673552Z
