@@ -2533,6 +2533,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             sync,
             no_git,
             verbose,
+            card,
+            brief,
+            full,
         } => {
             // STORY-78: opt-in sync-pull before show. trace:STORY-78 | ai:claude
             if *sync {
@@ -2580,6 +2583,33 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             match lookup? {
                 Some(req) => {
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
+                    // TASK-265: --card renders a compact boxed spec card
+                    // instead of the linear detail view, so /aida-pickup can
+                    // drop the spec's contract into terminal scrollback at
+                    // session start. The plain `aida show` stays the
+                    // canonical detail surface. trace:TASK-265 | ai:claude
+                    if *card {
+                        let density = if *brief {
+                            CardDensity::Brief
+                        } else if *full {
+                            CardDensity::Full
+                        } else {
+                            CardDensity::Balanced
+                        };
+                        // Resolve each relationship target to (label,
+                        // display-id, title) so the card can name parents
+                        // and related specs, not just count edges.
+                        let mut rels: Vec<(String, String, String)> = Vec::new();
+                        for rel in &req.relationships {
+                            let label = card_rel_label(&rel.rel_type).to_string();
+                            match backend.get_requirement(&rel.target_id) {
+                                Ok(Some(t)) => rels.push((label, t.display_id(), t.title.clone())),
+                                _ => rels.push((label, "(unknown)".to_string(), String::new())),
+                            }
+                        }
+                        render_spec_card(&req, &rels, store_path, density, *no_git, *verbose);
+                        return Ok(());
+                    }
                     println!("{}: {}", "ID".bold(), req.display_id());
                     // Only show Agreed ID / Origin ID when they actually
                     // differ from the canonical display id — otherwise it's
@@ -18521,6 +18551,71 @@ mod statusline_tests {
         let desc = "## Acceptance\n\n## Why\n\nReason.\n";
         // Empty body (just whitespace until the next heading) → None.
         assert!(extract_acceptance_section(desc).is_none());
+    }
+
+    /// TASK-265: card_lead_prose returns everything before the first
+    /// `## ` heading — the plain summary AIDA descriptions front-load.
+    /// trace:TASK-265 | ai:claude
+    #[test]
+    fn card_lead_prose_stops_at_first_heading() {
+        let desc = "Lead summary.\n\nSecond line.\n\n## Acceptance\n\n- a\n";
+        assert_eq!(card_lead_prose(desc), "Lead summary.\n\nSecond line.");
+        // No headings → whole description (trailing whitespace trimmed).
+        assert_eq!(card_lead_prose("Just prose.\n"), "Just prose.");
+        // A `## ` mid-line is not a heading and must not split.
+        assert_eq!(
+            card_lead_prose("see ## not a heading"),
+            "see ## not a heading"
+        );
+    }
+
+    /// TASK-265: card_truncate_paragraphs caps at N paragraphs / ~M chars
+    /// without ever cutting inside a paragraph. trace:TASK-265 | ai:claude
+    #[test]
+    fn card_truncate_paragraphs_respects_boundaries() {
+        let text = "Para one.\n\nPara two.\n\nPara three.\n\nPara four.";
+        let (body, truncated) = card_truncate_paragraphs(text, 3, 500);
+        assert_eq!(body, "Para one.\n\nPara two.\n\nPara three.");
+        assert!(truncated, "fourth paragraph dropped");
+
+        // Under both limits → nothing dropped.
+        let (body, truncated) = card_truncate_paragraphs("Only one.", 3, 500);
+        assert_eq!(body, "Only one.");
+        assert!(!truncated);
+
+        // Char budget stops accumulation, but never mid-paragraph.
+        let long = "aaaa\n\nbbbbbbbbbb\n\ncccc";
+        let (body, truncated) = card_truncate_paragraphs(long, 3, 8);
+        assert_eq!(body, "aaaa", "second paragraph blows the 8-char budget");
+        assert!(truncated);
+
+        // The first paragraph is always kept even if it alone exceeds
+        // the budget — the card never shows an empty description.
+        let (body, _) = card_truncate_paragraphs("wayy-too-long-first-para", 3, 5);
+        assert_eq!(body, "wayy-too-long-first-para");
+    }
+
+    /// TASK-265: card_count_acceptance counts `- [ ]` / `* [ ]` items.
+    /// trace:TASK-265 | ai:claude
+    #[test]
+    fn card_count_acceptance_counts_checkboxes() {
+        let body = "- [ ] one\n- [x] two\n  * [ ] nested three\nplain line\n- bullet not a box";
+        assert_eq!(card_count_acceptance(body), 3);
+        assert_eq!(card_count_acceptance(""), 0);
+    }
+
+    /// TASK-265: card_rel_label buckets a `Child` edge under "Parent"
+    /// (the edge reads "I am a child of the target") and everything else
+    /// under "Related". trace:TASK-265 | ai:claude
+    #[test]
+    fn card_rel_label_buckets_relationships() {
+        assert_eq!(card_rel_label(&RelationshipType::Child), "Parent");
+        assert_eq!(card_rel_label(&RelationshipType::Parent), "Related");
+        assert_eq!(card_rel_label(&RelationshipType::References), "Related");
+        assert_eq!(
+            card_rel_label(&RelationshipType::Custom("blocks".into())),
+            "Related"
+        );
     }
 
     /// STORY-67: spec ID detection inside a `(...)` group at end of
@@ -37095,6 +37190,244 @@ const ACCEPTANCE_SECTION_HEADINGS: &[&str] = &[
     "Tests",
     "Verification",
 ];
+
+/// Density levels for the `aida show --card` spec card. trace:TASK-265
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CardDensity {
+    /// One-line id/type/priority/status/title summary, no box. For
+    /// autonomous / scripted flows that just need the spec named.
+    Brief,
+    /// Boxed card: a truncated lead-prose description + the acceptance
+    /// criteria. The default.
+    Balanced,
+    /// Boxed card with the full description, no truncation. For deep
+    /// dives.
+    Full,
+}
+
+/// Map a relationship type to the field label the spec card buckets it
+/// under. AIDA's `RelationshipType` reads as "I am X to the target", so a
+/// `Child` edge means the target is this spec's parent. trace:TASK-265 | ai:claude
+fn card_rel_label(rt: &RelationshipType) -> &'static str {
+    match rt {
+        // This spec is a child of the target → target is the parent.
+        RelationshipType::Child => "Parent",
+        // Everything else is surfaced under the "Related" bucket; the
+        // canonical `aida show` / `aida rel` views carry the edge detail.
+        _ => "Related",
+    }
+}
+
+/// The lead prose of a requirement description — everything before the
+/// first `## ` section heading. AIDA descriptions front-load a plain
+/// summary, then break into `## Acceptance`, `## Origin`, etc.; the
+/// balanced card shows just that summary. trace:TASK-265 | ai:claude
+fn card_lead_prose(description: &str) -> &str {
+    let mut from = 0usize;
+    while let Some(rel) = description[from..].find("## ") {
+        let abs = from + rel;
+        // Only treat it as a heading when it starts a line.
+        if abs == 0 || description.as_bytes()[abs - 1] == b'\n' {
+            return description[..abs].trim_end();
+        }
+        from = abs + 3;
+    }
+    description.trim_end()
+}
+
+/// Truncate text to at most `max_paragraphs` blank-line-separated
+/// paragraphs and roughly `max_chars` characters, never cutting inside a
+/// paragraph (so the result never ends mid-sentence). The first paragraph
+/// is always kept even if it alone exceeds the char budget. Returns the
+/// kept text and whether anything was dropped. trace:TASK-265 | ai:claude
+fn card_truncate_paragraphs(text: &str, max_paragraphs: usize, max_chars: usize) -> (String, bool) {
+    let paragraphs: Vec<&str> = text
+        .split("\n\n")
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .collect();
+    let mut kept: Vec<&str> = Vec::new();
+    let mut total = 0usize;
+    for (i, para) in paragraphs.iter().enumerate() {
+        if i >= max_paragraphs {
+            break;
+        }
+        if i > 0 && total + para.chars().count() > max_chars {
+            break;
+        }
+        kept.push(para);
+        total += para.chars().count();
+    }
+    let truncated = kept.len() < paragraphs.len();
+    (kept.join("\n\n"), truncated)
+}
+
+/// Count `- [ ]` / `* [ ]` checklist items in an acceptance-section body.
+/// trace:TASK-265 | ai:claude
+fn card_count_acceptance(body: &str) -> usize {
+    body.lines()
+        .filter(|l| {
+            let t = l.trim_start();
+            t.starts_with("- [") || t.starts_with("* [")
+        })
+        .count()
+}
+
+/// Render a requirement as a compact, boxed "spec card" — the rendering
+/// behind `aida show --card`. The /aida-pickup skill calls this at session
+/// start so the spec's contract stays in terminal scrollback for the whole
+/// working session, with no separate `aida show`. The plain `aida show`
+/// view remains the canonical detail surface.
+///
+/// `rels` is the requirement's relationships already resolved by the
+/// caller to (label, display-id, title) triples. trace:TASK-265 | ai:claude
+fn render_spec_card(
+    req: &aida_core::Requirement,
+    rels: &[(String, String, String)],
+    store_path: &std::path::Path,
+    density: CardDensity,
+    no_git: bool,
+    verbose: bool,
+) {
+    let id = req.display_id();
+    let req_type = req.req_type.to_string();
+    let priority = req.effective_priority();
+    let status = req.effective_status();
+
+    // Brief: a single line, no box — for autonomous / scripted flows.
+    if density == CardDensity::Brief {
+        println!(
+            "{} · {} · {} · {} · {}",
+            id, req_type, priority, status, req.title
+        );
+        return;
+    }
+
+    const WIDTH: usize = 72;
+    let rule = "═".repeat(WIDTH);
+
+    // Header: ▶ <ID> — <title>, title trimmed to keep the banner tidy.
+    let prefix = format!("▶ {} — ", id);
+    let budget = WIDTH.saturating_sub(prefix.chars().count());
+    let title = if req.title.chars().count() > budget {
+        let t: String = req.title.chars().take(budget.saturating_sub(1)).collect();
+        format!("{}…", t)
+    } else {
+        req.title.clone()
+    };
+    println!("{}", rule.dimmed());
+    println!("{}{}", prefix.cyan().bold(), title.cyan().bold());
+    println!("{}", rule.dimmed());
+    println!();
+
+    // One-liner: ID · type · priority · status.
+    println!("  {} · {} · {} · {}", id.bold(), req_type, priority, status);
+    println!();
+
+    // Key fields. "Uncategorized" is the default feature — suppress it
+    // so the card only shows a feature the user actually set.
+    let mut printed_field = false;
+    if !req.feature.is_empty() && req.feature != "Uncategorized" {
+        println!("  {} {}", "▸ Feature:".bold(), req.feature);
+        printed_field = true;
+    }
+    if !req.tags.is_empty() {
+        let tags: Vec<String> = req.tags.iter().cloned().collect();
+        println!("  {} {}", "▸ Tags:".bold(), tags.join(", "));
+        printed_field = true;
+    }
+    let join_rels = |bucket: &str| -> String {
+        rels.iter()
+            .filter(|(l, _, _)| l == bucket)
+            .map(|(_, rid, rtitle)| {
+                if rtitle.is_empty() {
+                    rid.clone()
+                } else {
+                    format!("{} — {}", rid, rtitle)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let parent = join_rels("Parent");
+    if !parent.is_empty() {
+        println!("  {} {}", "▸ Parent:".bold(), parent);
+        printed_field = true;
+    }
+    let related = join_rels("Related");
+    if !related.is_empty() {
+        println!("  {} {}", "▸ Related:".bold(), related);
+        printed_field = true;
+    }
+    if printed_field {
+        println!();
+    }
+
+    // Description: full text for --full, otherwise the lead prose
+    // truncated to ~3 paragraphs / ~500 chars on a paragraph boundary.
+    // Brief already returned above; only Balanced and Full reach here.
+    let (desc_body, desc_label) = if density == CardDensity::Full {
+        (req.description.trim().to_string(), "▸ Description:")
+    } else {
+        let (body, truncated) = card_truncate_paragraphs(card_lead_prose(&req.description), 3, 500);
+        let body = if truncated && !body.is_empty() {
+            format!("{}\n\n…", body)
+        } else {
+            body
+        };
+        (body, "▸ Description (summary):")
+    };
+    if !desc_body.is_empty() {
+        println!("  {}", desc_label.bold());
+        for line in desc_body.lines() {
+            println!("    {}", line);
+        }
+        println!();
+    }
+
+    // Acceptance criteria as their own block (the --full description
+    // already carries the section verbatim, so skip it there).
+    if density == CardDensity::Balanced {
+        if let Some(acc) = extract_acceptance_section(&req.description) {
+            let n = card_count_acceptance(&acc);
+            let label = if n == 1 {
+                "1 item".to_string()
+            } else {
+                format!("{} items", n)
+            };
+            println!("  {}", format!("▸ Acceptance ({}):", label).bold());
+            for line in acc.lines() {
+                let t = line.trim_end();
+                if !t.is_empty() {
+                    println!("    {}", t);
+                }
+            }
+            println!();
+        }
+    }
+
+    // Git linkage — reuse the same section `aida show` appends, grepped
+    // against every id form the spec has worn. trace:TASK-241
+    if !no_git {
+        let mut ids: Vec<String> = vec![req.display_id()];
+        if let Some(ref a) = req.agreed_id {
+            if !ids.contains(&a.to_string()) {
+                ids.push(a.to_string());
+            }
+        }
+        if let Some(ref o) = req.spec_id {
+            if !ids.contains(o) {
+                ids.push(o.clone());
+            }
+        }
+        let project_root = store_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        print_git_linkage(&project_root, &ids, verbose);
+    }
+    println!("{}", rule.dimmed());
+}
 
 /// Extract the acceptance-criteria body from a requirement description.
 /// Returns the body text (without the heading line) when one of the

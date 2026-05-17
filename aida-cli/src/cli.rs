@@ -2843,6 +2843,26 @@ pub enum Command {
         /// trace:TASK-241 | ai:claude
         #[clap(long, short = 'v')]
         verbose: bool,
+
+        /// Render a compact, boxed "spec card" instead of the linear
+        /// detail view: a header rule, an ID/type/priority/status
+        /// one-liner, key fields, a truncated description, the
+        /// acceptance criteria, and the git-linkage summary. The
+        /// /aida-pickup skill renders this at session start so the
+        /// spec's contract stays in terminal scrollback.
+        #[clap(long)]
+        card: bool,
+
+        /// With --card: minimal density — a single-line
+        /// id/type/priority/status/title summary, no box. For
+        /// autonomous or scripted flows that just need the spec named.
+        #[clap(long, conflicts_with = "full")]
+        brief: bool,
+
+        /// With --card: full density — the complete description with
+        /// no paragraph truncation. For deep dives.
+        #[clap(long)]
+        full: bool,
     },
 
     /// Edit an existing requirement
