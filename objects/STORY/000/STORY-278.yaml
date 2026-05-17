@@ -101,7 +101,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:44:52.445178527Z
-modified_at: 2026-05-17T15:47:13.376876672Z
+modified_at: 2026-05-17T16:56:27.800206114Z
 req_type: Story
 tags:
 - advisor-triage
@@ -136,3 +136,8 @@ comments:
   content: STORY-278's web-/ultraplan-produced PR (when it lands) is a candidate **C-condition data point** for SPIKE-8 (empirical /ultraplan comparison). Fold the metrics into the SPIKE without re-running condition C for this spec — already-running cost is sunk.
   created_at: 2026-05-17T07:15:16.085937185Z
   modified_at: 2026-05-17T07:15:16.085937185Z
+- id: 019e36de-2198-7372-bbd3-378af57aa0de
+  author: joe
+  content: 'Sibling structural work filed 2026-05-17: STORY-285 (implementer-side findings under --no-human, mirror of this STORY''s reviewer-side pattern). The `aida findings` surface from this STORY extends transparently to cover both sources; no new commands needed.'
+  created_at: 2026-05-17T16:56:27.800206114Z
+  modified_at: 2026-05-17T16:56:27.800206114Z
