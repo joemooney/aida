@@ -1,0 +1,85 @@
+id: 019e367c-1d88-70a3-8998-e9a0a5fef7cd
+spec_id: TASK-307
+agreed_id: TASK-307
+title: Tee headless Claude output to terminal (high-signal events) during --no-human phases
+description: |-
+  \`--no-human\` headless phases (currently phase 3 reviewer; STORY-276 will add phase 1 implementer) print only a launch banner naming the JSONL log file. The actual headless Claude session output is invisible during the run — to follow what's happening, the user has to open a second terminal and \`tail -f .aida/headless-logs/<pr-id>.jsonl\` manually. First-time users (and even experienced users dropping into an overnight drain mid-cycle) have no way to know whether the headless Claude is making progress, stuck, or about to fail.
+
+  ## Proposed UX
+
+  Stream **high-signal events** from the JSONL to the orchestrator's terminal alongside the launch banner. Filter out the firehose (token-by-token deltas, tool input dumps) — keep the human-readable beats:
+
+  \`\`\`
+  ▶ launching claude headless in /home/joe/ai/aida-pr-67 (claude -p, ...)
+    ℹ headless output → /home/joe/ai/aida/.aida/headless-logs/pr-67-019e...jsonl
+    │ [headless] reading PR #67 diff (2 files, +2/-2)...
+    │ [headless] verifying plan ref points at docs/autonomous-drain.md... ✓
+    │ [headless] no findings; verdict: Approved
+    ✓ verdict written: Approved → /home/joe/ai/aida/.aida/review-verdicts/PR-67.json
+    ✓ phase 3 complete
+  \`\`\`
+
+  The \`│ [headless]\` prefix makes it visually distinct from orchestrator-native output.
+
+  ## High-signal event set (initial draft)
+
+  Pull from the stream-json events:
+  - \`session_start\` → "starting headless review"
+  - Top-level \`text\` messages (Claude's plain commentary) → indent + show
+  - \`tool_use\` events for high-signal tools: \`Bash\` summaries, \`Read\` paths, \`Edit\` summary
+  - Final \`result\` event → verdict + token cost
+  - Any \`is_error: true\` or non-empty \`permission_denials\` → loud surfacing
+
+  Skip:
+  - Tool input deltas (full bash command text, full file contents being edited)
+  - Token-by-token assistant streaming
+  - Internal thinking blocks
+
+  ## Composes with
+
+  - **STORY-263** (headless reviewer that creates the JSONL — this TASK consumes it)
+  - **STORY-276** (headless implementer — same JSONL pattern, same tee logic applies)
+  - **TASK-298** (stream-json watchdog — parses \`permission_denials\` / \`is_error\`; this TASK reuses that parser since both consume the JSONL stream)
+  - **TASK-306** (statusline + flag clarity — sibling visibility work; statusline answers "what phase," tee answers "what is the headless Claude doing right now")
+
+  ## Acceptance
+
+  - [ ] During phase 3 (and future phase 1 under STORY-276), high-signal events stream to the orchestrator's terminal with a \`│ [headless]\` prefix
+  - [ ] The launch banner still names the full JSONL path for users who want the firehose
+  - [ ] Default: tee enabled. Disable with \`--no-tee-headless\` (env: \`AIDA_TEE_HEADLESS=0\`) for noise-sensitive contexts (e.g., CI logs)
+  - [ ] Errors (\`is_error\`, \`permission_denials\`, exit non-zero) ALWAYS stream regardless of tee setting
+  - [ ] When multiple headless phases run concurrently (future batch parallelism), each line is prefixed \`│ [headless:PR-N]\` to disambiguate
+  - [ ] Performance: tee is async; doesn't block orchestrator phase advancement
+  - [ ] Test: simulated JSONL fixture produces expected high-signal subset
+  - [ ] Test: \`is_error\` event surfaces even when \`--no-tee-headless\` set
+
+  ## Out of scope
+
+  - **Live colorization of streamed lines** — defer
+  - **Web UI for streaming headless output** — TUI surface is a different EPIC
+  - **Replaying past JSONL files** — separate \`aida headless replay <log>\` capability if needed; not this TASK
+
+  ## Origin
+
+  User observation 2026-05-17 morning, on first-time observing the orchestrator's phase 3 launch:
+
+  > "It may be nicer to tee the output if possible."
+
+  Specifically the user saw the launch banner for PR-67's headless review (the bash-formatted block with \`claude -p, permission-mode bypassPermissions, prompt /aida-review --pr 67\`) followed by the headless-logs JSONL location, then phase 4 (merge) starting — with NO visibility into what the headless reviewer actually did. The verdict landed in the verdict-file JSON; the reasoning + findings disappeared into the JSONL. The PR comment surfaces them but only after-the-fact.
+
+  The tee makes the headless phase *feel* like normal output, just with a different prefix — closes a real "what's happening" gap during unattended drains.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T15:09:24.232543827Z
+modified_at: 2026-05-17T15:09:24.232543827Z
+req_type: Task
+tags:
+- first-users
+- headless
+- no-human
+- observability
+- stream-json
+- ux-clarity
+- visibility
