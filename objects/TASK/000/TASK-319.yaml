@@ -1,0 +1,62 @@
+id: 019e379d-50c9-7f21-9404-5a18afe15dce
+spec_id: TASK-319
+agreed_id: TASK-319
+title: Codify the 'don't retroactively edit dated historical artifacts' convention (SPIKE / PROMPT_HISTORY / dated docs)
+description: |-
+  When conventions evolve (glyph swaps, vocabulary updates, palette unifications), cross-cutting refactors should **NOT** retroactively edit dated historical artifacts: SPIKE outputs, dated session logs, PROMPT_HISTORY entries, dated plan files, dated competitive-analysis snapshots. Those are records of \"what we knew at time T\" — editing them rewrites history and erodes the trail of how the team's understanding evolved.
+
+  ## Concrete instance (2026-05-17 BUG-116)
+
+  BUG-116 propagated the \`▶ ⏵ 🚪\` → \`▶ ⇒ ⏸\` glyph swap across skill templates. The implementer correctly left \`docs/spikes/2026-05-16-claude-headless.md:87\` untouched, noting: *\"dated historical observation record, not living guidance.\"*
+
+  ## The discriminator
+
+  | Artifact kind | Retroactive edit? |
+  |---|---|
+  | Living guidance (CLAUDE.md, skill templates, docs/aida-discipline/, README) | **YES** — update to current truth |
+  | Code (Rust source, configs, templates that compile/scaffold) | **YES** — update to current truth |
+  | Plan files in \`docs/plans/\` (active or recent) | YES if still load-bearing; NO once the work shipped and the plan is historical |
+  | Dated SPIKE outputs (\`docs/spikes/YYYY-MM-DD-*.md\`) | **NO** — dated record of empirical findings |
+  | Dated session logs (PROMPT_HISTORY.md entries) | **NO** — chronological record |
+  | Dated competitive-analysis snapshots (\`docs/competitive-analysis/YYYY-MM-DD-*.md\`) | **NO** — snapshot at time T |
+  | Spec descriptions / acceptance bullets | YES if work hasn't started; OR file follow-up + comment per \`feedback_refinements_must_be_acceptance_criteria.md\` |
+  | Spec comments | **NO** — chronological record |
+  | Git commit messages | **NO** — immutable record |
+
+  ## Acceptance
+
+  - [ ] New memory file \`feedback_dated_artifacts_immutable.md\` with \`propagation: scaffolding-pack\` frontmatter; includes the discriminator table + the BUG-116 instance
+  - [ ] Add a section to \`docs/aida-discipline/\` (Channel A propagation): *\"When refactoring across the codebase, dated historical artifacts stay frozen at the date in their filename.\"*
+  - [ ] Indexed in dialog-project's MEMORY.md
+  - [ ] Cross-references: comment on BUG-116 noting this codification
+
+  ## Out of scope
+
+  - **Lint check for retroactive edits to dated files** — over-engineered; discipline is the value
+  - **Per-file metadata field declaring \"frozen\"** — over-engineered; filename-date convention is sufficient
+  - **Audit existing repo for retroactive edits in dated artifacts** — water under the bridge
+
+  ## Composes with
+
+  - \`feedback_propagate_generic_discipline_via_scaffolding.md\` (this discipline propagates via the scaffolding pack)
+  - \`feedback_precise_lifecycle_vocabulary.md\` (same family: precision about state-at-time-T)
+  - \`feedback_refinements_must_be_acceptance_criteria.md\` (sibling: refinements to *active* specs go in acceptance, not comments — but historical comments stay frozen)
+  - BUG-116 (the implementer instance that surfaced this convention)
+  - STORY-255 (scaffolding pack — Channel B consumer)
+
+  ## Origin
+
+  2026-05-17 BUG-116 implementer recap: glyph propagation across skill templates correctly left \`docs/spikes/2026-05-16-claude-headless.md\` untouched as a \"dated historical observation record, not living guidance.\" That phrase is the convention worth codifying. Discipline-only TASK (no code); propagates via Channels A + B per \`feedback_propagate_generic_discipline_via_scaffolding.md\`.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-17T20:25:17.257067895Z
+modified_at: 2026-05-17T20:25:17.257067895Z
+req_type: Task
+tags:
+- convention
+- from-implementer:BUG-116
+- historical-artifacts
+- propagation
+- scaffolding-pack
