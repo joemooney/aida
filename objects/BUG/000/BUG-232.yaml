@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T15:27:59.528779531Z
+modified_at: 2026-05-18T15:36:58.688077839Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
@@ -87,3 +87,16 @@ comments:
   content: 'Diagnosis correction 2026-05-18: my earlier revision blaming a stale AIDA_AUTO_COMPLETE leak is ALSO wrong — there is no leak (user verified `env | grep AIDA` clean; see BUG-233''s corrected diagnosis). TASK-264 was a legitimate orchestrator child of the batch:session-hygiene drain — AIDA_AUTO_COMPLETE=1 was correct in its env. The ''say the word'' limbo''s real root cause is BUG-230 (--zen auto-resolves the Exit menu but can''t synthesize EOF to close the REPL) — the implementer suppressed the menu, leaving the bare ''say the word'' wait, and the orchestrator stayed blocked on the un-exited child. BUG-232 may be a duplicate of BUG-230; recommend the implementer evaluate merging them. The valid residual in BUG-232: skill behavior should key off BUG-233''s corroborated orchestrator signal, not a bare env var or argv-shape guess.'
   created_at: 2026-05-18T01:47:14.095410017Z
   modified_at: 2026-05-18T01:47:14.095410017Z
+- id: 019e3bbb-b840-7751-82c7-ad36662311fd
+  author: joe
+  content: |-
+    Issue A resolved 2026-05-18 (implementer design-checkpoint → advisor call): under plain --zen (no --auto-complete, no orchestrator), the end-of-session behavior is **auto-open the PR, then ask 'grab next vs stop'**. The fork in the original acceptance ('OR (if option 2 chosen)') is CLOSED — implement this, not the show-full-menu alternative.
+
+    Binding acceptance for Issue A (supersedes the forked wording):
+    - Under plain --zen, the 'open PR for what shipped' confirmation AUTO-RESOLVES (runs /aida-pr) — it's kind:confirmation, the obvious next step; --zen honors it.
+    - The 'grab next item vs stop here' choice STILL pauses for the user — with no orchestrator to auto-continue to, that's a genuine decision, not mechanical.
+    - Net: the PR is always opened — BUG-232's limbo symptom is eliminated by construction.
+
+    Rationale: this applies STORY-287's taxonomy correctly by separating the mechanical prompt (open PR → auto-resolve) from the genuine fork (grab-next-vs-stop → pause). My original filing recommended the show-full-menu alternative; that conflated the two and suppressed --zen entirely at end-of-session. The implementer separated them — better answer. Also consistent with --zen + --auto-complete, which already auto-opens PRs. Issue B (aida queue done warns on commits-ahead-no-PR) was unambiguous — no fork, proceed as filed.
+  created_at: 2026-05-18T15:36:58.688077839Z
+  modified_at: 2026-05-18T15:36:58.688077839Z
