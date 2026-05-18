@@ -28,7 +28,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:55:30.643881256Z
-modified_at: 2026-05-18T02:33:54.475539346Z
+modified_at: 2026-05-18T02:35:02.755600753Z
 req_type: Bug
 tags:
 - from-implementer:TASK-265
@@ -45,6 +45,18 @@ comments:
     Discovered out-of-scope finding for dialog triage: ~60 *bare* SPEC-IDs (no 'trace:' prefix) are still woven into help-text prose — e.g. 'Bypass the TASK-45 guard', '(EPIC-26)', 'pre-TASK-111 behavior', 'STORY-86's pull-time auto-bump'. These ALSO violate TASK-268 but can't be fixed by /// -> // demotion (the ID is mid-sentence — needs rewording). Worth a separate TASK: 'Audit bare SPEC-IDs out of aida --help prose'.
   created_at: 2026-05-18T02:33:36.075712921Z
   modified_at: 2026-05-18T02:33:36.075712921Z
+- id: 019e38ef-d6e3-7451-90e1-0771e46a9bef
+  author: joe
+  content: |-
+    Implemented via commit 38f14da1 (PR pending):
+
+    - Audited every clap definition in aida-cli/src/cli.rs; demoted ~200 `trace:SPEC-ID` markers from `///` doc comments to plain `//` so they no longer render in `aida <subcmd> --help`.
+    - Mixed lines (help prose + trailing marker) split: prose stays `///`, marker drops to `//`. Placeholder mentions (`trace:REQ-ID`, `trace:<SPEC-ID>`) left intact.
+    - Added `cli::tests::help_text_carries_no_trace_markers` — walks the full clap tree via CommandFactory — plus a unit test pinning the marker-vs-prose discriminator.
+
+    Test status: 603/603 aida-cli tests green; cargo fmt --check + clippy clean.
+  created_at: 2026-05-18T02:35:02.755600753Z
+  modified_at: 2026-05-18T02:35:02.755600753Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T02:33:54.475539346Z
