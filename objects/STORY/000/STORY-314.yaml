@@ -1,0 +1,26 @@
+id: 019e39d4-6107-72f2-b542-bdf90a1cd931
+spec_id: STORY-314
+agreed_id: STORY-314
+title: 'Review PR-93: [AI:claude] docs(readme): "What makes AIDA distinct" 8-dimension niche statement (TASK-289)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e39cf`) for branch `epic-26-5`.
+
+  - PR: <https://github.com/joemooney/aida/pull/93>
+  - Branch: `epic-26-5` → `main`
+
+  ## Covers
+
+  - TASK-289
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 93` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T06:44:40.327884188Z
+modified_at: 2026-05-18T06:44:40.327884188Z
+req_type: Story
