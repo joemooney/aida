@@ -169,7 +169,100 @@ aida show FR-1-001
 
 `aida init` creates the orphan-branch git store, a SQLite cache for fast queries, the MCP server config, Claude Code skills + commands + hooks, and a docs/plans/ archive — in one command.
 
-After `aida init`, your first spec goes through [the lifecycle above](#spec-lifecycle): it starts in Draft, you approve it, queue it, and `aida queue work` carries it to a merged PR. See [`docs/lifecycle.md`](docs/lifecycle.md) for the full walkthrough.
+After `aida init`, your first spec goes through [the lifecycle above](#spec-lifecycle): it starts in Draft, you approve it, queue it, and `aida queue work` carries it to a merged PR. The [Getting started](#getting-started-in-5-minutes) walkthrough below runs one real spec through it, end to end.
+
+## Getting started in 5 minutes
+
+<!-- trace:TASK-274 | ai:claude -->
+
+The [Spec lifecycle](#spec-lifecycle) above is the map. This is the same trip run for real — one concrete spec, **"User can log in with email and password,"** carried from a blank idea to merged-and-Completed. It assumes AIDA is installed and you've run `aida init` in your project ([Quick start](#quick-start) above).
+
+> Reading time: ~4 min. Following along on your own project: ~10–15 min.
+
+**1. File the spec.** Everything in AIDA starts as a spec.
+
+```
+$ aida add --title "User can log in with email and password" \
+           --type story --status approved
+Requirement added successfully!
+UUID: 019e3220-f160-7413-af64-a030e84c99ff
+ID: STORY-1
+```
+
+`--status approved` skips Draft — you've already agreed this should happen. STORY-1 is now **Approved**: agreed, ready to schedule.
+
+**2. Route it to a work queue.** Queues are per-role; send STORY-1 to whoever does the coding.
+
+```
+$ aida queue add STORY-1 --for implementer
+✓ Added STORY-1 (User can log in with email and password) to queue [for:implementer]
+```
+
+**3. Pick it up.** `aida queue work` collapses pull + worktree + session + role into one command.
+
+```
+$ aida queue work STORY-1
+✓ pulled aida-store (up to date)
+✓ worktree   ../your-project-story-1   ·   branch story-1
+✓ session    019e3a7c · role implementer · scope STORY-1
+↳ launching Claude Code…
+```
+
+This drops you into a Claude Code session in a fresh git worktree — your main checkout is untouched. Inside, run the `/aida-pickup` skill: Claude reads STORY-1, writes the code with `// trace:STORY-1` comments linking each change back to the spec, and commits. STORY-1 flips to **In Progress**.
+
+**4. Open the PR.** Still inside the session, run `/aida-pr`:
+
+```
+> /aida-pr
+✓ pushed story-1 → origin
+✓ opened PR #42 — https://github.com/you/your-project/pull/42
+✓ queued a reviewer for PR #42
+```
+
+STORY-1 is now **Done** — *work finished on a branch*, PR open, awaiting CI and review. Done is not merged; the precise distinction is in [what "shipped" actually means](#what-shipped-actually-means) above.
+
+**5. Review it.** Reviewing is its own session. Pick up the reviewer item the same way — `aida queue work` with no argument takes the head of your queue — then run `/aida-review` inside it:
+
+```
+$ aida queue work          # no arg = next item routed to you
+✓ session    019e4b13 · role reviewer · scope PR-42
+↳ launching Claude Code…
+
+> /aida-review
+✓ reviewed PR #42 — verdict: approve
+  trace comments present · tests cover the new path · no findings
+```
+
+**6. Merge it.**
+
+```
+$ gh pr merge 42 --squash --delete-branch
+✓ Squashed and merged pull request #42
+```
+
+**7. Watch the status land.** `aida pull` refreshes both the code and the spec store — and notices the merge:
+
+```
+$ aida pull
+✓ code    fast-forwarded main (1 commit)
+✓ store   up to date
+↳ auto-bumps STORY-1 → Completed
+
+$ aida show STORY-1
+ID: STORY-1   Status: ✓ Completed
+```
+
+That is the whole loop: **Approved → In Progress → Done → Completed.** You never set "Completed" by hand — the merge earned it.
+
+### Once you're comfortable: collapse it to one command
+
+Steps 3–7 are a chain — implement, CI, review, merge, pull. Once you've run it by hand enough times to trust each stage, `--auto-complete` runs the entire chain from a single command:
+
+```
+$ aida queue work STORY-1 --auto-complete
+```
+
+It drives the implementer session, waits for CI, runs the reviewer, merges the PR, pulls, and bumps STORY-1 to Completed — no further input. Run the loop manually first so you can see each stage; reach for `--auto-complete` once the rhythm is familiar. The trade-off (interactive = better decisions, autonomous = better throughput) and the headless overnight-drain variants are covered in [`docs/lifecycle.md`](docs/lifecycle.md#autonomous-drains-and---auto-complete) and [`docs/autonomous-drain.md`](docs/autonomous-drain.md).
 
 ## What you get
 
