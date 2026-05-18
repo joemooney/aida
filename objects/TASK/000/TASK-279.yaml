@@ -77,7 +77,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:02:43.248239099Z
-modified_at: 2026-05-18T06:27:19.910003814Z
+modified_at: 2026-05-18T06:28:25.526844108Z
 req_type: Task
 tags:
 - advisor
@@ -88,6 +88,21 @@ tags:
 - role
 - user-facing
 - vocabulary
+comments:
+- id: 019e39c5-8136-7071-99c9-4c9fc104f486
+  author: joe
+  content: |-
+    Implemented on branch `task-279` (commit 704766fa):
+
+    - New `role_user_facing_identity()` maps the internal `dialog` role to its user-facing identity `advisor` at render time.
+    - `aida role list` renders `dialog (advisor)`; `aida role show dialog` adds an `Identity: advisor` line — both surface the identity regardless of the role file's stored purpose.
+    - `STARTER_ROLES` dialog purpose rewritten to the advisor framing, so freshly-scaffolded role files read as "advisor".
+    - CLAUDE.md / OVERVIEW.md note the dialog<->advisor identity split; `aida-pickup` / `aida-queue` skill prose uses "advisor seat" framing (commands keep the `dialog` identifier).
+    - Status line behavior intentionally unchanged.
+
+    Test status: 29/29 role-suite tests green, including 3 new `role_identity_tests`; `cargo fmt --all -- --check` clean.
+  created_at: 2026-05-18T06:28:25.526844108Z
+  modified_at: 2026-05-18T06:28:25.526844108Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T06:27:19.910003814Z
