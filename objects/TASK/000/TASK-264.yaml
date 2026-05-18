@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:45:18.469713543Z
-modified_at: 2026-05-18T01:03:33.850693130Z
+modified_at: 2026-05-18T01:03:47.626526360Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -75,6 +75,11 @@ comments:
     Test status: 30/30 aida-cli session tests green (incl. new spec_status_in_flight_covers_unmerged_work); cargo build / fmt --check / clippy clean.
   created_at: 2026-05-18T01:02:53.298001568Z
   modified_at: 2026-05-18T01:02:53.298001568Z
+- id: 019e389c-4baa-73f0-85e1-2335c57f80a7
+  author: joe
+  content: '→ Shipped as PR #81: https://github.com/joemooney/aida/pull/81 — review queued as STORY-299.'
+  created_at: 2026-05-18T01:03:47.626526360Z
+  modified_at: 2026-05-18T01:03:47.626526360Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T00:58:10.732849062Z
