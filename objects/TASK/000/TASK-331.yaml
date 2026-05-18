@@ -1,0 +1,58 @@
+id: 019e38b5-d651-7cd3-a853-baaba372cbcc
+spec_id: TASK-331
+agreed_id: TASK-331
+title: Audit non-atomic std::fs::write calls — convert concurrent-writer paths to write_atomic (BUG-228 follow-up)
+description: |-
+  BUG-228 fixed a torn-write corruption in role/activity TOML files by introducing \`write_atomic()\` (temp file + \`rename(2)\`). The same \`std::fs::write\` torn-write race exists in **~6 other non-test write paths** — any of them can corrupt under concurrent \`aida\` processes (which the autonomous-drain workflow makes routine).
+
+  ## Non-atomic writes found (2026-05-18 grep, excluding tests)
+
+  | File:line | What it writes | Concurrency risk |
+  |---|---|---|
+  | \`aida-cli/src/session_manifest.rs:147\` | session manifest | **HIGH** — multiple concurrent \`aida queue work\` sessions |
+  | \`aida-core/src/git_ops.rs:969\` | ID dispenser counters | **HIGH** — concurrent \`aida add\` from parallel sessions tears the counter |
+  | \`aida-core/src/dispenser.rs:194,207\` | dispenser state | **HIGH** — same; ID allocation races |
+  | \`aida-core/src/registry.rs:87,119\` | node registry | MEDIUM — multi-node writes |
+  | \`aida-cli/src/workflow_hints.rs:134\` | \`.aida/config.toml\` | LOW — config writes are rare/serial |
+  | \`aida-core/src/workspace.rs:87\` | workspace file | LOW — init-time, single-writer |
+  | \`aida-cli/src/docs.rs:93\` | doc body | LOW — interactive, single-writer |
+  | \`aida-core/src/integrations/jira/config.rs:172\` | jira config | LOW — config, rare |
+
+  ## Acceptance
+
+  - [ ] \`write_atomic()\` (from BUG-228) promoted to a shared util if it isn't already — single implementation, not copy-pasted
+  - [ ] All **HIGH** risk paths converted: \`session_manifest.rs:147\`, \`git_ops.rs:969\`, \`dispenser.rs:194\`, \`dispenser.rs:207\`
+  - [ ] **MEDIUM** risk paths converted: \`registry.rs:87\`, \`registry.rs:119\`
+  - [ ] **LOW** risk paths: convert opportunistically (cheap, uniform) OR document why they're safe to leave (single-writer-by-construction)
+  - [ ] The dispenser counter conversion is especially important — a torn counter file could hand out duplicate SPEC-IDs or block allocation entirely
+  - [ ] Test: concurrent-writer stress test on the dispenser + manifest paths (spawn N writers, assert no corruption)
+  - [ ] Grep guard: a test or CI lint that flags new \`std::fs::write\` on known-concurrent paths, nudging toward \`write_atomic\`
+
+  ## Out of scope
+
+  - **File locking / advisory locks** — atomic rename is sufficient for last-writer-wins correctness; locking is a heavier solution for a problem rename(2) already solves
+  - **Transactional multi-file writes** — different problem; not needed here
+  - **The cache.db SQLite file** — SQLite has its own atomicity (WAL); not a plain-write path
+
+  ## Composes with
+
+  - **BUG-228** (introduced \`write_atomic()\`; this TASK propagates it to siblings)
+  - **BUG-89** family (queue identity / multi-node — concurrent writes are the multi-node failure mode)
+  - **EPIC-1-001** (git-canonical storage — the dispenser + manifest are core state; torn writes there are data-integrity bugs)
+
+  ## Origin
+
+  2026-05-18 BUG-228 implementer's corrected diagnosis: the role-file corruption was a non-atomic \`std::fs::write\` torn-write race between concurrent \`aida\` processes during the 15:40 \`--auto-complete\` drain, NOT a TOML-escaping bug. The fix (\`write_atomic\`) is correct but was applied only to role files. A grep showed the same pattern in ~8 other write paths; the HIGH-risk ones (manifest, dispenser counters) are exercised constantly by the autonomous-drain workflow and must be converted before a multi-session drain corrupts core state.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T01:31:41.521260612Z
+modified_at: 2026-05-18T01:31:41.521260612Z
+req_type: Task
+tags:
+- atomic-write
+- concurrency
+- data-integrity
+- from-self-test:BUG-228
+- torn-write
