@@ -383,11 +383,23 @@ Print the URL `gh` returned. Then surface a structured next-steps table so
 the implementer→reviewer hand-off is explicit rather than improvised. Don't
 auto-execute — the user picks.
 
-Under `$AIDA_ZEN` (STORY-287) this menu is a `kind:confirmation` prompt:
-still render the table (the scrollback record), then proceed with the
-**primary row** automatically — `▶` in the manual templates, `⇒` in the
-*orchestrator mode* template — instead of waiting. Never auto-take a `⏏`
-abort row. Print the one-line `↳ zen:` note naming the row taken.
+Under `$AIDA_ZEN` (STORY-287) what auto-resolves depends on the mode
+(`aida orchestrator status`) — BUG-232:
+
+- **`orchestrated`** — `kind:confirmation`: render the *orchestrator mode*
+  table, then auto-take its `⇒` row (exit so the orchestrator continues),
+  touching `$AIDA_EXIT_SENTINEL` as its absolute last action (see below).
+- **plain `--zen`** (`interactive`) — the PR is now open, which was the
+  mechanical step `--zen` auto-resolved on the way here. What is left —
+  end the implementer session, and whether to grab the next queued item
+  or stop — is a genuine `kind:design-fork` only the standby advisor can
+  act on: a skill cannot synthesize the Ctrl+D, and there is no
+  orchestrator or `$AIDA_EXIT_SENTINEL` under plain `--zen`. Render the
+  *plain zen mode* template below and **pause** — do not auto-take a row.
+- **default** (no zen) — render the matching table, the user picks.
+
+Never auto-take a `⏏` abort row. Print the one-line `↳ zen:` note only
+when a row was actually auto-taken (orchestrated mode).
 
 **Ordering rationale (TASK-110 + TASK-111):** end-implementer comes BEFORE
 start-reviewer. The implementer's lease owns the PR/STORY scope; a reviewer
@@ -412,7 +424,7 @@ aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id
 Combine with step 11's auto-queue outcome (✓ filed / ⓘ already exists /
 ⚠ skipped).
 
-**Check orchestrator mode first** — it overrides both templates below. If
+**Check orchestrator mode first** — it overrides every template below. If
 `aida orchestrator status` printed `orchestrated`, `/aida-pr` ran inside a
 *corroborated* `aida queue work --auto-complete` session (STORY-246): the
 orchestrator owns phases 2-6 and is waiting for this session to exit so it
@@ -423,6 +435,13 @@ as phase 3). **Do not** key this off the bare `AIDA_AUTO_COMPLETE` env var:
 `aida orchestrator status` corroborates it against a live orchestrator run,
 so a stray value can't misfire orchestrator mode. trace:TASK-286
 trace:BUG-233
+
+**Then check plain zen** — if not `orchestrated` but `$AIDA_ZEN=1`,
+`/aida-pr` was reached as the auto-resolved end-of-session step of a plain
+`--zen` session (BUG-232). Render the *plain zen mode* template: the PR is
+open, and the only fork left — grab next vs stop — is surfaced for the
+standby advisor. It overrides the two auto-queue templates below.
+trace:BUG-232
 
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
 `/aida-review`): `▶` = primary recommended action, `⇒` = alternative path,
@@ -486,11 +505,33 @@ In default (non-`$AIDA_ZEN`) interactive mode, do **not** touch the sentinel
 — render the table and let the user press Ctrl+D. Full protocol:
 `docs/aida-discipline/skill-prompt-kinds.md`.
 
-Render this block instead of the two below whenever `aida orchestrator
+Render this block instead of the three below whenever `aida orchestrator
 status` is `orchestrated`. The reviewer-queue story still gets filed (step 11) — the orchestrator
 runs the reviewer itself as phase 3, so the queued story is the
 manual-recovery fallback if the chain is later aborted. trace:TASK-286
 trace:TASK-329
+
+*Plain zen mode (`$AIDA_ZEN=1`, `aida orchestrator status` = `interactive`) — BUG-232:*
+
+`/aida-pr` was reached as the auto-resolved end-of-session step of a plain
+`--zen` session — opening the PR is the mechanical move `--zen` takes for
+you, so the spec never lands committed-but-unshipped. The one genuine fork
+left is *grab next vs stop*; it is a `kind:design-fork`, so **render the
+table and pause** — the standby advisor answers it, even under `--zen`.
+Run `aida queue next` first and drop the `▶` row when the queue is empty
+(the `⏸` row is then the only move). Print the lead-in as normal text:
+
+PR-<N> opened: <url>. Review story filed (step 11).
+
+| Path | What happens | Why |
+|------|--------------|-----|
+| ▶ Grab the next queued item | End this session (Ctrl+D), then `aida queue work <NEXT-SPEC>` from the parent shell | PR-<N> now owns this branch — the next spec needs its own branch + worktree, so the implementer lease must be released first |
+| ⏸ Stop here | End this session (Ctrl+D), then `aida session end <session-id>` from the parent shell | PR-<N> is open and the review story filed — a clean stopping point; resume the queue later from the parent shell |
+
+Do **not** touch `$AIDA_EXIT_SENTINEL` here — that sentinel is the
+orchestrator-mode handoff only, and there is no orchestrator under plain
+`--zen`. Do **not** auto-take either row: the session-end action needs the
+human, and grab-next-vs-stop is a real choice. trace:BUG-232
 
 *Auto-queue succeeded (✓ filed or ⓘ already exists):*
 
@@ -512,7 +553,7 @@ PR-<N> opened: <url>
 | ▶ End implementer session (CI-aware) | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the implementer lease; probes CI — pass `--wait-ci` / `--skip-ci` as needed |
 | ⇒ Open reviewer manually (or merge inline) | From the parent shell: `eval "$(aida role enter reviewer --owns PR-<N>)"` + `/aida-review --pr <N>` — or `gh pr merge <N> --squash` if you're the sole reviewer | Auto-queue filed no review story, so the reviewer hand-off is manual; still needs the implementer lease released first |
 
-Print exactly one block — don't dump all three templates.
+Print exactly one block — don't dump all four templates.
 
 ## Composes With
 
