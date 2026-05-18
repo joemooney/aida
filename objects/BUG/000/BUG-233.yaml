@@ -61,12 +61,12 @@ description: |-
   ## Origin
 
   2026-05-17/18: a BUG-228 implementer (a legitimate orchestrator child) reported \`AIDA_AUTO_COMPLETE=1\` as a \"stray export leaked into an interactive shell.\" Dialog role filed this BUG as an env leak (high priority) WITHOUT verifying. User then ran \`env | grep AIDA\` on their actual interactive shell — no AIDA_AUTO_COMPLETE present — disproving the leak theory. The var existed only in orchestrator-child process environments, where it belongs. The genuine bug is that a child can't tell a legit orchestrator context from a standalone one — corrected framing above.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:38.878522976Z
-modified_at: 2026-05-18T07:26:05.957351001Z
+modified_at: 2026-05-18T14:38:08.602097548Z
 req_type: Bug
 tags:
 - auto-complete
