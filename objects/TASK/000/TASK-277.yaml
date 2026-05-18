@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:27.574885685Z
-modified_at: 2026-05-18T05:00:39.252040370Z
+modified_at: 2026-05-18T05:06:20.988897760Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -51,3 +51,9 @@ tags:
 - first-users
 - onboarding
 - sample-project
+comments:
+- id: 019e397a-5cbc-7901-8824-185725721f05
+  author: joe
+  content: Commit c9726add references this requirement
+  created_at: 2026-05-18T05:06:20.988897760Z
+  modified_at: 2026-05-18T05:06:20.988897760Z
