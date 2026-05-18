@@ -84,7 +84,8 @@ impl WorkspaceManifest {
     pub fn save(&self, workspace_root: &Path) -> Result<()> {
         let path = workspace_root.join(WORKSPACE_FILE);
         let content = toml::to_string_pretty(self)?;
-        std::fs::write(&path, content)
+        // Atomic write — uniform with the concurrent-writer paths. trace:TASK-331 | ai:claude
+        crate::write_atomic(&path, content)
             .with_context(|| format!("Failed to write {}", path.display()))?;
         Ok(())
     }

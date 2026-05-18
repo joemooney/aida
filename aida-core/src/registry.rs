@@ -84,7 +84,8 @@ impl Registry {
             fs::create_dir_all(parent)?;
         }
 
-        fs::write(&path, content)
+        // Atomic write: multi-node registry updates can race. trace:TASK-331 | ai:claude
+        crate::write_atomic(path.as_ref(), content)
             .with_context(|| format!("Failed to write registry to {:?}", path.as_ref()))?;
 
         Ok(())
@@ -116,7 +117,8 @@ impl Registry {
             fs::create_dir_all(parent)?;
         }
 
-        fs::write(&path, content)
+        // Atomic write: multi-node registry updates can race. trace:TASK-331 | ai:claude
+        crate::write_atomic(path.as_ref(), content)
             .with_context(|| format!("Failed to write default registry to {:?}", path.as_ref()))?;
 
         Ok(())

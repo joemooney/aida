@@ -131,7 +131,8 @@ pub fn persist_setting(project_root: &Path, value: bool) -> anyhow::Result<Optio
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent).ok();
     }
-    std::fs::write(&config_path, serialized)?;
+    // Atomic write — uniform with the concurrent-writer paths. trace:TASK-331 | ai:claude
+    aida_core::write_atomic(&config_path, serialized)?;
     Ok(prior)
 }
 
