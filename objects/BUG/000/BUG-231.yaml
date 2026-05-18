@@ -1,0 +1,55 @@
+id: 019e3894-4e23-7d93-bf83-e59423031e60
+spec_id: BUG-231
+agreed_id: BUG-231
+title: 'aida findings promote: TASK-327 ended up Approved without joining any queue (silent failure or wrong-role-route)'
+description: |-
+  \`aida findings promote TASK-327\` reported \"Promoted finding TASK-327 — status → Approved, joins the work queue\" (success message), but \`aida queue list --all\` shows TASK-327 in no queue. Status is Approved, the queue-add step silently failed (or the spec was routed to a queue I'm not seeing).
+
+  ## Symptom (2026-05-17)
+
+  - \`aida findings promote TASK-327\` → success message claims queue-join
+  - \`aida queue list\` (implementer queue) → TASK-327 absent
+  - \`aida queue list --all\` → TASK-327 absent
+  - \`aida show TASK-327\` → Status: Approved, no queue indicator
+
+  Manual recovery: \`aida queue add TASK-327 --for implementer\` worked fine. So the underlying queue-add capability is intact; only the \`findings promote\` path is broken.
+
+  ## Hypothesis
+
+  The promote command may:
+  1. Route to a role queue the user isn't currently in (and silently \"succeed\" by adding to a queue the user can't see) — but \`--all\` should show this
+  2. Set status to Approved + emit the success message but never actually call \`queue add\` due to a bug
+  3. Call \`queue add\` with a default role that doesn't match the user's current role
+
+  Diagnostic priority: instrument \`aida findings promote\` to print the queue route it used (\`for:implementer\` / \`for:reviewer\` / \`for:dialog\`); then it's obvious from the message whether the right role got the entry.
+
+  ## Acceptance
+
+  - [ ] Reproduce: file a finding, promote it, verify \`aida queue list\` (in the current role) reflects the join. If not, investigate the route.
+  - [ ] Fix: \`findings promote\` either routes to the current role's queue OR explicitly names the role it routed to in the success message
+  - [ ] Defensive check: if \`queue add\` fails internally, the promote command exits non-zero and reports the failure (no silent success)
+  - [ ] Test: \`findings promote <ID>\` followed by \`aida queue list\` in the same role shows the promoted ID
+  - [ ] Test: failure injection on queue-add reproduces the error path; promote reports it
+
+  ## Composes with
+
+  - **STORY-278** (findings surface; this BUG affects the triage workflow)
+  - **TASK-326** (auto-resolve logging — same family of \"action happened, surface what happened\" UX)
+  - \`feedback_run_help_before_suggesting_flags.md\` (silent success on a half-executed action is the inverse pattern; both are UX hygiene)
+
+  ## Origin
+
+  2026-05-17 dialog: I promoted TASK-327 via \`aida findings promote\` early in the session. Later, when trying to reorder it via \`aida queue move TASK-327 --after TASK-329\`, the move failed with \"TASK-327 is not in the queue.\" Audit showed Status=Approved but no queue entry anywhere. \`aida queue add TASK-327 --for implementer\` succeeded — capability is fine, just not invoked correctly by the promote path.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T00:55:03.971977140Z
+modified_at: 2026-05-18T00:55:03.971977140Z
+req_type: Bug
+tags:
+- findings
+- from-self-test:TASK-327
+- promote
+- queue-route
+- silent-failure
