@@ -1,0 +1,91 @@
+id: 019e3baa-6eae-7b53-b1e0-82d55b8af125
+spec_id: STORY-318
+agreed_id: STORY-318
+title: Periodic ecosystem review — recurring scan of Claude Code + neighbor-tool capabilities, fed into AIDA's backlog
+description: |-
+  AIDA is built **on** Claude Code and lives in a fast-moving agent-tooling ecosystem. New capabilities land regularly — \`/goal\`, \`/agents\` subagents, and whatever ships next. AIDA has **no recurring process** to (a) notice what's new, (b) assess each — *compete / complement / integrate / ignore*, (c) feed the relevant ones into the backlog. Awareness is ad-hoc: it depends on someone happening to spot a Claude Code tip.
+
+  The risks of staying ad-hoc:
+  - AIDA **reinvents** something Claude Code now provides natively (the \`/agents\` worry — see TASK-337)
+  - AIDA **misses** a capability it should integrate (the \`/goal\` case — AIDA *did* integrate it via \`aida goal\`, but by chance, not process)
+  - AIDA's **positioning docs drift stale** as neighbor tools evolve
+
+  ## Solution: a periodic ecosystem review — discipline + cadence + artifact + feedback loop
+
+  ### Cadence
+  Tied to release prep — every \`make release-minor\` includes an ecosystem review — **plus a monthly floor** so it can't lapse between infrequent releases. (Confirm the exact cadence at plan time.)
+
+  ### Scan scope (in priority order)
+  1. **Claude Code's own feature surface** — release notes, new slash commands, new primitives. PRIMARY: AIDA is built on Claude Code; its changes hit AIDA hardest.
+  2. **Complement tools** AIDA integrates with — \`gh\`, git, the MCP ecosystem.
+  3. **Competitor / neighbor tools** — the set already tracked in \`docs/positioning/\` and \`docs/competitive-analysis/\`.
+
+  ### Artifact: a dated "what's new" log
+  \`docs/competitive-analysis/ecosystem-watch.md\` (extends STORY-260's directory — same discipline, sibling artifact; do NOT spawn a third top-level docs dir). Each entry:
+  - The capability + date noticed
+  - AIDA assessment: **compete / complement / integrate / ignore** + one-line rationale
+  - Resulting action: TASK filed / \`docs/positioning/vs-X.md\` updated / no action
+
+  This log is the durable answer to the standing question **"what is new in the ecosystem?"** — answerable by reading the latest entry.
+
+  ### Feedback mechanism
+  The review is not just a log — it *produces work*:
+  - Capability AIDA should respond to → file a TASK (evaluate / integrate / adapt)
+  - Positioning shift → update the relevant \`docs/positioning/vs-X.md\`
+  - A capability that obsoletes part of AIDA → file a TASK to deprecate/simplify (the don't-reinvent discipline)
+
+  ### Owner
+  The **advisor role** owns the ecosystem review — it's squarely "detect strategic gaps" + "articulate mental models" from the advisor's responsibilities.
+
+  ## Seed the first entry (do this as part of the STORY)
+
+  The first \`ecosystem-watch.md\` entry, dated 2026-05-18, should record at least:
+  - **\`/goal\`** — complement; AIDA already integrates via \`aida goal\` (round-trip prompt assembly). Action: none / monitor for evolution.
+  - **\`/agents\` subagents** — complement (different layer — see TASK-337). Action: TASK-337 positioning doc in flight.
+  - Anything else current in Claude Code's recent release notes at review time.
+
+  ## Acceptance
+
+  - [ ] Ecosystem-review discipline documented — a short guide (\`docs/aida-discipline/\` or a section in the competitive-analysis README): cadence, scan scope, the compete/complement/integrate/ignore assessment, the feedback-to-backlog mechanism
+  - [ ] \`docs/competitive-analysis/ecosystem-watch.md\` created, with the seed entry (2026-05-18: /goal, /agents, current Claude Code surface)
+  - [ ] Cadence wired: release prep (\`scripts/release.sh\` or the release checklist) includes "run the ecosystem review" as a step; monthly floor documented
+  - [ ] The advisor role's discipline names the ecosystem review as a recurring responsibility
+  - [ ] The feedback mechanism is concrete: the review's output format makes "→ file TASK X" / "→ update vs-Y.md" explicit, not vague
+  - [ ] Composes cleanly with STORY-260 (same \`docs/competitive-analysis/\` home) — no duplicate/competing structure
+
+  ## Out of scope
+
+  - **Automating the scan** (a scheduled agent that diffs Claude Code release notes) — start with the human-advisor discipline; if the manual review proves reliable and worth automating, file that as a follow-up. Don't build scan-automation on spec.
+  - **Tracking the entire AI-tooling industry** — scope is Claude Code (primary) + AIDA's actual neighbors/complements, not a general market survey
+  - **Per-tool deep comparisons** — those are \`docs/positioning/vs-X.md\` files; the ecosystem-watch log is the lightweight "what changed" layer that *triggers* a positioning doc, not the doc itself
+
+  ## Composes with
+
+  - **STORY-260** (maintained competitive-analysis doc — the ecosystem-watch is its forward-scanning sibling; same directory)
+  - **TASK-337** (vs-claude-code-subagents positioning doc — an output of exactly this kind of review; the review is what would have *triggered* it on cadence instead of ad-hoc)
+  - **\`aida goal\`** + \`feedback_goal_prompt_phrasing.md\` (proof AIDA can respond to an ecosystem capability — this STORY makes that response systematic, not lucky)
+  - \`feedback_competitive_analysis_is_living_doc.md\` (the living-doc discipline this operationalizes)
+  - \`feedback_dialog_role_responsibilities.md\` ("detect strategic gaps" — ecosystem-awareness is one; this is the recurring mechanism for it)
+  - \`feedback_pushback_on_overengineering.md\` (kept to a human discipline + a doc; scan-automation explicitly deferred)
+
+  ## Note: AIDA-dev-specific, NOT scaffolding-pack
+
+  This discipline is for **AIDA the product** staying aware of its ecosystem. An AIDA-*using* project (a random app) does not need to track Claude Code's ecosystem on AIDA's behalf — so this does NOT get the \`propagation: scaffolding-pack\` treatment. It stays in the AIDA dev repo.
+
+  ## Origin
+
+  2026-05-18: Claude Code surfaced a \`/agents\` tip; user asked "are we reinventing the wheel?" After the layer-distinction analysis, user articulated the broader need: *"this project needs to be aware of new capabilities added/extended in Claude Code and elsewhere. /goal is an example — it recently landed, may be useful for zen/no-human mode. Periodic review of known competitors/complements is something we must perform. We need to be able to answer: what is new in the ecosystem."* This STORY makes that ad-hoc awareness a recurring, owned discipline.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T15:18:05.742873896Z
+modified_at: 2026-05-18T15:18:05.742873896Z
+req_type: Story
+tags:
+- advisor-discipline
+- cadence
+- claude-code
+- competitive-analysis
+- ecosystem-watch
+- living-doc
