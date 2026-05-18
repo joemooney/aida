@@ -133,8 +133,8 @@ relationship in the graph — not a string in a description field.
 
 ## Step 3 — File the bug, and add a cross-link by hand
 
-The fourth edge type. File a bug, then link it to the story it touches with a
-`references` edge — the second way to create relationships, after `--parent`:
+File a bug, then link it to the story it touches with a `references` edge — the
+second way to create relationships, after `--parent`:
 
 ```
 $ aida add --title "Listing crashes on an empty data file" \
@@ -175,14 +175,14 @@ bug's cross-link:
 
 ```
 $ aida rel list BUG-1
-FROM      TYPE            TO         TITLE
-  BUG-1     child           EPIC-1     TODO CLI
-· BUG-1     references      STORY-3    Persist tasks to a JSON file
+FROM   TYPE        TO       TITLE
+  BUG-1  child       EPIC-1   TODO CLI
+  BUG-1  references  STORY-3  Persist tasks to a JSON file
 
 2 edges
 ```
 
-This is the **graph**: six specs, five typed edges, all queryable. It cost you
+This is the **graph**: six specs, six typed edges, all queryable. It cost you
 six `aida add` calls and one `aida rel add`. From here on, AIDA does the
 remembering.
 
@@ -447,7 +447,7 @@ You ran maybe twenty commands. Here's what you actually built:
 
 | You did | AIDA kept |
 |---------|-----------|
-| `aida add … --parent EPIC-1` ×5, `aida rel add` ×1 | A six-spec graph with five typed, queryable edges |
+| `aida add … --parent EPIC-1` ×5, `aida rel add` ×1 | A six-spec graph with six typed, queryable edges |
 | `aida queue add … --for implementer` | An ordered, per-role work queue — "what's next" is answered |
 | `aida queue work` | Each feature in its own worktree + branch + session, no cross-contamination |
 | Let Claude write `// trace:STORY-1` | A code→spec link that survives in the source itself |
