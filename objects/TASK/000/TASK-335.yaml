@@ -1,0 +1,12 @@
+id: 019e39f6-c6da-71a1-8844-64bde58a0ced
+spec_id: TASK-335
+agreed_id: TASK-335
+title: When STORY-301's drain-state file lands, fold the run-UUID into it and retire
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T07:22:14.618866228Z
+modified_at: 2026-05-18T07:22:14.618866228Z
+req_type: Task
