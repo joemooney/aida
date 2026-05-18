@@ -66,9 +66,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T01:47:14.095410017Z
+modified_at: 2026-05-18T06:22:27.751578819Z
 req_type: Bug
 tags:
+- batch:orchestrator-hardening
 - end-of-session
 - first-users
 - from-self-test:TASK-264
