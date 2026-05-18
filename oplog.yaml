@@ -6811,5 +6811,13 @@ operations:
   timestamp: 2026-05-18T01:38:08.484528571Z
   kind: !SetStatus
     status: In Progress
-clock: 758
+- id: 019e38c4-0213-7532-87c5-75df2d9f208a
+  target_id: 019e38b5-cbfe-7f60-add0-098547517e2c
+  author: aida
+  node_id: '1'
+  lamport: 759
+  timestamp: 2026-05-18T01:47:10.227794245Z
+  kind: !SetTitle
+    title: Orchestrator-spawned child can't verify its parentage — misidentifies legit orchestrator context (no env leak; BUG-233 was misdiagnosed)
+clock: 759
 node_id: '1'

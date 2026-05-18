@@ -1,7 +1,7 @@
 id: 019e38b5-cbfe-7f60-add0-098547517e2c
 spec_id: BUG-233
 agreed_id: BUG-233
-title: AIDA_AUTO_COMPLETE leaks into interactive shells — every subsequent aida queue work misfires into orchestrator mode
+title: Orchestrator-spawned child can't verify its parentage — misidentifies legit orchestrator context (no env leak; BUG-233 was misdiagnosed)
 description: |-
   \`AIDA_AUTO_COMPLETE=1\` is meant to live ONLY on orchestrator-spawned child processes (set via \`.env(\"AIDA_AUTO_COMPLETE\", \"1\")\` on the subprocess \`Command\` in \`RealPhaseDriver::run_implementer\` / \`run_reviewer\`). It is NOT meant to be exported into the user's interactive shell. But on 2026-05-17 the var was found set in the user's interactive shell — and while it's set, **every** \`aida queue work\` launched from that shell inherits it and misfires into \"orchestrator mode\" despite no orchestrator existing.
 
@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:38.878522976Z
-modified_at: 2026-05-18T01:31:38.878522976Z
+modified_at: 2026-05-18T01:47:10.188522954Z
 req_type: Bug
 tags:
 - auto-complete
