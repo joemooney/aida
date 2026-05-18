@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:42:58.758955507Z
-modified_at: 2026-05-18T00:30:18.795321683Z
+modified_at: 2026-05-18T00:32:12.403804226Z
 req_type: Bug
 tags:
 - alpha-readiness
@@ -94,6 +94,18 @@ comments:
     filed 1 task(s): TASK-330
   created_at: 2026-05-18T00:30:19.181842444Z
   modified_at: 2026-05-18T00:30:19.181842444Z
+- id: 019e387f-6073-78c1-8225-7338daeff08e
+  author: joe
+  content: |-
+    Implemented via PR-80 (commit c195a16c):
+
+    - aida session list: dropped the stale INITIAL TOPIC column, added a RECENT FOCUS column sourced from the per-session activity log (live signal) with the manifest's most-recent planned item as fallback
+    - new session_log_recent_spec() helper + recent_focus_from() precedence logic; resume picker + caveat note updated
+
+    Test status: 85/85 aida-cli session tests green (3 new recent_focus_* tests)
+    Follow-up: TASK-330 — dialog fallback (acceptance criterion 3) deferred; needs the Claude session ID stamped onto comments first
+  created_at: 2026-05-18T00:32:12.403804226Z
+  modified_at: 2026-05-18T00:32:12.403804226Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T00:30:08.165736604Z
