@@ -7084,5 +7084,13 @@ operations:
       ## Origin
 
       2026-05-18, TASK-277 batch:alpha-docs drain. Headless reviewer returned RequestChanges on PR-91. The user walked the full recovery chain — orchestrator hint → \`queue work\` error → \`queue rework\` error — and only the THIRD command (\`aida queue rework TASK-277 --work\`) actually ran. Filed (originally as just Defect A); broadened 2026-05-18 to the full chain after the user hit Defect B running BUG-236's own originally-suggested command.
-clock: 779
+- id: 019e39a7-a6a4-7cd1-83f8-b2ca6ac5cb34
+  target_id: 019e398b-bd82-7952-a6c8-817c63761cc6
+  author: aida
+  node_id: '1'
+  lamport: 780
+  timestamp: 2026-05-18T05:55:49.028558541Z
+  kind: !SetStatus
+    status: In Progress
+clock: 780
 node_id: '1'
