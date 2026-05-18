@@ -36,12 +36,12 @@ description: |-
   ## Origin
 
   Dialog-session 2026-05-16 alpha-docs scoping. Friends/colleagues onboarding from a prebuilt tarball; a real example doc supplements the README.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:27.574885685Z
-modified_at: 2026-05-18T05:53:06.191169295Z
+modified_at: 2026-05-18T06:10:41.558546583Z
 req_type: Task
 tags:
 - alpha-readiness
