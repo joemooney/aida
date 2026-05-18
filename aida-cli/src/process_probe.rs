@@ -219,6 +219,22 @@ pub fn walk_ancestor_pids(start: u32) -> Vec<u32> {
     chain
 }
 
+/// Is process `pid` currently alive? A thin wrapper over `sysinfo`'s process
+/// table — `true` iff the kernel still has an entry for `pid`.
+///
+/// Used by BUG-233's orchestrator-run corroboration: a child trusts its
+/// `AIDA_AUTO_COMPLETE_TOKEN` only when the marker file it names records a PID
+/// that is still running. Returns `false` on platforms where the process table
+/// can't be read — corroboration fails safe (treat as not-orchestrated).
+/// trace:BUG-233 | ai:claude
+pub fn pid_is_alive(pid: u32) -> bool {
+    use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
+    let mut sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    sys.process(Pid::from_u32(pid)).is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,5 +296,17 @@ mod tests {
         assert_eq!(chain[0], me);
         // Should reach init (PID 1) or some root, not loop forever.
         assert!(chain.len() < 100);
+    }
+
+    #[test]
+    fn pid_is_alive_true_for_self() {
+        assert!(pid_is_alive(std::process::id()));
+    }
+
+    #[test]
+    fn pid_is_alive_false_for_unused_pid() {
+        // A PID near u32::MAX is astronomically unlikely to be in use — well
+        // above any real `pid_max` (Linux caps at ~4M, far below this).
+        assert!(!pid_is_alive(u32::MAX - 1));
     }
 }

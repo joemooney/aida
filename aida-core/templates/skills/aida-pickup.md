@@ -300,7 +300,7 @@ row taken.
 **Detect state first.** These signals decide which template to render:
 
 ```bash
-echo "${AIDA_AUTO_COMPLETE:-}"         # non-empty → spawned by the --auto-complete orchestrator
+aida orchestrator status               # `orchestrated` → corroborated --auto-complete child
 aida session show --plan 2>/dev/null   # manifest rows + ✓/◐/○ status + `batch:` line
 aida queue work --batch <NAME> --dry-run 2>/dev/null   # batch members still queued
 aida queue next 2>/dev/null            # is there another item routed to this role?
@@ -308,18 +308,20 @@ aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id
 ```
 
 Check **orchestrator mode first of all** — it overrides every template
-below. If `echo "${AIDA_AUTO_COMPLETE:-}"` printed a non-empty value, this
-session was spawned by the `aida queue work --auto-complete` orchestrator
-(STORY-246), which sets `AIDA_AUTO_COMPLETE=1` on the implementer session
-it launches. The orchestrator owns phases 2-6 (end session → wait CI →
-review → merge → pull → build); a manual `/aida-pickup` or `aida session
-end` here would break the chain. Render the *orchestrator mode* template
-and skip the batch / cluster / simple detection entirely. The env var
-reflects a *live* orchestrator parent — a session resumed by hand later
-won't carry it, and correctly so: a hand-resumed session is no longer
-orchestrator-driven. trace:TASK-286
+below. If `aida orchestrator status` printed `orchestrated`, this session
+is a *corroborated* phase child of the `aida queue work --auto-complete`
+orchestrator (STORY-246): `AIDA_AUTO_COMPLETE=1` is set AND its
+`AIDA_AUTO_COMPLETE_TOKEN` names a live orchestrator run. The orchestrator
+owns phases 2-6 (end session → wait CI → review → merge → pull → build); a
+manual `/aida-pickup` or `aida session end` here would break the chain.
+Render the *orchestrator mode* template and skip the batch / cluster /
+simple detection entirely. **Do not** key this off the bare
+`AIDA_AUTO_COMPLETE` env var — `aida orchestrator status` corroborates it
+against the live run, so a stray or stale value cannot misfire orchestrator
+mode (a hand-resumed session, for instance, prints `interactive`).
+trace:TASK-286 trace:BUG-233
 
-- **`AIDA_AUTO_COMPLETE` non-empty** → orchestrator mode (overrides all below)
+- **`aida orchestrator status` = `orchestrated`** → orchestrator mode (overrides all below)
 
 Otherwise check **batch context** next — it takes precedence over the
 manifest-row modes (a batch session's manifest carries only the head item
@@ -359,7 +361,7 @@ from detection above). Each shows a prose lead-in line followed by the
 next-steps table — print the lead-in as a normal sentence, then the table
 as a real GFM markdown table (no surrounding code fence):
 
-*Orchestrator mode (`AIDA_AUTO_COMPLETE` non-empty) — TASK-286:*
+*Orchestrator mode (`aida orchestrator status` = `orchestrated`) — TASK-286:*
 
 ✓ <SPEC-ID> done. This session runs under `--auto-complete` — the
 orchestrator drives the rest.
@@ -381,7 +383,8 @@ the next item" (the orchestrator picks up the next spec only after this
 one's *full* lifecycle completes, never mid-chain) and no plain "stop here"
 (`aida session end` is the orchestrator's phase 2 — it runs it for you, so
 a manual one would race it). This template overrides batch / cluster /
-simple mode — when `AIDA_AUTO_COMPLETE` is set, render it and nothing else.
+simple mode — when `aida orchestrator status` is `orchestrated`, render it
+and nothing else.
 trace:TASK-286
 
 **Graceful exit signal (TASK-329).** Under `$AIDA_ZEN`, `/aida-pickup`
