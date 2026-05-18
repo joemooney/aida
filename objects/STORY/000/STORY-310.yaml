@@ -1,0 +1,26 @@
+id: 019e3964-4b4f-72d0-ae83-072d085b98fc
+spec_id: STORY-310
+agreed_id: STORY-310
+title: 'Review PR-89: docs(readme): ''Getting started in 5 minutes'' walkthrough (TASK-274)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e395e`) for branch `task-274`.
+
+  - PR: <https://github.com/joemooney/aida/pull/89>
+  - Branch: `task-274` → `main`
+
+  ## Covers
+
+  - TASK-274
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 89` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T04:42:14.735128110Z
+modified_at: 2026-05-18T04:42:14.735128110Z
+req_type: Story
