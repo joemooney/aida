@@ -1,0 +1,53 @@
+id: 019e3863-f809-7100-a504-5e81faf76fd8
+spec_id: TASK-328
+agreed_id: TASK-328
+title: 'Repo-wide audit: trace: markers in /// doc comments leak SPEC-IDs into --help text'
+description: |-
+  TASK-318 fixed one instance of \`trace:STORY-72\` leaking through a \`///\` doc comment on a clap field. Implementer reported ~**30+ similar hits** in \`aida-cli/src/cli.rs\` alone via \`grep -nE '^\s*///.*trace:'\`. This TASK does the repo-wide sweep so the pattern stops bleeding into user-facing \`--help\` output across all subcommands.
+
+  ## Root cause (per TASK-268)
+
+  \`clap\`'s derive macros surface \`///\` doc comments verbatim into \`--help\` text. When developers add \`trace:SPEC-ID\` markers to those doc comments (as breadcrumbs for the requirement graph), the SPEC-ID becomes user-facing — violating the convention that SPEC-IDs are developer-only artifacts.
+
+  Fix pattern (proven on TASK-318 and BUG-227): demote the trace line from \`///\` to plain \`//\` so it stays a code comment and never reaches \`--help\`.
+
+  ## Acceptance
+
+  - [ ] \`grep -nE '^\s*///.*trace:' aida-cli/src/cli.rs\` returns zero results
+  - [ ] Same audit across \`aida-core/src/\`, \`aida-server/src/\`, \`aida-tui/src/\`, \`aida-cli/src/main.rs\` (clap derive blocks anywhere)
+  - [ ] Every demoted trace marker keeps its SPEC-ID — moved to a plain \`//\` line directly above or below
+  - [ ] \`aida <every-subcommand> --help\` text grep'd clean for \`trace:\` (programmatic check)
+  - [ ] Regression test: integration test that pipes \`aida --help\` (and all subcommand \`--help\` outputs) through \`grep -E 'trace:'\` and asserts no matches
+  - [ ] No code-side trace markers lost in the demotion (count before vs after on the demoted lines should match)
+
+  ## Out of scope
+
+  - **Lint at compile time** for new \`/// trace:\` patterns — separate TASK; this is the one-shot sweep, lint is enforcement-going-forward
+  - **Demote non-trace SPEC-ID references** in \`///\` comments (e.g., \`/// STORY-42's orchestrator\`) — those are LEGITIMATE references explaining what the field does in context, not breadcrumbs. The discriminator is \`trace:\` prefix.
+  - **Audit non-clap doc comments** (Rust API docs that aren't clap fields) — those don't surface to users; the SPEC-IDs there are fine
+
+  ## Composes with
+
+  - **TASK-268** (user-facing-text convention — this TASK is its enforcement sweep)
+  - **TASK-318** (proved the fix pattern on one field)
+  - **BUG-227** (4-field instance in \`aida show --help\`; will be subsumed by this sweep if not already fixed)
+  - **TASK-324** (skill-template lint — sibling enforcement work; this TASK is the clap equivalent)
+  - \`feedback_propagate_generic_discipline_via_scaffolding.md\` (this fix discipline propagates to AIDA-using projects)
+
+  ## Origin
+
+  2026-05-17 TASK-318 implementer flagged: *\"the trace:-in-///-doc-comment pattern is widespread across cli.rs (~30+ hits from \`grep -nE '^\s*///.*trace:'\`). TASK-318 was the narrow PR-74 follow-up for one field; a broader sweep deserves its own TASK.\"* Implementer correctly stayed in TASK-318's narrow lane and surfaced this as a separate concern.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T00:02:16.201957127Z
+modified_at: 2026-05-18T00:02:16.201957127Z
+req_type: Task
+tags:
+- audit
+- from-implementer:TASK-318
+- help-text
+- spec-id-leak
+- user-facing-text
+- violates:TASK-268
