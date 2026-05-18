@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:38.878522976Z
-modified_at: 2026-05-18T07:25:25.587652275Z
+modified_at: 2026-05-18T07:26:05.957351001Z
 req_type: Bug
 tags:
 - auto-complete
@@ -113,6 +113,11 @@ comments:
     Follow-up: TASK-334 (audit AIDA_ZEN provenance), TASK-335 (fold run-UUID into STORY-301 drain-state file)
   created_at: 2026-05-18T07:24:39.917174991Z
   modified_at: 2026-05-18T07:24:39.917174991Z
+- id: 019e39fa-4e85-7b60-b28b-85532232fb89
+  author: joe
+  content: 'PR opened: https://github.com/joemooney/aida/pull/94 (PR-94). Review story STORY-315 queued for the reviewer role.'
+  created_at: 2026-05-18T07:26:05.957351001Z
+  modified_at: 2026-05-18T07:26:05.957351001Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T07:22:04.083748923Z
