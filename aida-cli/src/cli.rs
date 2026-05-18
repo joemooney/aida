@@ -2296,7 +2296,9 @@ pub enum QueueCommand {
         /// `--before`. Useful for "put X right after Y" reasoning, and
         /// for inserting a cluster of items after a single anchor
         /// without each move shifting the previous one further from the
-        /// anchor. trace:STORY-72 | ai:claude
+        /// anchor.
+        // trace:STORY-72 | ai:claude
+        // trace:TASK-318 | ai:claude
         #[clap(long)]
         after: Option<String>,
     },
