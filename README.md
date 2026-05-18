@@ -19,7 +19,11 @@ Every line of code links back to a requirement. Every commit references what it 
 
 ### Install
 
-**Pre-built binary** (Linux x86_64 / arm64, macOS x86_64 / arm64) — no Rust toolchain needed. Auto-detects platform, installs to `~/.local/bin/`:
+Two paths: a **prebuilt binary** (the primary alpha path — no Rust toolchain needed) or a **build from source** (for platforms outside the release matrix, or for local development).
+
+#### Prebuilt binary
+
+The install script auto-detects your platform, downloads the matching release tarball, and drops `aida` into `~/.local/bin/`:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash
@@ -32,17 +36,53 @@ curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.
 curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --prefix /usr/local/bin
 ```
 
-After install, `aida upgrade` is the one-command path for future versions.
+Prefer to do it by hand? Download the tarball for your platform straight from the [releases page](https://github.com/joemooney/aida/releases). Each tarball unpacks to `aida` and `aida-server` in the current directory.
 
-**From source** (requires Rust toolchain — always pulls latest `main`):
+**Linux** (Tier 1 — primary alpha target):
 
 ```bash
-cargo install --git https://github.com/joemooney/aida.git aida-cli
+curl -L https://github.com/joemooney/aida/releases/latest/download/aida-linux-x86_64.tar.gz | tar xz
+./aida --version            # verify it runs
+mv aida ~/.local/bin/       # or: sudo mv aida /usr/local/bin/
+```
+
+On arm64, swap `aida-linux-x86_64` → `aida-linux-arm64`.
+
+**macOS** (Tier 2 — nightly-validated):
+
+```bash
+curl -L https://github.com/joemooney/aida/releases/latest/download/aida-darwin-arm64.tar.gz | tar xz
+./aida --version
+mv aida ~/.local/bin/
+```
+
+On Intel Macs, swap `aida-darwin-arm64` → `aida-darwin-x86_64`.
+
+**Windows** (Tier 2): no prebuilt tarball ships yet — [build from source](#build-from-source) below.
+
+Tier 1 vs Tier 2 is the [platform support](#platform-support) story: Linux is exercised on every PR, macOS and Windows by a nightly cross-platform CI run. After install, `aida upgrade` is the one-command path to future versions. Make sure your chosen install prefix (e.g. `~/.local/bin`) is on your `PATH`.
+
+#### Build from source
+
+Requires a recent stable Rust toolchain (the workspace uses edition 2021). `protoc` (the Protocol Buffers compiler) is needed **only** for the server / gRPC features — `apt install protobuf-compiler` or `brew install protobuf`; the default CLI build does not need it.
+
+```bash
+git clone https://github.com/joemooney/aida.git
+cd aida
+make build-release
+./target/release/aida --version
+```
+
+To install just the CLI straight onto your `PATH` instead — server features are off by default, so no `protoc` required:
+
+```bash
+cargo install --path aida-cli                                        # from a clone
+cargo install --git https://github.com/joemooney/aida.git aida-cli   # without cloning
 ```
 
 > Optional integrations (PostgreSQL, GitHub/GitLab/Jira sync) are off by default. Add `--features postgres,github,gitlab,jira` to the `cargo install` line if you need them.
 
-**Working on AIDA itself?** Clone the repo, `cargo build`, then `eval "$(target/debug/aida dev shell-init)"` (or `target/debug/aida dev shell-init --install` to wire `aida-on`/`aida-off` aliases into your `~/.bashrc` permanently). After that, `aida-on` from inside the repo activates your in-repo build pyenv-style — no need to install a released binary first. See [CLAUDE.md](CLAUDE.md) for the full dev workflow.
+**Working on AIDA itself?** See [CLAUDE.md](CLAUDE.md) for the full developer workflow — `aida dev shell-init --install` wires the `aida-on` / `aida-off` aliases into your shell, and `aida-on` then activates your in-repo build pyenv-style with no released binary needed.
 
 ### Bootstrap a project
 
