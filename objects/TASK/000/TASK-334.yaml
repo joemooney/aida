@@ -1,0 +1,12 @@
+id: 019e39f6-aa7b-70e1-88b6-ef091a5ec235
+spec_id: TASK-334
+agreed_id: TASK-334
+title: Audit whether `AIDA_ZEN` has the same can't-verify-provenance weakness
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T07:22:07.355563520Z
+modified_at: 2026-05-18T07:22:07.355563520Z
+req_type: Task
