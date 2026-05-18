@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:56:26.127208719Z
-modified_at: 2026-05-18T16:24:50.966968106Z
+modified_at: 2026-05-18T16:25:59.755518811Z
 req_type: Bug
 tags:
 - batch:autonomy-modes
@@ -83,6 +83,19 @@ comments:
   content: 'Reframed 2026-05-17: original framing assumed orchestrator-driven phase-3 silent-exit, but command was standalone (`aida queue work PR-65 --role reviewer --no-human` — no `--auto-complete`). Real gap is end-of-command summary for standalone reviewer invocations + decision on whether standalone writes verdict file. User correction; dialog-role apology noted.'
   created_at: 2026-05-17T15:57:59.032462838Z
   modified_at: 2026-05-17T15:57:59.032462838Z
+- id: 019e3be8-98cb-7d00-af3c-2064abaef084
+  author: joe
+  content: |-
+    Implemented via commit 05bc749a (PR pending):
+
+    - New `reviewer_summary` module parses the headless stream-json `result` event + the verdict file and formats the end-of-command summary (pure, unit-tested).
+    - `handle_queue_work` detects a standalone PR-scoped reviewer launch and routes it through `run_standalone_reviewer` (spawn + wait + summary) instead of `exec` — the silent-exit root cause.
+    - CLI always sets `AIDA_REVIEW_VERDICT_FILE` for a PR-scoped reviewer launch; `/aida-review` skill 7a rewritten to always write the verdict file with `mode` (standalone | orchestrator-phase-3) + `comment_url`.
+    - Failure summary on is_error / non-zero exit; `verdict: UNKNOWN (no verdict file)` + recovery hint; `--quiet` suppresses for scripted consumers.
+
+    Test status: aida-cli 647/647 tests green; cargo fmt + clippy clean
+  created_at: 2026-05-18T16:25:59.755518811Z
+  modified_at: 2026-05-18T16:25:59.755518811Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T16:24:50.966968106Z
