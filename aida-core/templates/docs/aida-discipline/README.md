@@ -1,0 +1,36 @@
+# Discipline for AIDA-using sessions
+
+These docs describe how to work effectively with AIDA — the habits,
+vocabulary, and workflow patterns that make an AIDA project run smoothly.
+They are *not* about AIDA's own internals; they apply to **any** project
+that uses AIDA to track requirements and drive AI coding sessions.
+
+They were scaffolded into this project by `aida init`. They are yours now —
+edit them to fit your team. `aida init --refresh` will not overwrite them
+once you have made them your own.
+
+## Why this exists
+
+A project that adopts AIDA gets the tool immediately, but the *use pattern*
+— how to route work, how to talk about lifecycle state, when to pause for
+input — is learned the hard way, one papercut at a time. This pack ships
+that pattern up front so a new project starts with the discipline already
+in hand.
+
+## The four guides
+
+| Guide | What it covers |
+|-------|----------------|
+| [`advisor-role.md`](advisor-role.md) | The advisor seat — its responsibilities, what it does *not* do, and the three autonomy modes |
+| [`lifecycle-vocabulary.md`](lifecycle-vocabulary.md) | Precise words for each lifecycle state — committed vs pushed vs merged vs completed vs released |
+| [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, and parallel-choice vs sequential-step UI |
+| [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
+
+## The companion: the starter memory pack
+
+`aida init --with-memories` writes the same discipline as a set of
+persistent *memory* files (one fact per file) into the Claude Code project
+memory directory, so the habits surface automatically during a session
+rather than only when someone reads these docs. The memory pack and these
+docs say the same things; the docs are the long form, the memories are the
+in-session nudge.

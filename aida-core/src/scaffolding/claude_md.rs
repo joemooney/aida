@@ -73,6 +73,24 @@ mod tests {
         assert!(!claude_md_has_import("@.claude/OTHER.md"));
         assert!(!claude_md_has_import(""));
     }
+
+    #[test]
+    fn generated_claude_md_has_discipline_section() {
+        // trace:STORY-255 | ai:claude
+        let scaffolder = Scaffolder::new(
+            std::path::PathBuf::from("/tmp/aida-story-255-test"),
+            ScaffoldConfig::default(),
+        );
+        let store = RequirementsStore::default();
+        let md = scaffolder.generate_claude_md(&store);
+        // The discipline section points at the scaffolded pack.
+        assert!(md.contains("## Discipline for AIDA-using sessions"));
+        assert!(md.contains("docs/aida-discipline/README.md"));
+        assert!(md.contains("docs/aida-discipline/advisor-role.md"));
+        // The change is additive — the AIDA conventions import still lands.
+        assert!(md.contains(CLAUDE_AIDA_IMPORT));
+        assert!(md.contains("## Project overview"));
+    }
 }
 
 impl Scaffolder {
@@ -146,14 +164,45 @@ them.
 
 ## Project overview
 
-{project_name}{description}{tech_stack}{features}{type_section}
+{project_name}{description}{tech_stack}{features}{type_section}{discipline}
 "#,
             project_name = project_name,
             description = description,
             tech_stack = tech_stack_section,
             features = features_section,
             type_section = type_section,
+            discipline = Self::discipline_section(),
         )
+    }
+
+    /// The "Discipline for AIDA-using sessions" section appended to a
+    /// scaffolded CLAUDE.md. Points at the `docs/aida-discipline/` pack that
+    /// `aida init` scaffolds alongside it — five short bullets so the model
+    /// sees the discipline pointers without this file duplicating them.
+    /// trace:STORY-255 | ai:claude
+    fn discipline_section() -> &'static str {
+        r#"
+
+## Discipline for AIDA-using sessions
+
+How to work effectively with AIDA on this project — the longer-form guides
+live in `docs/aida-discipline/` (scaffolded by `aida init`).
+
+- **Roles** — the advisor seat captures friction, gardens the queue, and
+  hands code work to an implementer; it does not write code itself. See
+  `docs/aida-discipline/advisor-role.md`.
+- **Lifecycle words** — committed / pushed / merged / completed / released
+  are distinct states; don't collapse them under "ship". See
+  `docs/aida-discipline/lifecycle-vocabulary.md`.
+- **Workflow patterns** — `/goal` prompts use real flags only; "next steps"
+  UI splits into parallel-choice tables vs sequential-step lists. See
+  `docs/aida-discipline/workflow-patterns.md`.
+- **Session habits** — verify before filing, pause for design input, trust
+  the reviewer, check for in-flight work before rejecting. See
+  `docs/aida-discipline/session-discipline.md`.
+- **Start here** — `docs/aida-discipline/README.md` indexes the pack and
+  explains the companion starter memory pack (`aida init --with-memories`).
+"#
     }
 
     /// Generate type-specific sections based on project type

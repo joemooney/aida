@@ -3567,6 +3567,20 @@ pub enum Command {
         // trace:BUG-25 | ai:claude
         #[clap(long)]
         name: Option<String>,
+
+        /// Also write the starter memory pack — generic AIDA-using
+        /// discipline as Claude Code project memories. Opt-in; off by
+        /// default so first-time projects start with an empty memory dir.
+        // trace:STORY-255 | ai:claude
+        #[clap(long)]
+        with_memories: bool,
+
+        /// Refresh the starter memory pack: overlay updated versions of
+        /// pack files you have not edited, leaving your own edits intact.
+        /// Implies --with-memories.
+        // trace:STORY-255 | ai:claude
+        #[clap(long)]
+        refresh: bool,
     },
 
     /// Scaffolding management commands
