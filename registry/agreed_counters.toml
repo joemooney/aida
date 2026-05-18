@@ -1,11 +1,11 @@
-TASK = 36
-SR = 1
-EPIC = 18
-BUG = 34
-SPIKE = 5
 FR = 281
-FOLDER = 6
+EPIC = 18
 UR = 2
+SR = 1
+FOLDER = 6
 SPRINT = 3
+SPIKE = 5
 STORY = 82
+TASK = 36
 CR = 5
+BUG = 34
