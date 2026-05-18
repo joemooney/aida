@@ -915,6 +915,12 @@ pub enum RoleCommand {
     /// Show details for one role (defaults to the active role if any).
     Show { name: Option<String> },
 
+    /// Repair a corrupted role file: quarantine any unparseable
+    /// activity-log entries, preserve the header and every well-formed
+    /// entry, back the original up, and rewrite the file cleanly. A
+    /// healthy file is left untouched. Defaults to the active role.
+    Repair { name: Option<String> },
+
     /// Print the active role's name and exit, or exit 1 with empty
     /// stdout when no role is active. Pure read of `$AIDA_SESSION_ROLE`
     /// — no project-store load. Shell-friendly counterpart to
