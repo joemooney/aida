@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T15:51:35.243777699Z
+modified_at: 2026-05-18T15:52:22.026614180Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
@@ -76,6 +76,11 @@ tags:
 - no-orchestrator
 - unopened-pr
 - zen-mode
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e3bc9-beec-7620-9e0e-0cbb32228291
+  created_at: 2026-05-18T15:52:22.026601590Z
+  created_by: joe
 comments:
 - id: 019e38b6-22b3-7f21-b71e-29b3303ddca2
   author: joe
