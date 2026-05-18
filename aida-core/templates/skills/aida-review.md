@@ -279,28 +279,33 @@ EOF
 
 `aida queue work <SPEC> --auto-complete` drives the whole implementer → CI →
 reviewer → merge → pull → build lifecycle. When the reviewer session is
-launched by that orchestrator, two environment variables are set:
-`AIDA_AUTO_COMPLETE=1` (the family-wide orchestrator signal — `/aida-pickup`
-and `/aida-pr` key their end-of-session menus off the same var, TASK-286)
-and `AIDA_REVIEW_VERDICT_FILE`, set to an absolute path. For the reviewer
-the verdict file is the precise signal: it both marks orchestrator mode AND
-says where to write the verdict — so this skill checks it directly. In that
-mode the reviewer's job ends at the verdict; the orchestrator owns the
-merge, pull, and build, and the only correct end-of-session move is "write
-the verdict and exit" — never "keep reviewing" or "stop here". trace:TASK-286
+launched by that orchestrator, it sets `AIDA_AUTO_COMPLETE=1`, a
+corroboration token `AIDA_AUTO_COMPLETE_TOKEN` (BUG-233), and
+`AIDA_REVIEW_VERDICT_FILE` — an absolute path that carries *where* to write
+the verdict. In orchestrator mode the reviewer's job ends at the verdict;
+the orchestrator owns the merge, pull, and build, and the only correct
+end-of-session move is "write the verdict and exit" — never "keep
+reviewing" or "stop here". trace:TASK-286
 
-Check for it:
+**Corroborate before trusting orchestrator mode (BUG-233).** Don't treat a
+bare `AIDA_AUTO_COMPLETE` env var as proof of an orchestrator — an
+unverifiable stale value misfired both ways before BUG-233. Confirm with
+`aida orchestrator status`, which checks the token against a *live*
+orchestrator run:
 
 ```bash
-echo "${AIDA_REVIEW_VERDICT_FILE:-}"
+aida orchestrator status               # `orchestrated` → corroborated --auto-complete child
+echo "${AIDA_REVIEW_VERDICT_FILE:-}"   # where to write the verdict, in orchestrator mode
 ```
 
-- **If `AIDA_REVIEW_VERDICT_FILE` is empty / unset** → normal review.
-  Continue to step 8 (confirm + merge + hand-off) as usual.
+- **If `aida orchestrator status` is not `orchestrated`** (or
+  `AIDA_REVIEW_VERDICT_FILE` is empty / unset) → normal review. Continue to
+  step 8 (confirm + merge + hand-off) as usual.
 
-- **If `AIDA_REVIEW_VERDICT_FILE` is set** → write the verdict JSON to that
-  path and **STOP**. Do NOT merge, do NOT mark specs Completed, do NOT do the
-  hand-off — the `--auto-complete` orchestrator performs phases 4-6 itself.
+- **If `aida orchestrator status` is `orchestrated`** → write the verdict
+  JSON to `AIDA_REVIEW_VERDICT_FILE` and **STOP**. Do NOT merge, do NOT mark
+  specs Completed, do NOT do the hand-off — the `--auto-complete`
+  orchestrator performs phases 4-6 itself.
 
   Derive the verdict from the per-spec verdicts recorded in step 3:
 
