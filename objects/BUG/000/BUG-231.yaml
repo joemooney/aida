@@ -45,9 +45,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:55:03.971977140Z
-modified_at: 2026-05-18T00:55:03.971977140Z
+modified_at: 2026-05-18T06:22:26.354031745Z
 req_type: Bug
 tags:
+- batch:orchestrator-hardening
 - findings
 - from-self-test:TASK-327
 - promote
