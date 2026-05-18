@@ -1,0 +1,80 @@
+id: 019e392a-2b4b-76c0-9097-9f54a3f93bb1
+spec_id: STORY-306
+agreed_id: STORY-306
+title: 'Advisor escalation tier for --no-human: design-forks punt to a headless advisor before reaching the human'
+description: |-
+  Upgrade --no-human's design-fork handling from a flat punt (pick the defensible default + file a finding for later human triage) into a three-tier **escalation cascade**: implementer → headless advisor → human. Each tier resolves what it can; only what it genuinely can't passes up.
+
+  ## The cascade
+
+  1. **Implementer (headless, STORY-276)** hits a \`kind:design-fork\` under --no-human.
+  2. Instead of picking the default outright, it writes a **rich punt payload** to a sentinel file (extends TASK-329's mechanism + STORY-285's findings file): the question, the options, the relevant spec, the code area, and *why the fork matters*.
+  3. The orchestrator detects the punt, spawns a **headless advisor** (\`claude -p\` in the advisor/dialog role) with the punt payload.
+  4. The advisor does one of two things:
+     - **Resolves it** — writes the chosen answer + its reasoning to a response file. The implementer session **resumes with the answer** (\`claude --resume <session-id>\` fed the advisor's decision) and the drain continues with a *judged* decision, not a default guess.
+     - **Escalates it** — decides the fork needs a human (strategy, irreversibility, genuine uncertainty). Files a finding tagged \`needs-human\`, the drain either pauses or falls back to the defensible default per a flag, and the human sees a well-framed question in the morning.
+
+  ## The load-bearing design constraint
+
+  A headless advisor applying judgment unattended is **exactly where drain quality silently degrades**. The mitigation must be structural, not hoped-for:
+
+  - **The advisor's default bias is ESCALATE, not resolve.** It answers only forks it is genuinely confident about. Anything touching strategy, anything irreversible, anything where it would be guessing → straight to the human. \"When in doubt, escalate\" is the rule, and the skill prompt must enforce it.
+  - **Every advisor decision is logged with reasoning** to an auditable location, so the human can review overnight-advisor calls in the morning and catch a bad one.
+  - **The advisor decision is itself a reviewable artifact** — a resolved fork carries the advisor's answer + rationale into the spec's comment trail, so the resolution isn't invisible.
+
+  If the advisor over-resolves (answers forks it should have escalated), the drain produces confident-but-wrong decisions — worse than the safe-default punt. The conservative-escalation bias is the whole ballgame.
+
+  ## Acceptance
+
+  - [ ] Implementer (headless) writes a rich punt payload on a \`kind:design-fork\`: question, options, spec context, code area, stakes — enough for an advisor with no session context to decide
+  - [ ] Orchestrator detects the punt, spawns a headless advisor (\`claude -p\`, advisor role) with the payload
+  - [ ] Advisor resolves OR escalates; the decision + reasoning is written to a response file
+  - [ ] On resolve: the implementer session resumes (\`claude --resume\`) fed the advisor's answer; the drain continues
+  - [ ] On escalate: a finding is filed tagged \`needs-human\` with the advisor's framing of *why* it couldn't decide; drain pauses or default-falls-back per a flag (\`--escalate-blocks\` vs \`--escalate-defaults\`)
+  - [ ] The advisor skill prompt enforces the conservative-escalation bias — escalate-when-in-doubt is the documented default
+  - [ ] Every advisor decision (resolve or escalate) logged with reasoning to an auditable location; resolved forks also leave a comment on the spec
+  - [ ] Tests: a confident fork → advisor resolves → implementer resumes; an uncertain fork → advisor escalates → needs-human finding; the resume plumbing round-trips
+  - [ ] Morning-after audit surface: \`aida findings list\` (or \`aida drain status\`) shows which forks the overnight advisor resolved vs escalated
+
+  ## Out of scope
+
+  - **Replacing the human entirely** — the human tier is permanent; this STORY shrinks the human's queue, never eliminates it
+  - **Multi-round advisor↔implementer dialogue** — one punt, one advisor answer. If the advisor's answer spawns a new fork, that's a fresh punt, not a conversation
+  - **A standing advisor daemon** — the advisor is spawned per-punt, like the headless reviewer; no long-lived process
+  - **--zen mode** — under --zen the human IS the advisor and is reachable; this tier is --no-human-only
+
+  ## Depends on (load-bearing — this STORY is meaningless without them)
+
+  - **STORY-276** (headless implementer — there must be a headless implementer to punt FROM)
+  - **STORY-285** (implementer findings persistence — the punt payload + findings surface)
+  - **TASK-323** (the basic --no-human design-fork punt — this STORY upgrades \"punt = pick default\" to \"punt = escalate to advisor\")
+  - **TASK-329** (sentinel-file mechanism — shipped; the file-based signal channel this extends)
+
+  ## Composes with
+
+  - **STORY-287** (three-mode autonomy taxonomy — this enriches the --no-human mode specifically)
+  - **STORY-278** (headless reviewer findings → advisor — that STORY explicitly deferred the \"headless advisor auto-triage\" as out-of-scope; THIS STORY is that deferred piece, promoted to a real future direction)
+  - **STORY-301** (drain status — the morning-after audit of advisor decisions surfaces here)
+  - \`feedback_three_mode_autonomy_taxonomy.md\` (the autonomy-vs-quality tradeoff this STORY navigates)
+  - \`feedback_pushback_on_overengineering.md\` (filed as \"eventually\" + dependency-gated — must not jump ahead of its foundations)
+
+  ## Origin
+
+  2026-05-18, user describing the future direction: *\"in the --no-human mode eventually I think we want the possibility of punting to an advisor, the advisor tries to answer, if the advisor wants a human then it is punted to the human, otherwise the advisor responds and the chat can be resumed with the answer.\"*
+
+  Explicitly an \"eventually\" — it sits on top of STORY-276 + STORY-285 + TASK-323, none shipped. Filed now to capture the architecture while it's clearly articulated; correctly gated so it doesn't jump its dependencies.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T03:38:45.451756021Z
+modified_at: 2026-05-18T03:38:45.451756021Z
+req_type: Story
+tags:
+- advisor-tier
+- autonomy-modes
+- batch:autonomy-modes
+- escalation
+- eventually
+- headless-advisor
+- no-human
