@@ -14458,47 +14458,40 @@ fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::
     }
 }
 
-/// fails session_end. The richer return shape lets the caller print an
-/// honest skip reason instead of pretending nothing happened.
+/// Run `gh pr list <filter> --limit 1 --json number,title,url` and parse the
+/// single result line into a [`PrLookup`]. The shared core behind the
+/// branch-keyed and spec-keyed PR lookups — each caller supplies only its
+/// distinguishing `<filter>` args (`--head <branch>` / `--search <query>`
+/// plus `--state`).
 ///
-/// BUG-74: previously this called `Command::new("gh")` and trusted that
-/// `ErrorKind::NotFound` meant "gh isn't installed". In practice the
-/// false-negative rate is non-trivial — a child Rust process can see a
-/// PATH that doesn't include the directory where the user installed gh
-/// (especially with shell helpers that mutate PATH only inside the
-/// shell). So we now do an explicit PATH walk first, fall back to a
-/// handful of common absolute paths, and invoke gh by absolute path.
-/// AIDA_DEBUG_GH=1 surfaces what we searched and where we found (or
-/// didn't find) the binary. trace:STORY-66 BUG-72 BUG-74 | ai:claude
-fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+/// BUG-74: resolves `gh` via an explicit PATH walk + absolute-path fallback
+/// rather than `Command::new("gh")`, because a child Rust process can see a
+/// PATH that omits the user's gh install dir. BUG-107: a spawn `NotFound`
+/// after the binary resolved means a removed working directory far more
+/// often than a missing binary — `gh_spawn_error` names the real culprit.
+/// AIDA_DEBUG_GH=1 surfaces the binary search.
+/// trace:STORY-66 BUG-72 BUG-74 BUG-107 BUG-223 | ai:claude
+fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup {
     let gh_bin = match resolve_gh_binary() {
         Some(p) => p,
         None => return PrLookup::GhMissing,
     };
+    let mut args: Vec<&str> = vec!["pr", "list"];
+    args.extend_from_slice(filter);
+    args.extend_from_slice(&[
+        "--limit",
+        "1",
+        "--json",
+        "number,title,url",
+        "-q",
+        r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
+    ]);
     let spawned = std::process::Command::new(&gh_bin)
         .current_dir(project_root)
-        .args([
-            "pr",
-            "list",
-            "--head",
-            branch,
-            "--state",
-            "open",
-            "--limit",
-            "1",
-            "--json",
-            "number,title,url",
-            "-q",
-            r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
-        ])
+        .args(&args)
         .output();
     let out = match spawned {
         Ok(o) => o,
-        // We resolved the binary path above, so NotFound here is either a
-        // race (binary deleted between resolve and spawn) or — far more
-        // commonly — a removed working directory (BUG-107). Treat it as a
-        // failure not a "gh missing"; the user almost certainly still has
-        // gh, and `gh_spawn_error` names the real culprit.
         Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
     };
     if !out.status.success() {
@@ -14512,6 +14505,56 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Pr
     parse_gh_pr_line(&String::from_utf8_lossy(&out.stdout))
 }
 
+/// Look up a single open PR keyed on `branch`. The richer [`PrLookup`]
+/// return shape lets callers print an honest skip reason (no PR yet / gh
+/// missing / gh failed) instead of collapsing every case to `None`.
+/// trace:STORY-66 BUG-72 BUG-74 | ai:claude
+fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+    gh_pr_list_first(project_root, &["--head", branch, "--state", "open"])
+}
+
+/// Fallback PR lookup for BUG-223: find an open PR that references `spec` in
+/// its title or body, used when the branch-keyed lookup comes up empty
+/// because `/aida-pr` swapped the branch. `gh pr list --search` does a
+/// full-text search across PR title + body; an AIDA PR body always names
+/// every covered spec in its `## Per-spec` section, so the spec id is a
+/// reliable key even after the branch the PR was opened from changed.
+/// trace:BUG-223 | ai:claude
+fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str) -> PrLookup {
+    gh_pr_list_first(project_root, &["--search", spec, "--state", "open"])
+}
+
+/// Look up the head branch of an open PR by number — used by the BUG-223
+/// spec-id fallback to realign the orchestrator's branch after a swap the
+/// worktree-HEAD reconciliation missed, so the CI / merge phases probe the
+/// PR's actual head. Best-effort: `None` on any `gh` failure.
+/// trace:BUG-223 | ai:claude
+fn pr_head_branch(project_root: &std::path::Path, pr_number: u64) -> Option<String> {
+    let gh_bin = resolve_gh_binary()?;
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "view",
+            &pr_number.to_string(),
+            "--json",
+            "headRefName",
+            "-q",
+            ".headRefName",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if branch.is_empty() {
+        None
+    } else {
+        Some(branch)
+    }
+}
+
 /// Detect whether `branch` was the head of a now-MERGED PR. Used by
 /// `aida push` (BUG-88) to warn that new commits will be stranded —
 /// pushing to a merged-PR branch puts the commit on `origin/<branch>`
@@ -14519,40 +14562,7 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Pr
 /// [`detect_open_pr_for_branch`] but queries `--state merged` and returns
 /// only the first hit (most recent). trace:BUG-88 | ai:claude
 fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
-    let gh_bin = match resolve_gh_binary() {
-        Some(p) => p,
-        None => return PrLookup::GhMissing,
-    };
-    let spawned = std::process::Command::new(&gh_bin)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "list",
-            "--head",
-            branch,
-            "--state",
-            "merged",
-            "--limit",
-            "1",
-            "--json",
-            "number,title,url",
-            "-q",
-            r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
-        ])
-        .output();
-    let out = match spawned {
-        Ok(o) => o,
-        Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
-    };
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        return PrLookup::GhFailed(if stderr.is_empty() {
-            format!("gh exited {}", out.status)
-        } else {
-            stderr
-        });
-    }
-    parse_gh_pr_line(&String::from_utf8_lossy(&out.stdout))
+    gh_pr_list_first(project_root, &["--head", branch, "--state", "merged"])
 }
 
 /// Parse a single tab-separated `gh pr list -q ...` line into a
@@ -44761,6 +44771,12 @@ fn handle_queue_work(
 struct LeasePeek {
     id: String,
     branch: String,
+    /// Worktree path — re-read by the BUG-223 branch-swap reconciliation to
+    /// recover the live branch when `/aida-pr` swapped it mid-phase.
+    /// `#[serde(default)]` so a lease (or hand-written test fixture) without
+    /// the field still parses. trace:BUG-223 | ai:claude
+    #[serde(default)]
+    worktree_path: std::path::PathBuf,
 }
 
 /// Statuses the `--auto-complete` orchestrator can drive from scratch
@@ -46020,18 +46036,94 @@ fn lease_ids_in(sessions_dir: &std::path::Path) -> Vec<String> {
 /// deterministic replacement for the lease-set-diff heuristic: it pins the
 /// orchestrated session by id, so concurrent leases (parallel user sessions,
 /// nested `/aida-pickup`) and the `.manifest.toml` companion file cannot
-/// confuse it. Returns `(lease_id, branch)`. trace:BUG-114 | ai:claude
+/// confuse it. Returns `(lease_id, branch, worktree_path)`.
+/// trace:BUG-114 trace:BUG-223 | ai:claude
 fn find_orchestrated_lease(
     project_root: &std::path::Path,
     claude_session_id: &str,
-) -> Option<(String, String)> {
+) -> Option<(String, String, std::path::PathBuf)> {
     let manifest = session_manifest::list_all(project_root)
         .into_iter()
         .find(|m| m.claude_session_id.as_deref() == Some(claude_session_id))?;
     let lease_path = leases_dir(project_root).join(format!("{}.toml", manifest.session_id));
     let body = std::fs::read_to_string(&lease_path).ok()?;
     let peek: LeasePeek = toml::from_str(&body).ok()?;
-    Some((peek.id, peek.branch))
+    Some((peek.id, peek.branch, peek.worktree_path))
+}
+
+/// Decide whether the worktree's live branch represents a mid-phase swap
+/// away from the branch the lease recorded at session-start. Returns the
+/// new branch when a genuine swap is detected; `None` when the recorded
+/// branch should stand — unchanged, detached HEAD (`rev-parse
+/// --abbrev-ref` yields the literal `HEAD`), or the branch was
+/// undetectable (the worktree is gone). Pure — split from
+/// [`reconcile_orchestrated_branch`] so the swap rule is unit-testable
+/// without a git fixture. trace:BUG-223 | ai:claude
+fn swapped_branch(live: Result<String>, recorded: &str) -> Option<String> {
+    match live {
+        Ok(b) if !b.is_empty() && b != "HEAD" && b != recorded => Some(b),
+        _ => None,
+    }
+}
+
+/// Rewrite the `branch` field of an existing session lease, leaving every
+/// other field intact. Used by the orchestrator when it detects a
+/// mid-phase branch swap (BUG-223). The orchestrated session has already
+/// exited by the time this runs, so there is no concurrent writer — but
+/// the write is still atomic for consistency with the other lease-file
+/// writers. trace:BUG-223 | ai:claude
+fn update_lease_branch(project_root: &std::path::Path, lease_id: &str, branch: &str) -> Result<()> {
+    let path = lease_path(project_root, lease_id);
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("reading lease {}", path.display()))?;
+    let mut lease: SessionLease =
+        toml::from_str(&body).with_context(|| format!("parsing lease {}", path.display()))?;
+    lease.branch = branch.to_string();
+    let content = toml::to_string_pretty(&lease)?;
+    write_atomic(&path, &content).with_context(|| format!("writing lease {}", path.display()))?;
+    Ok(())
+}
+
+/// Re-derive the worktree's current branch and, when it has drifted from
+/// the branch the lease recorded at session-start, rewrite the lease so
+/// every downstream consumer (`aida session end`, `aida session leases`)
+/// sees the live branch. Returns the branch the orchestrator should drive
+/// the rest of the pipeline with.
+///
+/// BUG-223: `/aida-pr`'s BUG-88 merged-branch-name guard can move the
+/// commits to a fresh branch mid-implementer-phase. The lease's recorded
+/// branch then goes stale and the phase-1 `gh pr list --head <branch>`
+/// lookup reports a false "opened no PR". The worktree's live HEAD is the
+/// only ground truth. trace:BUG-223 | ai:claude
+fn reconcile_orchestrated_branch(
+    project_root: &std::path::Path,
+    lease_id: &str,
+    worktree_path: &std::path::Path,
+    recorded: &str,
+) -> String {
+    let live = aida_core::git_ops::current_branch(worktree_path);
+    match swapped_branch(live, recorded) {
+        Some(new_branch) => {
+            match update_lease_branch(project_root, lease_id, &new_branch) {
+                Ok(()) => eprintln!(
+                    "  {} branch swapped during the implementer phase: `{}` → `{}` \
+                     (lease updated)",
+                    "ⓘ".cyan(),
+                    recorded,
+                    new_branch,
+                ),
+                Err(e) => eprintln!(
+                    "  {} branch swapped to `{}` but the lease could not be updated: {} \
+                     (continuing with the live branch)",
+                    "ⓘ".cyan(),
+                    new_branch,
+                    e,
+                ),
+            }
+            new_branch
+        }
+        None => recorded.to_string(),
+    }
 }
 
 /// Resolve the aida binary path for orchestrator subprocess spawning, once
@@ -46171,7 +46263,7 @@ impl RealPhaseDriver {
     fn discover_orchestrated_lease(
         &self,
         claude_session_id: &str,
-    ) -> Result<(String, String), auto_complete::PhaseFailure> {
+    ) -> Result<(String, String, std::path::PathBuf), auto_complete::PhaseFailure> {
         find_orchestrated_lease(&self.project_root, claude_session_id).ok_or_else(|| {
             let candidates = lease_ids_in(&self.sessions_dir());
             if candidates.is_empty() {
@@ -46239,29 +46331,77 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         // Locate the session `queue work` created — pinned by the id we
         // minted into `--session-id`, not a lease-set diff (BUG-114).
-        let (lease_id, branch) = self.discover_orchestrated_lease(&session_uuid)?;
-        self.implementer_lease = Some(lease_id);
+        let (lease_id, recorded_branch, worktree_path) =
+            self.discover_orchestrated_lease(&session_uuid)?;
+        self.implementer_lease = Some(lease_id.clone());
+
+        // BUG-223: the branch recorded in the lease is a session-start
+        // snapshot. If `/aida-pr` hit BUG-88's merged-branch-name guard
+        // during the implementer phase it moved the commits to a fresh
+        // branch, and the recorded branch is now stale. The worktree's
+        // live HEAD is ground truth — reconcile from it (rewriting the
+        // lease so `aida session end` agrees) before the PR lookup.
+        // trace:BUG-223 | ai:claude
+        let branch = reconcile_orchestrated_branch(
+            &self.project_root,
+            &lease_id,
+            &worktree_path,
+            &recorded_branch,
+        );
         self.branch = Some(branch.clone());
 
         // The pipeline has nothing to review or merge without a PR — verify
-        // the implementer opened one before exiting.
-        match detect_open_pr_for_branch(&self.project_root, &branch) {
-            PrLookup::Found(pr) => {
+        // the implementer opened one before exiting. The branch-keyed lookup
+        // is primary; if it comes up empty — a swap the worktree-HEAD
+        // reconciliation above could not catch (detached HEAD, worktree
+        // already gone) — fall back to a spec-id search before declaring a
+        // false negative. trace:BUG-223 | ai:claude
+        let pr = match detect_open_pr_for_branch(&self.project_root, &branch) {
+            PrLookup::Found(pr) => Some(pr),
+            PrLookup::NoOpenPr => match detect_open_pr_for_spec(&self.project_root, &self.spec) {
+                PrLookup::Found(pr) => {
+                    // Realign the branch so the CI / merge phases probe the
+                    // PR's actual head, not the worktree HEAD the
+                    // branch-keyed lookup just missed on. trace:BUG-223
+                    if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
+                        self.branch = Some(head);
+                    }
+                    eprintln!(
+                        "  {} no open PR on branch `{}` — recovered PR-{} via a `{}` \
+                         search (the implementer branch was swapped by /aida-pr's \
+                         merged-branch guard)",
+                        "ⓘ".cyan(),
+                        branch,
+                        pr.number,
+                        self.spec,
+                    );
+                    Some(pr)
+                }
+                _ => None,
+            },
+            PrLookup::GhMissing => {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::MissingTool,
+                    "`gh` is not on PATH — auto-complete needs it to track the PR",
+                ));
+            }
+            PrLookup::GhFailed(why) => {
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "could not look up the PR for `{branch}`: {why}"
+                )));
+            }
+        };
+
+        match pr {
+            Some(pr) => {
                 self.pr_number = Some(pr.number as u32);
                 Ok(())
             }
-            PrLookup::NoOpenPr => Err(auto_complete::PhaseFailure::of(
+            None => Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::NoPr,
                 "the implementer session exited cleanly but opened no PR — \
                  run `/aida-pr` inside the session before exiting",
             )),
-            PrLookup::GhMissing => Err(auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::MissingTool,
-                "`gh` is not on PATH — auto-complete needs it to track the PR",
-            )),
-            PrLookup::GhFailed(why) => Err(auto_complete::PhaseFailure::new(format!(
-                "could not look up the PR for `{branch}`: {why}"
-            ))),
         }
     }
 
@@ -46438,7 +46578,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         // End the reviewer session (best-effort — the verdict is already in
         // hand, so a stuck reviewer worktree must not block the merge).
-        if let Ok((reviewer_lease, _)) = self.discover_orchestrated_lease(&session_uuid) {
+        if let Ok((reviewer_lease, _, _)) = self.discover_orchestrated_lease(&session_uuid) {
             let _ = std::process::Command::new(self.aida_exe())
                 .current_dir(&self.project_root)
                 .args(["session", "end", &reviewer_lease, "--yes", "--skip-ci"])
@@ -46997,7 +47137,9 @@ mod queue_work_resume_tests {
         let mint = |lease_id: &str, branch: &str, claude_id: Option<&str>| {
             std::fs::write(
                 sessions.join(format!("{lease_id}.toml")),
-                format!("id = \"{lease_id}\"\nbranch = \"{branch}\"\n"),
+                format!(
+                    "id = \"{lease_id}\"\nbranch = \"{branch}\"\nworktree_path = \"/tmp/{lease_id}\"\n"
+                ),
             )
             .unwrap();
             let manifest = session_manifest::SessionManifest {
@@ -47025,11 +47167,153 @@ mod queue_work_resume_tests {
 
         assert_eq!(
             find_orchestrated_lease(root, orchestrated),
-            Some(("019e9999-cccc".to_string(), "task-259".to_string())),
+            Some((
+                "019e9999-cccc".to_string(),
+                "task-259".to_string(),
+                std::path::PathBuf::from("/tmp/019e9999-cccc"),
+            )),
         );
         // An unknown claude id resolves to nothing — the caller turns that
         // into a candidate-naming failure message.
         assert!(find_orchestrated_lease(root, "no-such-id").is_none());
+    }
+
+    /// BUG-223: the pure swap-detection rule. A worktree HEAD that differs
+    /// from the lease's session-start snapshot is a swap; an unchanged,
+    /// detached, or undetectable HEAD leaves the recorded branch standing.
+    #[test]
+    fn swapped_branch_detects_a_genuine_swap() {
+        // /aida-pr's BUG-88 guard moved the commits to a fresh branch.
+        assert_eq!(
+            swapped_branch(Ok("epic-23-10".to_string()), "epic-23-9"),
+            Some("epic-23-10".to_string()),
+        );
+        // No swap — worktree HEAD still matches the lease snapshot.
+        assert_eq!(
+            swapped_branch(Ok("epic-23-9".to_string()), "epic-23-9"),
+            None
+        );
+        // Detached HEAD — `rev-parse --abbrev-ref` yields the literal "HEAD".
+        assert_eq!(swapped_branch(Ok("HEAD".to_string()), "epic-23-9"), None);
+        // Empty / undetectable — trust the recorded branch.
+        assert_eq!(swapped_branch(Ok(String::new()), "epic-23-9"), None);
+        // git failed (worktree already gone) — trust the recorded branch.
+        assert_eq!(
+            swapped_branch(Err(anyhow::anyhow!("no worktree")), "epic-23-9"),
+            None,
+        );
+    }
+
+    /// BUG-223: `update_lease_branch` rewrites the `branch` field and only
+    /// that field — every other lease field survives the round-trip.
+    #[test]
+    fn update_lease_branch_rewrites_only_the_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let sessions = leases_dir(root);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let lease = SessionLease {
+            id: "019eabcd-1234".to_string(),
+            scope: "EPIC-23".to_string(),
+            slug: "epic-23".to_string(),
+            owner: "tester".into(),
+            worktree_path: root.to_path_buf(),
+            branch: "epic-23-9".to_string(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: Some(4242),
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+        };
+        std::fs::write(
+            sessions.join("019eabcd-1234.toml"),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+
+        update_lease_branch(root, "019eabcd-1234", "epic-23-10").unwrap();
+
+        let body = std::fs::read_to_string(sessions.join("019eabcd-1234.toml")).unwrap();
+        let reloaded: SessionLease = toml::from_str(&body).unwrap();
+        assert_eq!(reloaded.branch, "epic-23-10");
+        // Every other field survives the rewrite untouched.
+        assert_eq!(reloaded.scope, "EPIC-23");
+        assert_eq!(reloaded.creator_pid, Some(4242));
+        assert_eq!(reloaded.role.as_deref(), Some("implementer"));
+    }
+
+    /// BUG-223 regression: simulate `/aida-pr`'s BUG-88 guard swapping the
+    /// implementer branch, and verify the orchestrator's reconciliation both
+    /// returns the live branch and rewrites the stale lease.
+    #[test]
+    fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let git = |args: &[&str]| {
+            let ok = std::process::Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap()
+                .status
+                .success();
+            assert!(ok, "git {args:?} failed");
+        };
+        // A git worktree on `epic-23-9` with one commit.
+        git(&["init", "-q", "-b", "epic-23-9"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        git(&["config", "commit.gpgsign", "false"]);
+        git(&["commit", "-q", "--allow-empty", "-m", "seed"]);
+
+        // Lease recorded `epic-23-9` at session-start.
+        let sessions = leases_dir(root);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let lease = SessionLease {
+            id: "019eaaaa-bbbb".to_string(),
+            scope: "EPIC-23".into(),
+            slug: "epic-23".into(),
+            owner: "t".into(),
+            worktree_path: root.to_path_buf(),
+            branch: "epic-23-9".into(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+        };
+        std::fs::write(
+            sessions.join("019eaaaa-bbbb.toml"),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+
+        // No swap yet: reconcile is a no-op, returns the recorded branch.
+        assert_eq!(
+            reconcile_orchestrated_branch(root, "019eaaaa-bbbb", root, "epic-23-9"),
+            "epic-23-9",
+        );
+
+        // `/aida-pr`'s BUG-88 guard moves the commits to a fresh branch.
+        git(&["checkout", "-q", "-b", "epic-23-10"]);
+
+        // Reconcile now follows the swap and rewrites the lease.
+        assert_eq!(
+            reconcile_orchestrated_branch(root, "019eaaaa-bbbb", root, "epic-23-9"),
+            "epic-23-10",
+        );
+        let body = std::fs::read_to_string(sessions.join("019eaaaa-bbbb.toml")).unwrap();
+        let reloaded: SessionLease = toml::from_str(&body).unwrap();
+        assert_eq!(reloaded.branch, "epic-23-10");
     }
 }
 
