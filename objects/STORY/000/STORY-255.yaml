@@ -81,12 +81,12 @@ description: |-
   User asked 2026-05-16: *\"You have added a lot of memories and perhaps other updates to files. We are developing aida. We also have projects that will use aida. How much of what we have done needs to find its way into scaffolding?\"*
 
   The audit revealed ~10 memories that are generic discipline and currently don't propagate. This STORY captures the gap.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:31:11.178643234Z
-modified_at: 2026-05-16T20:33:39.497600400Z
+modified_at: 2026-05-18T03:19:08.587750530Z
 req_type: Story
 tags:
 - aida-init
