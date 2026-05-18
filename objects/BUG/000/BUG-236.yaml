@@ -55,10 +55,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T05:39:42.574770218Z
-modified_at: 2026-05-18T05:41:44.103886378Z
+modified_at: 2026-05-18T06:22:30.836739708Z
 req_type: Bug
 tags:
 - auto-complete
+- batch:orchestrator-hardening
 - first-users
 - from-self-test:TASK-277
 - recovery-hint
