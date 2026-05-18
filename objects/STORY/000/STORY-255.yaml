@@ -86,7 +86,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:31:11.178643234Z
-modified_at: 2026-05-18T03:32:06.089620811Z
+modified_at: 2026-05-18T03:33:22.413198795Z
 req_type: Story
 tags:
 - aida-init
@@ -163,3 +163,8 @@ comments:
   content: 'Acceptance correction 2026-05-18 (resolves the implementer''s scope-fork at the design checkpoint): the spec body''s ''writes 10 starter memory files'' is STALE — it was a filing-time snapshot. The producer mechanism is the `propagation: scaffolding-pack` frontmatter marker (per feedback_propagate_generic_discipline_via_scaffolding.md, ''the load-bearing step'' / canonical source of truth). DECISION: ship marker-driven — `aida init --with-memories` harvests every memory carrying the marker, NO hardcoded count. The advisor has corrected the 2 spec-named-but-unmarked files (feedback_verify_before_filing, feedback_failed_flag_attempts_are_ux_signals) so the marked set is now consistently 16. Reword the acceptance criterion from ''writes 10 starter memory files'' to ''writes every memory carrying propagation: scaffolding-pack (currently 16; grows incrementally as new generic-discipline memories are marked)''. The count is an artifact, never a constant.'
   created_at: 2026-05-18T03:32:06.089620811Z
   modified_at: 2026-05-18T03:32:06.089620811Z
+- id: 019e3925-3d6d-7663-9746-f07931805432
+  author: joe
+  content: 'Scope resolution 2026-05-18 (implementer design-fork at the checkpoint): the earlier comment that added 3 items ''to STORY-255''s scope'' was never promoted into the 8 binding `## Acceptance` criteria — so per feedback_refinements_must_be_acceptance_criteria.md it is NOT this PR''s contract. DECISION: implement only the 8 acceptance criteria. The 3 comment-items are spun out: items 2+3 (.claude/skills/local/ scaffolding + <skill>.local.md extension mechanism + extending-skills.md) → STORY-305. Item 1 (split the propagation memory into generic/AIDA halves) → advisor memory-curation, handled outside the implementer queue. This comment supersedes the earlier scope-adding comment — STORY-255''s PR is the 8 criteria, nothing more.'
+  created_at: 2026-05-18T03:33:22.413198795Z
+  modified_at: 2026-05-18T03:33:22.413198795Z
