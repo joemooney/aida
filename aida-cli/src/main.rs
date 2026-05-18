@@ -10379,6 +10379,12 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             yes,
             orphans,
         } => session_prune(*days, *dry_run, *yes, *orphans),
+        SessionCommand::Forget {
+            id,
+            force,
+            dry_run,
+            yes,
+        } => session::forget(id, *force, *dry_run, *yes),
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
         SessionCommand::Wakeup { cmd } => session_wakeup_dispatch(cmd),
     }

@@ -1322,6 +1322,247 @@ fn resolve_id(prefix: &str) -> Result<String> {
     }
 }
 
+/// TASK-264: a spec status that means "work is still in flight" — the
+/// `forget` anchor-spec guard refuses (without `--force`) to drop a
+/// session anchored to one. `Done` counts because it means "finished on
+/// a branch, not yet merged" (STORY-86) — the merge auto-bumps it to
+/// `Completed`, so a `Done` spec still has unmerged artifacts to protect.
+/// trace:TASK-264 | ai:claude
+fn spec_status_in_flight(status: &aida_core::RequirementStatus) -> bool {
+    matches!(
+        status,
+        aida_core::RequirementStatus::InProgress | aida_core::RequirementStatus::Done
+    )
+}
+
+/// TASK-264: `aida session forget <id>` — explicit removal of one tracked
+/// Claude Code session. Deletes the session's `.jsonl` metadata file so
+/// it drops out of `aida session list`. Sibling of `aida session prune`
+/// (bulk, age-based) — `forget` is single-target, addressed by id. Both
+/// share the `.aida/session-prune.log` audit trail.
+///
+/// Two guards protect mid-work artifacts, each overridable with `--force`:
+///   1. the session currently running this command (CLAUDE_CODE_SESSION_ID)
+///   2. any session whose anchor spec is still in flight (In Progress, or
+///      Done-but-not-yet-merged)
+///
+/// trace:TASK-264 | ai:claude
+pub fn forget(id_query: &str, force: bool, dry_run: bool, yes: bool) -> Result<()> {
+    let id_query = id_query.trim();
+    if id_query.is_empty() {
+        anyhow::bail!("a session id (or 8-char prefix) is required");
+    }
+    let cwd = std::env::current_dir().context("could not determine cwd")?;
+
+    // Search the same dirs `aida session list` walks: this cwd's encoded
+    // project dir, plus the parent project's when run inside a worktree —
+    // so an id picked off either table in `list` resolves here.
+    let mut search_dirs: Vec<PathBuf> = Vec::new();
+    if let Ok(d) = claude_project_dir(&cwd) {
+        if d.is_dir() {
+            search_dirs.push(d);
+        }
+    }
+    if let Some(parent) = crate::parent_project_root_for_session(&cwd) {
+        if parent != cwd {
+            if let Ok(d) = claude_project_dir(&parent) {
+                if d.is_dir() && !search_dirs.contains(&d) {
+                    search_dirs.push(d);
+                }
+            }
+        }
+    }
+    if search_dirs.is_empty() {
+        anyhow::bail!("no Claude Code session storage found for this project");
+    }
+
+    // Collect every .jsonl whose id starts with the query prefix.
+    let now = SystemTime::now();
+    let mut matches: Vec<(SessionMeta, PathBuf, u64)> = Vec::new();
+    for dir in &search_dirs {
+        let Ok(read) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in read.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if !stem.starts_with(id_query) {
+                continue;
+            }
+            let Ok(fs_meta) = entry.metadata() else {
+                continue;
+            };
+            let Ok(mtime) = fs_meta.modified() else {
+                continue;
+            };
+            if let Ok(meta) = parse_session_meta(&path, mtime, now) {
+                matches.push((meta, path, fs_meta.len()));
+            }
+        }
+    }
+
+    let (meta, path, size) = match matches.len() {
+        0 => anyhow::bail!(
+            "no tracked session matches id `{}` — check `aida session list`",
+            id_query
+        ),
+        1 => matches.into_iter().next().unwrap(),
+        n => {
+            eprintln!("{} sessions match `{}`:", n, id_query);
+            for (m, _, _) in &matches {
+                eprintln!("  {}", &m.id[..m.id.len().min(12)]);
+            }
+            anyhow::bail!("ambiguous id `{}` — use a longer prefix", id_query);
+        }
+    };
+
+    // Enrich the single match with its most-recent spec (RECENT FOCUS),
+    // so the anchor-spec guard and the confirmation use the live signal.
+    let mut one = vec![meta];
+    fill_recent_focus(&mut one);
+    let meta = one.pop().unwrap();
+    let id8 = &meta.id[..meta.id.len().min(8)];
+
+    // Guard 1: the session currently running this command. Claude Code
+    // exports its conversation id as CLAUDE_CODE_SESSION_ID, and that id
+    // is the .jsonl file stem — so a direct equality test identifies the
+    // live session. trace:TASK-264 | ai:claude
+    let is_active = std::env::var("CLAUDE_CODE_SESSION_ID")
+        .ok()
+        .is_some_and(|active| active == meta.id);
+    if is_active && !force {
+        anyhow::bail!(
+            "session {} is the one running this command — \
+             pass --force to forget it anyway",
+            id8
+        );
+    }
+
+    // Resolve the anchor spec (most-recent focus, else the launch spec)
+    // and its status from the requirement store.
+    let anchor_spec = meta.recent_focus.clone().or_else(|| meta.spec.clone());
+    let mut anchor_display = anchor_spec.clone();
+    let mut anchor_status: Option<aida_core::RequirementStatus> = None;
+    if let Some(spec) = anchor_spec.as_deref() {
+        if let Ok(root) = crate::find_project_root() {
+            if let Some(store) = crate::load_store_for_lookup(&root) {
+                if let Some(req) = store.get_requirement_by_spec_id(spec) {
+                    anchor_display = Some(
+                        req.agreed_id
+                            .clone()
+                            .or_else(|| req.spec_id.clone())
+                            .unwrap_or_else(|| spec.to_string()),
+                    );
+                    anchor_status = Some(req.status.clone());
+                }
+            }
+        }
+    }
+
+    // Guard 2: anchor spec still in flight — forgetting would drop
+    // metadata for unmerged work. trace:TASK-264 | ai:claude
+    let in_flight = anchor_status.as_ref().is_some_and(spec_status_in_flight);
+    if in_flight && !force {
+        anyhow::bail!(
+            "session {}'s anchor spec {} is still in flight ({}) — \
+             pass --force to forget it anyway",
+            id8,
+            anchor_display.as_deref().unwrap_or("?"),
+            anchor_status
+                .as_ref()
+                .map(|s| s.to_string())
+                .unwrap_or_default()
+        );
+    }
+
+    // Confirmation summary: role, anchor spec + status, age, last activity
+    // — enough for the user to verify they're not deleting live work.
+    let session_age = meta
+        .started_at
+        .map(|t| (chrono::Utc::now() - t).num_seconds().max(0) as u64)
+        .map(humanize_age)
+        .unwrap_or_else(|| "?".to_string());
+    println!(
+        "{} Forgetting session {} ({}, age {}, last active {} ago)",
+        "ℹ".cyan(),
+        id8.yellow(),
+        meta.role.as_deref().unwrap_or("unknown role"),
+        session_age,
+        humanize_age(meta.age_seconds),
+    );
+    let anchor_line = match (&anchor_display, &anchor_status) {
+        (Some(s), Some(st)) => format!("{} [{}]", s, st),
+        (Some(s), None) => format!("{} (status unknown)", s),
+        (None, _) => "(none tracked)".to_string(),
+    };
+    println!("   {}  {}", "anchor spec:".dimmed(), anchor_line);
+    println!("   {}  {}", "session file:".dimmed(), path.display());
+    if is_active {
+        println!(
+            "   {} this is the session running `aida session forget` — --force given",
+            "⚠".yellow()
+        );
+    }
+    if in_flight {
+        println!(
+            "   {} anchor spec is still in flight — forgetting unmerged work metadata, --force given",
+            "⚠".yellow()
+        );
+    }
+
+    if dry_run {
+        println!("{}", "(--dry-run; nothing removed)".dimmed());
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        print!("Continue? [y/N] ");
+        std::io::stdout().flush().ok();
+        let mut ans = String::new();
+        if std::io::stdin().read_line(&mut ans).is_err()
+            || !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+        {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    std::fs::remove_file(&path)
+        .with_context(|| format!("could not delete session file {}", path.display()))?;
+
+    // Audit trail — append to the same `.aida/session-prune.log`, in the
+    // same `<iso>\t<size>\t<age_seconds>\t<path>` shape `aida session
+    // prune` writes, so both removal paths read uniformly.
+    if let Ok(root) = crate::find_project_root() {
+        let log_path = root.join(".aida").join("session-prune.log");
+        if let Some(parent) = log_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            use std::io::Write;
+            let _ = writeln!(
+                f,
+                "{}\t{}\t{}\t{}",
+                chrono::Utc::now().to_rfc3339(),
+                size,
+                meta.age_seconds,
+                path.display()
+            );
+        }
+    }
+
+    println!("{} session {} forgotten", "✓".green(), id8);
+    Ok(())
+}
+
 /// Replace this process with `claude --resume <id>`. Falls back to spawn
 /// + wait on platforms without exec semantics. `permission_mode`, when
 /// given, is passed through so a resumed `aida queue work` session keeps
@@ -1460,6 +1701,21 @@ mod tests {
         assert_eq!(first_spec_id("not-spec-1 here"), None);
         // X is too short / not in the prefix list
         assert_eq!(first_spec_id("X-1 isn't a spec"), None);
+    }
+
+    /// TASK-264: the `forget` anchor-spec guard fires for in-flight work
+    /// (In Progress, Done-not-merged) and stays quiet for everything else.
+    #[test]
+    fn spec_status_in_flight_covers_unmerged_work() {
+        use aida_core::RequirementStatus::*;
+        assert!(spec_status_in_flight(&InProgress));
+        assert!(spec_status_in_flight(&Done));
+        for safe in [Draft, Approved, Planned, Completed, Rejected] {
+            assert!(
+                !spec_status_in_flight(&safe),
+                "{safe} should not block forget",
+            );
+        }
     }
 
     #[test]
