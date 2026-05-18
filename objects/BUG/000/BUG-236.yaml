@@ -3,61 +3,59 @@ spec_id: BUG-236
 agreed_id: BUG-236
 title: Auto-complete recovery-hint chain dead-ends — every suggested command bounces off the next layer
 description: |-
-  When \`aida queue work --auto-complete\` fails at phase 3 (reviewer returns RequestChanges), the orchestrator prints a recovery hint:
+  After \`aida queue work --auto-complete\` fails at phase 3 (reviewer RequestChanges), the recovery path is a **chain of hints where every link suggests a command the next layer rejects.** Observed 2026-05-18 on TASK-277 / PR-91:
 
   \`\`\`
-  → Address the review feedback, then push fixups: \`aida queue work TASK-277 --branch task-277 --steal\`
+  Link 1 — orchestrator phase-3 failure hint:
+    → aida queue work TASK-277 --branch task-277 --steal
+    ✗ Error: TASK-277 isn't queued. Status is Done.
+
+  Link 2 — aida queue work's own error message then suggests:
+    → aida queue rework TASK-277 --work --resume
+    ✗ Error: --resume requires TASK-112, not yet shipped. Re-run without --resume.
+
+  Link 3 — finally works:
+    → aida queue rework TASK-277 --work
   \`\`\`
 
-  Running that hint **errors**:
+  Three commands to do one thing ("fix the review feedback"). Each layer's hint is wrong in a different way.
 
-  \`\`\`
-  Error: \`TASK-277\` isn't queued. Status is Done (work finished on a branch).
-    If review found issues and more commits are needed: \`aida queue rework TASK-277 --work --resume\`
-  \`\`\`
+  ## The two defects
 
-  The hint sends the user to \`aida queue work\`, which only operates on *queued* items — but by the time phase 3 runs, the spec is **Done** (the implementer opened the PR back in phase 1, which flips status to Done). So the phase-3-failure recovery hint is structurally wrong: it can never succeed.
+  **Defect A — orchestrator hint uses the wrong verb.** The phase-3 failure hint hard-codes \`aida queue work … --steal\`, but by phase 3 the spec is **Done** (the implementer opened the PR in phase 1). \`aida queue work\` only operates on queued items. Phase-3/4/5/6 failures need \`aida queue rework\`, not \`aida queue work\`.
 
-  The correct command — which \`aida queue work\`'s own error message emits — is \`aida queue rework <SPEC> --work --resume\`.
+  **Defect B — \`aida queue work\`'s error message suggests an unshipped flag.** Its "if review found issues" hint is \`aida queue rework <SPEC> --work --resume\` — but \`--resume\` is gated behind TASK-112, which is not shipped. An error message must never suggest a flag that doesn't exist yet. Either drop \`--resume\` from the suggestion until TASK-112 ships, or feature-gate the suggestion text.
 
-  ## Root cause
+  ## The principle
 
-  The orchestrator's failure-recovery hint hard-codes \`aida queue work … --steal\` regardless of the spec's current lifecycle status. For a phase-1 failure the spec may still be queued/in-progress (so \`queue work\` is right). For a **phase-3, -4, -5, or -6** failure the spec is already Done (or Completed) — \`queue work\` rejects it, and the user needs \`queue rework\`.
+  **Every recovery hint must suggest a command that works with currently-shipped features and the spec's current status.** A hint that bounces is worse than no hint — it sends a stuck user in circles. The drain's *recovery* path is exactly when hint accuracy matters most.
 
   ## Fix
 
-  The recovery hint must be **status-aware**:
-
-  - Spec status is queued / in-progress (phase 1–2 failures) → \`aida queue work <SPEC> --branch <branch> --steal\`
-  - Spec status is Done / Completed (phase 3+ failures) → \`aida queue rework <SPEC> --work --resume\`
-
-  Simplest correct implementation: the hint logic reads the spec's actual status (it's right there) and emits the matching verb. Or, since phase ≥ 3 implies Done by construction, gate on the phase number.
-
-  ## Acceptance
-
-  - [ ] Phase-3 (RequestChanges) failure hint emits \`aida queue rework <SPEC> --work --resume\`
-  - [ ] Phase-4/5/6 failure hints likewise emit \`rework\` (spec is Done/Completed by then)
-  - [ ] Phase-1/2 failure hints keep \`aida queue work … --steal\` (spec may still be queued/in-progress) — or are themselves verified status-aware
-  - [ ] The emitted command is checked against the spec's actual status so it can never hand the user a command that errors
-  - [ ] Test: simulated phase-3 RequestChanges failure → recovery hint, when run, succeeds (doesn't bounce off the \"isn't queued\" guard)
-  - [ ] Test: phase-1 failure recovery hint still works for an in-progress spec
+  - [ ] Orchestrator phase-3/4/5/6 failure hints emit \`aida queue rework <SPEC> --work\` (status is Done/Completed by then) — NOT \`aida queue work … --steal\`
+  - [ ] Orchestrator phase-1/2 failure hints stay \`aida queue work <SPEC> --branch <branch> --steal\` (spec may still be queued/in-progress) — or are verified status-aware
+  - [ ] \`aida queue work\`'s "isn't queued, status is Done" error message drops \`--resume\` from its \`aida queue rework\` suggestion until TASK-112 ships (or gates the text on TASK-112's availability)
+  - [ ] Audit ALL recovery/error-message hints across \`queue work\` / \`queue rework\` / the orchestrator for flags or verbs that error against current shipped state
+  - [ ] Test: simulated phase-3 RequestChanges → the printed recovery command, run verbatim, succeeds on the first try
+  - [ ] Test: \`aida queue work\` on a Done spec → its suggested \`rework\` command, run verbatim, succeeds on the first try
+  - [ ] Regression guard: a recovery hint emitting an unshipped flag should be catchable — consider a test that greps hint strings against the real clap surface
 
   ## Composes with
 
-  - **TASK-218** (\`aida queue rework\` — the correct command the hint should point at)
-  - **BUG-226** (orchestrator end-of-phase messaging — sibling: the orchestrator's surfaced text must be accurate)
-  - **STORY-263** (headless reviewer — phase 3's RequestChanges is exactly the trigger path)
-  - \`feedback_run_help_before_suggesting_flags.md\` (a tool emitting a command that doesn't work is the inverse failure — the orchestrator should verify its own hint)
+  - **TASK-112** (\`aida queue work --resume\` — the unshipped feature whose flag leaked into a hint; when it ships, the \`--resume\` suggestion becomes valid)
+  - **TASK-218** (\`aida queue rework\` — the correct verb the phase-3+ hint should use)
+  - **BUG-226** (orchestrator end-of-phase messaging accuracy — same family)
+  - \`feedback_run_help_before_suggesting_flags.md\` (verify a flag exists before suggesting it — here the *tool itself* violates this in its own hint text)
 
   ## Origin
 
-  2026-05-18, TASK-277 (first-project walkthrough doc) batch:alpha-docs drain. Headless reviewer returned RequestChanges on PR-91 (3 output-block drifts). Orchestrator stopped at phase 3 and printed \`→ … aida queue work TASK-277 --branch task-277 --steal\`. User ran it verbatim; it errored \`TASK-277 isn't queued. Status is Done\`. The \`queue work\` error message itself supplied the correct command (\`aida queue rework TASK-277 --work --resume\`) — so the fix is just making the orchestrator's hint emit what already-correct guidance exists two layers down.
+  2026-05-18, TASK-277 batch:alpha-docs drain. Headless reviewer returned RequestChanges on PR-91. The user walked the full recovery chain — orchestrator hint → \`queue work\` error → \`queue rework\` error — and only the THIRD command (\`aida queue rework TASK-277 --work\`) actually ran. Filed (originally as just Defect A); broadened 2026-05-18 to the full chain after the user hit Defect B running BUG-236's own originally-suggested command.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T05:39:42.574770218Z
-modified_at: 2026-05-18T05:41:42.589166105Z
+modified_at: 2026-05-18T05:41:44.103886378Z
 req_type: Bug
 tags:
 - auto-complete
