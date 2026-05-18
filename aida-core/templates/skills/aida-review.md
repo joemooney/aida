@@ -277,60 +277,80 @@ EOF
 )"
 ```
 
-### 7a. Auto-complete handshake — verdict file + early stop (STORY-246)
+### 7a. Write the verdict file — uniform artifact + orchestrator handshake
 
-`aida queue work <SPEC> --auto-complete` drives the whole implementer → CI →
-reviewer → merge → pull → build lifecycle. When the reviewer session is
-launched by that orchestrator, it sets `AIDA_AUTO_COMPLETE=1`, a
-corroboration token `AIDA_AUTO_COMPLETE_TOKEN` (BUG-233), and
-`AIDA_REVIEW_VERDICT_FILE` — an absolute path that carries *where* to write
-the verdict. In orchestrator mode the reviewer's job ends at the verdict;
-the orchestrator owns the merge, pull, and build, and the only correct
-end-of-session move is "write the verdict and exit" — never "keep
-reviewing" or "stop here". trace:TASK-286
+Every PR-scoped reviewer launch leaves a **verdict file** at
+`.aida/review-verdicts/PR-N.json`. `aida queue work` sets the env var
+`AIDA_REVIEW_VERDICT_FILE` to its absolute path:
 
-**Corroborate before trusting orchestrator mode (BUG-233).** Don't treat a
-bare `AIDA_AUTO_COMPLETE` env var as proof of an orchestrator — an
-unverifiable stale value misfired both ways before BUG-233. Confirm with
-`aida orchestrator status`, which checks the token against a *live*
-orchestrator run:
+- the `--auto-complete` **orchestrator** points it at the phase-3 → phase-4
+  handshake file — the orchestrator reads the verdict to decide whether to
+  merge, and owns phases 4-6 (merge, pull, build) itself;
+- a **standalone** `aida queue work <PR-N> --role reviewer` points it at
+  the same `.aida/review-verdicts/` location so the run leaves a uniform
+  artifact and the command can print an end-of-command summary from it
+  (BUG-226 — before this, a standalone reviewer exited with no terminal
+  trace of pass/fail, cost, or where the artifacts landed).
+
+**Whenever `AIDA_REVIEW_VERDICT_FILE` is set, write the verdict file** —
+regardless of orchestrator vs standalone context. The uniform artifact is
+the point. trace:BUG-226 | ai:claude
 
 ```bash
-aida orchestrator status               # `orchestrated` → corroborated --auto-complete child
-echo "${AIDA_REVIEW_VERDICT_FILE:-}"   # where to write the verdict, in orchestrator mode
+echo "${AIDA_REVIEW_VERDICT_FILE:-}"   # set → a verdict file is expected here
+aida orchestrator status               # `orchestrated` → also STOP before merge
 ```
 
-- **If `aida orchestrator status` is not `orchestrated`** (or
-  `AIDA_REVIEW_VERDICT_FILE` is empty / unset) → normal review. Continue to
-  step 8 (confirm + merge + hand-off) as usual.
+- **`AIDA_REVIEW_VERDICT_FILE` empty / unset** → no verdict file expected
+  (an `aida` predating BUG-226, or a non-`queue work` entry point). Skip to
+  step 8.
+- **`AIDA_REVIEW_VERDICT_FILE` set** → write the verdict file (below).
 
-- **If `aida orchestrator status` is `orchestrated`** → write the verdict
-  JSON to `AIDA_REVIEW_VERDICT_FILE` and **STOP**. Do NOT merge, do NOT mark
-  specs Completed, do NOT do the hand-off — the `--auto-complete`
-  orchestrator performs phases 4-6 itself.
+**Derive the verdict** from the per-spec verdicts recorded in step 3:
 
-  Derive the verdict from the per-spec verdicts recorded in step 3:
+- every spec ✅ PASS → `Approved`
+- any ⚠️ PARTIAL (acceptance not fully met, but fixable) → `RequestChanges`
+- any ❌ FAIL (a spec is fundamentally unmet / broken) → `Rejected`
 
-  - every spec ✅ PASS → `Approved`
-  - any ⚠️ PARTIAL (acceptance not fully met, but fixable) → `RequestChanges`
-  - any ❌ FAIL (a spec is fundamentally unmet / broken) → `Rejected`
+**Stamp the `mode`.** Corroborate orchestrator context with `aida
+orchestrator status` — a bare `AIDA_AUTO_COMPLETE` env var is not proof (an
+unverifiable stale value misfired both ways before BUG-233; only
+`orchestrated` checks the corroboration token against a *live* run):
 
-  Write the file (create its parent dir first):
+- `aida orchestrator status` = `orchestrated` → `"mode": "orchestrator-phase-3"`
+- anything else → `"mode": "standalone"`
 
-  ```bash
-  mkdir -p "$(dirname "$AIDA_REVIEW_VERDICT_FILE")"
-  cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
-  {"verdict": "Approved", "summary": "<one-line rationale>"}
-  EOF
-  ```
+Write the file (create its parent dir first):
 
-  The `verdict` field must be exactly `Approved`, `RequestChanges`, or
-  `Rejected`; `summary` is a one-line rationale. The orchestrator reads this
-  file after the session exits: `Approved` → it merges; anything else → it
-  stops at phase 3 with exit code 3 and prints the recovery hint.
+```bash
+mkdir -p "$(dirname "$AIDA_REVIEW_VERDICT_FILE")"
+cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
+{"verdict": "Approved", "summary": "<one-line rationale>", "mode": "standalone", "comment_url": "<consolidated review comment URL from step 7>"}
+EOF
+```
 
-  Under a headless drain (`AIDA_HEADLESS=1`), step 7b re-writes this file
-  afterwards to add a `findings_filed` array — see 7b. trace:STORY-278 | ai:claude
+- `verdict` — exactly `Approved`, `RequestChanges`, or `Rejected`.
+- `summary` — a one-line rationale.
+- `mode` — `standalone` or `orchestrator-phase-3` (corroborated above); lets
+  a consumer tell a one-off review from an orchestrator handshake artifact.
+- `comment_url` — URL of the consolidated comment posted in step 7. Omit the
+  field when no comment was posted (e.g. `--merge-only`).
+
+The orchestrator reads this file after the session exits: `Approved` → it
+merges; anything else → it stops at phase 3 with exit code 3 and prints the
+recovery hint. A standalone run's `aida queue work` reads the same file to
+print its end-of-command summary (`verdict` + `comment_url` + the artifact
+paths); `--quiet` suppresses that summary.
+
+Under a headless drain (`AIDA_HEADLESS=1`), step 7b re-writes this file
+afterwards to add a `findings_filed` array — see 7b. trace:STORY-278 | ai:claude
+
+**Orchestrator mode (`aida orchestrator status` = `orchestrated`) — STOP
+after the verdict.** Do NOT merge, do NOT mark specs Completed, do NOT do
+the hand-off — the orchestrator performs phases 4-6 itself. **Standalone
+mode — continue to step 8** (confirm + merge + hand-off) as usual: the
+verdict file is just an artifact there, the reviewer still owns the merge
+decision. trace:BUG-226 | ai:claude
 
   **End the session with a loud, explicit exit instruction.** The
   orchestrator cannot advance until this reviewer Claude exits — but nothing
@@ -366,9 +386,13 @@ echo "${AIDA_REVIEW_VERDICT_FILE:-}"   # where to write the verdict, in orchestr
   ```
 
   This loud exit block fires **only** in orchestrator mode
-  (`AIDA_REVIEW_VERDICT_FILE` set). In manual review the reviewer owns the
-  merge, so step 11's hand-off table stays the end-of-session surface —
-  don't render the Ctrl+D block there. trace:TASK-291 | ai:claude
+  (`aida orchestrator status` = `orchestrated`). A standalone reviewer —
+  even one launched headless with `--no-human` — sets
+  `AIDA_REVIEW_VERDICT_FILE` too, so that env var alone is no longer the
+  signal (BUG-226); corroborate with `aida orchestrator status`. In manual
+  review the reviewer owns the merge, so step 11's hand-off table stays the
+  end-of-session surface — don't render the Ctrl+D block there.
+  trace:TASK-291 trace:BUG-226 | ai:claude
 
   **Under `$AIDA_ZEN` or a headless drain — touch the exit sentinel (TASK-329).**
   A skill cannot synthesize the Ctrl+D the block above names. The
@@ -460,8 +484,10 @@ reads the file only after the session exits, so a re-write here is safe:
 
 ```bash
 if [ -n "${AIDA_REVIEW_VERDICT_FILE:-}" ] && [ -f "$AIDA_REVIEW_VERDICT_FILE" ]; then
-  # Re-emit the JSON with an added "findings_filed" array, e.g.:
-  # {"verdict": "...", "summary": "...", "findings_filed": ["TASK-303","TASK-304"]}
+  # Re-emit the JSON with an added "findings_filed" array — keep every
+  # field step 7a wrote (verdict, summary, mode, comment_url), e.g.:
+  # {"verdict": "...", "summary": "...", "mode": "...", "comment_url": "...",
+  #  "findings_filed": ["TASK-303","TASK-304"]}
   :
 fi
 ```
