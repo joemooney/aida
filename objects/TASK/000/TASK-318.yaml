@@ -18,12 +18,12 @@ description: |
   author in the reviewer note as out of scope, worth a follow-up filing.
 
   Raised in review of PR-74: https://github.com/joemooney/aida/pull/74
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T19:51:17.579740126Z
-modified_at: 2026-05-17T23:59:19.337529247Z
+modified_at: 2026-05-18T00:10:21.754513940Z
 req_type: Task
 tags:
 - TASK-268
@@ -40,3 +40,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-17T23:57:13.268048431Z
   implemented_by: joe
+  completed_at: 2026-05-18T00:10:21.754513940Z
+  completion_sha: 56f5d5ae90bb5108bd053dfd96cf704ad9937cc1
