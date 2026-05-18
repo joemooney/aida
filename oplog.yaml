@@ -7246,5 +7246,13 @@ operations:
       ## Origin
 
       2026-05-18: across a long advisor session, the same recovery work recurred ad-hoc ~6+ times — stale leases, orchestrator/reality divergence (BUG-241), scaffold drift, leaked env vars, wrong recovery hints. The advisor re-derived the diagnosis each time. User: *"is there an \`aida doctor\` command that can come to the rescue?"* → on learning \`aida doctor\` is store-integrity-only: *"maybe instead of a command we need a skill for the advisor?"* → then the load-bearing refinement: *"does a user of aida need to concern themselves with it, or will it be employed by an advisor role when the need arises?"* — establishing that auto-invocation (not user-memorized) is a hard requirement. This session's manual recoveries ARE the playbook's initial content.
-clock: 791
+- id: 019e3b9f-b600-7d13-8ddd-5394afe3fcef
+  target_id: 019e3b9b-9871-7823-a111-8719be7f1cfa
+  author: aida
+  node_id: '1'
+  lamport: 792
+  timestamp: 2026-05-18T15:06:23.104723456Z
+  kind: !SetStatus
+    status: In Progress
+clock: 792
 node_id: '1'
