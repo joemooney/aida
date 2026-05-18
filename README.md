@@ -15,6 +15,23 @@ fn validate_token(token: &str) -> Result<Session> { ... }
 
 Every line of code links back to a requirement. Every commit references what it implements. The MCP server exposes the whole graph to any agent.
 
+## What makes AIDA distinct
+
+<!-- trace:TASK-289 | ai:claude -->
+
+Most agent-collaboration tooling is a queue, a swarm orchestrator, or a one-shot planning prompt. AIDA is the durable graph of *what exists and why* — eight dimensions of a niche no single-purpose tool occupies:
+
+1. **Spec graph as the backbone** — typed relationships (parent, blocks, relates-to) drive coordination, not a flat queue or an agent swarm.
+2. **Identity stability** — `TASK-289` is `TASK-289` forever; the ID survives years, releases, and refactors, so trace comments never rot.
+3. **Trace-comment enforcement** — code knows its spec and specs know their code; `// trace:TASK-289` is a checked link, not a decorative note.
+4. **Discipline-first** — AIDA scaffolds the vocabulary, workflow patterns, and starter memories alongside the tools, so a project inherits the habits.
+5. **Lifecycle-based roles** — implementer, reviewer, and advisor are distinct seats with deterministic handoffs, not one agent wearing every hat.
+6. **Trojan-horse surface** — simple on first sight (a TUI over Claude Code sessions); the depth — graph, IDs, traces, MCP — compounds through use.
+7. **Git-native** — per-session worktree isolation, orphan-branch storage for the graph, trace comments in source; no external database, no SaaS account.
+8. **Single-user-first** — built for solo developers and small teams, not enterprise federation; the whole graph lives in your repo.
+
+For deeper positioning vs specific tools, see [`docs/positioning/`](docs/positioning/README.md).
+
 ## Spec lifecycle
 
 <!-- trace:TASK-273 | ai:claude -->
