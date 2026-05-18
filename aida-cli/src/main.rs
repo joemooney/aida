@@ -10649,6 +10649,22 @@ fn append_session_activity(
     save_session_activity(project_root, session_id, &log)
 }
 
+/// BUG-112: the most-recent spec a session lease touched, read from its
+/// session activity log. `entries` are newest-first, so the head entry's
+/// `spec_id` is the session's current focus. `None` when the log is empty
+/// or absent. Used by `aida session list`'s RECENT FOCUS column.
+/// trace:BUG-112 | ai:claude
+pub(crate) fn session_log_recent_spec(
+    project_root: &std::path::Path,
+    lease_id: &str,
+) -> Option<String> {
+    load_session_activity(project_root, lease_id)
+        .entries
+        .into_iter()
+        .next()
+        .map(|e| e.spec_id)
+}
+
 /// STORY-57: queue routing filter. Returns true if `entry`'s scope/session
 /// routing tags are compatible with the consumer side (the shell calling
 /// `queue list` / `queue next`).

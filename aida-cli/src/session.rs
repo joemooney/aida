@@ -42,6 +42,14 @@ pub struct SessionMeta {
     /// not a repo, etc.).
     /// trace:STORY-59 | ai:claude
     pub branch: Option<String>,
+    /// Most-recent spec this session worked — the RECENT FOCUS column.
+    /// Filled by `fill_recent_focus` from AIDA's per-session activity log
+    /// (newest-first) with the manifest's planned items as fallback. None
+    /// when AIDA never tracked the session (renders `-`). Distinct from
+    /// `spec`, which stays the *first*-mentioned (launch) spec — together
+    /// they show the session's spec evolution.
+    /// trace:BUG-112 | ai:claude
+    pub recent_focus: Option<String>,
 }
 
 /// STORY-59: liveness inferred from activity recency. Visual indicator
@@ -110,6 +118,8 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     fill_branches(&mut parent);
     normalize_specs(&mut here);
     normalize_specs(&mut parent);
+    fill_recent_focus(&mut here);
+    fill_recent_focus(&mut parent);
 
     // STORY-58: when there's nothing to merge, render the classic single
     // table — keep the existing one-group output untouched. Only switch
@@ -143,15 +153,16 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
             .dimmed()
         );
     }
-    // TASK-236: Claude Code fixes the session title at conversation
-    // start and never updates it — for a long-running session the
-    // INITIAL TOPIC column drifts far from current work. Tell the
-    // reader so they identify a session by SPEC + AGE, not the title.
-    // trace:TASK-236 | ai:claude
+    // BUG-112: RECENT FOCUS replaced the old INITIAL TOPIC column. It
+    // tracks the latest spec each session worked (AIDA's per-session
+    // activity log, newest-first) so it stays current as work moves,
+    // instead of drifting like the conversation-start title did. A `-`
+    // means AIDA isn't tracking a spec for that session.
+    // trace:BUG-112 | ai:claude
     eprintln!(
         "{}",
-        "(INITIAL TOPIC is set once at session start; long sessions evolve beyond it — \
-         identify a session by SPEC + AGE)"
+        "(RECENT FOCUS is the latest spec a session worked — it updates as work moves; \
+         `-` = no spec tracked)"
             .dimmed()
     );
     print_leases_hint();
@@ -242,6 +253,66 @@ fn normalize_specs_with_store(sessions: &mut [SessionMeta], store: &aida_core::R
     }
 }
 
+/// BUG-112: populate `recent_focus` — the most-recent spec each session
+/// worked, for the RECENT FOCUS column. Joins each Claude session to its
+/// AIDA manifest on `claude_session_id`, then reads the session activity
+/// log for the live "current spec", falling back to the manifest's most
+/// recently picked-up planned item. Sessions AIDA never tracked keep
+/// `recent_focus = None` and render `-` — absent signal, not the
+/// misleading stale title BUG-112 set out to remove.
+/// trace:BUG-112 | ai:claude
+fn fill_recent_focus(sessions: &mut [SessionMeta]) {
+    if sessions.is_empty() {
+        return;
+    }
+    let Ok(root) = crate::find_project_root() else {
+        return;
+    };
+    let manifests = crate::session_manifest::list_all(&root);
+    if manifests.is_empty() {
+        return;
+    }
+    for s in sessions.iter_mut() {
+        // The manifest's `claude_session_id` is the only reliable join
+        // back to a Claude session — lease ids and Claude UUIDs are
+        // distinct id spaces. trace:TASK-112 | ai:claude
+        let Some(manifest) = manifests
+            .iter()
+            .find(|m| m.claude_session_id.as_deref() == Some(s.id.as_str()))
+        else {
+            continue;
+        };
+        let activity_recent = crate::session_log_recent_spec(&root, &manifest.session_id);
+        s.recent_focus = recent_focus_from(manifest, activity_recent.as_deref());
+    }
+}
+
+/// BUG-112: the store-pure half of [`fill_recent_focus`] — derive the
+/// RECENT FOCUS value from a session's manifest plus the optional
+/// most-recent spec from its activity log. The activity log is the live
+/// signal (actual `aida` spec interactions, newest-first); the manifest's
+/// most recently picked-up planned item — latest `started_at`, else
+/// highest `position` — is the fallback. Split out so the precedence is
+/// unit-testable without a project on disk. trace:BUG-112 | ai:claude
+fn recent_focus_from(
+    manifest: &crate::session_manifest::SessionManifest,
+    activity_recent: Option<&str>,
+) -> Option<String> {
+    if let Some(spec) = activity_recent {
+        return Some(spec.to_string());
+    }
+    manifest
+        .items
+        .iter()
+        .max_by(|a, b| match (a.started_at, b.started_at) {
+            (Some(x), Some(y)) => x.cmp(&y),
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (None, None) => a.position.cmp(&b.position),
+        })
+        .map(|it| it.spec_id.clone())
+}
+
 #[cfg(test)]
 mod normalize_specs_tests {
     use super::*;
@@ -256,6 +327,7 @@ mod normalize_specs_tests {
             started_at: None,
             last_cwd: None,
             branch: None,
+            recent_focus: None,
         }
     }
 
@@ -966,6 +1038,7 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
         started_at,
         last_cwd,
         branch: None,
+        recent_focus: None,
     })
 }
 
@@ -1111,7 +1184,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             "ROLE",
             "SPEC",
             "WORKTREE",
-            "INITIAL TOPIC",
+            "RECENT FOCUS",
             id_w = w.id_w,
             age_w = w.age_w,
             role_w = w.role_w,
@@ -1126,7 +1199,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
         let age = humanize_age(s.age_seconds);
         let role = s.role.as_deref().unwrap_or("-");
         let spec = s.spec.as_deref().unwrap_or("-");
-        let title = s.title.as_deref().unwrap_or("(untitled)");
+        let focus = s.recent_focus.as_deref().unwrap_or("-");
         let worktree =
             format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), w.worktree_w);
         let live = liveness_indicator(s.age_seconds);
@@ -1145,7 +1218,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             role.yellow(),
             spec.cyan(),
             worktree.cyan(),
-            title.dimmed(),
+            focus.cyan(),
             id_w = w.id_w,
             age_w = w.age_w,
             role_w = w.role_w,
@@ -1198,6 +1271,7 @@ fn pick_interactive(limit: usize) -> Result<String> {
         anyhow::bail!("no past sessions in this directory");
     }
     fill_branches(&mut sessions);
+    fill_recent_focus(&mut sessions);
     let labels: Vec<String> = sessions
         .iter()
         .map(|s| {
@@ -1209,7 +1283,7 @@ fn pick_interactive(limit: usize) -> Result<String> {
                 s.role.as_deref().unwrap_or("-"),
                 s.spec.as_deref().unwrap_or("-"),
                 format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), 24),
-                s.title.as_deref().unwrap_or("(untitled)"),
+                s.recent_focus.as_deref().unwrap_or("-"),
             )
         })
         .collect();
@@ -1276,6 +1350,75 @@ pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// BUG-112: build a manifest with `(spec, position, started_at)` items
+    /// for the RECENT FOCUS precedence tests.
+    fn manifest_with(
+        items: &[(&str, u32, Option<chrono::DateTime<chrono::Utc>>)],
+    ) -> crate::session_manifest::SessionManifest {
+        use crate::session_manifest::{ManifestItem, SessionManifest};
+        SessionManifest {
+            session_id: "lease01".to_string(),
+            planned_at: chrono::Utc::now(),
+            plan_source: "test".to_string(),
+            claude_session_id: None,
+            batch_name: None,
+            plan: None,
+            items: items
+                .iter()
+                .map(|(spec, pos, started)| ManifestItem {
+                    spec_id: spec.to_string(),
+                    position: *pos,
+                    status_at_plan: "Approved".to_string(),
+                    started_at: *started,
+                    completed_at: None,
+                    note: None,
+                })
+                .collect(),
+        }
+    }
+
+    /// BUG-112: the activity log is the live signal — its most-recent
+    /// spec wins over the manifest's planned items.
+    #[test]
+    fn recent_focus_prefers_activity_log_over_manifest() {
+        let m = manifest_with(&[("STORY-1", 1, None)]);
+        assert_eq!(
+            recent_focus_from(&m, Some("BUG-9")).as_deref(),
+            Some("BUG-9")
+        );
+    }
+
+    /// BUG-112: with no activity log, fall back to the most recently
+    /// picked-up planned item — latest `started_at`, else highest
+    /// `position`, and a started item always outranks an unstarted one.
+    #[test]
+    fn recent_focus_falls_back_to_latest_manifest_item() {
+        let early: chrono::DateTime<chrono::Utc> = "2026-05-17T10:00:00Z".parse().unwrap();
+        let late: chrono::DateTime<chrono::Utc> = "2026-05-17T12:00:00Z".parse().unwrap();
+        let by_time = manifest_with(&[("TASK-1", 1, Some(early)), ("TASK-2", 2, Some(late))]);
+        assert_eq!(recent_focus_from(&by_time, None).as_deref(), Some("TASK-2"));
+
+        let by_position = manifest_with(&[("TASK-3", 1, None), ("TASK-4", 2, None)]);
+        assert_eq!(
+            recent_focus_from(&by_position, None).as_deref(),
+            Some("TASK-4")
+        );
+
+        let started_beats_unstarted =
+            manifest_with(&[("TASK-5", 1, Some(early)), ("TASK-6", 9, None)]);
+        assert_eq!(
+            recent_focus_from(&started_beats_unstarted, None).as_deref(),
+            Some("TASK-5")
+        );
+    }
+
+    /// BUG-112: a manifest with no items yields no focus → renders `-`.
+    #[test]
+    fn recent_focus_none_for_empty_manifest() {
+        let m = manifest_with(&[]);
+        assert_eq!(recent_focus_from(&m, None), None);
+    }
 
     #[test]
     fn extract_str_basic() {
