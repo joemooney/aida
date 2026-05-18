@@ -1,0 +1,73 @@
+id: 019e3b94-3579-7e52-a853-ba0a86e39525
+spec_id: STORY-316
+agreed_id: STORY-316
+title: /aida-recover skill — advisor diagnostic playbook for session/orchestrator/runtime-state divergence
+description: |-
+  AIDA's runtime/session/orchestrator state can **diverge from reality** or get **stuck**, and there is no diagnostic playbook — the advisor (and the user) recover ad-hoc, re-deriving the same diagnosis every time. \`aida doctor\` exists but covers **store-graph integrity only** (blocks, collisions, dangling relationships, dead trace comments) — NOT the problem class that actually bites: leases, worktrees, the orchestrator, scaffold, env vars.
+
+  Solution: a **\`/aida-recover\`** advisor skill — a diagnostic playbook. When something looks wrong: gather evidence, interpret against known divergence patterns, recommend or execute recovery (conservative — explain + do the safe fixes, escalate the risky ones).
+
+  Skill, not command, deliberately: recovery here needs *reasoning* (cross-reference sources, interpret a divergence, decide a report is false, derive the fix) — a CLI command can't apply judgment; an advisor agent running a playbook can. The skill *uses* mechanical commands as its senses.
+
+  ## The playbook (MVP — the divergence patterns THIS session surfaced)
+
+  Each entry: symptom → evidence commands → interpretation → recovery.
+
+  1. **Orchestrator reports a phase failure** → `aida show <spec>` + `gh pr view <N>` → if spec is Completed + PR merged → **false failure** (BUG-241 class); the work shipped, advance. If both confirm failure → real.
+  2. **Stale lease blocking work** ("scope X owned by lease Y") → `aida session leases` → if the lease's session is dead → `aida session end <id> --yes --force`.
+  3. **Orphaned worktree / cwd gone** → `git worktree list` + `aida session prune --orphans`.
+  4. **Scaffold drift** (\`Unknown command: /aida-*\`, stale command set) → compare `.claude/commands` count + content against `aida-core/templates/`; refresh; **restart the session** (slash-command registries are session-start snapshots — resumed sessions never re-scan).
+  5. **Leaked autonomy env vars** (AIDA_ZEN / AIDA_AUTO_COMPLETE / AIDA_REVIEW_VERDICT_FILE / AIDA_EXIT_SENTINEL set with no live orchestrator) → `env | grep AIDA` → `unset` the stale ones; re-run with explicit flags.
+  6. **Cache staleness** → `aida cache status` → `aida cache rebuild`.
+  7. **Wrong recovery hint** (a tool suggests a command that errors) → check the spec's status; \`queue work\` for queued/in-progress, \`queue rework\` for Done (BUG-236 class).
+  8. **Spec stuck Done after merge** (auto-bump missed) → `aida db reconcile-status --spec <ID>`.
+
+  The skill leads with the **"check reality first"** discipline: tool runtime reports are derived/fallible; `aida show` (store) + `gh pr view` (GitHub) are ground truth; when they disagree, ground truth wins.
+
+  ## Acceptance
+
+  - [ ] \`/aida-recover\` skill + matching \`.claude/commands/\` command, scaffolded from \`aida-core/templates/skills/\`
+  - [ ] The skill is a structured playbook: per pattern — symptom, evidence commands, interpretation rule, recovery (with the safe-to-auto vs escalate-to-human split explicit)
+  - [ ] The skill leads with "check reality first" and the ground-truth-wins principle
+  - [ ] Conservative posture: the skill executes only **safe, reversible** recoveries automatically (cache rebuild, stale-lease end, orphan prune); risky ones (anything discarding work, force operations on dirty trees) it explains + asks
+  - [ ] The skill composes existing primitives (`aida doctor fsck`, `aida session leases`, `aida status`, `aida cache status`, `gh pr view`, STORY-301 drain-state) — it does not reimplement them
+  - [ ] Playbook is extensible — a clear "add a new pattern" section so it grows as new divergence classes appear
+  - [ ] Named `/aida-recover` (NOT `/aida-doctor` — avoid colliding with the store-integrity command)
+  - [ ] Ships in the scaffolding pack — generic discipline, every AIDA project benefits
+
+  ## Out of scope
+
+  - **Replacing `aida doctor`** — that's store-integrity; `/aida-recover` is session/runtime state. Siblings, not overlap. `/aida-recover` may *call* `aida doctor fsck` as one evidence source.
+  - **A daemon / continuous monitor** — the skill is invoked on demand when something looks wrong; no background process
+  - **Auto-fixing everything silently** — conservative-by-design; surface + recommend, auto-execute only the safe reversible fixes
+  - **New mechanical primitive commands** — the MVP uses what exists; if the playbook surfaces a genuine gap (e.g. a single "lease-vs-reality" check), file that as a follow-up, don't bundle it
+
+  ## Composes with
+
+  - **\`aida doctor\`** (store-integrity sibling — `/aida-recover` covers the other half: runtime/session state; the skill calls `doctor fsck` as evidence)
+  - **STORY-301** (drain-state file — a key evidence source for "is the orchestrator's report real?")
+  - **BUG-241** (orchestrator false-failure — pattern 1 of the playbook; even once BUG-241 is fixed, divergences happen and the skill is the human-facing recovery path)
+  - **BUG-236** (wrong recovery hints — pattern 7)
+  - **BUG-233 / BUG-237** (env-var provenance — pattern 5)
+  - \`feedback_dialog_role_responsibilities.md\` (recovery/diagnosis is a natural extension of the advisor's responsibilities)
+  - \`feedback_verify_before_filing.md\` + \`feedback_precise_lifecycle_vocabulary.md\` (the "check reality / ground-truth-wins" discipline the skill leads with)
+  - \`feedback_propagate_generic_discipline_via_scaffolding.md\` (the skill is generic discipline → scaffolding pack)
+
+  ## Origin
+
+  2026-05-18: across a long advisor session, the same recovery work recurred ad-hoc ~6+ times — stale leases, orchestrator/reality divergence (BUG-241), scaffold drift, leaked env vars, wrong recovery hints. The advisor re-derived the diagnosis each time. User: *"is there an `aida doctor` command that can come to the rescue for problem cases?"* — then, on learning `aida doctor` is store-integrity-only: *"maybe instead of a command we need a skill for the advisor?"* Correct instinct — the rescue is diagnostic reasoning, which is a skill's domain, not a command's. This session's manual recoveries ARE the playbook's initial content.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T14:53:49.305129956Z
+modified_at: 2026-05-18T14:53:49.305129956Z
+req_type: Story
+tags:
+- advisor-skill
+- alpha-readiness
+- diagnostics
+- orchestrator
+- recovery
+- scaffolding-pack
+- session-state
