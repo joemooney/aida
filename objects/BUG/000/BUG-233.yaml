@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:38.878522976Z
-modified_at: 2026-05-18T07:22:04.083748923Z
+modified_at: 2026-05-18T07:22:21.898972153Z
 req_type: Bug
 tags:
 - auto-complete
@@ -89,6 +89,13 @@ comments:
   content: 'Implemented (commit 19120f17). Corroboration token: orchestrator mints a per-run UUID, holds an RAII marker .aida/orchestrator-runs/<uuid> recording its PID, passes AIDA_AUTO_COMPLETE_TOKEN to every phase child. Children/skills corroborate via `aida orchestrator status` (orchestrated|interactive); queue work prints an informational note for a bare var with no live token. AC4 note: no ''stray export leak'' warning path existed in code or templates — it was the BUG-228 implementer''s ad-hoc message, never committed; satisfied by verified absence. 16 new unit tests; plan at docs/plans/2026-05-18-bug-233-orchestrator-corroboration-token.md.'
   created_at: 2026-05-18T07:21:59.767864973Z
   modified_at: 2026-05-18T07:21:59.767864973Z
+- id: 019e39f6-e4e9-7671-85e6-6785976c745c
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-18-bug-233-orchestrator-corroboration-token.md
+    filed 2 task(s): TASK-334, TASK-335
+  created_at: 2026-05-18T07:22:22.313957071Z
+  modified_at: 2026-05-18T07:22:22.313957071Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T07:22:04.083748923Z
