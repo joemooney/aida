@@ -1,0 +1,26 @@
+id: 019e3956-6bab-7313-8625-9fb6c9de8629
+spec_id: STORY-309
+agreed_id: STORY-309
+title: 'Review PR-88: docs(readme): spec-lifecycle flow diagram + State/Verb table (TASK-273)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3950`) for branch `task-273`.
+
+  - PR: <https://github.com/joemooney/aida/pull/88>
+  - Branch: `task-273` → `main`
+
+  ## Covers
+
+  - TASK-273
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 88` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T04:27:05.515952275Z
+modified_at: 2026-05-18T04:27:05.515952275Z
+req_type: Story
