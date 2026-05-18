@@ -103,12 +103,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16 after the dialog-role \"ship\" vocabulary correction: *\"I think a flow diagram added to the documentation, maybe the readme with all the verbs commands etc. would help. I really like your State/Verb table, maybe add that also, it helps people unfamiliar with git terminology.\"*
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:49:41.734450590Z
-modified_at: 2026-05-18T04:21:15.220499303Z
+modified_at: 2026-05-18T04:25:28.829679128Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -145,3 +145,7 @@ comments:
     User asked 2026-05-16: *\"what does auto-bump mean?\"* — confirmed it's vocabulary that needs explicit definition in user-facing docs, not just implementation-detail handwaved in conversation.
   created_at: 2026-05-16T20:22:20.417092233Z
   modified_at: 2026-05-16T20:22:20.417092233Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-18T04:25:28.829679128Z
+  implemented_by: joe
