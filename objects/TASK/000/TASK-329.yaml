@@ -1,0 +1,133 @@
+id: 019e3869-0dd0-7ed2-a7cb-aebae046e99e
+spec_id: TASK-329
+agreed_id: TASK-329
+title: 'Orchestrator graceful-exit signal: skill touches sentinel file, orchestrator reaps the Claude Code REPL'
+description: |-
+  Close BUG-230 (\`--zen\` can't synthesize EOF to close the Claude Code REPL in interactive mode) via a **graceful exit signal mechanism**: the skill, as its absolute last action, touches a sentinel file under \`.aida/sessions/\`; the orchestrator (which already owns the child PID via \`std::process::Command\`) polls for it and reaps the subprocess.
+
+  Designed to be a **reusable primitive**: same pattern extends to STORY-287's deferred \`--no-human\` punt case (different sentinel name, structured body), and potentially future skill-to-orchestrator signaling. Don't over-design for the future consumers — just leave the protocol clean enough to extend.
+
+  ## Mechanism
+
+  ### Skill side (last action of orchestrator-driven flows)
+
+  In \`/aida-pickup\`, \`/aida-implement\`, \`/aida-pr\`, \`/aida-review\` skill templates — when running under \`--auto-complete\` + \`--zen\` (or in future, \`--no-human\`):
+
+  After all real work completes (commits made, PR opened, push done, comments filed, verdict written), the skill's final Bash invocation is:
+
+  \`\`\`bash
+  touch \"$AIDA_SESSION_DIR/<session-id>.exit-requested\"
+  \`\`\`
+
+  This is the equivalent of saying \"I'm done, kill me.\" The skill then prints its end-of-drain summary and stops responding (Claude effectively goes idle). The REPL waits at \`❯\` as today — but only briefly, because the orchestrator's poll fires within milliseconds.
+
+  ### Orchestrator side (replace blocking \`.status()\`)
+
+  Today: \`cmd.status()\` blocks until the child exits naturally.
+
+  Change to:
+
+  \`\`\`rust
+  let mut child = cmd.spawn()?;
+  loop {
+      // Check 1: did the child exit naturally?
+      if let Some(status) = child.try_wait()? {
+          cleanup_sentinel(&session_id);  // best-effort, may not exist
+          return Ok(status);
+      }
+      // Check 2: did the skill ask to be reaped?
+      if sentinel_path(&session_id).exists() {
+          // Grace period: send SIGTERM, wait briefly for natural exit
+          let _ = child.kill_with_signal(SIGTERM);
+          for _ in 0..GRACE_MS / POLL_MS {
+              if let Some(status) = child.try_wait()? {
+                  cleanup_sentinel(&session_id);
+                  return Ok(status);
+              }
+              sleep(POLL_MS);
+          }
+          // SIGKILL fallback
+          let _ = child.kill();
+          let status = child.wait()?;
+          cleanup_sentinel(&session_id);
+          return Ok(status);
+      }
+      sleep(POLL_MS);  // ~100ms; tight enough to feel instant, loose enough to avoid CPU spin
+  }
+  \`\`\`
+
+  \`AIDA_SESSION_DIR\` env var (already set by \`aida queue work\`) tells the skill where to write the sentinel.
+
+  ### Process-group semantics
+
+  Claude Code may spawn child processes (bash tool, language servers). \`child.kill()\` on the immediate child must propagate to the process group so descendants don't leak. On Unix: use \`setsid\` when spawning OR send \`SIGTERM\` to \`-pgid\`. On Windows: Rust's \`Child::kill()\` calls \`TerminateProcess\` which doesn't naturally cascade — needs explicit job-object handling or process-tree walking.
+
+  ## Acceptance
+
+  ### Mechanism
+
+  - [ ] Orchestrator (\`RealPhaseDriver::run_implementer\` and \`run_reviewer\` in \`aida-cli/src/main.rs:45015\`+) switches from \`cmd.status()\` to \`cmd.spawn()\` + polling loop
+  - [ ] Sentinel path convention: \`\$AIDA_SESSION_DIR/<session-id>.exit-requested\` (matches existing \`.aida/sessions/<session-id>.toml\` pattern; sibling file)
+  - [ ] Polling interval: ~100ms (configurable via \`AIDA_EXIT_POLL_MS\`; default tight enough to feel instant)
+  - [ ] Grace period: SIGTERM first, then SIGKILL after 2s (configurable via \`AIDA_EXIT_GRACE_MS\`)
+  - [ ] Cleanup: orchestrator removes sentinel after reap (so a re-run doesn't see stale state)
+  - [ ] Process-group / job-object handling: Unix uses \`setsid\` + signal to \`-pgid\`; Windows uses job object (or explicit tree-walk fallback)
+  - [ ] Failure mode: skill never touches sentinel → existing \`child.wait()\` path still works; sentinel is additive, not a replacement
+  - [ ] Race: sentinel appears between poll and \`try_wait\` returning Ready → one final \`exists()\` check on the post-exit path
+
+  ### Skill template wiring
+
+  - [ ] \`/aida-pickup\` skill: under \`--auto-complete\` + \`--zen\` (or \`--no-human\`), end-of-drain Bash invocation is \`touch \$AIDA_SESSION_DIR/<session-id>.exit-requested\`
+  - [ ] Same wiring on \`/aida-implement\`, \`/aida-pr\`, \`/aida-review\` for symmetry
+  - [ ] Annotation reflects new behavior: \`↳ zen: auto-resolved \"next step\" → ⇒ Exit — orchestrator will reap in ~100ms\` (replaces the BUG-230 Fix A \"send EOF when ready\" phrasing)
+  - [ ] Sentinel touch is the **absolute last action** — after commits, PR open, push, comment filing, verdict write. Any work after the touch is racy and may be killed mid-flight.
+
+  ### Tests
+
+  - [ ] Integration test: orchestrator spawns a mock subprocess that touches the sentinel after N seconds; orchestrator reaps within grace + polling window
+  - [ ] Integration test: mock subprocess exits naturally without touching sentinel → existing path; sentinel-cleanup attempt is a no-op
+  - [ ] Integration test: mock subprocess touches sentinel + immediately exits → race window handled (one final exists() check)
+  - [ ] Integration test: SIGTERM doesn't kill within grace → SIGKILL fires
+  - [ ] Cross-platform: Unix process-group cascade test; Windows job-object test (or skip on Windows with a clear feature gate if not supported in v1)
+
+  ### Documentation
+
+  - [ ] \`docs/autonomous-drain.md\` updates the --zen row's friction-after cell: \"Friction after: near zero in interactive mode; orchestrator reaps the REPL within ~100ms of skill completion\"
+  - [ ] \`docs/aida-discipline/skill-prompt-kinds.md\` notes the sentinel mechanism + the \"sentinel is the absolute last action\" rule for skill authors
+  - [ ] Comment block in the orchestrator code naming the protocol + sentinel path convention
+
+  ## Out of scope
+
+  - **Generalized signal channel** (multiple message types, JSON bodies, etc.) — over-engineered for v1. Punt case (STORY-287) will extend with a different filename (\`.punt-requested\`) + body when it lands, but only build that when needed.
+  - **Bidirectional channel** (orchestrator signals skill) — different problem; not in this TASK's lane
+  - **Replace process-spawn with embedded Claude library** — fundamentally different architecture, way out of scope
+  - **Sentinel path under a different root** (e.g., \`/tmp\`, XDG dirs) — \`.aida/sessions/\` is already the session-state directory; staying there keeps semantics tight
+
+  ## Composes with
+
+  - **BUG-230** (the original problem — closes when this TASK ships; Fix A.5 supersedes Fix A's honest-annotation reframing)
+  - **STORY-287** (--zen mode shipped; this TASK closes the residual EOF gap)
+  - **STORY-276** (headless implementer — orthogonal: STORY-276 eliminates the REPL entirely; this TASK reaps the REPL when one exists. Both paths can coexist.)
+  - **TASK-326** (JSONL auto-resolve logging — should log \"sentinel touched / orchestrator reaping\" for observability)
+  - \`feedback_precise_lifecycle_vocabulary.md\` (\"touch sentinel → reaped\" is the precise verb sequence; don't say \"exits\" until the reap completes)
+
+  ## Origin
+
+  2026-05-17 user observation during TASK-318 --zen validation drain. The implementer's auto-resolved \"Exit\" annotation printed but the Claude Code REPL stayed open, blocking the orchestrator. User proposed: *\"we could touch a file or something and the other bash/rust program could kill the process and move along?\"*
+
+  That's a standard graceful-exit-signal pattern. This TASK builds it for the EXIT case; the same primitive extends to STORY-287's deferred --no-human punt case later as a second consumer. Don't generalize on speculation — ship EXIT, extend when punt-case work picks up the thread.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T00:07:49.456346316Z
+modified_at: 2026-05-18T00:07:49.456346316Z
+req_type: Task
+tags:
+- blocks:BUG-230
+- exit-signal
+- from-self-test:TASK-318
+- orchestrator
+- sentinel-file
+- subprocess-management
+- zen-mode
