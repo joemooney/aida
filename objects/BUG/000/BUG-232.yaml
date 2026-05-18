@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T01:01:37.117971412Z
+modified_at: 2026-05-18T01:32:01.075571300Z
 req_type: Bug
 tags:
 - end-of-session
@@ -75,3 +75,9 @@ tags:
 - no-orchestrator
 - unopened-pr
 - zen-mode
+comments:
+- id: 019e38b6-22b3-7f21-b71e-29b3303ddca2
+  author: joe
+  content: 'Root-cause revision 2026-05-18: BUG-233 (AIDA_AUTO_COMPLETE leaks into interactive shells) is likely the TRUE trigger of this BUG''s symptom. The TASK-264 session almost certainly inherited a stale `AIDA_AUTO_COMPLETE=1` from the user''s shell — so it believed it was orchestrator-driven, suppressed the menu, and tried to ''exit for the orchestrator'' that didn''t exist. The symptom wasn''t ''plain --zen without --auto-complete'' — it was ''--zen with a LYING AIDA_AUTO_COMPLETE''. BUG-232''s fix (gate menu-suppression on AIDA_AUTO_COMPLETE) is still valid BUT must key off the *corroborated* signal from BUG-233 (per-run token verifying a live orchestrator parent), not the bare env var. BUG-232 now depends on BUG-233''s corroboration mechanism.'
+  created_at: 2026-05-18T01:32:01.075571300Z
+  modified_at: 2026-05-18T01:32:01.075571300Z
