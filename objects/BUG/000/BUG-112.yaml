@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:42:58.758955507Z
-modified_at: 2026-05-18T00:30:08.165736604Z
+modified_at: 2026-05-18T00:30:18.795321683Z
 req_type: Bug
 tags:
 - alpha-readiness
@@ -86,6 +86,14 @@ relationships:
 - rel_type: Parent
   target_id: 019e387d-8b70-7dc0-82f9-096a1b725506
   created_at: 2026-05-18T00:30:16.449848126Z
+comments:
+- id: 019e387d-a62d-7b53-a78b-29012a58b4aa
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-17-bug-112-recent-focus.md
+    filed 1 task(s): TASK-330
+  created_at: 2026-05-18T00:30:19.181842444Z
+  modified_at: 2026-05-18T00:30:19.181842444Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T00:30:08.165736604Z
