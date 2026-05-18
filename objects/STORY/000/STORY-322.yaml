@@ -1,0 +1,26 @@
+id: 019e3c00-aab7-7622-bd71-ff4babb23c33
+spec_id: STORY-322
+agreed_id: STORY-322
+title: 'Review PR-99: fix(queue): recognize pr-N reviewer-snapshot branches in in-flight display (BUG-229)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3bf7`) for branch `bug-229`.
+
+  - PR: <https://github.com/joemooney/aida/pull/99>
+  - Branch: `bug-229` → `main`
+
+  ## Covers
+
+  - BUG-229
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 99` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T16:52:17.207767346Z
+modified_at: 2026-05-18T16:52:17.207767346Z
+req_type: Story
