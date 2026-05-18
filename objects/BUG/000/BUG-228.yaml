@@ -39,12 +39,12 @@ description: |-
   ## Origin
 
   2026-05-17 TASK-269 pickup, mid-batch:display-polish drain. Implementer flagged the issue while orienting; routed to dialog (me) via the conversational housekeeping channel rather than the (not-yet-built) STORY-285 persistence layer. Once STORY-285 ships, this kind of incidental find files automatically under \`from-implementer:SPEC-ID + kind:bug-spotted\` without a dialog intermediary.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:18:31.593593468Z
-modified_at: 2026-05-18T01:27:20.805265004Z
+modified_at: 2026-05-18T01:27:46.694360613Z
 req_type: Bug
 tags:
 - activity-log
@@ -108,3 +108,7 @@ comments:
     1 stray fragment quarantined, all 10 activity entries preserved).
   created_at: 2026-05-18T01:27:20.805265004Z
   modified_at: 2026-05-18T01:27:20.805265004Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-18T01:27:46.694360613Z
+  implemented_by: joe
