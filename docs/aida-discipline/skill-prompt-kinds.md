@@ -105,6 +105,65 @@ operative mode and design-forks always pause.
   skills are a follow-up.
 - `docs/autonomous-drain.md` — the three-mode table + when to use each.
 
+## The orchestrator exit signal (TASK-329)
+
+A `kind:confirmation` prompt under `--zen` auto-resolves to option 1 — but
+when that option is *"exit the session"*, the skill hits a wall. The
+`aida queue work --auto-complete` orchestrator launches each Claude phase as
+a subprocess and waits for it to exit. In interactive mode the user presses
+Ctrl+D; a skill **cannot synthesize that EOF** from inside its own session
+(BUG-230). Auto-resolving the prompt prints the annotation but the REPL
+stays open at `❯`, and the orchestrator blocks forever.
+
+The fix is a one-way file signal between the skill and the orchestrator:
+
+1. The orchestrator picks a sentinel path under `.aida/sessions/`
+   (`<session-id>.exit-requested`, a sibling of the `<session-id>.toml`
+   lease file) and exports its absolute path to the child as the
+   **`AIDA_EXIT_SENTINEL`** environment variable.
+2. Instead of a blocking wait, the orchestrator spawns the child and polls
+   (~100ms) for two things: did the child exit on its own, and did the
+   sentinel appear.
+3. The skill, as its **absolute last action**, runs:
+
+   ```bash
+   [ -n "${AIDA_EXIT_SENTINEL:-}" ] && touch "$AIDA_EXIT_SENTINEL"
+   ```
+
+4. The orchestrator sees the sentinel, terminates the child's process tree
+   (SIGTERM, a 2s grace window, then SIGKILL) and continues the pipeline.
+
+### The rule for skill authors
+
+**The sentinel touch is the absolute last action of the session.** It must
+come *after* every commit, PR open, push, comment, and verdict-file write —
+anything the skill does after touching the sentinel is racing the reap and
+may be killed mid-flight. Touch it exactly **once**, and only the skill that
+performs the session's genuinely last action touches it: when one skill
+hands off to another (`/aida-pickup` → `/aida-pr`), the hand-off target owns
+the exit, not the caller.
+
+Only touch the sentinel when **all** of these hold: `$AIDA_EXIT_SENTINEL` is
+set (the orchestrator is polling for it), the end-of-session prompt is a
+`kind:confirmation` that `--zen` or a headless drain auto-resolved to
+"exit", and there is no further hand-off. In default interactive mode, leave
+the sentinel untouched — the user presses Ctrl+D.
+
+The annotation the skill prints when it auto-resolves the exit names the
+mechanism, so the scrollback shows what happened:
+
+```
+↳ zen: auto-resolved "next step" → ⇒ Exit — orchestrator will reap in ~100ms
+```
+
+The protocol is a deliberately minimal primitive (one env var, one empty
+file). It is built for the EXIT case; STORY-287's deferred `--no-human`
+design-fork *punt* can extend it later with a second sentinel
+(`.punt-requested`) carrying a structured body — but that is built only when
+the punt slice picks it up, not on speculation. The polling/grace window is
+tunable via `AIDA_EXIT_POLL_MS` / `AIDA_EXIT_GRACE_MS`. Implementation:
+`aida-cli/src/exit_signal.rs`.
+
 ## Related
 
 - STORY-287 — the three-mode autonomy taxonomy.

@@ -363,6 +363,29 @@ echo "${AIDA_REVIEW_VERDICT_FILE:-}"
   merge, so step 11's hand-off table stays the end-of-session surface —
   don't render the Ctrl+D block there. trace:TASK-291 | ai:claude
 
+  **Under `$AIDA_ZEN` or a headless drain — touch the exit sentinel (TASK-329).**
+  A skill cannot synthesize the Ctrl+D the block above names. The
+  orchestrator instead reaps the reviewer by polling for a sentinel file. So
+  when `$AIDA_EXIT_SENTINEL` is set, once the verdict file is written **and**
+  step 7b has finished any `findings_filed` rewrite — as the **absolute last
+  action of the session** — run:
+
+  ```bash
+  [ -n "${AIDA_EXIT_SENTINEL:-}" ] && touch "$AIDA_EXIT_SENTINEL"
+  ```
+
+  The orchestrator reaps the REPL within ~100ms. Touch it **once, last** —
+  the verdict and findings must already be on disk, or they race the reap.
+  Then print the zen annotation and stop:
+
+  ```
+  ↳ zen: auto-resolved "next step" → ⇒ Exit — orchestrator will reap in ~100ms
+  ```
+
+  In default interactive mode leave the sentinel untouched and let the user
+  press Ctrl+D. Full protocol: `docs/aida-discipline/skill-prompt-kinds.md`.
+  trace:TASK-329 | ai:claude
+
 ### 7b. File non-blocking findings as draft TASKs (headless drain) — trace:STORY-278
 
 Under a headless `--no-human` drain there is no human to read the
