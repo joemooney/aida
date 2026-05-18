@@ -1,0 +1,26 @@
+id: 019e39f9-9e4b-70e3-9953-0452e8fb7144
+spec_id: STORY-315
+agreed_id: STORY-315
+title: 'Review PR-94: BUG-233: corroborate orchestrator-child parentage via run token'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e39e4`) for branch `bug-233`.
+
+  - PR: <https://github.com/joemooney/aida/pull/94>
+  - Branch: `bug-233` → `main`
+
+  ## Covers
+
+  - BUG-233
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 94` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T07:25:20.843109304Z
+modified_at: 2026-05-18T07:25:20.843109304Z
+req_type: Story
