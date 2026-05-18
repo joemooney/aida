@@ -60,12 +60,12 @@ description: |-
   ## Origin
 
   User dogfooded TASK-285 via \`--auto-complete\` 2026-05-16. Orchestrator misreported phase-1 failure despite PR-61 being successfully open. Diagnosed via lease state vs PR state inspection.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:27:49.026573463Z
-modified_at: 2026-05-17T02:27:49.026573463Z
+modified_at: 2026-05-18T02:49:36.620709917Z
 req_type: Bug
 tags:
 - auto-complete
