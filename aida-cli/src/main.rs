@@ -13220,15 +13220,34 @@ fn maybe_hint_after_queue_drain(storage: &Storage, user_id: &str) {
         return;
     }
 
-    let commits_ahead = current_branch_at(&project_root)
+    let branch = current_branch_at(&project_root);
+    let commits_ahead = branch
         .as_deref()
         .and_then(|b| branch_commits_ahead_main(&project_root, b));
+
+    // BUG-232: when the branch carries committed-but-unshipped work, probe
+    // whether a PR is already open. This lets the hint sharpen "open a PR"
+    // into a pointed "no PR open — run `/aida-pr`" warning — the failure
+    // mode where a `--zen` session ends with the spec Done but unmergeable.
+    // Probe only when there's something to ship; a `gh` miss / failure
+    // stays Unknown so the hint never *asserts* there's no PR on guesswork.
+    // trace:BUG-232 | ai:claude
+    let pr_state = match (branch.as_deref(), commits_ahead) {
+        (Some(b), Some(n)) if n > 0 => match detect_open_pr_for_branch(&project_root, b) {
+            PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
+            PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
+            PrLookup::GhMissing | PrLookup::GhFailed(_) => workflow_hints::PrState::Unknown,
+        },
+        _ => workflow_hints::PrState::Unknown,
+    };
 
     workflow_hints::after_queue_drained(
         Some(&project_root),
         role.as_deref(),
         scope.as_deref(),
         commits_ahead,
+        branch.as_deref(),
+        pr_state,
     );
 }
 
@@ -44789,14 +44808,30 @@ fn handle_queue_work(
     // `AIDA_ZEN=false`) counter-intuitively *enable* zen.
     // trace:TASK-327 | ai:claude
     if std::env::var("AIDA_ZEN").map(|v| v == "1").unwrap_or(false) {
-        line(
-            "autonomy",
-            format!(
-                "{} {}",
-                "zen".cyan(),
-                "(mechanical confirmations auto-resolve; design-forks still pause)".dimmed()
-            ),
-        );
+        // BUG-232: `--zen`'s end-of-session behavior differs by whether an
+        // orchestrator is present to hand off to. With one, `--auto-complete`
+        // drives PR → CI → review → merge; without one, `--zen` auto-opens
+        // the PR at end-of-session then pauses on the grab-next/stop fork.
+        // Corroborate via `orchestrator::detect` — BUG-233: never key off
+        // the bare `AIDA_AUTO_COMPLETE` var, a stray value would lie here.
+        // trace:BUG-232 | ai:claude
+        let orch_root = project_root_for_config
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let (mode, note) = if orchestrator::detect(&orch_root).is_orchestrated() {
+            (
+                "zen + auto-complete",
+                "(orchestrator drives end-of-session: PR → CI → review → merge)",
+            )
+        } else {
+            (
+                "zen",
+                "(no orchestrator — confirmations auto-resolve; at end-of-session the PR \
+                 auto-opens, then grab-next/stop pauses)",
+            )
+        };
+        line("autonomy", format!("{} {}", mode.cyan(), note.dimmed()));
     }
     // TASK-112: surface a resume in the pre-flight summary.
     if let Some(QueueWorkLaunch::Resume(id)) = &launch {

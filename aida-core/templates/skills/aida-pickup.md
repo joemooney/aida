@@ -285,6 +285,13 @@ This is one atomic step that:
 
 Equivalent to: `aida edit <spec_id> --status done && aida queue remove <spec_id>`
 
+`aida queue done` does **not** open the PR — Done means "finished on a
+branch," and the PR is Step 6's job. The ordering (done → PR) is by design
+(STORY-86), so Step 6 is mandatory, not optional: a spec left Done with no
+PR is committed-but-unmergeable. When the branch has commits ahead of main
+and no open PR, `queue done` now emits a workflow hint pointing at
+`/aida-pr` — don't end the session until the PR is open. trace:BUG-232
+
 ### Step 6: Next steps (state-aware) — trace:TASK-87 trace:TASK-260
 
 <!-- kind:confirmation -->
@@ -292,12 +299,29 @@ After step 5 succeeds, surface a structured next-steps table so the
 workflow self-guides instead of relying on improvised "want me to push?"
 prompts. Don't auto-execute — the user picks.
 
-Under `$AIDA_ZEN` (STORY-287) this menu is a `kind:confirmation` prompt:
-still render the table (it stays the scrollback record), then proceed
-with the **primary row** automatically — `▶` in the manual templates,
-`⇒` in the *orchestrator mode* template — instead of waiting for a pick.
-Never auto-take a `⏸` row. Print the one-line `↳ zen:` note naming the
-row taken.
+Under `$AIDA_ZEN` (STORY-287) this menu is a `kind:confirmation` prompt,
+but *which* row auto-resolves depends on whether an orchestrator is
+present — the pre-flight `autonomy:` line and `aida orchestrator status`
+both tell you (BUG-232):
+
+- **`orchestrated`** — the *orchestrator mode* template applies; auto-take
+  its `⇒` row (submit the PR) and the orchestrator drives phases 2-6.
+- **plain `--zen`** (`$AIDA_ZEN=1`, `aida orchestrator status` =
+  `interactive`) — auto-take the row that runs **`/aida-pr`**, whatever
+  glyph it carries: `▶ Open PR for what shipped` in the *queue empty*
+  template, `⇒ Wrap up what's shipped as a PR` in the *queue has more
+  items* template. Do **NOT** auto-take `▶ Grab next item` — looping the
+  queue unattended is `--auto-complete` / `--no-human` territory, not
+  plain `--zen`. Opening the PR is the mechanical step that must never be
+  skipped (BUG-232: plain `--zen` used to end here with the spec
+  committed-but-unshipped and no PR open). `/aida-pr` then surfaces the
+  one genuine fork left — grab next vs stop — as its own
+  `kind:design-fork` prompt.
+- **default** (no zen) — render the table and let the user pick.
+
+Still render the table first in every case — it stays the scrollback
+record. Never auto-take a `⏸` row. Print the one-line `↳ zen:` note
+naming the row taken. trace:BUG-232
 
 **Detect state first.** These signals decide which template to render:
 

@@ -153,27 +153,45 @@ pub fn emit(project_root: Option<&Path>, lines: &[String]) {
     }
 }
 
-/// Hint after `queue done` (or any other op that just emptied the queue
-/// for the active role+scope). Caller is responsible for verifying the
-/// queue is actually empty before calling — we trust the caller.
-pub fn after_queue_drained(
-    project_root: Option<&Path>,
+/// BUG-232: what `aida queue done` could determine about the current
+/// branch's pull-request state. Lets the drained-queue hint sharpen the
+/// generic "open a PR" nudge into a pointed "no PR open — run `/aida-pr`"
+/// warning when the branch carries committed-but-unshipped work — the
+/// failure mode where a `--zen` session left a spec Done but unmergeable.
+/// trace:BUG-232 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrState {
+    /// `gh` confirmed an open PR (carrying its number) for the branch.
+    Open(u64),
+    /// `gh` ran cleanly and reported no open PR for the branch.
+    Absent,
+    /// PR state is unknown — `gh` is missing / unauthenticated / errored,
+    /// or the branch has no commits ahead of main worth probing for.
+    Unknown,
+}
+
+/// Pure builder for the drained-queue hint lines — split out so the
+/// message selection is unit-testable without touching config or env.
+/// `branch` + `pr` drive the BUG-232 PR-aware sharpening. trace:BUG-232
+/// | ai:claude
+fn queue_drained_hint_lines(
     role: Option<&str>,
     scope: Option<&str>,
     branch_commits_ahead: Option<u32>,
-) {
-    if !enabled(project_root) {
-        return;
-    }
+    branch: Option<&str>,
+    pr: PrState,
+) -> Vec<String> {
     let role_phrase = role.map(|r| format!("role:{}", r)).unwrap_or_default();
     let scope_phrase = scope.map(|s| format!(" @{}", s)).unwrap_or_default();
-    let commit_phrase = match branch_commits_ahead {
-        Some(n) if n > 0 => format!(
+    let commits = branch_commits_ahead.unwrap_or(0);
+    let commit_phrase = if commits > 0 {
+        format!(
             " ({} commit{} on this branch)",
-            n,
-            if n == 1 { "" } else { "s" }
-        ),
-        _ => String::new(),
+            commits,
+            if commits == 1 { "" } else { "s" }
+        )
+    } else {
+        String::new()
     };
     let header = format!(
         "queue is now empty for {}{}{}.",
@@ -185,8 +203,53 @@ pub fn after_queue_drained(
         scope_phrase,
         commit_phrase
     );
-    let body = "Open a PR with `/aida-pr` (or `gh pr create`), or pick a new cluster with `aida queue work <scope>`.".to_string();
-    emit(project_root, &[header, body]);
+    let branch_phrase = branch
+        .map(|b| format!("`{}`", b))
+        .unwrap_or_else(|| "this branch".to_string());
+    let body = match pr {
+        // BUG-232: the branch has unshipped commits and `gh` confirmed no
+        // PR exists — the spec is Done-but-unmergeable. Say so pointedly.
+        PrState::Absent if commits > 0 => format!(
+            "⚠ No PR is open for {} — the work is committed but unshipped. \
+             Run `/aida-pr` to ship it, or it sits Done and unmergeable.",
+            branch_phrase
+        ),
+        // A PR already exists — the next move is merge, not open.
+        PrState::Open(n) => format!(
+            "PR #{} is already open for this work — merge it once review is green \
+             (`gh pr merge {} --squash`), or pick a new cluster with `aida queue work <scope>`.",
+            n, n
+        ),
+        // Unknown PR state, or nothing committed to ship — the original
+        // generic nudge.
+        _ => "Open a PR with `/aida-pr` (or `gh pr create`), or pick a new cluster \
+             with `aida queue work <scope>`."
+            .to_string(),
+    };
+    vec![header, body]
+}
+
+/// Hint after `queue done` (or any other op that just emptied the queue
+/// for the active role+scope). Caller is responsible for verifying the
+/// queue is actually empty before calling — we trust the caller.
+///
+/// BUG-232: `branch` + `pr` let the hint distinguish "committed but no PR
+/// open" (a pointed warning — the spec would otherwise sit Done-but-
+/// unshipped) from "PR already open" (merge it) and the generic case.
+/// trace:BUG-232 | ai:claude
+pub fn after_queue_drained(
+    project_root: Option<&Path>,
+    role: Option<&str>,
+    scope: Option<&str>,
+    branch_commits_ahead: Option<u32>,
+    branch: Option<&str>,
+    pr: PrState,
+) {
+    if !enabled(project_root) {
+        return;
+    }
+    let lines = queue_drained_hint_lines(role, scope, branch_commits_ahead, branch, pr);
+    emit(project_root, &lines);
 }
 
 /// Build the post-`session end` PR hint as ready-to-print lines.
@@ -415,5 +478,70 @@ mod tests {
     fn session_end_hint_generic_when_no_covered_specs() {
         let lines = session_end_pr_hint_lines(47, &[], true);
         assert!(lines[3].contains("auto-bumps the merged spec → Completed"));
+    }
+
+    // BUG-232: `queue done` on a branch with commits ahead of main and no
+    // open PR fires the pointed "no PR open — run /aida-pr" warning, so a
+    // `--zen` session can't quietly leave the spec committed-but-unshipped.
+    #[test]
+    fn queue_drained_warns_when_commits_ahead_and_no_pr() {
+        let lines = queue_drained_hint_lines(
+            Some("implementer"),
+            None,
+            Some(1),
+            Some("task-264"),
+            PrState::Absent,
+        );
+        assert!(lines[0].contains("queue is now empty for role:implementer"));
+        assert!(lines[0].contains("(1 commit on this branch)"));
+        assert!(lines[1].contains("⚠ No PR is open for `task-264`"));
+        assert!(lines[1].contains("committed but unshipped"));
+        assert!(lines[1].contains("/aida-pr"));
+    }
+
+    // An already-open PR redirects the hint to "merge it", not "open one".
+    #[test]
+    fn queue_drained_points_at_merge_when_pr_open() {
+        let lines = queue_drained_hint_lines(
+            Some("implementer"),
+            None,
+            Some(2),
+            Some("task-264"),
+            PrState::Open(97),
+        );
+        assert!(lines[1].contains("PR #97 is already open"));
+        assert!(lines[1].contains("gh pr merge 97 --squash"));
+        assert!(!lines[1].contains("⚠"));
+    }
+
+    // gh missing / unauthenticated → PrState::Unknown → fall back to the
+    // generic nudge rather than asserting a PR is (or isn't) there.
+    #[test]
+    fn queue_drained_generic_when_pr_state_unknown() {
+        let lines = queue_drained_hint_lines(
+            Some("implementer"),
+            None,
+            Some(1),
+            Some("task-264"),
+            PrState::Unknown,
+        );
+        assert!(lines[1].contains("Open a PR with `/aida-pr`"));
+        assert!(!lines[1].contains("⚠"));
+    }
+
+    // No commits ahead → nothing to ship → no warning even when `gh`
+    // reports no PR (the branch is level with main).
+    #[test]
+    fn queue_drained_no_warning_when_nothing_to_ship() {
+        let lines = queue_drained_hint_lines(
+            Some("implementer"),
+            None,
+            Some(0),
+            Some("task-264"),
+            PrState::Absent,
+        );
+        assert!(!lines[0].contains("commit on this branch"));
+        assert!(lines[1].contains("Open a PR with `/aida-pr`"));
+        assert!(!lines[1].contains("⚠"));
     }
 }
