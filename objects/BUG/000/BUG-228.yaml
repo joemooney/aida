@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:18:31.593593468Z
-modified_at: 2026-05-18T01:19:00.936523585Z
+modified_at: 2026-05-18T01:27:20.805265004Z
 req_type: Bug
 tags:
 - activity-log
@@ -53,3 +53,58 @@ tags:
 - from-implementer:TASK-269
 - role-state
 - toml-corruption
+comments:
+- id: 019e38b1-dbe5-7e10-a38d-98afe75cd3f9
+  author: joe
+  content: |-
+    Diagnosis correction + fix summary (implementer).
+
+    ROOT CAUSE — not what AC1/AC2 hypothesized. The activity log was NOT hand-built
+    TOML: save_role_at() and save_session_activity() already serialized via
+    toml::to_string_pretty(). The actual root cause is a non-atomic write race.
+    Both paths persisted with a bare std::fs::write(), which open()s with O_TRUNC and
+    writes at the fd offset. During the 15:40 `queue work --auto-complete` drain two
+    `aida` processes rewrote ~/.aida/roles/implementer.toml concurrently (one writing
+    the `aida pull` auto-bump activity entries, another bumping last_active_at via the
+    lease branch of record_role_activity). Their write() calls interleaved on the
+    shared file: the shorter process's content sat over the front, the longer
+    process's trailing bytes (`"` + newline) past its end — the stray line 58.
+
+    FIX (this branch, BUG-228):
+    - write_atomic(): stage to a sibling temp file (PID-suffixed), rename() over the
+      target. rename(2) is atomic, so a torn file is now impossible — worst case under
+      a race degrades to clean last-writer-wins. Applied to save_role_at() and
+      save_session_activity().
+    - parse_role_lenient(): on a strict-parse failure, salvage the header + every
+      well-formed [[activity]] block, quarantining (and reporting) any malformed
+      entry. load_role / list_roles / `aida role show` now use it — a corrupted
+      activity entry no longer fail-stops role-state reads (AC4).
+    - `aida role repair [name]`: backs the original up to
+      <file>.toml.corrupt-<UTC-stamp>, rewrites cleanly, reports what was quarantined.
+      Idempotent — a healthy file is left untouched (AC3).
+
+    KNOWN RESIDUAL (acceptable, not in scope): atomic write still allows last-writer-
+    wins to drop one activity entry under a concurrent-append burst. The activity log
+    is explicitly best-effort and bounded (ACTIVITY_MAX=10 LRU), so an occasionally
+    lost entry is tolerable; corruption — the filed bug — is fully fixed.
+
+    MANUAL RECOVERY RECIPE (AC7) — for users who hit this before the fix ships:
+      # once the fix lands, this is all automatic:
+      aida role repair <name>
+
+      # before the fix — repair by hand:
+      cp ~/.aida/roles/<name>.toml ~/.aida/roles/<name>.toml.bak
+      # edit the file: delete any stray line that is not blank, not `[[activity]]`,
+      # and not a `key = "value"` assignment (the corruption is usually a lone `"`
+      # on the last line). Every [[activity]] block must be exactly:
+      #   [[activity]]
+      #   spec_id = "..."
+      #   action = "..."
+      #   at = "..."
+      aida role show <name>   # verify it parses
+
+    The user's own ~/.aida/roles/implementer.toml was repaired via the new
+    `aida role repair implementer` (backup at implementer.toml.corrupt-20260518T012535Z;
+    1 stray fragment quarantined, all 10 activity entries preserved).
+  created_at: 2026-05-18T01:27:20.805265004Z
+  modified_at: 2026-05-18T01:27:20.805265004Z
