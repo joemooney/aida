@@ -61,12 +61,12 @@ description: |-
   User feedback: *"command finished albeit with no indication of pass/fail or what happened in that headless /aida-review session"* — clarified afterward as a standalone command (not orchestrator) so the original \"silent-exit from orchestrator\" framing was wrong; the real gap is the end-of-command summary for standalone invocations.
 
   Original dialog-role misframing 2026-05-17: assumed orchestrator context without verifying the command shape; corrected upon user pushback per \`feedback_run_help_before_suggesting_flags.md\` (verify the surface before reasoning about its behavior).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:56:26.127208719Z
-modified_at: 2026-05-18T16:26:30.992360171Z
+modified_at: 2026-05-18T16:40:52.059125426Z
 req_type: Bug
 tags:
 - batch:autonomy-modes
@@ -105,3 +105,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-18T16:24:50.966968106Z
   implemented_by: joe
+  completed_at: 2026-05-18T16:40:52.059125426Z
+  completion_sha: 3b22ef8193f0de5cbbd9cca48840815919eadab1
