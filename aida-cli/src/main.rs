@@ -31,6 +31,8 @@ use aida_core::{
     determine_requirements_path,
     export,
     seed_meta_requirements,
+    // trace:TASK-331 — shared atomic-write util, promoted from BUG-228's local copy
+    write_atomic,
     ArtifactType,
     Cardinality,
     Comment,
@@ -8278,27 +8280,6 @@ fn load_role(
 ) -> Result<(RoleState, std::path::PathBuf)> {
     let (state, path, _warnings) = load_role_with_warnings(project_root, name)?;
     Ok((state, path))
-}
-
-/// Write `content` to `path` atomically: stage it in a sibling temp file,
-/// then `rename` that file over the target. POSIX (and Windows) `rename`
-/// is atomic, so a concurrent reader or writer can never observe a
-/// half-written or byte-interleaved file — the failure mode under a write
-/// race degrades from the torn TOML that corrupted a role file in BUG-228
-/// to a clean last-writer-wins. The temp name carries the PID so two
-/// processes racing the same target don't collide on the staging path.
-/// trace:BUG-228 | ai:claude
-fn write_atomic(path: &std::path::Path, content: &str) -> std::io::Result<()> {
-    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
-    if let Err(e) = std::fs::write(&tmp, content) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
-    }
-    if let Err(e) = std::fs::rename(&tmp, path) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
-    }
-    Ok(())
 }
 
 /// Save back to the same location the role was loaded from (or the
