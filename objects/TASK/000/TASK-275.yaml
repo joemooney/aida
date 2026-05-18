@@ -46,12 +46,12 @@ description: |-
   ## Origin
 
   User stated 2026-05-16 alpha targets: tech-savvy friends/colleagues; install paths: prebuilt tarball OR build from source. README must surface both clearly for the audience.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:22.589954018Z
-modified_at: 2026-05-16T18:51:22.589954018Z
+modified_at: 2026-05-18T04:08:07.510142834Z
 req_type: Task
 tags:
 - alpha-readiness
