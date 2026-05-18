@@ -72,12 +72,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16: *\"what about advisor?\"* after considering supervisor/overseer/foreman. \"Advisor\" maps best to the role's actual responsibilities (4 strong fits + 2 medium) and uses standard corporate vocabulary that translates beyond AIDA. The split (internal name vs user-facing identity) avoids the churn of renaming the role primitive.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:02:43.248239099Z
-modified_at: 2026-05-18T06:29:19.775585823Z
+modified_at: 2026-05-18T06:38:26.932532764Z
 req_type: Task
 tags:
 - advisor
@@ -112,3 +112,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-18T06:27:19.910003814Z
   implemented_by: joe
+  completed_at: 2026-05-18T06:38:26.932532764Z
+  completion_sha: 1f003d2dc3b1948d14f6eedb891015d7b31e13fd
