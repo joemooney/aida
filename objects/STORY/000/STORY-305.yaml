@@ -1,0 +1,55 @@
+id: 019e3925-28df-7611-8edf-d5920e2fe42b
+spec_id: STORY-305
+agreed_id: STORY-305
+title: 'Per-project skill extensions: .claude/skills/local/ + <skill>.local.md override mechanism'
+description: |-
+  Spun out of a STORY-255 comment (items 2 + 3) that were never promoted into STORY-255's binding acceptance criteria. Per \`feedback_refinements_must_be_acceptance_criteria.md\`, comment-described scope isn't an implementer contract — so rather than scope-creep STORY-255, this STORY owns the per-project skill-extension mechanism as its own coherent feature.
+
+  ## Problem
+
+  \`aida init\` scaffolds 31 skills into \`.claude/skills/\` as per-file symlinks into the embedded master templates. A project that wants to (a) add its own project-specific skills, or (b) extend/tweak an AIDA-scaffolded skill, has nowhere clean to do it — local edits to the symlinked files either fight \`make sync-templates\` or get clobbered on template re-sync.
+
+  ## Proposed mechanism
+
+  1. **\`.claude/skills/local/\`** — a scaffolded directory (with a README) for **project-local skills** that AIDA never manages or overwrites. \`aida init\` creates it; template re-sync never touches it.
+  2. **\`<skill>.local.md\`** — a per-project extension file sitting alongside a scaffolded skill. When skill \`<skill>\` runs, AIDA appends/merges the project's \`<skill>.local.md\` content so a project can extend a stock skill (extra steps, project conventions) without editing the symlinked master.
+  3. **\`docs/extending-skills.md\`** — scaffolded doc explaining both: when to drop a skill in \`local/\`, when to write a \`.local.md\` extension, and how the merge/append works.
+
+  ## Acceptance
+
+  - [ ] \`aida init\` scaffolds \`.claude/skills/local/\` + a README explaining it's for project-owned skills AIDA won't manage
+  - [ ] \`make sync-templates\` / template re-sync never touches \`.claude/skills/local/\` or any \`*.local.md\` file
+  - [ ] Skill invocation merges \`<skill>.local.md\` (when present) with the stock skill — define and document the merge semantics (append? section-override?)
+  - [ ] \`.local.md\` extensions survive template re-sync (they're project state, deny-by-default per the \`.aida/\` gitignore convention's spirit)
+  - [ ] \`docs/extending-skills.md\` scaffolded, explaining local/ vs .local.md with a worked example
+  - [ ] Tests: local/ skill is discovered; .local.md merge produces expected combined skill; re-sync leaves both untouched
+  - [ ] \`aida init\` gitignore block handles local/ + .local.md correctly (tracked vs runtime — local skills are probably tracked project assets; decide and document)
+
+  ## Out of scope
+
+  - **Skill versioning / dependency between local and stock** — keep the merge simple (append or section-override); no version negotiation
+  - **Sharing local skills between projects** — that's the scaffolding pack's job (STORY-255), not this
+  - **A local-skill marketplace / registry** — way out of scope
+
+  ## Composes with
+
+  - **STORY-255** (the discipline-pack scaffolding STORY this was spun out of — sibling scaffolding work; both extend what \`aida init\` produces)
+  - The template architecture (\`aida-core/templates/\`, \`make sync-templates\`, the per-file symlink model — see AIDA's CLAUDE.md "Template architecture" section)
+  - \`feedback_refinements_must_be_acceptance_criteria.md\` (this STORY exists *because* the discipline was followed — comment-scope spun out rather than crammed into STORY-255)
+
+  ## Origin
+
+  2026-05-18: STORY-255's implementer hit a design-fork — a comment on STORY-255 had added 3 scope items never promoted to acceptance criteria. Advisor ruled Option 1 (implement only the 8 binding criteria; spin the comment-items out). Comment items 2 + 3 (\`.claude/skills/local/\` scaffolding + \`<skill>.local.md\` extensions + \`extending-skills.md\`) are this STORY. Comment item 1 (split the propagation memory into generic/AIDA halves) is advisor memory-curation, handled separately.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T03:33:17.151089316Z
+modified_at: 2026-05-18T03:33:17.151089316Z
+req_type: Story
+tags:
+- customization
+- from-comment:STORY-255
+- local-skills
+- scaffolding
+- skill-extensions
