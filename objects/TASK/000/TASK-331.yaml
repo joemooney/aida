@@ -48,7 +48,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:41.521260612Z
-modified_at: 2026-05-18T15:00:13.311923849Z
+modified_at: 2026-05-18T15:01:12.155396767Z
 req_type: Task
 tags:
 - atomic-write
@@ -63,6 +63,20 @@ comments:
   content: Commit 46b2412b references this requirement
   created_at: 2026-05-18T14:59:58.523376999Z
   modified_at: 2026-05-18T14:59:58.523376999Z
+- id: 019e3b9a-f75b-7101-8b78-3ebd6b832ed7
+  author: joe
+  content: |-
+    Implemented via commit 46b2412b (PR pending):
+
+    - Promoted write_atomic to a shared util (new aida-core/src/fs_atomic.rs, re-exported as aida_core::write_atomic); removed the aida-cli local copy so there is a single implementation. Signature generalized to `impl AsRef<[u8]>` (drop-in for std::fs::write); staging temp name now carries a process-global sequence so two threads of one process can't collide.
+    - HIGH-risk paths converted: session_manifest.rs, git_ops.rs merge-gate counters, dispenser.rs (open + save_state).
+    - MEDIUM-risk paths converted: registry.rs (both writers).
+    - LOW-risk paths converted opportunistically: workspace.rs, jira/config.rs, workflow_hints.rs, docs.rs.
+    - Concurrent-writer stress tests on the dispenser counter + session manifest + generic write_atomic; grep-guard tests fail if a bare fs::write regresses into a known-concurrent file.
+
+    Test status: aida-core lib 251/251 + aida-cli bin 631/631 green; cargo fmt + clippy clean on touched files.
+  created_at: 2026-05-18T15:01:12.155396767Z
+  modified_at: 2026-05-18T15:01:12.155396767Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T15:00:13.311923849Z
