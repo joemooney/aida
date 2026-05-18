@@ -74,9 +74,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T18:25:20.609292583Z
-modified_at: 2026-05-17T18:25:20.609292583Z
+modified_at: 2026-05-18T06:22:23.606406090Z
 req_type: Bug
 tags:
+- batch:orchestrator-hardening
 - branch-confusion
 - first-users
 - from-self-test:TASK-282
