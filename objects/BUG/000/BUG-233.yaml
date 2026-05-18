@@ -3,64 +3,70 @@ spec_id: BUG-233
 agreed_id: BUG-233
 title: Orchestrator-spawned child can't verify its parentage — misidentifies legit orchestrator context (no env leak; BUG-233 was misdiagnosed)
 description: |-
-  \`AIDA_AUTO_COMPLETE=1\` is meant to live ONLY on orchestrator-spawned child processes (set via \`.env(\"AIDA_AUTO_COMPLETE\", \"1\")\` on the subprocess \`Command\` in \`RealPhaseDriver::run_implementer\` / \`run_reviewer\`). It is NOT meant to be exported into the user's interactive shell. But on 2026-05-17 the var was found set in the user's interactive shell — and while it's set, **every** \`aida queue work\` launched from that shell inherits it and misfires into \"orchestrator mode\" despite no orchestrator existing.
+  **Corrected diagnosis 2026-05-18.** This BUG was originally filed as \"AIDA_AUTO_COMPLETE leaks into interactive shells.\" That was wrong — there is no leak. The user's interactive shell was verified clean (\`env | grep AIDA\` shows no AIDA_AUTO_COMPLETE). The real bug is different and is described below.
 
-  ## Symptom (2026-05-18, surfaced during BUG-228 work)
+  ## The real bug
 
-  The BUG-228 implementer reported: *\"your shell has AIDA_AUTO_COMPLETE=1 exported. That var is meant to live only on an orchestrator-spawned child — a stray export in an interactive shell makes /aida-pickup's Step 6 misfire into 'orchestrator mode.'\"*
+  An orchestrator-spawned phase-1 child (\`aida queue work <SPEC>\` invoked by \`RealPhaseDriver::run_implementer\`) is **indistinguishable from a standalone \`aida queue work <SPEC>\` the user typed**:
 
-  Confirmed: the var is absent from a clean advisor shell, present in the user's drain shell. Contained to that one shell — not a system-wide leak — but corrosive while it persists.
+  - Same argv shape — both are \`aida queue work <SPEC> [--session-id ...] [--zen]\`
+  - \`AIDA_AUTO_COMPLETE=1\` is the only differentiator, and the child has no way to tell whether it's (a) legitimately set by a live orchestrator parent, or (b) a stale value inherited from somewhere
 
-  ## Blast radius — this likely caused BUG-232
+  So the child **guesses** — and guesses wrong in both directions:
 
-  BUG-232 (\"plain --zen without --auto-complete stalls at 'say the word'\") was diagnosed as a --zen design gap. The real trigger is probably THIS leak: \`aida queue work TASK-264 --zen\` inherited the stale \`AIDA_AUTO_COMPLETE=1\`, so the session *believed* it was orchestrator-driven — suppressed the end-of-session menu and tried to \"exit for the orchestrator\" — but there was no orchestrator process. The limbo wasn't \"--zen without --auto-complete\"; it was \"--zen with a LYING AIDA_AUTO_COMPLETE.\" BUG-232's fix (gate menu-suppression on AIDA_AUTO_COMPLETE) is still valid, but it trusts a var that this BUG shows can lie.
+  - **2026-05-18, BUG-228 implementer**: a legitimate orchestrator child (orchestrator was draining batch:session-hygiene; BUG-228 was member 3/3). \`AIDA_AUTO_COMPLETE=1\` was CORRECT. But the implementer concluded it was a standalone interactive session with a \"stray export leak\" and printed an alarming (false) warning telling the user to \`unset AIDA_AUTO_COMPLETE\`.
+  - **2026-05-17, TASK-264 implementer (BUG-232)**: the \"say the word\" limbo. Whatever the child concluded, the result was an end-of-session stall.
 
-  ## Two problems
+  Both are the same root cause: **the child cannot verify its orchestrator parentage**, so its context-dependent behavior (menu suppression, end-of-session handoff, whether to print orchestrator-aware hints) is driven by a guess.
 
-  ### Problem A: where does it leak from?
+  ## Why it matters (real behavioral harm, not just confusing messages)
 
-  The orchestrator sets the var on child \`Command\`s only — that shouldn't escape to the parent. Candidate leak sources to investigate:
-  - A shell helper / \`aida dev\` eval path that \`export\`s it
-  - A killed/crashed orchestrator (Ctrl-C mid-drain) leaving a nested shell with the export
-  - \`eval \"\$(aida ...)\"\` somewhere echoing an \`export AIDA_AUTO_COMPLETE=1\`
-  - The user's shell rc sourced it accidentally
+  - Orchestrated child that thinks it's standalone → offers interactive menus / runs \`aida queue done\` instead of the clean orchestrator handoff → can break the orchestrator chain
+  - Standalone session that thinks it's orchestrated → suppresses menus, tries to \"exit for the orchestrator\" that doesn't exist → BUG-232-style limbo
+  - False \"your shell has a leak\" warnings → user runs \`unset\` on a var that was correct, or chases a non-existent leak (this BUG's own origin)
 
-  ### Problem B: a process can't trust the var
+  ## Solution: corroboration token
 
-  Even once the leak source is fixed, \`AIDA_AUTO_COMPLETE=1\` with no actual orchestrator parent should be *detectable*. A real orchestrator child has a parent \`aida\` process running the \`orchestrate()\` loop. A leaked var has no such parent.
+  The orchestrator passes a per-run token to its children: \`AIDA_AUTO_COMPLETE_TOKEN=<uuid>\`, where the uuid identifies the specific orchestrator run (e.g. the orchestrator writes \`<uuid>\` into its drain-state file — see STORY-301 — or registers it in \`.aida/\`). A child trusts orchestrator-mode ONLY when:
 
-  \`aida queue work\` should sanity-check: if \`AIDA_AUTO_COMPLETE=1\` but the parent process isn't an \`aida\` orchestrator (check \`PPID\`'s command, or have the orchestrator pass a corroborating signal like a per-run token the child verifies), warn loudly:
+  1. \`AIDA_AUTO_COMPLETE=1\` AND
+  2. \`AIDA_AUTO_COMPLETE_TOKEN\` is set AND
+  3. the token names a live orchestrator (PID alive, or drain-state file present with matching token)
 
-  \`\`\`
-  ⚠ AIDA_AUTO_COMPLETE=1 is set but this process has no orchestrator parent.
-    Likely a stale export leaked into your shell. Run: unset AIDA_AUTO_COMPLETE
-    Proceeding in interactive mode (ignoring the stale var).
-  \`\`\`
+  Bare \`AIDA_AUTO_COMPLETE=1\` with no valid token → treat as interactive, and print an informational (not alarming) note: \"AIDA_AUTO_COMPLETE set without a live orchestrator — treating as interactive.\"
 
   ## Acceptance
 
-  - [ ] Identify and fix the leak source (Problem A) — instrument or audit every path that could \`export\` the var vs set it on a child \`Command\`
-  - [ ] Corroborating signal (Problem B): orchestrator passes a per-run token (e.g. \`AIDA_AUTO_COMPLETE_TOKEN=<uuid>\` matching the orchestrator's run) — child verifies the token names a live orchestrator before trusting orchestrator-mode; bare \`AIDA_AUTO_COMPLETE=1\` with no valid token → warn + treat as interactive
-  - [ ] \`aida queue work\` prints the stale-var warning + \`unset\` hint when the var is set without a valid orchestrator parent
-  - [ ] Tests: leaked var (no token) → interactive mode + warning; valid token → orchestrator mode; no var → interactive
-  - [ ] Document the orchestrator env contract in \`docs/autonomous-drain.md\`
+  - [ ] Orchestrator passes \`AIDA_AUTO_COMPLETE_TOKEN=<run-uuid>\` to every phase child alongside \`AIDA_AUTO_COMPLETE=1\`
+  - [ ] The run-uuid is verifiable: written to STORY-301's drain-state file (or a dedicated \`.aida/orchestrator-runs/<uuid>\` marker), so a child can confirm a live orchestrator
+  - [ ] \`aida queue work\` / skill startup trusts orchestrator-mode only when AIDA_AUTO_COMPLETE + valid corroborated token; bare var → interactive mode + informational note
+  - [ ] Remove the false \"stray export leak\" warning path entirely — it was based on this BUG's original misdiagnosis
+  - [ ] Skill templates (/aida-pickup Step 6, /aida-implement, /aida-pr, /aida-review) key orchestrator-aware behavior off the corroborated signal, not the bare env var
+  - [ ] Tests: orchestrator child with valid token → orchestrator mode; bare var no token → interactive + note; no var → interactive
+  - [ ] Document the orchestrator→child env contract in docs/autonomous-drain.md
+
+  ## Out of scope
+
+  - **\"Where does the leak come from\"** — there is no leak; dropped from scope
+  - Hunting stale exports — not a thing
 
   ## Composes with
 
-  - **BUG-232** (plain --zen limbo — this BUG is likely its true root cause; BUG-232's menu-suppression-gating fix should key off the *corroborated* signal, not the bare var)
-  - **STORY-287** (--zen — AIDA_ZEN propagation is the same env-inheritance pattern; audit whether AIDA_ZEN can leak the same way)
-  - **STORY-263 / STORY-276** (headless phases set env on children — same contract)
-  - \`feedback_precise_lifecycle_vocabulary.md\` (an env var that *claims* orchestrator-mode but isn't — precision about actual vs claimed state)
+  - **STORY-301** (drain-state file — the natural home for the orchestrator run-uuid the token corroborates against)
+  - **BUG-232** (the --zen \"say the word\" limbo — same root cause: child misjudged its context. BUG-232's diagnosis also needs correcting; see its comments.)
+  - **STORY-287** (--zen — menu suppression must key off the corroborated signal)
+  - **AIDA_ZEN propagation** (STORY-287) — audit whether AIDA_ZEN has the same can't-verify-provenance weakness
+  - \`feedback_verify_before_filing.md\` (this BUG's original \"env leak\" framing was filed on an unverified implementer report — the lesson, freshly relearned)
 
   ## Origin
 
-  2026-05-18: BUG-228 implementer flagged \`AIDA_AUTO_COMPLETE=1\` stuck in the user's interactive shell, misfiring \`/aida-pickup\` Step 6. Likely leaked from the 15:40 \`--auto-complete\` drain (the same incident that produced BUG-228's torn-write corruption). The var has been silently making interactive \`aida queue work\` invocations believe they're orchestrated for an unknown stretch of the day — a strong candidate root cause for BUG-232 and possibly other \"--zen behaved oddly\" reports.
+  2026-05-17/18: a BUG-228 implementer (a legitimate orchestrator child) reported \`AIDA_AUTO_COMPLETE=1\` as a \"stray export leaked into an interactive shell.\" Dialog role filed this BUG as an env leak (high priority) WITHOUT verifying. User then ran \`env | grep AIDA\` on their actual interactive shell — no AIDA_AUTO_COMPLETE present — disproving the leak theory. The var existed only in orchestrator-child process environments, where it belongs. The genuine bug is that a child can't tell a legit orchestrator context from a standalone one — corrected framing above.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:38.878522976Z
-modified_at: 2026-05-18T01:47:11.571543314Z
+modified_at: 2026-05-18T01:47:12.996729020Z
 req_type: Bug
 tags:
 - auto-complete
