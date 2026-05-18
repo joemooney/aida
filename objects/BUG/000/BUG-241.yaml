@@ -1,0 +1,73 @@
+id: 019e3b8e-4d4e-7670-a031-8117c9b1b36a
+spec_id: BUG-241
+agreed_id: BUG-241
+title: Orchestrator reports phase-3 FALSE failure when the reviewer escalates the merge to a human — crashes the batch, reports 'shipped 0' on work that succeeded
+description: |-
+  The orchestrator's phase-3 handshake polls for a verdict file at \`.aida/review-verdicts/PR-N.json\`. When the reviewer **escalates the merge decision to a human** (correct behavior — conservative escalation on an uncertain signal) and the human handles the merge out-of-band, the reviewer session ends **without writing a verdict file** — and the orchestrator declares **phase-3 failure**, crashes the batch, and reports **"shipped 0"** for work that actually fully succeeded.
+
+  ## Symptom (2026-05-18, batch:orchestrator-hardening drain, BUG-233 / PR-94)
+
+  Orchestrator output:
+  \`\`\`
+  ✗ phase 3 (reviewer session) failed: the reviewer session produced no verdict file — the review did not complete
+  ✗ BUG-233 — auto-complete failed at phase 3 (461m 19s)
+  ✗ batch batch:orchestrator-hardening drain stopped at BUG-233 (phase 3 failed)
+    ✓ already shipped (0): (none)
+  \`\`\`
+
+  Reality, verified:
+  - BUG-233 → **Completed**
+  - PR-94 → **MERGED** (2026-05-18 14:37)
+  - \`orchestrator.rs\` (commit \`260903e0\`) → **on main**
+  - STORY-315 (review story) → auto-bumped Completed
+
+  **Every clause of the orchestrator's report is false.** The batch's first item shipped; the orchestrator says it failed and nothing shipped.
+
+  ## Root cause
+
+  1. The phase-3 reviewer reviewed PR-94, posted a consolidated comment, and **paused at the merge question** — correctly escalating, because the AIDA_ZEN provenance was unverifiable (BUG-237) and it would not auto-merge on an unverifiable signal.
+  2. It sat paused ~461 minutes (7.7h) waiting for the human's merge call. The human merged PR-94 manually.
+  3. The reviewer session ended **without writing a verdict file** — it had paused *before* the verdict-file write, deferring the merge/verdict to the human.
+  4. The orchestrator's phase-3 handshake found no verdict file → \`phase 3 failed\` → batch crashed → \`shipped 0\`.
+
+  The orchestrator **cannot distinguish** "reviewer genuinely failed" from "reviewer escalated to a human, who handled it out-of-band, and the work succeeded."
+
+  ## This is the intended escalation behavior colliding with the handshake
+
+  The reviewer pausing for a human merge decision is **correct** (per BUG-233 / STORY-306 conservative-escalation — don't auto-act on an unverifiable signal). The bug is that the orchestrator's verdict-file handshake has no path for it. --zen escalation and the phase-3 handshake don't compose.
+
+  ## Fix (any one of the first two closes the false-failure; ideally all three)
+
+  - [ ] **Orchestrator reconciles against reality before declaring phase-3 failure**: on phase-3-end-with-no-verdict-file, check — is the PR merged AND the spec Completed? If yes → phase 3 succeeded out-of-band; advance the batch, report it shipped. Do NOT crash with "shipped 0."
+  - [ ] **Reviewer writes a verdict file even when escalating**: when the reviewer defers the merge to a human, it still writes the verdict file (\`verdict: Approved\`, plus a \`merge: escalated-to-human\` marker) — so the handshake artifact exists. The orchestrator then knows the verdict and that the merge is human-owned.
+  - [ ] **Orchestrator recognizes "reviewer paused for human input" as a distinct non-failure state** — not lumped with "reviewer crashed." (461 min was human-response latency, not a hang — the orchestrator has no model for a legitimately-waiting reviewer.)
+  - [ ] Tests: reviewer escalates merge → ends without verdict file → PR gets merged out-of-band → orchestrator reconciles → batch advances, reports the spec shipped (not failed)
+  - [ ] Tests: reviewer genuinely fails (no verdict, PR not merged) → orchestrator still correctly reports phase-3 failure
+
+  ## Composes with
+
+  - **BUG-233** (the spec being reviewed when this surfaced; its corroboration fix is now merged)
+  - **BUG-237** (AIDA_ZEN provenance — the unverifiable AIDA_ZEN is *why* the reviewer escalated; fixing BUG-237 reduces how often the reviewer must escalate, but the orchestrator must handle escalation regardless)
+  - **BUG-226** (reviewer verdict-file discipline — sibling: the reviewer should always leave a verdict artifact)
+  - **STORY-263** (the verdict-file handshake this BUG patches)
+  - **STORY-306** (advisor escalation tier — escalation is correct and will become *more* common; the orchestrator must treat it as a first-class non-failure path)
+  - **BUG-236** (orchestrator recovery-hint accuracy — sibling: the \`aida queue work PR-94 --steal\` hint here is also wrong, PR-94 is merged)
+
+  ## Origin
+
+  2026-05-18 batch:orchestrator-hardening drain. BUG-233's PR-94 phase-3 reviewer escalated the merge (AIDA_ZEN unverifiable), paused 461 min, the human merged manually, the reviewer ended without a verdict file. The orchestrator declared phase-3 failure and "batch stopped, shipped 0" — verified false: PR-94 MERGED, BUG-233 Completed, code on main. A batch reporting total failure on its first item *succeeding* is a serious trust problem for the autonomous drain.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T14:47:22.190733508Z
+modified_at: 2026-05-18T14:47:22.190733508Z
+req_type: Bug
+tags:
+- auto-complete
+- batch:orchestrator-hardening
+- escalation
+- false-failure
+- from-self-test:BUG-233
+- reviewer-phase
+- verdict-file
