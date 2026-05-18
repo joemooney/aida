@@ -61,12 +61,12 @@ description: |-
   ## Origin
 
   2026-05-17: user ran \`aida queue work TASK-264 --zen\` (no --auto-complete). Implementer shipped + committed + \`queue done\`, then stalled at \"say the word to pick it up\" with no PR opened. User: *\"this is not prompting me on what to do and I have used --zen.\"* --zen's menu suppression was designed for the --auto-complete case; plain --zen inherits the suppression without the orchestrator handoff that makes it coherent.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T15:36:58.688077839Z
+modified_at: 2026-05-18T15:50:23.034226593Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
@@ -100,3 +100,7 @@ comments:
     Rationale: this applies STORY-287's taxonomy correctly by separating the mechanical prompt (open PR → auto-resolve) from the genuine fork (grab-next-vs-stop → pause). My original filing recommended the show-full-menu alternative; that conflated the two and suppressed --zen entirely at end-of-session. The implementer separated them — better answer. Also consistent with --zen + --auto-complete, which already auto-opens PRs. Issue B (aida queue done warns on commits-ahead-no-PR) was unambiguous — no fork, proceed as filed.
   created_at: 2026-05-18T15:36:58.688077839Z
   modified_at: 2026-05-18T15:36:58.688077839Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-18T15:50:23.034226593Z
+  implemented_by: joe
