@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:27.574885685Z
-modified_at: 2026-05-18T05:48:21.201582224Z
+modified_at: 2026-05-18T05:53:06.191169295Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -62,6 +62,18 @@ comments:
   content: Commit c9726add references this requirement
   created_at: 2026-05-18T05:06:20.988897760Z
   modified_at: 2026-05-18T05:06:20.988897760Z
+- id: 019e39a5-2a8f-7192-bc81-e5305ae22100
+  author: joe
+  content: |-
+    Rework (PR-91, commit 0feb8c89): corrected 3 follow-along output blocks in docs/first-project.md flagged by the STORY-312 review as not matching real `aida` output.
+
+    - aida rel add: real output is `Added relationship: BUG-1 --[References]--> STORY-3` (no ✓; debug-formatted enum).
+    - aida queue list: `My Queue (N items)` + 80-char rule + per-item status/route/epic chips; the `implementer queue (N)` header format does not exist.
+    - aida show "Files traced": counts (file, symbol) tuples, one symbol per line — `Files traced (2)` not `(1)`.
+
+    Each verified against aida-cli/src/main.rs. Docs-only; no Rust touched. Pushed to PR-91 as a fast-forward on top of the original doc commit, so STORY-312's re-review is a clean delta.
+  created_at: 2026-05-18T05:53:06.191169295Z
+  modified_at: 2026-05-18T05:53:06.191169295Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T05:06:30.633625009Z
