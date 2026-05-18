@@ -1,0 +1,45 @@
+id: 019e3b89-37d8-74a2-a67c-8dcc7e70aa71
+spec_id: BUG-238
+agreed_id: BUG-238
+title: 'Plan ## Followups parse is skipped when a spec is marked Completed directly (bypasses queue done + auto-bump)'
+description: |-
+  The plan \`## Followups\` auto-parse (TASK-96) fires on \`aida queue done\` and on the STORY-86 Done→Completed auto-bump. It does **NOT** fire when a spec is marked Completed **directly** via \`aida edit <ID> --status completed\` — and the \`/aida-review\` skill's step 10 does exactly that after a merge. Result: **plan followups are silently lost** for any spec completed through the review skill.
+
+  ## Symptom (2026-05-18, BUG-233 / PR-94)
+
+  The \`/aida-review\` skill marked BUG-233 Completed directly (step 10). BUG-233's plan had a \`## Followups\` section with two bullets. \`aida pull\`'s auto-bump saw BUG-233 already-Completed → skipped the followup parse entirely. The two followups had to be filed by hand (the AIDA_ZEN-provenance BUG and the run-UUID-into-drain-state TASK).
+
+  This is silent loss — the worst kind. No error, no warning; the followups just never get filed. Every spec completed via the review skill's step-10 path loses its plan followups.
+
+  ## Fix
+
+  The \`## Followups\` parse should fire on **any** transition into a terminal-completed state, regardless of the mechanism:
+
+  - [ ] \`aida edit <ID> --status completed\` (and \`--status done\`) triggers the same followup parse as \`aida queue done\` / the auto-bump
+  - [ ] Idempotency holds — the existing \`[aida:followups]\` marker prevents double-filing whichever path runs first (per TASK-96)
+  - [ ] \`/aida-review\` skill step 10: either the direct \`aida edit\` now triggers the parse (preferred — fix it at the command level), or step 10 explicitly invokes the followup parse
+  - [ ] Test: \`aida edit <ID> --status completed\` on a spec whose plan has \`## Followups\` → followups filed (or prompted, per AIDA_AUTO_FOLLOWUPS)
+  - [ ] Test: idempotency — direct-completion then a later auto-bump does not double-file
+
+  ## Composes with
+
+  - **TASK-96** (the \`## Followups\` auto-parse this BUG patches a hole in)
+  - **STORY-86** (the Done→Completed auto-bump — one of the two paths that currently DOES fire the parse)
+  - The AIDA_ZEN-provenance BUG + run-UUID TASK (BUG-233's two lost followups — the concrete casualties)
+
+  ## Origin
+
+  2026-05-18: the PR-94 reviewer noted that because it marked BUG-233 Completed directly per the review skill's step 10, \`aida pull\`'s auto-bump would see it already-Completed and skip the followup parse — so BUG-233's two plan followups needed hand-filing. The hand-filing is done; this BUG closes the hole so the next directly-completed spec doesn't silently drop its followups.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T14:41:49.016364112Z
+modified_at: 2026-05-18T14:41:49.016364112Z
+req_type: Bug
+tags:
+- auto-bump
+- followups
+- from-self-test:BUG-233
+- silent-loss
+- task-96
