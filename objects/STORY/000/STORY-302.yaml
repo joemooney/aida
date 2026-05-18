@@ -1,0 +1,26 @@
+id: 019e38d9-6a61-7563-bd12-10a0d1437d8b
+spec_id: STORY-302
+agreed_id: STORY-302
+title: 'Review PR-83: feat(cli): graceful-exit sentinel — orchestrator reaps the Claude REPL (TASK-329)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e38c6`) for branch `task-329`.
+
+  - PR: <https://github.com/joemooney/aida/pull/83>
+  - Branch: `task-329` → `main`
+
+  ## Covers
+
+  - TASK-329
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 83` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T02:10:33.185008196Z
+modified_at: 2026-05-18T02:10:33.185008196Z
+req_type: Story
