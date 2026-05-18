@@ -61,12 +61,12 @@ description: |-
   ## Origin
 
   2026-05-17/18: a BUG-228 implementer (a legitimate orchestrator child) reported \`AIDA_AUTO_COMPLETE=1\` as a \"stray export leaked into an interactive shell.\" Dialog role filed this BUG as an env leak (high priority) WITHOUT verifying. User then ran \`env | grep AIDA\` on their actual interactive shell — no AIDA_AUTO_COMPLETE present — disproving the leak theory. The var existed only in orchestrator-child process environments, where it belongs. The genuine bug is that a child can't tell a legit orchestrator context from a standalone one — corrected framing above.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:38.878522976Z
-modified_at: 2026-05-18T07:21:59.767864973Z
+modified_at: 2026-05-18T07:22:04.083748923Z
 req_type: Bug
 tags:
 - auto-complete
@@ -82,3 +82,7 @@ comments:
   content: 'Implemented (commit 19120f17). Corroboration token: orchestrator mints a per-run UUID, holds an RAII marker .aida/orchestrator-runs/<uuid> recording its PID, passes AIDA_AUTO_COMPLETE_TOKEN to every phase child. Children/skills corroborate via `aida orchestrator status` (orchestrated|interactive); queue work prints an informational note for a bare var with no live token. AC4 note: no ''stray export leak'' warning path existed in code or templates — it was the BUG-228 implementer''s ad-hoc message, never committed; satisfied by verified absence. 16 new unit tests; plan at docs/plans/2026-05-18-bug-233-orchestrator-corroboration-token.md.'
   created_at: 2026-05-18T07:21:59.767864973Z
   modified_at: 2026-05-18T07:21:59.767864973Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-18T07:22:04.083748923Z
+  implemented_by: joe
