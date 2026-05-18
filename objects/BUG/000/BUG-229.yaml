@@ -74,7 +74,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T18:25:20.609292583Z
-modified_at: 2026-05-18T16:50:22.747085003Z
+modified_at: 2026-05-18T16:51:42.095151039Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
@@ -84,6 +84,18 @@ tags:
 - in-flight
 - queue-list
 - reviewer-worktree
+comments:
+- id: 019e3c00-218f-7451-a8f2-a8345d3b59a5
+  author: joe
+  content: |-
+    Implemented via commit d89bedec (PR pending):
+
+    - `classify_in_flight_specs` now prefers a non-review-session branch over `pr-N` reviewer-worktree snapshots — `git branch --contains` lists both `pr-71` (snapshot) and `task-282` (real PR-source); the old alphabetical `.next()` picked `pr-71`, so `gh pr list --head pr-71` found nothing and the row rendered "no PR opened yet". Falls back to the `pr-N` branch only when it is the sole candidate.
+    - New `classify_open_pr_display` pure helper maps the three drain-pipeline signals (gh reviewDecision, local review state, CI probe) onto an `InFlightPrDisplay` stage — adds the previously-missing "CI running" state so the orchestrator's CI-wait window no longer mis-reads as "start review". Render wording aligned to the spec's matrix vocabulary.
+
+    Test status: 25 BUG-229/in-flight/review-state tests green + 102 queue tests green; build clean.
+  created_at: 2026-05-18T16:51:42.095151039Z
+  modified_at: 2026-05-18T16:51:42.095151039Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T16:50:22.747085003Z
