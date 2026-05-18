@@ -23,12 +23,12 @@ description: |-
   ## Origin
 
   Spotted by the TASK-265 implementer (2026-05-17) during incidental \`aida show --help\` review while implementing the \`--card\` flag. Pre-existing — predates TASK-265's diff. Filed via the dialog role rather than as a TASK-265 followup because it's an independent BUG with its own audit scope.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:55:30.643881256Z
-modified_at: 2026-05-18T02:33:36.075712921Z
+modified_at: 2026-05-18T02:33:54.475539346Z
 req_type: Bug
 tags:
 - from-implementer:TASK-265
@@ -45,3 +45,7 @@ comments:
     Discovered out-of-scope finding for dialog triage: ~60 *bare* SPEC-IDs (no 'trace:' prefix) are still woven into help-text prose — e.g. 'Bypass the TASK-45 guard', '(EPIC-26)', 'pre-TASK-111 behavior', 'STORY-86's pull-time auto-bump'. These ALSO violate TASK-268 but can't be fixed by /// -> // demotion (the ID is mid-sentence — needs rewording). Worth a separate TASK: 'Audit bare SPEC-IDs out of aida --help prose'.
   created_at: 2026-05-18T02:33:36.075712921Z
   modified_at: 2026-05-18T02:33:36.075712921Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-18T02:33:54.475539346Z
+  implemented_by: joe
