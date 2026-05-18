@@ -1,0 +1,68 @@
+id: 019e3998-e76e-7402-b610-79f008b711f8
+spec_id: BUG-236
+agreed_id: BUG-236
+title: Orchestrator phase-3+ failure recovery hint says 'aida queue work --steal' but the spec is Done — should say 'aida queue rework --work --resume'
+description: |-
+  When \`aida queue work --auto-complete\` fails at phase 3 (reviewer returns RequestChanges), the orchestrator prints a recovery hint:
+
+  \`\`\`
+  → Address the review feedback, then push fixups: \`aida queue work TASK-277 --branch task-277 --steal\`
+  \`\`\`
+
+  Running that hint **errors**:
+
+  \`\`\`
+  Error: \`TASK-277\` isn't queued. Status is Done (work finished on a branch).
+    If review found issues and more commits are needed: \`aida queue rework TASK-277 --work --resume\`
+  \`\`\`
+
+  The hint sends the user to \`aida queue work\`, which only operates on *queued* items — but by the time phase 3 runs, the spec is **Done** (the implementer opened the PR back in phase 1, which flips status to Done). So the phase-3-failure recovery hint is structurally wrong: it can never succeed.
+
+  The correct command — which \`aida queue work\`'s own error message emits — is \`aida queue rework <SPEC> --work --resume\`.
+
+  ## Root cause
+
+  The orchestrator's failure-recovery hint hard-codes \`aida queue work … --steal\` regardless of the spec's current lifecycle status. For a phase-1 failure the spec may still be queued/in-progress (so \`queue work\` is right). For a **phase-3, -4, -5, or -6** failure the spec is already Done (or Completed) — \`queue work\` rejects it, and the user needs \`queue rework\`.
+
+  ## Fix
+
+  The recovery hint must be **status-aware**:
+
+  - Spec status is queued / in-progress (phase 1–2 failures) → \`aida queue work <SPEC> --branch <branch> --steal\`
+  - Spec status is Done / Completed (phase 3+ failures) → \`aida queue rework <SPEC> --work --resume\`
+
+  Simplest correct implementation: the hint logic reads the spec's actual status (it's right there) and emits the matching verb. Or, since phase ≥ 3 implies Done by construction, gate on the phase number.
+
+  ## Acceptance
+
+  - [ ] Phase-3 (RequestChanges) failure hint emits \`aida queue rework <SPEC> --work --resume\`
+  - [ ] Phase-4/5/6 failure hints likewise emit \`rework\` (spec is Done/Completed by then)
+  - [ ] Phase-1/2 failure hints keep \`aida queue work … --steal\` (spec may still be queued/in-progress) — or are themselves verified status-aware
+  - [ ] The emitted command is checked against the spec's actual status so it can never hand the user a command that errors
+  - [ ] Test: simulated phase-3 RequestChanges failure → recovery hint, when run, succeeds (doesn't bounce off the \"isn't queued\" guard)
+  - [ ] Test: phase-1 failure recovery hint still works for an in-progress spec
+
+  ## Composes with
+
+  - **TASK-218** (\`aida queue rework\` — the correct command the hint should point at)
+  - **BUG-226** (orchestrator end-of-phase messaging — sibling: the orchestrator's surfaced text must be accurate)
+  - **STORY-263** (headless reviewer — phase 3's RequestChanges is exactly the trigger path)
+  - \`feedback_run_help_before_suggesting_flags.md\` (a tool emitting a command that doesn't work is the inverse failure — the orchestrator should verify its own hint)
+
+  ## Origin
+
+  2026-05-18, TASK-277 (first-project walkthrough doc) batch:alpha-docs drain. Headless reviewer returned RequestChanges on PR-91 (3 output-block drifts). Orchestrator stopped at phase 3 and printed \`→ … aida queue work TASK-277 --branch task-277 --steal\`. User ran it verbatim; it errored \`TASK-277 isn't queued. Status is Done\`. The \`queue work\` error message itself supplied the correct command (\`aida queue rework TASK-277 --work --resume\`) — so the fix is just making the orchestrator's hint emit what already-correct guidance exists two layers down.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T05:39:42.574770218Z
+modified_at: 2026-05-18T05:39:42.574770218Z
+req_type: Bug
+tags:
+- auto-complete
+- first-users
+- from-self-test:TASK-277
+- recovery-hint
+- reviewer-phase
+- rework
