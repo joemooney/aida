@@ -1,0 +1,26 @@
+id: 019e390d-2299-7ad2-aaea-43eee71101a1
+spec_id: STORY-304
+agreed_id: STORY-304
+title: 'Review PR-85: BUG-223: orchestrator phase-1 follows /aida-pr branch swaps'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e38fc`) for branch `epic-23-2026-05-17`.
+
+  - PR: <https://github.com/joemooney/aida/pull/85>
+  - Branch: `epic-23-2026-05-17` → `main`
+
+  ## Covers
+
+  - BUG-223
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 85` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T03:07:02.681332827Z
+modified_at: 2026-05-18T03:07:02.681332827Z
+req_type: Story
