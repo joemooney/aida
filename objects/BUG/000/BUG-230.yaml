@@ -59,9 +59,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:04:34.050931963Z
-modified_at: 2026-05-18T00:07:55.274984962Z
+modified_at: 2026-05-18T06:22:24.980654523Z
 req_type: Bug
 tags:
+- batch:orchestrator-hardening
 - exit-action
 - first-users
 - from-self-test:TASK-318
