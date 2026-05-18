@@ -1,0 +1,26 @@
+id: 019e3be9-0301-7101-bab3-394e00cf8805
+spec_id: STORY-321
+agreed_id: STORY-321
+title: 'Review PR-98: fix(reviewer): standalone reviewer end-of-command summary (BUG-226)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3bd4`) for branch `bug-226`.
+
+  - PR: <https://github.com/joemooney/aida/pull/98>
+  - Branch: `bug-226` → `main`
+
+  ## Covers
+
+  - BUG-226
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 98` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T16:26:26.945605952Z
+modified_at: 2026-05-18T16:26:26.945605952Z
+req_type: Story
