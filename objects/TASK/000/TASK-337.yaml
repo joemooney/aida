@@ -1,0 +1,73 @@
+id: 019e3ba3-f3b7-7242-8e11-2c0f5271d179
+spec_id: TASK-337
+agreed_id: TASK-337
+title: docs/positioning/vs-claude-code-subagents.md — where AIDA sits vs Claude Code's /agents subagents
+description: |-
+  Write \`docs/positioning/vs-claude-code-subagents.md\` — the focused comparison answering *"AIDA's roles/orchestrator vs Claude Code's \`/agents\` subagents — am I getting the same thing twice?"* Every Claude Code user who evaluates AIDA will ask this; right now there is no written answer.
+
+  ## Why this doc is needed (dual audience)
+
+  1. **Users evaluating AIDA** — they see Claude Code's \`/agents\` ("Software Architect / Code Writer / Code Reviewer") and AIDA's roles (planner/implementer/reviewer/advisor) and reasonably wonder if AIDA reinvents a built-in. They need a crisp answer to decide.
+  2. **The advisor role** — when a user asks the advisor a "where does AIDA fit / vs X" question, the advisor needs this written down to give good guidance. Ecosystem-positioning is reference material the advisor *consults*, not improvises.
+
+  ## The content (the analysis to capture — established 2026-05-18)
+
+  **The core thesis: different layers, not duplication.**
+
+  - **Claude Code subagents (`/agents`)** = a **within-conversation primitive**: specialized prompt + tool allowlist + model, fresh context window, ephemeral. For context-isolation, parallelism, task-specialization *inside one session*. An invocation's context dies with the conversation. A subagent is **a tool you delegate to**.
+  - **AIDA roles + orchestrator** = a **cross-conversation, graph-anchored workflow system**. A role (implementer/reviewer/advisor) is a *position in a lifecycle* — a full `claude` **process** in its own git worktree, holding a lease, tied to a spec in the requirement graph. State (queue, leases, spec status, trace comments, the graph) persists in git, **independent of any conversation**. A role is **a workflow position with persistent state**.
+
+  **The separating test** (use this verbatim in the doc — it's the clearest framing):
+  > A Claude Code "Code Reviewer" subagent reviews code you hand it, in the moment; the result lives only in that conversation.
+  > An AIDA reviewer role reviews a specific PR tied to a specific spec, writes a verdict file that drives an orchestrator merge phase, flips the spec's status in the graph, fires the auto-bump — durable, queryable, surviving every conversation ending.
+
+  **Why AIDA's roles can't just BE subagents**: subagents have no persistence, no graph anchoring, no cross-session lifecycle. AIDA's defensible niche IS the persistent graph (stable IDs, typed relationships, trace comments, MCP, queue, lifecycle). You cannot build a queue, a lease system, or a 6-phase merge orchestrator out of stateless task-runners — wrong layer.
+
+  **They compose, they don't compete**: an AIDA role can spawn a subagent internally (an implementer using a Code Reviewer subagent for a pre-`/aida-pr` self-check). Subagents make AIDA *better*; AIDA is the layer above them.
+
+  **The name-rhyme caveat**: "Software Architect / Code Writer / Code Reviewer" ≈ AIDA planner/implementer/reviewer is *surface rhyme, not substance*. Say so explicitly — it's what triggers the false "reinventing the wheel" worry.
+
+  **The discipline (AIDA's own watch-item)**: AIDA must NOT reinvent the within-session parts. If AIDA finds itself building "spawn a quick specialized in-context helper" → stop, that's `/agents`. AIDA's niche is strictly the cross-session graph+lifecycle layer; below that line, defer to Claude Code primitives.
+
+  ## Acceptance
+
+  - [ ] \`docs/positioning/vs-claude-code-subagents.md\` written, matching the style/length of the existing \`docs/positioning/vs-*.md\` files (one focused neighbor comparison)
+  - [ ] Covers: the layer distinction, the separating test (verbatim), why-roles-can't-be-subagents, they-compose, the name-rhyme caveat, AIDA's own don't-reinvent-within-session discipline
+  - [ ] Honest — acknowledges the surface overlap rather than dismissing the question; a reader's "am I reinventing?" worry is *answered*, not waved away
+  - [ ] Living-doc header: dated, with a refresh trigger (Claude Code's subagent surface evolves — per \`feedback_competitive_analysis_is_living_doc.md\`, note when it was last checked against the current Claude Code feature set)
+  - [ ] README's positioning-links section includes it (composes with TASK-276 — if TASK-276 shipped, add the row; if not, TASK-276 picks it up)
+  - [ ] The advisor role's discipline (scaffolded CLAUDE.md discipline section / advisor-role guide in docs/aida-discipline/) points at \`docs/positioning/\` as the reference for "where does AIDA fit / vs X" questions — so the advisor *consults* it rather than improvising
+  - [ ] CLAUDE.md's \`docs/positioning/\` pointer line updated to list the new doc alongside vs-ultraplan/vs-ultrareview/vs-karpathy-md/vs-saas-pm
+
+  ## Out of scope
+
+  - **Comparisons to other agent frameworks** (LangGraph, CrewAI, etc.) — one neighbor per doc; this one is Claude Code subagents only
+  - **Tutorial on how to USE subagents inside AIDA roles** — that's a how-to, separate from positioning; file later if wanted
+  - **Re-architecting AIDA to use subagents** — the doc may note where AIDA *could* use them, but implementing that is not this TASK
+
+  ## Composes with
+
+  - \`docs/positioning/\` (the existing vs-* family this joins)
+  - **TASK-276** (README surfaces docs/positioning/ links — this doc becomes one of the surfaced links)
+  - \`feedback_competitive_analysis_is_living_doc.md\` (positioning docs need refresh cadence — Claude Code's surface moves)
+  - \`feedback_dialog_role_responsibilities.md\` ("articulate mental models" — ecosystem-fit is one; the advisor uses positioning docs to do it)
+  - \`feedback_capture_doc_seeds.md\` (this TASK is a captured doc seed from a live advisory exchange)
+
+  ## Origin
+
+  2026-05-18: Claude Code surfaced a tip about \`/agents\` (Software Architect / Code Writer / Code Reviewer). User asked the advisor: *"how does this relate to aida, are we reinventing the wheel?"* The advisor gave the layer-distinction analysis. User: *"all this information deserves to be recorded — for users of aida being able to find out where it sits in the ecosystem is important. Information like this helps in your advisory role."* Correct on both counts: it's a recurring evaluation question (user-facing) and reference material the advisor needs (advisor-facing). This TASK records the analysis as a durable positioning doc.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T15:11:01.047654937Z
+modified_at: 2026-05-18T15:11:01.047654937Z
+req_type: Task
+tags:
+- alpha-readiness
+- claude-code-subagents
+- competitive-analysis
+- documentation
+- ecosystem
+- living-doc
+- positioning
