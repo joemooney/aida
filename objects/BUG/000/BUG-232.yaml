@@ -1,0 +1,77 @@
+id: 019e389a-4ddd-7bb2-b998-20dab3b17665
+spec_id: BUG-232
+agreed_id: BUG-232
+title: 'Plain --zen without --auto-complete: end-of-session stalls at ''say the word'' with PR unopened'
+description: |-
+  \`aida queue work <SPEC> --zen\` **without** \`--auto-complete\` leaves the implementer in a confusing limbo at end-of-session: --zen suppresses the 3-path menu (correct behavior), but with no orchestrator to hand off to, the skill has no \"obvious default\" to auto-resolve toward — so it falls back to a vague free-text wait (\"say the word to pick it up\"). Worse, the PR is never opened, so the spec is committed-but-unshipped.
+
+  ## Symptom (2026-05-17, TASK-264)
+
+  \`aida queue work TASK-264 --zen\` (no \`--auto-complete\`):
+  - Implementer shipped TASK-264, committed \`7e99c963\` on \`task-264\` branch
+  - Ran \`aida queue done TASK-264 --yes\` → status Done, removed from queue
+  - **Never ran \`/aida-pr\`** → \`gh pr list --head task-264\` is empty
+  - End-of-session: no 3-path menu (--zen suppressed it), no auto-proceed, just \"say the word to pick it up\" — a free-text limbo
+  - Net: TASK-264 is Done + committed but unshipped; the branch can't merge because no PR exists
+
+  ## Two distinct issues
+
+  ### Issue A: --zen has no defined end-of-session behavior without an orchestrator
+
+  \`--zen\`'s auto-resolve was designed assuming \`--auto-complete\` is also set — the orchestrator is the handoff target that makes \"open PR + exit\" the obvious default. Plain \`--zen\` (single-spec, no orchestrator) has no such target. The skill template's kind:confirmation auto-resolve fires (suppresses the menu) but resolves to... nothing actionable.
+
+  Fix options:
+  1. **Plain --zen still shows the end-of-session menu** — without an orchestrator, the human genuinely IS the decision-maker for \"grab next vs stop\"; suppressing the menu removes a real choice. --zen should only suppress menus when there's an orchestrator to absorb the decision.
+  2. **Plain --zen auto-resolves to \"open PR\"** — opening a PR after committing is almost always correct; the only genuine fork is \"grab next vs stop\" which can stay a prompt.
+
+  Recommend **option 1**: --zen's menu suppression should be gated on \`AIDA_AUTO_COMPLETE\` being set. No orchestrator → the menu is a real choice → show it. \`--zen\` without \`--auto-complete\` is arguably a mild misuse, but it should degrade gracefully to default behavior, not to a limbo.
+
+  ### Issue B: implementer marked \`queue done\` before opening a PR
+
+  Independent of --zen: the implementer ran \`aida queue done\` (status → Done, dequeued) but never ran \`/aida-pr\`. A spec at Done with no PR can't progress — \`done\` means \"work finished on a branch,\" but the branch needs a PR to merge. The skill flow should either:
+  - Open the PR before \`queue done\`, OR
+  - \`queue done\` should warn when the spec's branch has commits but no open PR
+
+  ## Acceptance
+
+  ### Issue A
+
+  - [ ] --zen menu suppression is gated on \`AIDA_AUTO_COMPLETE=1\` — plain \`--zen\` (no orchestrator) shows the end-of-session menu normally
+  - [ ] OR (if option 2 chosen): plain --zen auto-resolves end-of-session to \`/aida-pr\`, then shows only the \"grab next vs stop\" choice
+  - [ ] \`--zen\` pre-flight line notes whether an orchestrator is present (\`autonomy: zen (no orchestrator — menus shown)\` vs \`autonomy: zen + auto-complete\`)
+
+  ### Issue B
+
+  - [ ] \`aida queue done <SPEC>\` warns (or errors) when the spec's branch has commits ahead of main but no open PR — \"TASK-264 marked done but no PR is open for \`task-264\`; run \`/aida-pr\` to ship it\"
+  - [ ] \`/aida-pickup\` / \`/aida-implement\` skill flow opens the PR before \`queue done\`, OR makes the ordering explicit so the implementer can't skip it
+
+  ### Tests
+
+  - [ ] Simulated plain --zen session (no AIDA_AUTO_COMPLETE) → end-of-session menu appears
+  - [ ] Simulated --auto-complete --zen session → end-of-session menu suppressed + auto-resolved
+  - [ ] \`aida queue done\` on a branch-with-commits-no-PR → warning fires
+
+  ## Composes with
+
+  - **STORY-287** (--zen mode — this BUG is a gap in its design: auto-resolve assumed --auto-complete co-presence)
+  - **TASK-329** (sentinel-file exit — orthogonal; that's about HOW to exit, this is about WHAT the end-of-session decision is)
+  - **BUG-230** (--zen Exit can't synthesize Ctrl-D — sibling --zen end-of-session gap)
+  - \`feedback_precise_lifecycle_vocabulary.md\` (\"done\" ≠ \"shipped\" — Issue B is exactly this conflation: queue done without a PR)
+
+  ## Origin
+
+  2026-05-17: user ran \`aida queue work TASK-264 --zen\` (no --auto-complete). Implementer shipped + committed + \`queue done\`, then stalled at \"say the word to pick it up\" with no PR opened. User: *\"this is not prompting me on what to do and I have used --zen.\"* --zen's menu suppression was designed for the --auto-complete case; plain --zen inherits the suppression without the orchestrator handoff that makes it coherent.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T01:01:37.117971412Z
+modified_at: 2026-05-18T01:01:37.117971412Z
+req_type: Bug
+tags:
+- end-of-session
+- first-users
+- from-self-test:TASK-264
+- no-orchestrator
+- unopened-pr
+- zen-mode
