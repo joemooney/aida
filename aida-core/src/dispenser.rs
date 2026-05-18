@@ -191,7 +191,10 @@ impl FileDispenser {
         if !path.exists() {
             let state = DispenserState::new(mode.clone());
             let content = toml::to_string_pretty(&state)?;
-            std::fs::write(&path, content)?;
+            // Atomic write: concurrent `aida add` from parallel sessions can
+            // race the counter file — a torn write hands out duplicate
+            // SPEC-IDs or blocks allocation entirely. trace:TASK-331 | ai:claude
+            crate::write_atomic(&path, content)?;
         }
         Ok(Self { path, mode })
     }
@@ -204,7 +207,10 @@ impl FileDispenser {
 
     fn save_state(&self, state: &DispenserState) -> Result<()> {
         let content = toml::to_string_pretty(state)?;
-        std::fs::write(&self.path, content)?;
+        // Atomic write: the advisory lock in `next()` serializes writers, but
+        // atomic rename additionally guarantees a reader (or a crash) never
+        // sees a half-written counter file. trace:TASK-331 | ai:claude
+        crate::write_atomic(&self.path, content)?;
         Ok(())
     }
 }
@@ -678,5 +684,53 @@ mod tests {
                 .unwrap();
             assert_eq!(val, "hello");
         }
+    }
+
+    // AC6 (TASK-331): concurrent-writer stress test on the dispenser counter
+    // file. N threads each open their own FileDispenser on the SAME path and
+    // pull a batch of IDs. The advisory lock serializes the writers and
+    // write_atomic keeps each counter write torn-free — the invariant is
+    // that every ID handed out is unique and contiguous. A torn counter
+    // file would replay a value (duplicate SPEC-ID) or fail to parse.
+    #[test]
+    fn concurrent_file_dispensers_allocate_unique_ids() {
+        use std::sync::Arc;
+        const THREADS: usize = 8;
+        const PER_THREAD: usize = 25;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = Arc::new(dir.path().join("dispenser.toml"));
+        FileDispenser::open((*path).clone(), IdMode::Centralized).unwrap();
+
+        let handles: Vec<_> = (0..THREADS)
+            .map(|_| {
+                let path = Arc::clone(&path);
+                std::thread::spawn(move || {
+                    let d = FileDispenser::open((*path).clone(), IdMode::Centralized).unwrap();
+                    (0..PER_THREAD)
+                        .map(|_| d.next("TASK").unwrap())
+                        .collect::<Vec<u32>>()
+                })
+            })
+            .collect();
+
+        let mut ids: Vec<u32> = handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect();
+        let total = ids.len();
+        assert_eq!(total, THREADS * PER_THREAD);
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(
+            ids.len(),
+            total,
+            "dispenser handed out duplicate IDs under concurrency"
+        );
+        // Contiguous 1..=total — no torn state lost or replayed a counter.
+        assert_eq!(*ids.last().unwrap(), total as u32);
+        // The file still parses and the counter is consistent.
+        let reopened = FileDispenser::open((*path).clone(), IdMode::Centralized).unwrap();
+        assert_eq!(reopened.peek("TASK").unwrap(), total as u32 + 1);
     }
 }

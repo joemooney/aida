@@ -7,6 +7,7 @@ pub mod db;
 pub mod dispenser;
 pub mod docs_review;
 pub mod export;
+pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
 pub mod hlc;
@@ -58,6 +59,7 @@ pub use db::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, Version
 pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 #[cfg(feature = "native")]
 pub use dispenser::{FileDispenser, SqliteDispenser};
+pub use fs_atomic::write_atomic;
 pub use hlc::{Hlc, HlcTimestamp};
 pub use import::{
     create_backup, execute_import, validate_import_content, validate_import_file, ImportConfig,

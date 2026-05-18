@@ -144,7 +144,11 @@ pub fn save(path: &Path, manifest: &SessionManifest) -> Result<()> {
         std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
     let serialized = toml::to_string_pretty(manifest).context("serialize manifest")?;
-    std::fs::write(path, serialized).with_context(|| format!("write {}", path.display()))?;
+    // Atomic write: multiple concurrent `aida queue work` sessions can race
+    // the manifest file — a torn write makes the plan unreadable for every
+    // session reading it back. trace:TASK-331 | ai:claude
+    aida_core::write_atomic(path, serialized)
+        .with_context(|| format!("write {}", path.display()))?;
     Ok(())
 }
 
@@ -527,5 +531,81 @@ mod tests {
         };
         save(&path, &m).unwrap();
         assert!(!mark_started(&path, "MISSING").unwrap());
+    }
+
+    // AC6 (TASK-331): concurrent-writer stress test on the manifest path.
+    // N threads repeatedly save distinct manifests to the same file while a
+    // reader loads it in a tight loop. Every load must parse cleanly — a
+    // torn write makes `toml::from_str` fail. A bare `std::fs::write` (which
+    // this path used before TASK-331) loses this race.
+    #[test]
+    fn concurrent_manifest_saves_never_tear() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        const WRITERS: usize = 6;
+        const ROUNDS: usize = 40;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = Arc::new(dir.path().join("S.manifest.toml"));
+        save(&path, &manifest("seed", &[("STORY-1", 1)])).unwrap();
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let reader = {
+            let path = Arc::clone(&path);
+            let stop = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    load(&path).expect("manifest load observed a torn write");
+                }
+            })
+        };
+
+        let writers: Vec<_> = (0..WRITERS)
+            .map(|w| {
+                let path = Arc::clone(&path);
+                std::thread::spawn(move || {
+                    for r in 0..ROUNDS {
+                        // Vary item count so each save is a different length —
+                        // a torn write is then unambiguous, not masked by an
+                        // equal-size overwrite.
+                        let specs: Vec<(String, u32)> = (0..=(w + r % 5))
+                            .map(|i| (format!("SPEC-{w}-{i}"), i as u32 + 1))
+                            .collect();
+                        let refs: Vec<(&str, u32)> =
+                            specs.iter().map(|(s, p)| (s.as_str(), *p)).collect();
+                        save(&path, &manifest(&format!("S{w}"), &refs)).unwrap();
+                    }
+                })
+            })
+            .collect();
+
+        for h in writers {
+            h.join().unwrap();
+        }
+        stop.store(true, Ordering::Relaxed);
+        reader.join().unwrap();
+        load(&path).expect("manifest unreadable after the storm");
+    }
+
+    // AC7 (TASK-331): grep guard — the manifest write path is known-concurrent
+    // and must stay atomic. Flags any bare `fs::write` reintroduced into the
+    // production code (everything before the test module), nudging toward
+    // aida_core::write_atomic.
+    #[test]
+    fn manifest_write_path_stays_atomic() {
+        let src = include_str!("session_manifest.rs");
+        let production = src.split("#[cfg(test)]").next().unwrap_or(src);
+        for (n, line) in production.lines().enumerate() {
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
+            assert!(
+                !line.contains("fs::write("),
+                "session_manifest.rs:{} uses a bare fs::write on a \
+                 known-concurrent path — use aida_core::write_atomic instead \
+                 (torn-write race, TASK-331)",
+                n + 1
+            );
+        }
     }
 }

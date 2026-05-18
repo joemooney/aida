@@ -90,7 +90,8 @@ pub fn build(store: &RequirementsStore, output_dir: &Path, dry_run: bool) -> Res
                 std::fs::create_dir_all(parent)
                     .with_context(|| format!("failed to create directory {}", parent.display()))?;
             }
-            std::fs::write(path, &body_with_marker)
+            // Atomic write — uniform with the concurrent-writer paths. trace:TASK-331 | ai:claude
+            aida_core::write_atomic(path, &body_with_marker)
                 .with_context(|| format!("failed to write {}", path.display()))?;
         }
         if existing.is_some() {

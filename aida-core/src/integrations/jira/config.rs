@@ -169,7 +169,8 @@ impl JiraConfig {
             std::fs::create_dir_all(parent)?;
         }
         let content = toml::to_string_pretty(self)?;
-        std::fs::write(path, content)?;
+        // Atomic write — uniform with the concurrent-writer paths. trace:TASK-331 | ai:claude
+        crate::write_atomic(&path, content)?;
         Ok(())
     }
 

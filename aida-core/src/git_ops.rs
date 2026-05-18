@@ -966,7 +966,9 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
 
     // Save updated counters
     let content = toml::to_string_pretty(&counters)?;
-    std::fs::write(&counters_path, content)?;
+    // Atomic write: concurrent `aida add` from parallel sessions tears the
+    // counter file; a torn counter double-allocates IDs. trace:TASK-331 | ai:claude
+    crate::write_atomic(&counters_path, content)?;
 
     // Stage and commit
     if !assignments.is_empty() {
