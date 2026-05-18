@@ -37,11 +37,13 @@ comment directly above each one:
 
 Before surfacing any prompt, check the autonomy mode (`echo "${AIDA_ZEN:-}"`):
 
-- **Non-empty** — *advisor-on-standby* mode (`aida queue work --zen`, or
+- **`1`** — *advisor-on-standby* mode (`aida queue work --zen`, or
   `AIDA_ZEN=1` exported). Auto-resolve every `kind:confirmation` prompt to
   option 1 and proceed, printing `↳ zen: auto-resolved "<prompt>" →
   option 1`. Still surface every `kind:design-fork` prompt unchanged.
-- **Empty** — default mode: surface every prompt, no change.
+- **Anything else** (`0`, `false`, empty, unset) — default mode: surface
+  every prompt, no change. Only the exact value `1` enables zen — matching
+  `AIDA_HEADLESS` — so `AIDA_ZEN=0` reliably disables it. trace:TASK-327
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen` — it has its own finding-filing path (step 7b). An
