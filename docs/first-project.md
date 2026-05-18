@@ -144,7 +144,7 @@ Requirement added successfully!
 ID: BUG-1
 
 $ aida rel add BUG-1 STORY-3 --type references
-✓ BUG-1 --references--> STORY-3
+Added relationship: BUG-1 --[References]--> STORY-3
 ```
 
 `aida rel add` works on specs that already exist — use it whenever the
@@ -206,10 +206,15 @@ Check the queue:
 
 ```
 $ aida queue list
-implementer queue (2)
-  1. STORY-1   Add and list tasks
-  2. STORY-2   Mark a task done
+My Queue (2 items)
+────────────────────────────────────────────────────────────────────────────────
+  1. STORY-1 Add and list tasks  [▸ Approved]  [for:implementer]  [@EPIC-1*]
+  2. STORY-2 Mark a task done  [▸ Approved]  [for:implementer]  [@EPIC-1*]
 ```
+
+Each line carries the spec's status, the role it's routed to (`[for:implementer]`),
+and a dimmed `[@EPIC-1*]` — the parent epic, derived from the graph so you can
+see what a queued item belongs to without opening it.
 
 > **Without AIDA** — "What should I pick up next?" is a question you answer in
 > stand-up, in Slack, or by re-reading the board. The queue *is* the answer: an
@@ -378,8 +383,9 @@ Git linkage:
   PR         PR-1
   Commits (1)
     a3f9c1e2 [AI:claude] feat(cli): add and list tasks (STORY-1)
-  Files traced (1)
-    src/commands.rs — cmd_add, cmd_list
+  Files traced (2)
+    src/commands.rs — cmd_add
+    src/commands.rs — cmd_list
 ```
 
 That **Git linkage** block is the answer to "what code implements this spec?" —
