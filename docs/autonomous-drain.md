@@ -50,6 +50,27 @@ auto-resolves the `confirmation` prompts and still surfaces the
 `design-fork` ones. The classification rules live in
 `docs/aida-discipline/skill-prompt-kinds.md`.
 
+### Exiting a `--zen` session — the graceful-exit sentinel (TASK-329)
+
+Auto-resolving a `confirmation` prompt is easy when the answer is "open the
+PR" or "merge". It is harder when the answer is **"exit the session"**: a
+skill cannot synthesize the Ctrl+D it would press interactively (BUG-230),
+so under `--zen` the end-of-drain annotation used to print while the Claude
+Code REPL sat open at `❯`, blocking the orchestrator.
+
+`--zen` closes that gap with a one-way file signal. The orchestrator exports
+an `AIDA_EXIT_SENTINEL` path to each phase and, instead of blocking on the
+child, polls for it. The skill's absolute last action is
+`touch "$AIDA_EXIT_SENTINEL"`; the orchestrator sees the file and reaps the
+idle REPL (SIGTERM, a 2s grace window, then SIGKILL).
+
+**Friction after a `--zen` step:** near zero. In interactive mode the user
+still presses Ctrl+D; under `--zen` the orchestrator reaps the REPL within
+~100ms of the skill touching the sentinel — no keystroke, no hang. The
+polling and grace windows are tunable via `AIDA_EXIT_POLL_MS` /
+`AIDA_EXIT_GRACE_MS`. Full protocol:
+`docs/aida-discipline/skill-prompt-kinds.md`.
+
 ## What runs headless today
 
 This is a **reviewer-first cut**. Of the two Claude phases:
