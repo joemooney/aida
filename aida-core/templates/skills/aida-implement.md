@@ -76,6 +76,21 @@ overrides `--zen`. An un-annotated prompt defaults to `design-fork`
 (pause-safe). Author guidance: `docs/aida-discipline/skill-prompt-kinds.md`.
 trace:STORY-287
 
+**Graceful exit under the orchestrator (TASK-329).** If this skill runs
+inside an `aida queue work --auto-complete` session and `$AIDA_EXIT_SENTINEL`
+is set, then under `$AIDA_ZEN` (or a headless drain) — once every commit, PR,
+and comment is done and there is no hand-off to another skill — the
+**absolute last action of the session** is:
+
+```bash
+[ -n "${AIDA_EXIT_SENTINEL:-}" ] && touch "$AIDA_EXIT_SENTINEL"
+```
+
+The orchestrator polls for that file and reaps the otherwise-idle REPL (a
+skill cannot synthesize the Ctrl+D it would press interactively — BUG-230).
+Touch it **once, last**; skip it entirely in default interactive mode. Full
+protocol: `docs/aida-discipline/skill-prompt-kinds.md`. trace:TASK-329
+
 ## Workflow
 
 ### Step 1: Load Requirement Context

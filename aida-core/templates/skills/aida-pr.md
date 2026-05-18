@@ -455,13 +455,37 @@ end` yourself — that is the orchestrator's phase 2; just exit cleanly.
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ⇒ Exit — let the orchestrator continue | Ctrl+D | The orchestrator detects the open PR when this session exits and runs phases 2-6 automatically; this is the whole point of `--auto-complete` |
+| ⇒ Exit — let the orchestrator continue | Interactive: press Ctrl+D. Under `$AIDA_ZEN` / headless: the skill instead runs `touch "$AIDA_EXIT_SENTINEL"` as its absolute last action (see below) | The orchestrator detects the open PR and reaps this session — within ~100ms once the sentinel is touched — then runs phases 2-6 automatically |
 | ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — PR-<N> stays open but CI / review / merge will not run |
+
+**Graceful exit signal (TASK-329).** A skill cannot synthesize the Ctrl+D
+the `⇒` row names. So under `$AIDA_ZEN` (or a headless drain), where this
+`confirmation` menu auto-resolves to the `⇒` row, the **absolute last action
+of the session** — after the PR is opened and pushed and the reviewer-queue
+story is filed (step 11) — is:
+
+```bash
+[ -n "${AIDA_EXIT_SENTINEL:-}" ] && touch "$AIDA_EXIT_SENTINEL"
+```
+
+The `--auto-complete` orchestrator polls for that sentinel and reaps the
+otherwise-idle REPL within ~100ms. Touch it **once, last** — anything done
+after the touch races the reap and may be killed mid-flight. Then print the
+zen annotation and stop:
+
+```
+↳ zen: auto-resolved "next step" → ⇒ Exit — orchestrator will reap in ~100ms
+```
+
+In default (non-`$AIDA_ZEN`) interactive mode, do **not** touch the sentinel
+— render the table and let the user press Ctrl+D. Full protocol:
+`docs/aida-discipline/skill-prompt-kinds.md`.
 
 Render this block instead of the two below whenever `AIDA_AUTO_COMPLETE` is
 set. The reviewer-queue story still gets filed (step 11) — the orchestrator
 runs the reviewer itself as phase 3, so the queued story is the
 manual-recovery fallback if the chain is later aborted. trace:TASK-286
+trace:TASK-329
 
 *Auto-queue succeeded (✓ filed or ⓘ already exists):*
 

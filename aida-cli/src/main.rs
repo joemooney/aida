@@ -4,6 +4,7 @@ mod cli;
 #[cfg(feature = "remote")]
 mod client;
 mod docs;
+mod exit_signal;
 mod findings;
 mod global_queue;
 mod history;
@@ -46123,6 +46124,9 @@ struct RealPhaseDriver {
     /// headless (`claude -p`); the implementer phase stays interactive in
     /// this cut (STORY-276 wires it). `None` → fully interactive.
     no_human: Option<auto_complete::NoHumanMode>,
+    /// TASK-329: poll cadence + SIGTERM→SIGKILL grace for the graceful-exit
+    /// signal. Resolved once from `AIDA_EXIT_POLL_MS` / `AIDA_EXIT_GRACE_MS`.
+    exit_cfg: exit_signal::ExitSignalConfig,
 }
 
 impl RealPhaseDriver {
@@ -46144,6 +46148,7 @@ impl RealPhaseDriver {
             ci_run_id: None,
             aida_exe: resolve_aida_exe(),
             no_human,
+            exit_cfg: exit_signal::ExitSignalConfig::from_env(),
         }
     }
 
@@ -46198,20 +46203,38 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         if let Some(pm) = &self.permission_mode {
             cmd.args(["--permission-mode", pm]);
         }
-        let status = cmd.status().map_err(|e| {
+
+        // TASK-329: spawn + poll for the graceful-exit sentinel rather than a
+        // blocking `.status()`. In interactive `--zen` mode the skill
+        // auto-resolves its end-of-drain prompt and goes idle, but the Claude
+        // Code REPL has no EOF to synthesize from inside its own session
+        // (BUG-230) — so the orchestrator reaps the child when the skill
+        // touches `.aida/sessions/<session-id>.exit-requested`. A child that
+        // exits on its own is still reaped immediately; the sentinel is
+        // additive, not a replacement. Protocol: see the `exit_signal` module.
+        // trace:TASK-329 | ai:claude
+        let sentinel = exit_signal::sentinel_path(&self.sessions_dir(), &session_uuid);
+        let outcome = exit_signal::spawn_and_wait(cmd, &sentinel, &self.exit_cfg).map_err(|e| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Spawn,
                 format!("could not launch the implementer session: {e}"),
             )
         })?;
-        if !status.success() {
-            return Err(auto_complete::PhaseFailure::new(format!(
-                "the implementer session exited {} — it was aborted or errored",
-                status
-                    .code()
-                    .map(|c| c.to_string())
-                    .unwrap_or_else(|| "with a signal".to_string())
-            )));
+        if let exit_signal::ExitOutcome::Natural(status) = &outcome {
+            if !status.success() {
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "the implementer session exited {} — it was aborted or errored",
+                    status
+                        .code()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "with a signal".to_string())
+                )));
+            }
+        } else {
+            eprintln!(
+                "  {} implementer skill signalled completion — session reaped",
+                "ⓘ".cyan()
+            );
         }
 
         // Locate the session `queue work` created — pinned by the id we
@@ -46381,20 +46404,34 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         if self.no_human.is_some() {
             cmd.arg("--no-human");
         }
-        let status = cmd.status().map_err(|e| {
+
+        // TASK-329: same graceful-exit handling as the implementer phase —
+        // the reviewer skill touches the sentinel as its absolute last action,
+        // after the verdict file is written. The interactive `--zen` reviewer
+        // would otherwise sit at the REPL with no EOF to synthesize (BUG-230).
+        // trace:TASK-329 | ai:claude
+        let sentinel = exit_signal::sentinel_path(&self.sessions_dir(), &session_uuid);
+        let outcome = exit_signal::spawn_and_wait(cmd, &sentinel, &self.exit_cfg).map_err(|e| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Spawn,
                 format!("could not launch the reviewer session: {e}"),
             )
         })?;
-        if !status.success() {
-            return Err(auto_complete::PhaseFailure::new(format!(
-                "the reviewer session exited {}",
-                status
-                    .code()
-                    .map(|c| c.to_string())
-                    .unwrap_or_else(|| "with a signal".to_string())
-            )));
+        if let exit_signal::ExitOutcome::Natural(status) = &outcome {
+            if !status.success() {
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "the reviewer session exited {}",
+                    status
+                        .code()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "with a signal".to_string())
+                )));
+            }
+        } else {
+            eprintln!(
+                "  {} reviewer skill signalled completion — session reaped",
+                "ⓘ".cyan()
+            );
         }
 
         let verdict = read_verdict_file(&verdict_path)?;
