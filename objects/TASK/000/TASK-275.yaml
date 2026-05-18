@@ -46,12 +46,12 @@ description: |-
   ## Origin
 
   User stated 2026-05-16 alpha targets: tech-savvy friends/colleagues; install paths: prebuilt tarball OR build from source. README must surface both clearly for the audience.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:22.589954018Z
-modified_at: 2026-05-18T04:12:04.024368359Z
+modified_at: 2026-05-18T04:19:46.225691666Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -87,3 +87,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-18T04:10:28.042526843Z
   implemented_by: joe
+  completed_at: 2026-05-18T04:19:46.225691666Z
+  completion_sha: 77051f66b79535a5a389a1c7bfacd4d02d00684e
