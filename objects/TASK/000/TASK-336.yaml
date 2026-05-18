@@ -1,0 +1,35 @@
+id: 019e3b89-2d18-7702-83d7-fec01478b7e0
+spec_id: TASK-336
+agreed_id: TASK-336
+title: Fold the orchestrator run-UUID into STORY-301's drain-state file (BUG-233 followup)
+description: |-
+  BUG-233 introduced an orchestrator run-UUID corroboration token so a child can verify a live orchestrator parent. STORY-301's drain-state file (\`.aida/drain-state.json\`) is the natural place to persist that run-UUID — a child corroborates \`AIDA_AUTO_COMPLETE\` / \`AIDA_ZEN\` by checking the env-passed UUID against the live drain-state file's recorded UUID.
+
+  ## Acceptance
+
+  - [ ] STORY-301's drain-state file schema includes the orchestrator run-UUID (the BUG-233 corroboration token)
+  - [ ] The orchestrator writes its run-UUID into the drain-state file at start
+  - [ ] BUG-233's corroboration check (and the sibling AIDA_ZEN-provenance BUG's check) can verify the env-passed UUID against the drain-state file
+  - [ ] Stale drain-state file (dead orchestrator PID) → the UUID does not corroborate
+
+  ## Composes with
+
+  - **STORY-301** (the drain-state file this extends)
+  - **BUG-233** (the run-UUID this persists)
+  - The AIDA_ZEN-provenance BUG (a second consumer of the persisted run-UUID)
+
+  ## Origin
+
+  BUG-233 plan \`## Followups\` bullet ("fold the run-UUID into STORY-301's drain-state file") — not auto-filed (BUG-233 marked Completed directly; followup parse skipped). Filed by hand.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T14:41:46.264019075Z
+modified_at: 2026-05-18T14:41:46.264019075Z
+req_type: Task
+tags:
+- corroboration
+- drain-status
+- from-self-test:BUG-233
+- run-uuid
