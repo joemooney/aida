@@ -66,12 +66,18 @@ the manual menu. The orchestrator (STORY-246) owns phases 2-6 (end session →
 wait CI → review → merge → pull → build), so the manual menu's "keep
 working" / "stop here" rows are actively wrong: they break the chain.
 
-**Detection.** The orchestrator sets `AIDA_AUTO_COMPLETE=1` on every session
-it launches. A skill's end-of-session step checks `echo
-"${AIDA_AUTO_COMPLETE:-}"` — non-empty → orchestrator mode, which overrides
-every other state-aware template. The reviewer skill additionally keys off
-`AIDA_REVIEW_VERDICT_FILE` (set alongside `AIDA_AUTO_COMPLETE`) because that
-var also carries *where* to write the verdict.
+**Detection.** The orchestrator sets `AIDA_AUTO_COMPLETE=1` *plus* a
+corroboration token `AIDA_AUTO_COMPLETE_TOKEN=<run-uuid>` on every session it
+launches (BUG-233). A skill's end-of-session step runs `aida orchestrator
+status` — it prints `orchestrated` only when `AIDA_AUTO_COMPLETE` is set AND
+the token names a live orchestrator run, else `interactive`. Orchestrator
+mode overrides every other state-aware template. **Skills must not key off
+the bare `AIDA_AUTO_COMPLETE` env var** — an unverifiable bare flag is
+exactly BUG-233's bug (a stray or stale value misfired both ways);
+`aida orchestrator status` corroborates it against the live run. The
+reviewer skill additionally keys off `AIDA_REVIEW_VERDICT_FILE` (set
+alongside `AIDA_AUTO_COMPLETE`) because that var also carries *where* to
+write the verdict.
 
 **The menu.** Two rows — `⇒` for the forward move (submit the PR / exit so
 the orchestrator continues) and the orchestrator-specific `⏏` for the abort

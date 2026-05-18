@@ -10,6 +10,7 @@ mod global_queue;
 mod history;
 mod mcp;
 mod not_found;
+mod orchestrator;
 mod process_probe;
 mod prompts;
 mod session;
@@ -62,10 +63,10 @@ use aida_core::{
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     DocCommand, DocsCommand, FeatureCommand, FindingsCommand, GitHubCommand, GitLabCommand,
-    JiraCommand, NodeCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
-    RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand,
-    SessionWakeupCommand, TraceCommand, TypeCommand,
+    JiraCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, QueueCommand,
+    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
+    SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -385,6 +386,13 @@ fn run() -> Result<()> {
         return handle_pr_command(pr_cmd);
     }
 
+    // BUG-233: orchestrator-context introspection. Dispatched before storage
+    // init — it reads only env vars + the `.aida/orchestrator-runs/` marker
+    // dir, no requirement store. trace:BUG-233 | ai:claude
+    if let Command::Orchestrator(orch_cmd) = &cli.command {
+        return handle_orchestrator_command(orch_cmd);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -682,6 +690,9 @@ fn run() -> Result<()> {
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
+        Command::Orchestrator(_) => {
+            unreachable!("orchestrator is dispatched before storage init")
+        }
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -2166,6 +2177,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
+        Command::Orchestrator(_) => {
+            unreachable!("orchestrator is dispatched before storage init")
+        }
         Command::List {
             status,
             r#type,
@@ -44827,6 +44841,21 @@ fn handle_queue_work(
         }
     }
 
+    // BUG-233: if this session carries `AIDA_AUTO_COMPLETE` without a live
+    // corroboration token, surface it once — informationally. It is NOT a
+    // leak to hunt (BUG-233's corrected diagnosis): the session simply runs
+    // interactive. A corroborated orchestrator child stays silent here.
+    // trace:BUG-233 | ai:claude
+    {
+        let root_for_orch = project_root_for_config
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        if let Some(note) = orchestrator::detect(&root_for_orch).informational_note() {
+            eprintln!("  {} {}", "ⓘ".cyan(), note.dimmed());
+        }
+    }
+
     // TASK-81: scope-conflict pre-flight. If any active lease already
     // owns plan.scope, `session_start` would refuse with "scope X already
     // owned by session Y". Surface that here with a queue-work-flavored
@@ -45288,6 +45317,41 @@ fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String
     }
 }
 
+/// `aida orchestrator status` — print the corroborated orchestrator context
+/// of the current process. The bare status word goes to stdout (so a skill can
+/// branch on it cleanly); any informational note goes to stderr.
+/// trace:BUG-233 | ai:claude
+fn handle_orchestrator_command(cmd: &OrchestratorCommand) -> Result<()> {
+    match cmd {
+        OrchestratorCommand::Status { json } => {
+            // Resolve the shared `.aida/` root from any worktree so a child in
+            // a sibling worktree reads the *orchestrator's* marker dir. On a
+            // resolution failure the marker lookup simply finds nothing — the
+            // verdict fails safe to interactive. trace:BUG-233 | ai:claude
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let ctx = orchestrator::detect(&project_root);
+            if *json {
+                println!(
+                    "{{\"context\":\"{}\",\"corroborated\":{},\"reason\":\"{}\"}}",
+                    ctx.status_word(),
+                    ctx.is_orchestrated(),
+                    ctx.reason_slug()
+                );
+            } else {
+                println!("{}", ctx.status_word());
+            }
+            // The note is informational, never alarming — BUG-233's corrected
+            // diagnosis: a bare `AIDA_AUTO_COMPLETE` is not a leak to chase.
+            if let Some(note) = ctx.informational_note() {
+                eprintln!("  {} {}", "ⓘ".cyan(), note.dimmed());
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Entry point for `aida queue work <SPEC> --auto-complete`. Never returns:
 /// always terminates the process with an exit code (0 success, 1-6 = the
 /// 1-based index of the phase that failed). trace:STORY-246 | ai:claude
@@ -45369,16 +45433,46 @@ fn run_auto_complete(
         }
     }
 
+    // BUG-233: register this orchestrator run's corroboration marker. The
+    // RAII guard writes `.aida/orchestrator-runs/<uuid>` (recording our PID)
+    // and removes it on drop — so a child carrying `AIDA_AUTO_COMPLETE_TOKEN=
+    // <uuid>` can verify a *live* orchestrator owns it. A write failure is
+    // non-fatal: the run proceeds with an empty token, and children correctly
+    // fall back to treating themselves as interactive (fail-safe).
+    // trace:BUG-233 | ai:claude
+    let run_marker = match orchestrator::RunMarkerGuard::register(&project_root, spec) {
+        Ok(guard) => Some(guard),
+        Err(e) => {
+            if !json {
+                eprintln!(
+                    "  {} could not register the orchestrator-run marker ({e}) — phase \
+                     children will treat themselves as interactive",
+                    "⚠".yellow()
+                );
+            }
+            None
+        }
+    };
+    let run_token = run_marker
+        .as_ref()
+        .map(|g| g.token().to_string())
+        .unwrap_or_default();
+
     let mut driver = RealPhaseDriver::new(
         project_root.clone(),
         spec.to_string(),
         permission_mode.map(|s| s.to_string()),
         json,
         no_human,
+        run_token,
     );
     let started_at = chrono::Utc::now();
     let result = auto_complete::orchestrate(&mut driver, spec, variant, json);
     let completed_at = chrono::Utc::now();
+    // The marker is no longer needed once `orchestrate` has returned — every
+    // phase child has been spawned and reaped. Drop it explicitly so the
+    // marker file is gone before `record_auto_complete_run` runs.
+    drop(run_marker);
 
     // TASK-266: log the run to `~/.aida/auto-complete.jsonl` and, on a phase
     // failure, auto-draft a Draft BUG so the friction surfaces back to the
@@ -46599,6 +46693,11 @@ struct RealPhaseDriver {
     /// TASK-329: poll cadence + SIGTERM→SIGKILL grace for the graceful-exit
     /// signal. Resolved once from `AIDA_EXIT_POLL_MS` / `AIDA_EXIT_GRACE_MS`.
     exit_cfg: exit_signal::ExitSignalConfig,
+    /// BUG-233: the corroboration token for this orchestrator run. Passed to
+    /// every phase child as `AIDA_AUTO_COMPLETE_TOKEN` so the child can verify
+    /// — against the live marker file — that its `AIDA_AUTO_COMPLETE=1` comes
+    /// from a real orchestrator rather than guessing.
+    run_token: String,
 }
 
 impl RealPhaseDriver {
@@ -46608,6 +46707,7 @@ impl RealPhaseDriver {
         permission_mode: Option<String>,
         json: bool,
         no_human: Option<auto_complete::NoHumanMode>,
+        run_token: String,
     ) -> Self {
         Self {
             project_root,
@@ -46621,6 +46721,7 @@ impl RealPhaseDriver {
             aida_exe: resolve_aida_exe(),
             no_human,
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),
+            run_token,
         }
     }
 
@@ -46671,7 +46772,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let mut cmd = std::process::Command::new(self.aida_exe());
         cmd.current_dir(&self.project_root)
             .args(["queue", "work", &self.spec, "--session-id", &session_uuid])
-            .env("AIDA_AUTO_COMPLETE", "1");
+            .env(orchestrator::AUTO_COMPLETE_ENV, "1")
+            // BUG-233: the corroboration token, so the child can verify this
+            // orchestrator run is live rather than guessing from the bare var.
+            .env(orchestrator::TOKEN_ENV, &self.run_token);
         if let Some(pm) = &self.permission_mode {
             cmd.args(["--permission-mode", pm]);
         }
@@ -46909,7 +47013,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 &session_uuid,
                 "--no-pull",
             ])
-            .env("AIDA_AUTO_COMPLETE", "1")
+            .env(orchestrator::AUTO_COMPLETE_ENV, "1")
+            // BUG-233: corroboration token — same contract as the implementer
+            // phase. The reviewer additionally keys off the verdict-file path.
+            .env(orchestrator::TOKEN_ENV, &self.run_token)
             .env("AIDA_REVIEW_VERDICT_FILE", &verdict_path);
         if let Some(pm) = &self.permission_mode {
             cmd.args(["--permission-mode", pm]);

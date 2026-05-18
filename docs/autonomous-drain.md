@@ -108,6 +108,41 @@ Headless sessions launch with the flag set verified empirically in SPIKE-7
 - `--session-id <uuid>` — persistence stays on, so a killed run is resumable.
 - Never `--bare` — it breaks OAuth/keychain auth.
 
+## The orchestrator → child env contract
+
+A `--auto-complete` orchestrator launches each phase as a child `aida queue
+work` subprocess. The child needs to know it is a *genuine* phase child — so
+it suppresses interactive menus, takes the clean orchestrator hand-off, and
+keys orchestrator-aware skill behavior correctly. The env contract that
+carries this (BUG-233):
+
+| Variable | Set by | Meaning |
+|----------|--------|---------|
+| `AIDA_AUTO_COMPLETE=1` | orchestrator → every phase child | "this session belongs to an `--auto-complete` run" — **not trusted on its own** |
+| `AIDA_AUTO_COMPLETE_TOKEN=<run-uuid>` | orchestrator → every phase child | the corroboration token: a per-run UUID naming a marker file |
+| `AIDA_REVIEW_VERDICT_FILE=<path>` | orchestrator → reviewer child only | absolute path the reviewer writes its verdict JSON to |
+| `AIDA_EXIT_SENTINEL=<path>` | orchestrator → every phase child | file the skill `touch`es as its last action so the orchestrator reaps the idle REPL (TASK-329) |
+
+**Why a token, not a bare flag.** `AIDA_AUTO_COMPLETE=1` alone is
+unverifiable: a child cannot tell a legitimate orchestrator parent from a
+stale inherited value. Guessing wrong does real harm — an orchestrated child
+that thinks it is standalone runs menus that break the chain; a standalone
+session that thinks it is orchestrated stalls waiting for an orchestrator
+that does not exist (BUG-233's two misfires).
+
+**How corroboration works.** For the lifetime of each run the orchestrator
+holds a marker file `.aida/orchestrator-runs/<run-uuid>` (under the *main*
+worktree root) recording its own PID. A child trusts orchestrator-mode only
+when `AIDA_AUTO_COMPLETE=1` **and** `AIDA_AUTO_COMPLETE_TOKEN` names a marker
+whose PID is alive. The marker is RAII-cleaned when the run ends.
+
+**How to check it.** `aida orchestrator status` prints `orchestrated` (the
+corroborated verdict) or `interactive`; `--json` adds `corroborated` +
+`reason`. Skills (`/aida-pickup`, `/aida-pr`, `/aida-review`) branch off that
+word, never the bare env var. A bare `AIDA_AUTO_COMPLETE` with no live token
+is treated as interactive plus a one-line informational note — there is no
+"env leak" to chase (BUG-233 corrected its own original misdiagnosis).
+
 ## When `--no-human` is appropriate
 
 Good candidates:

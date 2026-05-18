@@ -91,6 +91,13 @@ skill cannot synthesize the Ctrl+D it would press interactively — BUG-230).
 Touch it **once, last**; skip it entirely in default interactive mode. Full
 protocol: `docs/aida-discipline/skill-prompt-kinds.md`. trace:TASK-329
 
+Key this off `$AIDA_EXIT_SENTINEL` being set — a per-session absolute path
+the orchestrator minted — not the bare `AIDA_AUTO_COMPLETE` env var. If you
+ever need the corroborated orchestrator verdict explicitly, run
+`aida orchestrator status` (`orchestrated` only when a live orchestrator run
+owns the session — BUG-233); never trust `AIDA_AUTO_COMPLETE` on its own.
+trace:BUG-233
+
 ## Workflow
 
 ### Step 1: Load Requirement Context

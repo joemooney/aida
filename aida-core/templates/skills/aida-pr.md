@@ -402,7 +402,7 @@ without a lease re-claim.
 **Detect state first:**
 
 ```bash
-echo "${AIDA_AUTO_COMPLETE:-}"         # non-empty → spawned by the --auto-complete orchestrator
+aida orchestrator status               # `orchestrated` → corroborated --auto-complete child
 gh run list --branch <pr-branch> --limit 1 --json status,conclusion 2>/dev/null
 aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
 ```
@@ -411,13 +411,16 @@ Combine with step 11's auto-queue outcome (✓ filed / ⓘ already exists /
 ⚠ skipped).
 
 **Check orchestrator mode first** — it overrides both templates below. If
-`echo "${AIDA_AUTO_COMPLETE:-}"` printed a non-empty value, `/aida-pr` ran
-inside an `aida queue work --auto-complete` session (STORY-246): the
+`aida orchestrator status` printed `orchestrated`, `/aida-pr` ran inside a
+*corroborated* `aida queue work --auto-complete` session (STORY-246): the
 orchestrator owns phases 2-6 and is waiting for this session to exit so it
 can continue. Render the *orchestrator mode* template — the manual "End
 implementer session / Start review session" rows are wrong under the
 orchestrator (it ends the session itself as phase 2 and runs the reviewer
-as phase 3). trace:TASK-286
+as phase 3). **Do not** key this off the bare `AIDA_AUTO_COMPLETE` env var:
+`aida orchestrator status` corroborates it against a live orchestrator run,
+so a stray value can't misfire orchestrator mode. trace:TASK-286
+trace:BUG-233
 
 **Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
 `/aida-review`): `▶` = primary recommended action, `⇒` = alternative path,
@@ -443,7 +446,7 @@ the second row's Why states the dependency explicitly. Full convention:
 table — print the lead-ins as normal text, then the table as a real GFM
 markdown table (no surrounding code fence):
 
-*Orchestrator mode (`AIDA_AUTO_COMPLETE` non-empty) — TASK-286:*
+*Orchestrator mode (`aida orchestrator status` = `orchestrated`) — TASK-286:*
 
 PR-<N> opened: <url>
 
@@ -481,8 +484,8 @@ In default (non-`$AIDA_ZEN`) interactive mode, do **not** touch the sentinel
 — render the table and let the user press Ctrl+D. Full protocol:
 `docs/aida-discipline/skill-prompt-kinds.md`.
 
-Render this block instead of the two below whenever `AIDA_AUTO_COMPLETE` is
-set. The reviewer-queue story still gets filed (step 11) — the orchestrator
+Render this block instead of the two below whenever `aida orchestrator
+status` is `orchestrated`. The reviewer-queue story still gets filed (step 11) — the orchestrator
 runs the reviewer itself as phase 3, so the queued story is the
 manual-recovery fallback if the chain is later aborted. trace:TASK-286
 trace:TASK-329
