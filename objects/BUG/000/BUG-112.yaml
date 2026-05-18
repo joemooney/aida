@@ -67,12 +67,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-16: *\"the session list's INITIAL TOPIC column is misleading after long sessions — it's stale data presented as current state... it directly affects 'what does my session list mean to me as a returning user' — alpha-adjacent.\"*
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:42:58.758955507Z
-modified_at: 2026-05-17T18:51:02.644770852Z
+modified_at: 2026-05-18T00:25:07.522847080Z
 req_type: Bug
 tags:
 - alpha-readiness
