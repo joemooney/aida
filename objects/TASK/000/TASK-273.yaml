@@ -108,7 +108,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:49:41.734450590Z
-modified_at: 2026-05-18T04:27:09.560850635Z
+modified_at: 2026-05-18T04:27:20.667511064Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -150,6 +150,18 @@ comments:
     User asked 2026-05-16: *\"what does auto-bump mean?\"* — confirmed it's vocabulary that needs explicit definition in user-facing docs, not just implementation-detail handwaved in conversation.
   created_at: 2026-05-16T20:22:20.417092233Z
   modified_at: 2026-05-16T20:22:20.417092233Z
+- id: 019e3956-a6db-7973-bc48-34db88e08295
+  author: joe
+  content: |-
+    Implemented via PR #88 (commit 62d9837b):
+
+    - README "Spec lifecycle" section: ASCII flow diagram (Draft → Released) + State/Verb table (verbs linked to docs/lifecycle.md command sections) + commands-at-each-stage table
+    - New docs/lifecycle.md deep-dive: seven states in prose, verb vocabulary, edge cases (cluster PRs, batches, parallel pipelining, --auto-complete / goal drains)
+    - CLAUDE.md --status bullet points at docs/lifecycle.md; Bootstrap section references the lifecycle for first-time users
+
+    Test status: docs-only change; cargo fmt --all --check clean, all six README→lifecycle anchors verified to resolve
+  created_at: 2026-05-18T04:27:20.667511064Z
+  modified_at: 2026-05-18T04:27:20.667511064Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T04:25:28.829679128Z
