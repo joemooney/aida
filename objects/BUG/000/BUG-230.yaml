@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:04:34.050931963Z
-modified_at: 2026-05-18T00:04:34.050931963Z
+modified_at: 2026-05-18T00:07:55.274984962Z
 req_type: Bug
 tags:
 - exit-action
@@ -67,3 +67,9 @@ tags:
 - from-self-test:TASK-318
 - interactive-repl
 - zen-mode
+comments:
+- id: 019e3869-248a-7161-b41f-9ceab5fcc71c
+  author: joe
+  content: 'Fix path updated 2026-05-17 per user direction: ship Fix A.5 (sentinel-file graceful exit signal) as TASK-329, NOT Fix A (honest annotation). Reason: A.5 eliminates the EOF click entirely in interactive mode rather than just reframing the friction. A.5 is bounded scope, ships sooner than Fix B (STORY-276), and the sentinel primitive extends naturally to STORY-287''s punt case as a second consumer. When TASK-329 ships, BUG-230 closes. Fix A (annotation reframing) becomes moot — the click goes away, no need to be honest about a friction we eliminated.'
+  created_at: 2026-05-18T00:07:55.274984962Z
+  modified_at: 2026-05-18T00:07:55.274984962Z
