@@ -1,7 +1,7 @@
 id: 019e3998-e76e-7402-b610-79f008b711f8
 spec_id: BUG-236
 agreed_id: BUG-236
-title: Orchestrator phase-3+ failure recovery hint says 'aida queue work --steal' but the spec is Done — should say 'aida queue rework --work --resume'
+title: Auto-complete recovery-hint chain dead-ends — every suggested command bounces off the next layer
 description: |-
   When \`aida queue work --auto-complete\` fails at phase 3 (reviewer returns RequestChanges), the orchestrator prints a recovery hint:
 
@@ -57,7 +57,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T05:39:42.574770218Z
-modified_at: 2026-05-18T05:39:42.574770218Z
+modified_at: 2026-05-18T05:41:42.589166105Z
 req_type: Bug
 tags:
 - auto-complete
