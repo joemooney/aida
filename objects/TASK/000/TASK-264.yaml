@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:45:18.469713543Z
-modified_at: 2026-05-18T00:58:10.732849062Z
+modified_at: 2026-05-18T01:02:53.298001568Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -57,6 +57,19 @@ tags:
 - returning-user
 - session-forget
 - session-list
+comments:
+- id: 019e389b-7772-7e63-b070-255bcdc01feb
+  author: joe
+  content: |-
+    Implemented on branch task-264 (commit 7e99c963):
+
+    - New `aida session forget <id>` command — deletes a single tracked Claude session's .jsonl so it drops out of `aida session list`; resolves a full id or 8-char prefix across worktree + parent project dirs.
+    - Two --force-overridable guards: refuses the session running the command (matched via CLAUDE_CODE_SESSION_ID) and any session whose anchor spec is still in flight (In Progress / Done-not-merged).
+    - Confirmation summary shows role, anchor spec + status, age, last activity; --dry-run previews, --yes scripts it; each removal appends to the .aida/session-prune.log audit trail `session prune` writes.
+
+    Test status: 30/30 aida-cli session tests green (incl. new spec_status_in_flight_covers_unmerged_work); cargo build / fmt --check / clippy clean.
+  created_at: 2026-05-18T01:02:53.298001568Z
+  modified_at: 2026-05-18T01:02:53.298001568Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T00:58:10.732849062Z
