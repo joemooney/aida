@@ -20,7 +20,7 @@ Show what's in the current queue without acting on it. Pairs with
 - At the start of a work session — orient on what's queued before
   picking the next concrete item
 - After queuing several items via `aida queue add --for <role>` from the
-  `dialog` seat, to confirm the routing landed correctly
+  advisor seat (`role:dialog`), to confirm the routing landed correctly
 - Sanity check that `aida role enter <X>` resulted in the expected
   scope filter narrowing the visible queue
 
@@ -97,10 +97,10 @@ If `aida queue list` is empty but `--no-scope` shows items:
 
 ## Producer-seat reminder
 
-If the user is in `dialog` mode and runs `/aida-queue`, the role-default
-filter shows items routed to dialog — usually empty since dialog produces,
-not consumes. Suggest `aida queue list --all` so they see what they've
-been routing to other roles.
+If the user is in `dialog` mode (the advisor seat) and runs `/aida-queue`,
+the role-default filter shows items routed to dialog — usually empty since
+the advisor produces, not consumes. Suggest `aida queue list --all` so they
+see what they've been routing to other roles.
 
 ## Related skills / commands
 

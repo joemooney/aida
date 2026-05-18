@@ -8885,6 +8885,20 @@ fn handle_role_end() -> Result<()> {
     Ok(())
 }
 
+/// The user-facing identity for an internal role name, when the two differ.
+/// The `dialog` role is surfaced to users as **advisor** — "trusted counsel"
+/// reads truer than "dialog" for a seat that gardens the queue, curates
+/// memory, and detects strategic gaps. The internal identifier stays
+/// `dialog` everywhere (config, env vars, queue routing, status line); only
+/// the rendered identity changes.
+// trace:TASK-279 | ai:claude
+fn role_user_facing_identity(name: &str) -> Option<&'static str> {
+    match name {
+        "dialog" => Some("advisor"),
+        _ => None,
+    }
+}
+
 fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
     let roles = list_roles(project_root)?;
     let active = std::env::var("AIDA_SESSION_ROLE").ok();
@@ -8916,10 +8930,17 @@ fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
             .as_deref()
             .map(|p| format!(" — {}", p))
             .unwrap_or_default();
+        // Render the user-facing identity alongside the internal role name
+        // (e.g. `dialog (advisor)`) without changing the stored identifier.
+        // trace:TASK-279 | ai:claude
+        let display_name = match role_user_facing_identity(&role.name) {
+            Some(identity) => format!("{} ({})", role.name, identity),
+            None => role.name.clone(),
+        };
         println!(
             "  {} {:<16}{} last active {}{}",
             marker,
-            role.name.bold(),
+            display_name.bold(),
             scope,
             last,
             purpose
@@ -8950,6 +8971,14 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
             String::new()
         }
     );
+    // trace:TASK-279 | ai:claude
+    if let Some(identity) = role_user_facing_identity(&state.name) {
+        println!(
+            "Identity:    {} {}",
+            identity.bold(),
+            "— user-facing name for this role".dimmed()
+        );
+    }
     println!("Stored at:   {}", path.display());
     println!(
         "Purpose:     {}",
@@ -9129,7 +9158,7 @@ fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> 
 const STARTER_ROLES: &[(&str, &str)] = &[
     (
         "dialog",
-        "Captain / customer / PO hat. Chat with the agent, capture requirements as they emerge, route work to doer roles via `aida queue add --for <role>`. Driver, not implementer.",
+        "Your AIDA advisor — trusted counsel across the project's lifetime. Surfaces friction, articulates mental models, gardens the queue, curates memory across sessions. Produces specs and comments, not code; routes implementation to doer roles via `aida queue add --for <role>`.",
     ),
     (
         "triage",
@@ -9346,6 +9375,49 @@ mod role_repair_tests {
             .filter(|e| e.file_name().to_string_lossy().contains("tmp"))
             .collect();
         assert!(leftovers.is_empty(), "atomic write left a temp file behind");
+    }
+}
+
+// trace:TASK-279 | ai:claude
+#[cfg(test)]
+mod role_identity_tests {
+    use super::{role_user_facing_identity, STARTER_ROLES};
+
+    // The `dialog` role's user-facing identity is "advisor" — surfaced by
+    // `aida role list` (as `dialog (advisor)`) and `aida role show dialog`
+    // (as the `Identity:` line).
+    #[test]
+    fn dialog_renders_as_advisor() {
+        assert_eq!(role_user_facing_identity("dialog"), Some("advisor"));
+    }
+
+    // Doer roles have no separate user-facing identity — the rendered name
+    // is the stored name.
+    #[test]
+    fn doer_roles_have_no_separate_identity() {
+        for name in ["implementer", "reviewer", "architect", "triage"] {
+            assert_eq!(role_user_facing_identity(name), None, "role {name}");
+        }
+    }
+
+    // A freshly-scaffolded `dialog` role ships the advisor framing in its
+    // purpose text, so `aida role show dialog` reads as "advisor" copy even
+    // before the render-time `Identity:` line.
+    #[test]
+    fn starter_dialog_role_uses_advisor_framing() {
+        let (_, purpose) = STARTER_ROLES
+            .iter()
+            .find(|(name, _)| *name == "dialog")
+            .expect("dialog is a starter role");
+        assert!(
+            purpose.contains("advisor"),
+            "dialog starter purpose should use advisor framing: {purpose}"
+        );
+        // The superseded "Captain / PO hat" framing must be gone.
+        assert!(
+            !purpose.contains("PO hat"),
+            "old captain/PO-hat framing should be removed: {purpose}"
+        );
     }
 }
 

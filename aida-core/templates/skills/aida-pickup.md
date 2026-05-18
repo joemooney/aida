@@ -15,8 +15,9 @@ allowed-tools:
 
 Drive the implementer / reviewer / triage / architect loop where the active
 role pulls the next item from the queue, works on it, marks it complete,
-and pulls the next. Pairs with the `dialog` role on the producer side
-(see `aida role enter dialog` and `aida queue add --for <role>`).
+and pulls the next. Pairs with the `dialog` role — the **advisor** seat —
+on the producer side (see `aida role enter dialog` and
+`aida queue add --for <role>`).
 
 ## When to use
 
@@ -33,7 +34,8 @@ and pulls the next. Pairs with the `dialog` role on the producer side
   `eval "$(aida role enter <name>)"` first so the queue filter has a target
   (or the `aida-role <name>` shell helper if `aida dev shell-init --install`
   has been run)
-- The user is in `dialog` mode — that's the producer seat, not the consumer
+- The user is in `dialog` mode (the advisor seat) — that's the producer
+  seat, not the consumer
 
 ## Active role
 
@@ -104,7 +106,7 @@ trace:STORY-287
 Run `aida queue next` to see the top item routed to the current role.
 The output includes:
 - spec_id, title, status, priority, owner
-- The note from whoever queued it (often the dialog seat)
+- The note from whoever queued it (often the advisor seat)
 - First 10 lines of the description
 - Suggested follow-up commands
 
@@ -114,7 +116,7 @@ work — empty queue is a real signal.
 **If the Pending findings block above emitted a line** (STORY-278) — the
 headless reviewer filed review follow-ups that the advisor hasn't triaged
 yet — surface it verbatim to the user as a one-line nudge. Don't act on it
-here (triage is the `dialog` role's job); just make sure it isn't missed.
+here (triage is the advisor's job); just make sure it isn't missed.
 Stay silent when the block is empty.
 
 **If a Plan brief is shown above** (TASK-95) — `aida queue work`
@@ -458,9 +460,9 @@ pre-authorized that loop — auto-take the primary row as described above.
 ## Producer side reminder
 
 If the user complains the queue is always empty, gently remind them about
-the dialog/captain seat:
+the advisor seat:
 
-> The queue is filled by whoever wears the `dialog` role
+> The queue is filled by whoever wears the `dialog` role (the advisor seat)
 > (`eval "$(aida role enter dialog)"`, then
 > `aida queue add <id> --for implementer`).
 > Want to switch hats and queue some work?
