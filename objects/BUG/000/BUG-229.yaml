@@ -69,12 +69,12 @@ description: |-
   2026-05-17 batch:display-polish drain. User noticed \`aida queue list\` showing TASK-282 as \"pr-71 (no PR opened yet)\" simultaneous with the orchestrator's phase-3 reviewer banner saying \"launching claude headless ... prompt \`/aida-review --pr 71\`\". User flag: *\"the queue does not reflect the work in progress?\"*
 
   Drain itself is unaffected (orchestrator correctly advanced through phases). Only the queue display gives misleading state to users glancing at \`aida queue list\` during a drain.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T18:25:20.609292583Z
-modified_at: 2026-05-18T06:22:23.606406090Z
+modified_at: 2026-05-18T16:42:35.113347086Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
