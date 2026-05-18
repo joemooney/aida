@@ -86,7 +86,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:31:11.178643234Z
-modified_at: 2026-05-18T03:19:08.587750530Z
+modified_at: 2026-05-18T03:32:06.089620811Z
 req_type: Story
 tags:
 - aida-init
@@ -158,3 +158,8 @@ comments:
     User asked 2026-05-16: *\"is that something that is also a project specific aida capture. And to what extent should there be project specific extensions to aida capture or other skills/commands?\"* — surfaced the project-specific-extension gap.
   created_at: 2026-05-16T20:33:39.497600400Z
   modified_at: 2026-05-16T20:33:39.497600400Z
+- id: 019e3924-1349-7c42-9721-cf199d0e8d28
+  author: joe
+  content: 'Acceptance correction 2026-05-18 (resolves the implementer''s scope-fork at the design checkpoint): the spec body''s ''writes 10 starter memory files'' is STALE — it was a filing-time snapshot. The producer mechanism is the `propagation: scaffolding-pack` frontmatter marker (per feedback_propagate_generic_discipline_via_scaffolding.md, ''the load-bearing step'' / canonical source of truth). DECISION: ship marker-driven — `aida init --with-memories` harvests every memory carrying the marker, NO hardcoded count. The advisor has corrected the 2 spec-named-but-unmarked files (feedback_verify_before_filing, feedback_failed_flag_attempts_are_ux_signals) so the marked set is now consistently 16. Reword the acceptance criterion from ''writes 10 starter memory files'' to ''writes every memory carrying propagation: scaffolding-pack (currently 16; grows incrementally as new generic-discipline memories are marked)''. The count is an artifact, never a constant.'
+  created_at: 2026-05-18T03:32:06.089620811Z
+  modified_at: 2026-05-18T03:32:06.089620811Z
