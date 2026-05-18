@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T23:47:46.920808117Z
-modified_at: 2026-05-18T15:16:40.364197343Z
+modified_at: 2026-05-18T15:18:05.829079601Z
 req_type: Task
 tags:
 - autonomy-modes
@@ -41,6 +41,18 @@ tags:
 - from-review:PR-78
 - severity:minor
 - zen-mode
+comments:
+- id: 019e3baa-6f05-7021-91e8-8d338422bbd4
+  author: joe
+  content: |-
+    Implemented via commit 0b376a5d (PR pending):
+
+    - aida-cli/src/main.rs handle_queue_work: the pre-flight autonomy banner now gates on AIDA_ZEN == "1" instead of !is_empty(), so AIDA_ZEN=0 / AIDA_ZEN=false no longer counter-intuitively enable zen.
+    - 4 skill templates (aida-pickup / aida-pr / aida-implement / aida-review): the autonomy-mode bullet keys on the exact value 1; anything else (0, false, empty, unset) is default mode — matching AIDA_HEADLESS and the documented --zen contract.
+
+    Test status: cargo build -p aida-cli + cargo fmt --all --check green locally; full workspace suite runs on CI.
+  created_at: 2026-05-18T15:18:05.829079601Z
+  modified_at: 2026-05-18T15:18:05.829079601Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T15:16:40.364197343Z
