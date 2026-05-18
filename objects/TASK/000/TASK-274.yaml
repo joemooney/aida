@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:20.288052451Z
-modified_at: 2026-05-18T04:40:38.987044309Z
+modified_at: 2026-05-18T04:42:12.850288459Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -50,6 +50,18 @@ tags:
 - getting-started
 - onboarding
 - readme
+comments:
+- id: 019e3964-43f2-72f0-a332-c5e5a02dfce5
+  author: joe
+  content: |-
+    Implemented via PR #89 (commit 4034cc6f): https://github.com/joemooney/aida/pull/89
+
+    - Added a `## Getting started in 5 minutes` section to README.md — a 7-step end-to-end walkthrough of one concrete spec (STORY-1) from `aida add` to auto-bumped Completed.
+    - Each step shows representative terminal output; cross-references the lifecycle diagram + State/Verb table; closes with the `--auto-complete` addendum.
+
+    Test status: docs-only change; cargo fmt clean. Markdown anchors + cross-doc links verified.
+  created_at: 2026-05-18T04:42:12.850288459Z
+  modified_at: 2026-05-18T04:42:12.850288459Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T04:40:38.987044309Z
