@@ -15,6 +15,77 @@ fn validate_token(token: &str) -> Result<Session> { ... }
 
 Every line of code links back to a requirement. Every commit references what it implements. The MCP server exposes the whole graph to any agent.
 
+## Spec lifecycle
+
+<!-- trace:TASK-273 | ai:claude -->
+
+Every spec in AIDA travels the same path, from "filed an idea" to "users have it." First-time users hit this path as implicit knowledge that takes hours to absorb — this section is the map. The deep dive (cluster PRs, parallel pipelining, autonomous drains) lives in [`docs/lifecycle.md`](docs/lifecycle.md).
+
+```
+   ┌─────────┐
+   │  Draft  │   filed, not yet agreed
+   └────┬────┘
+        │   aida edit SPEC --status approved
+        ▼
+   ┌──────────┐
+   │ Approved │   agreed — ready to schedule
+   └────┬─────┘
+        │   (optional) aida edit SPEC --status planned  ·  /aida-plan
+        ▼
+   ┌─────────┐
+   │ Planned │   scheduled into a sprint or cycle
+   └────┬────┘
+        │   aida queue work SPEC   → spawns a Claude session in a fresh worktree
+        ▼
+   ┌─────────────┐
+   │ In Progress │   Claude implements · git commit
+   └──────┬──────┘
+          │   /aida-pr   → push branch + open PR
+          ▼
+   ┌────────┐
+   │  Done  │   PR open on GitHub, awaiting CI + review
+   └───┬────┘
+       │   /aida-review → approve · gh pr merge --squash · aida pull
+       ▼
+   ┌───────────┐
+   │ Completed │   merged to main — auto-bumped by aida pull
+   └─────┬─────┘
+         │   make release-minor   → aggregates many completed specs
+         ▼
+   ┌──────────┐
+   │ Released │   version tagged, binaries published
+   └──────────┘
+```
+
+### What "shipped" actually means
+
+"Ship" is fuzzy across the software industry. AIDA names six distinct steps between a local commit and an installable version — when unsure, use the precise verb. Each links to its command in [`docs/lifecycle.md`](docs/lifecycle.md):
+
+| Verb | Where the work is | Spec status |
+|------|-------------------|-------------|
+| [**Committed**](docs/lifecycle.md#committed) | Local git history | In Progress |
+| [**Pushed**](docs/lifecycle.md#pushed) | On `origin` (the remote) | In Progress |
+| [**PR opened**](docs/lifecycle.md#pr-opened) | A GitHub PR exists, awaiting CI + review | Done |
+| [**Reviewed**](docs/lifecycle.md#reviewed) | A reviewer rendered a verdict (approved / changes requested) | Done |
+| [**Merged**](docs/lifecycle.md#merged) | The PR squashed onto `main` | Completed — via auto-bump on `aida pull` |
+| [**Released**](docs/lifecycle.md#released) | A version is tagged and binaries published | cross-spec — many merges aggregate per release |
+
+The default meaning of "shipped" in AIDA's docs is **merged to `main`** — the developer-facing "out the door." For "available to download with a version number," say **released** (e.g. v0.8.0). A merge does not auto-release.
+
+### Commands at each stage
+
+| Transition | Command | What it does |
+|------------|---------|--------------|
+| File a spec | `aida add --title "..." --type task` | Creates the spec in Draft (or Approved with `--status approved`) |
+| Queue it for a role | `aida queue add SPEC --for implementer` | Routes the spec to a role's work queue |
+| Pick it up | `aida queue work SPEC` | Spawns a Claude session in a fresh git worktree |
+| Open a PR | `/aida-pr` *(inside the session)* | Pushes the branch, opens the PR, queues the reviewer |
+| Review it | `/aida-review` *(inside a reviewer session)* | Reads the diff, renders an approve / request-changes verdict |
+| Merge it | `gh pr merge N --squash --delete-branch` | Lands the work on `main` |
+| Promote the status | `aida pull` | Detects the merge, auto-bumps the spec Done → Completed |
+| Release | `make release-minor` | Bumps the version, tags, pushes, publishes binary tarballs |
+| Do all of it at once | `aida queue work SPEC --auto-complete` | Runs the whole lifecycle — implement → CI → review → merge → pull → build — as a single command |
+
 ## Quick start
 
 ### Install
@@ -98,6 +169,8 @@ aida show FR-1-001
 
 `aida init` creates the orphan-branch git store, a SQLite cache for fast queries, the MCP server config, Claude Code skills + commands + hooks, and a docs/plans/ archive — in one command.
 
+After `aida init`, your first spec goes through [the lifecycle above](#spec-lifecycle): it starts in Draft, you approve it, queue it, and `aida queue work` carries it to a merged PR. See [`docs/lifecycle.md`](docs/lifecycle.md) for the full walkthrough.
+
 ## What you get
 
 - **CLI (`aida`)** — daily-driver command-line interface
@@ -138,6 +211,7 @@ Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Lin
 | Doc | What it covers |
 |-----|----------------|
 | [Getting Started](docs/getting-started.md) | Install, init, first requirement |
+| [Spec Lifecycle](docs/lifecycle.md) | Draft → Released, the verb vocabulary, and edge cases |
 | [Administrator's Guide](docs/admin-guide.md) | Storage backends, migration, multi-user setup |
 | [User Guide](docs/user-guide.md) | Daily-use reference for the CLI and dashboard |
 | [Why AIDA?](docs/WHY-AIDA.md) | Problem statement and competitive positioning |
