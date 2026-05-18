@@ -86,7 +86,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:31:11.178643234Z
-modified_at: 2026-05-18T03:56:14.507497654Z
+modified_at: 2026-05-18T03:57:40.772893968Z
 req_type: Story
 tags:
 - aida-init
@@ -168,6 +168,20 @@ comments:
   content: 'Scope resolution 2026-05-18 (implementer design-fork at the checkpoint): the earlier comment that added 3 items ''to STORY-255''s scope'' was never promoted into the 8 binding `## Acceptance` criteria — so per feedback_refinements_must_be_acceptance_criteria.md it is NOT this PR''s contract. DECISION: implement only the 8 acceptance criteria. The 3 comment-items are spun out: items 2+3 (.claude/skills/local/ scaffolding + <skill>.local.md extension mechanism + extending-skills.md) → STORY-305. Item 1 (split the propagation memory into generic/AIDA halves) → advisor memory-curation, handled outside the implementer queue. This comment supersedes the earlier scope-adding comment — STORY-255''s PR is the 8 criteria, nothing more.'
   created_at: 2026-05-18T03:33:22.413198795Z
   modified_at: 2026-05-18T03:33:22.413198795Z
+- id: 019e393b-7e24-73c2-8f82-53b2491a2ee6
+  author: joe
+  content: |-
+    Implemented via PR (commit 7f839021):
+
+    - Channel A: docs/aida-discipline/ — 5 canonical guides (README + advisor-role, lifecycle-vocabulary, workflow-patterns, session-discipline) scaffolded for every init mode by ensure_discipline_pack_scaffold.
+    - Channel B: `aida init --with-memories` (opt-in) — marker-driven starter memory pack; every aida-core/templates/memories/ file carrying `propagation: scaffolding-pack` (16 today) ships to ~/.claude/projects/<slug>/memory/ with originSessionId: aida-scaffold + an FNV-1a scaffoldChecksum. `--refresh` overlays unedited pack files, keeps edited/user files; MEMORY.md scaffold-pack block regenerated.
+    - Channel C: generate_claude_md appends a "Discipline for AIDA-using sessions" section pointing at the pack.
+
+    Marker-driven set (16) confirmed with the user over the spec's literal "10" — the propagation marker is the canonical producer mechanism.
+
+    Test status: workspace tests green — aida-cli 610/610, aida-core 250/250; 5 new tests cover scaffold structure, marker+checksum, refresh overlay vs edit-preservation, and the generated CLAUDE.md section.
+  created_at: 2026-05-18T03:57:40.772893968Z
+  modified_at: 2026-05-18T03:57:40.772893968Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T03:56:14.507497654Z
