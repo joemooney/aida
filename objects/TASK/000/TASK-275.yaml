@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:22.589954018Z
-modified_at: 2026-05-18T04:08:07.510142834Z
+modified_at: 2026-05-18T04:10:21.559603856Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -61,3 +61,9 @@ tags:
 - install
 - prebuilt-binary
 - readme
+comments:
+- id: 019e3947-19f7-70e3-8c55-939b50931f04
+  author: joe
+  content: 'Implemented in ca0ec341. Two factual corrections vs the acceptance examples: (1) real release artifact names are aida-linux-x86_64.tar.gz / aida-darwin-arm64.tar.gz etc. (per .github/workflows/release.yml) — the spec example''s aida-x86_64-linux.tar.gz had the segments reversed and would 404; (2) no Windows prebuilt tarball ships (release matrix is Linux x86_64/arm64 + macOS x86_64/arm64 only), so the Windows subsection points at build-from-source. Also: protoc is only needed for server/gRPC features, not the default CLI build; no MSRV is pinned so prereqs say ''recent stable Rust, edition 2021'' rather than a version. The ''aida-on shell integration'' cleanup criterion is dev-only (it activates an in-repo build) — kept it in the build-from-source/dev paragraph and used a ''PATH'' note for prebuilt-binary users instead.'
+  created_at: 2026-05-18T04:10:21.559603856Z
+  modified_at: 2026-05-18T04:10:21.559603856Z
