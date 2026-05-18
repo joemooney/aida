@@ -28,12 +28,12 @@ description: |
   review of PR-78. Did not sink the verdict (Approved).
 
   Raised in review of PR-78: STORY-287 --zen advisor-on-standby autonomy mode.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T23:47:46.920808117Z
-modified_at: 2026-05-17T23:47:46.920808117Z
+modified_at: 2026-05-18T00:02:13.399488808Z
 req_type: Task
 tags:
 - autonomy-modes
