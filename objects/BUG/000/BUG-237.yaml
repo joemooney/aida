@@ -54,10 +54,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:41:43.423344247Z
-modified_at: 2026-05-18T14:41:43.423344247Z
+modified_at: 2026-05-18T14:42:40.224813080Z
 req_type: Bug
 tags:
 - autonomy-modes
+- batch:orchestrator-hardening
 - corroboration
 - env-leak
 - from-self-test:BUG-233
