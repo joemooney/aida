@@ -2660,6 +2660,14 @@ pub enum QueueCommand {
         // of `--help` output (TASK-268 user-facing-text convention).
         #[clap(long)]
         zen: bool,
+        /// Suppress the end-of-command summary a standalone
+        /// `aida queue work <PR-N> --role reviewer` prints (verdict, cost,
+        /// artifact paths). For scripted consumers that read the verdict
+        /// file `.aida/review-verdicts/PR-N.json` directly. No effect on
+        /// non-reviewer or orchestrator-driven runs.
+        // trace:BUG-226 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        quiet: bool,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
