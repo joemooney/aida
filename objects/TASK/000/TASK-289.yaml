@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:47:42.585063299Z
-modified_at: 2026-05-18T06:42:49.030106463Z
+modified_at: 2026-05-18T06:44:34.147827448Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -54,6 +54,20 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-05-16T22:47:45.140454470Z
+comments:
+- id: 019e39d4-48e3-7030-a1d5-41e7f442d983
+  author: joe
+  content: |-
+    Implemented via PR-93 (commit 80161708): https://github.com/joemooney/aida/pull/93
+
+    - Added a "What makes AIDA distinct" section to README.md, between the project overview and the spec-lifecycle map — 8 numbered dimensions, each a bold lead plus a one-line elaboration.
+    - Cross-linked docs/positioning/README.md back to the README's elevator pitch as a sister doc.
+
+    Deviations from spec text (both noted in commit): linked to docs/positioning/ since the spec's docs/competitive-analysis/positioning.md path does not exist; rendered the role bullet as "advisor" not "dialog" per the TASK-279 user-facing-identity convention.
+
+    Test status: cargo fmt --all -- --check clean (docs-only change, no Rust touched)
+  created_at: 2026-05-18T06:44:34.147827448Z
+  modified_at: 2026-05-18T06:44:34.147827448Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T06:42:49.030106463Z
