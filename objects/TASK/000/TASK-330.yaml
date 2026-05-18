@@ -1,0 +1,12 @@
+id: 019e387d-8b70-7dc0-82f9-096a1b725506
+spec_id: TASK-330
+agreed_id: TASK-330
+title: Stamp the Claude session ID onto comments so `aida session list` can
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T00:30:12.336534153Z
+modified_at: 2026-05-18T00:30:12.336534153Z
+req_type: Task
