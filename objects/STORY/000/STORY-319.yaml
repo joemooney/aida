@@ -1,0 +1,26 @@
+id: 019e3bab-03f2-7261-a7e9-9aa4694cc61a
+spec_id: STORY-319
+agreed_id: STORY-319
+title: 'Review PR-96: [AI:claude] fix(zen): match AIDA_ZEN env var as exact `1`, not non-empty (TASK-327)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3ba4`) for branch `task-327`.
+
+  - PR: <https://github.com/joemooney/aida/pull/96>
+  - Branch: `task-327` → `main`
+
+  ## Covers
+
+  - TASK-327
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 96` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T15:18:43.954281816Z
+modified_at: 2026-05-18T15:18:43.954281816Z
+req_type: Story
