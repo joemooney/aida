@@ -4,6 +4,7 @@
 
 Sister documents:
 
+- [README.md](../../README.md#what-makes-aida-distinct) — the elevator pitch: AIDA's defensible niche in eight bullets. <!-- trace:TASK-289 | ai:claude -->
 - [OVERVIEW.md](../../OVERVIEW.md) — the big-picture vision.
 - [WHY-AIDA.md](../WHY-AIDA.md) — narrative for "why does this exist?"
 - [competitive-analysis.md](../competitive-analysis.md) — the broad landscape scan (2026-03-17 snapshot).
