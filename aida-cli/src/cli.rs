@@ -709,6 +709,38 @@ pub enum SessionCommand {
         #[clap(long)]
         orphans: bool,
     },
+
+    /// Forget a single tracked Claude Code session — delete its `.jsonl`
+    /// metadata file so it drops out of `aida session list`. Sibling of
+    /// `aida session prune`: `prune` is bulk disk-cleanup by age/orphan-ness,
+    /// `forget` is single-target display-management addressed by session id.
+    ///
+    /// Two guards protect mid-work artifacts, each overridable with
+    /// `--force`: it refuses to forget the session currently running this
+    /// command, and any session whose anchor spec is still in flight (In
+    /// Progress, or Done-but-not-yet-merged). `--dry-run` previews without
+    /// acting; `--yes` skips the confirmation. Each removal is appended to
+    /// `<project>/.aida/session-prune.log`, the same audit trail
+    /// `aida session prune` writes.
+    Forget {
+        /// Session id to forget — the full id or an 8-char prefix, as
+        /// shown in the first column of `aida session list`.
+        id: String,
+
+        /// Forget even when a guard would otherwise refuse — the
+        /// currently-active session, or one whose anchor spec is still
+        /// in flight.
+        #[clap(long)]
+        force: bool,
+
+        /// Show what would be forgotten without deleting anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip the y/N confirmation (for scripting / autonomous flows).
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 /// TASK-228: fallback-wakeup registry subcommands. Records live at
