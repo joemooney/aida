@@ -1,0 +1,26 @@
+id: 019e3bc9-beec-7620-9e0e-0cbb32228291
+spec_id: STORY-320
+agreed_id: STORY-320
+title: 'Review PR-97: [AI:claude] fix(zen): open the PR at end of a plain --zen session (BUG-232)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3bb2`) for branch `bug-232`.
+
+  - PR: <https://github.com/joemooney/aida/pull/97>
+  - Branch: `bug-232` → `main`
+
+  ## Covers
+
+  - BUG-232
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 97` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T15:52:17.900223881Z
+modified_at: 2026-05-18T15:52:17.900223881Z
+req_type: Story
