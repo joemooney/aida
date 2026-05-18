@@ -13,6 +13,7 @@ mod not_found;
 mod orchestrator;
 mod process_probe;
 mod prompts;
+mod reviewer_summary;
 mod session;
 mod session_manifest;
 mod status_display;
@@ -33460,6 +33461,25 @@ mod queue_work_tests {
         let msg = format_queue_work_not_queued_error("STORY-86", &r, None);
         assert!(msg.contains("--for <role>"), "msg: {msg}");
     }
+
+    /// BUG-226: `--quiet` parses on `aida queue work` and defaults off, so
+    /// a standalone reviewer prints its end-of-command summary unless the
+    /// caller opts out.
+    #[test]
+    fn queue_work_quiet_flag_parses() {
+        let on = Cli::try_parse_from([
+            "aida", "queue", "work", "PR-65", "--role", "reviewer", "--quiet",
+        ])
+        .expect("--quiet parses");
+        let off = Cli::try_parse_from(["aida", "queue", "work", "PR-65", "--role", "reviewer"])
+            .expect("no --quiet parses");
+        let quiet_of = |c: &Cli| match &c.command {
+            Command::Queue(QueueCommand::Work { quiet, .. }) => *quiet,
+            _ => panic!("expected queue work command"),
+        };
+        assert!(quiet_of(&on), "--quiet should set quiet=true");
+        assert!(!quiet_of(&off), "quiet defaults to false");
+    }
 }
 
 #[cfg(test)]
@@ -42887,6 +42907,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             max,
             no_human,
             zen,
+            quiet,
             user,
         } => {
             let user_id = get_user(user);
@@ -43138,6 +43159,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // TASK-272: the resolved `--batch NAME` (None for a plain
                 // or item-mode pickup) — recorded on the session manifest.
                 effective_batch,
+                // BUG-226: suppress the standalone reviewer summary.
+                *quiet,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -44057,6 +44080,7 @@ fn handle_queue_rework(
             /* session_id */ None,
             /* no_human */ false,
             /* batch_name */ None,
+            /* quiet */ false,
         )?;
     } else {
         println!(
@@ -44694,6 +44718,10 @@ fn handle_queue_work(
     // `aida queue work --batch NAME`. Recorded on the session manifest so
     // /aida-pickup can detect batch context. `None` for a plain pickup.
     batch_name: Option<&str>,
+    // BUG-226: suppress the end-of-command summary for a standalone
+    // reviewer run (`--quiet`). Ignored for non-reviewer / orchestrator
+    // launches, which never print one.
+    quiet: bool,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -45125,7 +45153,64 @@ fn handle_queue_work(
     // with the minted session id so this conversation is itself
     // resumable later. trace:TASK-112 | ai:claude
     let launch = launch.expect("launch decision is set when !no_launch");
+
+    // BUG-226: a standalone `aida queue work <PR-N> --role reviewer` — a
+    // reviewer session on a PR scope NOT spawned by the `--auto-complete`
+    // orchestrator. The orchestrator sets `AIDA_REVIEW_VERDICT_FILE` on
+    // its phase-3 child, so its absence is the standalone signal. For a
+    // standalone run, point the `/aida-review` skill at a verdict file and
+    // route the launch through `run_standalone_reviewer` (spawn + wait +
+    // end-of-command summary) instead of `exec`'ing claude — so the
+    // command no longer exits silently to the shell prompt.
+    // trace:BUG-226 | ai:claude
+    let standalone_reviewer: Option<(u64, std::path::PathBuf)> = if role
+        .eq_ignore_ascii_case("reviewer")
+        && std::env::var("AIDA_REVIEW_VERDICT_FILE")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_none()
+    {
+        plan.review_target.map(|(_, n)| {
+            (
+                n,
+                project_root
+                    .join(".aida")
+                    .join("review-verdicts")
+                    .join(format!("PR-{n}.json")),
+            )
+        })
+    } else {
+        None
+    };
+    if let Some((_, verdict_path)) = &standalone_reviewer {
+        if let Some(dir) = verdict_path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        // Clear any stale verdict so the summary can't read a prior run's.
+        let _ = std::fs::remove_file(verdict_path);
+        // The `/aida-review` skill writes the verdict here — it keys off
+        // this env var. Setting it for standalone runs too is what makes
+        // the skill "always write the verdict file" (BUG-226 acceptance).
+        std::env::set_var("AIDA_REVIEW_VERDICT_FILE", verdict_path);
+    }
+
     eprintln!();
+    if let Some((pr, verdict_path)) = standalone_reviewer {
+        return run_standalone_reviewer(
+            &project_root,
+            pr,
+            launch,
+            &prompt,
+            &permission_mode,
+            &plan.scope,
+            &lease.branch,
+            &role,
+            &lease.worktree_path,
+            no_human,
+            quiet,
+            &verdict_path,
+        );
+    }
     match launch {
         QueueWorkLaunch::Resume(id) => {
             eprintln!(
@@ -45183,6 +45268,124 @@ fn handle_queue_work(
             );
             session::exec_claude_with_session(&permission_mode, name.as_deref(), &prompt, &id)
         }
+    }
+}
+
+/// BUG-226: drive a standalone `aida queue work <PR-N> --role reviewer`
+/// launch — spawn `claude` (not `exec`) so this process survives to read
+/// the verdict file + headless JSONL log and print an end-of-command
+/// summary. The bug was the silent exit to the shell prompt: a headless
+/// reviewer ran to completion, posted a real review, and left no terminal
+/// trace of pass/fail, cost, or where the artifacts landed.
+///
+/// The `--auto-complete` orchestrator's phase-3 reviewer does NOT come
+/// here — it sets `AIDA_REVIEW_VERDICT_FILE`, which clears the standalone
+/// signal — so the orchestrator keeps owning its own progress output.
+/// trace:BUG-226 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn run_standalone_reviewer(
+    project_root: &std::path::Path,
+    pr: u64,
+    launch: QueueWorkLaunch,
+    prompt: &str,
+    permission_mode: &str,
+    scope: &str,
+    branch: &str,
+    role: &str,
+    worktree: &std::path::Path,
+    no_human: bool,
+    quiet: bool,
+    verdict_path: &std::path::Path,
+) -> Result<()> {
+    // Spawn claude, wait, and capture the headless JSONL log path (None
+    // for an interactive review — there is no stream-json log).
+    let (status, log_path): (std::process::ExitStatus, Option<std::path::PathBuf>) = match launch {
+        QueueWorkLaunch::Resume(id) => {
+            eprintln!(
+                "{} {}",
+                "▶".green().bold(),
+                format!(
+                    "resuming claude reviewer session {} in {} (permission-mode {})",
+                    &id[..id.len().min(8)],
+                    worktree.display(),
+                    permission_mode
+                )
+                .cyan()
+            );
+            (
+                session::spawn_claude_resume(&id, Some(permission_mode))?,
+                None,
+            )
+        }
+        QueueWorkLaunch::Fresh(id) => {
+            if no_human {
+                let log_path = project_root
+                    .join(".aida")
+                    .join("headless-logs")
+                    .join(format!("{branch}-{id}.jsonl"));
+                eprintln!(
+                    "{} {}",
+                    "▶".green().bold(),
+                    format!(
+                        "launching claude headless reviewer in {} (claude -p, permission-mode bypassPermissions)",
+                        worktree.display()
+                    )
+                    .cyan()
+                );
+                eprintln!(
+                    "  {} headless output → {}",
+                    "ℹ".cyan(),
+                    log_path.display().to_string().dimmed()
+                );
+                let status = session::spawn_claude_headless(prompt, &id, &log_path)?;
+                (status, Some(log_path))
+            } else {
+                let name = session::derive_session_name(scope, branch, role);
+                eprintln!(
+                    "{} {}",
+                    "▶".green().bold(),
+                    format!(
+                        "launching claude reviewer in {} (permission-mode {}, prompt `{}`)",
+                        worktree.display(),
+                        permission_mode,
+                        prompt
+                    )
+                    .cyan()
+                );
+                let status =
+                    session::spawn_claude_session(permission_mode, name.as_deref(), prompt, &id)?;
+                (status, None)
+            }
+        }
+    };
+
+    // End-of-command summary, assembled from the verdict file the
+    // `/aida-review` skill wrote and (headless only) the JSONL log.
+    // `--quiet` suppresses it for scripted consumers that read the
+    // verdict file directly. trace:BUG-226 | ai:claude
+    if !quiet {
+        let verdict_json = std::fs::read_to_string(verdict_path).ok();
+        let result_event = log_path
+            .as_deref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|s| reviewer_summary::parse_result_event(&s));
+        let summary = reviewer_summary::format_reviewer_summary(
+            pr,
+            verdict_json.as_deref(),
+            result_event.as_ref(),
+            verdict_path,
+            log_path.as_deref(),
+            status.code(),
+        );
+        println!();
+        println!("{summary}");
+    }
+
+    // Propagate claude's exit code so a scripted consumer can branch on
+    // it; a clean exit returns `Ok(())` so `main` records telemetry.
+    match status.code() {
+        Some(0) | None => Ok(()),
+        Some(code) => std::process::exit(code),
     }
 }
 

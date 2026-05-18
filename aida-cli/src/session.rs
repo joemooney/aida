@@ -636,6 +636,37 @@ pub fn exec_claude_with_session(
     )
 }
 
+/// Build the argv (after the `claude` program name) for an interactive
+/// `aida queue work` launch — `--permission-mode`, optional `--name` /
+/// `--session-id`, and a trailing positional initial prompt. Shared by
+/// `exec_claude` (process replacement) and `spawn_claude_session`
+/// (spawn + wait, BUG-226) so the two launch paths can never drift.
+/// trace:BUG-226 | ai:claude
+pub fn claude_session_args(
+    permission_mode: &str,
+    name: Option<&str>,
+    initial_prompt: Option<&str>,
+    session_id: Option<&str>,
+) -> Vec<String> {
+    let mut args = vec!["--permission-mode".to_string(), permission_mode.to_string()];
+    if let Some(n) = name {
+        args.push("--name".to_string());
+        args.push(n.to_string());
+    }
+    // TASK-112: a caller-minted session id, so the conversation is
+    // addressable for `aida queue work --resume`.
+    if let Some(sid) = session_id {
+        args.push("--session-id".to_string());
+        args.push(sid.to_string());
+    }
+    if let Some(p) = initial_prompt {
+        // Positional first-message — claude treats trailing positionals
+        // as the initial prompt for the session.
+        args.push(p.to_string());
+    }
+    args
+}
+
 fn exec_claude(
     permission_mode: &str,
     name: Option<&str>,
@@ -644,20 +675,12 @@ fn exec_claude(
 ) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
-    cmd.args(["--permission-mode", permission_mode]);
-    if let Some(n) = name {
-        cmd.args(["--name", n]);
-    }
-    // TASK-112: a caller-minted session id, so the conversation is
-    // addressable for `aida queue work --resume`.
-    if let Some(sid) = session_id {
-        cmd.args(["--session-id", sid]);
-    }
-    if let Some(p) = initial_prompt {
-        // Positional first-message — claude treats trailing positionals
-        // as the initial prompt for the session.
-        cmd.arg(p);
-    }
+    cmd.args(claude_session_args(
+        permission_mode,
+        name,
+        initial_prompt,
+        session_id,
+    ));
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -669,6 +692,69 @@ fn exec_claude(
         let status = cmd.status().context("failed to spawn claude")?;
         std::process::exit(status.code().unwrap_or(1));
     }
+}
+
+/// BUG-226: spawn an interactive `claude` session (inherited stdio) and
+/// wait for it, returning the exit status. The standalone reviewer path
+/// needs `aida queue work` to *outlive* the launch so it can print an
+/// end-of-command summary — `exec_claude` (process replacement) cannot.
+/// trace:BUG-226 | ai:claude
+pub fn spawn_claude_session(
+    permission_mode: &str,
+    name: Option<&str>,
+    initial_prompt: &str,
+    session_id: &str,
+) -> Result<std::process::ExitStatus> {
+    std::process::Command::new("claude")
+        .args(claude_session_args(
+            permission_mode,
+            name,
+            Some(initial_prompt),
+            Some(session_id),
+        ))
+        .status()
+        .context("failed to spawn claude")
+}
+
+/// BUG-226: spawn (not exec) a headless `claude -p` reviewer and wait,
+/// returning the exit status. Mirrors `exec_claude_headless` exactly —
+/// same `claude_headless_args` flag set, `AIDA_HEADLESS=1` in the env,
+/// stdout redirected to `log_path` — but keeps the parent alive so the
+/// standalone reviewer summary can read the verdict file + JSONL log.
+/// trace:BUG-226 | ai:claude
+pub fn spawn_claude_headless(
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+) -> Result<std::process::ExitStatus> {
+    use std::process::{Command, Stdio};
+    if let Some(dir) = log_path.parent() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("failed to create {}", dir.display()))?;
+    }
+    let log = std::fs::File::create(log_path)
+        .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
+    Command::new("claude")
+        .args(claude_headless_args(prompt, session_id))
+        .env("AIDA_HEADLESS", "1")
+        .stdout(Stdio::from(log))
+        .status()
+        .context("failed to spawn claude")
+}
+
+/// BUG-226: spawn `claude --resume <id>` and wait — the spawn counterpart
+/// of `exec_claude_resume` for the standalone reviewer summary path.
+/// trace:BUG-226 | ai:claude
+pub fn spawn_claude_resume(
+    id: &str,
+    permission_mode: Option<&str>,
+) -> Result<std::process::ExitStatus> {
+    let mut cmd = std::process::Command::new("claude");
+    cmd.args(["--resume", id]);
+    if let Some(m) = permission_mode {
+        cmd.args(["--permission-mode", m]);
+    }
+    cmd.status().context("failed to spawn claude")
 }
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
