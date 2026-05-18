@@ -80,7 +80,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T15:18:05.742873896Z
-modified_at: 2026-05-18T15:18:05.742873896Z
+modified_at: 2026-05-18T15:20:36.943931977Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -89,3 +89,9 @@ tags:
 - competitive-analysis
 - ecosystem-watch
 - living-doc
+comments:
+- id: 019e3bac-bd4f-7a32-a0e3-cab9c3792be5
+  author: joe
+  content: 'Ecosystem-watch seed item (2026-05-18): `/remote-control` — Claude Code feature to drive a session from the Claude mobile app. ASSESSMENT: **complement**. It pairs with --zen mode as the ''human on standby'' mechanism — it lets the --zen standby be a phone instead of the desk, turning ''user left for the day'' from --no-human into --zen-with-reachable-human. ACTION (small): document the --zen + /remote-control pairing in docs/autonomous-drain.md and note it in STORY-287''s three-mode taxonomy (the standby mechanism). OPEN QUESTION for the review to resolve: /remote-control drives a Claude Code session; AIDA''s orchestrator is a Rust process that spawns Claude sessions per phase — does /remote-control compose cleanly with that model, or is there an integration gap? Verify before claiming the pairing works. Add this to ecosystem-watch.md''s seed entry alongside /goal and /agents. Note: this seed item, like /agents before it, was surfaced ad-hoc by the user noticing a Claude Code tip — two ecosystem capabilities in two days caught by luck, not process. That recurrence IS the argument for STORY-318.'
+  created_at: 2026-05-18T15:20:36.943931977Z
+  modified_at: 2026-05-18T15:20:36.943931977Z
