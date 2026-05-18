@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:18:31.593593468Z
-modified_at: 2026-05-18T01:34:28.049338641Z
+modified_at: 2026-05-18T01:34:39.121551689Z
 req_type: Bug
 tags:
 - activity-log
@@ -113,6 +113,11 @@ comments:
     1 stray fragment quarantined, all 10 activity entries preserved).
   created_at: 2026-05-18T01:27:20.805265004Z
   modified_at: 2026-05-18T01:27:20.805265004Z
+- id: 019e38b8-8c11-7f02-aa31-6aa140feaa87
+  author: joe
+  content: 'Shipped in PR #82: https://github.com/joemooney/aida/pull/82 (commit 0cdcb52f). Atomic write_atomic() + parse_role_lenient() + aida role repair. cargo test -p aida-cli 594/594 green; reviewer story STORY-300 queued.'
+  created_at: 2026-05-18T01:34:39.121551689Z
+  modified_at: 2026-05-18T01:34:39.121551689Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T01:27:46.694360613Z
