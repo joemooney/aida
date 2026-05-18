@@ -44782,10 +44782,13 @@ fn handle_queue_work(
     // dispatch when `--zen` is effective) rather than threading a parameter
     // — the env var is the propagation mechanism. The full three-mode
     // pre-launch banner is TASK-306's job. trace:STORY-287 | ai:claude
-    if std::env::var("AIDA_ZEN")
-        .map(|v| !v.is_empty())
-        .unwrap_or(false)
-    {
+    // TASK-327: match the exact value `1`, not merely non-empty — the
+    // documented contract (`--zen` help text) is `AIDA_ZEN=1`, and the
+    // sibling autonomy var `AIDA_HEADLESS` is likewise checked for `1`.
+    // Treating any non-empty string as on made `AIDA_ZEN=0` (and
+    // `AIDA_ZEN=false`) counter-intuitively *enable* zen.
+    // trace:TASK-327 | ai:claude
+    if std::env::var("AIDA_ZEN").map(|v| v == "1").unwrap_or(false) {
         line(
             "autonomy",
             format!(
