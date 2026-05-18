@@ -82,6 +82,10 @@ tags:
 - session-list
 - stale-data
 - ux
+relationships:
+- rel_type: Parent
+  target_id: 019e387d-8b70-7dc0-82f9-096a1b725506
+  created_at: 2026-05-18T00:30:16.449848126Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T00:30:08.165736604Z
