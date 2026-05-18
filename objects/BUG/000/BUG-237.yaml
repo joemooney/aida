@@ -1,0 +1,66 @@
+id: 019e3b89-21ff-7c61-a519-1895c52142fa
+spec_id: BUG-237
+agreed_id: BUG-237
+title: AIDA_ZEN has no provenance corroboration — a leaked AIDA_ZEN=1 silently enables zen mode and can auto-merge
+description: |-
+  \`AIDA_ZEN=1\` enables zen mode (auto-resolve \`kind:confirmation\` prompts). It is set by the \`--zen\` flag and propagated to child processes. **It has no provenance corroboration** — a session that inherits a stale/leaked \`AIDA_ZEN=1\` silently believes it is in zen mode and auto-resolves prompts the user never authorized for that session.
+
+  BUG-233 just fixed exactly this class of bug for \`AIDA_AUTO_COMPLETE\` (corroboration token: trust the env var only when a live orchestrator parent is verifiable). \`AIDA_ZEN\` needs the same treatment — it currently has none.
+
+  ## Why this is high-priority, not cosmetic
+
+  The reviewer of BUG-233's own PR hit this live (2026-05-18): \`AIDA_ZEN=1\`, \`AIDA_AUTO_COMPLETE=1\`, \`AIDA_REVIEW_VERDICT_FILE\`, \`AIDA_EXIT_SENTINEL\` were all present in an interactive shell with no live orchestrator. \`aida orchestrator status\` corroborated \`AIDA_AUTO_COMPLETE\` away (post-BUG-233) — but **\`AIDA_ZEN\` has no such corroboration**, so:
+
+  > "a leaked AIDA_ZEN=1 would have silently auto-merged this PR if I'd followed the skill literally."
+
+  A leaked \`AIDA_ZEN=1\` auto-resolving a \`kind:confirmation\` merge prompt = a **silent unauthorized merge**. That is a safety gap, not a papercut.
+
+  ## Not the same as TASK-327
+
+  TASK-327 covers \`AIDA_ZEN=0\` *parsing semantics* (non-empty=on, so \`=0\` wrongly enables). This BUG is *provenance*: even a correctly-parsed \`AIDA_ZEN=1\` should not be trusted unless its origin is verifiable. Two different facets of the same env var; both need fixing.
+
+  ## The corroboration — note the extra subtlety vs AIDA_AUTO_COMPLETE
+
+  \`AIDA_AUTO_COMPLETE\` is always orchestrator-set, so BUG-233's run-UUID-names-a-live-orchestrator check is sufficient. \`AIDA_ZEN\` is set **two** legitimate ways:
+
+  1. By an orchestrator (\`aida queue work --auto-complete --zen\`) — corroborate against the orchestrator run-UUID (reuse BUG-233's mechanism)
+  2. By a standalone invocation (\`aida queue work --zen\`, no orchestrator) — no orchestrator to corroborate against
+
+  So AIDA_ZEN needs a **per-session zen token**: when \`--zen\` is passed, write a zen-intent marker into that session's lease. A session trusts \`AIDA_ZEN=1\` only when (a) a live orchestrator's run-UUID corroborates it, OR (b) its own lease records the zen-intent token. A bare \`AIDA_ZEN=1\` with neither → treat as interactive + print an informational note (\"AIDA_ZEN set without provenance — treating as interactive; \`unset AIDA_ZEN\` if stale\").
+
+  ## Acceptance
+
+  - [ ] \`--zen\` writes a zen-intent token into the session's lease (or the orchestrator run-record for orchestrator-driven sessions)
+  - [ ] A session trusts \`AIDA_ZEN=1\` only when corroborated: live-orchestrator run-UUID match, OR own-lease zen-intent token match
+  - [ ] Bare \`AIDA_ZEN=1\` with no corroboration → interactive mode + informational note + \`unset\` hint (NOT silent zen)
+  - [ ] No prompt — least of all a merge confirmation — auto-resolves on an uncorroborated \`AIDA_ZEN\`
+  - [ ] Reuse BUG-233's corroboration plumbing where it overlaps (orchestrator run-UUID)
+  - [ ] Tests: leaked AIDA_ZEN (no token) → interactive + note; orchestrator-set → zen; standalone --zen → zen; the merge-confirmation path specifically never auto-resolves uncorroborated
+  - [ ] Audit any other propagated AIDA_* env var (AIDA_REVIEW_VERDICT_FILE, AIDA_EXIT_SENTINEL) for the same provenance gap
+
+  ## Composes with
+
+  - **BUG-233** (the AIDA_AUTO_COMPLETE corroboration this extends to AIDA_ZEN — the shipped template)
+  - **TASK-327** (AIDA_ZEN=0 parsing semantics — sibling AIDA_ZEN bug, different facet)
+  - **STORY-287** (--zen mode — the feature whose env var this hardens)
+  - **STORY-301** (drain-state file — natural home for the orchestrator run-UUID; see the sibling run-UUID TASK)
+  - **STORY-306** (advisor escalation tier — conservative-escalation depends on the autonomy signals being trustworthy)
+
+  ## Origin
+
+  BUG-233 plan \`## Followups\` bullet ("audit whether AIDA_ZEN has the same can't-verify-provenance weakness") — NOT auto-filed because BUG-233 was marked Completed directly, bypassing the followup parse (see sibling BUG). The reviewer of PR-94 elaborated it from a hypothetical to a demonstrated risk: it hit the leaked-AIDA_ZEN condition while reviewing BUG-233's fix, and noted a literal skill-follow would have silently auto-merged PR-94.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T14:41:43.423344247Z
+modified_at: 2026-05-18T14:41:43.423344247Z
+req_type: Bug
+tags:
+- autonomy-modes
+- corroboration
+- env-leak
+- from-self-test:BUG-233
+- provenance
+- safety
+- zen-mode
