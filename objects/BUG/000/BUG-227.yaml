@@ -23,12 +23,12 @@ description: |-
   ## Origin
 
   Spotted by the TASK-265 implementer (2026-05-17) during incidental \`aida show --help\` review while implementing the \`--card\` flag. Pre-existing — predates TASK-265's diff. Filed via the dialog role rather than as a TASK-265 followup because it's an independent BUG with its own audit scope.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:55:30.643881256Z
-modified_at: 2026-05-17T16:55:30.643881256Z
+modified_at: 2026-05-18T02:22:27.769048015Z
 req_type: Bug
 tags:
 - from-implementer:TASK-265
