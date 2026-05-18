@@ -1,0 +1,26 @@
+id: 019e3948-9b72-7eb3-8fd1-704985ec884d
+spec_id: STORY-308
+agreed_id: STORY-308
+title: 'Review PR-87: docs: README install instructions for prebuilt tarball + build-from-source (TASK-275)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3944`) for branch `task-275`.
+
+  - PR: <https://github.com/joemooney/aida/pull/87>
+  - Branch: `task-275` → `main`
+
+  ## Covers
+
+  - TASK-275
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 87` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T04:12:00.242452279Z
+modified_at: 2026-05-18T04:12:00.242452279Z
+req_type: Story
