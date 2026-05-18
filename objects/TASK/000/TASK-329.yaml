@@ -116,12 +116,12 @@ description: |-
   2026-05-17 user observation during TASK-318 --zen validation drain. The implementer's auto-resolved \"Exit\" annotation printed but the Claude Code REPL stayed open, blocking the orchestrator. User proposed: *\"we could touch a file or something and the other bash/rust program could kill the process and move along?\"*
 
   That's a standard graceful-exit-signal pattern. This TASK builds it for the EXIT case; the same primitive extends to STORY-287's deferred --no-human punt case later as a second consumer. Don't generalize on speculation — ship EXIT, extend when punt-case work picks up the thread.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:07:49.456346316Z
-modified_at: 2026-05-18T02:10:38.311917775Z
+modified_at: 2026-05-18T02:20:13.659484710Z
 req_type: Task
 tags:
 - batch:autonomy-modes
@@ -164,3 +164,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-18T02:08:15.321610167Z
   implemented_by: joe
+  completed_at: 2026-05-18T02:20:13.659484710Z
+  completion_sha: 8a4d7cfac8c4a7b15d0c81026b449a5bd3135cb2
