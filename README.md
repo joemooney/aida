@@ -291,6 +291,19 @@ After `aida init`, the most-used skills:
 
 Run `aida` (no args) for the full CLI surface.
 
+## How AIDA compares
+
+<!-- trace:TASK-276 | ai:claude -->
+
+You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/) carries one focused comparison per neighbouring tool, each answering the *"why AIDA instead of X?"* question for one specific X:
+
+- [**AIDA vs `/ultraplan`**](docs/positioning/vs-ultraplan.md) — AIDA layers requirement structure on top of Claude's planning; `/ultraplan` is the planning primitive AIDA composes with.
+- [**AIDA vs `/ultrareview`**](docs/positioning/vs-ultrareview.md) — AIDA's `/aida-review` is workflow-integrated, single-perspective; `/ultrareview` is parallel cloud multi-agent. Complementary, not competing.
+- [**AIDA vs Karpathy-style markdown**](docs/positioning/vs-karpathy-md.md) — Structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
+- [**AIDA vs SaaS PM tools**](docs/positioning/vs-saas-pm.md) — Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.
+
+For the broader problem statement behind all four, see [Why AIDA?](docs/WHY-AIDA.md).
+
 ## Architecture (one paragraph)
 
 Git is the canonical store: one YAML file per requirement on the orphan `aida-store` branch, sharded as `objects/TYPE/000/SPEC-ID.yaml`. A SQLite cache at `.aida/cache.db` (gitignored, auto-rebuilt) projects summary fields for fast list/filter/search. An FTS5 virtual table backs full-text search. Writes go to git first, then the cache (write-through). The cache stale-detects via the orphan branch's HEAD SHA and rebuilds when needed. PostgreSQL is opt-in via feature flag for teams wanting a server-backed shared projection. See `docs/admin-guide.md` for the full storage details and `docs/plans/2026-05-02-git-canonical-storage.md` for the design rationale.
