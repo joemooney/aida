@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T01:32:01.075571300Z
+modified_at: 2026-05-18T01:47:14.095410017Z
 req_type: Bug
 tags:
 - end-of-session
@@ -81,3 +81,8 @@ comments:
   content: 'Root-cause revision 2026-05-18: BUG-233 (AIDA_AUTO_COMPLETE leaks into interactive shells) is likely the TRUE trigger of this BUG''s symptom. The TASK-264 session almost certainly inherited a stale `AIDA_AUTO_COMPLETE=1` from the user''s shell — so it believed it was orchestrator-driven, suppressed the menu, and tried to ''exit for the orchestrator'' that didn''t exist. The symptom wasn''t ''plain --zen without --auto-complete'' — it was ''--zen with a LYING AIDA_AUTO_COMPLETE''. BUG-232''s fix (gate menu-suppression on AIDA_AUTO_COMPLETE) is still valid BUT must key off the *corroborated* signal from BUG-233 (per-run token verifying a live orchestrator parent), not the bare env var. BUG-232 now depends on BUG-233''s corroboration mechanism.'
   created_at: 2026-05-18T01:32:01.075571300Z
   modified_at: 2026-05-18T01:32:01.075571300Z
+- id: 019e38c4-112f-7f92-83db-8831cbb8c7d9
+  author: joe
+  content: 'Diagnosis correction 2026-05-18: my earlier revision blaming a stale AIDA_AUTO_COMPLETE leak is ALSO wrong — there is no leak (user verified `env | grep AIDA` clean; see BUG-233''s corrected diagnosis). TASK-264 was a legitimate orchestrator child of the batch:session-hygiene drain — AIDA_AUTO_COMPLETE=1 was correct in its env. The ''say the word'' limbo''s real root cause is BUG-230 (--zen auto-resolves the Exit menu but can''t synthesize EOF to close the REPL) — the implementer suppressed the menu, leaving the bare ''say the word'' wait, and the orchestrator stayed blocked on the un-exited child. BUG-232 may be a duplicate of BUG-230; recommend the implementer evaluate merging them. The valid residual in BUG-232: skill behavior should key off BUG-233''s corroborated orchestrator signal, not a bare env var or argv-shape guess.'
+  created_at: 2026-05-18T01:47:14.095410017Z
+  modified_at: 2026-05-18T01:47:14.095410017Z
