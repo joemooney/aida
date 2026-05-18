@@ -1,0 +1,26 @@
+id: 019e3b9b-9871-7823-a111-8719be7f1cfa
+spec_id: STORY-317
+agreed_id: STORY-317
+title: 'Review PR-95: [AI:claude] fix(fs): convert non-atomic concurrent-writer paths to write_atomic (TASK-331)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3b8f`) for branch `task-331`.
+
+  - PR: <https://github.com/joemooney/aida/pull/95>
+  - Branch: `task-331` → `main`
+
+  ## Covers
+
+  - TASK-331
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 95` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T15:01:53.393456300Z
+modified_at: 2026-05-18T15:01:53.393456300Z
+req_type: Story
