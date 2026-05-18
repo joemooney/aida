@@ -28,7 +28,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:55:30.643881256Z
-modified_at: 2026-05-18T02:22:27.769048015Z
+modified_at: 2026-05-18T02:33:36.075712921Z
 req_type: Bug
 tags:
 - from-implementer:TASK-265
@@ -36,3 +36,12 @@ tags:
 - spec-id-leak
 - user-facing-text
 - violates:TASK-268
+comments:
+- id: 019e38ee-844b-7222-863b-faeec3f1e851
+  author: joe
+  content: |-
+    Fixed (scoped to acceptance): all 200 'trace:SPEC-ID' markers on clap doc-comments in aida-cli/src/cli.rs demoted /// -> // — they no longer leak into 'aida <subcmd> --help'. Regression test cli::tests::help_text_carries_no_trace_markers walks the full clap tree via CommandFactory. cargo test (603), fmt, clippy all clean.
+
+    Discovered out-of-scope finding for dialog triage: ~60 *bare* SPEC-IDs (no 'trace:' prefix) are still woven into help-text prose — e.g. 'Bypass the TASK-45 guard', '(EPIC-26)', 'pre-TASK-111 behavior', 'STORY-86's pull-time auto-bump'. These ALSO violate TASK-268 but can't be fixed by /// -> // demotion (the ID is mid-sentence — needs rewording). Worth a separate TASK: 'Audit bare SPEC-IDs out of aida --help prose'.
+  created_at: 2026-05-18T02:33:36.075712921Z
+  modified_at: 2026-05-18T02:33:36.075712921Z
