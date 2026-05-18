@@ -1,0 +1,26 @@
+id: 019e38f0-76b1-7c41-9b2b-43d2a3ddbc69
+spec_id: STORY-303
+agreed_id: STORY-303
+title: 'Review PR-84: fix(cli): keep trace: SPEC-IDs out of aida --help text (BUG-227)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e38e3`) for branch `bug-227`.
+
+  - PR: <https://github.com/joemooney/aida/pull/84>
+  - Branch: `bug-227` → `main`
+
+  ## Covers
+
+  - BUG-227
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 84` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T02:35:43.665590140Z
+modified_at: 2026-05-18T02:35:43.665590140Z
+req_type: Story
