@@ -1,0 +1,74 @@
+id: 019e39b7-8918-7541-8249-13d12251e24a
+spec_id: TASK-333
+agreed_id: TASK-333
+title: Make /aida-review's fix-forward policy explicit — reviewers improvise inconsistently (one refuses, one fix-forwards)
+description: |-
+  The \`/aida-review\` skill has **no explicit policy on whether a reviewer may fix-forward** (commit corrections directly to the branch) versus returning RequestChanges. Reviewers improvise — and improvise inconsistently:
+
+  - **PR-64 reviewer (2026-05-16/17)**: found 3 minor misses, *explicitly refused* to fix-forward — *"I did not fix-forward findings 1-3: in orchestrator mode a new commit would desync CI from the merged HEAD."*
+  - **PR-91 reviewer (2026-05-18)**: found 3 \`aida rel list\` output misses, *fix-forwarded them itself* (commit \`90fc26cb\`), then wrote the Approved verdict.
+
+  Same skill, same orchestrator mode, opposite behavior. The skill needs one clear, documented policy.
+
+  ## The two risks a fix-forwarding reviewer creates
+
+  1. **CI desync** — a commit pushed during phase 3 (after phase-2 CI ran) means the merged HEAD differs from what CI validated, unless CI re-runs and the reviewer waits for it. (Low for doc-only changes — a doc edit doesn't change build behavior — high for anything touching code.)
+  2. **Self-grading** — the reviewer reviews, makes its own correction, then approves it. Its fix-forward commit gets no independent review. The implementer/reviewer role separation that AIDA's model rests on is bent.
+
+  ## The tension (this is a genuine design fork — surface it, don't paper over it)
+
+  - **Pure role separation (never fix-forward)**: reviewer judges, never writes. Every miss → RequestChanges. Clean, no desync, no self-grading. **Cost**: under \`--auto-complete --no-human\`, a RequestChanges *halts the drain* (phase 3 exit 3) — so a trivial doc typo stops an overnight batch and forces a rework cycle.
+  - **Allow trivial fix-forward**: keeps the autonomous drain flowing past cosmetic misses. **Cost**: the two risks above.
+
+  ## Recommended policy (the spec's proposed default — confirm or revise at plan time)
+
+  A **scoped, guard-railed** fix-forward allowance:
+
+  1. **Fix-forward is permitted ONLY for**: documentation text, code comments, output-example accuracy, typos — changes that **cannot affect build/test behavior**. Anything touching logic, signatures, control flow, dependencies → **RequestChanges, no fix-forward**, no exceptions.
+  2. **When a reviewer fix-forwards**, it must:
+     - Push the fix-forward commit and confirm GitHub \`mergeStateStatus: CLEAN\` (checks re-ran) before writing the Approved verdict
+     - Record the fix-forward explicitly in the consolidated review comment (commit SHA + what was changed)
+     - File the fix-forward as a finding (STORY-285's \`from-review:PR-N\` surface, kind \`reviewer-fix-forward\`) so the advisor sees the reviewer's self-graded commit post-hoc — restores an independent checkpoint without halting the drain
+  3. **Verdict stays Approved** — the drain continues; the finding is the lightweight after-the-fact review of the reviewer's own commit.
+
+  This keeps the autonomous drain flowing past cosmetic misses (the throughput win) while bounding both risks: doc-only scope kills the CI-desync risk, the finding restores independent oversight of the self-graded commit.
+
+  ## Acceptance
+
+  - [ ] \`/aida-review\` skill template (\`aida-core/templates/skills/aida-review.md\`) gains an explicit **"Fix-forward policy"** section stating the scoped allowance + guardrails
+  - [ ] The doc-only-vs-logic discriminator is concrete enough that a reviewer can apply it without judgment-call ambiguity (worked examples)
+  - [ ] When a reviewer fix-forwards: review comment records the commit SHA + change; a \`kind:reviewer-fix-forward\` finding is filed (depends on STORY-285's findings surface — gate or stub accordingly)
+  - [ ] Reviewer confirms CI/mergeStateStatus CLEAN on the fix-forward commit before Approving
+  - [ ] Logic-touching changes: skill explicitly forbids fix-forward → RequestChanges
+  - [ ] Tests / skill-template review: the policy section is unambiguous; a reviewer following it produces consistent behavior
+
+  ## Out of scope
+
+  - **Re-litigating PR-64 / PR-91** — both shipped fine; this is forward policy
+  - **Auto-detecting "doc-only vs logic"** programmatically — the reviewer (an agent reading the diff) classifies; no static analysis
+  - **Changing the verdict enum** — Approved + a finding is enough; no new \`Approved-with-fixforward\` verdict needed
+
+  ## Composes with
+
+  - **STORY-263** (headless reviewer — the phase this policy governs)
+  - **STORY-285** (implementer/reviewer findings → advisor — the \`kind:reviewer-fix-forward\` finding rides this surface)
+  - **STORY-278** (reviewer findings — sibling)
+  - \`feedback_trust_reviewer_over_dialog_intuition.md\` (reviewer authority — a fix-forwarding reviewer extends that authority into writing; the guardrails keep it bounded)
+
+  ## Origin
+
+  2026-05-18: PR-91 (TASK-277 doc) re-review — the headless reviewer fix-forwarded 3 output-accuracy misses (commit \`90fc26cb\`) and approved. A prior reviewer (PR-64) had explicitly refused the same move citing CI desync. The inconsistency is the skill's fault — no documented policy — so reviewers improvise. PR-91's fix-forward was low-risk (doc-only, CI CLEAN), but the next one might not be.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T06:13:10.040246085Z
+modified_at: 2026-05-18T06:13:10.040246085Z
+req_type: Task
+tags:
+- aida-review
+- autonomous-drain
+- fix-forward
+- from-self-test:PR-91
+- reviewer-policy
+- role-separation
