@@ -7824,27 +7824,116 @@ fn global_role_file(name: &str) -> Option<std::path::PathBuf> {
     global_roles_dir().map(|d| d.join(format!("{}.toml", name)))
 }
 
+/// True if `line` (already trimmed) looks like a TOML `key = value`
+/// assignment — a bare-key identifier followed by `=`. The role-file
+/// salvage path uses it to tell a real field from injected junk such as
+/// the stray `"` a torn write left behind in BUG-228.
+/// trace:BUG-228 | ai:claude
+fn is_toml_kv_line(line: &str) -> bool {
+    match line.split_once('=') {
+        Some((key, _)) => {
+            let key = key.trim();
+            !key.is_empty()
+                && key
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        }
+        None => false,
+    }
+}
+
+/// Parse a role file leniently. A clean file behaves exactly like a strict
+/// `toml::from_str`. When the strict parse fails, salvage the header table
+/// and every well-formed `[[activity]]` entry, dropping — and reporting,
+/// via the returned warnings — any entry that won't parse. This keeps one
+/// corrupted activity append (BUG-228: a torn concurrent write left a
+/// stray `"`) from taking down the whole role. Returns `Err` only when the
+/// *header* itself is unparseable, since nothing useful survives that.
+/// trace:BUG-228 | ai:claude
+fn parse_role_lenient(content: &str) -> Result<(RoleState, Vec<String>)> {
+    // Fast path: a clean file parses strictly, no salvage needed.
+    let strict_err = match toml::from_str::<RoleState>(content) {
+        Ok(state) => return Ok((state, Vec::new())),
+        Err(e) => e,
+    };
+
+    let lines: Vec<&str> = content.lines().collect();
+    let Some(split) = lines.iter().position(|l| l.trim() == "[[activity]]") else {
+        // No activity region to salvage — the corruption is in the header.
+        return Err(anyhow::Error::new(strict_err).context("role file header is unparseable"));
+    };
+
+    let header = lines[..split].join("\n");
+    let mut state: RoleState = toml::from_str(&header)
+        .map_err(|e| anyhow::Error::new(e).context("role file header is unparseable"))?;
+    state.activity.clear();
+
+    // Group the activity region into blocks: each starts at an
+    // `[[activity]]` line and runs up to just before the next one.
+    let mut blocks: Vec<(usize, Vec<&str>)> = Vec::new();
+    for (i, line) in lines.iter().enumerate().skip(split) {
+        if line.trim() == "[[activity]]" {
+            blocks.push((i, Vec::new()));
+        } else if let Some((_, body)) = blocks.last_mut() {
+            body.push(*line);
+        }
+    }
+
+    let mut warnings: Vec<String> = Vec::new();
+    for (line_no, body_lines) in blocks {
+        // Activity entries only ever hold simple single-line string
+        // fields, so dropping any non-blank line that isn't a `key = …`
+        // assignment is safe — and rescues the entry from trailing junk.
+        let mut body = String::new();
+        for ln in &body_lines {
+            let t = ln.trim();
+            if t.is_empty() || is_toml_kv_line(t) {
+                body.push_str(ln);
+                body.push('\n');
+            } else {
+                warnings.push(format!(
+                    "activity entry near line {}: dropped malformed line `{}`",
+                    line_no + 1,
+                    t
+                ));
+            }
+        }
+        match toml::from_str::<RoleActivity>(&body) {
+            Ok(activity) => state.activity.push(activity),
+            Err(e) => warnings.push(format!(
+                "activity entry near line {} skipped — unparseable ({})",
+                line_no + 1,
+                e
+            )),
+        }
+    }
+    state.activity.truncate(ACTIVITY_MAX);
+    Ok((state, warnings))
+}
+
 /// Load a role by name. Looks in the project first, then the global dir.
-/// Returns the state plus the path it was loaded from (for save-back).
-fn load_role(
+/// Returns the state, the path it was loaded from (for save-back), and any
+/// salvage warnings from `parse_role_lenient` (empty for a clean file).
+/// trace:BUG-228 | ai:claude
+fn load_role_with_warnings(
     project_root: &std::path::Path,
     name: &str,
-) -> Result<(RoleState, std::path::PathBuf)> {
+) -> Result<(RoleState, std::path::PathBuf, Vec<String>)> {
     let project_path = project_role_file(project_root, name);
     if project_path.exists() {
         let content = std::fs::read_to_string(&project_path)
             .with_context(|| format!("Failed to read role file {}", project_path.display()))?;
-        let state: RoleState = toml::from_str(&content)
+        let (state, warnings) = parse_role_lenient(&content)
             .with_context(|| format!("Failed to parse role file {}", project_path.display()))?;
-        return Ok((state, project_path));
+        return Ok((state, project_path, warnings));
     }
     if let Some(global_path) = global_role_file(name) {
         if global_path.exists() {
             let content = std::fs::read_to_string(&global_path)
                 .with_context(|| format!("Failed to read role file {}", global_path.display()))?;
-            let state: RoleState = toml::from_str(&content)
+            let (state, warnings) = parse_role_lenient(&content)
                 .with_context(|| format!("Failed to parse role file {}", global_path.display()))?;
-            return Ok((state, global_path));
+            return Ok((state, global_path, warnings));
         }
     }
     anyhow::bail!(
@@ -7857,6 +7946,38 @@ fn load_role(
     )
 }
 
+/// Load a role by name, discarding salvage warnings. Most callers only
+/// want the state; `aida role show` / `aida role repair` use
+/// `load_role_with_warnings` to surface what was quarantined.
+fn load_role(
+    project_root: &std::path::Path,
+    name: &str,
+) -> Result<(RoleState, std::path::PathBuf)> {
+    let (state, path, _warnings) = load_role_with_warnings(project_root, name)?;
+    Ok((state, path))
+}
+
+/// Write `content` to `path` atomically: stage it in a sibling temp file,
+/// then `rename` that file over the target. POSIX (and Windows) `rename`
+/// is atomic, so a concurrent reader or writer can never observe a
+/// half-written or byte-interleaved file — the failure mode under a write
+/// race degrades from the torn TOML that corrupted a role file in BUG-228
+/// to a clean last-writer-wins. The temp name carries the PID so two
+/// processes racing the same target don't collide on the staging path.
+/// trace:BUG-228 | ai:claude
+fn write_atomic(path: &std::path::Path, content: &str) -> std::io::Result<()> {
+    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
+    if let Err(e) = std::fs::write(&tmp, content) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
+}
+
 /// Save back to the same location the role was loaded from (or the
 /// project / global location based on `state.global` for fresh roles).
 fn save_role_at(state: &RoleState, path: &std::path::Path) -> Result<()> {
@@ -7864,7 +7985,9 @@ fn save_role_at(state: &RoleState, path: &std::path::Path) -> Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let content = toml::to_string_pretty(state)?;
-    std::fs::write(path, content).with_context(|| format!("Failed to write {}", path.display()))?;
+    // BUG-228: atomic write — a bare std::fs::write let two concurrent
+    // `aida` processes interleave their bytes into a torn, unparseable file.
+    write_atomic(path, &content).with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(())
 }
 
@@ -7891,7 +8014,10 @@ fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
             let path = entry.path();
             if path.extension() == Some(std::ffi::OsStr::new("toml")) {
                 if let Ok(content) = std::fs::read_to_string(&path) {
-                    if let Ok(state) = toml::from_str::<RoleState>(&content) {
+                    // BUG-228: lenient parse — a role with a corrupted
+                    // activity entry still appears in `aida role list`
+                    // instead of silently vanishing from it.
+                    if let Ok((state, _warnings)) = parse_role_lenient(&content) {
                         roles.push(state);
                     }
                 }
@@ -7970,6 +8096,7 @@ fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         } => handle_role_add(&project_root, name, purpose.as_deref(), *global),
         RoleCommand::List => handle_role_list(&project_root),
         RoleCommand::Show { name } => handle_role_show(&project_root, name.as_deref()),
+        RoleCommand::Repair { name } => handle_role_repair(&project_root, name.as_deref()),
         RoleCommand::Active => handle_role_active(),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
@@ -8501,7 +8628,10 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
             )
         })?,
     };
-    let (state, path) = load_role(project_root, &resolved)?;
+    // BUG-228: lenient load — a corrupted activity entry is reported as a
+    // warning and the rest of the role still renders, rather than the whole
+    // command fail-stopping on an unparseable file.
+    let (state, path, warnings) = load_role_with_warnings(project_root, &resolved)?;
     println!(
         "Role:        {}{}",
         state.name.bold(),
@@ -8570,6 +8700,85 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
             );
         }
     }
+    // BUG-228: surface any salvaged corruption instead of fail-stopping.
+    if !warnings.is_empty() {
+        eprintln!();
+        for w in &warnings {
+            eprintln!("{}: role activity log — {}", "Warning".yellow(), w);
+        }
+        eprintln!(
+            "Run `{}` to quarantine the corrupted fragment(s) and rewrite the file cleanly.",
+            format!("aida role repair {}", resolved).cyan()
+        );
+    }
+    Ok(())
+}
+
+/// Repair a corrupted role file (BUG-228). Quarantines any unparseable
+/// activity-log entries, preserves the header and every well-formed entry,
+/// backs the original up, and rewrites the file cleanly. A healthy file is
+/// left untouched. trace:BUG-228 | ai:claude
+fn handle_role_repair(project_root: &std::path::Path, name: Option<&str>) -> Result<()> {
+    let resolved = resolve_role_name(name)?;
+    // Resolve the on-disk path the way load_role does, but read the raw
+    // bytes so we can salvage a file the strict parser rejects outright.
+    let path = {
+        let project_path = project_role_file(project_root, &resolved);
+        if project_path.exists() {
+            project_path
+        } else {
+            global_role_file(&resolved)
+                .filter(|g| g.exists())
+                .ok_or_else(|| anyhow::anyhow!("No such role: {}", resolved))?
+        }
+    };
+    let content = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read role file {}", path.display()))?;
+
+    if toml::from_str::<RoleState>(&content).is_ok() {
+        println!(
+            "{}: role file {} is healthy — nothing to repair.",
+            "OK".green(),
+            path.display()
+        );
+        return Ok(());
+    }
+
+    let (state, warnings) = parse_role_lenient(&content).with_context(|| {
+        format!(
+            "role file {} is corrupted in its header, beyond the activity log — \
+             auto-repair can't recover it; inspect the file by hand",
+            path.display()
+        )
+    })?;
+
+    // Back the original up before rewriting so nothing is lost.
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+    let backup = path.with_extension(format!("toml.corrupt-{}", stamp));
+    std::fs::copy(&path, &backup)
+        .with_context(|| format!("Failed to back up to {}", backup.display()))?;
+
+    save_role_at(&state, &path)?;
+
+    println!("{}: repaired {}", "OK".green(), path.display());
+    println!("  Original backed up to {}", backup.display());
+    if warnings.is_empty() {
+        println!("  No activity entries needed quarantining (corruption was structural).");
+    } else {
+        println!("  Quarantined {} corrupt fragment(s):", warnings.len());
+        for w in &warnings {
+            println!("    - {}", w);
+        }
+    }
+    println!(
+        "  Kept {} valid activity entr{}.",
+        state.activity.len(),
+        if state.activity.len() == 1 {
+            "y"
+        } else {
+            "ies"
+        }
+    );
     Ok(())
 }
 
@@ -8684,6 +8893,151 @@ fn handle_role_scaffold() -> Result<()> {
         println!("List all: {}", "aida role list".cyan());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod role_repair_tests {
+    use super::{is_toml_kv_line, parse_role_lenient, write_atomic, RoleActivity, RoleState};
+
+    fn sample_role() -> RoleState {
+        RoleState {
+            name: "implementer".to_string(),
+            purpose: Some("Heads-down coding.".to_string()),
+            created_at: "2026-05-04T04:14:39.836786244Z".parse().unwrap(),
+            last_active_at: "2026-05-17T15:40:08.879179372Z".parse().unwrap(),
+            working_directory: None,
+            notes: None,
+            global: true,
+            activity: Vec::new(),
+            scope_tags: Vec::new(),
+            scope_status: None,
+            system_prompt: None,
+        }
+    }
+
+    // AC5: a string field containing `"` must survive serialize → parse.
+    // The proper TOML serializer escapes it; this guards against any
+    // regression to hand-built TOML for activity-log appends.
+    #[test]
+    fn activity_string_with_quotes_round_trips() {
+        let mut state = sample_role();
+        state.activity.push(RoleActivity {
+            spec_id: "STORY-9704".to_string(),
+            action: "noted \"auto-completed\" status".to_string(),
+            at: "2026-05-17T15:40:08.610383127Z".parse().unwrap(),
+        });
+        let serialized = toml::to_string_pretty(&state).unwrap();
+        let back: RoleState = toml::from_str(&serialized).unwrap();
+        assert_eq!(back.activity.len(), 1);
+        assert_eq!(back.activity[0].action, "noted \"auto-completed\" status");
+    }
+
+    // A clean file takes the strict fast path: no warnings, no salvage.
+    #[test]
+    fn lenient_parse_fast_path_on_clean_file() {
+        let mut state = sample_role();
+        state.activity.push(RoleActivity {
+            spec_id: "STORY-1".to_string(),
+            action: "edit".to_string(),
+            at: "2026-05-17T15:40:08.610383127Z".parse().unwrap(),
+        });
+        let content = toml::to_string_pretty(&state).unwrap();
+        let (parsed, warnings) = parse_role_lenient(&content).unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!(parsed.name, "implementer");
+        assert_eq!(parsed.activity.len(), 1);
+    }
+
+    // AC6: the exact BUG-228 corruption — a complete file plus a trailing
+    // stray `"` from a torn concurrent write. The salvage path keeps every
+    // valid entry, drops the junk line, and reports it.
+    #[test]
+    fn lenient_parse_salvages_stray_quote() {
+        let content = "name = \"implementer\"\n\
+            created_at = \"2026-05-04T04:14:39.836786244Z\"\n\
+            last_active_at = \"2026-05-17T15:40:08.879179372Z\"\n\
+            global = true\n\
+            \n\
+            [[activity]]\n\
+            spec_id = \"STORY-9201\"\n\
+            action = \"auto-completed\"\n\
+            at = \"2026-05-17T15:40:08.879176602Z\"\n\
+            \n\
+            [[activity]]\n\
+            spec_id = \"STORY-9704\"\n\
+            action = \"auto-completed\"\n\
+            at = \"2026-05-17T15:40:08.610383127Z\"\n\
+            \"\n";
+        // The fixture must actually reproduce the bug: strict parse fails.
+        assert!(toml::from_str::<RoleState>(content).is_err());
+        let (state, warnings) = parse_role_lenient(content).expect("header is salvageable");
+        assert_eq!(state.name, "implementer");
+        // Both valid entries survive — the stray quote is dropped, not the
+        // entry it landed against.
+        assert_eq!(state.activity.len(), 2);
+        assert_eq!(state.activity[0].spec_id, "STORY-9201");
+        assert_eq!(state.activity[1].spec_id, "STORY-9704");
+        assert!(!warnings.is_empty(), "the dropped line must be reported");
+    }
+
+    // An [[activity]] block missing a required field can't parse as a
+    // RoleActivity — it is quarantined, the well-formed entry survives.
+    #[test]
+    fn lenient_parse_skips_incomplete_entry_keeps_rest() {
+        let content = "name = \"implementer\"\n\
+            created_at = \"2026-05-04T04:14:39.836786244Z\"\n\
+            last_active_at = \"2026-05-17T15:40:08.879179372Z\"\n\
+            global = true\n\
+            \n\
+            [[activity]]\n\
+            spec_id = \"STORY-1\"\n\
+            action = \"edit\"\n\
+            \n\
+            [[activity]]\n\
+            spec_id = \"STORY-2\"\n\
+            action = \"show\"\n\
+            at = \"2026-05-17T15:40:08.610383127Z\"\n";
+        let (state, warnings) = parse_role_lenient(content).unwrap();
+        assert_eq!(state.activity.len(), 1);
+        assert_eq!(state.activity[0].spec_id, "STORY-2");
+        assert_eq!(warnings.len(), 1);
+    }
+
+    // Header corruption can't be salvaged — it must surface as an error
+    // rather than silently returning a half-empty role.
+    #[test]
+    fn lenient_parse_errors_on_unparseable_header() {
+        let content = "name = \"implementer\nbroken = oops";
+        assert!(parse_role_lenient(content).is_err());
+    }
+
+    #[test]
+    fn kv_line_detection() {
+        assert!(is_toml_kv_line("spec_id = \"STORY-1\""));
+        assert!(is_toml_kv_line("at=\"x\""));
+        assert!(!is_toml_kv_line("\""));
+        assert!(!is_toml_kv_line("[[activity]]"));
+        assert!(!is_toml_kv_line("just some prose"));
+    }
+
+    // write_atomic replaces content cleanly and leaves no temp file behind.
+    #[test]
+    fn write_atomic_replaces_content_no_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let role_dir = dir.path().join("roles");
+        std::fs::create_dir_all(&role_dir).unwrap();
+        let path = role_dir.join("implementer.toml");
+        write_atomic(&path, "first").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "first");
+        write_atomic(&path, "second").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
+        let leftovers: Vec<_> = std::fs::read_dir(&role_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains("tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "atomic write left a temp file behind");
+    }
 }
 
 fn humanize_relative(t: chrono::DateTime<chrono::Utc>) -> String {
@@ -10619,8 +10973,9 @@ fn save_session_activity(
         std::fs::create_dir_all(parent)?;
     }
     let content = toml::to_string_pretty(log)?;
-    std::fs::write(&path, content)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    // BUG-228: atomic write — guards the session activity log against the
+    // same torn-concurrent-write corruption as the project-level role file.
+    write_atomic(&path, &content).with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
 }
 
