@@ -61,12 +61,12 @@ description: |-
   ## Origin
 
   2026-05-17: user ran \`aida queue work TASK-264 --zen\` (no --auto-complete). Implementer shipped + committed + \`queue done\`, then stalled at \"say the word to pick it up\" with no PR opened. User: *\"this is not prompting me on what to do and I have used --zen.\"* --zen's menu suppression was designed for the --auto-complete case; plain --zen inherits the suppression without the orchestrator handoff that makes it coherent.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T06:22:27.751578819Z
+modified_at: 2026-05-18T15:27:59.528779531Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
