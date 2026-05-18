@@ -42,12 +42,12 @@ description: |-
   ## Origin
 
   User attempted \`aida session prune --completed\` and \`aida session prune --interactive\` 2026-05-16 looking for a way to clean up stale tracked sessions. Both flags don't exist; \`prune\` is the wrong surface. The real missing primitive is \`forget\` — explicit per-session removal.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:45:18.469713543Z
-modified_at: 2026-05-18T00:53:52.857237927Z
+modified_at: 2026-05-18T00:58:10.732849062Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -57,3 +57,7 @@ tags:
 - returning-user
 - session-forget
 - session-list
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-18T00:58:10.732849062Z
+  implemented_by: joe
