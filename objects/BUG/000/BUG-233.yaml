@@ -66,10 +66,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:38.878522976Z
-modified_at: 2026-05-18T01:47:12.996729020Z
+modified_at: 2026-05-18T06:22:29.105050566Z
 req_type: Bug
 tags:
 - auto-complete
+- batch:orchestrator-hardening
 - env-leak
 - first-users
 - from-self-test:BUG-228
