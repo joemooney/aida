@@ -220,6 +220,8 @@ fn run() -> Result<()> {
         registry_remote,
         verbose,
         name,
+        with_memories,
+        refresh,
     } = &cli.command
     {
         // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -254,6 +256,14 @@ fn run() -> Result<()> {
                 *verbose,
                 name.as_deref(),
             )?;
+        }
+        // Starter memory pack — opt-in, orthogonal to storage mode. Failure
+        // is non-fatal: it writes outside the project root, so a hiccup
+        // there must not abort an otherwise-successful init. trace:STORY-255
+        if *with_memories || *refresh {
+            if let Err(e) = scaffold_memory_pack(*refresh) {
+                eprintln!("  {} starter memory pack skipped: {}", "Note:".dimmed(), e);
+            }
         }
         return Ok(());
     }
@@ -1122,6 +1132,286 @@ fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Re
     Ok(())
 }
 
+/// Scaffold the discipline pack — every embedded `docs/aida-discipline/*`
+/// template — into `<root>/docs/aida-discipline/`. Idempotent: an existing
+/// file is left alone unless `force` is set. Returns the count written.
+/// trace:STORY-255 | ai:claude
+fn ensure_discipline_pack_scaffold(root: &std::path::Path, force: bool) -> Result<usize> {
+    use aida_core::templates::EMBEDDED_TEMPLATES;
+    let mut pack: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
+        .iter()
+        .filter_map(|(k, v)| k.strip_prefix("docs/aida-discipline/").map(|n| (n, *v)))
+        .collect();
+    if pack.is_empty() {
+        return Ok(0);
+    }
+    pack.sort_by(|a, b| a.0.cmp(b.0));
+
+    let dir = root.join("docs").join("aida-discipline");
+    std::fs::create_dir_all(&dir)?;
+    let mut written = 0;
+    for (name, content) in pack {
+        let dest = dir.join(name);
+        if dest.exists() && !force {
+            continue;
+        }
+        std::fs::write(&dest, format!("{content}\n"))?;
+        written += 1;
+    }
+    Ok(written)
+}
+
+/// FNV-1a 64-bit hash, lowercase hex. Used as the starter memory pack's
+/// "edited since scaffold?" fingerprint — deterministic across releases and
+/// platforms, no dependency. trace:STORY-255 | ai:claude
+fn fnv1a_hex(data: &[u8]) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in data {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{h:016x}")
+}
+
+/// Split a markdown file into (frontmatter, body) at the leading `---`
+/// fenced YAML block. Returns `None` when there is no frontmatter.
+fn split_md_frontmatter(content: &str) -> Option<(&str, &str)> {
+    let rest = content.strip_prefix("---\n")?;
+    let end = rest.find("\n---\n")?;
+    Some((&rest[..end], &rest[end + 5..]))
+}
+
+/// Read a top-level scalar frontmatter field. Indented (nested) keys are
+/// ignored on purpose — `originSessionId` must be a top-level key for the
+/// refresh check to see it. trace:STORY-255 | ai:claude
+fn frontmatter_field<'a>(frontmatter: &'a str, key: &str) -> Option<&'a str> {
+    let prefix = format!("{key}: ");
+    frontmatter
+        .lines()
+        .find_map(|l| l.strip_prefix(prefix.as_str()))
+        .map(str::trim)
+}
+
+/// Build the on-disk form of a starter memory from its embedded template:
+/// stamp `originSessionId: aida-scaffold` and a `scaffoldChecksum` (an
+/// FNV-1a fingerprint of the body) into the frontmatter, so a later
+/// `--refresh` can tell a pristine pack file from a user-edited one.
+/// trace:STORY-255 | ai:claude
+fn build_scaffolded_memory(template: &str) -> Option<String> {
+    let (fm, body) = split_md_frontmatter(template)?;
+    let body = body.trim_end();
+    let checksum = fnv1a_hex(body.as_bytes());
+    let mut new_fm = String::new();
+    for line in fm.lines() {
+        if line.starts_with("originSessionId:") || line.starts_with("scaffoldChecksum:") {
+            continue;
+        }
+        new_fm.push_str(line);
+        new_fm.push('\n');
+    }
+    new_fm.push_str("originSessionId: aida-scaffold\n");
+    new_fm.push_str(&format!("scaffoldChecksum: {checksum}\n"));
+    Some(format!("---\n{new_fm}---\n{body}\n"))
+}
+
+/// What `aida init --with-memories --refresh` should do with an existing
+/// memory file. trace:STORY-255 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum MemoryDisposition {
+    /// Not a scaffolded pack file (no `originSessionId: aida-scaffold`) —
+    /// the user wrote it; never touch it.
+    UserOwned,
+    /// Scaffolded, but the body no longer matches its recorded checksum —
+    /// the user has edited it; keep their edits.
+    Edited,
+    /// Scaffolded and untouched since — safe to overlay a new version.
+    Pristine,
+}
+
+/// Classify an existing memory file for `--refresh`.
+fn memory_refresh_disposition(existing: &str) -> MemoryDisposition {
+    let Some((fm, body)) = split_md_frontmatter(existing) else {
+        return MemoryDisposition::UserOwned;
+    };
+    if frontmatter_field(fm, "originSessionId") != Some("aida-scaffold") {
+        return MemoryDisposition::UserOwned;
+    }
+    match frontmatter_field(fm, "scaffoldChecksum") {
+        Some(stored) if stored == fnv1a_hex(body.trim_end().as_bytes()) => {
+            MemoryDisposition::Pristine
+        }
+        _ => MemoryDisposition::Edited,
+    }
+}
+
+/// Regenerate the `aida:scaffold-pack` block in the memory dir's MEMORY.md
+/// index. Content outside the markers is the user's and is preserved.
+/// trace:STORY-255 | ai:claude
+fn update_memory_index(mem_dir: &std::path::Path, files: &[(&str, &str)]) -> Result<()> {
+    const START: &str = "<!-- aida:scaffold-pack:start -->";
+    const END: &str = "<!-- aida:scaffold-pack:end -->";
+
+    let mut entries = String::new();
+    for (filename, template) in files {
+        let (fm, _) = split_md_frontmatter(template).unwrap_or(("", ""));
+        let label = frontmatter_field(fm, "name").unwrap_or(filename);
+        let desc = frontmatter_field(fm, "description").unwrap_or("");
+        entries.push_str(&format!("- [{label}]({filename}) — {desc}\n"));
+    }
+    let block = format!("{START}\n{entries}{END}");
+
+    let index_path = mem_dir.join("MEMORY.md");
+    let content = if index_path.exists() {
+        let existing = std::fs::read_to_string(&index_path)?;
+        match (existing.find(START), existing.find(END)) {
+            (Some(s), Some(e)) if e > s => {
+                format!("{}{}{}", &existing[..s], block, &existing[e + END.len()..])
+            }
+            _ => {
+                let sep = if existing.ends_with('\n') {
+                    "\n"
+                } else {
+                    "\n\n"
+                };
+                format!("{existing}{sep}{block}\n")
+            }
+        }
+    } else {
+        let skeleton = aida_core::templates::EMBEDDED_TEMPLATES
+            .get("memories/MEMORY.md")
+            .copied()
+            .unwrap_or("# Project Memory Index");
+        match (skeleton.find(START), skeleton.find(END)) {
+            (Some(s), Some(e)) if e > s => {
+                format!(
+                    "{}{}{}\n",
+                    &skeleton[..s],
+                    block,
+                    &skeleton[e + END.len()..]
+                )
+            }
+            _ => format!("{skeleton}\n\n{block}\n"),
+        }
+    };
+    std::fs::write(&index_path, content)?;
+    Ok(())
+}
+
+/// Per-disposition counts from a starter-memory-pack scaffold/refresh run.
+/// trace:STORY-255 | ai:claude
+#[derive(Debug, Default, PartialEq, Eq)]
+struct MemoryPackReport {
+    /// Files that did not exist and were freshly written.
+    written: usize,
+    /// Pristine pack files overlaid with a newer version (`--refresh`).
+    refreshed: usize,
+    /// Files left as-is — already current, or `--with-memories` without
+    /// `--refresh` finding an existing file.
+    unchanged: usize,
+    /// Scaffolded files the user has edited — kept (`--refresh`).
+    kept_edited: usize,
+    /// Files with no `aida-scaffold` marker — the user's own; kept.
+    kept_user: usize,
+}
+
+/// Write (or `--refresh`) the starter memory pack into `mem_dir`. Every
+/// embedded `memories/*` template except the MEMORY.md skeleton is a pack
+/// member; MEMORY.md's `aida:scaffold-pack` index block is regenerated.
+/// The pure core of `scaffold_memory_pack` — takes the target dir directly
+/// so it is testable without touching the real `$HOME`.
+/// trace:STORY-255 | ai:claude
+fn scaffold_memory_pack_into(mem_dir: &std::path::Path, refresh: bool) -> Result<MemoryPackReport> {
+    use aida_core::templates::EMBEDDED_TEMPLATES;
+
+    let mut files: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
+        .iter()
+        .filter_map(|(k, v)| {
+            k.strip_prefix("memories/")
+                .filter(|n| *n != "MEMORY.md")
+                .map(|n| (n, *v))
+        })
+        .collect();
+    if files.is_empty() {
+        anyhow::bail!("no starter memories are embedded in this build");
+    }
+    files.sort_by(|a, b| a.0.cmp(b.0));
+
+    std::fs::create_dir_all(mem_dir)?;
+    let mut report = MemoryPackReport::default();
+
+    for (name, template) in &files {
+        let dest = mem_dir.join(name);
+        let scaffolded = build_scaffolded_memory(template)
+            .with_context(|| format!("malformed starter memory template: {name}"))?;
+
+        if !dest.exists() {
+            std::fs::write(&dest, &scaffolded)?;
+            report.written += 1;
+            continue;
+        }
+        if !refresh {
+            // Plain --with-memories never overwrites an existing file.
+            report.unchanged += 1;
+            continue;
+        }
+        let existing = std::fs::read_to_string(&dest)?;
+        match memory_refresh_disposition(&existing) {
+            MemoryDisposition::UserOwned => report.kept_user += 1,
+            MemoryDisposition::Edited => report.kept_edited += 1,
+            MemoryDisposition::Pristine => {
+                if existing == scaffolded {
+                    report.unchanged += 1;
+                } else {
+                    std::fs::write(&dest, &scaffolded)?;
+                    report.refreshed += 1;
+                }
+            }
+        }
+    }
+
+    update_memory_index(mem_dir, &files)?;
+    Ok(report)
+}
+
+/// Write (or `--refresh`) the starter memory pack into the Claude Code
+/// project memory dir for the current working directory.
+/// trace:STORY-255 | ai:claude
+fn scaffold_memory_pack(refresh: bool) -> Result<()> {
+    let cwd = std::env::current_dir()?;
+    let home =
+        dirs::home_dir().context("cannot resolve home directory for the starter memory pack")?;
+    let slug = process_probe::encode_cwd_for_projects(&cwd);
+    let mem_dir = home
+        .join(".claude")
+        .join("projects")
+        .join(&slug)
+        .join("memory");
+
+    let report = scaffold_memory_pack_into(&mem_dir, refresh)?;
+
+    println!();
+    if refresh {
+        println!("  {}:", "Memory pack refreshed".bold());
+        println!(
+            "    {} new · {} updated · {} unchanged · {} kept (edited) · {} kept (yours)",
+            report.written.to_string().green(),
+            report.refreshed.to_string().blue(),
+            report.unchanged,
+            report.kept_edited.to_string().yellow(),
+            report.kept_user,
+        );
+    } else {
+        println!("  {}:", "Starter memory pack".bold());
+        println!(
+            "    {} written · {} already present",
+            report.written.to_string().green(),
+            report.unchanged.to_string().yellow(),
+        );
+    }
+    println!("    {}", mem_dir.display().to_string().dimmed());
+    Ok(())
+}
+
 /// Append AIDA's `.gitignore` entries if any are missing. Returns `true` if a
 /// new entry was written (so callers can echo "updated .gitignore"); `false`
 /// if everything was already covered or the file had to be created from
@@ -1292,6 +1582,10 @@ fn complete_init_scaffolding(
         }
     }
 
+    // Scaffold the discipline pack (docs/aida-discipline/) — generic
+    // AIDA-using guidance, written for every init mode. trace:STORY-255
+    let discipline_written = ensure_discipline_pack_scaffold(root, force).unwrap_or(0);
+
     // Auto-configure Codex MCP if codex is installed
     if std::process::Command::new("codex")
         .arg("--version")
@@ -1389,9 +1683,23 @@ fn complete_init_scaffolding(
             "docs/plans/".white().bold(),
             " ".repeat(27)
         );
+        println!(
+            "    {}{}AIDA-using discipline guides",
+            "docs/aida-discipline/".white().bold(),
+            " ".repeat(17)
+        );
     } else {
         // Brief: one line of storage location + counts.
         println!("  Storage: {}", storage_label.dimmed());
+    }
+
+    if discipline_written > 0 {
+        println!(
+            "  {} discipline guide{} scaffolded to {}",
+            discipline_written.to_string().green(),
+            if discipline_written == 1 { "" } else { "s" },
+            "docs/aida-discipline/".dimmed(),
+        );
     }
 
     if skipped_count > 0 {
@@ -49125,4 +49433,161 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod story_255_discipline_pack_tests {
+    //! Starter discipline pack — `docs/aida-discipline/` + the opt-in
+    //! memory pack scaffolded by `aida init --with-memories`.
+    //! trace:STORY-255 | ai:claude
+    use super::*;
+
+    #[test]
+    fn discipline_pack_scaffolds_four_docs_plus_readme() {
+        let root = tempfile::tempdir().unwrap();
+        let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
+        assert_eq!(written, 5, "expected README + 4 discipline docs");
+
+        let dir = root.path().join("docs/aida-discipline");
+        for f in [
+            "README.md",
+            "advisor-role.md",
+            "lifecycle-vocabulary.md",
+            "workflow-patterns.md",
+            "session-discipline.md",
+        ] {
+            assert!(dir.join(f).is_file(), "missing discipline doc: {f}");
+        }
+
+        // Idempotent: a second call without --force writes nothing.
+        assert_eq!(
+            ensure_discipline_pack_scaffold(root.path(), false).unwrap(),
+            0
+        );
+        // --force re-writes them all.
+        assert_eq!(
+            ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
+            5
+        );
+    }
+
+    #[test]
+    fn memory_pack_writes_marked_files_with_marker_and_checksum() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory");
+        let report = scaffold_memory_pack_into(&mem, false).unwrap();
+
+        assert!(
+            report.written >= 10,
+            "expected the marker-driven pack (>= 10), got {}",
+            report.written
+        );
+        assert_eq!(report.unchanged, 0);
+
+        // Every memory file carries the scaffold marker + a checksum.
+        let mut md_count = 0;
+        for entry in std::fs::read_dir(&mem).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().unwrap() == "MEMORY.md" {
+                continue;
+            }
+            md_count += 1;
+            let body = std::fs::read_to_string(&path).unwrap();
+            assert!(
+                body.contains("originSessionId: aida-scaffold"),
+                "{path:?} missing scaffold marker"
+            );
+            assert!(
+                body.contains("scaffoldChecksum: "),
+                "{path:?} missing checksum"
+            );
+        }
+        assert_eq!(md_count, report.written);
+
+        // A known generic memory is present.
+        assert!(mem
+            .join("feedback_run_help_before_suggesting_flags.md")
+            .is_file());
+
+        // MEMORY.md carries the generated index block.
+        let index = std::fs::read_to_string(mem.join("MEMORY.md")).unwrap();
+        assert!(index.contains("<!-- aida:scaffold-pack:start -->"));
+        assert!(index.contains("<!-- aida:scaffold-pack:end -->"));
+        assert!(index.contains("](feedback_run_help_before_suggesting_flags.md)"));
+    }
+
+    #[test]
+    fn memory_pack_refresh_overlays_pristine_skips_edited() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory");
+        let first = scaffold_memory_pack_into(&mem, false).unwrap();
+        assert!(first.written >= 10);
+
+        // (a) User-edit one file's body — must be kept on refresh.
+        let edited = mem.join("feedback_verify_before_filing.md");
+        let mut edited_content = std::fs::read_to_string(&edited).unwrap();
+        edited_content.push_str("\n\nUSER EDIT — do not clobber.\n");
+        std::fs::write(&edited, &edited_content).unwrap();
+
+        // (b) Replace one file with a user-owned file (no scaffold marker).
+        let user_owned = mem.join("feedback_goal_prompt_phrasing.md");
+        std::fs::write(&user_owned, "---\nname: mine\n---\n\nmy own memory\n").unwrap();
+
+        // (c) Make one pristine file look like an older scaffold version: a
+        //     benign extra frontmatter line, body untouched → still Pristine
+        //     but != the current scaffold, so refresh overlays it.
+        let stale = mem.join("feedback_pause_for_design_input.md");
+        let stale_v1 =
+            std::fs::read_to_string(&stale)
+                .unwrap()
+                .replacen("---\n", "---\nstaleField: x\n", 1);
+        std::fs::write(&stale, &stale_v1).unwrap();
+
+        let report = scaffold_memory_pack_into(&mem, true).unwrap();
+        assert_eq!(report.written, 0, "all files already exist on refresh");
+        assert_eq!(report.kept_edited, 1, "the body-edited file is kept");
+        assert_eq!(report.kept_user, 1, "the unmarked user file is kept");
+        assert_eq!(
+            report.refreshed, 1,
+            "the stale-but-pristine file is overlaid"
+        );
+
+        // The user edit survived.
+        assert!(std::fs::read_to_string(&edited)
+            .unwrap()
+            .contains("USER EDIT"));
+        // The user-owned file survived.
+        assert!(std::fs::read_to_string(&user_owned)
+            .unwrap()
+            .contains("my own memory"));
+        // The stale file was overlaid — the benign line is gone.
+        assert!(!std::fs::read_to_string(&stale)
+            .unwrap()
+            .contains("staleField"));
+    }
+
+    #[test]
+    fn memory_disposition_classifies_pristine_edited_and_user() {
+        let template =
+            "---\nname: t\ndescription: d\nmetadata:\n  type: feedback\n---\n\nbody text\n";
+        let scaffolded = build_scaffolded_memory(template).unwrap();
+        assert!(scaffolded.contains("originSessionId: aida-scaffold"));
+        assert_eq!(
+            memory_refresh_disposition(&scaffolded),
+            MemoryDisposition::Pristine
+        );
+
+        // A user file with no scaffold marker.
+        assert_eq!(
+            memory_refresh_disposition("---\nname: x\n---\n\nmine\n"),
+            MemoryDisposition::UserOwned
+        );
+
+        // Scaffolded but the body was edited → checksum mismatch.
+        let edited = scaffolded.replace("body text", "body text — changed");
+        assert_eq!(
+            memory_refresh_disposition(&edited),
+            MemoryDisposition::Edited
+        );
+    }
 }

@@ -39,10 +39,22 @@ aida init --sibling            # Distributed using a sibling repo (multi-repo wo
 aida init --centralized        # Legacy SQLite mode (deprecated, prints warning)
 aida init --no-skills          # Skip .claude/skills/ and .claude/commands/
 aida init --no-hooks           # Skip .claude/hooks/ and git hooks
+aida init --with-memories      # Also write the starter memory pack (opt-in)
+aida init --with-memories --refresh   # Overlay updated pack files, keep your edits
 aida init --force              # Overwrite existing files
 ```
 
-`aida init` creates: orphan branch `aida-store` + worktree at `.aida-store/`, `.aida/config.toml`, `.aida/cache.db`, META requirements seeded into the orphan store, `.mcp.json`, `CLAUDE.md`, `AGENTS.md` (Codex), `.claude/skills/` + `commands/` + `hooks/`, `docs/plans/`.
+`aida init` creates: orphan branch `aida-store` + worktree at `.aida-store/`, `.aida/config.toml`, `.aida/cache.db`, META requirements seeded into the orphan store, `.mcp.json`, `CLAUDE.md`, `AGENTS.md` (Codex), `.claude/skills/` + `commands/` + `hooks/`, `docs/plans/`, `docs/aida-discipline/`.
+
+### Starter discipline pack (STORY-255)
+
+`aida init` ships AIDA-using *discipline* — the habits and vocabulary that make an AIDA project run well — as scaffolding, so a new project inherits it instead of re-discovering the same friction. Three channels:
+
+- **`docs/aida-discipline/`** (always) — five canonical guides (`README.md`, `advisor-role.md`, `lifecycle-vocabulary.md`, `workflow-patterns.md`, `session-discipline.md`). Master templates: `aida-core/templates/docs/aida-discipline/`, embedded via `build.rs`, scaffolded by `ensure_discipline_pack_scaffold` (idempotent — `--force` to overwrite).
+- **CLAUDE.md discipline section** (always) — `generate_claude_md` appends a "Discipline for AIDA-using sessions" section pointing at the pack.
+- **Starter memory pack** (`--with-memories`, opt-in) — the generic discipline memories under `aida-core/templates/memories/` written to `~/.claude/projects/<slug>/memory/`. The pack is **marker-driven**: every memory file carrying `propagation: scaffolding-pack` in frontmatter ships, so the set grows just by tagging new generic memories. Scaffolded files get `originSessionId: aida-scaffold` + a `scaffoldChecksum` (FNV-1a of the body). `aida init --with-memories --refresh` overlays newer versions of files the user has *not* edited (body checksum still matches) and leaves edited or unmarked files alone. `MEMORY.md`'s `<!-- aida:scaffold-pack -->` block is regenerated; user content outside the markers is preserved.
+
+When adding a new generic discipline memory, tag it `propagation: scaffolding-pack` and it joins the pack on the next build — no code change.
 
 ### Daily-use commands
 

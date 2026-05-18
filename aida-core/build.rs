@@ -38,6 +38,19 @@ fn main() {
     // Plan template (scaffolded into docs/plans/_TEMPLATE.md). trace:TASK-92
     embed_file(&mut code, "templates/plan-template.md", "plan-template.md");
 
+    // Discipline pack — canonical markdown scaffolded into a new project's
+    // docs/aida-discipline/. trace:STORY-255
+    embed_directory(
+        &mut code,
+        "templates/docs/aida-discipline",
+        "docs/aida-discipline",
+    );
+
+    // Starter memory pack — generic AIDA-using discipline written to the
+    // Claude Code project memory dir by `aida init --with-memories`.
+    // trace:STORY-255
+    embed_directory(&mut code, "templates/memories", "memories");
+
     code.push_str("    m\n");
     code.push_str("});\n");
 
@@ -51,6 +64,8 @@ fn main() {
     code.push_str("    (\"hooks\", \"Hooks - Git and Claude Code integration hooks\"),\n");
     code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");
     code.push_str("    (\"plan-template.md\", \"Plan template - scaffolded into docs/plans/_TEMPLATE.md\"),\n");
+    code.push_str("    (\"docs/aida-discipline\", \"Discipline pack - AIDA-using guidance scaffolded into docs/aida-discipline/\"),\n");
+    code.push_str("    (\"memories\", \"Starter memory pack - generic discipline for `aida init --with-memories`\"),\n");
     code.push_str("];\n");
 
     fs::write(&dest_path, code).unwrap();

@@ -185,7 +185,7 @@ pub fn claude_projects_dir_for_cwd(cwd: &Path) -> Option<PathBuf> {
 
 /// Encode a cwd to Claude Code's project-dir naming convention: replace each
 /// `/` (including leading) with `-`.
-fn encode_cwd_for_projects(cwd: &Path) -> String {
+pub fn encode_cwd_for_projects(cwd: &Path) -> String {
     let s = cwd.to_string_lossy().to_string();
     s.replace('/', "-")
 }
