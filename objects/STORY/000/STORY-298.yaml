@@ -1,0 +1,26 @@
+id: 019e387f-677e-75e1-b452-2a753ca2540b
+spec_id: STORY-298
+agreed_id: STORY-298
+title: 'Review PR-80: [AI:claude] fix(cli): aida session list RECENT FOCUS column replaces stale INITIAL TOPIC (BUG-112)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e386e`) for branch `bug-112`.
+
+  - PR: <https://github.com/joemooney/aida/pull/80>
+  - Branch: `bug-112` → `main`
+
+  ## Covers
+
+  - BUG-112
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 80` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T00:32:14.206346357Z
+modified_at: 2026-05-18T00:32:14.206346357Z
+req_type: Story
