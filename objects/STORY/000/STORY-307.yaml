@@ -1,0 +1,26 @@
+id: 019e393c-094c-7403-891e-6b4f7ea356ee
+spec_id: STORY-307
+agreed_id: STORY-307
+title: 'Review PR-86: [AI:claude] feat(cli): aida init ships a starter discipline pack (STORY-255)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3917`) for branch `story-255`.
+
+  - PR: <https://github.com/joemooney/aida/pull/86>
+  - Branch: `story-255` → `main`
+
+  ## Covers
+
+  - STORY-255
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 86` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-18T03:58:16.396842643Z
+modified_at: 2026-05-18T03:58:16.396842643Z
+req_type: Story
