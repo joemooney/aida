@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T15:50:23.034226593Z
+modified_at: 2026-05-18T15:51:35.243777699Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
@@ -100,6 +100,24 @@ comments:
     Rationale: this applies STORY-287's taxonomy correctly by separating the mechanical prompt (open PR → auto-resolve) from the genuine fork (grab-next-vs-stop → pause). My original filing recommended the show-full-menu alternative; that conflated the two and suppressed --zen entirely at end-of-session. The implementer separated them — better answer. Also consistent with --zen + --auto-complete, which already auto-opens PRs. Issue B (aida queue done warns on commits-ahead-no-PR) was unambiguous — no fork, proceed as filed.
   created_at: 2026-05-18T15:36:58.688077839Z
   modified_at: 2026-05-18T15:36:58.688077839Z
+- id: 019e3bc9-184b-7922-9f5a-66692a24b1b8
+  author: joe
+  content: |-
+    Implemented via PR (commit ab3a0c4b):
+
+    - Issue A: plain `--zen` end-of-session no longer stalls. `/aida-pickup`
+      Step 6 zen handling splits three ways (orchestrated / plain-zen /
+      default); plain `--zen` auto-opens the PR (never auto-loops the queue),
+      `/aida-pr` gains a plain-zen template that pauses on the grab-next/stop
+      fork. The `aida queue work` pre-flight `autonomy:` line corroborates the
+      orchestrator (zen + auto-complete vs zen-no-orchestrator).
+    - Issue B: `aida queue done` is PR-aware. Queue-drain with commits ahead
+      of main + no open PR sharpens the workflow hint into a pointed "no PR
+      open — run /aida-pr" warning; an open PR redirects to "merge it".
+
+    Test status: 16/16 workflow_hints + 14/14 orchestrator tests green; cargo fmt --check clean
+  created_at: 2026-05-18T15:51:35.243777699Z
+  modified_at: 2026-05-18T15:51:35.243777699Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T15:50:23.034226593Z
