@@ -121,7 +121,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:07:49.456346316Z
-modified_at: 2026-05-18T01:50:19.400400224Z
+modified_at: 2026-05-18T02:07:48.717409794Z
 req_type: Task
 tags:
 - batch:autonomy-modes
@@ -132,3 +132,13 @@ tags:
 - sentinel-file
 - subprocess-management
 - zen-mode
+comments:
+- id: 019e38d6-e7ed-7961-832a-6e19c9002b3a
+  author: joe
+  content: |-
+    Implemented. Two deliberate deviations from the literal acceptance text, both documented in aida-cli/src/exit_signal.rs:
+    1. Skill receives the full sentinel path in one env var (AIDA_EXIT_SENTINEL) rather than AIDA_SESSION_DIR + a recomputed <session-id>. AIDA_SESSION_DIR does not exist in the codebase, and a single full path means the orchestrator owns it end-to-end — the skill never recomputes a session id, so the file it touches always matches the file the orchestrator polls.
+    2. Reap uses a sysinfo process-tree walk (Unix + Windows) instead of setsid + kill(-pgid). setsid/process_group would detach the interactive REPL from its controlling terminal, breaking interactivity in default (non-zen) mode. The tree-walk gives the same descendant cascade without touching job control.
+    Sentinel path convention is honoured: .aida/sessions/<session-id>.exit-requested, a sibling of the lease file.
+  created_at: 2026-05-18T02:07:48.717409794Z
+  modified_at: 2026-05-18T02:07:48.717409794Z
