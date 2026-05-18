@@ -264,6 +264,8 @@ $ aida queue work STORY-1 --auto-complete
 
 It drives the implementer session, waits for CI, runs the reviewer, merges the PR, pulls, and bumps STORY-1 to Completed — no further input. Run the loop manually first so you can see each stage; reach for `--auto-complete` once the rhythm is familiar. The trade-off (interactive = better decisions, autonomous = better throughput) and the headless overnight-drain variants are covered in [`docs/lifecycle.md`](docs/lifecycle.md#autonomous-drains-and---auto-complete) and [`docs/autonomous-drain.md`](docs/autonomous-drain.md).
 
+> **Want to see AIDA on a real project?** This walkthrough carries *one* spec. [`docs/first-project.md`](docs/first-project.md) builds a whole tiny project — a TODO CLI, six specs, a real parent/child graph driven to merged — so you can see what the graph is *for*, not just how each command works.
+
 ## What you get
 
 - **CLI (`aida`)** — daily-driver command-line interface
@@ -317,6 +319,7 @@ Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Lin
 | Doc | What it covers |
 |-----|----------------|
 | [Getting Started](docs/getting-started.md) | Install, init, first requirement |
+| [First Project](docs/first-project.md) | Follow-along walkthrough — a TODO CLI from zero to a merged spec graph |
 | [Spec Lifecycle](docs/lifecycle.md) | Draft → Released, the verb vocabulary, and edge cases |
 | [Administrator's Guide](docs/admin-guide.md) | Storage backends, migration, multi-user setup |
 | [User Guide](docs/user-guide.md) | Daily-use reference for the CLI and dashboard |
