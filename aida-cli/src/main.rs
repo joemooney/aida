@@ -23795,6 +23795,60 @@ mod in_flight_linkage_integration_tests {
         assert_eq!(b.no_commit, vec!["TASK-803".to_string()]);
     }
 
+    /// BUG-229: a Done spec whose referencing commit lives on BOTH the
+    /// reviewer-worktree snapshot branch (`pr-71`, left by `git fetch
+    /// origin pull/71/head:pr-71`) and the real PR-source branch
+    /// (`task-282`). The classifier must bucket it under the real
+    /// branch — picking the `pr-N` snapshot is what mis-rendered the row
+    /// as "no PR opened yet" while the PR was under review.
+    /// trace:BUG-229 | ai:claude
+    #[test]
+    fn classify_prefers_pr_source_branch_over_reviewer_snapshot() {
+        let (_tmp, root) = init_repo();
+        git(&root, &["checkout", "-q", "-b", "task-282"]);
+        commit(&root, "feature.txt", "work", "feat: ship it (TASK-282)");
+        // The reviewer snapshot branch points at the SAME commit.
+        git(&root, &["branch", "pr-71"]);
+        git(&root, &["checkout", "-q", "main"]);
+
+        let specs = [req("TASK-282")];
+        let refs: Vec<&aida_core::Requirement> = specs.iter().collect();
+        let b = classify_in_flight_specs(&refs, &root);
+
+        assert_eq!(
+            b.awaiting.get("task-282").map(|v| v.as_slice()),
+            Some(&["TASK-282".to_string()][..]),
+            "bucketed under the real PR-source branch, not the pr-N snapshot"
+        );
+        assert!(
+            !b.awaiting.contains_key("pr-71"),
+            "the `pr-71` reviewer snapshot must not drive the bucket key"
+        );
+    }
+
+    /// BUG-229: when the ONLY branch containing the commit is a `pr-N`
+    /// reviewer snapshot (the real PR-source branch was pruned), the
+    /// classifier falls back to it rather than losing the spec — a
+    /// degraded but honest key, better than `(branch unknown)`.
+    /// trace:BUG-229 | ai:claude
+    #[test]
+    fn classify_falls_back_to_pr_n_when_it_is_the_only_branch() {
+        let (_tmp, root) = init_repo();
+        git(&root, &["checkout", "-q", "-b", "pr-71"]);
+        commit(&root, "snap.txt", "work", "feat: snapshot (TASK-283)");
+        git(&root, &["checkout", "-q", "main"]);
+
+        let specs = [req("TASK-283")];
+        let refs: Vec<&aida_core::Requirement> = specs.iter().collect();
+        let b = classify_in_flight_specs(&refs, &root);
+
+        assert_eq!(
+            b.awaiting.get("pr-71").map(|v| v.as_slice()),
+            Some(&["TASK-283".to_string()][..]),
+            "falls back to the pr-N branch when no real branch contains the commit"
+        );
+    }
+
     /// TASK-234: an empty queue yields three empty buckets — the
     /// no-Done-items path.
     #[test]
@@ -26483,12 +26537,27 @@ fn classify_in_flight_specs(
                 "--format=%(refname:short)",
             ])
             .unwrap_or_default();
-            let branch = contains
+            let candidates: Vec<String> = contains
                 .lines()
                 .map(|b| b.trim().trim_start_matches("origin/"))
                 .filter(|b| !b.is_empty() && *b != "HEAD" && *b != "main" && *b != "master")
                 .map(|b| b.to_string())
-                .next()
+                .collect();
+            // BUG-229: `pr-N` (and `mr-N` / `github-N` / `gitlab-N`) are
+            // reviewer-worktree *snapshot* branches — `aida` fetches them
+            // via `git fetch origin pull/N/head:pr-N` for headless review.
+            // The spec's actual PR-source branch is named after the spec
+            // (e.g. `task-282`). When the referencing commit lands on both,
+            // a plain alphabetical `.next()` picks `pr-N` (it sorts first),
+            // and the later `gh pr list --head pr-N` finds nothing — the
+            // row then mis-renders as "no PR opened yet" for a PR that is
+            // open and under review. Prefer a non-review-session branch so
+            // the PR lookup keys off the real head. trace:BUG-229 | ai:claude
+            let branch = candidates
+                .iter()
+                .find(|b| !is_review_session_branch(b))
+                .or_else(|| candidates.first())
+                .cloned()
                 .unwrap_or_else(|| "(branch unknown)".to_string());
             awaiting.entry(branch).or_default().push(id);
         }
@@ -26855,6 +26924,185 @@ mod task_250_review_state_tests {
     }
 }
 
+/// BUG-229: the in-flight display state for a branch with an open PR —
+/// one variant per drain-pipeline stage. Derived purely from the three
+/// signals the render path already gathers (`gh reviewDecision`, the
+/// local review state, the CI probe) so the mapping is unit-testable
+/// without spawning `gh`. trace:BUG-229 | ai:claude
+#[derive(Debug, PartialEq)]
+enum InFlightPrDisplay {
+    /// gh `reviewDecision` == APPROVED — review done, awaiting merge.
+    ReviewApproved { approver: Option<String> },
+    /// A reviewer session lease owns the PR — review running now.
+    UnderReviewLease { session_id: String, since: String },
+    /// An In-Progress `Review PR-N:` story — a reviewer picked it up
+    /// without a PR-scoped session.
+    UnderReviewStory { story_id: String },
+    /// PR open, no review started yet, CI still running — the
+    /// orchestrator is in its CI-wait window; "start review" would be
+    /// premature.
+    CiRunning,
+    /// PR open, no review started, CI not blocking — ready for a
+    /// reviewer to pick up.
+    AwaitingReview,
+}
+
+/// BUG-229: map the three already-probed signals onto an
+/// [`InFlightPrDisplay`] stage. Pure — no `gh`, no `git` — so the full
+/// drain-pipeline matrix is unit-testable from synthesized inputs.
+///
+/// Precedence mirrors the pipeline: an APPROVED `reviewDecision` is the
+/// authoritative "safe to merge" signal and supersedes a lingering
+/// reviewer lease; an active reviewer lease / story means review is
+/// running; only when no review has started does the CI probe decide
+/// between "CI still running" and "ready for review".
+/// trace:BUG-229 | ai:claude
+fn classify_open_pr_display(
+    approved: Option<PrReviewDecision>,
+    local_state: LocalReviewState,
+    ci: &CiProbe,
+) -> InFlightPrDisplay {
+    if let Some(d) = approved {
+        if d.decision == "APPROVED" {
+            return InFlightPrDisplay::ReviewApproved {
+                approver: d.approver,
+            };
+        }
+    }
+    match local_state {
+        LocalReviewState::InProgressLease { session_id, since } => {
+            InFlightPrDisplay::UnderReviewLease { session_id, since }
+        }
+        LocalReviewState::InProgressStory { story_id } => {
+            InFlightPrDisplay::UnderReviewStory { story_id }
+        }
+        LocalReviewState::NotStarted => {
+            if matches!(ci, CiProbe::InProgress { .. }) {
+                InFlightPrDisplay::CiRunning
+            } else {
+                InFlightPrDisplay::AwaitingReview
+            }
+        }
+    }
+}
+
+/// BUG-229: the open-PR display matrix — `classify_open_pr_display` maps
+/// the three drain-pipeline signals onto one [`InFlightPrDisplay`] stage
+/// per row of the spec's state machine. Synthesized inputs, no `gh` /
+/// `git`. trace:BUG-229 | ai:claude
+#[cfg(test)]
+mod bug_229_display_matrix_tests {
+    use super::*;
+
+    fn approved_decision(login: Option<&str>) -> PrReviewDecision {
+        PrReviewDecision {
+            decision: "APPROVED".to_string(),
+            approver: login.map(|s| s.to_string()),
+        }
+    }
+
+    /// PR open, CI still running, no review started → CI-running stage,
+    /// so the row says "wait for CI" instead of a premature "start
+    /// review" (the orchestrator's CI-wait window).
+    #[test]
+    fn open_pr_ci_running() {
+        let d = classify_open_pr_display(
+            None,
+            LocalReviewState::NotStarted,
+            &CiProbe::InProgress { pr_number: 71 },
+        );
+        assert_eq!(d, InFlightPrDisplay::CiRunning);
+    }
+
+    /// PR open, CI finished (green / no-checks / no-signal), no review
+    /// started → ready for a reviewer to pick up.
+    #[test]
+    fn open_pr_ci_done_awaits_review() {
+        for ci in [
+            CiProbe::Green { pr_number: 71 },
+            CiProbe::PrNoChecks { pr_number: 71 },
+            CiProbe::NoSignal(String::new()),
+        ] {
+            assert_eq!(
+                classify_open_pr_display(None, LocalReviewState::NotStarted, &ci),
+                InFlightPrDisplay::AwaitingReview,
+            );
+        }
+    }
+
+    /// PR open, a reviewer session lease owns it → under-review stage.
+    /// A still-running CI probe does not override an active lease.
+    #[test]
+    fn open_pr_under_review_by_lease() {
+        let d = classify_open_pr_display(
+            None,
+            LocalReviewState::InProgressLease {
+                session_id: "abc12345".to_string(),
+                since: "30m ago".to_string(),
+            },
+            &CiProbe::InProgress { pr_number: 71 },
+        );
+        assert_eq!(
+            d,
+            InFlightPrDisplay::UnderReviewLease {
+                session_id: "abc12345".to_string(),
+                since: "30m ago".to_string(),
+            }
+        );
+    }
+
+    /// PR open, an In-Progress `Review PR-N:` story (no PR-scoped
+    /// session) → under-review stage.
+    #[test]
+    fn open_pr_under_review_by_story() {
+        let d = classify_open_pr_display(
+            None,
+            LocalReviewState::InProgressStory {
+                story_id: "STORY-9".to_string(),
+            },
+            &CiProbe::NoSignal(String::new()),
+        );
+        assert_eq!(
+            d,
+            InFlightPrDisplay::UnderReviewStory {
+                story_id: "STORY-9".to_string()
+            }
+        );
+    }
+
+    /// PR open, review complete (gh `reviewDecision` APPROVED) →
+    /// review-complete stage, carrying the approver login.
+    #[test]
+    fn open_pr_review_approved() {
+        let d = classify_open_pr_display(
+            Some(approved_decision(Some("octocat"))),
+            LocalReviewState::NotStarted,
+            &CiProbe::NoSignal(String::new()),
+        );
+        assert_eq!(
+            d,
+            InFlightPrDisplay::ReviewApproved {
+                approver: Some("octocat".to_string())
+            }
+        );
+    }
+
+    /// An APPROVED decision is authoritative — it supersedes a reviewer
+    /// lease still on disk (a lingering session after approval).
+    #[test]
+    fn approved_supersedes_lingering_lease() {
+        let d = classify_open_pr_display(
+            Some(approved_decision(None)),
+            LocalReviewState::InProgressLease {
+                session_id: "abc12345".to_string(),
+                since: "1h ago".to_string(),
+            },
+            &CiProbe::NoSignal(String::new()),
+        );
+        assert_eq!(d, InFlightPrDisplay::ReviewApproved { approver: None });
+    }
+}
+
 /// TASK-234: render the "Done — awaiting merge" body grouped by PR +
 /// state instead of as a flat list. [`classify_in_flight_specs`] does
 /// the git-only bucketing; this adds the `gh` PR-state lookups and
@@ -26900,45 +27148,57 @@ fn render_in_flight_grouped(
                 );
                 println!("    {} {}", "◐".bright_green(), ids_line);
 
-                // State 3 first: gh's `reviewDecision` is the
-                // authoritative "safe to merge" signal and supersedes a
-                // lingering reviewer lease.
+                // BUG-229: gather the three drain-pipeline signals, then
+                // let `classify_open_pr_display` pick the stage. gh's
+                // `reviewDecision` (State: approved) is the authoritative
+                // "safe to merge" signal and supersedes a lingering
+                // reviewer lease. The CI probe is only consulted when no
+                // review has started — an extra `gh` round-trip we skip
+                // once a lease / APPROVED decision already settles the
+                // stage. trace:BUG-229 | ai:claude
                 let approved = detect_pr_review_decision(project_root, pr.number)
                     .filter(|d| d.decision == "APPROVED");
-                match approved {
-                    Some(decision) => {
-                        let by = decision
-                            .approver
-                            .map(|a| format!(" by {}", a))
-                            .unwrap_or_default();
+                let local_state = detect_local_review_state(project_root, all_reqs, pr.number);
+                let ci =
+                    if approved.is_none() && matches!(local_state, LocalReviewState::NotStarted) {
+                        probe_ci_state_for_branch(branch)
+                    } else {
+                        CiProbe::NoSignal(String::new())
+                    };
+                match classify_open_pr_display(approved, local_state, &ci) {
+                    InFlightPrDisplay::ReviewApproved { approver } => {
+                        let by = approver.map(|a| format!(" by {}", a)).unwrap_or_default();
                         println!(
-                            "    {} Review approved{} — Next: merge (`{}`)",
+                            "    {} Review complete{}, awaiting merge — Next: merge (`{}`)",
                             "▶".bold(),
                             by,
                             format!("gh pr merge {} --squash", pr.number).cyan()
                         );
                     }
-                    None => match detect_local_review_state(project_root, all_reqs, pr.number) {
-                        LocalReviewState::InProgressLease { session_id, since } => println!(
-                            "    {} {}",
-                            "⏳".yellow(),
-                            format!(
-                                "Review in progress (reviewer session {} since {})",
-                                session_id, since
-                            )
-                            .yellow()
-                        ),
-                        LocalReviewState::InProgressStory { story_id } => println!(
-                            "    {} {}",
-                            "⏳".yellow(),
-                            format!("Review in progress (review story {})", story_id).yellow()
-                        ),
-                        LocalReviewState::NotStarted => println!(
-                            "    {} start review (`{}`)",
-                            "▶ Next:".bold(),
-                            format!("aida queue work PR-{}", pr.number).cyan()
-                        ),
-                    },
+                    InFlightPrDisplay::UnderReviewLease { session_id, since } => println!(
+                        "    {} {}",
+                        "⏳".yellow(),
+                        format!(
+                            "Under review (reviewer session {} since {})",
+                            session_id, since
+                        )
+                        .yellow()
+                    ),
+                    InFlightPrDisplay::UnderReviewStory { story_id } => println!(
+                        "    {} {}",
+                        "⏳".yellow(),
+                        format!("Under review (review story {})", story_id).yellow()
+                    ),
+                    InFlightPrDisplay::CiRunning => println!(
+                        "    {} {}",
+                        "◐".yellow(),
+                        "CI running — Next: wait for CI to finish, then review".yellow()
+                    ),
+                    InFlightPrDisplay::AwaitingReview => println!(
+                        "    {} start review (`{}`)",
+                        "▶ Next:".bold(),
+                        format!("aida queue work PR-{}", pr.number).cyan()
+                    ),
                 }
             }
             _ => {
