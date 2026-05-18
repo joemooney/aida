@@ -43,12 +43,12 @@ description: |-
   ## Origin
 
   2026-05-18 BUG-228 implementer's corrected diagnosis: the role-file corruption was a non-atomic \`std::fs::write\` torn-write race between concurrent \`aida\` processes during the 15:40 \`--auto-complete\` drain, NOT a TOML-escaping bug. The fix (\`write_atomic\`) is correct but was applied only to role files. A grep showed the same pattern in ~8 other write paths; the HIGH-risk ones (manifest, dispenser counters) are exercised constantly by the autonomous-drain workflow and must be converted before a multi-session drain corrupts core state.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:41.521260612Z
-modified_at: 2026-05-18T06:22:33.616964977Z
+modified_at: 2026-05-18T14:49:15.140860901Z
 req_type: Task
 tags:
 - atomic-write
