@@ -47,12 +47,12 @@ description: |-
   ## Origin
 
   2026-05-18 batch:orchestrator-hardening drain. Filed first for instance A (phase-3 reviewer escalation crashing the batch with a false "shipped 0"). Broadened 2026-05-18 to phase-agnostic after instance B surfaced: BUG-230, resolved-by-supersession, produced a phase-1 \`PrLookup::NoOpenPr\` false failure for the identical root reason — the orchestrator's phase model has no concept of a valid abnormal-but-successful outcome. One principle (reconcile against reality before failing) fixes both; writing the fix as phase-3-only would leave instance B — and every future no-work spec — still crashing the batch.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:47:22.190733508Z
-modified_at: 2026-05-19T04:39:00.937939205Z
+modified_at: 2026-05-19T05:07:38.931845981Z
 req_type: Bug
 tags:
 - auto-complete
@@ -109,3 +109,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-19T04:14:24.087966681Z
   implemented_by: joe
+  completed_at: 2026-05-19T05:07:38.931845981Z
+  completion_sha: 84c40cfd8ab138e958e9b8c22349f66d9c6898ae
