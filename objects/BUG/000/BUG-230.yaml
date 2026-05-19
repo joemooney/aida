@@ -20,12 +20,12 @@ description: |-
   ## Original acceptance (SUPERSEDED — do not implement)
 
   The Fix-A annotation criteria are obsolete per the RESOLVED header above. TASK-329's acceptance is the one that was actually delivered.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:04:34.050931963Z
-modified_at: 2026-05-19T01:22:58.961354187Z
+modified_at: 2026-05-19T01:23:01.215483530Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
