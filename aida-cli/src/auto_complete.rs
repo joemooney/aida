@@ -307,6 +307,27 @@ impl PhaseFailure {
     }
 }
 
+/// The verdict of the BUG-241 reconcile step: when a phase ends without the
+/// artifact the orchestrator polls for (an open PR, a verdict file), did the
+/// phase genuinely fail — or did the spec ship anyway, merged out-of-band by a
+/// human or resolved by supersession so no code was ever needed? The
+/// orchestrator asks the driver this *before declaring any phase a failure*,
+/// so a phase that ended abnormally-but-successfully can never crash the batch
+/// with a false "shipped 0". trace:BUG-241 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PhaseReconcile {
+    /// Ground truth confirms the failure — nothing shipped. The phase failure
+    /// stands and the orchestrator reports it exactly as before. This is the
+    /// regression guard: the reconcile step only ever *ratifies* a real
+    /// success, it never invents one.
+    GenuineFailure,
+    /// Ground truth shows the spec shipped despite the missing artifact.
+    /// `reason` is the one-line evidence (e.g. `PR-94 is merged`) shown to the
+    /// user. The orchestrator treats the run as a success and advances the
+    /// batch.
+    ShippedOutOfBand { reason: String },
+}
+
 /// Everything a recovery hint might need to name a concrete next command.
 /// The driver fills in whatever it has discovered so far.
 /// trace:STORY-246 | ai:claude
@@ -359,6 +380,18 @@ pub(crate) trait PhaseDriver {
     fn build(&mut self) -> Result<(), PhaseFailure>;
     /// Snapshot of what the driver has discovered, for the recovery hint.
     fn hint_context(&self) -> HintContext;
+    /// Phase-agnostic reality check (BUG-241). Before the orchestrator
+    /// declares `phase` a failure, it asks the driver whether ground truth — a
+    /// merged PR, a Completed spec — shows the work shipped anyway. Two real
+    /// cases this redeems: a reviewer that escalates the merge to a human who
+    /// merges out-of-band (phase 3 leaves no verdict file), and a spec already
+    /// resolved by supersession (phase 1 correctly produces no PR). The
+    /// default is [`PhaseReconcile::GenuineFailure`] — a driver with no way to
+    /// check reality leaves every failure standing, so the reconcile step can
+    /// only ever ratify a success, never invent one. trace:BUG-241 | ai:claude
+    fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
+        PhaseReconcile::GenuineFailure
+    }
 }
 
 /// Build a `--json` phase-transition event line. Pure — unit-tested directly.
@@ -663,6 +696,99 @@ fn finish_failure(
     }
 }
 
+/// Print the reconciled-success epilogue and build a *success*
+/// [`OrchestrationResult`]. Used when the BUG-241 reconcile step finds that a
+/// phase which ended without its expected artifact actually shipped — the PR
+/// merged out-of-band, or the spec legitimately needed no code. The run
+/// counts as a success (exit `0`, no `failed_phase`): the batch advances and
+/// the spec is *not* mis-reported as un-shipped. trace:BUG-241 | ai:claude
+fn finish_reconciled(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+    phase: Phase,
+    reason: &str,
+) -> OrchestrationResult {
+    let elapsed = start.elapsed().as_millis();
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                phase.slug(),
+                "reconciled",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "success",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reconciled", "true")],
+            )
+        );
+    } else {
+        eprintln!();
+        eprintln!(
+            "{} phase {} ({}) ended without its usual artifact — reconciled against \
+             reality: {}",
+            "ⓘ".cyan(),
+            phase.index(),
+            phase.label(),
+            reason,
+        );
+        eprintln!(
+            "{} {} shipped ({}, reconciled)",
+            "✓".green().bold(),
+            spec.bold(),
+            fmt_duration(elapsed)
+        );
+    }
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: durations,
+        total_ms: elapsed,
+    }
+}
+
+/// Resolve a phase `Err` through the BUG-241 reconcile step. The orchestrator
+/// asks the driver — via [`PhaseDriver::reconcile_failure`] — whether ground
+/// truth shows the spec shipped despite the missing artifact. If it did, the
+/// run is a [`finish_reconciled`] success; otherwise the failure stands and
+/// [`finish_failure`] reports it exactly as before. Returns the terminal
+/// [`OrchestrationResult`] the caller returns immediately.
+///
+/// This is the phase-agnostic seam: every failure site in [`orchestrate`]
+/// routes through here, so reconciliation is one principle applied at every
+/// phase, not a per-phase patch. trace:BUG-241 | ai:claude
+fn resolve_phase_failure(
+    driver: &mut dyn PhaseDriver,
+    phase: Phase,
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    failure: &PhaseFailure,
+    durations: Vec<(Phase, u128)>,
+) -> OrchestrationResult {
+    match driver.reconcile_failure(phase, failure) {
+        PhaseReconcile::ShippedOutOfBand { reason } => {
+            finish_reconciled(spec, json, start, durations, phase, &reason)
+        }
+        PhaseReconcile::GenuineFailure => {
+            finish_failure(driver, phase, spec, json, start, failure, durations)
+        }
+    }
+}
+
 /// Drive the phases in order, stopping at the variant's last phase or at the
 /// first failure. Returns an [`OrchestrationResult`] — the process exit code
 /// (`0` on success, else the 1-based index of the phase that failed) plus
@@ -694,7 +820,7 @@ pub(crate) fn orchestrate(
     let phase_start = Instant::now();
     if let Err(f) = driver.run_implementer() {
         durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-        return finish_failure(
+        return resolve_phase_failure(
             driver,
             Phase::Implementer,
             spec,
@@ -712,7 +838,7 @@ pub(crate) fn orchestrate(
     let phase_start = Instant::now();
     if let Err(f) = driver.finish_ci() {
         durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
-        return finish_failure(driver, Phase::Ci, spec, json, &start, &f, durations);
+        return resolve_phase_failure(driver, Phase::Ci, spec, json, &start, &f, durations);
     }
     durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
     emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
@@ -726,7 +852,15 @@ pub(crate) fn orchestrate(
     match driver.run_reviewer() {
         Err(f) => {
             durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-            return finish_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
+            return resolve_phase_failure(
+                driver,
+                Phase::Reviewer,
+                spec,
+                json,
+                &start,
+                &f,
+                durations,
+            );
         }
         Ok(verdict) if verdict != Verdict::Approved => {
             durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
@@ -734,7 +868,15 @@ pub(crate) fn orchestrate(
                 "reviewer verdict is {} — not Approved",
                 verdict.label()
             ));
-            return finish_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
+            return resolve_phase_failure(
+                driver,
+                Phase::Reviewer,
+                spec,
+                json,
+                &start,
+                &f,
+                durations,
+            );
         }
         Ok(_) => {}
     }
@@ -746,7 +888,7 @@ pub(crate) fn orchestrate(
     let phase_start = Instant::now();
     if let Err(f) = driver.merge() {
         durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
-        return finish_failure(driver, Phase::Merge, spec, json, &start, &f, durations);
+        return resolve_phase_failure(driver, Phase::Merge, spec, json, &start, &f, durations);
     }
     durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
     emit_done(Phase::Merge, spec, json, start.elapsed().as_millis());
@@ -759,7 +901,7 @@ pub(crate) fn orchestrate(
     let phase_start = Instant::now();
     if let Err(f) = driver.pull() {
         durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
-        return finish_failure(driver, Phase::Pull, spec, json, &start, &f, durations);
+        return resolve_phase_failure(driver, Phase::Pull, spec, json, &start, &f, durations);
     }
     durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
     emit_done(Phase::Pull, spec, json, start.elapsed().as_millis());
@@ -772,7 +914,7 @@ pub(crate) fn orchestrate(
     let phase_start = Instant::now();
     if let Err(f) = driver.build() {
         durations.push((Phase::Build, phase_start.elapsed().as_millis()));
-        return finish_failure(driver, Phase::Build, spec, json, &start, &f, durations);
+        return resolve_phase_failure(driver, Phase::Build, spec, json, &start, &f, durations);
     }
     durations.push((Phase::Build, phase_start.elapsed().as_millis()));
     emit_done(Phase::Build, spec, json, start.elapsed().as_millis());
@@ -901,6 +1043,9 @@ mod tests {
         calls: Vec<Phase>,
         fail_at: Option<Phase>,
         verdict: Verdict,
+        /// BUG-241: what [`PhaseDriver::reconcile_failure`] returns. Defaults
+        /// to `GenuineFailure` so every pre-BUG-241 failure test is unchanged.
+        reconcile: PhaseReconcile,
     }
 
     impl MockPhaseDriver {
@@ -909,6 +1054,7 @@ mod tests {
                 calls: Vec::new(),
                 fail_at: None,
                 verdict: Verdict::Approved,
+                reconcile: PhaseReconcile::GenuineFailure,
             }
         }
 
@@ -917,6 +1063,7 @@ mod tests {
                 calls: Vec::new(),
                 fail_at: Some(phase),
                 verdict: Verdict::Approved,
+                reconcile: PhaseReconcile::GenuineFailure,
             }
         }
 
@@ -925,7 +1072,16 @@ mod tests {
                 calls: Vec::new(),
                 fail_at: None,
                 verdict,
+                reconcile: PhaseReconcile::GenuineFailure,
             }
+        }
+
+        /// BUG-241: make this driver's [`PhaseDriver::reconcile_failure`]
+        /// report `reconcile` — the ground-truth verdict the orchestrator
+        /// consults before declaring a phase failed.
+        fn reconciles_as(mut self, reconcile: PhaseReconcile) -> Self {
+            self.reconcile = reconcile;
+            self
         }
 
         fn record(&mut self, phase: Phase) -> Result<(), PhaseFailure> {
@@ -966,6 +1122,9 @@ mod tests {
                 implementer_session: Some("019e2f423e7c".to_string()),
                 ci_run_id: Some("9988776655".to_string()),
             }
+        }
+        fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
+            self.reconcile.clone()
         }
     }
 
@@ -1126,6 +1285,100 @@ mod tests {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::Approved);
         let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 0);
+    }
+
+    // --- BUG-241: reconcile against reality before declaring a failure ----
+
+    /// Instance B — phase 1 produces no PR because the spec was already
+    /// resolved by supersession. The reconcile step finds the spec Completed
+    /// and treats the run as a success: exit `0`, no `failed_phase`. A batch
+    /// drain advances on exactly this result shape (`drain_batch` keys off
+    /// `exit_code` / `failed_phase`), so the false "shipped 0" crash is gone.
+    #[test]
+    fn orchestrate_reconciles_phase1_no_work_spec() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Implementer).reconciles_as(
+            PhaseReconcile::ShippedOutOfBand {
+                reason: "BUG-230 is Completed — the spec needed no further work".to_string(),
+            },
+        );
+        let result = orchestrate(&mut driver, "BUG-230", AutoCompleteVariant::Full, false);
+        assert_eq!(
+            result.exit_code, 0,
+            "a reconciled phase-1 failure is a success"
+        );
+        assert!(result.failed_phase.is_none());
+        assert!(result.failure.is_none());
+        // The pipeline still stopped at phase 1 — reconcile redeems the
+        // outcome, it does not resume the remaining phases.
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// Instance A — phase 3 ends with no verdict file because the reviewer
+    /// escalated and a human merged the PR out-of-band. The reconcile step
+    /// finds the PR merged and treats the run as a success.
+    #[test]
+    fn orchestrate_reconciles_phase3_out_of_band_merge() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Reviewer).reconciles_as(
+            PhaseReconcile::ShippedOutOfBand {
+                reason: "PR-94 is merged and BUG-233 is Completed".to_string(),
+            },
+        );
+        let result = orchestrate(&mut driver, "BUG-233", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failed_phase.is_none());
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer, Phase::Ci, Phase::Reviewer]
+        );
+    }
+
+    /// A non-Approved verdict is also routed through reconcile — if reality
+    /// shows the PR merged out-of-band, even a Rejected verdict is redeemed.
+    #[test]
+    fn orchestrate_reconciles_rejected_verdict_when_pr_merged() {
+        let mut driver = MockPhaseDriver::with_verdict(Verdict::Rejected).reconciles_as(
+            PhaseReconcile::ShippedOutOfBand {
+                reason: "PR-94 is already merged".to_string(),
+            },
+        );
+        let result = orchestrate(&mut driver, "BUG-233", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failed_phase.is_none());
+    }
+
+    /// Regression guard — the reconcile step must NOT mask a real failure.
+    /// With the default `GenuineFailure` verdict (reality confirms nothing
+    /// shipped) a phase-1 failure still exits `1` and names the failed phase.
+    #[test]
+    fn orchestrate_genuine_phase1_failure_still_fails() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Implementer);
+        let result = orchestrate(&mut driver, "BUG-241", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 1);
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert!(result.failure.is_some());
+    }
+
+    /// Regression guard at phase 3 — a genuine no-verdict failure (reality
+    /// confirms nothing merged) still stops the batch at phase 3.
+    #[test]
+    fn orchestrate_genuine_phase3_failure_still_fails() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Reviewer);
+        let result = orchestrate(&mut driver, "BUG-241", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+    }
+
+    /// The default `PhaseDriver::reconcile_failure` is `GenuineFailure` — a
+    /// driver that does not override it (cannot check reality) leaves every
+    /// failure standing. This pins the conservative default.
+    #[test]
+    fn reconcile_failure_default_is_genuine_failure() {
+        let mut driver = MockPhaseDriver::all_ok();
+        // `all_ok()` leaves `reconcile` at its `GenuineFailure` default.
+        assert_eq!(
+            driver.reconcile_failure(Phase::Implementer, &PhaseFailure::new("x")),
+            PhaseReconcile::GenuineFailure
+        );
     }
 
     // --- Recovery hints: per phase, per failure kind ----------------------
