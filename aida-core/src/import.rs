@@ -350,8 +350,10 @@ const KNOWN_STATUSES: &[&str] = &[
     "Approved",
     "Planned",
     "In Progress",
+    "Done",
     "Completed",
     "Rejected",
+    "Needs Attention",
 ];
 
 /// Known priority strings (for validation)
@@ -386,6 +388,7 @@ pub fn parse_requirement_status(s: &str) -> Option<RequirementStatus> {
         "Done" => Some(RequirementStatus::Done),
         "Completed" => Some(RequirementStatus::Completed),
         "Rejected" => Some(RequirementStatus::Rejected),
+        "NeedsAttention" | "Needs Attention" => Some(RequirementStatus::NeedsAttention),
         _ => None,
     }
 }
@@ -854,6 +857,15 @@ mod tests {
         assert_eq!(
             parse_requirement_status("Rejected"),
             Some(RequirementStatus::Rejected)
+        );
+        // trace:STORY-332 | ai:claude — both spellings of the punt status.
+        assert_eq!(
+            parse_requirement_status("NeedsAttention"),
+            Some(RequirementStatus::NeedsAttention)
+        );
+        assert_eq!(
+            parse_requirement_status("Needs Attention"),
+            Some(RequirementStatus::NeedsAttention)
         );
         // Unknown values still fall through to None.
         assert_eq!(parse_requirement_status("FlibbertyGibbet"), None);

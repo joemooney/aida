@@ -96,12 +96,16 @@ pub use meta::{
 pub use models::{
     default_reaction_definitions,
     default_type_definitions,
+    // Status-transition rules (STORY-332)
+    forbidden_attention_transition,
     // AI prompt configuration types
     AiActionPromptConfig,
     AiPromptConfig,
     AiTypePromptConfig,
     // Traceability types
     ArtifactType,
+    // Punt / attention types (STORY-332)
+    AttentionReason,
     // Baseline types
     Baseline,
     BaselineComparison,
@@ -130,6 +134,7 @@ pub use models::{
     LinkOrigin,
     MetaSubtype,
     NumberingStrategy,
+    PuntCategory,
     // Queue types
     QueueEntry,
     ReactionDefinition,

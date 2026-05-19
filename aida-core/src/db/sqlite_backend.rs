@@ -294,6 +294,7 @@ impl SqliteBackend {
             RequirementStatus::Done => "Done",
             RequirementStatus::Completed => "Completed",
             RequirementStatus::Rejected => "Rejected",
+            RequirementStatus::NeedsAttention => "Needs Attention",
         }
     }
 
@@ -307,6 +308,7 @@ impl SqliteBackend {
             "Done" => RequirementStatus::Done,
             "Completed" => RequirementStatus::Completed,
             "Rejected" => RequirementStatus::Rejected,
+            "Needs Attention" => RequirementStatus::NeedsAttention,
             _ => RequirementStatus::Draft,
         }
     }
@@ -569,6 +571,9 @@ impl SqliteBackend {
                 gitlab_issues,
                 implementation_info,
                 ai_evaluation,
+                // STORY-332: the legacy centralized SQLite backend is
+                // deprecated and does not persist punt metadata.
+                attention_reason: None,
                 version,
             });
         }
@@ -1484,6 +1489,8 @@ impl DatabaseBackend for SqliteBackend {
                     gitlab_issues,
                     implementation_info,
                     ai_evaluation,
+                    // STORY-332: legacy centralized backend — not persisted.
+                    attention_reason: None,
                     version,
                 }))
             }

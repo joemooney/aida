@@ -14,6 +14,7 @@ mod not_found;
 mod orchestrator;
 mod process_probe;
 mod prompts;
+mod punt;
 mod reviewer_summary;
 mod session;
 mod session_manifest;
@@ -33,10 +34,12 @@ use aida_core::{
     check_scaffold_status,
     determine_requirements_path,
     export,
+    forbidden_attention_transition,
     seed_meta_requirements,
     // trace:TASK-331 — shared atomic-write util, promoted from BUG-228's local copy
     write_atomic,
     ArtifactType,
+    AttentionReason,
     Cardinality,
     Comment,
     DatabaseBackend,
@@ -903,6 +906,16 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+        Command::Punt { .. } => {
+            // `aida punt` writes the NeedsAttention status + structured punt
+            // metadata; the deprecated SQLite backend does not persist it.
+            // trace:STORY-332 | ai:claude
+            anyhow::bail!(
+                "aida punt requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
     }
 
     Ok(())
@@ -943,7 +956,29 @@ fn handle_findings_command(
                 kind: kind.clone(),
             };
             let sections = findings::build_findings_view(&summaries, &view_filter);
-            let total = findings::count_findings(&sections);
+            let findings_total = findings::count_findings(&sections);
+
+            // STORY-332: a NeedsAttention spec is a punt awaiting triage —
+            // compose it into the same surface. `--pr`/`--source`/`--kind`
+            // are findings-specific axes; when any is set the caller asked
+            // for a specific finding source, so punts are left out.
+            let show_punts = pr.is_none() && source.is_none() && kind.is_none();
+            let mut punts: Vec<aida_core::Requirement> = Vec::new();
+            if show_punts {
+                let na_filter = aida_core::ListFilter {
+                    status: Some("needs-attention".to_string()),
+                    ..Default::default()
+                };
+                for s in backend.list_summaries(&na_filter)? {
+                    if let Some(did) = s.agreed_id.as_deref().or(s.spec_id.as_deref()) {
+                        if let Some(r) = backend.get_requirement_by_spec_id(did)? {
+                            punts.push(r);
+                        }
+                    }
+                }
+                punts.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+            }
+            let total = findings_total + punts.len();
 
             if *count {
                 println!("{total}");
@@ -984,13 +1019,54 @@ fn handle_findings_command(
                     }
                 }
             }
+            // STORY-332: punts awaiting triage — paused specs an autonomous
+            // agent could not safely resolve.
+            if !punts.is_empty() {
+                println!();
+                println!("{}", "Punts awaiting triage".magenta().bold());
+                for r in &punts {
+                    let did = r
+                        .agreed_id
+                        .as_deref()
+                        .or(r.spec_id.as_deref())
+                        .unwrap_or("?");
+                    match &r.attention_reason {
+                        Some(a) => {
+                            println!("  {:<20} {:<14} {}", a.category.to_string(), did, a.detail);
+                            if let Some(lean) = &a.lean {
+                                println!(
+                                    "  {:<20} {:<14} {}",
+                                    "",
+                                    "",
+                                    format!("↳ lean: {lean}").dimmed()
+                                );
+                            }
+                        }
+                        // A NeedsAttention spec with no recorded reason —
+                        // status set by hand rather than via `aida punt`.
+                        None => println!("  {:<20} {:<14} {}", "(no reason)", did, r.title),
+                    }
+                }
+            }
+
             println!();
-            println!(
-                "{}",
-                "Triage: `aida findings promote <ID>` joins the queue · \
-                 `aida findings dismiss <ID>` rejects it"
-                    .dimmed()
-            );
+            if findings_total > 0 {
+                println!(
+                    "{}",
+                    "Triage: `aida findings promote <ID>` joins the queue · \
+                     `aida findings dismiss <ID>` rejects it"
+                        .dimmed()
+                );
+            }
+            if !punts.is_empty() {
+                println!(
+                    "{}",
+                    "Punts: `aida show <ID>` for the fork · resume with \
+                     `aida edit <ID> --status in-progress` · drop with \
+                     `--status rejected`"
+                        .dimmed()
+                );
+            }
         }
 
         FindingsCommand::Dismiss { id } => {
@@ -1052,6 +1128,105 @@ fn handle_findings_command(
             println!("Promoted finding {id} — status → Approved, queued for {role}.");
         }
     }
+    Ok(())
+}
+
+/// `aida punt` — pause a spec in `NeedsAttention` with a structured reason
+/// instead of guessing past a design-fork (STORY-332). The transition is
+/// enforced (`InProgress → NeedsAttention` only); a punt record is appended
+/// to the ledger; control returns immediately so an orchestrator advances.
+/// trace:STORY-332 | ai:claude
+fn handle_punt_command(
+    id: &str,
+    category: &str,
+    reason: &str,
+    lean: Option<&str>,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let category = punt::parse_punt_category(category).map_err(|e| anyhow::anyhow!(e))?;
+
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+
+    // STORY-332: a spec can only be punted out of In Progress — punting is
+    // the "I was working this and hit a fork" move. This is the same edge
+    // `forbidden_attention_transition` guards for `aida edit`, asserted here
+    // directly so the error is punt-shaped.
+    if forbidden_attention_transition(&req.status, &RequirementStatus::NeedsAttention).is_some() {
+        anyhow::bail!(
+            "{display_id} is {} — only an In Progress spec can be punted \
+             (punting is the \"I was working this and hit a fork\" move). \
+             Take it to In Progress first if you mean to pause it.",
+            req.status
+        );
+    }
+
+    let raised_by = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|r| !r.is_empty());
+    let now = chrono::Utc::now();
+
+    req.status = RequirementStatus::NeedsAttention;
+    req.attention_reason = Some(AttentionReason {
+        category,
+        detail: reason.to_string(),
+        lean: lean.map(|s| s.to_string()),
+        raised_by: raised_by.clone(),
+        raised_at: now,
+    });
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+    record_role_activity(&display_id, "punt");
+
+    // Append the punt ledger record (`.aida/punts.jsonl`). Best-effort — a
+    // ledger-write failure must not undo the status flip, which is the
+    // load-bearing part; warn and continue. trace:STORY-325 | ai:claude
+    if let Ok(project_root) = find_project_root() {
+        let record = punt::PuntRecord {
+            timestamp: now,
+            spec: display_id.clone(),
+            category,
+            detail: reason.to_string(),
+            lean: lean.map(|s| s.to_string()),
+            raised_by: raised_by.clone(),
+            resolution_path: "punted".to_string(),
+        };
+        if let Err(e) = punt::append_to_ledger(&project_root, &record) {
+            eprintln!(
+                "{} could not write punt ledger record: {e}",
+                "Note:".dimmed()
+            );
+        }
+    }
+
+    println!(
+        "{} {display_id} → {}",
+        "Punted".magenta().bold(),
+        "Needs Attention".magenta().bold()
+    );
+    println!("  {}  {category}", "Category:".dimmed());
+    println!("  {}    {reason}", "Reason:".dimmed());
+    if let Some(l) = lean {
+        println!("  {}      {l}", "Lean:".dimmed());
+    }
+    println!(
+        "{}",
+        "The spec is paused awaiting triage. An orchestrator can continue to \
+         the next item."
+            .dimmed()
+    );
+    println!(
+        "{}",
+        format!(
+            "Triage: `aida findings` lists it · resume with \
+             `aida edit {display_id} --status in-progress` · \
+             drop with `--status rejected`."
+        )
+        .dimmed()
+    );
     Ok(())
 }
 
@@ -2628,6 +2803,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 Requirement::new(title_resolved, resolved_description.unwrap_or_default());
             if let Some(s) = status {
                 let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
+                // STORY-332: a freshly-added spec cannot be born paused —
+                // NeedsAttention is reached only by punting In-Progress work.
+                if let Some(msg) =
+                    forbidden_attention_transition(&req.status, &parse_status(canonical)?)
+                {
+                    anyhow::bail!(msg);
+                }
                 req.set_status_from_str(canonical);
             }
             if let Some(p) = &effective_priority {
@@ -3164,6 +3346,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             }
                         }
                     }
+                    // STORY-332: surface the punt reason when the spec is
+                    // paused in NeedsAttention, so triage sees the fork
+                    // without grepping the ledger. `attention_reason` is
+                    // present only while paused (cleared on triage-out).
+                    if let Some(reason) = req.attention_reason.as_ref() {
+                        println!("\n{}:", "Needs Attention — punted".magenta().bold());
+                        println!("  Category:  {}", reason.category);
+                        println!("  Reason:    {}", reason.detail);
+                        if let Some(lean) = &reason.lean {
+                            println!("  Lean:      {}", lean);
+                        }
+                        if let Some(who) = &reason.raised_by {
+                            println!("  Raised by: {}", who);
+                        }
+                        println!(
+                            "  Raised at: {}",
+                            reason
+                                .raised_at
+                                .with_timezone(&chrono::Local)
+                                .format("%Y-%m-%d %H:%M %Z")
+                        );
+                    }
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
                     }
@@ -3290,7 +3494,23 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let mut new_status_for_manifest: Option<String> = None;
             if let Some(s) = status {
                 let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
+                // STORY-332: enforce the NeedsAttention transition rules —
+                // into it only from In Progress (use `aida punt`), out of it
+                // only to Approved / In Progress / Rejected. Every other
+                // transition is unconstrained, so existing edits don't regress.
+                if let Some(msg) =
+                    forbidden_attention_transition(&req.status, &parse_status(canonical)?)
+                {
+                    anyhow::bail!(msg);
+                }
+                let was_needs_attention = matches!(req.status, RequirementStatus::NeedsAttention);
                 req.set_status_from_str(canonical);
+                // STORY-332: a spec triaged out of NeedsAttention is no longer
+                // paused — drop the now-stale punt metadata. The punt ledger
+                // (`.aida/punts.jsonl`) keeps the durable history.
+                if was_needs_attention && !matches!(req.status, RequirementStatus::NeedsAttention) {
+                    req.attention_reason = None;
+                }
                 changed = true;
                 new_status_for_manifest = Some(canonical.to_string());
             }
@@ -3404,6 +3624,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Findings(findings_cmd) => {
             handle_findings_command(findings_cmd, &backend, store_path)?;
+        }
+        Command::Punt {
+            id,
+            category,
+            reason,
+            lean,
+        } => {
+            handle_punt_command(id, category, reason, lean.as_deref(), &backend, store_path)?;
         }
         Command::Search {
             query,
@@ -4282,8 +4510,10 @@ pub fn validate_status_input(raw: &str) -> Result<&'static str, String> {
         "done" => Ok("Done"),
         "completed" => Ok("Completed"),
         "rejected" => Ok("Rejected"),
+        // trace:STORY-332 | ai:claude — the punt/pause state.
+        "needsattention" => Ok("NeedsAttention"),
         _ => Err(format!(
-            "invalid status `{}` — expected one of: draft, approved, planned, in-progress, done, completed, rejected",
+            "invalid status `{}` — expected one of: draft, approved, planned, in-progress, done, completed, rejected, needs-attention",
             raw
         )),
     }
@@ -5517,6 +5747,7 @@ fn list_requirements(
             RequirementStatus::Done => "Done".bright_green().bold(),
             RequirementStatus::Completed => "Completed".green(),
             RequirementStatus::Rejected => "Rejected".red(),
+            RequirementStatus::NeedsAttention => "Needs Attention".magenta().bold(),
         };
 
         let priority_str = match req.priority {
@@ -5569,6 +5800,7 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementStatus::Done => "Done".bright_green().bold(),
         RequirementStatus::Completed => "Completed".green(),
         RequirementStatus::Rejected => "Rejected".red(),
+        RequirementStatus::NeedsAttention => "Needs Attention".magenta().bold(),
     };
     println!("{}: {}", "Status".blue(), status_str);
 
@@ -5751,8 +5983,15 @@ fn edit_requirement_cli(
             "done" => RequirementStatus::Done,
             "completed" => RequirementStatus::Completed,
             "rejected" => RequirementStatus::Rejected,
-            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, done, completed, rejected", status_str),
+            "needs_attention" | "needs-attention" | "needsattention" => {
+                RequirementStatus::NeedsAttention
+            }
+            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, done, completed, rejected, needs-attention", status_str),
         };
+        // STORY-332: enforce the NeedsAttention transition rules here too.
+        if let Some(msg) = forbidden_attention_transition(&req.status, &new_status) {
+            anyhow::bail!(msg);
+        }
         if new_status != req.status {
             changes.push(Requirement::field_change(
                 "status",
@@ -5939,6 +6178,13 @@ fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> Result<()> {
     ];
     if let Ok(new_status) = inquire::Select::new("Status:", status_options).prompt() {
         if new_status != req.status {
+            // STORY-332: the picker does not offer NeedsAttention (it is
+            // reached only via `aida punt`), but a NeedsAttention spec can
+            // still be edited here — enforce the transition rules so it
+            // only resolves to Approved / In Progress / Rejected.
+            if let Some(msg) = forbidden_attention_transition(&req.status, &new_status) {
+                anyhow::bail!(msg);
+            }
             changes.push(Requirement::field_change(
                 "status",
                 format!("{:?}", req.status),
@@ -6098,6 +6344,9 @@ fn parse_status(status_str: &str) -> Result<RequirementStatus> {
         "done" => Ok(RequirementStatus::Done),
         "completed" => Ok(RequirementStatus::Completed),
         "rejected" => Ok(RequirementStatus::Rejected),
+        "needs_attention" | "needs-attention" | "needsattention" => {
+            Ok(RequirementStatus::NeedsAttention)
+        }
         _ => anyhow::bail!("Invalid status: {}", status_str),
     }
 }
@@ -22206,6 +22455,48 @@ mod auto_bump_done_tests {
             ),
             Ok(_) => panic!("typo should not validate"),
         }
+    }
+
+    /// STORY-332: `validate_status_input` and `parse_status` both recognise
+    /// the NeedsAttention status across its spelling variants, and the
+    /// error message lists it so a typo is still rejected helpfully.
+    #[test]
+    fn status_parsers_recognize_needs_attention() {
+        assert_eq!(
+            validate_status_input("needs-attention"),
+            Ok("NeedsAttention")
+        );
+        assert_eq!(
+            validate_status_input("Needs Attention"),
+            Ok("NeedsAttention")
+        );
+        assert_eq!(
+            validate_status_input("NEEDSATTENTION"),
+            Ok("NeedsAttention")
+        );
+        assert!(
+            matches!(
+                parse_status("needs-attention"),
+                Ok(RequirementStatus::NeedsAttention)
+            ),
+            "parse_status should accept needs-attention"
+        );
+        match validate_status_input("needs-attentoin") {
+            Err(msg) => assert!(
+                msg.contains("needs-attention"),
+                "error should list needs-attention: {msg}"
+            ),
+            Ok(_) => panic!("typo should not validate"),
+        }
+    }
+
+    /// STORY-332: a punted spec is not terminal — it resumes — so it must
+    /// stay out of the terminal-status predicates that drive child-guards
+    /// and the `aida list` default hide.
+    #[test]
+    fn needs_attention_is_not_terminal() {
+        assert!(!is_terminal_status(&RequirementStatus::NeedsAttention));
+        assert!(!is_terminal_status_str("Needs Attention"));
     }
 
     /// STORY-86: `is_terminal_status_str` no longer treats "done" as
@@ -39387,6 +39678,17 @@ fn render_spec_card(
         println!();
     }
 
+    // STORY-332: a punted spec carries its fork reason — surface it on the
+    // card so a triager sees the contract and the obstacle together.
+    if let Some(reason) = req.attention_reason.as_ref() {
+        println!("  {} {}", "⚠ Punted:".magenta().bold(), reason.category);
+        println!("    {}", reason.detail);
+        if let Some(lean) = &reason.lean {
+            println!("    {}", format!("↳ lean: {lean}").dimmed());
+        }
+        println!();
+    }
+
     // Description: full text for --full, otherwise the lead prose
     // truncated to ~3 paragraphs / ~500 chars on a paragraph boundary.
     // Brief already returned above; only Balanced and Full reach here.
@@ -43105,11 +43407,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     // override here because the whole point of `next`
                     // is "what should I pick up", and the answer is
                     // never "this Completed thing". trace:TASK-46 | ai:claude
+                    //
+                    // STORY-332: a NeedsAttention spec is paused awaiting
+                    // triage — also not "what to pick up next". It is not
+                    // terminal (it resumes), so it still shows in `queue
+                    // list` and surfaces in `aida findings`; it is just
+                    // excluded from the actionable head. trace:STORY-332
                     let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
                     else {
                         return true;
                     };
                     !is_terminal_status(&req.status)
+                        && !matches!(req.status, RequirementStatus::NeedsAttention)
                 })
                 .filter(|e| {
                     if !lease_filter_active {
@@ -43939,6 +44248,8 @@ fn rework_smart_target(current: &RequirementStatus) -> Option<RequirementStatus>
         RequirementStatus::Done => Some(RequirementStatus::InProgress),
         RequirementStatus::Completed => Some(RequirementStatus::InProgress),
         RequirementStatus::Rejected => Some(RequirementStatus::Approved),
+        // STORY-332: reworking a punted spec resumes the paused work.
+        RequirementStatus::NeedsAttention => Some(RequirementStatus::InProgress),
     }
 }
 
@@ -43965,6 +44276,10 @@ fn classify_progress_bucket(status: &aida_core::RequirementStatus) -> ProgressBu
         RequirementStatus::Completed | RequirementStatus::Rejected => ProgressBucket::Shipped,
         RequirementStatus::Done => ProgressBucket::InFlight,
         RequirementStatus::InProgress => ProgressBucket::WorkingNow,
+        // STORY-332: a punted spec is paused pending triage — still work the
+        // batch must land, so it buckets with the not-yet-done Remaining set
+        // (its ⚠ status glyph carries the "needs a decision" signal).
+        RequirementStatus::NeedsAttention => ProgressBucket::Remaining,
         _ => ProgressBucket::Remaining,
     }
 }
@@ -45214,6 +45529,13 @@ fn format_queue_work_not_queued_error(
         ),
         RequirementStatus::Rejected => format!(
             "`{display_id}` is Rejected. Pick a different spec, or re-open with `aida edit {display_id} --status approved --force`."
+        ),
+        // STORY-332: a punted spec is paused awaiting triage — it should be
+        // resolved by a human/advisor, not silently re-queued.
+        RequirementStatus::NeedsAttention => format!(
+            "`{display_id}` is paused (Needs Attention) — an agent punted a design-fork it couldn't resolve.\n  \
+             Review the reason with `aida show {display_id}`, then triage:\n  \
+             resume with `aida edit {display_id} --status in-progress`, or drop it with `--status rejected`."
         ),
     }
 }

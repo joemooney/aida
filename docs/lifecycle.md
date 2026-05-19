@@ -12,10 +12,11 @@ If you know git but not AIDA's vocabulary, the one thing to internalise is
 that **"merged" and "completed" are not the same event** and **"merged" and
 "released" are not the same event**. The rest of this doc unpacks why.
 
-## The seven states
+## The lifecycle states
 
-A spec's `status` field moves through up to seven values. List or filter on
-any of them with `aida list --status <state>`.
+A spec's `status` field moves through up to seven mainline values, plus one
+off-mainline pause state. List or filter on any of them with
+`aida list --status <state>`.
 
 | State | Meaning | How it gets here |
 |-------|---------|------------------|
@@ -26,6 +27,36 @@ any of them with `aida list --status <state>`.
 | **Done** | The work is finished **on a branch** — a PR is open, but it has not landed on `main` yet. | `aida queue done SPEC`, or `/aida-pr` |
 | **Completed** | The work is **merged to `main`**. This is the terminal status for a spec. | auto-bumped by `aida pull` when a commit referencing the spec lands on the default branch |
 | **Released** | Not a spec status — a *cross-spec* milestone. Many Completed specs aggregate into one tagged, published version. | `make release-minor` (or `scripts/release.sh`) |
+
+### The off-mainline state: Needs Attention
+
+| State | Meaning | How it gets here |
+|-------|---------|------------------|
+| **Needs Attention** | A spec that was **In Progress** but is now **paused** — an autonomous agent hit a design-fork it could not safely resolve and **punted** rather than guess. | `aida punt SPEC` / `/aida-punt` |
+
+**Needs Attention** is the design-fork safety net for autonomous drains
+(STORY-332). When a `--no-human` implementer or reviewer hits a decision it
+cannot safely make — two valid designs and the spec is silent, an ambiguous
+spec, missing context, a blocking dependency — guessing produces a *silent
+wrong implementation*. Punting instead pauses the spec with a structured
+reason: an obstacle **category** (`design-fork` / `ambiguous-spec` /
+`missing-context` / `blocked-dependency` / `other`), a human-readable
+**detail**, and an optional **lean** (the agent's best-guess-if-forced).
+
+- Reached **only from In Progress** — punting is the "I was working this and
+  hit a fork" move; `aida punt` refuses any other source state.
+- A Needs Attention spec is **excluded from normal queue pickup** (it is not
+  "what to pick up next") but is **not terminal** — it still shows in
+  `aida list` and surfaces in `aida findings` for triage. A Needs Attention
+  spec *is* a punt awaiting triage.
+- Resolved out **only to Approved, In Progress, or Rejected**:
+  `aida edit SPEC --status in-progress` resumes it; `--status rejected`
+  drops it. The structured reason is cleared once it leaves Needs Attention;
+  the punt ledger (`.aida/punts.jsonl`) keeps the durable history.
+
+The full punt mechanism — when to punt, the obstacle categories, and the
+`aida punt` invocation — is documented in the `/aida-punt` skill
+(`.claude/skills/aida-punt.md`).
 
 The load-bearing distinction is **Done vs Completed** (STORY-86): `done`
 means "work finished on a branch"; `completed` means "merged to the default

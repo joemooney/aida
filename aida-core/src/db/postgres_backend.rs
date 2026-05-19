@@ -244,6 +244,7 @@ impl PostgresBackend {
             RequirementStatus::Done => "Done",
             RequirementStatus::Completed => "Completed",
             RequirementStatus::Rejected => "Rejected",
+            RequirementStatus::NeedsAttention => "Needs Attention",
         }
     }
 
@@ -257,6 +258,7 @@ impl PostgresBackend {
             "Done" => RequirementStatus::Done,
             "Completed" => RequirementStatus::Completed,
             "Rejected" => RequirementStatus::Rejected,
+            "Needs Attention" => RequirementStatus::NeedsAttention,
             _ => RequirementStatus::Draft,
         }
     }
@@ -411,6 +413,9 @@ impl PostgresBackend {
             gitlab_issues,
             implementation_info,
             ai_evaluation,
+            // STORY-332: punt metadata is not persisted by the Postgres
+            // backend (opt-in, behind the `postgres` feature).
+            attention_reason: None,
             version,
         })
     }

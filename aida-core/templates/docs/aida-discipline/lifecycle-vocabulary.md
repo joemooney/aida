@@ -27,6 +27,27 @@ version tag. Use the precise verb for the state.
 | **Completed** | The spec's status is Completed in AIDA | final state |
 | **Released** | A version tag exists and binaries are published | cross-spec — aggregates many merges |
 
+## The off-mainline state: Needs Attention
+
+Not every spec travels the line cleanly. **Needs Attention** is an
+*off-mainline* status: a spec that was **In Progress** but is now **paused**
+because an autonomous agent hit a design-fork it could not safely resolve and
+**punted** (`aida punt` / `/aida-punt`) rather than guess.
+
+- Reached only from **In Progress** — punting is the "I was working this and
+  hit a fork" move.
+- Carries a structured reason: an obstacle **category** (`design-fork`,
+  `ambiguous-spec`, `missing-context`, `blocked-dependency`, `other`), a
+  human-readable **detail**, and an optional **lean** (the agent's
+  best-guess-if-forced, kept separate from the fork itself).
+- Excluded from normal queue pickup, but surfaces in `aida findings` for
+  human / advisor triage — a Needs Attention spec *is* a punt awaiting triage.
+- Resolved out only to **Approved**, **In Progress**, or **Rejected**.
+
+Punting is a discipline, not a failure: a punted fork is a recorded decision
+point. Guessing past it produces a silent wrong implementation; punting keeps
+the wrong call from being made at all.
+
 ## How to apply
 
 - Default **"ship"** to mean **merged to the main branch** — the

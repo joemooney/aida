@@ -102,6 +102,9 @@ pub struct UrlLink {
     /// Who added the link
     #[prost(string, tag = "6")]
     pub added_by: ::prost::alloc::string::String,
+    /// 0=Preview (iframe), 1=NewTab (external)
+    #[prost(int32, tag = "7")]
+    pub open_mode: i32,
 }
 /// The main Requirement message
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -161,6 +164,9 @@ pub struct Requirement {
     >,
     #[prost(message, repeated, tag = "23")]
     pub urls: ::prost::alloc::vec::Vec<UrlLink>,
+    /// Short agreed ID (e.g., "FR-423") assigned at merge
+    #[prost(string, tag = "24")]
+    pub agreed_id: ::prost::alloc::string::String,
 }
 /// A feature definition
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -797,6 +803,12 @@ pub enum RequirementStatus {
     InProgress = 4,
     Completed = 5,
     Rejected = 6,
+    /// STORY-86: work finished on a branch; auto-bumps to COMPLETED when
+    /// the referencing commit lands on the default branch.
+    Done = 7,
+    /// STORY-332: work was in progress but is paused — an autonomous agent
+    /// punted a design-fork it could not safely resolve; awaits triage.
+    NeedsAttention = 8,
 }
 impl RequirementStatus {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -812,6 +824,8 @@ impl RequirementStatus {
             Self::InProgress => "REQUIREMENT_STATUS_IN_PROGRESS",
             Self::Completed => "REQUIREMENT_STATUS_COMPLETED",
             Self::Rejected => "REQUIREMENT_STATUS_REJECTED",
+            Self::Done => "REQUIREMENT_STATUS_DONE",
+            Self::NeedsAttention => "REQUIREMENT_STATUS_NEEDS_ATTENTION",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -824,6 +838,8 @@ impl RequirementStatus {
             "REQUIREMENT_STATUS_IN_PROGRESS" => Some(Self::InProgress),
             "REQUIREMENT_STATUS_COMPLETED" => Some(Self::Completed),
             "REQUIREMENT_STATUS_REJECTED" => Some(Self::Rejected),
+            "REQUIREMENT_STATUS_DONE" => Some(Self::Done),
+            "REQUIREMENT_STATUS_NEEDS_ATTENTION" => Some(Self::NeedsAttention),
             _ => None,
         }
     }

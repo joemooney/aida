@@ -136,7 +136,7 @@ impl<'a> McpServer<'a> {
                         "inputSchema": {
                             "type": "object",
                             "properties": {
-                                "status": { "type": "string", "description": "Filter by status: draft, approved, in-progress, completed, rejected" },
+                                "status": { "type": "string", "description": "Filter by status: draft, approved, planned, in-progress, needs-attention, done, completed, rejected" },
                                 "type": { "type": "string", "description": "Filter by type: functional, non-functional, system, user, bug, epic, story, task, spike, sprint" },
                                 "feature": { "type": "string", "description": "Filter by feature category" },
                                 "limit": { "type": "integer", "description": "Maximum number of results (default: 50)" }
@@ -163,7 +163,7 @@ impl<'a> McpServer<'a> {
                                 "title": { "type": "string", "description": "Title of the requirement" },
                                 "description": { "type": "string", "description": "Detailed description" },
                                 "type": { "type": "string", "description": "Requirement type: functional, non-functional, system, user, bug, epic, story, task" },
-                                "status": { "type": "string", "description": "Status: draft, approved, in-progress, completed" },
+                                "status": { "type": "string", "description": "Status: draft, approved, planned, in-progress, done, completed, rejected" },
                                 "priority": { "type": "string", "description": "Priority: high, medium, low" }
                             },
                             "required": ["title", "description"]
@@ -448,6 +448,15 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .and_then(parse_status)
             .unwrap_or(RequirementStatus::Draft);
+        // STORY-332: a freshly-added spec cannot be born paused —
+        // NeedsAttention is reached only by punting In-Progress work.
+        if status == RequirementStatus::NeedsAttention {
+            return Err(
+                "cannot create a requirement with status `needs-attention` — \
+                 it is reached only by punting In-Progress work"
+                    .to_string(),
+            );
+        }
         let priority = args
             .get("priority")
             .and_then(|v| v.as_str())
@@ -491,6 +500,14 @@ impl<'a> McpServer<'a> {
 
         if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
             if let Some(new_status) = parse_status(status) {
+                // STORY-332: enforce the NeedsAttention transition rules —
+                // into it only from In Progress (`aida punt`), out of it
+                // only to Approved / In Progress / Rejected.
+                if let Some(msg) =
+                    aida_core::forbidden_attention_transition(&req.status, &new_status)
+                {
+                    return Err(msg);
+                }
                 changes.push(format!("status: {} → {}", req.status, new_status));
                 req.status = new_status;
             }
@@ -595,13 +612,19 @@ impl<'a> McpServer<'a> {
              **Total Requirements:** {}\n\
              - Draft: {}\n\
              - Approved: {}\n\
+             - Planned: {}\n\
              - In Progress: {}\n\
+             - Needs Attention: {}\n\
+             - Done: {}\n\
              - Completed: {}\n\
              - Rejected: {}\n",
             total,
             by_status(RequirementStatus::Draft),
             by_status(RequirementStatus::Approved),
+            by_status(RequirementStatus::Planned),
             by_status(RequirementStatus::InProgress),
+            by_status(RequirementStatus::NeedsAttention),
+            by_status(RequirementStatus::Done),
             by_status(RequirementStatus::Completed),
             by_status(RequirementStatus::Rejected),
         );
@@ -653,9 +676,14 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
     match s.to_lowercase().as_str() {
         "draft" => Some(RequirementStatus::Draft),
         "approved" => Some(RequirementStatus::Approved),
+        "planned" => Some(RequirementStatus::Planned),
         "in-progress" | "inprogress" | "in_progress" => Some(RequirementStatus::InProgress),
+        "done" => Some(RequirementStatus::Done),
         "completed" => Some(RequirementStatus::Completed),
         "rejected" => Some(RequirementStatus::Rejected),
+        "needs-attention" | "needsattention" | "needs_attention" => {
+            Some(RequirementStatus::NeedsAttention)
+        }
         _ => None,
     }
 }

@@ -1417,7 +1417,12 @@ fn resolve_id(prefix: &str) -> Result<String> {
 fn spec_status_in_flight(status: &aida_core::RequirementStatus) -> bool {
     matches!(
         status,
-        aida_core::RequirementStatus::InProgress | aida_core::RequirementStatus::Done
+        aida_core::RequirementStatus::InProgress
+            | aida_core::RequirementStatus::Done
+            // STORY-332: a punted spec was being worked and may carry
+            // partial unmerged branch work — keep its session out of a
+            // bulk `forget`.
+            | aida_core::RequirementStatus::NeedsAttention
     )
 }
 
@@ -1796,6 +1801,8 @@ mod tests {
         use aida_core::RequirementStatus::*;
         assert!(spec_status_in_flight(&InProgress));
         assert!(spec_status_in_flight(&Done));
+        // STORY-332: a punted spec is still in flight.
+        assert!(spec_status_in_flight(&NeedsAttention));
         for safe in [Draft, Approved, Planned, Completed, Rejected] {
             assert!(
                 !spec_status_in_flight(&safe),
