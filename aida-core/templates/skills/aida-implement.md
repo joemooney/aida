@@ -61,17 +61,23 @@ comment directly above each one:
 - `<!-- kind:design-fork -->` — a genuine choice between meaningful
   alternatives, where guessing wrong has real cost.
 
-Before surfacing any prompt, check the autonomy mode (`echo "${AIDA_ZEN:-}"`):
+Before surfacing any prompt, check the autonomy mode:
 
-- **`1`** — *advisor-on-standby* mode (`aida queue work --zen`, or
-  `AIDA_ZEN=1` exported). Auto-resolve every `kind:confirmation` prompt to
-  option 1 and proceed, printing `↳ zen: auto-resolved "<prompt>" →
-  option 1`. Still surface every `kind:design-fork` prompt unchanged —
-  implementation approach decisions are exactly what the advisor stays at
-  the keyboard for.
-- **Anything else** (`0`, `false`, empty, unset) — default mode: surface
-  every prompt, no change. Only the exact value `1` enables zen — matching
-  `AIDA_HEADLESS` — so `AIDA_ZEN=0` reliably disables it. trace:TASK-327
+```bash
+aida zen status
+```
+
+- **`zen`** — *advisor-on-standby* mode, **corroborated** (`aida queue
+  work --zen`, or a live `--auto-complete --zen` orchestrator).
+  Auto-resolve every `kind:confirmation` prompt to option 1 and proceed,
+  printing `↳ zen: auto-resolved "<prompt>" → option 1`. Still surface
+  every `kind:design-fork` prompt unchanged — implementation approach
+  decisions are exactly what the advisor stays at the keyboard for.
+- **`interactive`** — default mode: surface every prompt, no change.
+  `aida zen status` prints `interactive` whenever zen is off *or*
+  `AIDA_ZEN=1` is set but its provenance cannot be corroborated — a
+  stale / leaked `AIDA_ZEN=1` never silently enables zen (BUG-237).
+  Branch off this word, **not** the bare `$AIDA_ZEN` env var. trace:BUG-237
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen`. An un-annotated prompt defaults to `design-fork`
