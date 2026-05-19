@@ -45,6 +45,10 @@ on the producer side (see `aida role enter dialog` and
 
 !`aida queue next 2>/dev/null || echo "(no items)"`
 
+## Drain position
+
+!`aida orchestrator status 2>/dev/null | grep -q orchestrated && aida drain status 2>/dev/null || true`
+
 ## Plan brief
 
 !`aida session show --plan 2>/dev/null | sed -n '/Plan brief:/,$p' || true`
@@ -117,6 +121,15 @@ The output includes:
 
 If the queue is empty, surface that to the user and stop. Don't fabricate
 work — empty queue is a real signal.
+
+**If the Drain position block above emitted output** (STORY-301) — this
+session is a phase child of a live `aida queue work --auto-complete`
+orchestrator. Lead your first message with it: it answers, *before the
+user asks*, what command launched the drain, whether it is a single-spec
+or a batch drain, how far through it is, and what happens to the queue
+when this session exits. The user inside an orchestrator-driven session
+otherwise has no way to see any of that. Stay silent when the block is
+empty (no drain, or a standalone session). trace:STORY-301
 
 **If the Pending findings block above emitted a line** (STORY-278) — the
 headless reviewer filed review follow-ups that the advisor hasn't triaged

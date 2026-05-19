@@ -2864,6 +2864,31 @@ pub enum ZenCommand {
     },
 }
 
+/// Drain-state introspection (STORY-301). An `aida queue work --auto-complete`
+/// orchestrator writes `.aida/drain-state.json` while a drain is live; this
+/// subcommand reads it so a user inside the orchestrator-spawned session can
+/// see what command launched the drain, whether it is a single-spec or a batch
+/// drain, how far through it is, and what happens when they exit the session.
+// trace:STORY-301 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum DrainCommand {
+    /// Show the active `--auto-complete` drain: the launching command, the
+    /// members and their lifecycle state, the current phase, and a prediction
+    /// of what happens on session exit. Prints `No drain in progress.` (exit
+    /// 0) when none is running. A drain-state file whose orchestrator process
+    /// is no longer alive is reported as stale — `--clear` removes it.
+    Status {
+        /// Emit the drain state as JSON instead of the human summary.
+        #[clap(long)]
+        json: bool,
+        /// Remove a stale drain-state file (one whose orchestrator process is
+        /// no longer running). Refuses while the drain is still live — a live
+        /// orchestrator removes the file itself on exit.
+        #[clap(long)]
+        clear: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Add a new requirement
@@ -3457,6 +3482,13 @@ pub enum Command {
     // trace:BUG-237 | ai:claude
     #[clap(subcommand, hide = true)]
     Zen(ZenCommand),
+
+    /// Inspect the active `aida queue work --auto-complete` drain — what
+    /// command launched it, the batch members and their progress, and what
+    /// happens to the queue when the current session exits.
+    // trace:STORY-301 | ai:claude
+    #[clap(subcommand)]
+    Drain(DrainCommand),
 
     /// One-line project + role summary suitable for shell prompts and
     /// the `statusLine.command` setting in ~/.claude/settings.json.

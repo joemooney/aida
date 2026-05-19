@@ -4,6 +4,7 @@ mod cli;
 #[cfg(feature = "remote")]
 mod client;
 mod docs;
+mod drain_state;
 mod exit_signal;
 mod findings;
 mod global_queue;
@@ -66,9 +67,9 @@ use aida_core::{
 
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
-    DocCommand, DocsCommand, FeatureCommand, FindingsCommand, GitHubCommand, GitLabCommand,
-    JiraCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, QueueCommand,
-    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
+    DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand, GitHubCommand,
+    GitLabCommand, JiraCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
+    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
     SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand, ZenCommand,
 };
@@ -404,6 +405,13 @@ fn run() -> Result<()> {
         return handle_zen_command(zen_cmd);
     }
 
+    // STORY-301: drain-state introspection. Dispatched before storage init —
+    // it reads only `.aida/drain-state.json`, no requirement store.
+    // trace:STORY-301 | ai:claude
+    if let Command::Drain(drain_cmd) = &cli.command {
+        return handle_drain_command(drain_cmd);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -705,6 +713,7 @@ fn run() -> Result<()> {
             unreachable!("orchestrator is dispatched before storage init")
         }
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
+        Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -2251,6 +2260,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             unreachable!("orchestrator is dispatched before storage init")
         }
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
+        Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::List {
             status,
             r#type,
@@ -16225,6 +16235,18 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
             .partition(|(_, state, _)| !matches!(state, LeaseState::Stale))
     };
 
+    // STORY-301: cross-reference the active `--auto-complete` drain. A lease
+    // whose scope is the drain's current member is an orchestrator phase
+    // child — annotate it so `aida session leases` shows which session the
+    // orchestrator is driving, and at which phase. trace:STORY-301 | ai:claude
+    let drain_current: Option<(String, Option<String>)> = match find_main_worktree_root()
+        .map(|r| drain_state::probe(&r))
+        .unwrap_or(drain_state::DrainStatus::None)
+    {
+        drain_state::DrainStatus::Active(s) => s.current.map(|c| (c, s.current_phase)),
+        _ => None,
+    };
+
     println!("{}", "Active session leases".bold());
     println!();
     // STORY-65: role column shows the persona inherited at session start.
@@ -16270,6 +16292,16 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
         }
         row.push_str(&format!(" {}", l.worktree_path.display()));
         println!("{}", row);
+        // STORY-301: annotate the lease the orchestrator is currently driving.
+        if let Some((cur, phase)) = &drain_current {
+            if &l.scope == cur {
+                let phase_txt = phase.as_deref().unwrap_or("starting");
+                println!(
+                    "{}",
+                    format!("{}◆ orchestrator drain — phase {phase_txt}", " ".repeat(15)).cyan()
+                );
+            }
+        }
     }
     if !hidden_stale.is_empty() {
         println!();
@@ -46229,6 +46261,81 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
     }
 }
 
+/// `aida drain status` — show the active `aida queue work --auto-complete`
+/// drain (STORY-301). Reads `.aida/drain-state.json`, corroborates the recorded
+/// orchestrator PID against a liveness probe, and prints the human summary —
+/// or `No drain in progress.` (exit 0) when no drain is running. `--clear`
+/// removes a stale file left by a crashed orchestrator. trace:STORY-301
+fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
+    match cmd {
+        DrainCommand::Status { json, clear } => {
+            // Resolve the shared `.aida/` root from any worktree so a child in
+            // a sibling worktree reads the *orchestrator's* drain-state file.
+            // On a resolution failure the lookup simply finds nothing — the
+            // verdict fails safe to "no drain".
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let status = drain_state::probe(&project_root);
+            if *clear {
+                return drain_clear(&project_root, &status, *json);
+            }
+            if *json {
+                println!("{}", drain_state::render_json(&status));
+                return Ok(());
+            }
+            match status {
+                drain_state::DrainStatus::None => {
+                    println!("No drain in progress.");
+                }
+                drain_state::DrainStatus::Active(state) => {
+                    print!("{}", drain_state::render_human(&state, false));
+                }
+                drain_state::DrainStatus::Stale(state) => {
+                    print!("{}", drain_state::render_human(&state, true));
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// `aida drain status --clear` — remove a stale drain-state file. Refuses
+/// while the orchestrator is still live: a live orchestrator removes the file
+/// itself on a clean exit, so clearing it from under a running drain would
+/// only hide work in progress. trace:STORY-301 | ai:claude
+fn drain_clear(
+    project_root: &std::path::Path,
+    status: &drain_state::DrainStatus,
+    json: bool,
+) -> Result<()> {
+    match status {
+        drain_state::DrainStatus::None => {
+            if json {
+                println!("{{\"status\":\"none\"}}");
+            } else {
+                println!("No drain-state file to clear.");
+            }
+            Ok(())
+        }
+        drain_state::DrainStatus::Active(state) => anyhow::bail!(
+            "the drain is still live (orchestrator pid {}) — not clearing. \
+             The drain-state file is removed automatically when the \
+             orchestrator exits.",
+            state.orchestrator_pid
+        ),
+        drain_state::DrainStatus::Stale(_) => {
+            drain_state::DrainState::clear(project_root)?;
+            if json {
+                println!("{{\"status\":\"cleared\"}}");
+            } else {
+                println!("{} removed the stale drain-state file", "✓".green().bold());
+            }
+            Ok(())
+        }
+    }
+}
+
 /// TASK-306: the decision the `--no-human` kickoff gate makes — split from
 /// its terminal/stdin I/O so it is unit-testable. `acknowledged` is whether
 /// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` is set.
@@ -46344,6 +46451,8 @@ fn handle_auto_complete(
         json,
         permission_mode,
         no_human,
+        // STORY-301: a bare single-spec drain owns its drain-state file.
+        true,
     );
     std::process::exit(result.exit_code);
 }
@@ -46363,6 +46472,11 @@ fn run_auto_complete(
     json: bool,
     permission_mode: Option<&str>,
     no_human: Option<auto_complete::NoHumanMode>,
+    // STORY-301: `true` for a standalone single-spec drain — this run creates
+    // the `.aida/drain-state.json` file and clears it on return. `false` for a
+    // batch / nextN member — the batch orchestrator owns the file; this run
+    // only announces it is the current spec.
+    owns_drain_state: bool,
 ) -> auto_complete::OrchestrationResult {
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
@@ -46430,6 +46544,19 @@ fn run_auto_complete(
         .map(|g| g.token().to_string())
         .unwrap_or_default();
 
+    // STORY-301: surface the drain so a user inside the spawned Claude session
+    // can see what command launched it, how far it has got, and what happens
+    // when they exit. A single-spec drain owns the file — it writes it now and
+    // clears it on return; a batch / nextN member only announces that it is
+    // the current spec (the batch orchestrator created the file). Best-effort:
+    // a write failure leaves the drain running, just unobservable.
+    // trace:STORY-301 | ai:claude
+    if owns_drain_state {
+        let _ = drain_state::DrainState::new_single(spec).write(&project_root);
+    } else {
+        drain_state::set_current(&project_root, spec);
+    }
+
     let mut driver = RealPhaseDriver::new(
         project_root.clone(),
         spec.to_string(),
@@ -46450,6 +46577,17 @@ fn run_auto_complete(
     // failure, auto-draft a Draft BUG so the friction surfaces back to the
     // project instead of dying in scrollback. Best-effort — never blocks the
     // exit. trace:TASK-266 | ai:claude
+    // STORY-301: stamp this member's terminal state — completed / failed plus
+    // the PR a phase discovered — into the drain-state file. For a batch drain
+    // this leaves a member-by-member trail; for a single drain the file is
+    // cleared just below, so this update only matters mid-run.
+    drain_state::set_member_outcome(
+        &project_root,
+        spec,
+        result.exit_code == 0,
+        auto_complete::PhaseDriver::hint_context(&driver).pr_number,
+    );
+
     record_auto_complete_run(
         &driver,
         &project_root,
@@ -46460,6 +46598,13 @@ fn run_auto_complete(
         completed_at,
         json,
     );
+
+    // STORY-301: a single-spec drain owns the file — clear it now the run is
+    // over. A clean exit removes the file; only a crash leaves it behind for
+    // `aida drain status` to flag as a stale drain. trace:STORY-301
+    if owns_drain_state {
+        let _ = drain_state::DrainState::clear(&project_root);
+    }
 
     result
 }
@@ -46570,6 +46715,9 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             self.json,
             self.permission_mode.as_deref(),
             self.no_human,
+            // STORY-301: a batch / nextN member does not own the drain-state
+            // file — the batch orchestrator created it.
+            false,
         )
     }
 }
@@ -46609,6 +46757,18 @@ fn handle_auto_complete_batch(
         }
     }
 
+    // STORY-301: write the drain-state file so `aida drain status` can show
+    // the batch, its members, the current position, and what happens on exit.
+    // Best-effort — a resolution / write failure leaves the drain running,
+    // just unobservable. trace:STORY-301 | ai:claude
+    let drain_root = find_main_worktree_root().ok();
+    if let Some(root) = &drain_root {
+        if let Ok(members) = resolve_batch_members(storage, user_id, batch_name, role) {
+            let specs: Vec<String> = members.into_iter().map(|m| m.1).collect();
+            let _ = drain_state::DrainState::new_batch(batch_name, &specs).write(root);
+        }
+    }
+
     let mut driver = RealBatchDriver {
         storage,
         user_id: user_id.to_string(),
@@ -46631,6 +46791,11 @@ fn handle_auto_complete_batch(
         result.exit_code
     };
     emit_batch_drain_summary(batch_name, &result, exit_code, json);
+    // STORY-301: clean batch exit removes the drain-state file. A crash mid-
+    // drain skips this, leaving the file for `aida drain status` to flag stale.
+    if let Some(root) = &drain_root {
+        let _ = drain_state::DrainState::clear(root);
+    }
     std::process::exit(exit_code);
 }
 
@@ -46907,6 +47072,9 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             self.json,
             self.permission_mode.as_deref(),
             self.no_human,
+            // STORY-301: a batch / nextN member does not own the drain-state
+            // file — the batch orchestrator created it.
+            false,
         )
     }
 }
@@ -46948,6 +47116,21 @@ fn handle_auto_complete_next_n(
         }
     }
 
+    // STORY-301: write the drain-state file — the drivable queue head, capped
+    // at N, is the member list. Best-effort. trace:STORY-301 | ai:claude
+    let drain_root = find_main_worktree_root().ok();
+    if let Some(root) = &drain_root {
+        if let Ok(candidates) = auto_complete_head_candidates(storage, user_id) {
+            let specs: Vec<String> = candidates
+                .into_iter()
+                .filter(|(_, status)| auto_complete_head_drivable(status))
+                .take(n)
+                .map(|(id, _)| id)
+                .collect();
+            let _ = drain_state::DrainState::new_next_n(n, &specs).write(root);
+        }
+    }
+
     let mut driver = RealNextNDriver {
         storage,
         user_id: user_id.to_string(),
@@ -46968,6 +47151,10 @@ fn handle_auto_complete_next_n(
         result.exit_code
     };
     emit_next_n_drain_summary(n, &result, exit_code, json);
+    // STORY-301: clean exit removes the drain-state file; a crash leaves it.
+    if let Some(root) = &drain_root {
+        let _ = drain_state::DrainState::clear(root);
+    }
     std::process::exit(exit_code);
 }
 
@@ -47845,10 +48032,19 @@ impl RealPhaseDriver {
             _ => None,
         }
     }
+
+    /// STORY-301: stamp the drain-state file with the phase about to run, so
+    /// `aida drain status` (and the `/aida-pickup` banner) show live progress.
+    /// Best-effort — a missing file is a silent no-op, never blocks the phase.
+    /// trace:STORY-301 | ai:claude
+    fn mark_drain_phase(&self, phase: auto_complete::Phase) {
+        drain_state::set_phase(&self.project_root, &self.spec, phase.index(), phase.slug());
+    }
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn run_implementer(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        self.mark_drain_phase(auto_complete::Phase::Implementer);
         let session_uuid = uuid::Uuid::now_v7().to_string();
 
         let mut cmd = std::process::Command::new(self.aida_exe());
@@ -47983,6 +48179,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     }
 
     fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        self.mark_drain_phase(auto_complete::Phase::Ci);
         let branch = self.branch.clone().ok_or_else(|| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Internal,
@@ -48075,6 +48272,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     }
 
     fn run_reviewer(&mut self) -> Result<auto_complete::Verdict, auto_complete::PhaseFailure> {
+        self.mark_drain_phase(auto_complete::Phase::Reviewer);
         let pr = self.pr_number.ok_or_else(|| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Internal,
@@ -48181,6 +48379,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     }
 
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        self.mark_drain_phase(auto_complete::Phase::Merge);
         let pr = self.pr_number.ok_or_else(|| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Internal,
@@ -48218,6 +48417,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     }
 
     fn pull(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        self.mark_drain_phase(auto_complete::Phase::Pull);
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .arg("pull")
@@ -48237,6 +48437,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     }
 
     fn build(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        self.mark_drain_phase(auto_complete::Phase::Build);
         let status = std::process::Command::new("cargo")
             .current_dir(&self.project_root)
             .args(["build", "--release"])
