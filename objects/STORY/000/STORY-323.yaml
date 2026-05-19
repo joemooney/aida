@@ -1,0 +1,26 @@
+id: 019e3dea-2427-7503-b7aa-25351855e8df
+spec_id: STORY-323
+agreed_id: STORY-323
+title: 'Review PR-100: fix(findings): findings promote actually queues the finding (BUG-231)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3ddf`) for branch `bug-231`.
+
+  - PR: <https://github.com/joemooney/aida/pull/100>
+  - Branch: `bug-231` → `main`
+
+  ## Covers
+
+  - BUG-231
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 100` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T01:46:55.399149074Z
+modified_at: 2026-05-19T01:46:55.399149074Z
+req_type: Story
