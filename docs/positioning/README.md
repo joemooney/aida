@@ -7,7 +7,7 @@ Sister documents:
 - [README.md](../../README.md#what-makes-aida-distinct) — the elevator pitch: AIDA's defensible niche in eight bullets. <!-- trace:TASK-289 | ai:claude -->
 - [OVERVIEW.md](../../OVERVIEW.md) — the big-picture vision.
 - [WHY-AIDA.md](../WHY-AIDA.md) — narrative for "why does this exist?"
-- [competitive-analysis.md](../competitive-analysis.md) — the broad landscape scan (2026-03-17 snapshot).
+- [competitive-analysis/](../competitive-analysis/) — the living landscape scan + ecosystem tracking (dated snapshots and per-topic files).
 
 The docs here are **focused comparisons**: one file per neighbor, each answering "when AIDA, when X, when both?" in one sitting.
 
