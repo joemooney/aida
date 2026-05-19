@@ -1,0 +1,12 @@
+id: 019e415b-4400-71b1-9749-05009d7b8eb6
+spec_id: TASK-352
+agreed_id: TASK-352
+title: 'TASK-298 watchdog: parse headless `permission_denials` as the backstop for an'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T17:49:20.768238113Z
+modified_at: 2026-05-19T17:49:20.768238113Z
+req_type: Task
