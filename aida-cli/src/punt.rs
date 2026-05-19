@@ -75,6 +75,72 @@ pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Res
     Ok(())
 }
 
+// --- Orchestrator punt-signal handshake (STORY-276) -------------------------
+//
+// A headless `--auto-complete --no-human=both` implementer that hits a
+// design-fork runs `aida punt` — but the orchestrator, watching from the
+// main worktree, has no in-band way to learn the spec was parked rather than
+// shipped. So `aida punt` drops a small signal file the orchestrator polls
+// for after the implementer session exits. This mirrors the reviewer's
+// `AIDA_REVIEW_VERDICT_FILE` handshake exactly: the orchestrator provisions
+// an absolute path, passes it via an env var, and reads it back — making the
+// handshake independent of how `.aida/` resolves across git worktrees.
+// trace:STORY-276 | ai:claude
+
+/// Env var the `--auto-complete` orchestrator sets on the implementer
+/// subprocess. `aida punt` writes its signal file here when the var is set.
+pub const SIGNAL_FILE_ENV: &str = "AIDA_PUNT_SIGNAL_FILE";
+
+/// The payload of a punt signal file — enough for the orchestrator to confirm
+/// a punt happened and name the fork in its run epilogue.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PuntSignal {
+    /// Display ID of the punted spec.
+    pub spec: String,
+    /// The obstacle category the raiser picked.
+    pub category: PuntCategory,
+    /// Human-readable description of the fork / obstacle.
+    pub detail: String,
+    /// The raiser's best guess if forced to choose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lean: Option<String>,
+}
+
+impl PuntSignal {
+    /// One-line punt summary for the orchestrator's run epilogue.
+    pub fn summary(&self) -> String {
+        match &self.lean {
+            Some(l) => format!("[{}] {} (lean: {l})", self.category, self.detail),
+            None => format!("[{}] {}", self.category, self.detail),
+        }
+    }
+}
+
+/// Path the orchestrator provisions for a spec's punt signal —
+/// `.aida/punt-signals/<spec>.json` under the (main) project root.
+pub fn signal_path(project_root: &Path, spec: &str) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("punt-signals")
+        .join(format!("{spec}.json"))
+}
+
+/// Write a punt signal file, creating `.aida/punt-signals/` if needed.
+pub fn write_signal(path: &Path, signal: &PuntSignal) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(signal)?)?;
+    Ok(())
+}
+
+/// Read a punt signal file. `None` when the file is absent or unparseable —
+/// either way the orchestrator reads it as "no punt happened".
+pub fn read_signal(path: &Path) -> Option<PuntSignal> {
+    let body = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&body).ok()
+}
+
 /// Parse a `--category` value, or return a help-shaped error listing the
 /// valid kebab-case categories.
 pub fn parse_punt_category(raw: &str) -> Result<PuntCategory, String> {
@@ -112,6 +178,48 @@ mod tests {
             err.contains("design-fork"),
             "error should list valid: {err}"
         );
+    }
+
+    #[test]
+    fn punt_signal_round_trips_and_summarises() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = signal_path(dir.path(), "STORY-276");
+        assert!(
+            path.ends_with("punt-signals/STORY-276.json"),
+            "{}",
+            path.display()
+        );
+        // Absent file → no punt.
+        assert_eq!(read_signal(&path), None);
+
+        let signal = PuntSignal {
+            spec: "STORY-276".to_string(),
+            category: PuntCategory::DesignFork,
+            detail: "two valid auth flows; spec doesn't say which".to_string(),
+            lean: Some("OAuth".to_string()),
+        };
+        write_signal(&path, &signal).unwrap();
+        assert_eq!(read_signal(&path), Some(signal.clone()));
+        let summary = signal.summary();
+        assert!(summary.contains("design-fork"), "{summary}");
+        assert!(summary.contains("lean: OAuth"), "{summary}");
+
+        // A garbage file reads as "no punt" rather than erroring.
+        std::fs::write(&path, "not json").unwrap();
+        assert_eq!(read_signal(&path), None);
+    }
+
+    #[test]
+    fn punt_signal_summary_omits_absent_lean() {
+        let signal = PuntSignal {
+            spec: "STORY-276".to_string(),
+            category: PuntCategory::AmbiguousSpec,
+            detail: "the acceptance criteria contradict the parent".to_string(),
+            lean: None,
+        };
+        let summary = signal.summary();
+        assert!(summary.contains("ambiguous-spec"), "{summary}");
+        assert!(!summary.contains("lean:"), "{summary}");
     }
 
     #[test]

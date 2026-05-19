@@ -275,6 +275,51 @@ card is a convenience snapshot, not a replacement. Reach for plain
 `aida show` (or `--card --full`) whenever the trimmed summary isn't
 enough. trace:TASK-265
 
+### Step 3d: Headless design-fork gate (`AIDA_HEADLESS=1`) — trace:STORY-276
+
+Under a headless `--no-human=both` drain there is no human to catch a wrong
+guess in real time. Before writing any code, decide whether the spec presents
+a **design-fork you cannot safely resolve** — and if so, punt it rather than
+guess. Guessing past a fork produces a *silent wrong implementation*: it
+compiles, the session ends green, and the wrong call surfaces only later.
+
+**This step runs only when `AIDA_HEADLESS=1`** — the variable AIDA sets when
+it launches a headless `claude -p` implementer. In an interactive pickup a
+human is present: surface the fork to them and let them decide — do **not**
+punt. Skip 3d entirely when the variable is empty.
+
+```bash
+echo "${AIDA_HEADLESS:-}"
+```
+
+- **Empty / unset** → interactive pickup. Skip 3d — implement normally.
+- **`1`** → headless. Continue.
+
+**What counts as a punt-worthy fork.** Re-read the spec, its `## Acceptance`
+criteria, its parent, and any plan brief. Punt only when *all three* hold:
+
+- **Two or more materially different valid implementations** exist, and the
+  spec / acceptance / plan does not say which to pick.
+- **Guessing wrong has real cost** — it shapes a public API, a data model, a
+  user-facing behaviour, or something else expensive to undo later.
+- You **cannot resolve it** from the spec, the codebase's existing
+  conventions, or recorded project decisions.
+
+Do **not** punt a fork you *can* resolve from context, a merely hard
+implementation question, or a failing test / incidental bug (that is a
+finding — Step 5b). Punting a resolvable fork adds triage noise; the bar is
+"a human genuinely has to decide this."
+
+**On a genuine fork: punt, do not guess.** Invoke `/aida-punt` — it
+classifies the obstacle, runs `aida punt <spec_id> --category <cat> --reason
+"…" [--lean "…"]`, and returns control. The spec flips to **Needs Attention**;
+the `--auto-complete` orchestrator detects the punt, records it, and advances
+to the next item; the advisor triages it later (`aida findings list`). Then
+**stop** — do not implement, do not commit a guess, do not open a PR.
+
+**No genuine fork → proceed to Step 4** and implement normally. The common
+case is a clean spec that ships straight through headless.
+
 ### Step 4: Do the work
 
 Drive the actual implementation. Read the requirement (`aida show <spec_id>`),
