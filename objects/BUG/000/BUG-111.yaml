@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T01:49:24.323883905Z
-modified_at: 2026-05-19T05:31:14.935653254Z
+modified_at: 2026-05-19T05:32:47.532747873Z
 req_type: Bug
 tags:
 - intra-workspace
@@ -51,6 +51,18 @@ comments:
   content: 'Demonstrated release-blocker 2026-05-19: `make release-minor` (v0.7.0→v0.8.0) failed exactly here. release.sh''s hardcoded dep-pin list bumped `aida-core` (in aida-cli + aida-crate) but MISSED `aida-tui` — aida-tui joined the workspace later (EPIC-26) and the hardcoded list was never updated. Result: workspace version + package versions bumped to 0.8.0, but `aida-cli/Cargo.toml` left `aida-tui = { version = "0.7", ... }` → `cargo` error ''failed to select a version for aida-tui = ^0.7, candidate 0.8.0''. Fix per this BUG''s title: discover intra-workspace dep pins GENERICALLY — scan every workspace member, find deps that `path`-point at another member, bump their `version =` field — so no crate can ever be missed again. Priority bumped to high: this blocks the v0.8.0 release now (73 commits since v0.7.0).'
   created_at: 2026-05-19T05:17:06.638375656Z
   modified_at: 2026-05-19T05:17:06.638375656Z
+- id: 019e3eb8-ee2c-7a31-8aa1-113ff7d736f9
+  author: joe
+  content: |-
+    Implemented via PR (commit 09319bb6):
+
+    - New scripts/workspace-deps.sh: discovers every intra-workspace path-dep pin generically from [workspace.members] (ws_discover_members / ws_list_intra_pins / ws_bump_intra_pins / ws_verify_intra_pins) — no hardcoded crate list.
+    - release.sh bumps all discovered pins; diff preview, git add, and recovery hints now stage every member Cargo.toml. New verification step before commit: pin self-check (names a stale crate) + cargo check --workspace.
+    - Verified against the real repo: discovery catches aida-cli -> aida-tui, the exact pin the old hardcoded script missed.
+
+    Test status: tests/test_release_dep_discovery.sh 5/5 green
+  created_at: 2026-05-19T05:32:47.532747873Z
+  modified_at: 2026-05-19T05:32:47.532747873Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T05:31:14.935653254Z
