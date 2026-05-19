@@ -87,13 +87,34 @@ reviewer just stops needing a keystroke.
 
 ### MODE selector
 
-- `--no-human=reviewer-only` — headless reviewer; implementer stays interactive.
-- `--no-human` / `--no-human=both` — requests both. The headless implementer
-  is not wired yet, so phase 1 still runs interactively and the orchestrator
-  prints a one-line note. The flag grammar will not change when the headless
-  implementer lands — it just starts honouring `both`.
+- `--no-human` / `--no-human=reviewer-only` — headless reviewer; the
+  implementer phase stays interactive. **Bare `--no-human` resolves here** —
+  the honest default of what the flag actually covers today (TASK-306).
+- `--no-human=both` — requests a fully headless drain, implementer included.
+  The headless implementer is not wired yet (STORY-276), so `--no-human=both`
+  is **rejected at kickoff** with a clear message until it lands. The flag
+  grammar will not change when the headless implementer ships — `both` just
+  stops erroring.
 
 `--unattended` and `--headless` are accepted as aliases of `--no-human`.
+
+### Scope clarity at kickoff and in the statusline (TASK-306)
+
+`--no-human` names a bigger promise than it keeps today, so the
+reviewer-only scope is stated **loudly** in three places until the headless
+implementer lands:
+
+- **Pre-launch banner** — `aida queue work --auto-complete --no-human` prints
+  a scope banner (reviewer headless, implementer still interactive) and
+  requires a one-time acknowledgement before phase 1 launches. It shows once
+  per kickoff. Skip the prompt for an unattended run by exporting
+  `AIDA_NO_HUMAN_ACKNOWLEDGED=1`; a non-terminal stdin without it errors
+  rather than blocking on an unanswerable prompt.
+- **`--help` text** — `aida queue work --help` spells out the per-MODE scope.
+- **Statusline** — an interactive phase running inside an `--auto-complete`
+  orchestrator shows `auto:N/6 <phase>`, the `no-human:<mode>` scope, and a
+  loud `pause-here` cue, so a user who expected to walk away sees that
+  phase 1 still needs them.
 
 ### How the headless launch is configured
 
@@ -120,6 +141,8 @@ carries this (BUG-233):
 |----------|--------|---------|
 | `AIDA_AUTO_COMPLETE=1` | orchestrator → every phase child | "this session belongs to an `--auto-complete` run" — **not trusted on its own** |
 | `AIDA_AUTO_COMPLETE_TOKEN=<run-uuid>` | orchestrator → every phase child | the corroboration token: a per-run UUID naming a marker file |
+| `AIDA_AUTO_COMPLETE_PHASE=<1..6>` | orchestrator → each Claude-launching phase child (1 implementer, 3 reviewer) | the 1-based phase index, so the child's statusline can show `auto:N/6` (TASK-306) |
+| `AIDA_NO_HUMAN_MODE=<slug>` | orchestrator → phase children, when `--no-human` is set | the `--no-human` scope (`reviewer-only`), shown in the statusline (TASK-306) |
 | `AIDA_REVIEW_VERDICT_FILE=<path>` | orchestrator → reviewer child only | absolute path the reviewer writes its verdict JSON to |
 | `AIDA_EXIT_SENTINEL=<path>` | orchestrator → every phase child | file the skill `touch`es as its last action so the orchestrator reaps the idle REPL (TASK-329) |
 
@@ -196,8 +219,10 @@ requirement type.
 
 ## Limits of this cut
 
-- The implementer phase is not headless — `--no-human=both` runs it
-  interactively (STORY-276).
+- The implementer phase is not headless — `--no-human=both` is rejected at
+  kickoff until the headless implementer lands (STORY-276). Bare `--no-human`
+  is reviewer-only: phase 1 still runs interactively and the drain pauses
+  there for you.
 - There is no liveness watchdog yet: a genuinely stuck headless run is not
   auto-detected. The `stream-json` log is written so the watchdog can be
   added (TASK-298). Until then, treat a drain that has not progressed for a

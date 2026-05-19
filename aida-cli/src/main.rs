@@ -25620,6 +25620,33 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         "αιδα".dimmed().to_string(),
         project_label.green().bold().to_string(),
     ];
+    // TASK-306: orchestrator-context badge. When this interactive session is
+    // a corroborated phase of an `--auto-complete` run, surface the phase
+    // index, the `--no-human` scope, and a loud `pause-here` cue — so a user
+    // who kicked off `--no-human` expecting to walk away sees that phase 1
+    // still needs them. Placed right after the project label so it reads
+    // before the role/queue segments. The orchestrator's `.aida/` lives in
+    // the main worktree (a phase child runs in a sibling worktree), so
+    // corroboration resolves the main root. trace:TASK-306 | ai:claude
+    {
+        let orch_root = find_main_worktree_root()
+            .ok()
+            .unwrap_or_else(|| project_root.clone());
+        if orchestrator::detect(&orch_root).is_orchestrated() {
+            let phase = std::env::var(orchestrator::PHASE_ENV)
+                .ok()
+                .and_then(|v| v.trim().parse::<u8>().ok());
+            let no_human = std::env::var(orchestrator::NO_HUMAN_MODE_ENV)
+                .ok()
+                .filter(|v| !v.is_empty());
+            let badge = OrchestratorBadge::build(phase, no_human.as_deref());
+            parts.push(badge.phase.cyan().bold().to_string());
+            if let Some(nh) = &badge.no_human {
+                parts.push(nh.clone().yellow().bold().to_string());
+            }
+            parts.push(badge.pause.red().bold().to_string());
+        }
+    }
     // Resolve the active session lease once: both the @SPEC fallback and
     // the dedicated sess: segment use it, and we want a single canonicalize
     // + read-dir per render. trace:STORY-53 | ai:claude
@@ -25828,6 +25855,41 @@ fn wt_divergence_segment(worktree_path: &std::path::Path, slug: &str) -> Option<
         None
     } else {
         Some(format!("wt:{}", truncate(basename, SESS_LABEL_MAX)))
+    }
+}
+
+/// TASK-306: the orchestrator-context badge for the statusline. Built for a
+/// corroborated `--auto-complete` phase session; the caller colors the
+/// fields. `phase` is the 1-based phase index (`AIDA_AUTO_COMPLETE_PHASE`),
+/// `no_human_mode` the `--no-human` scope slug (`AIDA_NO_HUMAN_MODE`).
+/// trace:TASK-306 | ai:claude
+struct OrchestratorBadge {
+    /// `auto:N/6 <phase-name>` — the phase indicator. `auto:?/6` when the
+    /// phase env var is missing or unparseable (defensive — the orchestrator
+    /// always sets it on the children it spawns).
+    phase: String,
+    /// `no-human:<mode>` — present only when `--no-human` is in effect.
+    no_human: Option<String>,
+    /// `pause-here` — the cue that the user is expected to act in this phase.
+    /// A statusline only renders for an interactive session, so an
+    /// orchestrated badge always carries it.
+    pause: &'static str,
+}
+
+impl OrchestratorBadge {
+    fn build(phase: Option<u8>, no_human_mode: Option<&str>) -> Self {
+        let phase = match phase {
+            Some(n) => match auto_complete::Phase::from_index(n as i32) {
+                Some(p) => format!("auto:{n}/6 {}", p.slug()),
+                None => format!("auto:{n}/6"),
+            },
+            None => "auto:?/6".to_string(),
+        };
+        OrchestratorBadge {
+            phase,
+            no_human: no_human_mode.map(|m| format!("no-human:{m}")),
+            pause: "pause-here",
+        }
     }
 }
 
@@ -33631,6 +33693,65 @@ mod queue_work_tests {
     #[test]
     fn autonomy_mode_no_human_beats_zen() {
         assert_eq!(resolve_autonomy_mode(true, true), AutonomyMode::NoHuman);
+    }
+
+    // --- TASK-306: --no-human kickoff gate --------------------------------
+
+    /// `--no-human=both` is rejected — the headless implementer phase is not
+    /// shipped — regardless of the acknowledgement env var. trace:TASK-306
+    #[test]
+    fn no_human_gate_both_is_unavailable() {
+        assert_eq!(
+            classify_no_human_gate(auto_complete::NoHumanMode::Both, false),
+            NoHumanGate::BothUnavailable
+        );
+        assert_eq!(
+            classify_no_human_gate(auto_complete::NoHumanMode::Both, true),
+            NoHumanGate::BothUnavailable
+        );
+    }
+
+    /// reviewer-only keys off the acknowledgement: ack'd → proceed silently,
+    /// otherwise the banner + prompt. trace:TASK-306
+    #[test]
+    fn no_human_gate_reviewer_only_keys_off_acknowledgement() {
+        assert_eq!(
+            classify_no_human_gate(auto_complete::NoHumanMode::ReviewerOnly, false),
+            NoHumanGate::NeedsAck
+        );
+        assert_eq!(
+            classify_no_human_gate(auto_complete::NoHumanMode::ReviewerOnly, true),
+            NoHumanGate::Acknowledged
+        );
+    }
+
+    // --- TASK-306: orchestrator-context statusline badge ------------------
+
+    /// A corroborated phase-1 session shows the phase index, its name, and
+    /// the always-present pause cue. trace:TASK-306
+    #[test]
+    fn orchestrator_badge_shows_phase_and_name() {
+        let b = OrchestratorBadge::build(Some(1), None);
+        assert_eq!(b.phase, "auto:1/6 implementer");
+        assert!(b.no_human.is_none());
+        assert_eq!(b.pause, "pause-here");
+    }
+
+    /// The `--no-human` scope is folded in when the env var is present.
+    /// trace:TASK-306
+    #[test]
+    fn orchestrator_badge_includes_no_human_scope() {
+        let b = OrchestratorBadge::build(Some(3), Some("reviewer-only"));
+        assert_eq!(b.phase, "auto:3/6 reviewer");
+        assert_eq!(b.no_human.as_deref(), Some("no-human:reviewer-only"));
+    }
+
+    /// Defensive fallback: a missing phase env var renders `?`; an
+    /// out-of-range index keeps the number but drops the name. trace:TASK-306
+    #[test]
+    fn orchestrator_badge_falls_back_when_phase_unknown() {
+        assert_eq!(OrchestratorBadge::build(None, None).phase, "auto:?/6");
+        assert_eq!(OrchestratorBadge::build(Some(9), None).phase, "auto:9/6");
     }
 
     /// `read_behavior_permission_mode` parses `[behavior]
@@ -43470,14 +43591,24 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .map_err(|e| anyhow::anyhow!(e))?;
                 // STORY-263: `--no-human[=MODE]` runs the orchestrator's
                 // phases headless (`claude -p`). This first cut wires the
-                // reviewer (phase 3) only; under `both` phase 1 still runs
-                // interactively with a deferral note (STORY-276).
+                // reviewer (phase 3) only; the implementer (phase 1) stays
+                // interactive (the headless implementer is STORY-276).
                 let no_human_mode = match no_human.as_deref() {
                     Some(v) => {
                         Some(auto_complete::NoHumanMode::parse(v).map_err(|e| anyhow::anyhow!(e))?)
                     }
                     None => None,
                 };
+                // TASK-306: pre-launch gate. `--no-human=both` errors here —
+                // the headless implementer is not shipped — and `reviewer-only`
+                // prints the loud scope banner + requires a one-time
+                // acknowledgement. This dispatch arm runs exactly once per
+                // `aida queue work --auto-complete` invocation, so the banner
+                // appears once per kickoff even when a batch / `nextN` drain
+                // loops `run_auto_complete` internally. trace:TASK-306
+                if let Some(mode) = no_human_mode {
+                    no_human_kickoff_gate(mode)?;
+                }
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
                 // batch — one full lifecycle per member, advancing the head
                 // after each — instead of one session per re-invocation.
@@ -46098,6 +46229,101 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
     }
 }
 
+/// TASK-306: the decision the `--no-human` kickoff gate makes — split from
+/// its terminal/stdin I/O so it is unit-testable. `acknowledged` is whether
+/// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` is set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NoHumanGate {
+    /// `--no-human=both` — the headless implementer phase is not shipped, so
+    /// the run is rejected regardless of acknowledgement.
+    BothUnavailable,
+    /// reviewer-only, already acknowledged via the env var — proceed with a
+    /// one-line scope reminder, no prompt.
+    Acknowledged,
+    /// reviewer-only, not yet acknowledged — show the scope banner and ask.
+    NeedsAck,
+}
+
+/// TASK-306: pure classification for [`no_human_kickoff_gate`].
+fn classify_no_human_gate(mode: auto_complete::NoHumanMode, acknowledged: bool) -> NoHumanGate {
+    if mode.wants_headless_implementer() {
+        // `both` is not an acknowledgement question — the phase simply does
+        // not exist yet, so the env var cannot wave it through.
+        NoHumanGate::BothUnavailable
+    } else if acknowledged {
+        NoHumanGate::Acknowledged
+    } else {
+        NoHumanGate::NeedsAck
+    }
+}
+
+/// TASK-306: the pre-launch gate for `aida queue work --auto-complete
+/// --no-human`, run once per kickoff. `--no-human=both` is rejected (the
+/// headless implementer phase is not shipped); `reviewer-only` prints a loud
+/// scope banner — making clear the implementer phase still needs the user —
+/// and requires a one-time acknowledgement, either interactively or up front
+/// with `AIDA_NO_HUMAN_ACKNOWLEDGED=1` for an unattended run. trace:TASK-306
+fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
+    let acknowledged = std::env::var("AIDA_NO_HUMAN_ACKNOWLEDGED")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    match classify_no_human_gate(mode, acknowledged) {
+        NoHumanGate::BothUnavailable => anyhow::bail!(
+            "`--no-human=both` would run the implementer phase headless too, but \
+             the headless implementer is not available yet.\n  Use `--no-human` \
+             (reviewer-only) — the reviewer phase runs headless and the \
+             implementer phase stays interactive."
+        ),
+        NoHumanGate::Acknowledged => {
+            eprintln!(
+                "  {} --no-human: reviewer phase runs headless; the implementer \
+                 phase stays interactive and will pause for you (acknowledged via \
+                 AIDA_NO_HUMAN_ACKNOWLEDGED)",
+                "ℹ".cyan()
+            );
+            Ok(())
+        }
+        NoHumanGate::NeedsAck => {
+            eprintln!();
+            eprintln!(
+                "{}  --no-human covers the reviewer phase only.",
+                "⚠".yellow().bold()
+            );
+            eprintln!(
+                "   Phase 1 (implementer) and phase 4 (merge) still require \
+                 interactive input."
+            );
+            eprintln!(
+                "   A full headless drain (the headless implementer phase) is not \
+                 available yet."
+            );
+            eprintln!("   The drain will pause at each phase-1 completion until you act.");
+            eprintln!(
+                "   {}",
+                "Set AIDA_NO_HUMAN_ACKNOWLEDGED=1 to skip this prompt on an \
+                 unattended run."
+                    .dimmed()
+            );
+            eprintln!();
+            // `--no-human` is meant for unattended drains, so a non-terminal
+            // stdin is the expected unattended case — but it cannot answer a
+            // prompt. Fail loud with the env-var escape rather than blocking
+            // forever on a stdin read. trace:TASK-306 | ai:claude
+            if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                anyhow::bail!(
+                    "--no-human needs a one-time scope acknowledgement, but stdin \
+                     is not a terminal. Re-run with AIDA_NO_HUMAN_ACKNOWLEDGED=1 to \
+                     confirm you understand it covers the reviewer phase only."
+                );
+            }
+            if !prompt_yes_no("   Continue? [y/N] ", false)? {
+                anyhow::bail!("aborted — --no-human scope not acknowledged");
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Entry point for `aida queue work <SPEC> --auto-complete`. Never returns:
 /// always terminates the process with an exit code (0 success, 1-6 = the
 /// 1-based index of the phase that failed). trace:STORY-246 | ai:claude
@@ -46158,25 +46384,19 @@ fn run_auto_complete(
         }
     };
 
-    // STORY-263: announce headless mode. The reviewer (phase 3) runs
-    // headless; the implementer (phase 1) stays interactive in this cut, so
-    // under `both` the user is told phase 1 is unchanged (the headless
-    // implementer is STORY-276 — SPEC-ID kept out of this note per the
-    // user-facing-text convention, TASK-268). trace:STORY-263 | ai:claude
-    if let Some(mode) = no_human {
-        if !json {
-            eprintln!(
-                "  {} headless mode: the reviewer phase runs unattended (`claude -p`)",
-                "ℹ".cyan()
-            );
-            if mode.wants_headless_implementer() {
-                eprintln!(
-                    "  {} the headless implementer is not available yet — phase 1 \
-                     runs interactively",
-                    "⚠".yellow()
-                );
-            }
-        }
+    // STORY-263 / TASK-306: a one-line per-run reminder of the headless
+    // scope. The loud scope banner + acknowledgement already fired once at
+    // kickoff (`no_human_kickoff_gate`); this keeps the scope visible in a
+    // batch drain's per-member scrollback. `--no-human=both` was rejected at
+    // the kickoff gate, so the mode reaching here is always reviewer-only —
+    // the reviewer runs headless, the implementer stays interactive.
+    // trace:STORY-263, TASK-306 | ai:claude
+    if no_human.is_some() && !json {
+        eprintln!(
+            "  {} headless reviewer phase — phase 1 (implementer) stays \
+             interactive and will pause for you",
+            "ℹ".cyan()
+        );
     }
 
     // BUG-233: register this orchestrator run's corroboration marker. The
@@ -47638,6 +47858,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             // BUG-233: the corroboration token, so the child can verify this
             // orchestrator run is live rather than guessing from the bare var.
             .env(orchestrator::TOKEN_ENV, &self.run_token);
+        // TASK-306: tell the child's statusline this is phase 1 of 6 (and the
+        // `--no-human` scope) so the interactive implementer session shows it
+        // is an orchestrator phase the user is expected to act in.
+        // trace:TASK-306 | ai:claude
+        cmd.env(
+            orchestrator::PHASE_ENV,
+            auto_complete::Phase::Implementer.index().to_string(),
+        );
+        if let Some(mode) = self.no_human {
+            cmd.env(orchestrator::NO_HUMAN_MODE_ENV, mode.slug());
+        }
         if let Some(pm) = &self.permission_mode {
             cmd.args(["--permission-mode", pm]);
         }
@@ -47880,6 +48111,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             // phase. The reviewer additionally keys off the verdict-file path.
             .env(orchestrator::TOKEN_ENV, &self.run_token)
             .env("AIDA_REVIEW_VERDICT_FILE", &verdict_path);
+        // TASK-306: phase index + `--no-human` scope for the child statusline,
+        // consistent with the implementer phase. The reviewer runs headless
+        // under `--no-human` (so usually no statusline renders), but a plain
+        // `--auto-complete` reviewer is interactive and shows `auto:3/6`.
+        // trace:TASK-306 | ai:claude
+        cmd.env(
+            orchestrator::PHASE_ENV,
+            auto_complete::Phase::Reviewer.index().to_string(),
+        );
+        if let Some(mode) = self.no_human {
+            cmd.env(orchestrator::NO_HUMAN_MODE_ENV, mode.slug());
+        }
         if let Some(pm) = &self.permission_mode {
             cmd.args(["--permission-mode", pm]);
         }
