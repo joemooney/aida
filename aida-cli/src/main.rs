@@ -19,6 +19,7 @@ mod session_manifest;
 mod status_display;
 mod usage;
 mod workflow_hints;
+mod zen;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -69,7 +70,7 @@ use crate::cli::{
     JiraCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, QueueCommand,
     RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand,
+    SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand, ZenCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -396,6 +397,13 @@ fn run() -> Result<()> {
         return handle_orchestrator_command(orch_cmd);
     }
 
+    // BUG-237: zen-context introspection. Like `orchestrator status`, reads
+    // only env vars + the marker dir + session leases — no requirement store.
+    // trace:BUG-237 | ai:claude
+    if let Command::Zen(zen_cmd) = &cli.command {
+        return handle_zen_command(zen_cmd);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -696,6 +704,7 @@ fn run() -> Result<()> {
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
         }
+        Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -2241,6 +2250,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
         }
+        Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::List {
             status,
             r#type,
@@ -11248,6 +11258,17 @@ struct SessionLease {
     /// trace:STORY-71 | ai:claude
     #[serde(default)]
     pr_base_ref: Option<String>,
+    /// BUG-237: zen-intent token for a standalone `aida queue work --zen`
+    /// session — the per-invocation UUID the `--zen` dispatch minted into
+    /// `AIDA_ZEN_TOKEN`. Its presence is what corroborates a standalone zen
+    /// session: `aida zen status` trusts an inherited `AIDA_ZEN=1` only when
+    /// the lease covering the worktree carries this token (or a live
+    /// orchestrator run owns the session). `None` for non-`--zen` sessions —
+    /// the dispatch scrubs `AIDA_ZEN_TOKEN` unless `--zen` was genuinely
+    /// passed — so a leaked `AIDA_ZEN=1` cannot silently enable zen mode.
+    /// trace:BUG-237 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    zen_intent_token: Option<String>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -12938,6 +12959,14 @@ fn session_start(
         pr_head_sha: pr_metadata.head_sha.clone(),
         pr_base_sha: pr_metadata.base_sha.clone(),
         pr_base_ref: pr_metadata.base_ref.clone(),
+        // BUG-237: copy the zen-intent token the `--zen` dispatch minted into
+        // `AIDA_ZEN_TOKEN`. Present iff this `aida queue work` was genuinely
+        // `--zen` (the `Default` / `--no-human` arms scrub it), so a leaked
+        // `AIDA_ZEN=1` never lands a token in a non-zen session's lease.
+        // trace:BUG-237 | ai:claude
+        zen_intent_token: std::env::var(zen::ZEN_TOKEN_ENV)
+            .ok()
+            .filter(|t| !t.is_empty()),
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -20332,6 +20361,7 @@ cargo test -p aida-cli
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         };
 
         // No routing tags = visible everywhere.
@@ -20646,6 +20676,7 @@ hostname = "h"
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         };
         std::fs::write(
             leases.join("abcdef123456.toml"),
@@ -21106,6 +21137,7 @@ mod lease_enforcement_tests {
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         }
     }
 
@@ -21321,6 +21353,7 @@ mod scope_fallback_tests {
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         }
     }
 
@@ -21563,6 +21596,7 @@ mod session_end_resolution_tests {
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         }
     }
 
@@ -26908,6 +26942,7 @@ mod task_250_review_state_tests {
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         };
         std::fs::write(
             dir.join(format!("{}.toml", id)),
@@ -33432,6 +33467,7 @@ mod queue_work_tests {
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         }
     }
 
@@ -43331,7 +43367,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // session. trace:STORY-287 | ai:claude
             match resolve_autonomy_mode(*zen, no_human.is_some()) {
                 AutonomyMode::Zen => {
-                    std::env::set_var("AIDA_ZEN", "1");
+                    std::env::set_var(zen::ZEN_ENV, "1");
+                    // BUG-237: mint this invocation's zen-intent token. It is
+                    // the provenance anchor for `AIDA_ZEN` — the session lease
+                    // records it (standalone path) and `RunMarkerGuard::
+                    // register` reads its presence (orchestrator path). A
+                    // leaked `AIDA_ZEN=1` carries no token, so `aida zen
+                    // status` corroborates it away rather than auto-resolving
+                    // a confirmation prompt the user never authorized.
+                    // trace:BUG-237 | ai:claude
+                    std::env::set_var(zen::ZEN_TOKEN_ENV, uuid::Uuid::now_v7().to_string());
                 }
                 AutonomyMode::NoHuman => {
                     if *zen {
@@ -43341,9 +43386,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             "⚠".yellow().bold()
                         );
                     }
-                    std::env::remove_var("AIDA_ZEN");
+                    std::env::remove_var(zen::ZEN_ENV);
+                    std::env::remove_var(zen::ZEN_TOKEN_ENV);
                 }
-                AutonomyMode::Default => {}
+                AutonomyMode::Default => {
+                    // BUG-237: scrub any inherited / leaked zen-intent token
+                    // so a non-`--zen` `aida queue work` never records zen
+                    // provenance — neither in its session lease nor (for an
+                    // `--auto-complete` orchestrator) in its run marker.
+                    // `AIDA_ZEN` itself is left intact: an orchestrated phase
+                    // child legitimately inherits it, and corroboration — not
+                    // scrubbing — is the safety net. trace:BUG-237 | ai:claude
+                    std::env::remove_var(zen::ZEN_TOKEN_ENV);
+                }
             }
             // TASK-270: accept `batch:NAME` as a positional id (equivalent
             // to `--batch NAME`) and strip a redundant `batch:` prefix off
@@ -45976,6 +46031,42 @@ fn handle_orchestrator_command(cmd: &OrchestratorCommand) -> Result<()> {
     }
 }
 
+/// `aida zen status` — print the corroborated zen context of the current
+/// process. The bare status word (`zen` / `interactive`) goes to stdout so a
+/// skill can branch on it cleanly; any informational note goes to stderr.
+/// trace:BUG-237 | ai:claude
+fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
+    match cmd {
+        ZenCommand::Status { json } => {
+            // Resolve the shared `.aida/` root from any worktree so a child in
+            // a sibling worktree reads the orchestrator's marker dir and the
+            // canonical lease set. On a resolution failure the lookups simply
+            // find nothing — the verdict fails safe to interactive.
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let cwd = std::env::current_dir().unwrap_or_else(|_| project_root.clone());
+            let ctx = zen::detect(&project_root, &cwd);
+            if *json {
+                println!(
+                    "{{\"context\":\"{}\",\"corroborated\":{},\"reason\":\"{}\"}}",
+                    ctx.status_word(),
+                    ctx.is_zen(),
+                    ctx.reason_slug()
+                );
+            } else {
+                println!("{}", ctx.status_word());
+            }
+            // The note is informational. For the no-provenance case it names
+            // a real stale value and suggests `unset AIDA_ZEN`.
+            if let Some(note) = ctx.informational_note() {
+                eprintln!("  {} {}", "ⓘ".cyan(), note.dimmed());
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Entry point for `aida queue work <SPEC> --auto-complete`. Never returns:
 /// always terminates the process with an exit code (0 success, 1-6 = the
 /// 1-based index of the phase that failed). trace:STORY-246 | ai:claude
@@ -46064,7 +46155,13 @@ fn run_auto_complete(
     // non-fatal: the run proceeds with an empty token, and children correctly
     // fall back to treating themselves as interactive (fail-safe).
     // trace:BUG-233 | ai:claude
-    let run_marker = match orchestrator::RunMarkerGuard::register(&project_root, spec) {
+    //
+    // BUG-237: record whether this run is `--zen`. `AIDA_ZEN_TOKEN` is present
+    // iff the `--zen` dispatch arm ran — the `Default` / `--no-human` arms
+    // scrub it — so a leaked `AIDA_ZEN=1` on a plain `--auto-complete` run
+    // does not get recorded as a zen run. trace:BUG-237 | ai:claude
+    let run_zen = std::env::var(zen::ZEN_TOKEN_ENV).is_ok();
+    let run_marker = match orchestrator::RunMarkerGuard::register(&project_root, spec, run_zen) {
         Ok(guard) => Some(guard),
         Err(e) => {
             if !json {
@@ -48339,6 +48436,7 @@ mod queue_work_resume_tests {
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         };
         std::fs::write(
             sessions.join("019eabcd-1234.toml"),
@@ -48401,6 +48499,7 @@ mod queue_work_resume_tests {
             pr_head_sha: None,
             pr_base_sha: None,
             pr_base_ref: None,
+            zen_intent_token: None,
         };
         std::fs::write(
             sessions.join("019eaaaa-bbbb.toml"),
