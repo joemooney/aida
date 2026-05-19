@@ -1,0 +1,62 @@
+id: 019e40a2-e744-7bd2-babb-3a2b2953e467
+spec_id: STORY-333
+agreed_id: STORY-333
+title: Typed blocked-by relationship — orchestrator + queue skip blocked specs at pickup instead of phase-1-failing on them
+description: |-
+  The orchestrator, \`aida queue work\` (head pickup), and batch drains have **no concept of a blocked spec** — a spec that cannot be worked because it hard-depends on an unshipped spec. Today a dependency is recorded only as prose (a comment, or "(requires X)" in a title) — not machine-readable. So a drain that reaches a blocked spec spawns a doomed phase-1 implementer, which discovers the block, exits with no PR → phase-1 "failure" → the batch stops / the drain breaks. The implementer burns a full pickup re-discovering a block that was already known.
+
+  ## Worked example (2026-05-19)
+
+  STORY-276 (headless implementer) hard-depends on STORY-332 (/aida-punt). The dependency lived only as STORY-276's title text "(requires /aida-punt)" + a comment. The batch:autonomy-modes drain reached STORY-276, spawned a phase-1 implementer, which spent a pickup tracing the dependency and concluding "blocked." STORY-276 then sat at the queue HEAD — every subsequent head-pickup would trip on it again. (Worked around for now by reordering STORY-332 ahead of it — a band-aid.)
+
+  ## The fix: a typed \`blocked-by\` relationship + a pre-pickup check
+
+  1. **Typed relationship** — \`A blocked-by B\` (use AIDA's existing relationship machinery — typed relationships are a core capability; check whether a \`depends-on\`/\`blocks\` type already exists and reuse it, else add \`blocked-by\`). Machine-readable, in the spec graph, walkable by \`aida doctor verify-relationships\`.
+  2. **Pre-pickup check** — \`aida queue work\` (head pickup), batch drains, and the orchestrator check a spec's \`blocked-by\` relationships **before spawning phase 1**: if any blocker is not \`Completed\`, the spec is **blocked** → skip it (don't start phase 1, don't fail). Head-pickup skips to the next pickable spec; a batch drain skips blocked members and continues.
+  3. **Unblock transition** — when a blocker reaches \`Completed\`, the \`blocked-by\` is satisfied; the formerly-blocked spec becomes pickable on the next pass. No manual re-enabling.
+  4. **Visibility** — blocked specs are not silently swallowed: \`aida queue list\` shows a **Blocked** section (sibling to "Done — awaiting merge"), each entry naming its unsatisfied blocker. A blocked spec is visible, with its reason, at a glance.
+  5. **Permanent-block surfacing** — a \`blocked-by\` whose target is \`Rejected\` (the blocker will never ship) → surface it loudly: that spec is blocked forever and needs re-scoping. Don't just silently skip it.
+
+  ## Acceptance
+
+  - [ ] \`blocked-by\` relationship available (reuse an existing dependency type or add it); \`aida rel add <A> blocked-by <B>\`
+  - [ ] \`aida queue work\` head-pickup skips a spec with an unsatisfied \`blocked-by\`, picks the next pickable one
+  - [ ] Batch drains skip blocked members, continue to the next; never spawn phase 1 for a blocked spec
+  - [ ] When the blocker hits \`Completed\`, the dependent becomes pickable with no manual step
+  - [ ] \`aida queue list\` shows a **Blocked** section — blocked specs + their unsatisfied blocker(s)
+  - [ ] \`blocked-by\` → \`Rejected\` target surfaces as a permanent block (needs re-scoping), not a silent skip
+  - [ ] STORY-276 (\`blocked-by\` STORY-332) and STORY-306 (\`blocked-by\` STORY-276) wired up as the live examples — their prose "blocked on" comments converted to typed relationships
+  - [ ] Tests: blocked spec skipped at head-pickup + in a batch drain; unblock-on-blocker-Completed; Rejected-blocker surfaces permanent block
+  - [ ] \`aida doctor verify-relationships\` validates \`blocked-by\` targets resolve (composes — a \`blocked-by\` pointing at a non-existent spec is a dangling dep)
+
+  ## Out of scope
+
+  - **Transitive-chain resolution** — \`A blocked-by B blocked-by C\`: the direct check suffices (if B isn't Completed for any reason, A is blocked); no recursion needed
+  - **Auto-filing the blocker** — if a spec is blocked-by an unfiled thing, that's TASK-311's spec-audit job (dangling-dependency check); this STORY handles blocked-by-a-filed-spec
+  - **Soft/priority dependencies** — \`blocked-by\` is a hard gate; "should come after but not strictly blocked" is a different (out-of-scope) notion
+
+  ## Composes with
+
+  - **BUG-241** (orchestrator outcome model — "blocked" is a third state alongside the false-failure cases BUG-241 covered; this STORY adds the *pre-pickup* gate so the orchestrator never starts a doomed phase-1, while BUG-241's reconcile remains the post-phase safety net)
+  - **STORY-276 / STORY-332 / STORY-306** (the live blocked-by chain — the worked example)
+  - **TASK-311** (dialog-role spec-audit — a typed \`blocked-by\` makes the dangling-dependency check machine-checkable)
+  - **TASK-310** (\`--batches\` chaining — batch drains must skip blocked members)
+  - AIDA's typed-relationship machinery + \`aida doctor verify-relationships\`
+
+  ## Origin
+
+  2026-05-19: STORY-276's implementer found it hard-blocked on STORY-332, burned a pickup discovering it, and STORY-276 then sat at the queue head where every head-pickup would re-trip on it. The block was prose-only — invisible to the orchestrator/queue. A typed \`blocked-by\` relationship + a pre-pickup check makes blocked specs machine-visible and skipped cleanly, instead of discovered the hard way one doomed phase-1 at a time.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T14:27:58.404097978Z
+modified_at: 2026-05-19T14:27:58.404097978Z
+req_type: Story
+tags:
+- blocked-by
+- dependency
+- from-self-test:STORY-276
+- orchestrator
+- queue
+- typed-relationship
