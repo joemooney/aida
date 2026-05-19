@@ -1,0 +1,26 @@
+id: 019e3e87-a174-7253-ae38-6b188dce7767
+spec_id: STORY-327
+agreed_id: STORY-327
+title: 'Review PR-103: [AI:claude] fix(orchestrator): reconcile against reality before declaring a phase failure (BUG-241)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3e56`) for branch `bug-241`.
+
+  - PR: <https://github.com/joemooney/aida/pull/103>
+  - Branch: `bug-241` → `main`
+
+  ## Covers
+
+  - BUG-241
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 103` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T04:38:56.628089005Z
+modified_at: 2026-05-19T04:38:56.628089005Z
+req_type: Story
