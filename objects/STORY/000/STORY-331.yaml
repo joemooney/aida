@@ -1,0 +1,26 @@
+id: 019e3f1b-8924-7c90-ac79-685eba9d86db
+spec_id: STORY-331
+agreed_id: STORY-331
+title: 'Review PR-107: [AI:claude] feat(findings): implementer findings reach the advisor under --no-human (STORY-285)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3f0c`) for branch `story-285`.
+
+  - PR: <https://github.com/joemooney/aida/pull/107>
+  - Branch: `story-285` → `main`
+
+  ## Covers
+
+  - STORY-285
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 107` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T07:20:29.732033038Z
+modified_at: 2026-05-19T07:20:29.732033038Z
+req_type: Story
