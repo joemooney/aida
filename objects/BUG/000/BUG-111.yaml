@@ -38,10 +38,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T01:49:24.323883905Z
-modified_at: 2026-05-19T05:17:05.447271970Z
+modified_at: 2026-05-19T05:17:06.638375656Z
 req_type: Bug
 tags:
 - intra-workspace
 - maintenance
 - release-script
 - version-bump
+comments:
+- id: 019e3eaa-92ce-7132-a229-00c6532de2d9
+  author: joe
+  content: 'Demonstrated release-blocker 2026-05-19: `make release-minor` (v0.7.0→v0.8.0) failed exactly here. release.sh''s hardcoded dep-pin list bumped `aida-core` (in aida-cli + aida-crate) but MISSED `aida-tui` — aida-tui joined the workspace later (EPIC-26) and the hardcoded list was never updated. Result: workspace version + package versions bumped to 0.8.0, but `aida-cli/Cargo.toml` left `aida-tui = { version = "0.7", ... }` → `cargo` error ''failed to select a version for aida-tui = ^0.7, candidate 0.8.0''. Fix per this BUG''s title: discover intra-workspace dep pins GENERICALLY — scan every workspace member, find deps that `path`-point at another member, bump their `version =` field — so no crate can ever be missed again. Priority bumped to high: this blocks the v0.8.0 release now (73 commits since v0.7.0).'
+  created_at: 2026-05-19T05:17:06.638375656Z
+  modified_at: 2026-05-19T05:17:06.638375656Z
