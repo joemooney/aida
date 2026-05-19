@@ -1,0 +1,85 @@
+id: 019e3e09-e320-7853-8602-e15723061e28
+spec_id: STORY-325
+agreed_id: STORY-325
+title: Punt ledger — record every design-fork decision as structured metadata; analyze for patterns that become recorded principles
+description: |-
+  STORY-306's corpus-growth loop ("escalated answers get recorded → Type-B/C becomes Type-A") and its v1-vs-v2 recipient decision ("measure how often v1 escalates for genuine lack-of-synthesis") both **assume measurement infrastructure that does not exist**. You cannot measure escalation patterns — or learn from punts — without capturing each punt as structured, analyzable metadata. "Measure it" is hollow without the ledger.
+
+  ## The reframe: a punt is a data point and a learning signal
+
+  Every design-fork decision in the autonomous flow — whether --zen auto-resolved it, the advisor resolved it, or it escalated to the human — is a **record**. Recorded + analyzed over time → **patterns** → patterns promoted to **recorded principles** → future similar punts auto-resolve (Type-A). The punt ledger is how AIDA *learns from its own decisions* instead of re-deriving the same judgment forever. The corpus-growth loop, made operational with real feedback data instead of "hope someone writes a memory."
+
+  ## Artifact: \`.aida/punts.jsonl\`
+
+  Append-only, one structured record per design-fork decision (mirrors STORY-122's \`usage.jsonl\` JSONL-append pattern). **Local-only** — unlike STORY-122's privacy-floored command telemetry, the punt ledger NEEDS content (the question, the answer, the spec) to be analyzable, so it stays the project's own decision history, never transmitted.
+
+  ## Record fields (LOAD-BEARING — garbage-in-garbage-out; the field design決定s what is analyzable)
+
+  - timestamp, spec/scope, the question text, the options presented
+  - **classification**: Type A / B / C / unclassified (STORY-306's calibration model)
+  - **resolution path**: --zen-auto-resolved / advisor-resolved / escalated-to-human / punted-to-default
+  - **escalation reason** (categorized, when escalated): \`lack-of-synthesis\` / \`unrecorded-preference\` / \`genuinely-needs-human-judgment\` / \`advisor-uncertain\`
+  - the answer chosen + who/what answered
+  - (optional, discovered-later) outcome: did the answer hold up, or was it reversed?
+
+  The categorized \`escalation reason\` is the field that makes the v1-vs-v2 decision measurable — without it you cannot tell "escalated for lack of synthesis" from "escalated because it genuinely needed a human."
+
+  ## Analysis surface
+
+  - \`aida punts list\` — recent punts, filterable by spec / reason / resolution path
+  - \`aida punts analyze\` — escalation rate, escalation-by-reason breakdown, recurring-pattern detection (questions of similar shape recurring N times)
+
+  ## What it makes possible
+
+  1. **The v1-vs-v2 decision becomes data-driven** — \`aida punts analyze\` → if \`lack-of-synthesis\` escalations are a high fraction, v2 (persistent advisor) is justified; if rare, v1 suffices. **The ledger subsumes the need for a separate measurement SPIKE** — the ledger + a few weeks of real drains IS the measurement.
+  2. **The promote-to-principle loop** — periodic review of the ledger (an advisor responsibility) surfaces a recurring punt pattern → promote it to a recorded principle (memory / discipline doc / acceptance default) → future instances of that shape become Type-A. Escalation rate decays *measurably*.
+
+  ## Scaffolding-pack — every AIDA project needs this
+
+  Every AIDA project running autonomous drains punts. Their punt patterns differ by domain — so each project needs its OWN ledger + analysis, surfacing THAT project's recurring forks → THAT project's discipline growth. The *capability* is generic and propagates via the scaffolding pack; the *data* is per-project.
+
+  ## Acceptance
+
+  - [ ] \`.aida/punts.jsonl\` append-only ledger; one structured record per design-fork decision (auto-resolved, advisor-resolved, or escalated — all of them, so the escalation-rate denominator exists)
+  - [ ] Record schema covers the fields above; the categorized \`escalation reason\` enum is mandatory on escalations
+  - [ ] Every punt path writes a record: --zen auto-resolve, advisor resolve, escalate-to-human, --no-human punt-to-default
+  - [ ] \`aida punts list\` + \`aida punts analyze\` (analyze starts as simple aggregation — count by reason, group by question-shape)
+  - [ ] Local-only; never transmitted; opt-out consistent with STORY-122's telemetry opt-out
+  - [ ] \`.gitignore\` handles \`.aida/punts.jsonl\` (runtime per-clone state, deny-by-default per the \`.aida/\` convention)
+  - [ ] Scaffolding-pack: \`aida init\` sets it up; the capability propagates, the data is per-project
+  - [ ] Tests: each resolution path emits a correct record; \`analyze\` aggregates correctly
+
+  ## Out of scope
+
+  - **ML / fancy pattern-mining** — \`analyze\` is simple aggregation in v1; sophisticated pattern detection is a later follow-up if the simple version proves insufficient
+  - **Auto-promoting patterns to principles** — a recurring pattern is a CANDIDATE; a human/advisor decides if it becomes a principle. Auto-promotion would codify wrong patterns. The promote step stays human/advisor judgment.
+  - **Phoning telemetry home** — local-only, always
+  - **Outcome-tracking automation** — the "did the answer hold up?" field is optional/manual in v1; auto-detecting a reversed decision is a later refinement
+
+  ## Composes with
+
+  - **STORY-306** (advisor escalation tier — generates the punts; STORY-306's v1 MUST emit ledger records from day 1 — instrumentation baked in, not retrofitted. See the STORY-306 comment.)
+  - **STORY-122** (usage telemetry — sibling JSONL-append pattern + opt-out mechanism; reuse it)
+  - **STORY-318** (ecosystem review — same periodic-analysis→action shape; the punt-ledger review is a sibling advisor discipline)
+  - **STORY-287** (the A/B/C calibration model whose classifications the ledger records)
+  - \`feedback_propagate_generic_discipline_via_scaffolding.md\` (the promote-to-principle loop IS this discipline, operationalized with measured data)
+  - \`feedback_dialog_role_responsibilities.md\` (periodic ledger review is an advisor responsibility)
+
+  ## Origin
+
+  2026-05-18 user, on the v1-vs-v2 staging: *"how are we going to measure how often it escalates for genuine lack-of-synthesis? We need to have this metadata captured. Any project using aida will also need this capability since their problems may be different in nature. Every decision to punt is an opportunity to record and later analyze for a pattern that can be applied for future instances."* Correct — and it exposes that STORY-306's "measure it" was hollow without this instrument. The punt ledger is the measurement substrate AND the learning substrate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T02:21:35.904151679Z
+modified_at: 2026-05-19T02:21:35.904151679Z
+req_type: Story
+tags:
+- advisor-discipline
+- corpus-growth
+- decision-telemetry
+- escalation
+- measurement
+- punt-ledger
+- scaffolding-pack
