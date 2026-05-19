@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:38:45.451756021Z
-modified_at: 2026-05-18T03:38:45.451756021Z
+modified_at: 2026-05-19T02:11:49.022464693Z
 req_type: Story
 tags:
 - advisor-tier
@@ -78,3 +78,43 @@ tags:
 - eventually
 - headless-advisor
 - no-human
+comments:
+- id: 019e3e00-ee9e-7c81-885c-06d233badc85
+  author: joe
+  content: |-
+    DESIGN EXPANSION 2026-05-18 — fold into the plan + acceptance when STORY-306 is planned (it's gated far down the queue; this is design input for its eventual ultraplan, and it is design-defining, not optional).
+
+    ## The advisor's resolve-vs-escalate calibration — three types, not two
+
+    A punted question is one of:
+    - TYPE A — answer follows from a RECORDED PRINCIPLE (discipline memories, the spec graph, lifecycle rules, plans). A headless advisor has this corpus → resolves reliably.
+    - TYPE B — answer needs a RECORDED USER PREFERENCE/intent. Resolvable IF the preference was recorded; else escalate.
+    - TYPE C — answer needs SYNTHESIZED IN-FLIGHT CONTEXT — the working model built across a long session, the threads connecting specs. Lives in no single memory. A fresh per-punt advisor lacks it.
+
+    The advisor's core skill is CALIBRATION: recognize which type a punt is. Type A/B-with-recorded-pref → resolve. Type B-unrecorded / Type C → escalate. Over-resolving (answering a Type C it can't actually judge) → confident-but-wrong overnight decisions, WORSE than the safe-default punt. Conservative-escalation bias is load-bearing: when the question turns on something not in the recorded corpus, escalate.
+
+    ## The corpus-growth feedback loop
+
+    Every escalated answer the human gives must be RECORDED (memory / acceptance edit / discipline doc) → it converts a future Type B/C into a Type A. The escalation rate DECAYS as the judgment-corpus grows. This is the engine behind 'punts abate in frequency over time' — not just bug-closure.
+
+    ## Inter-agent communication infrastructure
+
+    CHANNEL (solved-in-pattern): file-based async, the proven AIDA mechanism (verdict files STORY-263, findings STORY-285, sentinel TASK-329, drain-state STORY-301). Punt channel = punt-request.json -> punt-response.json. Implementer writes a RICH punt-request; advisor writes punt-response; implementer resumes via claude --resume.
+
+    RECIPIENT (the open question) — build in stages, evidence-first:
+    - v1: FRESH advisor + a rich punt payload (the spec + its plan + all comments + trace graph + code refs + recorded user prefs + drain-context summary — ultraplan-style assembly). Resolves Type A + much of apparent-Type-C (most 'synthesis' is really 'had full spec context').
+    - v2 (only if a SPIKE shows v1 escalates too often for genuine lack-of-synthesis): a PERSISTENT advisor session, alive across the drain, accumulating context. Carries a context-window/compaction cost — justify with data.
+    - v3: reinstantiation from recorded state — hardest; likely unnecessary if v1 + externalization suffices.
+    DECISION: implement v1. File a SPIKE to measure v1's escalation-rate-for-lack-of-synthesis before considering v2. Do NOT build persistent-advisor infrastructure on the theory that fresh-advisor is insufficient.
+
+    ## Acceptance additions (fold in at plan time)
+
+    - [ ] Punt payload is RICH (ultraplan-grade): spec + plan + comments + trace graph + code refs + recorded user prefs + drain-context summary — not just the bare question
+    - [ ] The advisor skill's resolve-vs-escalate logic is built around the A/B/C calibration; conservative-escalation when a punt turns on un-recorded context
+    - [ ] Every escalated answer is recorded (memory/acceptance/doc) — the corpus-growth loop is explicit, not hoped-for
+    - [ ] v1 (fresh advisor + rich payload) is the build target; v2 (persistent advisor) is gated behind a SPIKE measuring v1's synthesis-gap escalation rate
+    - [ ] punt-request.json / punt-response.json file channel, extending the STORY-263/285/329 file-handshake pattern
+
+    Origin: 2026-05-18 user — 'this session, and maybe no idle advisor session, is best equipped to answer; the fully-loaded advisor or reinstantiation thereof sounds critical; the inter-agent comms infrastructure will be important.' Correct — and the resolution is staged (v1 first, measure, then v2) plus the externalization loop (recorded synthesis shrinks Type C).
+  created_at: 2026-05-19T02:11:49.022464693Z
+  modified_at: 2026-05-19T02:11:49.022464693Z
