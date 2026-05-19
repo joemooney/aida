@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:38:45.451756021Z
-modified_at: 2026-05-19T02:11:49.022464693Z
+modified_at: 2026-05-19T02:21:41.856238217Z
 req_type: Story
 tags:
 - advisor-tier
@@ -118,3 +118,8 @@ comments:
     Origin: 2026-05-18 user — 'this session, and maybe no idle advisor session, is best equipped to answer; the fully-loaded advisor or reinstantiation thereof sounds critical; the inter-agent comms infrastructure will be important.' Correct — and the resolution is staged (v1 first, measure, then v2) plus the externalization loop (recorded synthesis shrinks Type C).
   created_at: 2026-05-19T02:11:49.022464693Z
   modified_at: 2026-05-19T02:11:49.022464693Z
+- id: 019e3e09-fa60-7de1-8ab2-47982d9cb9cb
+  author: joe
+  content: 'Coupling 2026-05-18: STORY-306''s v1 (fresh advisor + rich payload) MUST emit punt-ledger records from day 1 — see the punt-ledger STORY (STORY-325). Instrumentation is baked into the punt mechanism from the start, NOT retrofitted: every punt — --zen auto-resolve, advisor resolve, escalate-to-human, --no-human default-punt — appends a structured record to `.aida/punts.jsonl` with the A/B/C classification + categorized escalation reason. This is what makes STORY-306''s ''measure v1''s escalation rate, then decide on v2'' actually measurable — the earlier comment''s ''file a SPIKE to measure'' is SUPERSEDED: the ledger + weeks of real drains IS the measurement, no separate SPIKE needed. STORY-306 v1 acceptance must include ''emits punt-ledger records per STORY-325''.'
+  created_at: 2026-05-19T02:21:41.856238217Z
+  modified_at: 2026-05-19T02:21:41.856238217Z
