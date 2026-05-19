@@ -1202,6 +1202,27 @@ fn handle_punt_command(
         }
     }
 
+    // STORY-276: when an `--auto-complete` orchestrator launched this session
+    // it set `AIDA_PUNT_SIGNAL_FILE` to a path it watches. Drop the signal
+    // there so the orchestrator learns the spec was punted — not shipped —
+    // once the implementer session exits. Best-effort: a missing var means a
+    // standalone `aida punt` with no orchestrator, and a write failure must
+    // not undo the status flip. trace:STORY-276 | ai:claude
+    if let Some(signal_path) = std::env::var(punt::SIGNAL_FILE_ENV)
+        .ok()
+        .filter(|s| !s.is_empty())
+    {
+        let signal = punt::PuntSignal {
+            spec: display_id.clone(),
+            category,
+            detail: reason.to_string(),
+            lean: lean.map(|s| s.to_string()),
+        };
+        if let Err(e) = punt::write_signal(std::path::Path::new(&signal_path), &signal) {
+            eprintln!("{} could not write punt signal file: {e}", "Note:".dimmed());
+        }
+    }
+
     println!(
         "{} {display_id} → {}",
         "Punted".magenta().bold(),
@@ -34061,32 +34082,30 @@ mod queue_work_tests {
 
     // --- TASK-306: --no-human kickoff gate --------------------------------
 
-    /// `--no-human=both` is rejected — the headless implementer phase is not
-    /// shipped — regardless of the acknowledgement env var. trace:TASK-306
+    /// STORY-276: the gate keys purely off acknowledgement — ack'd → proceed
+    /// silently, otherwise the banner + prompt. `both` is no longer rejected
+    /// (the headless implementer ships); it is acknowledged like any mode.
+    /// trace:TASK-306, STORY-276
     #[test]
-    fn no_human_gate_both_is_unavailable() {
-        assert_eq!(
-            classify_no_human_gate(auto_complete::NoHumanMode::Both, false),
-            NoHumanGate::BothUnavailable
-        );
-        assert_eq!(
-            classify_no_human_gate(auto_complete::NoHumanMode::Both, true),
-            NoHumanGate::BothUnavailable
-        );
+    fn no_human_gate_keys_off_acknowledgement() {
+        assert_eq!(classify_no_human_gate(false), NoHumanGate::NeedsAck);
+        assert_eq!(classify_no_human_gate(true), NoHumanGate::Acknowledged);
     }
 
-    /// reviewer-only keys off the acknowledgement: ack'd → proceed silently,
-    /// otherwise the banner + prompt. trace:TASK-306
+    /// STORY-276: the scope line differs by mode — `both` names the headless
+    /// implementer + the punt safety net; `reviewer-only` says phase 1 stays
+    /// interactive. trace:STORY-276
     #[test]
-    fn no_human_gate_reviewer_only_keys_off_acknowledgement() {
-        assert_eq!(
-            classify_no_human_gate(auto_complete::NoHumanMode::ReviewerOnly, false),
-            NoHumanGate::NeedsAck
+    fn no_human_scope_line_differs_by_mode() {
+        let both = no_human_scope_line(auto_complete::NoHumanMode::Both);
+        assert!(both.contains("both"), "{both}");
+        assert!(both.contains("punts"), "{both}");
+        let reviewer = no_human_scope_line(auto_complete::NoHumanMode::ReviewerOnly);
+        assert!(
+            reviewer.contains("reviewer phase runs headless"),
+            "{reviewer}"
         );
-        assert_eq!(
-            classify_no_human_gate(auto_complete::NoHumanMode::ReviewerOnly, true),
-            NoHumanGate::Acknowledged
-        );
+        assert!(reviewer.contains("interactive"), "{reviewer}");
     }
 
     // --- TASK-306: orchestrator-context statusline badge ------------------
@@ -43971,23 +43990,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 let mode = auto_complete.as_deref().unwrap_or("full");
                 let variant = auto_complete::AutoCompleteVariant::parse(mode)
                     .map_err(|e| anyhow::anyhow!(e))?;
-                // STORY-263: `--no-human[=MODE]` runs the orchestrator's
-                // phases headless (`claude -p`). This first cut wires the
-                // reviewer (phase 3) only; the implementer (phase 1) stays
-                // interactive (the headless implementer is STORY-276).
+                // STORY-263 / STORY-276: `--no-human[=MODE]` runs the
+                // orchestrator's phases headless (`claude -p`). `reviewer-only`
+                // wires the reviewer (phase 3); `both` additionally runs the
+                // implementer (phase 1) headless, with the `/aida-punt` safety
+                // net for design-forks (STORY-276).
                 let no_human_mode = match no_human.as_deref() {
                     Some(v) => {
                         Some(auto_complete::NoHumanMode::parse(v).map_err(|e| anyhow::anyhow!(e))?)
                     }
                     None => None,
                 };
-                // TASK-306: pre-launch gate. `--no-human=both` errors here —
-                // the headless implementer is not shipped — and `reviewer-only`
-                // prints the loud scope banner + requires a one-time
+                // TASK-306 / STORY-276: pre-launch gate. Both modes print the
+                // loud scope banner (wording per mode) and require a one-time
                 // acknowledgement. This dispatch arm runs exactly once per
                 // `aida queue work --auto-complete` invocation, so the banner
                 // appears once per kickoff even when a batch / `nextN` drain
-                // loops `run_auto_complete` internally. trace:TASK-306
+                // loops `run_auto_complete` internally. trace:TASK-306, STORY-276
                 if let Some(mode) = no_human_mode {
                     no_human_kickoff_gate(mode)?;
                 }
@@ -46701,73 +46720,93 @@ fn drain_clear(
 
 /// TASK-306: the decision the `--no-human` kickoff gate makes — split from
 /// its terminal/stdin I/O so it is unit-testable. `acknowledged` is whether
-/// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` is set.
+/// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` is set. STORY-276 dropped `BothUnavailable`
+/// — the headless implementer now ships, so `both` is a real, acknowledgeable
+/// mode like `reviewer-only`; the gate keys purely off acknowledgement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NoHumanGate {
-    /// `--no-human=both` — the headless implementer phase is not shipped, so
-    /// the run is rejected regardless of acknowledgement.
-    BothUnavailable,
-    /// reviewer-only, already acknowledged via the env var — proceed with a
-    /// one-line scope reminder, no prompt.
+    /// Already acknowledged via the env var — proceed with a one-line scope
+    /// reminder, no prompt.
     Acknowledged,
-    /// reviewer-only, not yet acknowledged — show the scope banner and ask.
+    /// Not yet acknowledged — show the scope banner and ask.
     NeedsAck,
 }
 
-/// TASK-306: pure classification for [`no_human_kickoff_gate`].
-fn classify_no_human_gate(mode: auto_complete::NoHumanMode, acknowledged: bool) -> NoHumanGate {
-    if mode.wants_headless_implementer() {
-        // `both` is not an acknowledgement question — the phase simply does
-        // not exist yet, so the env var cannot wave it through.
-        NoHumanGate::BothUnavailable
-    } else if acknowledged {
+/// TASK-306 / STORY-276: pure classification for [`no_human_kickoff_gate`].
+/// The decision no longer depends on the mode (both modes ship) — only on
+/// whether the scope was acknowledged. The *banner wording* still varies by
+/// mode; that lives in [`no_human_kickoff_gate`].
+fn classify_no_human_gate(acknowledged: bool) -> NoHumanGate {
+    if acknowledged {
         NoHumanGate::Acknowledged
     } else {
         NoHumanGate::NeedsAck
     }
 }
 
+/// STORY-276: the one-line scope description for a `--no-human` mode — used in
+/// the acknowledged-path reminder and as the lead line of the ack banner.
+fn no_human_scope_line(mode: auto_complete::NoHumanMode) -> &'static str {
+    if mode.wants_headless_implementer() {
+        "--no-human=both: the implementer AND reviewer phases run headless — \
+         no human at the keyboard. On a design-fork it cannot safely resolve, \
+         the implementer punts the spec to Needs Attention instead of guessing."
+    } else {
+        "--no-human: the reviewer phase runs headless; the implementer phase \
+         stays interactive and will pause for you."
+    }
+}
+
 /// TASK-306: the pre-launch gate for `aida queue work --auto-complete
-/// --no-human`, run once per kickoff. `--no-human=both` is rejected (the
-/// headless implementer phase is not shipped); `reviewer-only` prints a loud
-/// scope banner — making clear the implementer phase still needs the user —
-/// and requires a one-time acknowledgement, either interactively or up front
-/// with `AIDA_NO_HUMAN_ACKNOWLEDGED=1` for an unattended run. trace:TASK-306
+/// --no-human`, run once per kickoff. It prints a loud scope banner — what
+/// runs unattended and what does not — and requires a one-time
+/// acknowledgement, either interactively or up front with
+/// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` for an unattended run. STORY-276: `both` is
+/// now a shipped mode, so it is acknowledged like `reviewer-only` rather than
+/// rejected; the banner wording differs by mode. trace:TASK-306, STORY-276
 fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
     let acknowledged = std::env::var("AIDA_NO_HUMAN_ACKNOWLEDGED")
         .map(|v| v == "1")
         .unwrap_or(false);
-    match classify_no_human_gate(mode, acknowledged) {
-        NoHumanGate::BothUnavailable => anyhow::bail!(
-            "`--no-human=both` would run the implementer phase headless too, but \
-             the headless implementer is not available yet.\n  Use `--no-human` \
-             (reviewer-only) — the reviewer phase runs headless and the \
-             implementer phase stays interactive."
-        ),
+    let both = mode.wants_headless_implementer();
+    match classify_no_human_gate(acknowledged) {
         NoHumanGate::Acknowledged => {
             eprintln!(
-                "  {} --no-human: reviewer phase runs headless; the implementer \
-                 phase stays interactive and will pause for you (acknowledged via \
-                 AIDA_NO_HUMAN_ACKNOWLEDGED)",
-                "ℹ".cyan()
+                "  {} {} (acknowledged via AIDA_NO_HUMAN_ACKNOWLEDGED)",
+                "ℹ".cyan(),
+                no_human_scope_line(mode),
             );
             Ok(())
         }
         NoHumanGate::NeedsAck => {
             eprintln!();
-            eprintln!(
-                "{}  --no-human covers the reviewer phase only.",
-                "⚠".yellow().bold()
-            );
-            eprintln!(
-                "   Phase 1 (implementer) and phase 4 (merge) still require \
-                 interactive input."
-            );
-            eprintln!(
-                "   A full headless drain (the headless implementer phase) is not \
-                 available yet."
-            );
-            eprintln!("   The drain will pause at each phase-1 completion until you act.");
+            if both {
+                eprintln!(
+                    "{}  --no-human=both runs the implementer AND reviewer phases \
+                     headless.",
+                    "⚠".yellow().bold()
+                );
+                eprintln!("   No human is at the keyboard during phase 1 (implementer).");
+                eprintln!(
+                    "   On a design-fork it cannot safely resolve, the implementer \
+                     punts the spec"
+                );
+                eprintln!(
+                    "   to Needs Attention instead of guessing — review punts later \
+                     with `aida findings list`."
+                );
+            } else {
+                eprintln!(
+                    "{}  --no-human covers the reviewer phase only.",
+                    "⚠".yellow().bold()
+                );
+                eprintln!("   Phase 1 (implementer) still requires interactive input.");
+                eprintln!("   The drain will pause at each phase-1 completion until you act.");
+                eprintln!(
+                    "   {}",
+                    "For a fully headless drain use `--no-human=both`.".dimmed()
+                );
+            }
             eprintln!(
                 "   {}",
                 "Set AIDA_NO_HUMAN_ACKNOWLEDGED=1 to skip this prompt on an \
@@ -46783,7 +46822,7 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
                 anyhow::bail!(
                     "--no-human needs a one-time scope acknowledgement, but stdin \
                      is not a terminal. Re-run with AIDA_NO_HUMAN_ACKNOWLEDGED=1 to \
-                     confirm you understand it covers the reviewer phase only."
+                     confirm you understand its scope."
                 );
             }
             if !prompt_yes_no("   Continue? [y/N] ", false)? {
@@ -46861,19 +46900,28 @@ fn run_auto_complete(
         }
     };
 
-    // STORY-263 / TASK-306: a one-line per-run reminder of the headless
-    // scope. The loud scope banner + acknowledgement already fired once at
-    // kickoff (`no_human_kickoff_gate`); this keeps the scope visible in a
-    // batch drain's per-member scrollback. `--no-human=both` was rejected at
-    // the kickoff gate, so the mode reaching here is always reviewer-only —
-    // the reviewer runs headless, the implementer stays interactive.
-    // trace:STORY-263, TASK-306 | ai:claude
-    if no_human.is_some() && !json {
-        eprintln!(
-            "  {} headless reviewer phase — phase 1 (implementer) stays \
-             interactive and will pause for you",
-            "ℹ".cyan()
-        );
+    // STORY-263 / TASK-306 / STORY-276: a one-line per-run reminder of the
+    // headless scope. The loud scope banner + acknowledgement already fired
+    // once at kickoff (`no_human_kickoff_gate`); this keeps the scope visible
+    // in a batch drain's per-member scrollback. The wording follows the mode:
+    // `both` runs phase 1 headless (with the punt safety net), `reviewer-only`
+    // leaves it interactive. trace:STORY-263, TASK-306, STORY-276 | ai:claude
+    if let Some(mode) = no_human {
+        if !json {
+            if mode.wants_headless_implementer() {
+                eprintln!(
+                    "  {} headless implementer + reviewer — phase 1 punts to \
+                     Needs Attention on a design-fork it cannot resolve",
+                    "ℹ".cyan()
+                );
+            } else {
+                eprintln!(
+                    "  {} headless reviewer phase — phase 1 (implementer) stays \
+                     interactive and will pause for you",
+                    "ℹ".cyan()
+                );
+            }
+        }
     }
 
     // BUG-233: register this orchestrator run's corroboration marker. The
@@ -47143,11 +47191,13 @@ fn handle_auto_complete_batch(
         no_human,
     };
     let result = auto_complete::drain_batch(&mut driver, max);
-    // An empty batch (nothing shipped, nothing to drain) is a user error —
-    // the named batch tag matched no queued work. Surface it with a non-zero
-    // exit so scripts notice, even though `drain_batch` calls it `Drained`.
+    // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
+    // user error — the named batch tag matched no queued work. Surface it with
+    // a non-zero exit so scripts notice, even though `drain_batch` calls it
+    // `Drained`. A batch where every member punted is *not* empty (STORY-276).
     let exit_code = if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
         && result.shipped.is_empty()
+        && result.punted.is_empty()
     {
         1
     } else {
@@ -47209,6 +47259,21 @@ fn emit_batch_drain_summary(
             "shipped_count".to_string(),
             serde_json::Value::Number((result.shipped.len() as u64).into()),
         );
+        // STORY-276: punted members — parked in Needs Attention, not shipped.
+        obj.insert(
+            "punted".to_string(),
+            serde_json::Value::Array(
+                result
+                    .punted
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "punted_count".to_string(),
+            serde_json::Value::Number((result.punted.len() as u64).into()),
+        );
         obj.insert(
             "stopped_at".to_string(),
             match &result.stopped_at {
@@ -47233,7 +47298,7 @@ fn emit_batch_drain_summary(
     let plural = if n == 1 { "" } else { "s" };
     eprintln!();
     match &result.outcome {
-        BatchDrainOutcome::Drained if result.shipped.is_empty() => {
+        BatchDrainOutcome::Drained if result.shipped.is_empty() && result.punted.is_empty() => {
             eprintln!(
                 "{} no queued items tagged `batch:{batch_name}` — tag members \
                  via `aida edit <id> --tags batch:{batch_name}` first",
@@ -47289,6 +47354,19 @@ fn emit_batch_drain_summary(
                 "→".dimmed()
             );
         }
+    }
+    // STORY-276: name the members a headless implementer punted — the drain
+    // advanced past them, but they parked in Needs Attention rather than
+    // shipping, so they need advisor triage.
+    if !result.punted.is_empty() {
+        let pn = result.punted.len();
+        eprintln!(
+            "  {} {pn} spec{} punted to Needs Attention: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if pn == 1 { "" } else { "s" },
+            result.punted.join(", ")
+        );
     }
 }
 
@@ -47503,11 +47581,13 @@ fn handle_auto_complete_next_n(
         no_human,
     };
     let result = auto_complete::drain_batch(&mut driver, Some(n));
-    // An empty queue (nothing shipped, nothing to drain) is a user error —
-    // surface it with a non-zero exit even though `drain_batch` reports it as
-    // a clean `Drained`, matching the `--batch` drain's treatment.
+    // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
+    // user error — surface it with a non-zero exit even though `drain_batch`
+    // reports it as a clean `Drained`, matching the `--batch` drain. A drain
+    // where every member punted is *not* empty (STORY-276).
     let exit_code = if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
         && result.shipped.is_empty()
+        && result.punted.is_empty()
     {
         1
     } else {
@@ -47567,6 +47647,21 @@ fn emit_next_n_drain_summary(
             "shipped_count".to_string(),
             serde_json::Value::Number((result.shipped.len() as u64).into()),
         );
+        // STORY-276: punted members — parked in Needs Attention, not shipped.
+        obj.insert(
+            "punted".to_string(),
+            serde_json::Value::Array(
+                result
+                    .punted
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "punted_count".to_string(),
+            serde_json::Value::Number((result.punted.len() as u64).into()),
+        );
         obj.insert(
             "stopped_at".to_string(),
             match &result.stopped_at {
@@ -47591,7 +47686,7 @@ fn emit_next_n_drain_summary(
     let plural = if count == 1 { "" } else { "s" };
     eprintln!();
     match &result.outcome {
-        BatchDrainOutcome::Drained if result.shipped.is_empty() => {
+        BatchDrainOutcome::Drained if result.shipped.is_empty() && result.punted.is_empty() => {
             eprintln!(
                 "{} no drivable items in the queue — nothing to drive",
                 "✗".red().bold()
@@ -47652,6 +47747,19 @@ fn emit_next_n_drain_summary(
                 "→".dimmed()
             );
         }
+    }
+    // STORY-276: name the members a headless implementer punted — the drain
+    // advanced past them, but they parked in Needs Attention rather than
+    // shipping, so they need advisor triage.
+    if !result.punted.is_empty() {
+        let pn = result.punted.len();
+        eprintln!(
+            "  {} {pn} spec{} punted to Needs Attention: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if pn == 1 { "" } else { "s" },
+            result.punted.join(", ")
+        );
     }
 }
 
@@ -48406,7 +48514,9 @@ impl RealPhaseDriver {
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
-    fn run_implementer(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+    fn run_implementer(
+        &mut self,
+    ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Implementer);
         let session_uuid = uuid::Uuid::now_v7().to_string();
 
@@ -48428,9 +48538,36 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         if let Some(mode) = self.no_human {
             cmd.env(orchestrator::NO_HUMAN_MODE_ENV, mode.slug());
         }
+        // STORY-276: under `--no-human=both` the implementer phase runs
+        // headless too — append `--no-human` so `handle_queue_work` launches
+        // `claude -p` instead of an interactive session. `ReviewerOnly` (and
+        // a plain `--auto-complete`) leave phase 1 interactive: no flag.
+        // trace:STORY-276 | ai:claude
+        if self
+            .no_human
+            .map(|m| m.wants_headless_implementer())
+            .unwrap_or(false)
+        {
+            cmd.arg("--no-human");
+        }
         if let Some(pm) = &self.permission_mode {
             cmd.args(["--permission-mode", pm]);
         }
+
+        // STORY-276: provision the punt-signal handshake. An implementer that
+        // hits a design-fork runs `aida punt`, which drops a signal file at
+        // this path (it reads `AIDA_PUNT_SIGNAL_FILE`). Clear any stale file
+        // from a prior run, then point the subprocess at it. Set for every
+        // mode — an interactive `--auto-complete` implementer can punt too,
+        // and the orchestrator must park gracefully rather than report a
+        // phantom NoPr failure. Mirrors the reviewer's verdict-file handshake.
+        // trace:STORY-276 | ai:claude
+        let punt_signal = punt::signal_path(&self.project_root, &self.spec);
+        if let Some(parent) = punt_signal.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::remove_file(&punt_signal);
+        cmd.env(punt::SIGNAL_FILE_ENV, &punt_signal);
 
         // TASK-329: spawn + poll for the graceful-exit sentinel rather than a
         // blocking `.status()`. In interactive `--zen` mode the skill
@@ -48470,6 +48607,23 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let (lease_id, recorded_branch, worktree_path) =
             self.discover_orchestrated_lease(&session_uuid)?;
         self.implementer_lease = Some(lease_id.clone());
+
+        // STORY-276: did the implementer punt? `aida punt` dropped the signal
+        // file and the spec is now parked in NeedsAttention — there is no PR
+        // to chase, and the pipeline must stop *cleanly*, not report a NoPr
+        // failure. End the implementer session (best-effort — a punted spec
+        // hit a fork before producing work worth keeping) and hand the punt
+        // up so `orchestrate` runs `finish_punted`. trace:STORY-276 | ai:claude
+        if let Some(signal) = punt::read_signal(&punt_signal) {
+            let _ = std::fs::remove_file(&punt_signal);
+            let _ = std::process::Command::new(self.aida_exe())
+                .current_dir(&self.project_root)
+                .args(["session", "end", &lease_id, "--yes", "--skip-ci"])
+                .status();
+            return Ok(auto_complete::ImplementerOutcome::Punted {
+                reason: signal.summary(),
+            });
+        }
 
         // BUG-223: the branch recorded in the lease is a session-start
         // snapshot. If `/aida-pr` hit BUG-88's merged-branch-name guard
@@ -48531,7 +48685,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         match pr {
             Some(pr) => {
                 self.pr_number = Some(pr.number as u32);
-                Ok(())
+                Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
             None => Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::NoPr,
