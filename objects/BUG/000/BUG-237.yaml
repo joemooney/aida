@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:41:43.423344247Z
-modified_at: 2026-05-19T02:49:46.747160007Z
+modified_at: 2026-05-19T02:50:05.338957098Z
 req_type: Bug
 tags:
 - autonomy-modes
@@ -72,6 +72,14 @@ relationships:
 - rel_type: Parent
   target_id: 019e3e23-e2d5-77f0-bc0c-533c7d41de15
   created_at: 2026-05-19T02:50:03.061558195Z
+comments:
+- id: 019e3e23-fa46-7fc1-87cf-3174c4a75883
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-18-bug-237-zen-provenance-corroboration.md
+    filed 2 task(s): TASK-341, TASK-342
+  created_at: 2026-05-19T02:50:05.766263265Z
+  modified_at: 2026-05-19T02:50:05.766263265Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T02:49:46.747160007Z
