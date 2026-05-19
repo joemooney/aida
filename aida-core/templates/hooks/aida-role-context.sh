@@ -79,10 +79,11 @@ extract_field() {
 purpose=$(extract_field purpose "$role_file")
 system_prompt=$(extract_field system_prompt "$role_file")
 
-# STORY-278: the dialog (advisor) seat triages review findings the headless
-# reviewer files as draft TASKs. Surface a pending count at session start so
-# they aren't missed. Non-zero count only — silent when clean. Best-effort:
-# a missing/slow `aida` degrades to no line.
+# STORY-278/STORY-285: the dialog (advisor) seat triages findings the headless
+# drain files as draft TASKs — the reviewer (from-review:) and the implementer
+# (from-implementer:). Surface a pending count at session start so they aren't
+# missed. Non-zero count only — silent when clean. Best-effort: a missing/slow
+# `aida` degrades to no line.
 findings_line=""
 if [ "$role" = "dialog" ]; then
     n=$(aida findings list --count 2>/dev/null || echo 0)
@@ -90,7 +91,7 @@ if [ "$role" = "dialog" ]; then
         '' | *[!0-9]*) n=0 ;;
     esac
     if [ "$n" -gt 0 ]; then
-        findings_line="${n} findings from recent merges awaiting triage (use \`aida findings list\` to review)"
+        findings_line="${n} findings awaiting triage (use \`aida findings list\` to review)"
     fi
 fi
 

@@ -59,7 +59,7 @@ on the producer side (see `aida role enter dialog` and
 
 ## Pending findings
 
-!`c=$(aida findings list --count 2>/dev/null || echo 0); [ "${c:-0}" -gt 0 ] && echo "$c findings from recent merges awaiting triage — run: aida findings list" || true`
+!`c=$(aida findings list --count 2>/dev/null || echo 0); [ "${c:-0}" -gt 0 ] && echo "$c findings from headless drain phases awaiting triage — run: aida findings list" || true`
 
 ## Argument forms
 
@@ -131,11 +131,12 @@ when this session exits. The user inside an orchestrator-driven session
 otherwise has no way to see any of that. Stay silent when the block is
 empty (no drain, or a standalone session). trace:STORY-301
 
-**If the Pending findings block above emitted a line** (STORY-278) — the
-headless reviewer filed review follow-ups that the advisor hasn't triaged
-yet — surface it verbatim to the user as a one-line nudge. Don't act on it
-here (triage is the advisor's job); just make sure it isn't missed.
-Stay silent when the block is empty.
+**If the Pending findings block above emitted a line** (STORY-278 /
+STORY-285) — a headless drain phase filed follow-ups the advisor hasn't
+triaged yet: the reviewer (`from-review:`) and/or the implementer
+(`from-implementer:`, Step 5b below). Surface it verbatim to the user as a
+one-line nudge. Don't act on it here (triage is the advisor's job); just
+make sure it isn't missed. Stay silent when the block is empty.
 
 **If a Plan brief is shown above** (TASK-95) — `aida queue work`
 pre-populated it from a matching `docs/plans/` file — lead your first
@@ -307,6 +308,101 @@ branch," and the PR is Step 6's job. The ordering (done → PR) is by design
 PR is committed-but-unmergeable. When the branch has commits ahead of main
 and no open PR, `queue done` now emits a workflow hint pointing at
 `/aida-pr` — don't end the session until the PR is open. trace:BUG-232
+
+### Step 5b: File conversational flags as draft TASKs (headless drain) — trace:STORY-285
+
+Under a headless `--no-human` drain there is no human reading the
+implementer's end-of-session prose in real time. The conversational flags an
+implementer naturally raises at the end of a spec — a deviation from the
+acceptance criteria, a non-obvious design call, a pre-existing bug spotted in
+passing, a "could also do X" suggestion — would vanish into conversation
+history the moment the orchestrator advances to phase 2. So the headless
+implementer files them itself, as draft TASKs the advisor triages later via
+`aida findings list` — the same surface the headless reviewer's findings land
+on. This is the phase-1 mirror of `/aida-review` step 7b.
+
+**This step runs only when `AIDA_HEADLESS=1`** — the variable AIDA sets when
+it launches a headless `claude -p` implementer. In an interactive pickup a
+human is present and reads the flags straight from the session; skip 5b
+entirely.
+
+```bash
+echo "${AIDA_HEADLESS:-}"
+```
+
+- **Empty / unset** → interactive pickup. Skip 5b — the human reads the flags.
+- **`1`** → headless. Continue.
+
+**What counts as a finding.** A *finding* is a conversational flag worth the
+advisor's attention later — not every incidental note. File these four kinds:
+
+- `kind:deviation` — you deviated from the spec's acceptance criteria (give
+  the reason). The advisor needs to know what shipped that the spec didn't
+  ask for, or what it asked for that didn't ship.
+- `kind:bug-spotted` — a pre-existing issue you found incidentally that is
+  file-worthy in its own right (the kind of thing a watching human would
+  route to a BUG).
+- `kind:design-choice` — a non-obvious call you made *within* spec scope that
+  the advisor should know shipped.
+- `kind:followup-suggestion` — a concrete "could also do X" worth a TASK.
+
+Do **not** file: mechanical choices obvious from the diff, restatements of
+the spec, or anything a `git show` makes self-evident. When the spec went in
+clean with nothing to flag, 5b files nothing — that is the common case.
+
+**Idempotency — probe before filing.** A re-run of the implementer for the
+same spec must not double-file. Check for findings already filed against this
+spec (`--all` is required — a finding the advisor already promoted/dismissed
+is terminal-status and hidden by default):
+
+```bash
+existing=$(aida list --tags "from-implementer:<SPEC-ID>" --all | grep -cE '^[A-Z]+-[0-9]+' || true)
+```
+
+If `existing` is non-zero, **skip the rest of 5b** — this spec's findings
+were filed on an earlier run.
+
+**File each finding** — one draft TASK apiece:
+
+```bash
+aida add --type task --status draft \
+  --tags "from-implementer:<SPEC-ID>,kind:<deviation|design-choice|bug-spotted|followup-suggestion>,severity:<cosmetic|minor|major>" \
+  --title "<one-line summary>" \
+  --description-stdin <<'EOF'
+<full flag text — what, where (file:line), why it matters>
+
+Raised by the implementer while working <SPEC-ID>.
+Branch: <branch>  ·  Commit: <SHA>  (PR link added on merge)
+EOF
+```
+
+- **Always `--type task`** — even a bug-shaped finding. The advisor can
+  `aida edit <ID> --type bug` on triage if warranted; the implementer does
+  not expand the taxonomy.
+- **`from-implementer:<SPEC-ID>`**, **`kind:<category>`**, and
+  **`severity:<level>`** tags are all required. Add context tags freely.
+- **Severity rubric:** `cosmetic` = nits; `minor` = a real but small gap;
+  `major` = a design concern worth a conversation. When unsure, round down —
+  the advisor re-grades on triage.
+- The PR is not open yet at 5b time, so the description carries the branch +
+  commit SHA; the advisor recovers the PR from the SHA. Capture each printed
+  `<ID>` (e.g. `TASK-303`).
+
+**Report what was filed.** Close the step with a one-line summary naming the
+count and the TASK IDs — under TASK-307's tee this reaches the terminal, and
+it lands in the headless JSONL either way:
+
+```
+Filed 2 implementer findings for <SPEC-ID>: TASK-303 (bug-spotted), TASK-304 (deviation)
+```
+
+If nothing was filed, say so: `No implementer findings filed for <SPEC-ID>.`
+
+**The advisor picks these up** on its next session: `aida findings list`
+surfaces them grouped under a *From implementer* section, `aida findings list
+--source implementer` narrows to them, `aida findings list --kind bug-spotted`
+isolates the file-worthy ones, `aida findings promote <ID>` sends one to the
+work queue, `aida findings dismiss <ID>` rejects it.
 
 ### Step 6: Next steps (state-aware) — trace:TASK-87 trace:TASK-260
 
