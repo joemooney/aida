@@ -1,0 +1,59 @@
+id: 019e3ecd-111e-7441-8252-85a3195746e8
+spec_id: BUG-244
+agreed_id: BUG-244
+title: Starter-memory-template parser fails on CRLF — 2 STORY-255 tests fail on Windows, blocks v0.8.0
+description: |-
+  Two tests fail on **windows-latest** in the nightly cross-platform CI (run 26078738329), blocking the v0.8.0 tag:
+
+  - \`story_255_discipline_pack_tests::memory_pack_writes_marked_files_with_marker_and_checksum\`
+  - \`story_255_discipline_pack_tests::memory_pack_refresh_overlays_pristine_skips_edited\`
+
+  Both panic identically: \`called Result::unwrap() on an Err value: malformed starter memory template: feedback_check_in_flight_before_rejecting.md\` — at \`aida-cli/src/main.rs:50565\` and \`:50610\` (STORY-255's memory-pack code). macOS passed; Linux PR CI passed (STORY-255 merged green — PR CI is Linux-only, TASK-257). **Windows-only failure.**
+
+  ## Root cause: CRLF line endings
+
+  High confidence — Windows-only + macOS-passing = a line-ending issue:
+  - Git on Windows (default \`autocrlf\`) checks out the embedded memory templates (\`aida-core/templates/memories/*.md\`) with \`\r\n\`. The same CI log shows \`warning: in the working copy of '.gitignore', LF will be replaced by CRLF\` — confirming autocrlf is active.
+  - \`build.rs\` embeds the templates into the binary; on Windows that embeds CRLF strings.
+  - STORY-255's starter-memory-template parser (the frontmatter \`---\` block parser at main.rs ~50565) does not handle \`\r\n\` → reports the template malformed.
+
+  \`feedback_check_in_flight_before_rejecting.md\` is named because it is the first-failing template in iteration order — under CRLF, every memory template is affected; the parser aborts on the first. It is NOT a defect in that one file (verified: the source file is well-formed LF on Linux).
+
+  ## Fix
+
+  - [ ] **The parser is line-ending-agnostic** — normalize \`\r\n\` (and bare \`\r\`) → \`\n\` before parsing frontmatter. This is the load-bearing fix; the parser must handle any input, not assume LF.
+  - [ ] Defense-in-depth (optional but cheap): a \`.gitattributes\` entry pinning the memory templates to \`eol=lf\` so the embedded source stays LF regardless of checkout platform. But do NOT rely on this alone — the parser-normalize is the real fix.
+  - [ ] Regression test: feed the parser CRLF-line-ending content and assert it parses correctly — so this can't regress (it would have been caught by such a test).
+  - [ ] Audit STORY-255's other embedded-template parsing (discipline docs, CLAUDE.md section) for the same CRLF assumption.
+  - [ ] Verify: cross-platform CI green on windows-latest.
+
+  ## Release-blocker
+
+  \`make release-minor\` (v0.8.0) ran release.sh's cross-platform gate (\`pre-release-check.sh\`), which correctly caught this and **refused to tag** v0.8.0. The version bump is in the working tree, uncommitted. Once this BUG is fixed and cross-platform CI is green, re-run \`make release-minor\`. This BUG jumps the queue — it is the v0.8.0 blocker.
+
+  ## Composes with
+
+  - **STORY-255** (introduced the starter-memory-pack parser — this is its Windows regression)
+  - **TASK-257** (split CI — PR CI is Linux-only; this is exactly the class of bug the nightly cross-platform run exists to catch, and it did)
+  - The cross-platform CI workflow + \`scripts/pre-release-check.sh\` (the release gate — working as designed)
+  - **BUG-111** (the prior v0.8.0 release-blocker — release machinery now gets past dep-resolve and reaches the cross-platform gate, which is progress)
+
+  ## Origin
+
+  2026-05-19: \`make release-minor\` for v0.8.0. With BUG-111 fixed, release.sh now bumps cleanly and reaches its cross-platform-CI gate — which caught 2 Windows test failures in STORY-255's memory-pack code (CRLF). The gate refused to tag. The machinery is working; this is a real Windows regression to fix before v0.8.0 ships.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T05:54:47.198693550Z
+modified_at: 2026-05-19T05:54:47.198693550Z
+req_type: Bug
+tags:
+- crlf
+- cross-platform
+- from-self-test:release-v0.8.0
+- line-endings
+- memory-pack
+- release-blocker
+- story-255
+- windows
