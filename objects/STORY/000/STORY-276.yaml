@@ -28,12 +28,12 @@ description: |-
   - **STORY-263** (first cut — reviewer only) — must ship first
   - **EPIC-28 STORY 3** (shelving + /aida-punt) — required prereq
   - **SPIKE-7** — empirical evidence for the headless-implementer risks
-status: Planned
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-19T17:16:44.330578166Z
+modified_at: 2026-05-19T17:36:13.711341637Z
 req_type: Story
 tags:
 - auto-complete
@@ -124,3 +124,7 @@ comments:
     Acceptance bullets 5-6 (real headless Claude punts / ships) are verified manually SPIKE-7-style (~$3/run real API spend, CI can't run them); automated tests cover the orchestrator's handling of a punt with a mock.
   created_at: 2026-05-19T17:16:42.867726962Z
   modified_at: 2026-05-19T17:16:42.867726962Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-19T17:36:13.711341637Z
+  implemented_by: joe
