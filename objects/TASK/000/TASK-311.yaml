@@ -82,7 +82,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:37:15.060027836Z
-modified_at: 2026-05-17T16:37:15.060027836Z
+modified_at: 2026-05-19T14:14:35.852246229Z
 req_type: Task
 tags:
 - advisor-discipline
@@ -91,3 +91,9 @@ tags:
 - scaffolding-pack
 - self-audit
 - spec-shaping
+comments:
+- id: 019e4096-a84c-7382-815f-d218e126b8f5
+  author: joe
+  content: 'Audit-check to add 2026-05-19: the spec audit should verify every named hard-dependency/prerequisite resolves to a FILED spec. Worked example: STORY-276 was filed with ''(requires /aida-punt)'' in its title and STORY-306 depending on it — but /aida-punt was never a spec (EPIC-28''s children were prose only). A dangling hard-dependency: the implementer can''t complete the spec, and only discovers it at pickup. The audit check: for each ''requires X'' / ''depends on X'' / ''prerequisite: X'' in a spec, confirm X is a filed spec ID — not prose, not an aspiration. Same family as the primary-caller-environment check: a spec criterion that references something non-existent. (STORY-332 was filed 2026-05-19 to close this specific dangling dep.)'
+  created_at: 2026-05-19T14:14:35.852246229Z
+  modified_at: 2026-05-19T14:14:35.852246229Z
