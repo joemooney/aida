@@ -94,7 +94,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:24:27.901638768Z
-modified_at: 2026-05-16T17:24:27.901638768Z
+modified_at: 2026-05-19T17:44:20.597696150Z
 req_type: Story
 tags:
 - advanced-user
@@ -108,3 +108,19 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-16T17:24:30.423626884Z
+comments:
+- id: 019e4156-af75-7412-ad59-e29fe422c01b
+  author: joe
+  content: |-
+    Plan: docs/plans/2026-05-19-story-248-stacked-branch-awareness.md
+
+    Decomposed into 3 vertical slices (one per acceptance sub-feature):
+      Slice 1 (tracer bullet) — base selection: aida queue work --stack/--base, lease records parent_branch + parent_branch_sha
+      Slice 2 — stack tracking: .aida/stacks.json graph + aida stack show/list (new aida-cli/src/stacks.rs module)
+      Slice 3 — auto-rebase cascade on aida pull (bottom-up, --onto origin/main <parent_sha>, aborts on diverged-risky)
+
+    Key design call: AIDA squash-merges + deletes branches (gh pr merge --squash --delete-branch), so a plain rebase from a stacked branch re-applies the parent's pre-squash commits. Rebase MUST use 'git rebase --onto origin/main <recorded-parent-sha> <branch>' — hence slice 1 records parent_branch_sha at stack-creation time.
+
+    BUG-114 precondition already satisfied (Completed).
+  created_at: 2026-05-19T17:44:20.597696150Z
+  modified_at: 2026-05-19T17:44:20.597696150Z
