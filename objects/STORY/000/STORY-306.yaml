@@ -35,6 +35,8 @@ description: |-
   - [ ] Every advisor decision (resolve or escalate) logged with reasoning to an auditable location; resolved forks also leave a comment on the spec
   - [ ] Tests: a confident fork → advisor resolves → implementer resumes; an uncertain fork → advisor escalates → needs-human finding; the resume plumbing round-trips
   - [ ] Morning-after audit surface: \`aida findings list\` (or \`aida drain status\`) shows which forks the overnight advisor resolved vs escalated
+  - [ ] Escalation handshake (a) — the reviewer writes a verdict file even when it escalates the merge decision to a human: \`verdict: Approved\`, \`merge: escalated-to-human\`, so the orchestrator's phase-3 handshake artifact always exists (absorbed from BUG-241 item 4)
+  - [ ] Escalation handshake (b) — the orchestrator treats \`escalated-to-human\` as a first-class non-failure outcome, distinct from Approved/RequestChanges/Rejected and from a crashed phase; under it the drain neither auto-merges nor reports a failure (absorbed from BUG-241 item 5)
 
   ## Out of scope
 
@@ -68,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:38:45.451756021Z
-modified_at: 2026-05-19T04:01:55.253905199Z
+modified_at: 2026-05-19T04:12:01.611737885Z
 req_type: Story
 tags:
 - advisor-tier
