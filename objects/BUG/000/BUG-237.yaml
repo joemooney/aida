@@ -65,6 +65,10 @@ tags:
 - provenance
 - safety
 - zen-mode
+relationships:
+- rel_type: Parent
+  target_id: 019e3e23-bd91-7991-bb03-e57f766a03a5
+  created_at: 2026-05-19T02:49:57.774127850Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T02:49:46.747160007Z
