@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T05:39:42.574770218Z
-modified_at: 2026-05-19T02:08:49.366488911Z
+modified_at: 2026-05-19T02:10:08.327500413Z
 req_type: Bug
 tags:
 - auto-complete
@@ -65,6 +65,20 @@ tags:
 - recovery-hint
 - reviewer-phase
 - rework
+comments:
+- id: 019e3dff-6547-73b1-bf6e-fbf8bd7451e1
+  author: joe
+  content: |-
+    Implemented on branch bug-236 (commit 31612d69):
+
+    - Defect A: orchestrator phase-3 reviewer recovery hint now emits `aida queue rework <SPEC> --work` (the verb that re-opens a Done spec) instead of `aida queue work … --steal`, which rejects Done specs.
+    - Defect B: removed the stale "--resume requires TASK-112" bail in handle_queue_rework — TASK-112 has shipped, so `aida queue rework --resume` now chains through to `aida queue work --resume`. The `aida queue work` Done-spec error message drops `--resume` so it runs verbatim for any Done spec.
+    - Audit: the cross-cutting `Internal` failure hint had the same bounce (`aida queue work {spec}` in phase 3+); switched to `aida queue rework {spec} --work`, valid in every phase.
+    - Stripped the TASK-112 SPEC-ID leak from `aida queue rework --resume` clap --help text.
+
+    Test status: 84/84 relevant tests green (auto_complete 65, queue_work not_queued 8, queue_rework 11). Includes a new regression guard `recovery_hints_never_route_done_spec_through_queue_work` covering phases 3-6 × every FailureKind.
+  created_at: 2026-05-19T02:10:08.327500413Z
+  modified_at: 2026-05-19T02:10:08.327500413Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T02:08:49.366488911Z
