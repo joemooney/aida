@@ -150,12 +150,12 @@ description: |-
   - Editorial logic filters rejected-without-supersedes, typos, abandoned approaches
   - Memory entries surfaced when public-worthy
   - Cadence-aware via \`.aida/last-digest.toml\` marker
-status: Approved
+status: Planned
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:10:49.715594843Z
-modified_at: 2026-05-19T17:53:59.056448863Z
+modified_at: 2026-05-19T17:54:01.827408873Z
 req_type: Story
 tags:
 - advisor
