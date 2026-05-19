@@ -1,0 +1,26 @@
+id: 019e3ee6-1bbc-7652-a183-1560608d8ac4
+spec_id: STORY-329
+agreed_id: STORY-329
+title: 'Review PR-105: [AI:claude] feat(no-human): loud reviewer-only scope clarity for --no-human (TASK-306)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e3ecb`) for branch `task-306`.
+
+  - PR: <https://github.com/joemooney/aida/pull/105>
+  - Branch: `task-306` → `main`
+
+  ## Covers
+
+  - TASK-306
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 105` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T06:22:08.316369884Z
+modified_at: 2026-05-19T06:22:08.316369884Z
+req_type: Story
