@@ -50,12 +50,12 @@ description: |-
   ## Origin
 
   2026-05-19. v0.8.0 release blocked at the cross-platform CI gate (\`pre-release-check.sh\`). BUG-244 (CRLF) cleared the first Windows blocker; this is the second surfaced by the same gate. PR CI is Linux-only (TASK-257) so Windows-only failures only surface at release time — two in a row now.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:59:59.231766599Z
-modified_at: 2026-05-19T15:13:28.727056287Z
+modified_at: 2026-05-19T15:14:29.567057020Z
 req_type: Bug
 tags:
 - cross-platform
@@ -67,3 +67,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-19T15:13:28.727056287Z
   implemented_by: joe
+  completed_at: 2026-05-19T15:14:29.567057020Z
+  completion_sha: 4ba5a6541b999f51a7dfa2254cb6e28df3ff15a8
