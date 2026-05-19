@@ -1,0 +1,62 @@
+id: 019e3ec0-0ab7-77f3-bddb-38ddd341605e
+spec_id: SPIKE-9
+agreed_id: SPIKE-9
+title: 'SPIKE: MCP server as the inter-agent communication bus — evaluate vs file-handshakes'
+description: |-
+  Decide the **transport** for AIDA's inter-agent communication — the punt channel (STORY-306), the directive/control channel (TASK-294), and any future control plane. Three candidates; this SPIKE evaluates and recommends.
+
+  ## Context
+
+  Claude Code's experimental **Agent Teams** (\`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1\`) coordinates multiple Claude Code sessions via a **shared task list** — the same model AIDA's queue/roles/store already is. Agent Teams validates AIDA's architecture, but is **Claude-Code-locked**. AIDA's coordination is agent-agnostic by substrate (git + YAML + MCP) — Codex and any MCP-speaking agent can participate. The open question is the transport for cross-session / cross-machine / cross-AGENT messaging.
+
+  ## Candidate transports (from the 2026-05-18 ecosystem input)
+
+  1. **MCP server as shared bus** — both/all sessions connect to AIDA's MCP server, which exposes tools for posting/reading messages, claiming tasks, posting directives. *Leading candidate*: AIDA already has an MCP server; it's the natural integration point; sessions stay command-agnostic; and — load-bearing — it is **agent-agnostic** (Codex speaks MCP). This is "what Agent Teams does internally, generalized."
+  2. **gRPC service** — AIDA already has aida-server (gRPC). A small Rust service exposing \`PostMessage\` / \`Subscribe\` (streaming). Agents wrap calls as MCP tools or shell commands.
+  3. **Shared filesystem / sqlite + polling** — crude but works; what most kanban-style implementations do under the hood. AIDA already uses file-handshakes for verdict files (STORY-263), findings (STORY-285), the exit sentinel (TASK-329).
+
+  ## The SPIKE
+
+  - [ ] Evaluate MCP-as-bus for the inter-agent comms layer: can the AIDA MCP server cleanly expose \`post_punt\` / \`read_punt_response\`, \`post_directive\` / \`list_directives\`, \`claim_task\`? Assess latency, durability, and the orchestrator-as-participant question (the orchestrator is a Rust process, not an MCP client today).
+  - [ ] Compare against the file-handshake pattern AIDA already uses (STORY-263/285/329) — is MCP-as-bus a clean win, or does the file pattern stay simpler for the orchestrator↔skill cases while MCP wins for cross-machine / cross-agent?
+  - [ ] Note: a hybrid is plausible — file-handshakes for same-host orchestrator↔session (already proven, zero new infra), MCP-as-bus for cross-machine / cross-agent. Evaluate whether one transport should win or both have a place.
+  - [ ] Honest cost: making the orchestrator an MCP client, and keeping the bus durable + human-inspectable (the shared-task-list property that file/queue have and direct-messaging lacks).
+  - [ ] Output: a recommendation written to \`docs/spikes/\` that informs STORY-306 (punt-channel transport), TASK-294 (directive-channel transport), and TASK-339 (the autonomy architecture doc).
+
+  ## Why this is high-priority and no-regret
+
+  It gates STORY-306's and TASK-294's transport design — better to decide before they're built than to retrofit. And it is **no-regret strategically**: building inter-agent comms agent-agnostically (MCP) keeps the "AIDA as an independent, agent-agnostic multi-agent coordination platform" direction *open* without committing the roadmap to it. If AIDA becomes that platform, the foundation is already right; if it doesn't, MCP-as-bus is still the cleaner design for the immediate need.
+
+  ## Out of scope
+
+  - **Building the full comms layer** — this SPIKE recommends a transport; STORY-306 / TASK-294 build it
+  - **The "independent multi-agent platform" repositioning** — that's a strategic direction with a revisit-trigger (real users + stable autonomy layer + a validating Codex user), NOT a roadmap item to act on now
+  - **Direct agent-to-agent messaging** (the part Agent Teams adds on top of the shared task list) — AIDA's durable-shared-state model is the sound half; direct messaging lacks durability/pause-resume/inspection. Out of scope unless the SPIKE finds a real need.
+
+  ## Composes with
+
+  - **STORY-306** (advisor escalation tier — the punt channel; its transport is this SPIKE's output)
+  - **TASK-294** (aida-worker + directive channel — same)
+  - **TASK-339** (autonomy architecture doc — documents the chosen transport)
+  - **STORY-318** (ecosystem review — Agent Teams is the ecosystem capability that prompted this; see its watch entry)
+  - **TASK-337** (vs-claude-code-subagents — same layering insight: Claude Code primitives are Claude-locked; AIDA is the agent-agnostic layer)
+  - The MCP server (\`aida mcp-serve\`) — the leading-candidate bus
+
+  ## Origin
+
+  2026-05-18: user shared details on Claude Code's experimental Agent Teams (shared-task-list multi-session coordination) + three transport options for cross-machine/cross-agent comms, with MCP-as-bus recommended as the cleanest fit for AIDA's architecture. Also raised: AIDA should support Codex and other agents, not just Claude — "utility in an independent platform." This SPIKE acts on the no-regret slice of that (agent-agnostic comms transport) while the platform repositioning stays a captured-but-deferred direction.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T05:40:33.591087796Z
+modified_at: 2026-05-19T05:40:33.591087796Z
+req_type: Spike
+tags:
+- agent-agnostic
+- evidence
+- from-ecosystem:agent-teams
+- inter-agent-comms
+- mcp
+- spike
+- transport
