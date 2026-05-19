@@ -1,0 +1,65 @@
+id: 019e40c0-367f-7073-bcee-19f4d38e6bc2
+spec_id: BUG-246
+agreed_id: BUG-246
+title: 'Windows: concurrent_writers_never_tear_the_file fails — reader hits transient ERROR_ACCESS_DENIED during atomic rename — blocks v0.8.0'
+description: |-
+  \`fs_atomic::tests::concurrent_writers_never_tear_the_file\` fails on \`windows-latest\` — the **second** Windows-only failure blocking v0.8.0. (BUG-244 was the first; its CRLF fix is now verified green in this same run.)
+
+  ## Evidence — cross-platform CI run 26104910790 (2026-05-19)
+
+  macOS: fully green. Windows: 249 passed, **1 failed** in \`aida-core --lib\`:
+
+      test fs_atomic::tests::concurrent_writers_never_tear_the_file ... FAILED
+      thread '<unnamed>' panicked at aida-core\src\fs_atomic.rs:117:68:
+        called `Result::unwrap()` on an `Err` value:
+        Os { code: 5, kind: PermissionDenied, message: "Access is denied." }
+      thread 'fs_atomic::tests::concurrent_writers_never_tear_the_file'
+        panicked at aida-core\src\fs_atomic.rs:145:23
+
+  \`fs_atomic.rs:117\` is the **reader thread's** \`std::fs::read_to_string(&*path).unwrap()\`. \`:145\` is \`reader.join().unwrap()\` — panicking because the reader already died.
+
+  ## Root cause — not a torn write
+
+  The reader never observed wrong *content* — the \`valid.contains(&observed)\` torn-write assertion (line 118) never fired. The panic is on the **open itself**: \`Os { code: 5 }\` = Windows \`ERROR_ACCESS_DENIED\`.
+
+  POSIX \`rename(2)\` is atomic — a concurrent \`open\` always sees old-or-new, never an error. Windows file replacement (\`MoveFileExW\`/\`ReplaceFileW\`) has a **transient window**: when the reader's \`CreateFile\` races a writer's atomic replace, the open briefly fails with \`ERROR_ACCESS_DENIED\` (or \`ERROR_FILE_NOT_FOUND\`). 8 writers × 60 rounds = 480 replaces against a spinning reader reliably hits it.
+
+  \`write_atomic\` itself is sound — every writer succeeded (no panic at line 135/142) and the property it guarantees (no *torn* file) holds. The test's reader just doesn't tolerate Windows's transient open errors.
+
+  ## Fix — test-side (unblocks the release)
+
+  The reader must distinguish two outcomes:
+
+  - read **errors** transiently (\`PermissionDenied\` code 5 / \`NotFound\` code 2) → the Windows rename-race window → **retry the read**, don't fail.
+  - read **succeeds with content not in \`valid\`** → a genuine torn write → fail, as today.
+
+  A small bounded retry loop around line 117 (retry on \`io::ErrorKind::PermissionDenied\`/\`NotFound\`, brief backoff, capped attempts) makes the test exercise the real property — *atomicity, not openability* — on all three platforms. No-op on Linux/macOS where those errors don't occur.
+
+  ## Acceptance
+
+  - [ ] Reader retries transient \`PermissionDenied\`/\`NotFound\` open errors; still hard-fails on out-of-set content (torn-write property preserved)
+  - [ ] \`concurrent_writers_never_tear_the_file\` passes on \`windows-latest\` — cross-platform CI run green
+  - [ ] Linux + macOS still pass (retry is a no-op there)
+  - [ ] No other Windows failures hide behind this one (verify the next full cross-platform run)
+  - [ ] Followup TASK filed (see below)
+
+  ## Followup — separate, not release-blocking
+
+  If AIDA has **production** read paths that read a file another process may be atomically replacing (object-store YAML, cache-adjacent files), those readers face the same transient \`ERROR_ACCESS_DENIED\` on Windows. Worth a \`read_atomic\` retry helper + an audit of concurrent read sites. File as a child TASK.
+
+  ## Origin
+
+  2026-05-19. v0.8.0 release blocked at the cross-platform CI gate (\`pre-release-check.sh\`). BUG-244 (CRLF) cleared the first Windows blocker; this is the second surfaced by the same gate. PR CI is Linux-only (TASK-257) so Windows-only failures only surface at release time — two in a row now.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T14:59:59.231766599Z
+modified_at: 2026-05-19T14:59:59.231766599Z
+req_type: Bug
+tags:
+- cross-platform
+- from-release-gate
+- fs-atomic
+- release-blocker
+- windows
