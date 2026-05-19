@@ -74,7 +74,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:18:06.878953098Z
-modified_at: 2026-05-17T02:23:08.892296202Z
+modified_at: 2026-05-19T05:33:29.429129010Z
 req_type: Task
 tags:
 - aida-worker
@@ -119,3 +119,21 @@ comments:
     So the watchdog is valuable for the current interactive flow AND the future headless flow.
   created_at: 2026-05-17T02:23:08.892296202Z
   modified_at: 2026-05-17T02:23:08.892296202Z
+- id: 019e3eb9-91d5-74a2-8275-e03c214e9ca1
+  author: joe
+  content: |-
+    Design refinement 2026-05-18 (fold into acceptance at pickup) — the directive channel is a control plane, and these constraints shape it:
+
+    1. SCOPE — the directive file (`.aida/worker.cmd` or similar) supports more than exit/pause/drain. It must support **queue-the-next-drain**: e.g. `drain batch:autonomy-modes --zen` appended while a current drain is mid-flight → the worker picks it up when the current drain ends. This is the concrete need: 'I want to call it quits for the night but the orchestrator is running and I can't chain the next batch.'
+
+    2. SEPARATE FROM THE WORK QUEUE — directives are imperative ('run X next', 'pause', 'stop'); the work queue holds declarative specs. Do NOT put directives in the queue — it muddies `aida queue list` (specs intermixed with directives). The directive channel is its own thing.
+
+    3. ORCHESTRATOR/WORKER-SCOPED, not all-roles — the long-running worker/orchestrator is what needs steering. Implementer/reviewer sessions are ephemeral (one spec then gone); they don't need a control inbox. Resist generalizing to a universal role-mailbox until evidence demands it.
+
+    4. VISIBLE — the load-bearing requirement. A buried sentinel-style file is a bad control channel *because you can't see it*. The directive channel MUST be inspectable: `aida worker directives` (or `aida orchestrator directives`) lists pending directives, and they surface in `aida status` / `aida drain status` (STORY-301). Separate channel from the work queue, but EQUAL visibility to it.
+
+    Acceptance additions when TASK-294 is picked up: directive file supports a queue-next-drain directive; a command lists pending directives; pending directives surface in status output.
+
+    Origin: 2026-05-18 user — 'once the orchestrator is running I am blocked from signalling other work… a control message in the queue for role orchestrator… or the sentinel system although that does not have the same visibility.' The synthesis: separate directive channel (not the work queue), orchestrator-scoped (not all-roles), but inspectable (the visibility the queue would have given).
+  created_at: 2026-05-19T05:33:29.429129010Z
+  modified_at: 2026-05-19T05:33:29.429129010Z
