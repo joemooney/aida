@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-19T14:13:34.397600939Z
+modified_at: 2026-05-19T14:13:42.150253509Z
 req_type: Story
 tags:
 - auto-complete
@@ -101,3 +101,8 @@ comments:
   content: 'Verified blocked (2026-05-19, implementer pickup): /aida-punt does not exist — no skill, command, or CLI subcommand. EPIC-28 STORY 3 (its home) is not filed as a spec. /aida-punt also needs a ''NeedsAttention'' status, which is not in the state machine. 4 of 6 acceptance criteria are punt-dependent. Prerequisite EPIC-28 STORY 3 must ship first.'
   created_at: 2026-05-19T14:13:34.397600939Z
   modified_at: 2026-05-19T14:13:34.397600939Z
+- id: 019e4095-d686-7a10-859a-c54f5238b45d
+  author: joe
+  content: 'BLOCKED 2026-05-19 — hard dependency on STORY-332 (/aida-punt + NeedsAttention lifecycle status), which was filed today after STORY-276''s implementer found the prerequisite dangling (named in STORY-276''s title, never a spec). STORY-276 cannot complete until STORY-332 ships: 4 of its 6 acceptance criteria require /aida-punt. The batch:autonomy-modes drain should skip STORY-276 — it is blocked, not workable. Sequence to unblock: STORY-332 → STORY-276 → STORY-306.'
+  created_at: 2026-05-19T14:13:42.150253509Z
+  modified_at: 2026-05-19T14:13:42.150253509Z
