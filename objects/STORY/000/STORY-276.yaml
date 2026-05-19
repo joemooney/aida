@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-17T18:50:50.974622451Z
+modified_at: 2026-05-19T14:13:34.397600939Z
 req_type: Story
 tags:
 - auto-complete
@@ -96,3 +96,8 @@ comments:
   content: 'STORY-286 (three-mode autonomy taxonomy) filed 2026-05-17 — depends on this STORY for the headless implementer that enables `--no-human` to actually cover phase 1. Until STORY-276 lands, `--no-human` design-fork punt behavior can''t execute (no headless implementer runtime to punt FROM). The two compose: STORY-276 makes phase 1 headless; STORY-286 makes it auto-resolve / punt correctly.'
   created_at: 2026-05-17T17:28:20.280676353Z
   modified_at: 2026-05-17T17:28:20.280676353Z
+- id: 019e4095-b83d-7de3-8bf0-b1ccb9282fbb
+  author: joe
+  content: 'Verified blocked (2026-05-19, implementer pickup): /aida-punt does not exist — no skill, command, or CLI subcommand. EPIC-28 STORY 3 (its home) is not filed as a spec. /aida-punt also needs a ''NeedsAttention'' status, which is not in the state machine. 4 of 6 acceptance criteria are punt-dependent. Prerequisite EPIC-28 STORY 3 must ship first.'
+  created_at: 2026-05-19T14:13:34.397600939Z
+  modified_at: 2026-05-19T14:13:34.397600939Z
