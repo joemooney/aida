@@ -635,3 +635,10 @@
   added_by: joe
   added_at: 2026-05-19T05:40:37.412432191Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e3ee6-1bbc-7652-a183-1560608d8ac4
+  position: 123000
+  added_by: joe
+  note: auto-queued by `session end` (019e3ecb); covers 1 spec
+  added_at: 2026-05-19T06:22:14.664233505Z
+  for_role: reviewer
