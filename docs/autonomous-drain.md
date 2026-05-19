@@ -39,9 +39,9 @@ Each rung is strictly more autonomy than the one above. Precedence is
 - **`--zen`** — you are watching the drain and want to stay in the loop on
   real decisions, but the mechanical "open PR? / merge? / grab next?"
   prompts are noise. You are still there to answer a design fork.
-- **`--no-human`** — nobody is watching (overnight, a long batch). Needs
-  the reviewer-headless cut below; the headless *implementer* and the
-  design-fork punt are tracked under STORY-276 / STORY-287's follow-up.
+- **`--no-human`** — nobody is watching (overnight, a long batch).
+  `--no-human=both` runs both Claude phases headless; the implementer punts a
+  design-fork to Needs Attention (STORY-276) rather than guess past it.
 
 `--zen` works today without any headless machinery — it is pure
 prompt-classification. Skill templates tag each prompt with a `kind:`
@@ -71,50 +71,55 @@ polling and grace windows are tunable via `AIDA_EXIT_POLL_MS` /
 `AIDA_EXIT_GRACE_MS`. Full protocol:
 `docs/aida-discipline/skill-prompt-kinds.md`.
 
-## What runs headless today
+## What runs headless
 
-This is a **reviewer-first cut**. Of the two Claude phases:
+Of the two Claude phases, `--no-human` runs one or both headless depending on
+the MODE:
 
-| Phase | `--no-human` behaviour |
-|-------|------------------------|
-| 1 — implementer | **Interactive** — unchanged. The headless implementer needs a design-pause→punt path and is tracked separately (STORY-276). |
-| 3 — reviewer | **Headless** — `/aida-review` runs `claude -p`, writes its verdict file, and exits. No Ctrl+D. |
+| Phase | `reviewer-only` | `both` |
+|-------|-----------------|--------|
+| 1 — implementer | **Interactive** — pauses for you at each phase-1 completion. | **Headless** — `/aida-pickup` runs `claude -p`; on a design-fork it cannot resolve it punts the spec to Needs Attention (STORY-276) instead of guessing. |
+| 3 — reviewer | **Headless** — `/aida-review` runs `claude -p`, writes its verdict file, and exits. No Ctrl+D. | **Headless** — same. |
 
-The reviewer is the safe phase to run headless: `/aida-review` already writes
-its verdict to a file the orchestrator reads (the `--auto-complete` handshake)
-and stops before any merge — the orchestrator owns phase 4. A headless
-reviewer just stops needing a keystroke.
+The reviewer was the safe phase to run headless first: `/aida-review` already
+writes its verdict to a file the orchestrator reads (the `--auto-complete`
+handshake) and stops before any merge — the orchestrator owns phase 4. The
+headless implementer (STORY-276) is the riskier phase, and its safety net is
+the **punt**: a headless implementer that hits a design-fork it cannot safely
+resolve runs `/aida-punt` rather than commit a silent wrong guess. The spec
+parks in Needs Attention, the orchestrator records the punt and advances to
+the next item, and the advisor triages it later (`aida findings list`).
 
 ### MODE selector
 
 - `--no-human` / `--no-human=reviewer-only` — headless reviewer; the
   implementer phase stays interactive. **Bare `--no-human` resolves here** —
-  the honest default of what the flag actually covers today (TASK-306).
-- `--no-human=both` — requests a fully headless drain, implementer included.
-  The headless implementer is not wired yet (STORY-276), so `--no-human=both`
-  is **rejected at kickoff** with a clear message until it lands. The flag
-  grammar will not change when the headless implementer ships — `both` just
-  stops erroring.
+  the conservative default (TASK-306). Use it when you want to review each
+  spec's implementation yourself but let the reviewer phase run unattended.
+- `--no-human=both` — fully headless drain, implementer included (STORY-276).
+  The implementer punts design-forks rather than guessing. Use it for an
+  unattended overnight drain of low-ambiguity work.
 
 `--unattended` and `--headless` are accepted as aliases of `--no-human`.
 
 ### Scope clarity at kickoff and in the statusline (TASK-306)
 
-`--no-human` names a bigger promise than it keeps today, so the
-reviewer-only scope is stated **loudly** in three places until the headless
-implementer lands:
+`--no-human` covers different ground per MODE, so the scope is stated
+**loudly** in three places:
 
 - **Pre-launch banner** — `aida queue work --auto-complete --no-human` prints
-  a scope banner (reviewer headless, implementer still interactive) and
-  requires a one-time acknowledgement before phase 1 launches. It shows once
-  per kickoff. Skip the prompt for an unattended run by exporting
-  `AIDA_NO_HUMAN_ACKNOWLEDGED=1`; a non-terminal stdin without it errors
-  rather than blocking on an unanswerable prompt.
+  a scope banner — for `reviewer-only`, that phase 1 stays interactive and the
+  drain pauses there; for `both`, that phase 1 runs headless with the
+  design-fork punt as its safety net — and requires a one-time
+  acknowledgement before launch. It shows once per kickoff. Skip the prompt
+  for an unattended run by exporting `AIDA_NO_HUMAN_ACKNOWLEDGED=1`; a
+  non-terminal stdin without it errors rather than blocking on an
+  unanswerable prompt.
 - **`--help` text** — `aida queue work --help` spells out the per-MODE scope.
 - **Statusline** — an interactive phase running inside an `--auto-complete`
   orchestrator shows `auto:N/6 <phase>`, the `no-human:<mode>` scope, and a
   loud `pause-here` cue, so a user who expected to walk away sees that
-  phase 1 still needs them.
+  phase 1 still needs them (`reviewer-only`).
 
 ### How the headless launch is configured
 
@@ -142,8 +147,10 @@ carries this (BUG-233):
 | `AIDA_AUTO_COMPLETE=1` | orchestrator → every phase child | "this session belongs to an `--auto-complete` run" — **not trusted on its own** |
 | `AIDA_AUTO_COMPLETE_TOKEN=<run-uuid>` | orchestrator → every phase child | the corroboration token: a per-run UUID naming a marker file |
 | `AIDA_AUTO_COMPLETE_PHASE=<1..6>` | orchestrator → each Claude-launching phase child (1 implementer, 3 reviewer) | the 1-based phase index, so the child's statusline can show `auto:N/6` (TASK-306) |
-| `AIDA_NO_HUMAN_MODE=<slug>` | orchestrator → phase children, when `--no-human` is set | the `--no-human` scope (`reviewer-only`), shown in the statusline (TASK-306) |
+| `AIDA_NO_HUMAN_MODE=<slug>` | orchestrator → phase children, when `--no-human` is set | the `--no-human` scope (`reviewer-only` / `both`), shown in the statusline (TASK-306) |
+| `AIDA_HEADLESS=1` | the headless `claude -p` launch → its session | "this Claude session is headless" — skills key findings-filing and the design-fork punt off it |
 | `AIDA_REVIEW_VERDICT_FILE=<path>` | orchestrator → reviewer child only | absolute path the reviewer writes its verdict JSON to |
+| `AIDA_PUNT_SIGNAL_FILE=<path>` | orchestrator → implementer child only | absolute path `aida punt` drops a signal file at, so the orchestrator detects a punt and parks the spec instead of reporting a phantom no-PR failure (STORY-276) |
 | `AIDA_EXIT_SENTINEL=<path>` | orchestrator → every phase child | file the skill `touch`es as its last action so the orchestrator reaps the idle REPL (TASK-329) |
 
 **Why a token, not a bare flag.** `AIDA_AUTO_COMPLETE=1` alone is
@@ -178,9 +185,10 @@ Good candidates:
 Use interactive (omit `--no-human`) for:
 
 - **Specs whose description mentions a design fork / open question.** A
-  headless Claude cannot pause to ask you — under `--no-human` it stops
-  cleanly with the work undone rather than guessing. Decide those at the
-  keyboard.
+  headless `--no-human=both` implementer will *punt* such a spec to Needs
+  Attention rather than guess — safe, but it spends a session and a punt to
+  reach a decision you could have made up front. Decide known-forky specs at
+  the keyboard; let the punt catch the forks you did not see coming.
 - **Anything where you want to shape the approach as it goes.**
 
 The trade-off is simple: **interactive = better decisions, autonomous =
@@ -210,13 +218,15 @@ after posting the consolidated PR comment, files each as a draft TASK tagged
 `from-review:PR-N,severity:<cosmetic|minor|major>`. Idempotent — a re-review
 of the same PR skips filing if `from-review:PR-N` TASKs already exist.
 
-**Implementer side (phase 1).** A headless implementer raises conversational
-flags at the end of a spec — a deviation from the acceptance criteria, a
-non-obvious design call, a pre-existing bug spotted in passing, a follow-up
-suggestion. `/aida-pickup` step 5b files each as a draft TASK tagged
+**Implementer side (phase 1).** A headless implementer (`--no-human=both`)
+raises conversational flags at the end of a spec — a deviation from the
+acceptance criteria, a non-obvious design call, a pre-existing bug spotted in
+passing, a follow-up suggestion. `/aida-pickup` step 5b files each as a draft
+TASK tagged
 `from-implementer:SPEC-ID,kind:<deviation|design-choice|bug-spotted|followup-suggestion>,severity:<level>`.
-Idempotent — keyed on the `from-implementer:SPEC-ID` tag. (This fires once
-the implementer phase itself runs headless — STORY-276.)
+Idempotent — keyed on the `from-implementer:SPEC-ID` tag. A *design-fork* the
+implementer cannot resolve is not a finding — it is a **punt** (`/aida-pickup`
+step 3d → `/aida-punt`), which parks the spec in Needs Attention.
 
 **Triage.** `aida findings list` shows pending findings grouped by source
 (*From review* / *From implementer*), then origin, severity-sorted;
@@ -231,10 +241,6 @@ tag), not a new requirement type.
 
 ## Limits of this cut
 
-- The implementer phase is not headless — `--no-human=both` is rejected at
-  kickoff until the headless implementer lands (STORY-276). Bare `--no-human`
-  is reviewer-only: phase 1 still runs interactively and the drain pauses
-  there for you.
 - There is no liveness watchdog yet: a genuinely stuck headless run is not
   auto-detected. The `stream-json` log is written so the watchdog can be
   added (TASK-298). Until then, treat a drain that has not progressed for a

@@ -354,6 +354,23 @@ pub(crate) struct HintContext {
     pub(crate) ci_run_id: Option<String>,
 }
 
+/// The outcome of phase 1 — the implementer session. The implementer either
+/// opens a PR (the normal path), or, under a headless `--no-human=both`
+/// drain, hits a design-fork it cannot safely resolve and invokes
+/// `/aida-punt`, which parks the spec in `NeedsAttention`. A punt is neither a
+/// failure (nothing broke) nor a ship (no PR), so it is a first-class third
+/// outcome of phase 1: the orchestrator stops the pipeline cleanly and a
+/// batch drain advances to the next member. trace:STORY-276 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ImplementerOutcome {
+    /// The implementer opened a PR — the pipeline continues to CI (phase 2).
+    PrOpened,
+    /// The implementer punted on a design-fork. `reason` is the one-line punt
+    /// summary (category + detail) surfaced in the run epilogue. The punt is
+    /// already durably recorded by `aida punt` (status flip + ledger).
+    Punted { reason: String },
+}
+
 /// Outcome of an [`orchestrate`] run — the process exit code plus the
 /// telemetry the caller needs to log the run and, on failure, auto-draft a
 /// BUG. Returning this instead of a bare `i32` keeps `orchestrate` pure: it
@@ -372,6 +389,10 @@ pub(crate) struct OrchestrationResult {
     pub(crate) phase_durations: Vec<(Phase, u128)>,
     /// Total wall time of the run, in milliseconds.
     pub(crate) total_ms: u128,
+    /// STORY-276: set when phase 1 punted — the one-line punt reason. The run
+    /// is *not* a failure (`exit_code` is `0`, `failed_phase` is `None`), so
+    /// this is the only field that distinguishes a punt from a clean ship.
+    pub(crate) punt_reason: Option<String>,
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -379,8 +400,11 @@ pub(crate) struct OrchestrationResult {
 /// and shells out to `gh` / `cargo`.
 /// trace:STORY-246 | ai:claude
 pub(crate) trait PhaseDriver {
-    /// Phase 1 — run the implementer Claude session and verify it opened a PR.
-    fn run_implementer(&mut self) -> Result<(), PhaseFailure>;
+    /// Phase 1 — run the implementer Claude session. Returns
+    /// [`ImplementerOutcome::PrOpened`] once a PR is verified, or
+    /// [`ImplementerOutcome::Punted`] when a headless implementer hit a
+    /// design-fork and punted the spec to `NeedsAttention` (STORY-276).
+    fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure>;
     /// Phase 2 — wait for CI to go terminal, then end the implementer session
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
@@ -645,6 +669,78 @@ fn finish_success(
         failure: None,
         phase_durations: durations,
         total_ms: elapsed,
+        punt_reason: None,
+    }
+}
+
+/// Print the punt epilogue and build a *non-failure* terminal
+/// [`OrchestrationResult`] (STORY-276). A headless implementer that hits a
+/// design-fork it cannot safely resolve invokes `/aida-punt`, parking the
+/// spec in `NeedsAttention`; phase 1 then ends without a PR. The pipeline
+/// stopping here is correct, not a failure — so the run exits `0` with no
+/// `failed_phase`, and a batch drain advances to the next member (the punted
+/// spec drops out of the queue on its own, `NeedsAttention` not being
+/// drivable). The punt itself is already durably recorded by `aida punt`
+/// (status flip + `.aida/punts.jsonl` ledger); `punt_reason` only carries it
+/// into the run epilogue and telemetry. trace:STORY-276 | ai:claude
+fn finish_punted(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+    reason: &str,
+) -> OrchestrationResult {
+    let elapsed = start.elapsed().as_millis();
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                Phase::Implementer.slug(),
+                "punted",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "punted",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+    } else {
+        eprintln!();
+        eprintln!(
+            "{} phase 1 (implementer session) punted: {}",
+            "⏸".yellow().bold(),
+            reason
+        );
+        eprintln!(
+            "  {} {}",
+            "→".dimmed(),
+            "the spec is parked in Needs Attention — triage it with `aida findings list`".cyan()
+        );
+        eprintln!();
+        eprintln!(
+            "{} {} punted ({}) — parked for advisor triage, drain continues",
+            "⏸".yellow().bold(),
+            spec.bold(),
+            fmt_duration(elapsed)
+        );
+    }
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: durations,
+        total_ms: elapsed,
+        punt_reason: Some(reason.to_string()),
     }
 }
 
@@ -707,6 +803,7 @@ fn finish_failure(
         failure: Some(failure.clone()),
         phase_durations: durations,
         total_ms: elapsed,
+        punt_reason: None,
     }
 }
 
@@ -771,6 +868,7 @@ fn finish_reconciled(
         failure: None,
         phase_durations: durations,
         total_ms: elapsed,
+        punt_reason: None,
     }
 }
 
@@ -829,20 +927,30 @@ pub(crate) fn orchestrate(
         );
     }
 
-    // Phase 1 — implementer session.
+    // Phase 1 — implementer session. Three outcomes: a PR was opened (run on),
+    // a genuine failure (reconcile then report), or a punt — a headless
+    // implementer hit a design-fork and parked the spec; the pipeline stops
+    // here cleanly, not as a failure. trace:STORY-276 | ai:claude
     emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
     let phase_start = Instant::now();
-    if let Err(f) = driver.run_implementer() {
-        durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-        return resolve_phase_failure(
-            driver,
-            Phase::Implementer,
-            spec,
-            json,
-            &start,
-            &f,
-            durations,
-        );
+    match driver.run_implementer() {
+        Err(f) => {
+            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+            return resolve_phase_failure(
+                driver,
+                Phase::Implementer,
+                spec,
+                json,
+                &start,
+                &f,
+                durations,
+            );
+        }
+        Ok(ImplementerOutcome::Punted { reason }) => {
+            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+            return finish_punted(spec, json, &start, durations, &reason);
+        }
+        Ok(ImplementerOutcome::PrOpened) => {}
     }
     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
     emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
@@ -968,6 +1076,11 @@ pub(crate) struct BatchDrainResult {
     /// Spec-ids that completed their full `--auto-complete` lifecycle, in
     /// drain order.
     pub(crate) shipped: Vec<String>,
+    /// STORY-276: spec-ids a headless implementer punted to `NeedsAttention`,
+    /// in drain order. Kept apart from `shipped` — a punt advances the drain
+    /// (the punted spec leaves the queue on its own) but it did *not* ship, so
+    /// the batch summary must not claim it did.
+    pub(crate) punted: Vec<String>,
     /// The spec the drain stopped on — set for `Failed` / `Stalled`, `None`
     /// for a clean `Drained` / `MaxReached`.
     pub(crate) stopped_at: Option<String>,
@@ -997,35 +1110,42 @@ pub(crate) trait BatchDriver {
 /// sequencing; the I/O lives in the [`BatchDriver`]. trace:TASK-285 | ai:claude
 pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> BatchDrainResult {
     let mut shipped: Vec<String> = Vec::new();
+    let mut punted: Vec<String> = Vec::new();
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
         let Some(head) = driver.next_head() else {
             return BatchDrainResult {
                 shipped,
+                punted,
                 stopped_at: None,
                 outcome: BatchDrainOutcome::Drained,
                 exit_code: 0,
             };
         };
+        // `--max` bounds how many members the drain *acts on* — shipped or
+        // punted, both consume a slot (each ran a full phase-1 attempt).
         if let Some(limit) = max {
-            if shipped.len() >= limit {
+            if shipped.len() + punted.len() >= limit {
                 return BatchDrainResult {
                     shipped,
+                    punted,
                     stopped_at: None,
                     outcome: BatchDrainOutcome::MaxReached,
                     exit_code: 0,
                 };
             }
         }
-        // A spec we already shipped resurfacing as the head means the queue
+        // A spec we already acted on resurfacing as the head means the queue
         // did not advance — its run reported success but it never left the
         // queue, so it was not really shipped. Drop it from `shipped` and
-        // stop rather than loop forever on it.
+        // stop rather than loop forever on it. (A punted spec leaves the
+        // queue via `NeedsAttention`, so it cannot resurface this way.)
         if shipped.iter().any(|s| s == &head) {
             shipped.retain(|s| s != &head);
             return BatchDrainResult {
                 shipped,
+                punted,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Stalled,
                 exit_code: 1,
@@ -1036,12 +1156,19 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
             let phase = result.failed_phase.unwrap_or(Phase::Implementer);
             return BatchDrainResult {
                 shipped,
+                punted,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Failed(phase),
                 exit_code: result.exit_code,
             };
         }
-        shipped.push(head);
+        // STORY-276: a punt is a clean exit (`exit_code` 0) — the drain
+        // advances — but the spec parked, it did not ship. Sort it accordingly.
+        if result.punt_reason.is_some() {
+            punted.push(head);
+        } else {
+            shipped.push(head);
+        }
     }
 }
 
@@ -1060,6 +1187,10 @@ mod tests {
         /// BUG-241: what [`PhaseDriver::reconcile_failure`] returns. Defaults
         /// to `GenuineFailure` so every pre-BUG-241 failure test is unchanged.
         reconcile: PhaseReconcile,
+        /// STORY-276: when `Some`, `run_implementer` returns
+        /// [`ImplementerOutcome::Punted`] with this reason instead of opening
+        /// a PR — the headless-implementer design-fork punt.
+        punt: Option<String>,
     }
 
     impl MockPhaseDriver {
@@ -1069,6 +1200,7 @@ mod tests {
                 fail_at: None,
                 verdict: Verdict::Approved,
                 reconcile: PhaseReconcile::GenuineFailure,
+                punt: None,
             }
         }
 
@@ -1078,6 +1210,7 @@ mod tests {
                 fail_at: Some(phase),
                 verdict: Verdict::Approved,
                 reconcile: PhaseReconcile::GenuineFailure,
+                punt: None,
             }
         }
 
@@ -1087,6 +1220,19 @@ mod tests {
                 fail_at: None,
                 verdict,
                 reconcile: PhaseReconcile::GenuineFailure,
+                punt: None,
+            }
+        }
+
+        /// STORY-276: make `run_implementer` punt — phase 1 returns
+        /// [`ImplementerOutcome::Punted`] with `reason`.
+        fn punting_at_implementer(reason: &str) -> Self {
+            Self {
+                calls: Vec::new(),
+                fail_at: None,
+                verdict: Verdict::Approved,
+                reconcile: PhaseReconcile::GenuineFailure,
+                punt: Some(reason.to_string()),
             }
         }
 
@@ -1109,8 +1255,14 @@ mod tests {
     }
 
     impl PhaseDriver for MockPhaseDriver {
-        fn run_implementer(&mut self) -> Result<(), PhaseFailure> {
-            self.record(Phase::Implementer)
+        fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure> {
+            self.record(Phase::Implementer)?;
+            match &self.punt {
+                Some(reason) => Ok(ImplementerOutcome::Punted {
+                    reason: reason.clone(),
+                }),
+                None => Ok(ImplementerOutcome::PrOpened),
+            }
         }
         fn finish_ci(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Ci)
@@ -1160,6 +1312,28 @@ mod tests {
                 Phase::Build,
             ]
         );
+    }
+
+    /// STORY-276 acceptance: a headless implementer that hits a design-fork
+    /// punts rather than guessing. `orchestrate` stops cleanly after phase 1 —
+    /// no CI / review / merge runs — exits `0`, and the result carries the
+    /// punt reason so the run is not mistaken for a clean ship.
+    #[test]
+    fn orchestrate_punt_at_implementer_stops_clean() {
+        let mut driver = MockPhaseDriver::punting_at_implementer(
+            "two valid auth flows — the spec does not say which",
+        );
+        let result = orchestrate(&mut driver, "STORY-276", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 0, "a punt is a clean exit, not a failure");
+        assert_eq!(result.failed_phase, None);
+        assert!(result.failure.is_none());
+        assert_eq!(
+            result.punt_reason.as_deref(),
+            Some("two valid auth flows — the spec does not say which"),
+            "the punt reason is what distinguishes a punt from a clean ship",
+        );
+        // The pipeline stopped dead at phase 1 — no CI, review, or merge ran.
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
 
     // --- Variant gating ---------------------------------------------------
@@ -1865,6 +2039,7 @@ mod tests {
             failure: None,
             phase_durations: Vec::new(),
             total_ms: 0,
+            punt_reason: None,
         }
     }
 
@@ -1875,6 +2050,20 @@ mod tests {
             failure: Some(PhaseFailure::new(format!("mock failure at {phase:?}"))),
             phase_durations: Vec::new(),
             total_ms: 0,
+            punt_reason: None,
+        }
+    }
+
+    /// STORY-276: a punt [`OrchestrationResult`] — exit `0`, no `failed_phase`,
+    /// `punt_reason` set. The shape `finish_punted` returns.
+    fn punt_result() -> OrchestrationResult {
+        OrchestrationResult {
+            exit_code: 0,
+            failed_phase: None,
+            failure: None,
+            phase_durations: Vec::new(),
+            total_ms: 0,
+            punt_reason: Some("mock punt: design-fork".to_string()),
         }
     }
 
@@ -1882,11 +2071,13 @@ mod tests {
     /// the head on success (mirroring a real completed spec leaving the
     /// queue); a `fail_at` spec returns a failure result *without* consuming
     /// the head; a `stall` spec succeeds but is left at the head (the
-    /// non-advancing-queue case).
+    /// non-advancing-queue case); a `punt` spec returns a punt result and —
+    /// like a real `NeedsAttention` punt — leaves the queue.
     struct MockBatchDriver {
         heads: Vec<String>,
         fail_at: Option<(String, Phase)>,
         stall_spec: Option<String>,
+        punt_spec: Option<String>,
         runs: Vec<String>,
     }
 
@@ -1896,6 +2087,7 @@ mod tests {
                 heads: heads.iter().map(|s| s.to_string()).collect(),
                 fail_at: None,
                 stall_spec: None,
+                punt_spec: None,
                 runs: Vec::new(),
             }
         }
@@ -1907,6 +2099,11 @@ mod tests {
 
         fn stalling(mut self, spec: &str) -> Self {
             self.stall_spec = Some(spec.to_string());
+            self
+        }
+
+        fn punting(mut self, spec: &str) -> Self {
+            self.punt_spec = Some(spec.to_string());
             self
         }
     }
@@ -1927,6 +2124,12 @@ mod tests {
             if self.stall_spec.as_deref() == Some(spec) {
                 // "Success" but the head is intentionally not consumed.
                 return ok_result();
+            }
+            if self.punt_spec.as_deref() == Some(spec) {
+                // A punt parks the spec in NeedsAttention — it leaves the
+                // queue, exactly like a shipped spec, so the drain advances.
+                self.heads.retain(|h| h != spec);
+                return punt_result();
             }
             // Normal success — the completed spec leaves the queue.
             self.heads.retain(|h| h != spec);
@@ -2005,6 +2208,21 @@ mod tests {
         assert_eq!(result.exit_code, 0);
         assert_eq!(result.outcome, BatchDrainOutcome::Drained);
         assert!(result.shipped.is_empty());
+    }
+
+    /// STORY-276: a punted member advances the drain — it leaves the queue
+    /// (`NeedsAttention`), so the batch keeps going — but it lands in `punted`,
+    /// not `shipped`, so the summary does not claim a parked spec shipped.
+    #[test]
+    fn drain_batch_punted_member_advances_the_drain() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]).punting("TASK-2");
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 0, "a punt does not fail the drain");
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-3"]);
+        assert_eq!(result.punted, vec!["TASK-2"]);
+        // Every member ran — the punt did not stall or short-circuit the drain.
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
     }
 
     /// A "successful" run that leaves the head in place is caught by the

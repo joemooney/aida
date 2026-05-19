@@ -2630,22 +2630,22 @@ pub enum QueueCommand {
         #[clap(long, value_name = "N", requires = "auto_complete")]
         max: Option<usize>,
         /// Run `--auto-complete` phases headless (`claude -p`) so the drain
-        /// needs no Ctrl+D. Scope is reviewer-only today.
+        /// needs no Ctrl+D.
         ///
         /// reviewer-only (default, also bare `--no-human`): phase 3
         /// (reviewer) runs headless; phase 1 (implementer) stays interactive
-        /// and the drain PAUSES there for you. This is all the flag covers
-        /// right now.
+        /// and the drain PAUSES there for you.
         ///
-        /// both: full headless drain, implementer included — NOT available
-        /// yet; `--no-human=both` errors until the headless implementer
-        /// ships.
+        /// both: full headless drain, implementer included. On a design-fork
+        /// it cannot safely resolve the implementer punts the spec to Needs
+        /// Attention rather than guessing — triage punts with
+        /// `aida findings list`.
         ///
         /// Headless sessions force `--permission-mode bypassPermissions` and
         /// log JSON output under `.aida/headless-logs/`. Aliases:
         /// `--unattended`, `--headless`.
-        // trace:STORY-263, TASK-306 | ai:claude — plain `//` so the marker
-        // stays out of `--help` output (TASK-268 user-facing-text convention).
+        // trace:STORY-263, TASK-306, STORY-276 | ai:claude — plain `//` so the
+        // marker stays out of `--help` (TASK-268 user-facing-text convention).
         #[clap(
             long,
             value_name = "MODE",
