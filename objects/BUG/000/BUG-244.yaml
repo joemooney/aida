@@ -41,12 +41,12 @@ description: |-
   ## Origin
 
   2026-05-19: \`make release-minor\` for v0.8.0. With BUG-111 fixed, release.sh now bumps cleanly and reaches its cross-platform-CI gate — which caught 2 Windows test failures in STORY-255's memory-pack code (CRLF). The gate refused to tag. The machinery is working; this is a real Windows regression to fix before v0.8.0 ships.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T05:54:47.198693550Z
-modified_at: 2026-05-19T05:54:47.198693550Z
+modified_at: 2026-05-19T14:13:37.406598650Z
 req_type: Bug
 tags:
 - crlf
