@@ -33800,9 +33800,13 @@ mod queue_work_tests {
         let msg = format_queue_work_not_queued_error("STORY-86", &r, Some("implementer"));
         assert!(msg.contains("Done"), "msg: {msg}");
         assert!(
-            msg.contains("aida queue rework STORY-86 --work --resume"),
+            msg.contains("aida queue rework STORY-86 --work"),
             "msg: {msg}"
         );
+        // BUG-236: the suggestion must run verbatim for any Done spec, so
+        // it stays `--work` (fresh session) — never `--work --resume`,
+        // which bounces when the spec has no recorded claude session.
+        assert!(!msg.contains("--resume"), "msg: {msg}");
         assert!(msg.contains("auto-bump"), "msg: {msg}");
     }
 
@@ -44309,20 +44313,10 @@ fn handle_queue_rework(
     no_pull: bool,
     user: Option<&str>,
 ) -> Result<()> {
-    // TASK-112's "resume claude session" feature has not yet shipped.
-    // Refuse `--resume` until it does so the flag is documented +
-    // discoverable, but doesn't silently no-op.
-    if resume && !work {
-        // --resume implies --work in the spec; allow the implicit chain
-        // rather than error.
-    }
-    if resume {
-        anyhow::bail!(
-            "--resume requires TASK-112 (`aida queue work --resume`) to be \
-             shipped; that feature is not yet available. Re-run without \
-             --resume, or track TASK-112 for status."
-        );
-    }
+    // `--resume` chains through to `aida queue work --resume` (TASK-112,
+    // shipped). It implies `--work` — there is nothing to resume without
+    // launching a session. trace:BUG-236 | ai:claude
+    let work = work || resume;
 
     let user_id = current_user_id(user);
     let store = storage.load()?;
@@ -44475,7 +44469,10 @@ fn handle_queue_rework(
             /* branch_override */ None,
             /* path_override */ None,
             steal,
-            /* resume */ None,
+            // Bare `--resume` → resume the scope's most recent recorded
+            // claude session (`resolve_queue_work_launch` fails clean when
+            // there is none). trace:BUG-236 | ai:claude
+            if resume { Some("") } else { None },
             /* fresh */ false,
             /* list_sessions */ false,
             /* session_id */ None,
@@ -44912,9 +44909,13 @@ fn format_queue_work_not_queued_error(
              The lease may have been lost. Inspect with `aida queue list --all`.\n  \
              To re-queue: `aida queue add {display_id} --for {role_display}`"
         ),
+        // The suggested command must run verbatim for *any* Done spec —
+        // including one with no recorded claude session — so it stays
+        // `--work` (a fresh session), not `--work --resume` (which needs a
+        // prior session and bounces when there isn't one). trace:BUG-236
         RequirementStatus::Done => format!(
             "`{display_id}` isn't queued. Status is Done (work finished on a branch).\n  \
-             If review found issues and more commits are needed: `aida queue rework {display_id} --work --resume`\n  \
+             If review found issues and more commits are needed: `aida queue rework {display_id} --work`\n  \
              If just waiting for merge: nothing to do — auto-bump fires when the PR merges."
         ),
         RequirementStatus::Completed => format!(
