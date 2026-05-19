@@ -434,10 +434,15 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
             );
         }
         FailureKind::Internal => {
+            // `aida queue rework --work` re-picks the spec up regardless of
+            // its current status (Approved/InProgress/Done all resolve via
+            // the rework smart-status table), so it is the one verb that
+            // works whichever phase the internal error struck in.
+            // trace:BUG-236 | ai:claude
             return format!(
                 "This is an orchestrator bug, not something you did — please file it \
                  (`aida add --type bug --title 'auto-complete phase {} internal error'`). \
-                 Meanwhile, drive the remaining phases by hand from `aida queue work {spec}`.",
+                 Meanwhile, pick the spec back up by hand: `aida queue rework {spec} --work`.",
                 phase.index()
             );
         }
@@ -500,9 +505,13 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
             "The reviewer session ended without a usable verdict — re-run the review: \
              `aida queue work PR-{pr} --steal`"
         ),
+        // By phase 3 the spec is Done — the implementer opened the PR in
+        // phase 1, so `aida queue work` (queued items only) would reject
+        // it. `aida queue rework` is the verb that re-opens a Done spec.
+        // trace:BUG-236 | ai:claude
         (Phase::Reviewer, _) => format!(
             "Address the review feedback, then push fixups: \
-             `aida queue work {spec} --branch {branch} --steal`"
+             `aida queue rework {spec} --work`"
         ),
 
         (Phase::Merge, FailureKind::MissingTool) => {
@@ -1141,16 +1150,60 @@ mod tests {
         assert!(hint.contains("aida queue work TASK-247 --resume 019e2f423e7c"));
     }
 
+    /// BUG-236: by phase 3 the spec is Done (the implementer opened the PR
+    /// in phase 1), so the recovery hint must use `aida queue rework`, the
+    /// verb that re-opens a Done spec — never `aida queue work`, which
+    /// operates on queued items only and would bounce.
     #[test]
-    fn recovery_hint_reviewer_failed_names_steal() {
+    fn recovery_hint_reviewer_failed_names_rework_verb() {
         let hint = recovery_hint(Phase::Reviewer, FailureKind::Failed, &ctx());
-        assert!(hint.contains("aida queue work TASK-247 --branch task-247 --steal"));
+        assert!(
+            hint.contains("aida queue rework TASK-247 --work"),
+            "hint: {hint}"
+        );
+        assert!(
+            !hint.contains("aida queue work TASK-247"),
+            "phase-3 hint must not route a Done spec through `queue work`: {hint}"
+        );
     }
 
     #[test]
     fn recovery_hint_merge_failed_names_pr_view() {
         let hint = recovery_hint(Phase::Merge, FailureKind::Failed, &ctx());
         assert!(hint.contains("gh pr view 46"));
+    }
+
+    /// BUG-236 regression guard: by phase 3 the spec is Done (the
+    /// implementer opened the PR in phase 1), and `aida queue work`
+    /// operates on queued items only — so no phase-3+ recovery hint, for
+    /// any failure kind, may route the spec through `aida queue work
+    /// <SPEC>`. The `aida queue work PR-N` form is fine (a PR review is
+    /// status-independent); only the bare-spec form bounces. This test
+    /// fails against the pre-fix `(Phase::Reviewer, _)` and `Internal`
+    /// hints, which both did exactly that.
+    #[test]
+    fn recovery_hints_never_route_done_spec_through_queue_work() {
+        let kinds = [
+            FailureKind::Spawn,
+            FailureKind::MissingTool,
+            FailureKind::Internal,
+            FailureKind::NoPr,
+            FailureKind::CiRed,
+            FailureKind::CiTimeout,
+            FailureKind::NoVerdict,
+            FailureKind::Failed,
+        ];
+        for phase in [Phase::Reviewer, Phase::Merge, Phase::Pull, Phase::Build] {
+            for kind in kinds {
+                let hint = recovery_hint(phase, kind, &ctx());
+                // `ctx()` uses spec TASK-247 — the bare-spec `queue work`
+                // form is the bounce; `queue work PR-46` is allowed.
+                assert!(
+                    !hint.contains("aida queue work TASK-247"),
+                    "{phase:?}/{kind:?} routes the Done spec through `aida queue work`: {hint}"
+                );
+            }
+        }
     }
 
     #[test]

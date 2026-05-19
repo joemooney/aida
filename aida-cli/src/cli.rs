@@ -2755,8 +2755,8 @@ pub enum QueueCommand {
         #[clap(long)]
         reason: Option<String>,
         /// Chain `aida queue work --resume` to resume a prior claude
-        /// session for this spec. Requires TASK-112; errors with a hint
-        /// until that ships. Implies `--work`.
+        /// session for this spec instead of cold-launching. Implies
+        /// `--work`.
         #[clap(long)]
         resume: bool,
         /// Bypass the TASK-45 terminal-status guard (Completed/Rejected)
