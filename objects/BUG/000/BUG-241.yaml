@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:47:22.190733508Z
-modified_at: 2026-05-19T04:01:54.192320805Z
+modified_at: 2026-05-19T04:12:43.022888581Z
 req_type: Bug
 tags:
 - auto-complete
@@ -83,3 +83,8 @@ comments:
     BUG-241's acceptance is hereby items 1,2,3,6,7. The reviewer reviews BUG-241's PR against those five. This amendment is binding for the in-flight implementation (synchronous design-checkpoint resolution — the implementer asked, this is the answer).
   created_at: 2026-05-19T04:01:54.192320805Z
   modified_at: 2026-05-19T04:01:54.192320805Z
+- id: 019e3e6f-9e8e-7333-a095-2a337face1e4
+  author: joe
+  content: 'Scope (implementer, 2026-05-19): this PR ships the phase-agnostic reconcile step only — items 1,2,3,6,7. orchestrate() now routes every phase failure through PhaseDriver::reconcile_failure before declaring a failure; RealPhaseDriver checks ground truth (a merged PR via gh, the spec''s status in the git store) and reports ShippedOutOfBand when reality shows the spec shipped. This independently fixes both verified instances: A (phase-3 out-of-band merge) and B (phase-1 no-work spec). Items 4-5 (the escalation handshake — reviewer writes a verdict file on escalation; orchestrator''s first-class escalated-to-human outcome) were folded into STORY-306''s acceptance criteria, not filed as a standalone TASK — they are STORY-306''s escalation mechanism and belong with its A/B/C calibration + punt-channel design. Reconcile gates by phase (1 and 3 only): phases 2/4/5/6 fail by a gate or command genuinely not passing, so reconciling them would mask real failures.'
+  created_at: 2026-05-19T04:12:43.022888581Z
+  modified_at: 2026-05-19T04:12:43.022888581Z
