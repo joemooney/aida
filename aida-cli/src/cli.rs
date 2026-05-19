@@ -2804,10 +2804,15 @@ pub enum FindingsCommand {
         id: String,
     },
 
-    /// Promote a finding — sets status Approved so it joins the work queue.
+    /// Promote a finding — sets status Approved and adds it to a work queue.
     Promote {
         /// The finding's ID (UUID or SPEC-ID).
         id: String,
+
+        /// Route the promoted finding to this role's work queue. Defaults
+        /// to `implementer` — a promoted finding is implementation work.
+        #[clap(long = "for", value_name = "ROLE")]
+        r#for: Option<String>,
     },
 }
 

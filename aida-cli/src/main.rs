@@ -977,7 +977,7 @@ fn handle_findings_command(
             println!("Dismissed finding {id} — status → Rejected.");
         }
 
-        FindingsCommand::Promote { id } => {
+        FindingsCommand::Promote { id, r#for } => {
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -989,13 +989,71 @@ fn handle_findings_command(
                      Use `aida edit {id} --status approved` for a general status change."
                 );
             }
+
+            // Add the finding to a work queue BEFORE flipping its status.
+            // The old path printed "joins the work queue" but never called
+            // `queue add` — a finding ended up Approved and in no queue, a
+            // silent half-success. Queueing first means a queue failure
+            // exits non-zero with the finding still draft (cleanly retryable),
+            // and the success message names the role it routed to.
+            // trace:BUG-231 | ai:claude
+            let display_id = req.spec_id.as_deref().unwrap_or(id.as_str());
+            let role = queue_promoted_finding(store_path, req.id, display_id, r#for.as_deref())?;
+            record_role_activity(display_id, "queue-add");
+
             req.status = RequirementStatus::Approved;
             req.modified_at = chrono::Utc::now();
             backend.update_requirement(&req)?;
-            println!("Promoted finding {id} — status → Approved, joins the work queue.");
+            println!("Promoted finding {id} — status → Approved, queued for {role}.");
         }
     }
     Ok(())
+}
+
+/// Add a promoted review finding to a role's work queue.
+///
+/// Findings are review follow-ups that need an implementer, so the default
+/// route is the `implementer` queue; `for_override` (the `--for` flag) picks
+/// a different role. Returns the role it routed to so the caller can name it
+/// in the success message.
+///
+/// Kept separate from the status flip in `FindingsCommand::Promote` so a
+/// queue-add failure surfaces as a non-zero exit *before* the finding is
+/// marked Approved — BUG-231 was a silent "Approved but in no queue"
+/// half-state because the old promote path flipped status and printed
+/// "joins the work queue" without ever calling `queue add`.
+/// trace:BUG-231 | ai:claude
+fn queue_promoted_finding(
+    store_path: &std::path::Path,
+    requirement_id: Uuid,
+    display_id: &str,
+    for_override: Option<&str>,
+) -> Result<String> {
+    let role = for_override.unwrap_or("implementer").to_string();
+    let user_id = current_user_id(None);
+    let storage = Storage::new(store_path);
+    let entry = aida_core::QueueEntry {
+        user_id: user_id.clone(),
+        requirement_id,
+        // i64::MAX is the "append to bottom" sentinel the git backend
+        // resolves to max_position + 1000 (STORY-72).
+        position: i64::MAX,
+        added_by: user_id,
+        note: Some(format!(
+            "Promoted from review finding {display_id} via `aida findings promote`"
+        )),
+        added_at: chrono::Utc::now(),
+        for_role: Some(role.clone()),
+        for_scope: None,
+        for_session: None,
+    };
+    storage.queue_add(entry).with_context(|| {
+        format!(
+            "failed to add {display_id} to the {role} queue — \
+             finding left at draft, not promoted"
+        )
+    })?;
+    Ok(role)
 }
 
 // trace:TASK-0001 | ai:claude:high
@@ -20939,6 +20997,89 @@ mod bug_87_queue_filter_tests {
             .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
             .collect();
         assert_eq!(kept, vec![Some("implementer"), Some("implementer")]);
+    }
+}
+
+/// BUG-231: `aida findings promote` flipped status to Approved and printed
+/// "joins the work queue" but never called `queue add` — the finding ended
+/// up Approved and in no queue (a silent half-success). These cover the
+/// fixed `queue_promoted_finding` helper: it routes to a real queue, honors
+/// `--for`, and surfaces a queue-add failure as an error.
+#[cfg(test)]
+mod bug_231_findings_promote_tests {
+    use super::*;
+
+    /// Seed a git-canonical store at `root` with one finding requirement;
+    /// returns the requirement's UUID.
+    fn seed_finding(root: &std::path::Path, spec_id: &str) -> Uuid {
+        let backend = aida_core::GitBackend::new(root).unwrap();
+        let mut store = RequirementsStore::new();
+        let mut finding = Requirement::new("Review finding".into(), "A finding from review".into());
+        finding.spec_id = Some(spec_id.to_string());
+        let id = finding.id;
+        store.requirements.push(finding);
+        backend.save(&store).unwrap();
+        id
+    }
+
+    /// A promoted finding lands in the `implementer` queue by default, and
+    /// `queue_list` (the consumer side) sees it. trace:BUG-231
+    #[test]
+    fn promote_routes_to_implementer_queue_by_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let fid = seed_finding(&root, "TASK-900");
+
+        let role = queue_promoted_finding(&root, fid, "TASK-900", None).unwrap();
+        assert_eq!(role, "implementer");
+
+        let user_id = current_user_id(None);
+        let entries = Storage::new(&root).queue_list(&user_id, false).unwrap();
+        let entry = entries
+            .iter()
+            .find(|e| e.requirement_id == fid)
+            .expect("promoted finding must be present in the queue");
+        assert_eq!(entry.for_role.as_deref(), Some("implementer"));
+    }
+
+    /// `--for <role>` overrides the default queue route. trace:BUG-231
+    #[test]
+    fn promote_honors_for_override() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let fid = seed_finding(&root, "TASK-901");
+
+        let role = queue_promoted_finding(&root, fid, "TASK-901", Some("reviewer")).unwrap();
+        assert_eq!(role, "reviewer");
+
+        let user_id = current_user_id(None);
+        let entries = Storage::new(&root).queue_list(&user_id, false).unwrap();
+        let entry = entries
+            .iter()
+            .find(|e| e.requirement_id == fid)
+            .expect("promoted finding must be present in the queue");
+        assert_eq!(entry.for_role.as_deref(), Some("reviewer"));
+    }
+
+    /// Failure injection: pointing the store at a path that is neither a
+    /// git directory nor a SQLite file makes `Storage::queue_backend` bail.
+    /// The error must propagate (non-zero exit) instead of a silent success,
+    /// and name the route + the not-promoted outcome. trace:BUG-231
+    #[test]
+    fn promote_surfaces_queue_add_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        // A plain file (no `.db`/`.sqlite` extension, not a directory) —
+        // `queue_backend()` refuses it.
+        let bogus = dir.path().join("not-a-store");
+        std::fs::write(&bogus, b"not a store").unwrap();
+
+        let err = queue_promoted_finding(&bogus, Uuid::now_v7(), "TASK-902", None)
+            .expect_err("queue-add against a non-store path must fail");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("not promoted") && msg.contains("implementer"),
+            "error must name the failed route and the not-promoted outcome: {msg}"
+        );
     }
 }
 
