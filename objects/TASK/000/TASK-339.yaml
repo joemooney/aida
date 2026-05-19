@@ -1,0 +1,66 @@
+id: 019e3e00-f3ab-77b2-8dd2-78deb8c8f56b
+spec_id: TASK-339
+agreed_id: TASK-339
+title: docs/architecture/autonomy-and-escalation.md — the autonomy modes, escalation cascade, and inter-agent communication architecture
+description: |-
+  AIDA's autonomous-collaboration architecture — the autonomy modes, the implementer→advisor→human escalation cascade, the advisor's resolve-vs-escalate calibration, the inter-agent communication channel — is **fundamental architecture** that anyone (human or agent) understanding AIDA needs. Right now it's scattered across STORY-287, STORY-306, BUG-233/237/241, and a long advisor-session conversation. It needs one canonical architecture doc.
+
+  ## Deliverable
+
+  \`docs/architecture/autonomy-and-escalation.md\` (create \`docs/architecture/\` if absent), referenced from \`OVERVIEW.md\`. A dedicated doc, not bloat in OVERVIEW.md — but OVERVIEW.md must point at it.
+
+  ## Content
+
+  1. **The three-mode autonomy taxonomy** (STORY-287) — default / --zen / --no-human; the two orthogonal axes (human present? what to ask?); mechanical-confirmation vs design-fork classification.
+  2. **The escalation cascade** — implementer/reviewer → advisor → human. Each tier resolves what it can, escalates what it can't. (STORY-306.)
+  3. **The advisor's resolve-vs-escalate calibration** — the Type A / Type B / Type C model:
+     - A: answer follows from a recorded principle (discipline corpus, graph, lifecycle)
+     - B: answer needs a recorded user preference/intent
+     - C: answer needs synthesized in-flight context (the working model of a loaded session)
+     The advisor resolves A (and recorded-B); escalates un-recorded-B and C. Conservative-escalation bias: when in doubt, escalate — over-resolving produces confident-but-wrong autonomous decisions.
+  4. **The corpus-growth feedback loop** — every escalated answer recorded → converts future Type-B/C into Type-A → escalation rate decays over time. This is *why* autonomous operation improves with use, not just with bug-fixes.
+  5. **Inter-agent communication infrastructure** — file-based async handshakes (the proven AIDA pattern: verdict files, findings files, exit sentinel, drain-state file). The punt channel (punt-request/punt-response). The orchestrator as mediator.
+  6. **The recipient question** — fresh advisor + rich payload (v1) vs persistent advisor session (v2) vs reinstantiation (v3); the evidence-first staging.
+  7. **Honest open questions** — name what's unsolved (the v1-vs-v2 recipient question, calibration reliability) rather than presenting a finished design.
+
+  ## Acceptance
+
+  - [ ] \`docs/architecture/autonomy-and-escalation.md\` written, covering sections 1–7
+  - [ ] Referenced from \`OVERVIEW.md\` (and CLAUDE.md's architecture pointers)
+  - [ ] Honest about what is shipped vs designed vs open — a reader can tell which parts are real today (--zen, the sentinel) vs planned (STORY-306 escalation tier) vs unsolved (the recipient question)
+  - [ ] Diagram: the escalation cascade + the file-based comms channel
+  - [ ] Living-doc header — this architecture is still evolving; dated, with a note that STORY-306 et al. may change it
+  - [ ] Written for the dual audience: a human evaluating AIDA's architecture, and an agent that needs to understand the model it operates within
+
+  ## Out of scope
+
+  - **The store/graph architecture** — that's EPIC-1-001 / existing architecture docs; this doc is specifically the autonomy + escalation + comms layer
+  - **Implementation detail** — this is the architecture/why, not the code walkthrough
+
+  ## Composes with
+
+  - **STORY-287** (three-mode taxonomy — section 1)
+  - **STORY-306** (escalation tier + the A/B/C calibration + inter-agent comms — sections 2–6; this doc is STORY-306's architecture narrative)
+  - **STORY-316** (/aida-recover — the advisor's diagnostic playbook; sibling advisor-tooling)
+  - **STORY-318** (ecosystem review — keeps the architecture doc honest as the ecosystem moves)
+  - \`feedback_three_mode_autonomy_taxonomy.md\`, \`feedback_dialog_role_responsibilities.md\`
+  - \`OVERVIEW.md\` (the parent doc this is referenced from)
+
+  ## Origin
+
+  2026-05-18 user: *"we need to capture this topic in our documentation — it is part of the fundamental architecture that others will want to understand."* Said while working through the punt/escalation design (STORY-306) and the inter-agent-communication challenge. The advisor-escalation model is being designed in conversation + specs; this doc is where it becomes canonically understandable.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T02:11:50.315618425Z
+modified_at: 2026-05-19T02:11:50.315618425Z
+req_type: Task
+tags:
+- architecture
+- autonomy
+- documentation
+- escalation
+- fundamental
+- inter-agent-comms
+- onboarding
