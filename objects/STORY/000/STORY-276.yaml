@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-19T17:36:13.711341637Z
+modified_at: 2026-05-19T17:37:46.803217975Z
 req_type: Story
 tags:
 - auto-complete
@@ -124,6 +124,19 @@ comments:
     Acceptance bullets 5-6 (real headless Claude punts / ships) are verified manually SPIKE-7-style (~$3/run real API spend, CI can't run them); automated tests cover the orchestrator's handling of a punt with a mock.
   created_at: 2026-05-19T17:16:42.867726962Z
   modified_at: 2026-05-19T17:16:42.867726962Z
+- id: 019e4150-ad33-7203-9a25-f74d1d5095aa
+  author: joe
+  content: |-
+    Implemented via PR (commit c64223ee):
+
+    - Wired `--no-human=both` to run the implementer phase (phase 1) headless — `RealPhaseDriver::run_implementer` appends `--no-human` to the phase-1 subprocess so `handle_queue_work` launches `claude -p`.
+    - Added the design-fork punt safety net: `/aida-pickup` Step 3d (headless-only) directs the implementer to `/aida-punt` rather than guess; `aida punt` drops an `AIDA_PUNT_SIGNAL_FILE` signal the orchestrator detects to park the spec in NeedsAttention and advance.
+    - `orchestrate` routes a punt to `finish_punted` — a clean exit-0 result, not a failure; `OrchestrationResult.punt_reason` + `BatchDrainResult.punted` keep punted specs out of the "shipped" count.
+    - Kickoff gate: `--no-human=both` is now an acknowledgeable mode (was rejected); scope banner + reminders vary by mode.
+
+    Test status: 716/716 aida-cli tests green
+  created_at: 2026-05-19T17:37:46.803217975Z
+  modified_at: 2026-05-19T17:37:46.803217975Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T17:36:13.711341637Z
