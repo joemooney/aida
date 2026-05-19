@@ -1,0 +1,44 @@
+id: 019e4121-aefa-7032-9934-1d9528bf4e2b
+spec_id: TASK-351
+agreed_id: TASK-351
+title: 'aida edit: add --add-tag / --remove-tag — --tags is replace-only and silently clobbers'
+description: |-
+  `aida edit --tags` is **replace-only** — its help reads "New tags (comma-separated, replaces existing)". To change one tag you must re-supply the *entire* set; a stale mental model of the set silently clobbers every tag you left out. No error — just lost tags.
+
+  Observed 2026-05-19: dropping `batch:tui-v2` from TASK-288 (7 tags) required re-listing the other six — and an `aida show` first to retrieve the full set. An agent curating tags hits this constantly, and the failure mode is silent.
+
+  This is the `feedback_no_partial_force_overwrite` footgun shape — a whole-set operation where the caller wants a partial one.
+
+  ## Fix
+
+  Add to `aida edit`:
+
+  - `--add-tag <TAG>` — repeatable; adds without touching existing tags
+  - `--remove-tag <TAG>` — repeatable; removes without touching the rest
+  - keep `--tags` as the explicit full-replace
+  - (optional) `--tags +x,-y` delta syntax as sugar
+
+  ## Acceptance
+
+  - [ ] `aida edit <id> --add-tag x` adds `x`, leaves every other tag intact
+  - [ ] `aida edit <id> --remove-tag y` removes `y`, leaves every other tag intact
+  - [ ] both repeatable and composable in one invocation
+  - [ ] adding a present tag / removing an absent one is a graceful no-op, not an error
+  - [ ] `--tags` behaviour unchanged (full replace); mixing it with `--add-tag`/`--remove-tag` errors as ambiguous
+
+  ## Origin
+
+  2026-05-19 tag-curation friction while dropping one tag from a 7-tag spec.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T16:46:27.066347440Z
+modified_at: 2026-05-19T16:46:27.066347440Z
+req_type: Task
+tags:
+- cli-ux
+- footgun
+- from-user-request
+- papercut
+- tags
