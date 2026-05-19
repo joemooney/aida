@@ -89,7 +89,7 @@ Every spec in AIDA travels the same path, from "filed an idea" to "users have it
 
 The default meaning of "shipped" in AIDA's docs is **merged to `main`** — the developer-facing "out the door." For "available to download with a version number," say **released** (e.g. v0.8.0). A merge does not auto-release.
 
-One status sits **off** this mainline: **Needs Attention**. An autonomous drain that hits a design-fork it can't safely resolve runs `aida punt` (the [`/aida-punt`](docs/lifecycle.md#the-off-mainline-state-needs-attention) skill) instead of guessing — the spec pauses with a structured reason and surfaces in `aida findings` for triage, rather than landing a silent wrong implementation.
+One status sits **off** this mainline: **Needs Attention**. An autonomous drain that hits a design-fork it can't safely resolve runs `aida punt` (the [`/aida-punt`](docs/lifecycle.md#the-off-mainline-state-needs-attention) skill) instead of guessing — the spec pauses with a structured reason and surfaces in `aida findings` for triage, rather than landing a silent wrong implementation. Under a fully-headless drain (`--no-human=both`) that punt first reaches a headless **advisor** (STORY-306): it resolves the fork where the answer is grounded in a recorded principle or preference, and escalates only what genuinely needs a person — shrinking the morning queue without ever guessing past a fork.
 
 ### Commands at each stage
 

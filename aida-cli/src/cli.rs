@@ -2654,6 +2654,23 @@ pub enum QueueCommand {
             aliases = ["unattended", "headless"]
         )]
         no_human: Option<String>,
+        /// Under `--no-human=both`: leave a spec parked in Needs Attention
+        /// when the headless advisor escalates its design-fork to a human,
+        /// and advance the drain (the default). A paused spec beats a
+        /// guessed one — the conservative choice. Mutually exclusive with
+        /// `--escalate-defaults`; only meaningful with `--no-human=both`.
+        // trace:STORY-306 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, conflicts_with = "escalate_defaults")]
+        escalate_blocks: bool,
+        /// Under `--no-human=both`: when the headless advisor escalates a
+        /// design-fork, resume the implementer to ship the defensible
+        /// default rather than parking the spec, and file a needs-human
+        /// finding for post-hoc review. For mechanical batches where
+        /// throughput beats per-spec correctness. Only meaningful with
+        /// `--no-human=both`.
+        // trace:STORY-306 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        escalate_defaults: bool,
         /// "Advisor on standby" autonomy mode: auto-resolve mechanical
         /// confirmation prompts (open PR? grab next item? end session?)
         /// without pausing, while still pausing for genuine design-fork

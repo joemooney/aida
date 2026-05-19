@@ -957,6 +957,54 @@ fn run() -> Result<()> {
 /// STORY-285). `list` is a read-only query; `dismiss`/`promote` are status
 /// flips guarded so they only act on real findings of either source.
 /// trace:STORY-278 trace:STORY-285 | ai:claude
+/// STORY-306: the morning-after audit block for `aida findings list` — read
+/// the punt ledger and summarise the headless advisor's decisions: how many
+/// design-forks it resolved vs escalated, and the escalated rows (a human
+/// still owns those). `None` when the advisor has decided nothing, so the
+/// section is omitted entirely rather than printing an empty header.
+/// trace:STORY-306 | ai:claude
+fn render_advisor_decisions_footer(project_root: &std::path::Path) -> Option<String> {
+    let records = punt::read_ledger(project_root);
+    // Advisor decisions only — a plain implementer punt has no `answered_by`.
+    let advisor: Vec<&punt::PuntRecord> = records
+        .iter()
+        .filter(|r| r.answered_by.as_deref() == Some("advisor"))
+        .collect();
+    if advisor.is_empty() {
+        return None;
+    }
+    let resolved = advisor
+        .iter()
+        .filter(|r| r.resolution_path == "advisor-resolved")
+        .count();
+    let escalated: Vec<&punt::PuntRecord> = advisor
+        .iter()
+        .copied()
+        .filter(|r| r.resolution_path == "escalated-to-human")
+        .collect();
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "{}\n",
+        "Advisor decisions (recent)".magenta().bold()
+    ));
+    out.push_str(&format!(
+        "  {resolved} resolved · {} escalated to a human\n",
+        escalated.len()
+    ));
+    // The escalated rows — most recent first — a human still decides these.
+    for r in escalated.iter().rev().take(10) {
+        let why = r
+            .escalation_reason
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("needs a human");
+        out.push_str(&format!("  {:<14} {:<22} {}\n", r.spec, why, r.detail));
+    }
+    Some(out.trim_end().to_string())
+}
+
 fn handle_findings_command(
     cmd: &FindingsCommand,
     backend: &aida_core::CachedGitBackend,
@@ -1014,8 +1062,18 @@ fn handle_findings_command(
                 println!("{total}");
                 return Ok(());
             }
+            // STORY-306: the overnight-advisor audit — what the headless
+            // advisor tier resolved vs escalated. Shown even when nothing
+            // awaits triage: the advisor may have resolved every fork.
+            let advisor_footer = store_path
+                .parent()
+                .and_then(render_advisor_decisions_footer);
             if total == 0 {
                 println!("{}", "No findings awaiting triage.".dimmed());
+                if let Some(footer) = &advisor_footer {
+                    println!();
+                    println!("{footer}");
+                }
                 return Ok(());
             }
 
@@ -1096,6 +1154,11 @@ fn handle_findings_command(
                      `--status rejected`"
                         .dimmed()
                 );
+            }
+            // STORY-306: the overnight-advisor audit footer.
+            if let Some(footer) = &advisor_footer {
+                println!();
+                println!("{footer}");
             }
         }
 
@@ -44841,6 +44904,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             json,
             max,
             no_human,
+            escalate_blocks,
+            escalate_defaults,
             zen,
             quiet,
             user,
@@ -44951,11 +45016,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if let Some(mode) = no_human_mode {
                     no_human_kickoff_gate(mode)?;
                 }
-                // STORY-306: how an advisor escalation is handled under
-                // `--no-human=both`. Slice 5 wires the `--escalate-blocks` /
-                // `--escalate-defaults` flag; until then it is the
-                // conservative default (Blocks — pause, don't guess).
-                let escalate_mode = auto_complete::EscalateMode::Blocks;
+                // STORY-306: resolve how an advisor escalation is handled.
+                // `--escalate-blocks` (the default — pause, don't guess) and
+                // `--escalate-defaults` are `--no-human=both`-only: the
+                // advisor tier exists only in a fully-headless drain. Reject
+                // the flag anywhere else so it never silently no-ops.
+                // trace:STORY-306 | ai:claude
+                if (*escalate_blocks || *escalate_defaults)
+                    && no_human_mode != Some(auto_complete::NoHumanMode::Both)
+                {
+                    anyhow::bail!(
+                        "--escalate-blocks / --escalate-defaults only apply to a \
+                         fully-headless drain — pair them with `--no-human=both`"
+                    );
+                }
+                let escalate_mode = auto_complete::EscalateMode::from_flags(*escalate_defaults);
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
                 // batch — one full lifecycle per member, advancing the head
                 // after each — instead of one session per re-invocation.

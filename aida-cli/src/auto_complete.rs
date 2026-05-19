@@ -146,32 +146,26 @@ impl NoHumanMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EscalateMode {
     /// Leave the spec parked (`NeedsAttention`), file the `needs-human`
-    /// finding, advance the batch — this spec waits for a human.
+    /// finding, advance the batch — this spec waits for a human. The default;
+    /// the `--escalate-blocks` flag is its explicit spelling.
     Blocks,
     /// Resume the implementer told to proceed with its stated lean / the most
     /// defensible default, and file a `needs-human` finding for post-hoc
-    /// review.
+    /// review. The `--escalate-defaults` flag.
     Defaults,
 }
 
 impl EscalateMode {
-    /// Parse the `--escalate-blocks` / `--escalate-defaults` choice. An empty
-    /// or absent value is [`Blocks`](Self::Blocks) — the safe default.
-    pub(crate) fn parse(s: &str) -> Result<Self, String> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "" | "blocks" | "escalate-blocks" => Ok(Self::Blocks),
-            "defaults" | "escalate-defaults" => Ok(Self::Defaults),
-            other => Err(format!(
-                "unknown escalate mode `{other}` (expected: blocks, defaults)"
-            )),
-        }
-    }
-
-    /// Stable slug for telemetry and the punt ledger.
-    pub(crate) fn slug(self) -> &'static str {
-        match self {
-            Self::Blocks => "blocks",
-            Self::Defaults => "defaults",
+    /// Resolve the mode from the `--escalate-defaults` flag — absent ⇒ the
+    /// conservative [`Blocks`](Self::Blocks) default. (`--escalate-blocks` is
+    /// the explicit spelling of that default; clap's `conflicts_with` keeps
+    /// the two flags mutually exclusive, so a single bool resolves it.)
+    /// trace:STORY-306 | ai:claude
+    pub(crate) fn from_flags(escalate_defaults: bool) -> Self {
+        if escalate_defaults {
+            Self::Defaults
+        } else {
+            Self::Blocks
         }
     }
 }
@@ -2080,24 +2074,12 @@ mod tests {
         assert_eq!(driver.advisor_calls, 1, "no second advisor round");
     }
 
-    /// `EscalateMode::parse` — empty / `blocks` → `Blocks`; `defaults` →
-    /// `Defaults`; an unknown value errors.
+    /// `EscalateMode::from_flags` — `--escalate-defaults` set ⇒ `Defaults`;
+    /// absent ⇒ the conservative `Blocks` default.
     #[test]
-    fn escalate_mode_parse_defaults_to_blocks() {
-        assert_eq!(EscalateMode::parse(""), Ok(EscalateMode::Blocks));
-        assert_eq!(EscalateMode::parse("blocks"), Ok(EscalateMode::Blocks));
-        assert_eq!(
-            EscalateMode::parse("escalate-blocks"),
-            Ok(EscalateMode::Blocks)
-        );
-        assert_eq!(EscalateMode::parse("defaults"), Ok(EscalateMode::Defaults));
-        assert_eq!(
-            EscalateMode::parse("escalate-defaults"),
-            Ok(EscalateMode::Defaults)
-        );
-        assert!(EscalateMode::parse("sideways").is_err());
-        assert_eq!(EscalateMode::Blocks.slug(), "blocks");
-        assert_eq!(EscalateMode::Defaults.slug(), "defaults");
+    fn escalate_mode_from_flags_defaults_to_blocks() {
+        assert_eq!(EscalateMode::from_flags(false), EscalateMode::Blocks);
+        assert_eq!(EscalateMode::from_flags(true), EscalateMode::Defaults);
     }
 
     // --- Variant gating ---------------------------------------------------

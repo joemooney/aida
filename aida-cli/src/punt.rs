@@ -96,6 +96,19 @@ pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Res
     Ok(())
 }
 
+/// Read every punt-ledger record from `.aida/punts.jsonl`, in append order
+/// (oldest first). Bad or forward-incompatible lines are skipped rather than
+/// aborting the read; an absent ledger reads as empty. trace:STORY-306
+pub fn read_ledger(project_root: &Path) -> Vec<PuntRecord> {
+    let Ok(body) = std::fs::read_to_string(ledger_path(project_root)) else {
+        return Vec::new();
+    };
+    body.lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str::<PuntRecord>(l).ok())
+        .collect()
+}
+
 // --- Orchestrator punt-signal handshake (STORY-276) -------------------------
 //
 // A headless `--auto-complete --no-human=both` implementer that hits a
