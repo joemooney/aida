@@ -44951,6 +44951,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if let Some(mode) = no_human_mode {
                     no_human_kickoff_gate(mode)?;
                 }
+                // STORY-306: how an advisor escalation is handled under
+                // `--no-human=both`. Slice 5 wires the `--escalate-blocks` /
+                // `--escalate-defaults` flag; until then it is the
+                // conservative default (Blocks — pause, don't guess).
+                let escalate_mode = auto_complete::EscalateMode::Blocks;
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
                 // batch — one full lifecycle per member, advancing the head
                 // after each — instead of one session per re-invocation.
@@ -44971,6 +44976,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         role.as_deref(),
                         *max,
                         no_human_mode,
+                        escalate_mode,
                     );
                 }
                 // TASK-293: `nextN --auto-complete` drains N specs from the
@@ -44992,6 +44998,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             *json,
                             permission_mode.as_deref(),
                             no_human_mode,
+                            escalate_mode,
                         );
                     }
                 }
@@ -45021,6 +45028,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     *json,
                     permission_mode.as_deref(),
                     no_human_mode,
+                    escalate_mode,
                 );
             }
             // TASK-293: a multi-spec `nextN` has no coherent single
@@ -47888,6 +47896,7 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
 /// Entry point for `aida queue work <SPEC> --auto-complete`. Never returns:
 /// always terminates the process with an exit code (0 success, 1-6 = the
 /// 1-based index of the phase that failed). trace:STORY-246 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn handle_auto_complete(
     storage: &Storage,
     user_id: &str,
@@ -47896,6 +47905,7 @@ fn handle_auto_complete(
     json: bool,
     permission_mode: Option<&str>,
     no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
 ) -> ! {
     let result = run_auto_complete(
         storage,
@@ -47905,6 +47915,7 @@ fn handle_auto_complete(
         json,
         permission_mode,
         no_human,
+        escalate_mode,
         // STORY-301: a bare single-spec drain owns its drain-state file.
         true,
     );
@@ -47926,6 +47937,9 @@ fn run_auto_complete(
     json: bool,
     permission_mode: Option<&str>,
     no_human: Option<auto_complete::NoHumanMode>,
+    // STORY-306: how an advisor escalation is handled — `Blocks` (default) or
+    // `Defaults`. Only meaningful under `--no-human=both`.
+    escalate_mode: auto_complete::EscalateMode,
     // STORY-301: `true` for a standalone single-spec drain — this run creates
     // the `.aida/drain-state.json` file and clears it on return. `false` for a
     // batch / nextN member — the batch orchestrator owns the file; this run
@@ -48029,7 +48043,7 @@ fn run_auto_complete(
         run_token,
     );
     let started_at = chrono::Utc::now();
-    let result = auto_complete::orchestrate(&mut driver, spec, variant, json);
+    let result = auto_complete::orchestrate(&mut driver, spec, variant, json, escalate_mode);
     let completed_at = chrono::Utc::now();
     // The marker is no longer needed once `orchestrate` has returned — every
     // phase child has been spawned and reaped. Drop it explicitly so the
@@ -48163,6 +48177,8 @@ struct RealBatchDriver<'a> {
     /// STORY-263: headless mode, propagated to every member's
     /// `run_auto_complete`.
     no_human: Option<auto_complete::NoHumanMode>,
+    /// STORY-306: advisor-escalation mode, propagated to every member.
+    escalate_mode: auto_complete::EscalateMode,
 }
 
 impl auto_complete::BatchDriver for RealBatchDriver<'_> {
@@ -48196,6 +48212,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             self.json,
             self.permission_mode.as_deref(),
             self.no_human,
+            self.escalate_mode,
             // STORY-301: a batch / nextN member does not own the drain-state
             // file — the batch orchestrator created it.
             false,
@@ -48219,6 +48236,7 @@ fn handle_auto_complete_batch(
     role: Option<&str>,
     max: Option<usize>,
     no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
 ) -> ! {
     if !json {
         eprintln!();
@@ -48259,6 +48277,7 @@ fn handle_auto_complete_batch(
         json,
         permission_mode: permission_mode.map(|s| s.to_string()),
         no_human,
+        escalate_mode,
     };
     let result = auto_complete::drain_batch(&mut driver, max);
     // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
@@ -48627,6 +48646,8 @@ struct RealNextNDriver<'a> {
     json: bool,
     permission_mode: Option<String>,
     no_human: Option<auto_complete::NoHumanMode>,
+    /// STORY-306: advisor-escalation mode, propagated to every member.
+    escalate_mode: auto_complete::EscalateMode,
 }
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
@@ -48643,6 +48664,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             self.json,
             self.permission_mode.as_deref(),
             self.no_human,
+            self.escalate_mode,
             // STORY-301: a batch / nextN member does not own the drain-state
             // file — the batch orchestrator created it.
             false,
@@ -48656,6 +48678,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
 /// the queue is exhausted, or a phase fails. Never returns: exits `0` on a
 /// clean drain, else the failed-phase index (per STORY-246's exit codes).
 /// trace:TASK-293 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn handle_auto_complete_next_n(
     storage: &Storage,
     user_id: &str,
@@ -48664,6 +48687,7 @@ fn handle_auto_complete_next_n(
     json: bool,
     permission_mode: Option<&str>,
     no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
 ) -> ! {
     if !json {
         eprintln!();
@@ -48709,6 +48733,7 @@ fn handle_auto_complete_next_n(
         json,
         permission_mode: permission_mode.map(|s| s.to_string()),
         no_human,
+        escalate_mode,
     };
     let result = auto_complete::drain_batch(&mut driver, Some(n));
     // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
@@ -49688,6 +49713,12 @@ struct RealPhaseDriver {
     /// — against the live marker file — that its `AIDA_AUTO_COMPLETE=1` comes
     /// from a real orchestrator rather than guessing.
     run_token: String,
+    /// STORY-306: the Claude `--session-id` the phase-1 implementer was
+    /// launched with. When phase 1 punts and the advisor tier resolves the
+    /// fork, `resume_implementer` `--resume`s exactly this session so the
+    /// implementer re-enters its own conversation with the working model it
+    /// had built. `None` until `run_implementer` mints it.
+    implementer_session: Option<String>,
 }
 
 impl RealPhaseDriver {
@@ -49712,6 +49743,7 @@ impl RealPhaseDriver {
             no_human,
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),
             run_token,
+            implementer_session: None,
         }
     }
 
@@ -49791,6 +49823,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Implementer);
         let session_uuid = uuid::Uuid::now_v7().to_string();
+        // STORY-306: remember the minted session id — if phase 1 punts and the
+        // advisor tier resolves the fork, `resume_implementer` `--resume`s
+        // exactly this session. trace:STORY-306 | ai:claude
+        self.implementer_session = Some(session_uuid.clone());
 
         let mut cmd = std::process::Command::new(self.aida_exe());
         cmd.current_dir(&self.project_root)
@@ -49882,16 +49918,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         // STORY-276: did the implementer punt? `aida punt` dropped the signal
         // file and the spec is now parked in NeedsAttention — there is no PR
-        // to chase, and the pipeline must stop *cleanly*, not report a NoPr
-        // failure. End the implementer session (best-effort — a punted spec
-        // hit a fork before producing work worth keeping) and hand the punt
-        // up so `orchestrate` runs `finish_punted`. trace:STORY-276 | ai:claude
+        // to chase. Hand the punt up so `orchestrate` routes it through the
+        // STORY-306 advisor tier.
+        //
+        // STORY-306: do NOT end the session here. STORY-276 ran `aida session
+        // end` on a punt (a punt was terminal then) — but now the advisor tier
+        // may resolve the fork and resume *this exact session* (`claude -p
+        // --resume`), which needs the lease + worktree intact. So the punted
+        // session persists. An escalate-blocks punt that is never resumed
+        // leaves the worktree to a later cleanup pass — a filed followup. The
+        // branch is reconciled from the worktree HEAD now so a resume +
+        // PR-lookup has it. trace:STORY-276, STORY-306 | ai:claude
         if let Some(signal) = punt::read_signal(&punt_signal) {
             let _ = std::fs::remove_file(&punt_signal);
-            let _ = std::process::Command::new(self.aida_exe())
-                .current_dir(&self.project_root)
-                .args(["session", "end", &lease_id, "--yes", "--skip-ci"])
-                .status();
+            self.branch = Some(reconcile_orchestrated_branch(
+                &self.project_root,
+                &lease_id,
+                &worktree_path,
+                &recorded_branch,
+            ));
             return Ok(auto_complete::ImplementerOutcome::Punted {
                 reason: signal.summary(),
             });
@@ -50311,6 +50356,325 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn shipped_spec_id(&mut self) -> Option<String> {
         let pr = self.pr_number?;
         pr_credited_spec_id(&self.project_root, pr, &self.spec)
+    }
+
+    /// STORY-306 advisor tier — spawn a headless advisor to judge the design-
+    /// fork phase 1 punted on. Assembles the rich payload, writes the request
+    /// file, runs `claude -p /aida-advise` in the advisor role, reads the
+    /// response, appends a punt-ledger record, and — on an escalate — tags the
+    /// spec `needs-human` + leaves the advisor's reasoning as a comment.
+    /// trace:STORY-306 | ai:claude
+    fn run_advisor(
+        &mut self,
+    ) -> Result<auto_complete::AdvisorOutcome, auto_complete::PhaseFailure> {
+        use auto_complete::{AdvisorOutcome, FailureKind, PhaseFailure};
+
+        // Load the punted spec + its AttentionReason — `aida punt` recorded it.
+        let store = load_store_for_lookup(&self.project_root).ok_or_else(|| {
+            PhaseFailure::of(
+                FailureKind::Internal,
+                "advisor tier: could not load the requirements store",
+            )
+        })?;
+        let target = store
+            .get_requirement_by_spec_id(&self.spec)
+            .ok_or_else(|| {
+                PhaseFailure::of(
+                    FailureKind::Internal,
+                    format!("advisor tier: spec {} not found in the store", self.spec),
+                )
+            })?;
+        let attention = target.attention_reason.clone().ok_or_else(|| {
+            PhaseFailure::of(
+                FailureKind::Internal,
+                "advisor tier: the punted spec carries no AttentionReason",
+            )
+        })?;
+
+        // Assemble the rich, ultraplan-grade payload and write the request.
+        let request = assemble_punt_payload(&store, target, &self.project_root, &attention);
+        let request_path = punt::punt_request_path(&self.project_root, &self.spec);
+        let response_path = punt::punt_response_path(&self.project_root, &self.spec);
+        let _ = std::fs::remove_file(&response_path); // clear any stale response
+        punt::write_punt_request(&request_path, &request).map_err(|e| {
+            PhaseFailure::of(
+                FailureKind::Internal,
+                format!("advisor tier: could not write the punt request: {e}"),
+            )
+        })?;
+
+        // Spawn the headless advisor — `claude -p /aida-advise`, advisor role.
+        let advisor_uuid = uuid::Uuid::now_v7().to_string();
+        let log_path = self
+            .project_root
+            .join(".aida")
+            .join("headless-logs")
+            .join(format!(
+                "advise-{}-{}.jsonl",
+                self.spec,
+                &advisor_uuid[..advisor_uuid.len().min(8)]
+            ));
+        if let Some(dir) = log_path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let log = std::fs::File::create(&log_path).map_err(|e| {
+            PhaseFailure::of(
+                FailureKind::Spawn,
+                format!("advisor tier: could not create the headless log: {e}"),
+            )
+        })?;
+        if !self.json {
+            eprintln!(
+                "  {} spawning a headless advisor for the design-fork…",
+                "◆".cyan()
+            );
+        }
+        let status = std::process::Command::new("claude")
+            .current_dir(&self.project_root)
+            .args(session::claude_headless_args("/aida-advise", &advisor_uuid))
+            .env("AIDA_HEADLESS", "1")
+            .env(punt::REQUEST_FILE_ENV, &request_path)
+            .env(punt::RESPONSE_FILE_ENV, &response_path)
+            // The advisor judges in the advisor (`dialog`) role's seat.
+            .env("AIDA_SESSION_ROLE", "dialog")
+            .stdout(std::process::Stdio::from(log))
+            .status()
+            .map_err(|e| {
+                PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor tier: could not launch the advisor session: {e}"),
+                )
+            })?;
+        if !status.success() {
+            return Err(PhaseFailure::new(format!(
+                "the headless advisor session exited {} — see {}",
+                status
+                    .code()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "with a signal".to_string()),
+                log_path.display(),
+            )));
+        }
+
+        // Read the advisor's response.
+        let response = punt::read_punt_response(&response_path).ok_or_else(|| {
+            PhaseFailure::of(
+                FailureKind::Internal,
+                format!(
+                    "the headless advisor wrote no usable response — see {}",
+                    log_path.display()
+                ),
+            )
+        })?;
+
+        // Append the advisor decision to the punt ledger (STORY-325 coupling —
+        // v1's escalation rate must be measurable from day one).
+        let resolution_path = match response.resolution {
+            punt::PuntResolution::Resolved => "advisor-resolved",
+            punt::PuntResolution::Escalated => "escalated-to-human",
+        };
+        let record = punt::PuntRecord {
+            timestamp: chrono::Utc::now(),
+            spec: self.spec.clone(),
+            category: attention.category,
+            detail: attention.detail.clone(),
+            lean: attention.lean.clone(),
+            raised_by: attention.raised_by.clone(),
+            resolution_path: resolution_path.to_string(),
+            classification: response.classification.clone(),
+            escalation_reason: response.escalation_reason.clone(),
+            answer: response.answer.clone(),
+            answered_by: Some("advisor".to_string()),
+        };
+        let _ = punt::append_to_ledger(&self.project_root, &record);
+
+        match response.resolution {
+            punt::PuntResolution::Resolved => {
+                let answer = response.answer.clone().unwrap_or_default();
+                if answer.trim().is_empty() {
+                    return Err(PhaseFailure::of(
+                        FailureKind::Internal,
+                        "the advisor reported `resolved` but wrote no answer",
+                    ));
+                }
+                // Leave the resolution on the spec so it is not invisible —
+                // a resolved fork carries the advisor's answer + rationale
+                // into the spec's comment trail.
+                let _ = std::process::Command::new(self.aida_exe())
+                    .current_dir(&self.project_root)
+                    .args([
+                        "comment",
+                        "add",
+                        &self.spec,
+                        &format!(
+                            "Advisor resolved the punted design-fork (STORY-306).\n\n\
+                             Decision: {answer}\n\nReasoning: {}",
+                            response.reasoning
+                        ),
+                    ])
+                    .status();
+                Ok(AdvisorOutcome::Resolved {
+                    answer,
+                    reasoning: response.reasoning.clone(),
+                })
+            }
+            punt::PuntResolution::Escalated => {
+                // Tag the spec `needs-human` (preserving existing tags) so
+                // `aida findings` can tell an advisor-escalated fork from one
+                // not yet triaged, and leave the advisor's reasoning — plus a
+                // nudge toward the corpus-growth loop — as a comment.
+                let mut tags: Vec<String> = target.tags.iter().cloned().collect();
+                if !tags.iter().any(|t| t == "needs-human") {
+                    tags.push("needs-human".to_string());
+                }
+                let _ = std::process::Command::new(self.aida_exe())
+                    .current_dir(&self.project_root)
+                    .args(["edit", &self.spec, "--tags", &tags.join(",")])
+                    .status();
+                let _ = std::process::Command::new(self.aida_exe())
+                    .current_dir(&self.project_root)
+                    .args([
+                        "comment",
+                        "add",
+                        &self.spec,
+                        &format!(
+                            "Advisor escalated this design-fork to a human (STORY-306).\n\n\
+                             Reasoning: {}\n\nWhen you resolve this, record the answer \
+                             (a memory, an acceptance-criteria edit, or a discipline doc) \
+                             so a future advisor can resolve the same kind of fork as a \
+                             recorded principle.",
+                            response.reasoning
+                        ),
+                    ])
+                    .status();
+                Ok(AdvisorOutcome::Escalated {
+                    reason: response.reasoning.clone(),
+                    category: response
+                        .escalation_reason
+                        .clone()
+                        .unwrap_or_else(|| "unspecified".to_string()),
+                })
+            }
+        }
+    }
+
+    /// STORY-306 advisor tier — resume the punted phase-1 implementer session
+    /// with the advisor's judged `answer` (or, under `--escalate-defaults`, an
+    /// authorization to ship the defensible default). `--resume`s the exact
+    /// phase-1 Claude session so the implementer keeps the working model it
+    /// built before punting; the worktree survived because STORY-306's punt
+    /// path no longer ends the session. Classifies the outcome from ground
+    /// truth — a re-punt leaves the spec in `NeedsAttention`, a ship opens a
+    /// PR. trace:STORY-306 | ai:claude
+    fn resume_implementer(
+        &mut self,
+        answer: &str,
+    ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
+        use auto_complete::{FailureKind, ImplementerOutcome, PhaseFailure};
+
+        let session_id = self.implementer_session.clone().ok_or_else(|| {
+            PhaseFailure::of(
+                FailureKind::Internal,
+                "advisor tier: no implementer session id to resume",
+            )
+        })?;
+
+        let prompt = format!(
+            "You punted spec {spec} on a design-fork. A headless advisor has now \
+             judged it. Apply this decision and finish the spec — do NOT punt \
+             again.\n\nADVISOR DECISION:\n{answer}\n\nTake the spec from Needs \
+             Attention back to In Progress (`aida edit {spec} --status \
+             in-progress`), implement the decision, and open the PR with \
+             `/aida-pr` before exiting.",
+            spec = self.spec,
+        );
+
+        let resume_uuid = uuid::Uuid::now_v7().to_string();
+        let log_path = self
+            .project_root
+            .join(".aida")
+            .join("headless-logs")
+            .join(format!(
+                "resume-{}-{}.jsonl",
+                self.spec,
+                &resume_uuid[..resume_uuid.len().min(8)]
+            ));
+        if !self.json {
+            eprintln!(
+                "  {} resuming the implementer session with the advisor's answer…",
+                "◆".cyan()
+            );
+        }
+        let status = session::spawn_claude_headless_resume(&prompt, &session_id, &log_path)
+            .map_err(|e| {
+                PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor tier: could not resume the implementer session: {e}"),
+                )
+            })?;
+        if !status.success() {
+            return Err(PhaseFailure::new(format!(
+                "the resumed implementer session exited {} — see {}",
+                status
+                    .code()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "with a signal".to_string()),
+                log_path.display(),
+            )));
+        }
+
+        // Classify from ground truth (the STORY-276 detect-punt logic): a
+        // re-punt leaves the spec back in `NeedsAttention`.
+        if matches!(
+            spec_status(&self.project_root, &self.spec),
+            Some(RequirementStatus::NeedsAttention)
+        ) {
+            let reason = load_store_for_lookup(&self.project_root)
+                .and_then(|s| {
+                    s.get_requirement_by_spec_id(&self.spec)
+                        .and_then(|r| r.attention_reason.clone())
+                })
+                .map(|a| a.detail)
+                .unwrap_or_else(|| "the resumed implementer punted again".to_string());
+            return Ok(ImplementerOutcome::Punted { reason });
+        }
+
+        // A ship opens a PR — a spec-id lookup is branch-independent and
+        // robust, with the recorded branch as a fallback.
+        let pr = match detect_open_pr_for_spec(&self.project_root, &self.spec) {
+            PrLookup::Found(pr) => Some(pr),
+            PrLookup::NoOpenPr => self.branch.as_deref().and_then(|b| {
+                match detect_open_pr_for_branch(&self.project_root, b) {
+                    PrLookup::Found(pr) => Some(pr),
+                    _ => None,
+                }
+            }),
+            PrLookup::GhMissing => {
+                return Err(PhaseFailure::of(
+                    FailureKind::MissingTool,
+                    "`gh` is not on PATH — auto-complete needs it to track the PR",
+                ));
+            }
+            PrLookup::GhFailed(why) => {
+                return Err(PhaseFailure::new(format!(
+                    "could not look up the PR after the implementer resume: {why}"
+                )));
+            }
+        };
+        match pr {
+            Some(pr) => {
+                self.pr_number = Some(pr.number as u32);
+                if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
+                    self.branch = Some(head);
+                }
+                Ok(ImplementerOutcome::PrOpened)
+            }
+            None => Err(PhaseFailure::of(
+                FailureKind::NoPr,
+                "the resumed implementer session exited but opened no PR — \
+                 the advisor's answer did not produce shippable work",
+            )),
+        }
     }
 }
 

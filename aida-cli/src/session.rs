@@ -822,6 +822,54 @@ pub fn exec_claude_headless(prompt: &str, session_id: &str, log_path: &Path) -> 
     }
 }
 
+/// STORY-306: build the argv (after the `claude` program name) for a headless
+/// `claude -p --resume <id>` launch — the advisor tier's implementer-resume
+/// leg. Identical to [`claude_headless_args`] (the SPIKE-7 mandatory flag
+/// set) except it `--resume`s an existing session instead of minting a new
+/// `--session-id`, so the resumed implementer re-enters its punted phase-1
+/// conversation with the working model it had already built. Pure — the flag
+/// set is unit-tested without spawning claude. trace:STORY-306 | ai:claude
+pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String> {
+    vec![
+        "-p".to_string(),
+        "--permission-mode".to_string(),
+        "bypassPermissions".to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--resume".to_string(),
+        session_id.to_string(),
+        // Prompt last — a positional, mirroring `claude_headless_args`.
+        prompt.to_string(),
+    ]
+}
+
+/// STORY-306: spawn a headless `claude -p --resume <id>` run and wait,
+/// returning the exit status. The spawn-and-wait counterpart of
+/// [`spawn_claude_headless`] for the orchestrator's advisor-resume leg — the
+/// parent stays alive to classify the resumed implementer's outcome. Claude's
+/// stream-json stdout is redirected to `log_path`; `AIDA_HEADLESS=1` is set so
+/// the resumed skill knows it is unattended. trace:STORY-306 | ai:claude
+pub fn spawn_claude_headless_resume(
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+) -> Result<std::process::ExitStatus> {
+    use std::process::{Command, Stdio};
+    if let Some(dir) = log_path.parent() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("failed to create {}", dir.display()))?;
+    }
+    let log = std::fs::File::create(log_path)
+        .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
+    Command::new("claude")
+        .args(claude_headless_resume_args(prompt, session_id))
+        .env("AIDA_HEADLESS", "1")
+        .stdout(Stdio::from(log))
+        .status()
+        .context("failed to spawn claude")
+}
+
 /// One line of `~/.aida/session-launches.log` matching the current cwd,
 /// parsed back into structured form so `aida session list` can correlate
 /// by timestamp. (The cwd field is dropped after the filter — every
@@ -2030,5 +2078,29 @@ mod tests {
             !args.iter().any(|a| a == "--no-session-persistence"),
             "{args:?}"
         );
+    }
+
+    /// STORY-306: the headless-resume argv `--resume`s the punted session
+    /// instead of minting a fresh `--session-id`, and keeps every SPIKE-7
+    /// mandatory flag.
+    #[test]
+    fn claude_headless_resume_args_has_resume_and_no_session_id() {
+        let sid = "019e0000-0000-7000-8000-000000000000";
+        let args = claude_headless_resume_args("proceed with OAuth", sid);
+        // Resumes the existing session — `--resume <id>`, not `--session-id`.
+        assert!(args.contains(&"--resume".to_string()), "{args:?}");
+        assert!(
+            !args.iter().any(|a| a == "--session-id"),
+            "resume must not mint a new session id: {args:?}"
+        );
+        assert!(args.contains(&sid.to_string()), "{args:?}");
+        // SPIKE-7 mandatory flags intact.
+        assert!(args.contains(&"-p".to_string()), "{args:?}");
+        assert!(args.contains(&"bypassPermissions".to_string()), "{args:?}");
+        assert!(args.contains(&"stream-json".to_string()), "{args:?}");
+        assert!(args.contains(&"--verbose".to_string()), "{args:?}");
+        assert!(!args.iter().any(|a| a == "--bare"), "{args:?}");
+        // The resume prompt survives into the argv.
+        assert!(args.contains(&"proceed with OAuth".to_string()), "{args:?}");
     }
 }

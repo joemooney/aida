@@ -112,6 +112,14 @@ pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Res
 /// subprocess. `aida punt` writes its signal file here when the var is set.
 pub const SIGNAL_FILE_ENV: &str = "AIDA_PUNT_SIGNAL_FILE";
 
+/// STORY-306: env var the orchestrator sets on the headless *advisor*
+/// subprocess, pointing at the [`PuntRequest`] payload file it should read.
+pub const REQUEST_FILE_ENV: &str = "AIDA_PUNT_REQUEST_FILE";
+
+/// STORY-306: env var the orchestrator sets on the headless *advisor*
+/// subprocess, pointing at the path it should write its [`PuntResponse`] to.
+pub const RESPONSE_FILE_ENV: &str = "AIDA_PUNT_RESPONSE_FILE";
+
 /// The payload of a punt signal file — enough for the orchestrator to confirm
 /// a punt happened and name the fork in its run epilogue.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
