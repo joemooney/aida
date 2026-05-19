@@ -28,12 +28,12 @@ description: |-
   - **STORY-263** (first cut — reviewer only) — must ship first
   - **EPIC-28 STORY 3** (shelving + /aida-punt) — required prereq
   - **SPIKE-7** — empirical evidence for the headless-implementer risks
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-19T14:13:42.150253509Z
+modified_at: 2026-05-19T17:07:46.658674119Z
 req_type: Story
 tags:
 - auto-complete
