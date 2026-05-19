@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:13:34.298400649Z
-modified_at: 2026-05-19T16:36:57.306839616Z
+modified_at: 2026-05-19T16:37:24.697525052Z
 req_type: Story
 tags:
 - aida-punt
@@ -89,6 +89,13 @@ comments:
   content: Commit 59beb1f0 references this requirement
   created_at: 2026-05-19T16:36:31.655649808Z
   modified_at: 2026-05-19T16:36:31.655649808Z
+- id: 019e4119-69ef-7bd1-bfc9-8f5647a2ce5f
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-19-story-332-aida-punt.md
+    filed 4 task(s): TASK-347, TASK-348, TASK-349, TASK-350
+  created_at: 2026-05-19T16:37:25.103235499Z
+  modified_at: 2026-05-19T16:37:25.103235499Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T16:36:57.306839616Z
