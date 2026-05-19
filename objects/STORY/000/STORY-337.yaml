@@ -1,0 +1,26 @@
+id: 019e4152-419b-7931-9cd4-d0390198f9aa
+spec_id: STORY-337
+agreed_id: STORY-337
+title: 'Review PR-111: EPIC-23: headless implementer phase via --no-human=both (STORY-276)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e4134`) for branch `epic-23-story-276`.
+
+  - PR: <https://github.com/joemooney/aida/pull/111>
+  - Branch: `epic-23-story-276` → `main`
+
+  ## Covers
+
+  - STORY-276
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 111` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T17:39:30.331750562Z
+modified_at: 2026-05-19T17:39:30.331750562Z
+req_type: Story
