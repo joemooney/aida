@@ -1,0 +1,12 @@
+id: 019e415b-8a9d-7770-af47-dc1161705b97
+spec_id: TASK-355
+agreed_id: TASK-355
+title: '`--max-budget-usd` / `--model` cost knobs for the headless drain (SPIKE-7)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T17:49:38.845250662Z
+modified_at: 2026-05-19T17:49:38.845250662Z
+req_type: Task
