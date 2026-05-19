@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:47:22.190733508Z
-modified_at: 2026-05-19T01:26:32.459920001Z
+modified_at: 2026-05-19T01:26:33.714446606Z
 req_type: Bug
 tags:
 - auto-complete
@@ -68,3 +68,8 @@ comments:
   content: 'Sibling case 2026-05-18 — the reconcile-against-reality fix must be PHASE-AGNOSTIC, not phase-3-only. Discovered draining BUG-230 (batch:orchestrator-hardening): BUG-230 was resolved-by-supersession (TASK-329 did the work) → the implementer phase found nothing to code → exits with no PR → the orchestrator''s phase-1 `PrLookup::NoOpenPr` declares phase-1 FALSE failure and stops the batch, even though BUG-230 is legitimately Completed. Same root cause as this BUG''s phase-3 case: the orchestrator''s phase model has no concept of a valid ''spec needs no work / already resolved'' outcome, so it false-fails. BUG-241''s fix (''orchestrator reconciles against reality — PR merged? spec Completed? — before declaring a phase failure'') should be written PHASE-AGNOSTIC so it covers BOTH: phase-3 reviewer-escalation AND phase-1 no-PR-because-spec-needs-no-work. Recommend BUG-241''s acceptance be broadened to state the reconcile check applies at every phase. (Advisor: offered to formally re-emit BUG-241''s acceptance with this generalization — pending user call; until then this comment flags it for whoever implements BUG-241 to fold in.)'
   created_at: 2026-05-19T01:24:20.402037577Z
   modified_at: 2026-05-19T01:24:20.402037577Z
+- id: 019e3dd7-7ff2-7042-940c-fa3e1639369f
+  author: joe
+  content: 'Acceptance broadened 2026-05-18 (per advisor+user decision): scope generalized from phase-3-only to PHASE-AGNOSTIC. The reconcile-against-reality fix now bindingly covers both instance A (phase-3 reviewer escalation) and instance B (phase-1 no-work spec, BUG-230 class). Title + description + acceptance all updated. This supersedes the earlier ''sibling case'' comment — the phase-1 case is no longer a flag, it''s in the acceptance.'
+  created_at: 2026-05-19T01:26:33.714446606Z
+  modified_at: 2026-05-19T01:26:33.714446606Z
