@@ -49,12 +49,12 @@ description: |-
   ## Origin
 
   BUG-233 plan \`## Followups\` bullet ("audit whether AIDA_ZEN has the same can't-verify-provenance weakness") — NOT auto-filed because BUG-233 was marked Completed directly, bypassing the followup parse (see sibling BUG). The reviewer of PR-94 elaborated it from a hypothetical to a demonstrated risk: it hit the leaked-AIDA_ZEN condition while reviewing BUG-233's fix, and noted a literal skill-follow would have silently auto-merged PR-94.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:41:43.423344247Z
-modified_at: 2026-05-19T03:31:06.542288297Z
+modified_at: 2026-05-19T03:43:58.064863466Z
 req_type: Bug
 tags:
 - autonomy-modes
@@ -101,3 +101,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-19T02:49:46.747160007Z
   implemented_by: joe
+  completed_at: 2026-05-19T03:43:58.064863466Z
+  completion_sha: d1e0f17f3a960828124dc480d60c5a658b734b2f
