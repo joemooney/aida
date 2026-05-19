@@ -101,7 +101,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:56:20.866430726Z
-modified_at: 2026-05-19T07:18:36.553671150Z
+modified_at: 2026-05-19T07:19:51.197740705Z
 req_type: Story
 tags:
 - advisor-triage
@@ -111,6 +111,19 @@ tags:
 - no-human
 - phase-1
 - recap
+comments:
+- id: 019e3f1a-f29d-74d0-9bbf-25c53d1d2356
+  author: joe
+  content: |-
+    Implemented on branch story-285 (commit c8d80108):
+
+    - aida findings extended from a review-only surface to both headless drain phases: the triage view groups source → origin → rows, recognising from-implementer:SPEC-ID alongside from-review:PR-N.
+    - aida findings list gained --source review|implementer and --kind <category>; dismiss/promote guards accept either source (is_finding replaces is_review_finding).
+    - /aida-pickup step 5b: under AIDA_HEADLESS=1 the implementer files conversational flags as draft from-implementer:* TASKs, idempotent on the tag. /aida-implement points at it; SessionStart hook + docs/autonomous-drain.md updated.
+
+    Test status: 706/706 aida-cli tests green; clippy-clean; cargo fmt --check clean.
+  created_at: 2026-05-19T07:19:51.197740705Z
+  modified_at: 2026-05-19T07:19:51.197740705Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T07:18:36.553671150Z
