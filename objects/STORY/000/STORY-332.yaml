@@ -1,0 +1,72 @@
+id: 019e4095-b7da-7621-921e-1316079f0f3f
+spec_id: STORY-332
+agreed_id: STORY-332
+title: /aida-punt mechanism + NeedsAttention lifecycle status — the design-fork punt safety net for --no-human
+description: |-
+  \`--no-human=both\` (STORY-276, headless implementer) and the advisor escalation tier (STORY-306) both require a way for an autonomous agent to **punt** a design-fork it cannot safely resolve — instead of guessing, which produces a silent wrong implementation. That mechanism is \`/aida-punt\`. It does not exist: no skill, no command, no CLI subcommand; EPIC-28's child STORYs (its home) exist only as prose, never filed. STORY-276 and STORY-306 are hard-blocked on it.
+
+  Filed because STORY-276's implementer (2026-05-19) traced the dependency and found it dangling — STORY-276 was filed with "(requires /aida-punt)" in its title, but /aida-punt itself was never a spec. This STORY closes that gap.
+
+  ## What /aida-punt is
+
+  A two-part mechanism — the implementer's analysis identified both as load-bearing:
+
+  ### 1. The NeedsAttention lifecycle status (the STORY-sized part)
+
+  A new state in AIDA's lifecycle machine (currently draft / approved / planned / in-progress / done / completed / rejected). **NeedsAttention** = "work was in progress but is now paused — a human or advisor must decide something before it can proceed." It is NOT a reuse of an existing status; reusing one (the Option-3 shortcut) loses the semantic and the triage surface.
+
+  - Transitions: \`in-progress → NeedsAttention\` (via /aida-punt); \`NeedsAttention → approved\` or \`→ in-progress\` (triage resolved) or \`→ rejected\`.
+  - Must be threaded through everywhere statuses are enumerated: CLI \`--status\`, the cache schema, queue filters, \`aida list\`, the statusline, \`aida show\`, status color-coding.
+  - Carries reason metadata: a **machine-readable reason category** + a **human-readable reason comment** (per EPIC-28's design — state + category + comment).
+
+  ### 2. The \`/aida-punt\` skill
+
+  \`/aida-punt <reason>\` — invoked by a headless implementer/reviewer when it hits a \`kind:design-fork\` it cannot resolve under --no-human. It:
+  - Flips the spec to \`NeedsAttention\` with the reason category + comment
+  - Records the punt in the punt ledger (STORY-325)
+  - Returns control so the orchestrator continues to the next item — the drain does not stall on the punt
+
+  ## Acceptance
+
+  - [ ] \`NeedsAttention\` added to the lifecycle state machine + every status enumeration (CLI, cache, queue filters, list/show, statusline, color-coding) — audit exhaustively; a missed enumeration site is a latent bug
+  - [ ] Valid transitions defined + enforced: in-progress→NeedsAttention; NeedsAttention→approved/in-progress/rejected
+  - [ ] Reason metadata: machine category (enum) + human comment, stored on the spec
+  - [ ] \`/aida-punt <reason>\` skill + matching command, scaffolded from \`aida-core/templates/\`
+  - [ ] /aida-punt flips status, writes reason metadata, records to the punt ledger (STORY-325), returns control
+  - [ ] Triage surface: NeedsAttention specs surface for advisor triage (compose with the \`aida findings\` surface — a NeedsAttention spec is a punt awaiting triage)
+  - [ ] \`docs/aida-discipline/lifecycle-vocabulary.md\` + the machinery glossary (TASK-338) updated — NeedsAttention is a new lifecycle term
+  - [ ] Tests: punt flips status correctly; transitions enforced; a NeedsAttention spec is excluded from normal queue pickup but visible to triage
+
+  ## Out of scope
+
+  - **The headless implementer itself** — STORY-276; this STORY is its prerequisite
+  - **The advisor escalation tier** — STORY-306; punting to an advisor is the escalation, but the tier's design is STORY-306's
+  - **Auto-triage of NeedsAttention specs** — a NeedsAttention spec surfaces for human/advisor triage; auto-resolving it is out of scope (same conservative principle as STORY-306)
+
+  ## Composes with / unblocks
+
+  - **STORY-276** (headless implementer — HARD-blocked on this; 4 of its 6 acceptance criteria depend on /aida-punt)
+  - **STORY-306** (advisor escalation tier — punting IS the escalation mechanism)
+  - **STORY-287** (three-mode taxonomy — --no-human's design-fork→punt behavior)
+  - **STORY-325** (punt ledger — /aida-punt writes a ledger record)
+  - **EPIC-28** (NeedsAttention's home EPIC — its prose-only children should be properly filed; this STORY is the first)
+  - **TASK-338** (machinery glossary — NeedsAttention is a new term to define)
+
+  ## Origin
+
+  2026-05-19: STORY-276's implementer (a batch:autonomy-modes drain pickup) found STORY-276 hard-blocked — \`/aida-punt\` named as a required prerequisite but never filed; EPIC-28's children are prose only; \`NeedsAttention\` not in the state machine. Advisor mistake: STORY-276 + STORY-306 were filed with a hard dependency on /aida-punt without /aida-punt being a spec. This STORY files it properly. STORY-276/306 are gated on it.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T14:13:34.298400649Z
+modified_at: 2026-05-19T14:13:34.298400649Z
+req_type: Story
+tags:
+- aida-punt
+- autonomous-drain
+- blocks:STORY-276
+- epic-28
+- from-self-test:STORY-276
+- lifecycle-status
+- needs-attention
