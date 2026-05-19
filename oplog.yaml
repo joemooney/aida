@@ -7634,5 +7634,81 @@ operations:
       ## Origin
 
       2026-05-19: STORY-276's implementer found it hard-blocked on STORY-332, burned a pickup discovering it, and STORY-276 then sat at the queue head where every head-pickup would re-trip on it. The block was prose-only — invisible to the orchestrator/queue. A typed `blocked-by` relationship + a pre-pickup check makes blocked specs machine-visible and skipped cleanly, instead of discovered the hard way one doomed phase-1 at a time. The ordering-time warning (fix point 6) was folded in 2026-05-19 after confirming `queue add`/`move` do zero dependency validation — a hand-set order is currently unprotected.
-clock: 826
+- id: 019e4103-c56d-79a2-818a-f14deaa91fdb
+  target_id: 019e40a2-e744-7bd2-babb-3a2b2953e467
+  author: aida
+  node_id: '1'
+  lamport: 827
+  timestamp: 2026-05-19T16:13:46.733799522Z
+  kind: !SetTitle
+    title: Typed blocked-by + human-only markers — orchestrator + queue skip un-pickable specs at pickup instead of phase-1-failing on them
+- id: 019e4103-c5dc-71b0-9991-3bc2a92b4cf1
+  target_id: 019e40a2-e744-7bd2-babb-3a2b2953e467
+  author: aida
+  node_id: '1'
+  lamport: 828
+  timestamp: 2026-05-19T16:13:46.844091670Z
+  kind: !SetDescription
+    description: |-
+      The orchestrator, `aida queue work` (head pickup), and batch/cluster drains have **no concept of an un-pickable spec** — one that cannot or should not be auto-worked. Two flavours:
+
+      - **Blocked** — the spec hard-depends on an unshipped spec. Recorded today only as prose (a comment, or "(requires X)" in a title) — not machine-readable.
+      - **Human-only** — the spec is work no agent can do ("recruit real users and moderate a test", a sign-off, a physical task). Nothing marks it as such.
+
+      Either way the drain treats it as ordinary work: it spawns a doomed phase-1 implementer, which discovers the problem, exits with no PR → phase-1 "failure" → the batch stops / the drain breaks. The implementer burns a full pickup re-discovering something already known — or, worse, false-completes the spec.
+
+      ## Worked example 1 — blocked (2026-05-19)
+
+      STORY-276 (headless implementer) hard-depends on STORY-332 (/aida-punt). The dependency lived only as STORY-276's title text "(requires /aida-punt)" + a comment. The batch:autonomy-modes drain reached STORY-276, spawned a phase-1 implementer, which spent a pickup tracing the dependency and concluding "blocked." STORY-276 then sat at the queue HEAD — every subsequent head-pickup would trip on it again. (Worked around for now by reordering STORY-332 ahead of it — a band-aid.)
+
+      ## Worked example 2 — human-only (2026-05-19)
+
+      aida-tutor's TASK-2 is *"a moderated human test of the onboarding wow — recruit 1-2 real first-time users; a person-in-the-room activity, not an agent task"* — and an AC-1 **gate** ("run it before any investment beyond the slice"). It sat at the head of an `aida queue work epic-5 --auto-complete` cluster drain. Nothing marked it un-pickable, so the drain would spawn a phase for it — best case stalling, worst case false-completing the spec and **silently bypassing the gate**.
+
+      ## The fix: typed markers + a pre-pickup check
+
+      1. **Typed `blocked-by` relationship** — `A blocked-by B` (use AIDA's existing relationship machinery — typed relationships are a core capability; check whether a `depends-on`/`blocks` type already exists and reuse it, else add `blocked-by`). Machine-readable, in the spec graph, walkable by `aida doctor verify-relationships`.
+      2. **Pre-pickup check** — `aida queue work` (head pickup), batch/cluster drains, and the orchestrator check **before spawning phase 1**: if a spec has an unsatisfied `blocked-by` (a blocker not `Completed`) *or* is `human-only`, it is **un-pickable** → skip it (don't start a phase, don't fail). Head-pickup skips to the next pickable spec; a drain skips un-pickable members and continues.
+      3. **Unblock transition** — when a blocker reaches `Completed`, the `blocked-by` is satisfied; the formerly-blocked spec becomes pickable on the next pass. No manual re-enabling. (`human-only` does not "unblock" — it is permanent; see point 7.)
+      4. **Visibility** — un-pickable specs are not silently swallowed: `aida queue list` shows a **Blocked** section (sibling to "Done — awaiting merge"), each entry naming its reason — the unsatisfied blocker, or "human-only". An un-pickable spec is visible, with its reason, at a glance.
+      5. **Permanent-block surfacing** — a `blocked-by` whose target is `Rejected` (the blocker will never ship) → surface it loudly: that spec is blocked forever and needs re-scoping. Don't just silently skip it.
+      6. **Ordering-time warning** — `aida queue move` and `aida queue add` **warn** (never reject) when the placement puts a spec ahead of a spec it is `blocked-by` — e.g. `⚠ STORY-276 queued ahead of STORY-332, which blocks it`. The mistake is caught when it is made, not discovered at drain time. Verified 2026-05-19: `queue add`/`move` are pure position arithmetic and never consult relationships, so a hand-set order is held together only by the operator's memory.
+      7. **`human-only` marker** — a typed spec-level flag (*not* a relationship — it is a property of the one spec) marking work no agent can do. The pre-pickup gate (point 2) skips a `human-only` spec and surfaces it (point 4) as the human's to do. Distinct from `blocked-by` (which clears when the blocker ships) and from a `/aida-punt` design-fork (STORY-332 — an in-task escalation): a `human-only` spec is *never* agent-pickable, full stop. The human completes it with a normal `aida edit --status`.
+
+      ## Acceptance
+
+      - [ ] `blocked-by` relationship available (reuse an existing dependency type or add it); `aida rel add <A> blocked-by <B>`
+      - [ ] A `human-only` marker can be set on a spec (e.g. `aida edit <id> --human-only`) — a typed field, not a free-text tag
+      - [ ] `aida queue work` head-pickup skips a spec that has an unsatisfied `blocked-by` or is `human-only`, and picks the next pickable one
+      - [ ] Batch + cluster drains skip un-pickable members, continue to the next; never spawn phase 1 for one
+      - [ ] When a blocker hits `Completed`, the dependent becomes pickable with no manual step
+      - [ ] `aida queue list` shows a **Blocked** section — each entry naming its reason (unsatisfied blocker, or "human-only")
+      - [ ] `blocked-by` → `Rejected` target surfaces as a permanent block (needs re-scoping), not a silent skip
+      - [ ] `aida queue move` / `aida queue add` emit a **warning** (not an error) when the placement puts a spec ahead of a spec it is `blocked-by` — the operation still succeeds
+      - [ ] `aida queue list` annotates any queued item ordered ahead of a queued, unsatisfied `blocked-by` blocker with a one-line ⚠
+      - [ ] STORY-276 (`blocked-by` STORY-332) and STORY-306 (`blocked-by` STORY-276) wired up as the live examples — their prose "blocked on" comments converted to typed relationships
+      - [ ] Tests: blocked spec skipped at head-pickup + in a batch drain; `human-only` spec skipped in a cluster/batch drain with the drain continuing; unblock-on-blocker-Completed; Rejected-blocker surfaces permanent block; `queue move` inverting a `blocked-by` order warns but still succeeds
+      - [ ] `aida doctor verify-relationships` validates `blocked-by` targets resolve (composes — a `blocked-by` pointing at a non-existent spec is a dangling dep)
+
+      ## Out of scope
+
+      - **Hard rejection of a dependency-inverting reorder** — `queue move`/`add` *warn*, they never refuse; staging work ahead of its blocker is sometimes deliberate
+      - **Completing a `human-only` spec** — the human marks it done with a normal `aida edit --status`; this STORY only makes the drain *skip* it, it adds no special completion path
+      - **Transitive-chain resolution** — `A blocked-by B blocked-by C`: the direct check suffices (if B isn't Completed for any reason, A is blocked); no recursion needed
+      - **Auto-filing the blocker** — if a spec is blocked-by an unfiled thing, that's TASK-311's spec-audit job (dangling-dependency check); this STORY handles blocked-by-a-filed-spec
+      - **Soft/priority dependencies** — `blocked-by` is a hard gate; "should come after but not strictly blocked" is a different (out-of-scope) notion
+
+      ## Composes with
+
+      - **BUG-241** (orchestrator outcome model — "un-pickable" is a state alongside the false-failure cases BUG-241 covered; this STORY adds the *pre-pickup* gate so the orchestrator never starts a doomed phase-1, while BUG-241's reconcile remains the post-phase safety net)
+      - **STORY-332 / STORY-287** (the autonomy taxonomy — `human-only` is a *third* un-pickable category beyond a `blocked-by` dependency and a `/aida-punt` design-fork: a spec no agent can ever do, vs. a fork an agent escalates mid-task)
+      - **STORY-276 / STORY-332 / STORY-306** (the live blocked-by chain — worked example 1)
+      - **TASK-311** (dialog-role spec-audit — a typed `blocked-by` makes the dangling-dependency check machine-checkable)
+      - **TASK-310** (`--batches` chaining — batch drains must skip un-pickable members)
+      - AIDA's typed-relationship machinery + `aida doctor verify-relationships`
+
+      ## Origin
+
+      2026-05-19: STORY-276's implementer found it hard-blocked on STORY-332, burned a pickup discovering it, and STORY-276 then sat at the queue head where every head-pickup would re-trip on it. The block was prose-only — invisible to the orchestrator/queue. Later the same day, aida-tutor's TASK-2 (a human-only AC-1 gate) showed the second flavour: an `aida queue work epic-5 --auto-complete` cluster drain would try to auto-work a person-in-the-room task. Typed `blocked-by` + `human-only` markers + a pre-pickup check make un-pickable specs machine-visible and skipped cleanly, instead of discovered the hard way one doomed phase at a time. The ordering-time warning (fix point 6) and the `human-only` marker (point 7) were folded in 2026-05-19.
+clock: 828
 node_id: '1'
