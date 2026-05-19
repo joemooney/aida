@@ -31,4 +31,4 @@ current state of AIDA**. For current docs, see:
 
 ### Snapshot evaluations
 - `PROJECT_EVALUATION_2026-02-28.md` — point-in-time project evaluation,
-  superseded by `docs/competitive-analysis.md` and `OVERVIEW.md`
+  superseded by `docs/competitive-analysis/` and `OVERVIEW.md`
