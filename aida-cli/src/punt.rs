@@ -49,9 +49,30 @@ pub struct PuntRecord {
     /// Role / agent that raised the punt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raised_by: Option<String>,
-    /// How the punt resolved. `"punted"` until STORY-325's analysis layer
-    /// records an outcome — kept as a string for forward compatibility.
+    /// How the punt resolved. `"punted"` for a plain implementer punt;
+    /// STORY-306's advisor tier writes `"advisor-resolved"`,
+    /// `"escalated-to-human"`, or `"escalate-defaulted"`; STORY-325's
+    /// analysis layer records later outcomes. Kept a string for forward
+    /// compatibility.
     pub resolution_path: String,
+    /// STORY-306: the A/B/C calibration class a headless advisor assigned
+    /// this fork (`"A"` recorded-principle, `"B"` recorded-preference,
+    /// `"C"` synthesized-context). `None` for a plain implementer punt the
+    /// advisor never judged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub classification: Option<String>,
+    /// STORY-306: on an advisor escalation, the categorized reason a human
+    /// is needed (e.g. `"strategy"`, `"irreversible"`, `"unrecorded-context"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escalation_reason: Option<String>,
+    /// STORY-306: the answer the advisor resolved the fork with — present
+    /// when `resolution_path` is `"advisor-resolved"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer: Option<String>,
+    /// STORY-306: who produced the resolution — e.g. `"advisor"`. `None` for
+    /// a plain implementer punt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answered_by: Option<String>,
 }
 
 /// Path to the punt ledger for a project, given its root directory.
@@ -137,6 +158,114 @@ pub fn write_signal(path: &Path, signal: &PuntSignal) -> anyhow::Result<()> {
 /// Read a punt signal file. `None` when the file is absent or unparseable —
 /// either way the orchestrator reads it as "no punt happened".
 pub fn read_signal(path: &Path) -> Option<PuntSignal> {
+    let body = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&body).ok()
+}
+
+// --- Advisor punt-request / punt-response channel (STORY-306) ---------------
+//
+// STORY-306 inserts a headless *advisor* tier between the implementer's punt
+// and the human. When phase 1 punts, the orchestrator assembles a rich,
+// ultraplan-grade payload — a `PuntRequest` — writes it to a file, and spawns
+// a headless advisor. The advisor judges the fork and writes a `PuntResponse`
+// back. The channel is the proven file-based async handshake (STORY-263
+// verdict files, STORY-285 findings, the TASK-329 sentinel): one request file
+// in, one response file out, both under `.aida/punts/`. trace:STORY-306
+
+/// What a headless advisor decided about a punted design-fork.
+/// trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PuntResolution {
+    /// The advisor judged the fork — `PuntResponse::answer` carries the call.
+    Resolved,
+    /// The advisor escalated the fork to a human — it could not safely judge
+    /// it (strategy, irreversibility, un-recorded context).
+    Escalated,
+}
+
+/// The rich, ultraplan-grade payload the orchestrator writes for a headless
+/// advisor to judge a punted design-fork. Everything an advisor with **no
+/// session context** needs: the structured fork (`question` + `options` +
+/// `stakes` + `lean`) plus a markdown brief (`context_markdown` — the spec,
+/// its acceptance, graph context, trace-graph helpers). trace:STORY-306
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PuntRequest {
+    /// Display ID of the punted spec.
+    pub spec: String,
+    /// The obstacle category the implementer picked when it punted.
+    pub category: PuntCategory,
+    /// The fork as a question — what the advisor must decide.
+    pub question: String,
+    /// The candidate answers the implementer enumerated, if any.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<String>,
+    /// The code area the fork lives in, if the implementer named one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_area: Option<String>,
+    /// Why the fork matters — what a wrong call would cost.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stakes: Option<String>,
+    /// The implementer's best guess if forced to choose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lean: Option<String>,
+    /// The assembled ultraplan-grade brief — spec description, acceptance,
+    /// parent/child/sibling context, trace-graph helpers — as markdown.
+    pub context_markdown: String,
+}
+
+/// The headless advisor's answer to a [`PuntRequest`], written back for the
+/// orchestrator to act on. trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PuntResponse {
+    /// Whether the advisor resolved the fork or escalated it.
+    pub resolution: PuntResolution,
+    /// The chosen answer — present (and load-bearing) when `resolution` is
+    /// [`PuntResolution::Resolved`]; absent on an escalation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer: Option<String>,
+    /// The advisor's reasoning — why it resolved this way, or why it could
+    /// not. Always present: every advisor decision is auditable.
+    pub reasoning: String,
+    /// The A/B/C calibration class the advisor assigned the fork.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub classification: Option<String>,
+    /// On an escalation, the categorized reason a human is needed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escalation_reason: Option<String>,
+}
+
+/// Path the orchestrator provisions for a spec's punt-request payload —
+/// `.aida/punts/<spec>.request.json` under the (main) project root.
+pub fn punt_request_path(project_root: &Path, spec: &str) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("punts")
+        .join(format!("{spec}.request.json"))
+}
+
+/// Path the headless advisor writes its response to —
+/// `.aida/punts/<spec>.response.json`.
+pub fn punt_response_path(project_root: &Path, spec: &str) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("punts")
+        .join(format!("{spec}.response.json"))
+}
+
+/// Write a punt-request file, creating `.aida/punts/` if needed.
+pub fn write_punt_request(path: &Path, request: &PuntRequest) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(request)?)?;
+    Ok(())
+}
+
+/// Read a punt-response file. `None` when the file is absent or unparseable
+/// — either way the orchestrator reads it as "the advisor produced no usable
+/// answer" and falls back to the escalate path.
+pub fn read_punt_response(path: &Path) -> Option<PuntResponse> {
     let body = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&body).ok()
 }
@@ -233,6 +362,10 @@ mod tests {
             lean: Some("OAuth".to_string()),
             raised_by: Some("implementer".to_string()),
             resolution_path: "punted".to_string(),
+            classification: None,
+            escalation_reason: None,
+            answer: None,
+            answered_by: None,
         };
         append_to_ledger(dir.path(), &record).unwrap();
         // A second punt appends rather than overwrites.
@@ -245,5 +378,102 @@ mod tests {
         assert_eq!(parsed, record);
         // Category serialises kebab-case so the ledger is human-readable.
         assert!(lines[0].contains("\"design-fork\""), "{}", lines[0]);
+    }
+
+    #[test]
+    fn punt_request_roundtrips_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = punt_request_path(dir.path(), "STORY-306");
+        assert!(
+            path.ends_with("punts/STORY-306.request.json"),
+            "{}",
+            path.display()
+        );
+        let request = PuntRequest {
+            spec: "STORY-306".to_string(),
+            category: PuntCategory::DesignFork,
+            question: "flag name --json vs --format json?".to_string(),
+            options: vec!["--json bool".to_string(), "--format json".to_string()],
+            code_area: Some("aida-cli/src/cli.rs".to_string()),
+            stakes: Some("a published flag is hard to rename".to_string()),
+            lean: Some("--json bool — AIDA's recorded convention".to_string()),
+            context_markdown: "## Requirement\n\nAdd a --json flag.".to_string(),
+        };
+        write_punt_request(&path, &request).unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        let parsed: PuntRequest = serde_json::from_str(&body).unwrap();
+        assert_eq!(parsed, request);
+    }
+
+    #[test]
+    fn punt_response_resolved_and_escalated_parse() {
+        // Resolved — answer + reasoning + classification present.
+        let resolved = PuntResponse {
+            resolution: PuntResolution::Resolved,
+            answer: Some("use a bare --json bool".to_string()),
+            reasoning: "AIDA's recorded flag convention is a bare --json bool".to_string(),
+            classification: Some("A".to_string()),
+            escalation_reason: None,
+        };
+        let json = serde_json::to_string(&resolved).unwrap();
+        assert!(json.contains("\"resolution\":\"resolved\""), "{json}");
+        assert_eq!(
+            serde_json::from_str::<PuntResponse>(&json).unwrap(),
+            resolved
+        );
+
+        // Escalated — no answer, an escalation_reason instead.
+        let escalated = PuntResponse {
+            resolution: PuntResolution::Escalated,
+            answer: None,
+            reasoning: "a project-strategy call with no recorded principle".to_string(),
+            classification: Some("C".to_string()),
+            escalation_reason: Some("strategy".to_string()),
+        };
+        let json = serde_json::to_string(&escalated).unwrap();
+        assert!(json.contains("\"resolution\":\"escalated\""), "{json}");
+        assert_eq!(
+            serde_json::from_str::<PuntResponse>(&json).unwrap(),
+            escalated
+        );
+    }
+
+    #[test]
+    fn read_punt_response_none_on_absent_or_garbage() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = punt_response_path(dir.path(), "STORY-306");
+        // Absent file → no usable response.
+        assert_eq!(read_punt_response(&path), None);
+        // A garbage file reads as "no response" rather than erroring.
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "not json").unwrap();
+        assert_eq!(read_punt_response(&path), None);
+    }
+
+    #[test]
+    fn punt_record_carries_advisor_fields() {
+        // A record with the STORY-306 advisor fields round-trips.
+        let record = PuntRecord {
+            timestamp: Utc::now(),
+            spec: "STORY-306".to_string(),
+            category: PuntCategory::DesignFork,
+            detail: "flag naming fork".to_string(),
+            lean: None,
+            raised_by: Some("implementer".to_string()),
+            resolution_path: "advisor-resolved".to_string(),
+            classification: Some("A".to_string()),
+            escalation_reason: None,
+            answer: Some("use a bare --json bool".to_string()),
+            answered_by: Some("advisor".to_string()),
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        assert_eq!(serde_json::from_str::<PuntRecord>(&json).unwrap(), record);
+
+        // An old record with the advisor fields absent still deserializes —
+        // they are all `#[serde(default)]`.
+        let old = r#"{"timestamp":"2026-05-19T10:00:00Z","spec":"STORY-1","category":"design-fork","detail":"x","resolution_path":"punted"}"#;
+        let parsed: PuntRecord = serde_json::from_str(old).unwrap();
+        assert_eq!(parsed.classification, None);
+        assert_eq!(parsed.answer, None);
     }
 }

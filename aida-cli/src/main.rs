@@ -1223,6 +1223,12 @@ fn handle_punt_command(
             lean: lean.map(|s| s.to_string()),
             raised_by: raised_by.clone(),
             resolution_path: "punted".to_string(),
+            // STORY-306 advisor fields — a plain implementer punt the advisor
+            // has not yet judged; the orchestrator's advisor tier fills these.
+            classification: None,
+            escalation_reason: None,
+            answer: None,
+            answered_by: None,
         };
         if let Err(e) = punt::append_to_ledger(&project_root, &record) {
             eprintln!(
@@ -20706,6 +20712,46 @@ cargo test -p aida-cli
         assert!(ultraplan_comments_section(&[]).is_none());
     }
 
+    /// STORY-306: the punt payload carries the spec's identity + the fork
+    /// question from the `AttentionReason`, and embeds the ultraplan-grade
+    /// context brief so a fresh advisor has the full spec context.
+    #[test]
+    fn assemble_punt_payload_includes_spec_and_fork() {
+        use aida_core::{AttentionReason, PuntCategory, Requirement, RequirementsStore};
+
+        let mut store = RequirementsStore::new();
+        let mut spec = Requirement::new(
+            "Add a --json flag".into(),
+            "Intro.\n\n## Acceptance\n\n- [ ] emits JSON\n".into(),
+        );
+        spec.spec_id = Some("TASK-9".into());
+        store.requirements.push(spec);
+        let attention = AttentionReason {
+            category: PuntCategory::DesignFork,
+            detail: "flag name --json vs --format json — no recorded convention".into(),
+            lean: Some("--json bool".into()),
+            raised_by: Some("implementer".into()),
+            raised_at: chrono::Utc::now(),
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let payload = assemble_punt_payload(&store, &store.requirements[0], dir.path(), &attention);
+        assert_eq!(payload.spec, "TASK-9");
+        assert_eq!(payload.category, PuntCategory::DesignFork);
+        assert!(
+            payload.question.contains("--json vs --format"),
+            "{}",
+            payload.question
+        );
+        assert_eq!(payload.lean.as_deref(), Some("--json bool"));
+        // The context brief embeds the ultraplan-grade spec context.
+        assert!(
+            payload.context_markdown.contains("TASK-9"),
+            "{}",
+            payload.context_markdown
+        );
+        assert!(payload.context_markdown.contains("emits JSON"));
+    }
+
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
     /// suffix so the auto-bump pass can match review stories filed against
     /// that PR. trace:BUG-102 | ai:claude
@@ -29122,6 +29168,39 @@ fn ultraplan_comments_section(comments: &[aida_core::models::Comment]) -> Option
 /// comments into a `## Comments` section (TASK-247). Returns the prompt
 /// and any warnings to surface. Pure over its inputs so it is
 /// unit-testable. trace:TASK-113 TASK-247 | ai:claude
+/// Assemble the rich, ultraplan-grade punt payload (STORY-306) a headless
+/// advisor judges. The structured fork fields come from the punted spec's
+/// recorded [`AttentionReason`](aida_core::AttentionReason) — what `aida
+/// punt` captured — and the `context_markdown` body reuses the `aida
+/// ultraplan` machinery (`assemble_ultraplan_prompt` + the trace-graph
+/// `build_reusable_helpers_section`), so an advisor with **no session
+/// context** has everything the implementer's `/ultraplan` would have.
+/// Split out as a deterministic, unit-testable transform — no session, no
+/// subprocess. trace:STORY-306 | ai:claude
+fn assemble_punt_payload(
+    store: &aida_core::RequirementsStore,
+    target: &aida_core::models::Requirement,
+    project_root: &std::path::Path,
+    attention: &aida_core::AttentionReason,
+) -> punt::PuntRequest {
+    let helpers = build_reusable_helpers_section(store, project_root, target);
+    let (context_markdown, _warnings) =
+        assemble_ultraplan_prompt(store, target, helpers.as_deref(), true);
+    punt::PuntRequest {
+        spec: target.display_id(),
+        category: attention.category,
+        question: attention.detail.clone(),
+        // `aida punt` records the fork as free-form `detail` + `lean`; it
+        // does not enumerate options / code-area / stakes separately, so
+        // those structured fields stay empty until a future punt does.
+        options: Vec::new(),
+        code_area: None,
+        stakes: None,
+        lean: attention.lean.clone(),
+        context_markdown,
+    }
+}
+
 fn assemble_ultraplan_prompt(
     store: &aida_core::RequirementsStore,
     target: &aida_core::models::Requirement,
