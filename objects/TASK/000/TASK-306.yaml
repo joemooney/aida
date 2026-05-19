@@ -84,12 +84,12 @@ description: |-
   > "kicked it on --no-human but I am prompted [implementer table at end of phase 1] do I need to have entered implementer role? ... maybe put something in the statusline as well"
 
   The role question turned out to be a separate issue (resolved: yes, switch role) — but the deeper issue is that \`--no-human\` doesn't communicate its reviewer-only scope. User retired for the night expecting batch:pr-64-cleanup to drain; in practice only TASK-303 will land before phase 1 of BUG-224 stalls for input.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:55:51.242806850Z
-modified_at: 2026-05-17T18:50:47.998966938Z
+modified_at: 2026-05-19T05:53:26.570123893Z
 req_type: Task
 tags:
 - alpha-readiness
