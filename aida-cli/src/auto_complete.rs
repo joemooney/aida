@@ -371,6 +371,54 @@ pub(crate) enum ImplementerOutcome {
     Punted { reason: String },
 }
 
+/// The outcome of phase 3 — the reviewer session. The reviewer either
+/// reaches a [`Verdict`] (the normal path — `Approved` continues to merge,
+/// anything else stops the pipeline), or *escalates the merge decision to a
+/// human*. Under `--no-human` the reviewer cannot reach a person, so when
+/// the merge call turns on something it should not decide unattended
+/// (uncertain zen provenance, an irreversible call) it writes its verdict
+/// file with `merge: escalated-to-human` and the orchestrator stops cleanly
+/// — exit `0`, no merge, no failure — leaving the PR for a human. An
+/// escalation is the reviewer's honest "I will not auto-merge this": it is
+/// neither a crash nor a `RequestChanges`, so it is a first-class third
+/// outcome of phase 3 (BUG-241 items 4-5). trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReviewerOutcome {
+    /// The reviewer reached a verdict — phase 3 proceeds on it.
+    Verdict(Verdict),
+    /// The reviewer escalated the *merge* decision to a human. `reason` is
+    /// the one-line "why" surfaced in the run epilogue.
+    EscalatedToHuman { reason: String },
+}
+
+/// Which tier escalated a decision to a human — selects the
+/// [`finish_escalated`] epilogue wording. An escalated *merge* decision (the
+/// reviewer would not auto-merge) and an escalated *design-fork* (the
+/// headless advisor would not resolve a punt) are the same orchestration
+/// outcome — exit `0`, the drain advances, a human triages — so they share
+/// one terminal path, distinguished only for the epilogue wording.
+/// trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EscalationKind {
+    /// The reviewer escalated a merge decision (phase 3).
+    MergeDecision,
+    /// The headless advisor escalated a punted design-fork (phase 1 tier).
+    DesignFork,
+}
+
+/// Set on an [`OrchestrationResult`] when the run ended in an escalation — a
+/// first-class non-failure stop (BUG-241 items 4-5, STORY-306). Mirrors
+/// STORY-276's `punt_reason`: the run exits `0` with no `failed_phase`, and
+/// this is the field that distinguishes an escalation from a clean ship.
+/// trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EscalationSummary {
+    /// Which tier escalated — picks the epilogue wording.
+    pub(crate) kind: EscalationKind,
+    /// One-line "why a human is needed", surfaced in the run epilogue.
+    pub(crate) reason: String,
+}
+
 /// Outcome of an [`orchestrate`] run — the process exit code plus the
 /// telemetry the caller needs to log the run and, on failure, auto-draft a
 /// BUG. Returning this instead of a bare `i32` keeps `orchestrate` pure: it
@@ -403,6 +451,13 @@ pub(crate) struct OrchestrationResult {
     /// or when the driver could not determine an id from the PR's commits.
     /// trace:BUG-245 | ai:claude
     pub(crate) shipped_spec_id: Option<String>,
+    /// STORY-306: set when the run ended in an escalation — the reviewer would
+    /// not auto-merge, or the headless advisor would not resolve a punted
+    /// design-fork. Like `punt_reason` this is a non-failure stop (`exit_code`
+    /// `0`, `failed_phase` `None`); it carries the escalation kind + reason so
+    /// the caller can log the run and a batch drain can sort the spec apart
+    /// from a clean ship. trace:STORY-306 | ai:claude
+    pub(crate) escalation: Option<EscalationSummary>,
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -419,7 +474,11 @@ pub(crate) trait PhaseDriver {
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
     /// Phase 3 — run the reviewer Claude session and read its verdict file.
-    fn run_reviewer(&mut self) -> Result<Verdict, PhaseFailure>;
+    /// Returns [`ReviewerOutcome::Verdict`] on a normal review, or
+    /// [`ReviewerOutcome::EscalatedToHuman`] when the reviewer wrote
+    /// `merge: escalated-to-human` rather than auto-deciding the merge
+    /// (STORY-306).
+    fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure>;
     /// Phase 4 — merge the PR.
     fn merge(&mut self) -> Result<(), PhaseFailure>;
     /// Phase 5 — `aida pull` (auto-bumps Done → Completed).
@@ -747,6 +806,7 @@ fn finish_success(
         total_ms: elapsed,
         punt_reason: None,
         shipped_spec_id,
+        escalation: None,
     }
 }
 
@@ -819,6 +879,90 @@ fn finish_punted(
         total_ms: elapsed,
         punt_reason: Some(reason.to_string()),
         shipped_spec_id: None,
+        escalation: None,
+    }
+}
+
+/// Print the escalation epilogue and build a *non-failure* terminal
+/// [`OrchestrationResult`] (STORY-306). Two tiers escalate to a human and
+/// share this path: the reviewer that will not auto-merge a PR
+/// ([`EscalationKind::MergeDecision`], BUG-241 items 4-5) and the headless
+/// advisor that will not resolve a punted design-fork
+/// ([`EscalationKind::DesignFork`]). Both are honest stops, not failures —
+/// the run exits `0` with no `failed_phase`, the PR / spec is left for a
+/// human, and a batch drain advances. `escalation` is the field that
+/// distinguishes the run from a clean ship; the human triages it via
+/// `aida findings`. trace:STORY-306 | ai:claude
+fn finish_escalated(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+    kind: EscalationKind,
+    reason: &str,
+) -> OrchestrationResult {
+    let elapsed = start.elapsed().as_millis();
+    // The escalation surfaced in a specific phase — phase 3 for a merge
+    // decision, phase 1 (the punt) for a design-fork.
+    let phase = match kind {
+        EscalationKind::MergeDecision => Phase::Reviewer,
+        EscalationKind::DesignFork => Phase::Implementer,
+    };
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                phase.slug(),
+                "escalated",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "escalated",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+    } else {
+        let what = match kind {
+            EscalationKind::MergeDecision => "the reviewer escalated the merge decision to a human",
+            EscalationKind::DesignFork => "the advisor escalated a design-fork to a human",
+        };
+        eprintln!();
+        eprintln!("{} {}: {}", "⏸".yellow().bold(), what, reason);
+        eprintln!(
+            "  {} {}",
+            "→".dimmed(),
+            "left for a human — triage it with `aida findings list`".cyan()
+        );
+        eprintln!();
+        eprintln!(
+            "{} {} escalated ({}) — drain continues, a human decides",
+            "⏸".yellow().bold(),
+            spec.bold(),
+            fmt_duration(elapsed)
+        );
+    }
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: durations,
+        total_ms: elapsed,
+        punt_reason: None,
+        shipped_spec_id: None,
+        escalation: Some(EscalationSummary {
+            kind,
+            reason: reason.to_string(),
+        }),
     }
 }
 
@@ -883,6 +1027,7 @@ fn finish_failure(
         total_ms: elapsed,
         punt_reason: None,
         shipped_spec_id: None,
+        escalation: None,
     }
 }
 
@@ -949,6 +1094,7 @@ fn finish_reconciled(
         total_ms: elapsed,
         punt_reason: None,
         shipped_spec_id: None,
+        escalation: None,
     }
 }
 
@@ -1082,7 +1228,24 @@ pub(crate) fn orchestrate(
                 durations,
             );
         }
-        Ok(verdict) if verdict != Verdict::Approved => {
+        // STORY-306: the reviewer escalated the merge decision to a human
+        // rather than auto-deciding it (uncertain zen provenance, an
+        // irreversible call). A clean stop, not a failure — exit `0`, no
+        // merge runs, the PR is left for a human. Distinct from a
+        // non-Approved verdict (which still fails the phase below) and from a
+        // crashed reviewer. trace:STORY-306 | ai:claude
+        Ok(ReviewerOutcome::EscalatedToHuman { reason }) => {
+            durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+            return finish_escalated(
+                spec,
+                json,
+                &start,
+                durations,
+                EscalationKind::MergeDecision,
+                &reason,
+            );
+        }
+        Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
             durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
             let f = PhaseFailure::new(format!(
                 "reviewer verdict is {} — not Approved",
@@ -1098,7 +1261,7 @@ pub(crate) fn orchestrate(
                 durations,
             );
         }
-        Ok(_) => {}
+        Ok(ReviewerOutcome::Verdict(_)) => {}
     }
     durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
     emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
@@ -1186,6 +1349,11 @@ pub(crate) struct BatchDrainResult {
     /// (the punted spec leaves the queue on its own) but it did *not* ship, so
     /// the batch summary must not claim it did.
     pub(crate) punted: Vec<String>,
+    /// STORY-306: spec-ids the drain *escalated to a human*, in drain order —
+    /// the reviewer would not auto-merge, or the headless advisor would not
+    /// resolve a punted design-fork. Like `punted`, an escalation advances the
+    /// drain but did not ship; kept apart so the batch summary is honest.
+    pub(crate) escalated: Vec<String>,
     /// The spec the drain stopped on — set for `Failed` / `Stalled`, `None`
     /// for a clean `Drained` / `MaxReached`.
     pub(crate) stopped_at: Option<String>,
@@ -1216,6 +1384,7 @@ pub(crate) trait BatchDriver {
 pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> BatchDrainResult {
     let mut shipped: Vec<String> = Vec::new();
     let mut punted: Vec<String> = Vec::new();
+    let mut escalated: Vec<String> = Vec::new();
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
@@ -1223,18 +1392,20 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
             return BatchDrainResult {
                 shipped,
                 punted,
+                escalated,
                 stopped_at: None,
                 outcome: BatchDrainOutcome::Drained,
                 exit_code: 0,
             };
         };
-        // `--max` bounds how many members the drain *acts on* — shipped or
-        // punted, both consume a slot (each ran a full phase-1 attempt).
+        // `--max` bounds how many members the drain *acts on* — shipped,
+        // punted, or escalated, each consumed a slot (a full phase attempt).
         if let Some(limit) = max {
-            if shipped.len() + punted.len() >= limit {
+            if shipped.len() + punted.len() + escalated.len() >= limit {
                 return BatchDrainResult {
                     shipped,
                     punted,
+                    escalated,
                     stopped_at: None,
                     outcome: BatchDrainOutcome::MaxReached,
                     exit_code: 0,
@@ -1244,13 +1415,14 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
         // A spec we already acted on resurfacing as the head means the queue
         // did not advance — its run reported success but it never left the
         // queue, so it was not really shipped. Drop it from `shipped` and
-        // stop rather than loop forever on it. (A punted spec leaves the
-        // queue via `NeedsAttention`, so it cannot resurface this way.)
+        // stop rather than loop forever on it. (A punted / escalated spec
+        // leaves the queue, so it cannot resurface this way.)
         if shipped.iter().any(|s| s == &head) {
             shipped.retain(|s| s != &head);
             return BatchDrainResult {
                 shipped,
                 punted,
+                escalated,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Stalled,
                 exit_code: 1,
@@ -1262,6 +1434,7 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
             return BatchDrainResult {
                 shipped,
                 punted,
+                escalated,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Failed(phase),
                 exit_code: result.exit_code,
@@ -1278,6 +1451,7 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
             return BatchDrainResult {
                 shipped,
                 punted,
+                escalated,
                 stopped_at: Some(head.clone()),
                 outcome: BatchDrainOutcome::Mismatched {
                     dispatched: head,
@@ -1286,10 +1460,14 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
                 exit_code: 0,
             };
         }
-        // STORY-276: a punt is a clean exit (`exit_code` 0) — the drain
-        // advances — but the spec parked, it did not ship. Sort it accordingly.
+        // A punt and an escalation are both clean exits (`exit_code` 0) — the
+        // drain advances — but the spec did not ship. Sort each accordingly so
+        // the batch summary never claims a parked / escalated spec shipped.
+        // trace:STORY-276, STORY-306 | ai:claude
         if result.punt_reason.is_some() {
             punted.push(head);
+        } else if result.escalation.is_some() {
+            escalated.push(head);
         } else {
             shipped.push(head);
         }
@@ -1319,6 +1497,10 @@ mod tests {
         /// (default) preserves the pre-BUG-245 behaviour — the dispatched id
         /// is credited.
         shipped_spec_id: Option<String>,
+        /// STORY-306: when `Some`, `run_reviewer` returns
+        /// [`ReviewerOutcome::EscalatedToHuman`] with this reason instead of a
+        /// verdict — the reviewer escalated the merge decision.
+        reviewer_escalates: Option<String>,
     }
 
     impl MockPhaseDriver {
@@ -1330,6 +1512,7 @@ mod tests {
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
                 shipped_spec_id: None,
+                reviewer_escalates: None,
             }
         }
 
@@ -1341,6 +1524,7 @@ mod tests {
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
                 shipped_spec_id: None,
+                reviewer_escalates: None,
             }
         }
 
@@ -1352,6 +1536,7 @@ mod tests {
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
                 shipped_spec_id: None,
+                reviewer_escalates: None,
             }
         }
 
@@ -1365,6 +1550,21 @@ mod tests {
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: Some(reason.to_string()),
                 shipped_spec_id: None,
+                reviewer_escalates: None,
+            }
+        }
+
+        /// STORY-306: make `run_reviewer` escalate the merge decision —
+        /// phase 3 returns [`ReviewerOutcome::EscalatedToHuman`] with `reason`.
+        fn reviewer_escalates_merge(reason: &str) -> Self {
+            Self {
+                calls: Vec::new(),
+                fail_at: None,
+                verdict: Verdict::Approved,
+                reconcile: PhaseReconcile::GenuineFailure,
+                punt: None,
+                shipped_spec_id: None,
+                reviewer_escalates: Some(reason.to_string()),
             }
         }
 
@@ -1407,9 +1607,14 @@ mod tests {
         fn finish_ci(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Ci)
         }
-        fn run_reviewer(&mut self) -> Result<Verdict, PhaseFailure> {
+        fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure> {
             self.record(Phase::Reviewer)?;
-            Ok(self.verdict)
+            match &self.reviewer_escalates {
+                Some(reason) => Ok(ReviewerOutcome::EscalatedToHuman {
+                    reason: reason.clone(),
+                }),
+                None => Ok(ReviewerOutcome::Verdict(self.verdict)),
+            }
         }
         fn merge(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Merge)
@@ -1616,6 +1821,47 @@ mod tests {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::Approved);
         let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
         assert_eq!(code, 0);
+    }
+
+    // --- STORY-306: reviewer escalates the merge decision to a human ------
+
+    /// The reviewer escalates the merge decision rather than auto-deciding
+    /// it. `orchestrate` stops cleanly after phase 3 — no merge / pull /
+    /// build — exits `0`, and the result carries the escalation so the run
+    /// is mistaken for neither a clean ship nor a failure.
+    #[test]
+    fn orchestrate_reviewer_escalated_to_human_skips_merge() {
+        let mut driver = MockPhaseDriver::reviewer_escalates_merge(
+            "uncertain whether the zen run was corroborated — a human should merge",
+        );
+        let result = orchestrate(&mut driver, "BUG-241", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 0, "an escalation is a clean exit");
+        assert_eq!(result.failed_phase, None);
+        assert!(result.failure.is_none());
+        let escalation = result.escalation.expect("escalation recorded");
+        assert_eq!(escalation.kind, EscalationKind::MergeDecision);
+        assert!(
+            escalation.reason.contains("zen run"),
+            "{}",
+            escalation.reason
+        );
+        // The pipeline stopped at phase 3 — merge / pull / build never ran.
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer, Phase::Ci, Phase::Reviewer]
+        );
+    }
+
+    /// Regression guard — an escalation is a *distinct* outcome from a
+    /// non-Approved verdict. A plain `RequestChanges` verdict still routes
+    /// through the phase-3 failure path (exit `3`), unchanged.
+    #[test]
+    fn orchestrate_reviewer_request_changes_still_fails() {
+        let mut driver = MockPhaseDriver::with_verdict(Verdict::RequestChanges);
+        let result = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        assert!(result.escalation.is_none());
     }
 
     // --- BUG-241: reconcile against reality before declaring a failure ----
@@ -2184,6 +2430,7 @@ mod tests {
             total_ms: 0,
             punt_reason: None,
             shipped_spec_id: None,
+            escalation: None,
         }
     }
 
@@ -2196,6 +2443,7 @@ mod tests {
             total_ms: 0,
             punt_reason: None,
             shipped_spec_id: None,
+            escalation: None,
         }
     }
 
@@ -2210,6 +2458,7 @@ mod tests {
             total_ms: 0,
             punt_reason: Some("mock punt: design-fork".to_string()),
             shipped_spec_id: None,
+            escalation: None,
         }
     }
 
@@ -2225,6 +2474,25 @@ mod tests {
             total_ms: 0,
             punt_reason: None,
             shipped_spec_id: Some(shipped.to_string()),
+            escalation: None,
+        }
+    }
+
+    /// STORY-306: an escalated [`OrchestrationResult`] — exit `0`, no
+    /// `failed_phase`, `escalation` set. The shape `finish_escalated` returns.
+    fn escalated_result() -> OrchestrationResult {
+        OrchestrationResult {
+            exit_code: 0,
+            failed_phase: None,
+            failure: None,
+            phase_durations: Vec::new(),
+            total_ms: 0,
+            punt_reason: None,
+            shipped_spec_id: None,
+            escalation: Some(EscalationSummary {
+                kind: EscalationKind::MergeDecision,
+                reason: "mock escalation: merge decision".to_string(),
+            }),
         }
     }
 
@@ -2244,6 +2512,7 @@ mod tests {
         /// stays in `heads` (matching reality — the implementer dequeued the
         /// shipped spec, not the dispatched one). trace:BUG-245 | ai:claude
         mismatch: Option<(String, String)>,
+        escalate_spec: Option<String>,
         runs: Vec<String>,
     }
 
@@ -2255,6 +2524,7 @@ mod tests {
                 stall_spec: None,
                 punt_spec: None,
                 mismatch: None,
+                escalate_spec: None,
                 runs: Vec::new(),
             }
         }
@@ -2280,6 +2550,12 @@ mod tests {
         /// and the dispatched one is still queued. trace:BUG-245 | ai:claude
         fn mismatching(mut self, dispatched: &str, shipped: &str) -> Self {
             self.mismatch = Some((dispatched.to_string(), shipped.to_string()));
+            self
+        }
+
+        /// STORY-306: mark `spec` so its run returns an escalated result.
+        fn escalating(mut self, spec: &str) -> Self {
+            self.escalate_spec = Some(spec.to_string());
             self
         }
     }
@@ -2315,6 +2591,12 @@ mod tests {
                     // re-running the dispatched head. trace:BUG-245
                     return mismatch_result(shipped);
                 }
+            }
+            if self.escalate_spec.as_deref() == Some(spec) {
+                // An escalation leaves the queue and advances the drain, like
+                // a punt — but lands in `escalated`, not `shipped`.
+                self.heads.retain(|h| h != spec);
+                return escalated_result();
             }
             // Normal success — the completed spec leaves the queue.
             self.heads.retain(|h| h != spec);
@@ -2407,6 +2689,21 @@ mod tests {
         assert_eq!(result.shipped, vec!["TASK-1", "TASK-3"]);
         assert_eq!(result.punted, vec!["TASK-2"]);
         // Every member ran — the punt did not stall or short-circuit the drain.
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
+    }
+
+    /// STORY-306: an escalated member advances the drain like a punt — it
+    /// leaves the queue, the batch keeps going — but it lands in `escalated`,
+    /// not `shipped`, so the summary does not claim it shipped.
+    #[test]
+    fn drain_batch_escalated_member_advances_the_drain() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]).escalating("TASK-2");
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 0, "an escalation does not fail the drain");
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-3"]);
+        assert_eq!(result.escalated, vec!["TASK-2"]);
+        assert!(result.punted.is_empty());
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
     }
 

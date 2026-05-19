@@ -48189,6 +48189,7 @@ fn handle_auto_complete_batch(
     let exit_code = if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
         && result.shipped.is_empty()
         && result.punted.is_empty()
+        && result.escalated.is_empty()
     {
         1
     } else {
@@ -48266,6 +48267,21 @@ fn emit_batch_drain_summary(
             "punted_count".to_string(),
             serde_json::Value::Number((result.punted.len() as u64).into()),
         );
+        // STORY-306: escalated members — left for a human, not shipped.
+        obj.insert(
+            "escalated".to_string(),
+            serde_json::Value::Array(
+                result
+                    .escalated
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "escalated_count".to_string(),
+            serde_json::Value::Number((result.escalated.len() as u64).into()),
+        );
         obj.insert(
             "stopped_at".to_string(),
             match &result.stopped_at {
@@ -48290,7 +48306,11 @@ fn emit_batch_drain_summary(
     let plural = if n == 1 { "" } else { "s" };
     eprintln!();
     match &result.outcome {
-        BatchDrainOutcome::Drained if result.shipped.is_empty() && result.punted.is_empty() => {
+        BatchDrainOutcome::Drained
+            if result.shipped.is_empty()
+                && result.punted.is_empty()
+                && result.escalated.is_empty() =>
+        {
             eprintln!(
                 "{} no queued items tagged `batch:{batch_name}` — tag members \
                  via `aida edit <id> --tags batch:{batch_name}` first",
@@ -48384,6 +48404,19 @@ fn emit_batch_drain_summary(
             "⏸".yellow(),
             if pn == 1 { "" } else { "s" },
             result.punted.join(", ")
+        );
+    }
+    // STORY-306: name the members the drain escalated to a human — the
+    // reviewer would not auto-merge, or the advisor would not resolve a
+    // design-fork. The drain advanced past them; a human decides.
+    if !result.escalated.is_empty() {
+        let en = result.escalated.len();
+        eprintln!(
+            "  {} {en} spec{} escalated to a human: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if en == 1 { "" } else { "s" },
+            result.escalated.join(", ")
         );
     }
 }
@@ -48606,6 +48639,7 @@ fn handle_auto_complete_next_n(
     let exit_code = if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
         && result.shipped.is_empty()
         && result.punted.is_empty()
+        && result.escalated.is_empty()
     {
         1
     } else {
@@ -48681,6 +48715,21 @@ fn emit_next_n_drain_summary(
             "punted_count".to_string(),
             serde_json::Value::Number((result.punted.len() as u64).into()),
         );
+        // STORY-306: escalated members — left for a human, not shipped.
+        obj.insert(
+            "escalated".to_string(),
+            serde_json::Value::Array(
+                result
+                    .escalated
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "escalated_count".to_string(),
+            serde_json::Value::Number((result.escalated.len() as u64).into()),
+        );
         obj.insert(
             "stopped_at".to_string(),
             match &result.stopped_at {
@@ -48705,7 +48754,11 @@ fn emit_next_n_drain_summary(
     let plural = if count == 1 { "" } else { "s" };
     eprintln!();
     match &result.outcome {
-        BatchDrainOutcome::Drained if result.shipped.is_empty() && result.punted.is_empty() => {
+        BatchDrainOutcome::Drained
+            if result.shipped.is_empty()
+                && result.punted.is_empty()
+                && result.escalated.is_empty() =>
+        {
             eprintln!(
                 "{} no drivable items in the queue — nothing to drive",
                 "✗".red().bold()
@@ -48806,6 +48859,17 @@ fn emit_next_n_drain_summary(
             "⏸".yellow(),
             if pn == 1 { "" } else { "s" },
             result.punted.join(", ")
+        );
+    }
+    // STORY-306: name the members the drain escalated to a human.
+    if !result.escalated.is_empty() {
+        let en = result.escalated.len();
+        eprintln!(
+            "  {} {en} spec{} escalated to a human: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if en == 1 { "" } else { "s" },
+            result.escalated.join(", ")
         );
     }
 }
@@ -49125,10 +49189,18 @@ fn latest_run_id_for_branch(branch: &str) -> Option<String> {
 }
 
 /// Read + parse a `.aida/review-verdicts/PR-N.json` verdict file written by
-/// the `/aida-review` skill. trace:STORY-246 | ai:claude
+/// the `/aida-review` skill.
+///
+/// Returns [`auto_complete::ReviewerOutcome::EscalatedToHuman`] when the file
+/// carries `merge: escalated-to-human` — the reviewer wrote a verdict but
+/// escalated the *merge* decision to a human rather than auto-deciding it
+/// (STORY-306) — and [`auto_complete::ReviewerOutcome::Verdict`] otherwise.
+/// The `merge` field is dominant: an escalation is honoured whatever the
+/// `verdict` field says, so the phase-3 handshake artifact always parses.
+/// trace:STORY-246, STORY-306 | ai:claude
 fn read_verdict_file(
     path: &std::path::Path,
-) -> Result<auto_complete::Verdict, auto_complete::PhaseFailure> {
+) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
     let body = std::fs::read_to_string(path).map_err(|_| {
         auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,
@@ -49141,6 +49213,22 @@ fn read_verdict_file(
             format!("the verdict file is not valid JSON: {e}"),
         )
     })?;
+    // STORY-306: `merge: escalated-to-human` ⇒ the reviewer would not
+    // auto-decide the merge. A first-class non-failure outcome — the
+    // orchestrator stops clean and leaves the PR for a human. The `summary`
+    // field carries the "why".
+    if value.get("merge").and_then(|m| m.as_str()).map(str::trim)
+        == Some(reviewer_summary::MERGE_ESCALATED_TO_HUMAN)
+    {
+        let reason = value
+            .get("summary")
+            .and_then(|s| s.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("the reviewer escalated the merge decision to a human")
+            .to_string();
+        return Ok(auto_complete::ReviewerOutcome::EscalatedToHuman { reason });
+    }
     let raw = value
         .get("verdict")
         .and_then(|v| v.as_str())
@@ -49150,12 +49238,70 @@ fn read_verdict_file(
                 "the verdict file has no `verdict` field",
             )
         })?;
-    auto_complete::Verdict::parse(raw).ok_or_else(|| {
-        auto_complete::PhaseFailure::of(
-            auto_complete::FailureKind::NoVerdict,
-            format!("unrecognised verdict `{raw}` in the verdict file"),
+    auto_complete::Verdict::parse(raw)
+        .map(auto_complete::ReviewerOutcome::Verdict)
+        .ok_or_else(|| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoVerdict,
+                format!("unrecognised verdict `{raw}` in the verdict file"),
+            )
+        })
+}
+
+#[cfg(test)]
+mod read_verdict_file_tests {
+    use super::read_verdict_file;
+    use crate::auto_complete::{ReviewerOutcome, Verdict};
+
+    /// Write `json` to a temp verdict file and read it back.
+    fn read(json: &str) -> Result<ReviewerOutcome, crate::auto_complete::PhaseFailure> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("PR-1.json");
+        std::fs::write(&path, json).unwrap();
+        read_verdict_file(&path)
+    }
+
+    #[test]
+    fn verdict_file_reads_merge_escalated_to_human() {
+        // STORY-306: the reviewer wrote a verdict AND escalated the merge.
+        let outcome = read(
+            r#"{"verdict":"Approved","merge":"escalated-to-human","summary":"irreversible schema change — a human should merge"}"#,
         )
-    })
+        .expect("escalation parses");
+        match outcome {
+            ReviewerOutcome::EscalatedToHuman { reason } => {
+                assert!(reason.contains("irreversible"), "{reason}");
+            }
+            other => panic!("expected EscalatedToHuman, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn verdict_file_without_merge_field_is_plain_verdict() {
+        // Regression: a STORY-263 verdict file with no `merge` field parses
+        // to a plain verdict exactly as before.
+        assert_eq!(
+            read(r#"{"verdict":"Approved","summary":"all good"}"#).unwrap(),
+            ReviewerOutcome::Verdict(Verdict::Approved),
+        );
+        assert_eq!(
+            read(r#"{"verdict":"RequestChanges"}"#).unwrap(),
+            ReviewerOutcome::Verdict(Verdict::RequestChanges),
+        );
+    }
+
+    #[test]
+    fn escalation_without_summary_falls_back_to_a_generic_reason() {
+        let outcome = read(r#"{"verdict":"Approved","merge":"escalated-to-human"}"#).unwrap();
+        assert!(matches!(outcome, ReviewerOutcome::EscalatedToHuman { .. }));
+    }
+
+    #[test]
+    fn missing_verdict_file_is_a_no_verdict_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = read_verdict_file(&dir.path().join("absent.json")).unwrap_err();
+        assert_eq!(err.kind, crate::auto_complete::FailureKind::NoVerdict);
+    }
 }
 
 /// Read a spec's current status straight from the git-canonical store —
@@ -49835,7 +49981,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         Ok(())
     }
 
-    fn run_reviewer(&mut self) -> Result<auto_complete::Verdict, auto_complete::PhaseFailure> {
+    fn run_reviewer(
+        &mut self,
+    ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Reviewer);
         let pr = self.pr_number.ok_or_else(|| {
             auto_complete::PhaseFailure::of(
@@ -49928,7 +50076,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
         }
 
-        let verdict = read_verdict_file(&verdict_path)?;
+        let outcome = read_verdict_file(&verdict_path)?;
 
         // End the reviewer session (best-effort — the verdict is already in
         // hand, so a stuck reviewer worktree must not block the merge).
@@ -49939,7 +50087,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 .status();
         }
 
-        Ok(verdict)
+        Ok(outcome)
     }
 
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
