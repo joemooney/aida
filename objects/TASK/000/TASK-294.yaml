@@ -3,61 +3,97 @@ spec_id: TASK-294
 agreed_id: TASK-294
 title: 'aida-worker bash function: MVP queue-drain loop with file-directive control (.aida/worker.cmd)'
 description: |-
-  The MVP version of EPIC-30 (backlogged) — a 20-30 line bash function in shell-init.sh that drains the queue via \`aida queue work <head> --auto-complete\` in a loop, honoring directives in \`.aida/worker.cmd\`.
+  The MVP version of EPIC-30 (backlogged) — a bash function (`aida-worker`) emitted by `aida dev shell-init` that drains the queue via `aida queue work --auto-complete` in a loop, honoring directives in `.aida/worker.cmd`.
+
+  Plan: docs/plans/2026-05-19-task-294-aida-worker-bash-loop.md (3 slices; slice 1 is the shippable tracer bullet).
 
   ## Acceptance
 
-  - [ ] \`aida-worker\` bash function added to \`aida-core/templates/shell-init.sh\` (which \`aida dev shell-init --install\` writes to user's rc file)
-  - [ ] Directive file: \`.aida/worker.cmd\` (gitignored)
-  - [ ] Recognized directives: \`drain\` (default if absent), \`pause\` (sleep 30s, re-check), \`exit\` (stop the loop)
-  - [ ] On unknown directive: defensive — treat as pause
-  - [ ] On \`aida queue work\` failure (non-zero exit): auto-writes \`pause\` directive so the worker doesn't loop on a broken spec
-  - [ ] On empty queue: sleeps and re-checks (queue might fill from another session)
-  - [ ] Logs each action to stdout with \`aida-worker: <message>\` prefix
-  - [ ] Function returns 0 on \`exit\` directive; non-zero on unrecoverable errors
+  Folds in the 2026-05-16 watchdog comment and the 2026-05-18 directive-channel comment — both explicitly asked to be folded into acceptance at pickup.
+
+  ### Slice 1 — `aida-worker` bash function (MVP loop + watchdog + scoped drain)
+
+  - [ ] `aida-worker` bash function emitted by `aida dev shell-init` (lands in `~/.aida/shell-init.sh`; lives in a Rust string constant beside `SHELL_HELPERS` — note: the original criterion's `aida-core/templates/shell-init.sh` path is historical, no such file exists)
+  - [ ] Directive file `.aida/worker.cmd` — a FIFO, one directive per line; gitignored by the deny-by-default `.aida/*` rule (no `.gitignore` change needed)
+  - [ ] Recognized directives: `drain` (also the default when the file is absent/empty), `pause` (sleep 30s, re-check), `exit` (stop the loop, return 0)
+  - [ ] Scoped drain: a `drain <args>` line (e.g. `drain batch:autonomy-modes --zen`, `drain --no-human`) runs `aida queue work <args> --auto-complete`; `drain` lines are consumed (popped) on completion so a user can write a whole overnight plan into the file
+  - [ ] Unknown directive → defensive: treat as pause
+  - [ ] `aida queue work` non-zero exit → auto-write `pause` so the worker doesn't loop on a broken spec
+  - [ ] Empty queue / "nothing to drive" → sleep 30s and re-check (NOT a pause — the queue may fill from another session)
+  - [ ] Per-spec timeout via `AIDA_WORKER_SPEC_TIMEOUT` (default 1800s): wrap the pickup in `timeout`; exit 124 → log "TIMED OUT" + auto-pause; other non-zero → log "halted" + auto-pause
+  - [ ] Timeout kill terminates `aida queue work` AND the spawned `claude` (process-group kill — verify it actually reaches the descendants)
+  - [ ] Logs each action to stdout with `aida-worker: <message>` prefix
+  - [ ] Returns 0 on `exit`; non-zero on unrecoverable errors
+
+  ### Slice 2 — `aida worker directives` (the visibility command)
+
+  - [ ] `aida worker directives` reads `.aida/worker.cmd` and lists the pending directives in human-readable form ("No pending directives." when empty)
+  - [ ] `--json` mode for machine consumers
+  - [ ] Dispatched pre-storage (reads only `.aida/worker.cmd`), mirroring `aida drain status` (STORY-301)
+
+  ### Slice 3 — status surfacing (the "load-bearing" visibility requirement)
+
+  - [ ] Pending directives surface in `aida status` output
+  - [ ] Pending directives surface in `aida drain status` output
+
+  ## Directive-channel constraints (2026-05-18)
+
+  The directive channel is a control plane, shaped by four constraints:
+
+  1. SCOPE — supports more than exit/pause/drain: a queue-the-next-drain directive (`drain batch:X --zen` appended mid-flight, picked up when the current drain ends).
+  2. SEPARATE FROM THE WORK QUEUE — directives are imperative; the work queue holds declarative specs. Directives do NOT go in the queue.
+  3. ORCHESTRATOR/WORKER-SCOPED — only the long-running worker needs steering; ephemeral implementer/reviewer sessions don't get a control inbox.
+  4. VISIBLE — a buried sentinel file is a bad control channel. The directive channel must be inspectable (`aida worker directives`) and surface in status output — separate channel from the work queue, but equal visibility.
 
   ## How users interact
 
-  \`\`\`bash
+  ```bash
   # Terminal 1 — start the worker
   aida-worker
 
   # Terminal 2 — control it
   echo pause > .aida/worker.cmd     # worker stops at next 30s check
   echo drain > .aida/worker.cmd     # resumes
-  echo exit > .aida/worker.cmd      # graceful stop
-  \`\`\`
+  echo exit  > .aida/worker.cmd     # graceful stop
+
+  # Queue a whole overnight plan (FIFO, consumed top-to-bottom)
+  printf 'drain batch:autonomy-modes --zen\ndrain batch:session-hygiene\nexit\n' > .aida/worker.cmd
+
+  # Inspect what's pending
+  aida worker directives
+  ```
 
   ## Why this is the right MVP (vs EPIC-30's full daemon)
 
   Per the 2026-05-16 pushback session, EPIC-30's daemon (Unix sockets, REQUEST items, state files, signal handling) is yak shaving for an MVP. This TASK delivers ~80% of EPIC-30's value at <1% of the cost:
 
-  - ✅ Continuous drain loop
-  - ✅ Pause / resume / exit control
-  - ✅ Failure recovery (auto-pause on phase failure)
-  - ✅ No daemon to manage; just a shell function
-  - ❌ No REQUEST queue items (use direct file directives instead)
-  - ❌ No multi-user / multi-machine coordination
-  - ❌ No structured state file for advisor reads
+  - Continuous drain loop
+  - Pause / resume / exit control
+  - Failure recovery (auto-pause on phase failure or timeout)
+  - Queue-the-next-drain chaining via the directive FIFO
+  - No daemon to manage; just a shell function
+  - No REQUEST queue items (direct file directives instead)
+  - No multi-user / multi-machine coordination
 
   If/when those gaps become real friction, promote EPIC-30 from Draft. Until then: this is enough.
 
-  ## Reality check on autonomy (today vs post-STORY-263)
+  ## Reality check on autonomy
 
-  - **Today** (without STORY-263 \`--no-human\`): \`aida queue work --auto-complete\` is interactive — implementer + reviewer Claudes need Ctrl+D. The worker batches spec pickup but isn't fully autonomous.
-  - **After STORY-263 lands**: same function works fully autonomously (\`aida queue work X --auto-complete --no-human\` runs Claudes headless).
-
-  So this TASK pre-stages the infrastructure for the post-STORY-263 reality. Shipping it now is still useful (saves typing the spec ID each iteration) AND the same function continues working when STORY-263 lands.
+  - Without `--no-human`: `aida queue work --auto-complete` is interactive — implementer + reviewer Claudes need Ctrl+D. The worker batches spec pickup but isn't fully autonomous. The `timeout` watchdog still applies (a walked-away user's blocked session gets killed).
+  - With STORY-263 (`--no-human`, completed): a `drain --no-human` directive runs the reviewer phase headless. Full autonomy lands when STORY-276 (headless implementer) ships — then `drain --no-human=both` runs both phases headless.
 
   ## Composes with
 
-  - **STORY-263** (\`--no-human\`) — unlocks full autonomy; this TASK's function inherits the capability
-  - **TASK-292** (\`--auto-complete\` no-SPEC picks head) — once shipped, simplifies the function (no need for \`aida queue next | grep\`)
-  - **TASK-293** (\`next\` keyword) — same simplification
-  - **EPIC-30** (full worker daemon, Draft) — captures \"if this MVP grows real limits, here's the next architectural step\"
+  - STORY-263 (`--no-human`, completed) — unlocks headless reviewer; the worker passes it through via a `drain --no-human` directive
+  - TASK-292 (`--auto-complete` no-SPEC picks head, completed) — the worker just calls `aida queue work --auto-complete`, no `aida queue next | grep`
+  - TASK-293 (`next` keyword, completed) — same simplification
+  - STORY-301 (drain-state introspection, completed) — the `.aida/`-runtime-file + pre-storage-subcommand pattern this TASK mirrors for `aida worker`
+  - STORY-276 (headless implementer, planned) — when it lands, `drain --no-human=both` becomes fully autonomous
+  - EPIC-30 (full worker daemon, Draft) — the next architectural step if this MVP grows real limits
 
   ## Out of scope (yagni)
 
+  - Heartbeat (`.aida/worker.heartbeat`) — explicitly OPT-IN per the 2026-05-16 comment, "not strictly required"; deferred to a followup (the `timeout` watchdog covers the dominant hang case)
   - Structured state file beyond stdout logging
   - Multiple concurrent workers
   - Cross-shell signaling beyond the directive file
@@ -66,15 +102,15 @@ description: |-
 
   ## Origin
 
-  User asked 2026-05-16 after the EPIC-30 pushback / pruning session: *\"for the queue worker I am thinking of a 20 line bash function to begin with like you mentioned. The communication could be a simple text file that has a directive like 'exit', 'pause', 'drain'. Keep it simple. I just want to make steps towards being able to drain what I can without a human in the loop.\"*
+  User asked 2026-05-16 after the EPIC-30 pushback / pruning session: "for the queue worker I am thinking of a 20 line bash function to begin with like you mentioned. The communication could be a simple text file that has a directive like 'exit', 'pause', 'drain'. Keep it simple. I just want to make steps towards being able to drain what I can without a human in the loop."
 
-  This is the disciplined MVP — exactly what the pushback memory (\`feedback_pushback_on_overengineering.md\`) describes: bash-loop substitute for daemon-grade infrastructure.
+  This is the disciplined MVP — exactly what the pushback memory (`feedback_pushback_on_overengineering.md`) describes: bash-loop substitute for daemon-grade infrastructure.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:18:06.878953098Z
-modified_at: 2026-05-19T05:33:29.429129010Z
+modified_at: 2026-05-19T17:37:15.431957392Z
 req_type: Task
 tags:
 - aida-worker
