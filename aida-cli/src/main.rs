@@ -15047,6 +15047,37 @@ fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> 
     gh_pr_list_first(project_root, &["--head", branch, "--state", "merged"])
 }
 
+/// Is PR #`pr` merged on GitHub? Ground truth for the BUG-241 reconcile step
+/// — a reviewer that escalated the merge to a human who merged out-of-band
+/// leaves the PR merged but the orchestrator's verdict file absent. `None` on
+/// any `gh` failure (binary missing, auth, network): the caller treats
+/// "cannot confirm" as "the failure stands", never as a silent success.
+/// trace:BUG-241 | ai:claude
+fn pr_is_merged(project_root: &std::path::Path, pr: u32) -> Option<bool> {
+    let gh = resolve_gh_binary()?;
+    let out = std::process::Command::new(&gh)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "view",
+            &pr.to_string(),
+            "--json",
+            "state",
+            "-q",
+            ".state",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .trim()
+            .eq_ignore_ascii_case("merged"),
+    )
+}
+
 /// Parse a single tab-separated `gh pr list -q ...` line into a
 /// `PrLookup`. Extracted for unit-testing the empty / well-formed /
 /// malformed shapes without spawning `gh`. trace:BUG-88 | ai:claude
@@ -47202,6 +47233,94 @@ fn read_verdict_file(
     })
 }
 
+/// Read a spec's current status straight from the git-canonical store —
+/// ground truth for the BUG-241 reconcile step. A spec the implementer (or a
+/// human) marked Completed needed no further work, even when the phase
+/// produced no PR (instance B: resolved-by-supersession). `None` when the
+/// store can't be opened or the spec isn't found. trace:BUG-241 | ai:claude
+fn spec_status(project_root: &std::path::Path, spec: &str) -> Option<RequirementStatus> {
+    use aida_core::DatabaseBackend;
+    let store_path = project_root.join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_path).ok()?;
+    let req = backend.get_requirement_by_spec_id(spec).ok()??;
+    Some(req.status)
+}
+
+/// Pure decision for the BUG-241 reconcile (`RealPhaseDriver::reconcile_failure`):
+/// given the two ground-truth signals — a merged PR number, if one was found,
+/// and whether the spec reached Completed — decide whether a phase failure is
+/// genuine or an out-of-band success. Either signal alone is proof the spec
+/// shipped; needing both would miss instance A (the status auto-bump lags a
+/// human's out-of-band merge) and instance B (a no-work spec never gets a PR).
+/// Split out so the rule is unit-testable without `gh` or a store.
+/// trace:BUG-241 | ai:claude
+fn reconcile_verdict(
+    merged_pr: Option<u32>,
+    spec_completed: bool,
+    spec: &str,
+) -> auto_complete::PhaseReconcile {
+    use auto_complete::PhaseReconcile;
+    match (merged_pr, spec_completed) {
+        (Some(pr), true) => PhaseReconcile::ShippedOutOfBand {
+            reason: format!("PR-{pr} is merged and {spec} is Completed"),
+        },
+        (Some(pr), false) => PhaseReconcile::ShippedOutOfBand {
+            reason: format!("PR-{pr} is already merged"),
+        },
+        (None, true) => PhaseReconcile::ShippedOutOfBand {
+            reason: format!("{spec} is Completed — the spec needed no further work"),
+        },
+        // Regression guard: no merged PR and the spec is still open — reality
+        // confirms nothing shipped, so the phase failure stands. trace:BUG-241
+        (None, false) => PhaseReconcile::GenuineFailure,
+    }
+}
+
+#[cfg(test)]
+mod reconcile_verdict_tests {
+    use super::reconcile_verdict;
+    use crate::auto_complete::PhaseReconcile;
+
+    #[test]
+    fn merged_pr_and_completed_spec_is_shipped() {
+        match reconcile_verdict(Some(94), true, "BUG-233") {
+            PhaseReconcile::ShippedOutOfBand { reason } => {
+                assert!(reason.contains("PR-94"), "{reason}");
+                assert!(reason.contains("BUG-233"), "{reason}");
+            }
+            other => panic!("expected ShippedOutOfBand, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn merged_pr_alone_is_shipped() {
+        // Instance A: the human merged out-of-band; the status auto-bump may
+        // lag, so a merged PR alone is proof enough.
+        assert!(matches!(
+            reconcile_verdict(Some(94), false, "BUG-233"),
+            PhaseReconcile::ShippedOutOfBand { .. }
+        ));
+    }
+
+    #[test]
+    fn completed_spec_with_no_pr_is_shipped() {
+        // Instance B: resolved-by-supersession — no PR was ever needed.
+        assert!(matches!(
+            reconcile_verdict(None, true, "BUG-230"),
+            PhaseReconcile::ShippedOutOfBand { .. }
+        ));
+    }
+
+    #[test]
+    fn no_pr_and_open_spec_is_a_genuine_failure() {
+        // The regression guard: reality confirms nothing shipped.
+        assert_eq!(
+            reconcile_verdict(None, false, "BUG-241"),
+            PhaseReconcile::GenuineFailure
+        );
+    }
+}
+
 /// Lease ids present in `.aida/sessions/` — `<id>.toml` files only, *not*
 /// the `<id>.activity.toml` / `<id>.manifest.toml` companions. A lease id is
 /// a dot-free UUID, so a real lease file's name has exactly one `.`; every
@@ -47483,6 +47602,28 @@ impl RealPhaseDriver {
                 ))
             }
         })
+    }
+
+    /// Ground-truth check for the BUG-241 reconcile: find a *merged* PR for
+    /// this spec. Prefers the PR number an earlier phase already discovered
+    /// (checked directly with [`pr_is_merged`]); otherwise looks one up by
+    /// branch. `None` when no merged PR exists, or `gh` can't answer — both
+    /// resolve to "cannot confirm a merge", which leaves the failure standing.
+    /// trace:BUG-241 | ai:claude
+    fn detect_merged_pr(&self) -> Option<u32> {
+        if let Some(pr) = self.pr_number {
+            // We already know the PR — `gh pr view` is the direct check.
+            return (pr_is_merged(&self.project_root, pr) == Some(true)).then_some(pr);
+        }
+        // Phase 1 never resolved a PR — try a branch-keyed merged-PR lookup.
+        match self
+            .branch
+            .as_deref()
+            .map(|b| detect_merged_pr_for_branch(&self.project_root, b))
+        {
+            Some(PrLookup::Found(pr)) => Some(pr.number as u32),
+            _ => None,
+        }
     }
 }
 
@@ -47879,6 +48020,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             implementer_session: self.implementer_lease.clone(),
             ci_run_id: self.ci_run_id.clone(),
         }
+    }
+
+    /// BUG-241: before the orchestrator declares a phase failed, check whether
+    /// the spec shipped anyway. Two real cases this redeems:
+    ///   - phase 1 produced no PR because the spec was already resolved by
+    ///     supersession (instance B);
+    ///   - phase 3 left no verdict file because the reviewer escalated and a
+    ///     human merged the PR out-of-band (instance A).
+    /// trace:BUG-241 | ai:claude
+    fn reconcile_failure(
+        &mut self,
+        phase: auto_complete::Phase,
+        failure: &auto_complete::PhaseFailure,
+    ) -> auto_complete::PhaseReconcile {
+        use auto_complete::{FailureKind, Phase, PhaseReconcile};
+
+        // Reconcile only the two phases that can succeed out-of-band. Phase 1
+        // (implementer) can correctly produce no PR — the spec needed no code.
+        // Phase 3 (reviewer) can end with no verdict file — a human merged
+        // out-of-band. Phases 2/4/5/6 fail by a gate or command genuinely not
+        // passing (red CI, a failed merge, a divergent pull, a broken build);
+        // those are real regardless of whether the spec's code reached main,
+        // so reconciling them would mask a true failure.
+        if !matches!(phase, Phase::Implementer | Phase::Reviewer) {
+            return PhaseReconcile::GenuineFailure;
+        }
+        // A spawn ENOENT, a missing tool, or a violated invariant is a local
+        // / tooling fault — not an out-of-band success. Leave it standing
+        // without spending a `gh` round-trip on it.
+        if matches!(
+            failure.kind,
+            FailureKind::Spawn | FailureKind::MissingTool | FailureKind::Internal
+        ) {
+            return PhaseReconcile::GenuineFailure;
+        }
+
+        // Ground truth: a merged PR (instance A) and/or a Completed spec
+        // (instance B). Either alone is proof the spec shipped.
+        let merged_pr = self.detect_merged_pr();
+        let completed = matches!(
+            spec_status(&self.project_root, &self.spec),
+            Some(RequirementStatus::Completed)
+        );
+        reconcile_verdict(merged_pr, completed, &self.spec)
     }
 }
 
