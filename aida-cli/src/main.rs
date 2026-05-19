@@ -1290,8 +1290,19 @@ fn fnv1a_hex(data: &[u8]) -> String {
     format!("{h:016x}")
 }
 
+/// Normalize Windows (`\r\n`) and classic-Mac (`\r`) line endings to `\n`
+/// so the frontmatter parser is line-ending-agnostic. Git on Windows with
+/// `autocrlf` checks the embedded memory templates out as CRLF, which
+/// `build.rs` then embeds verbatim — without this the `---\n` frontmatter
+/// fence never matches and the template is reported malformed.
+/// trace:BUG-244 | ai:claude
+fn normalize_line_endings(s: &str) -> String {
+    s.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 /// Split a markdown file into (frontmatter, body) at the leading `---`
-/// fenced YAML block. Returns `None` when there is no frontmatter.
+/// fenced YAML block. Returns `None` when there is no frontmatter. Callers
+/// pass LF-normalized input (see `normalize_line_endings`).
 fn split_md_frontmatter(content: &str) -> Option<(&str, &str)> {
     let rest = content.strip_prefix("---\n")?;
     let end = rest.find("\n---\n")?;
@@ -1315,7 +1326,8 @@ fn frontmatter_field<'a>(frontmatter: &'a str, key: &str) -> Option<&'a str> {
 /// `--refresh` can tell a pristine pack file from a user-edited one.
 /// trace:STORY-255 | ai:claude
 fn build_scaffolded_memory(template: &str) -> Option<String> {
-    let (fm, body) = split_md_frontmatter(template)?;
+    let template = normalize_line_endings(template);
+    let (fm, body) = split_md_frontmatter(&template)?;
     let body = body.trim_end();
     let checksum = fnv1a_hex(body.as_bytes());
     let mut new_fm = String::new();
@@ -1347,7 +1359,8 @@ enum MemoryDisposition {
 
 /// Classify an existing memory file for `--refresh`.
 fn memory_refresh_disposition(existing: &str) -> MemoryDisposition {
-    let Some((fm, body)) = split_md_frontmatter(existing) else {
+    let existing = normalize_line_endings(existing);
+    let Some((fm, body)) = split_md_frontmatter(&existing) else {
         return MemoryDisposition::UserOwned;
     };
     if frontmatter_field(fm, "originSessionId") != Some("aida-scaffold") {
@@ -1370,7 +1383,8 @@ fn update_memory_index(mem_dir: &std::path::Path, files: &[(&str, &str)]) -> Res
 
     let mut entries = String::new();
     for (filename, template) in files {
-        let (fm, _) = split_md_frontmatter(template).unwrap_or(("", ""));
+        let template = normalize_line_endings(template);
+        let (fm, _) = split_md_frontmatter(&template).unwrap_or(("", ""));
         let label = frontmatter_field(fm, "name").unwrap_or(filename);
         let desc = frontmatter_field(fm, "description").unwrap_or("");
         entries.push_str(&format!("- [{label}]({filename}) — {desc}\n"));
@@ -51146,6 +51160,45 @@ mod story_255_discipline_pack_tests {
         assert_eq!(
             memory_refresh_disposition(&edited),
             MemoryDisposition::Edited
+        );
+    }
+
+    #[test]
+    fn parser_is_line_ending_agnostic_crlf_and_cr() {
+        // The embedded memory templates are checked out as CRLF on a Windows
+        // box with git autocrlf, then embedded verbatim by build.rs. The
+        // frontmatter parser must not assume LF — and the scaffolded output
+        // (hence its checksum) must be byte-identical across platforms.
+        // Regression for BUG-244. trace:BUG-244 | ai:claude
+        let lf = "---\nname: t\ndescription: d\nmetadata:\n  type: feedback\n---\n\nbody text\n";
+        let crlf = lf.replace('\n', "\r\n");
+        let cr = lf.replace('\n', "\r");
+
+        let from_lf = build_scaffolded_memory(lf).expect("LF template parses");
+        let from_crlf = build_scaffolded_memory(&crlf).expect("CRLF template parses");
+        let from_cr = build_scaffolded_memory(&cr).expect("bare-CR template parses");
+
+        assert_eq!(
+            from_lf, from_crlf,
+            "CRLF input must scaffold identically to LF"
+        );
+        assert_eq!(
+            from_lf, from_cr,
+            "bare-CR input must scaffold identically to LF"
+        );
+        assert!(
+            !from_crlf.contains('\r'),
+            "scaffolded output must be LF-only regardless of input line endings"
+        );
+        assert!(from_crlf.contains("scaffoldChecksum: "));
+
+        // A CRLF-on-disk copy of a pristine scaffold still classifies as
+        // Pristine — the refresh check is line-ending-agnostic too.
+        let crlf_scaffolded = from_lf.replace('\n', "\r\n");
+        assert_eq!(
+            memory_refresh_disposition(&crlf_scaffolded),
+            MemoryDisposition::Pristine,
+            "a CRLF copy of a pristine scaffold must still be Pristine"
         );
     }
 }
