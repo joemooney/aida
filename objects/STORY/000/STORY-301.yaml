@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:38:10.232248536Z
-modified_at: 2026-05-19T06:50:39.814972921Z
+modified_at: 2026-05-19T06:53:10.626487671Z
 req_type: Story
 tags:
 - alpha-readiness
@@ -42,6 +42,19 @@ comments:
     filed 3 task(s): TASK-343, TASK-344, TASK-345
   created_at: 2026-05-19T06:50:40.210624254Z
   modified_at: 2026-05-19T06:50:40.210624254Z
+- id: 019e3f02-8662-76e2-ad34-4f9527830637
+  author: joe
+  content: |-
+    Implemented via PR-106 (commit e12c53fb):
+
+    - New aida-cli/src/drain_state.rs — DrainState/DrainMember written to .aida/drain-state.json by the orchestrator (write_atomic), read by `aida drain status`.
+    - run_auto_complete / handle_auto_complete_batch / handle_auto_complete_next_n write + clear the file; RealPhaseDriver stamps each phase transition; member outcomes (completed/failed + PR) recorded as the drain runs.
+    - `aida drain status` corroborates orchestrator_pid liveness — Active / Stale / None; `--clear` removes a stale file and refuses a live one.
+    - /aida-pickup drain-position banner + `aida session leases` annotates the orchestrator-driven lease.
+
+    Test status: 701/701 tests green (16 new drain_state tests)
+  created_at: 2026-05-19T06:53:10.626487671Z
+  modified_at: 2026-05-19T06:53:10.626487671Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T06:50:18.391985327Z
