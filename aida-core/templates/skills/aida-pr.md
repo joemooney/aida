@@ -45,15 +45,22 @@ comment directly above each one:
 - `<!-- kind:design-fork -->` — a genuine choice between meaningful
   alternatives, where guessing wrong has real cost.
 
-Before surfacing any prompt, check the autonomy mode (`echo "${AIDA_ZEN:-}"`):
+Before surfacing any prompt, check the autonomy mode:
 
-- **`1`** — *advisor-on-standby* mode (`aida queue work --zen`, or
-  `AIDA_ZEN=1` exported). Auto-resolve every `kind:confirmation` prompt to
-  option 1 and proceed, printing `↳ zen: auto-resolved "<prompt>" →
-  option 1`. Still surface every `kind:design-fork` prompt unchanged.
-- **Anything else** (`0`, `false`, empty, unset) — default mode: surface
-  every prompt, no change. Only the exact value `1` enables zen — matching
-  `AIDA_HEADLESS` — so `AIDA_ZEN=0` reliably disables it. trace:TASK-327
+```bash
+aida zen status
+```
+
+- **`zen`** — *advisor-on-standby* mode, **corroborated** (`aida queue
+  work --zen`, or a live `--auto-complete --zen` orchestrator).
+  Auto-resolve every `kind:confirmation` prompt to option 1 and proceed,
+  printing `↳ zen: auto-resolved "<prompt>" → option 1`. Still surface
+  every `kind:design-fork` prompt unchanged.
+- **`interactive`** — default mode: surface every prompt, no change.
+  `aida zen status` prints `interactive` whenever zen is off *or*
+  `AIDA_ZEN=1` is set but its provenance cannot be corroborated — a
+  stale / leaked `AIDA_ZEN=1` never silently enables zen (BUG-237).
+  Branch off this word, **not** the bare `$AIDA_ZEN` env var. trace:BUG-237
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen`. An un-annotated prompt defaults to `design-fork`
@@ -383,8 +390,9 @@ Print the URL `gh` returned. Then surface a structured next-steps table so
 the implementer→reviewer hand-off is explicit rather than improvised. Don't
 auto-execute — the user picks.
 
-Under `$AIDA_ZEN` (STORY-287) what auto-resolves depends on the mode
-(`aida orchestrator status`) — BUG-232:
+When zen mode is corroborated (`aida zen status` = `zen`, STORY-287 /
+BUG-237) what auto-resolves depends on the mode (`aida orchestrator
+status`) — BUG-232:
 
 - **`orchestrated`** — `kind:confirmation`: render the *orchestrator mode*
   table, then auto-take its `⇒` row (exit so the orchestrator continues),
@@ -417,6 +425,7 @@ without a lease re-claim.
 
 ```bash
 aida orchestrator status               # `orchestrated` → corroborated --auto-complete child
+aida zen status                        # `zen` → corroborated zen mode (BUG-237)
 gh run list --branch <pr-branch> --limit 1 --json status,conclusion 2>/dev/null
 aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
 ```
@@ -436,7 +445,8 @@ as phase 3). **Do not** key this off the bare `AIDA_AUTO_COMPLETE` env var:
 so a stray value can't misfire orchestrator mode. trace:TASK-286
 trace:BUG-233
 
-**Then check plain zen** — if not `orchestrated` but `$AIDA_ZEN=1`,
+**Then check plain zen** — if not `orchestrated` but `aida zen status`
+prints `zen` (corroborated — never the bare `$AIDA_ZEN` env var, BUG-237),
 `/aida-pr` was reached as the auto-resolved end-of-session step of a plain
 `--zen` session (BUG-232). Render the *plain zen mode* template: the PR is
 open, and the only fork left — grab next vs stop — is surfaced for the
@@ -511,7 +521,7 @@ runs the reviewer itself as phase 3, so the queued story is the
 manual-recovery fallback if the chain is later aborted. trace:TASK-286
 trace:TASK-329
 
-*Plain zen mode (`$AIDA_ZEN=1`, `aida orchestrator status` = `interactive`) — BUG-232:*
+*Plain zen mode (`aida zen status` = `zen`, `aida orchestrator status` = `interactive`) — BUG-232:*
 
 `/aida-pr` was reached as the auto-resolved end-of-session step of a plain
 `--zen` session — opening the PR is the mechanical move `--zen` takes for

@@ -2836,6 +2836,28 @@ pub enum OrchestratorCommand {
     },
 }
 
+/// Zen-mode introspection (BUG-237). `AIDA_ZEN=1` enables zen mode but is
+/// inherited by every child process — a leaked / stale value is unverifiable
+/// on its own. These subcommands let a session — or a skill running inside one
+/// — verify whether zen mode is *genuinely* in effect rather than trusting the
+/// bare env var.
+// trace:BUG-237 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum ZenCommand {
+    /// Print the corroborated zen context of the current process: `zen` when
+    /// `AIDA_ZEN=1` is set AND corroborated (a live `--auto-complete --zen`
+    /// orchestrator run, or the session's own `--zen` lease token), else
+    /// `interactive`. Skills branch their zen behavior off this word instead
+    /// of reading the bare `$AIDA_ZEN` env var, so a leaked `AIDA_ZEN=1` never
+    /// silently auto-resolves a confirmation prompt.
+    Status {
+        /// Emit `{"context","corroborated","reason"}` JSON instead of the
+        /// bare status word.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Add a new requirement
@@ -3422,6 +3444,13 @@ pub enum Command {
     // trace:BUG-233 | ai:claude
     #[clap(subcommand, hide = true)]
     Orchestrator(OrchestratorCommand),
+
+    /// Inspect the corroborated zen context — whether `AIDA_ZEN=1` is backed by
+    /// a verifiable provenance or is a stale / leaked value. Hidden: it is a
+    /// skill introspection hook, not a daily-driver command.
+    // trace:BUG-237 | ai:claude
+    #[clap(subcommand, hide = true)]
+    Zen(ZenCommand),
 
     /// One-line project + role summary suitable for shell prompts and
     /// the `statusLine.command` setting in ~/.claude/settings.json.

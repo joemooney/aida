@@ -83,18 +83,21 @@ comment directly above each one:
 Before surfacing any prompt, check the autonomy mode:
 
 ```bash
-echo "${AIDA_ZEN:-}"
+aida zen status
 ```
 
-- **`1`** — *advisor-on-standby* mode (`aida queue work --zen`, or
-  `AIDA_ZEN=1` exported). For every `kind:confirmation` prompt, do **not**
-  call `AskUserQuestion`: take option 1 (the first / recommended choice)
-  and proceed, printing one line — `↳ zen: auto-resolved "<prompt>" →
-  option 1`. Still surface every `kind:design-fork` prompt unchanged —
-  those are the real questions the advisor stays at the keyboard for.
-- **Anything else** (`0`, `false`, empty, unset) — default mode: surface
-  every prompt, no change. Only the exact value `1` enables zen — matching
-  `AIDA_HEADLESS` — so `AIDA_ZEN=0` reliably disables it. trace:TASK-327
+- **`zen`** — *advisor-on-standby* mode, **corroborated** (`aida queue
+  work --zen`, or a live `--auto-complete --zen` orchestrator). For every
+  `kind:confirmation` prompt, do **not** call `AskUserQuestion`: take
+  option 1 (the first / recommended choice) and proceed, printing one
+  line — `↳ zen: auto-resolved "<prompt>" → option 1`. Still surface
+  every `kind:design-fork` prompt unchanged — those are the real
+  questions the advisor stays at the keyboard for.
+- **`interactive`** — default mode: surface every prompt, no change.
+  `aida zen status` prints `interactive` whenever zen is off *or*
+  `AIDA_ZEN=1` is set but its provenance cannot be corroborated — a
+  stale / leaked `AIDA_ZEN=1` never silently enables zen (BUG-237).
+  Branch off this word, **not** the bare `$AIDA_ZEN` env var. trace:BUG-237
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen`. An un-annotated prompt defaults to `design-fork`
@@ -299,15 +302,15 @@ After step 5 succeeds, surface a structured next-steps table so the
 workflow self-guides instead of relying on improvised "want me to push?"
 prompts. Don't auto-execute — the user picks.
 
-Under `$AIDA_ZEN` (STORY-287) this menu is a `kind:confirmation` prompt,
-but *which* row auto-resolves depends on whether an orchestrator is
-present — the pre-flight `autonomy:` line and `aida orchestrator status`
-both tell you (BUG-232):
+When zen mode is corroborated (`aida zen status` = `zen`, STORY-287 /
+BUG-237) this menu is a `kind:confirmation` prompt, but *which* row
+auto-resolves depends on whether an orchestrator is present — `aida
+orchestrator status` tells you (BUG-232):
 
 - **`orchestrated`** — the *orchestrator mode* template applies; auto-take
   its `⇒` row (submit the PR) and the orchestrator drives phases 2-6.
-- **plain `--zen`** (`$AIDA_ZEN=1`, `aida orchestrator status` =
-  `interactive`) — auto-take the row that runs **`/aida-pr`**, whatever
+- **plain `--zen`** (`aida zen status` = `zen`, `aida orchestrator status`
+  = `interactive`) — auto-take the row that runs **`/aida-pr`**, whatever
   glyph it carries: `▶ Open PR for what shipped` in the *queue empty*
   template, `⇒ Wrap up what's shipped as a PR` in the *queue has more
   items* template. Do **NOT** auto-take `▶ Grab next item` — looping the
@@ -327,6 +330,7 @@ naming the row taken. trace:BUG-232
 
 ```bash
 aida orchestrator status               # `orchestrated` → corroborated --auto-complete child
+aida zen status                        # `zen` → corroborated zen mode (BUG-237)
 aida session show --plan 2>/dev/null   # manifest rows + ✓/◐/○ status + `batch:` line
 aida queue work --batch <NAME> --dry-run 2>/dev/null   # batch members still queued
 aida queue next 2>/dev/null            # is there another item routed to this role?

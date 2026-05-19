@@ -78,8 +78,10 @@ fn is_valid_token(token: &str) -> bool {
 }
 
 /// The contents of an orchestrator-run marker file. Only [`RunMarker::pid`] is
-/// load-bearing for corroboration; `spec` and `started_at` are diagnostic
-/// (and the natural fold-in point when STORY-301's drain-state file lands).
+/// load-bearing for orchestrator corroboration; `spec` and `started_at` are
+/// diagnostic (and the natural fold-in point when STORY-301's drain-state file
+/// lands). `zen` records whether the run was started with `--zen` — a phase
+/// child corroborates its inherited `AIDA_ZEN` against it (BUG-237).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RunMarker {
     /// PID of the orchestrator process that owns this run.
@@ -88,23 +90,29 @@ pub(crate) struct RunMarker {
     pub(crate) spec: String,
     /// RFC-3339 timestamp the run started (diagnostic).
     pub(crate) started_at: String,
+    /// BUG-237: whether the orchestrator run was started with `--zen`. A
+    /// phase child trusts an inherited `AIDA_ZEN=1` only when this is true.
+    pub(crate) zen: bool,
 }
 
 impl RunMarker {
     /// Render as the `key=value` line format written to disk.
     fn serialize(&self) -> String {
         format!(
-            "pid={}\nspec={}\nstarted_at={}\n",
-            self.pid, self.spec, self.started_at
+            "pid={}\nspec={}\nstarted_at={}\nzen={}\n",
+            self.pid, self.spec, self.started_at, self.zen
         )
     }
 
     /// Parse a marker file body. Returns `None` when the file is unreadable or
     /// has no parseable `pid=` line — a torn write fails safe (no live run).
+    /// A missing `zen=` line defaults to `false` (back-compat with pre-BUG-237
+    /// markers, and the safe direction — an un-flagged run is not zen).
     fn parse(body: &str) -> Option<Self> {
         let mut pid: Option<u32> = None;
         let mut spec = String::new();
         let mut started_at = String::new();
+        let mut zen = false;
         for line in body.lines() {
             let Some((key, value)) = line.split_once('=') else {
                 continue;
@@ -113,6 +121,7 @@ impl RunMarker {
                 "pid" => pid = value.trim().parse::<u32>().ok(),
                 "spec" => spec = value.trim().to_string(),
                 "started_at" => started_at = value.trim().to_string(),
+                "zen" => zen = value.trim() == "true",
                 _ => {}
             }
         }
@@ -120,6 +129,7 @@ impl RunMarker {
             pid,
             spec,
             started_at,
+            zen,
         })
     }
 
@@ -143,8 +153,9 @@ pub(crate) struct RunMarkerGuard {
 impl RunMarkerGuard {
     /// Mint a fresh run UUID, write its marker file under `project_root`, and
     /// return the guard. The marker records *this* process's PID — so a child
-    /// corroborating the token confirms a live orchestrator.
-    pub(crate) fn register(project_root: &Path, spec: &str) -> std::io::Result<Self> {
+    /// corroborating the token confirms a live orchestrator. `zen` records
+    /// whether the run was started with `--zen` (BUG-237).
+    pub(crate) fn register(project_root: &Path, spec: &str, zen: bool) -> std::io::Result<Self> {
         let token = uuid::Uuid::now_v7().to_string();
         let dir = runs_dir(project_root);
         std::fs::create_dir_all(&dir)?;
@@ -153,6 +164,7 @@ impl RunMarkerGuard {
             pid: std::process::id(),
             spec: spec.to_string(),
             started_at: chrono::Utc::now().to_rfc3339(),
+            zen,
         };
         std::fs::write(&path, marker.serialize())?;
         Ok(Self { path, token })
@@ -291,6 +303,24 @@ pub(crate) fn detect(project_root: &Path) -> OrchestratorContext {
     )
 }
 
+/// The marker file of the *live, corroborated* orchestrator run that owns the
+/// current process, or `None`. `Some` exactly when [`detect`] would return
+/// [`OrchestratorContext::Orchestrated`] — so a caller that needs a field off
+/// the marker (zen-mode corroboration, BUG-237) gets it without re-deriving
+/// the corroboration. trace:BUG-237 | ai:claude
+pub(crate) fn live_run_marker(project_root: &Path) -> Option<RunMarker> {
+    let auto_complete = std::env::var(AUTO_COMPLETE_ENV).ok()?;
+    if auto_complete.is_empty() {
+        return None;
+    }
+    let token = std::env::var(TOKEN_ENV).ok()?;
+    if token.is_empty() || !is_valid_token(&token) {
+        return None;
+    }
+    let marker = RunMarker::read(&marker_path(project_root, &token))?;
+    process_probe::pid_is_alive(marker.pid).then_some(marker)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -387,8 +417,31 @@ mod tests {
             pid: 4242,
             spec: "BUG-233".to_string(),
             started_at: "2026-05-18T12:00:00+00:00".to_string(),
+            zen: false,
         };
         assert_eq!(RunMarker::parse(&marker.serialize()), Some(marker));
+    }
+
+    #[test]
+    fn run_marker_zen_field_round_trips() {
+        // BUG-237: the `zen` flag survives serialize → parse both ways.
+        for zen in [true, false] {
+            let marker = RunMarker {
+                pid: 7,
+                spec: "BUG-237".to_string(),
+                started_at: "now".to_string(),
+                zen,
+            };
+            assert_eq!(
+                RunMarker::parse(&marker.serialize()).map(|m| m.zen),
+                Some(zen)
+            );
+        }
+        // A pre-BUG-237 marker with no `zen=` line defaults to false.
+        assert_eq!(
+            RunMarker::parse("pid=7\nspec=BUG-237\nstarted_at=now\n").map(|m| m.zen),
+            Some(false)
+        );
     }
 
     #[test]
@@ -406,7 +459,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path;
         {
-            let guard = RunMarkerGuard::register(dir.path(), "BUG-233").unwrap();
+            let guard = RunMarkerGuard::register(dir.path(), "BUG-233", true).unwrap();
             path = marker_path(dir.path(), guard.token());
             assert!(path.exists(), "marker should exist while guard is held");
             // The token is a UUID and the marker records this process.
@@ -414,6 +467,7 @@ mod tests {
             let marker = RunMarker::read(&path).unwrap();
             assert_eq!(marker.pid, std::process::id());
             assert_eq!(marker.spec, "BUG-233");
+            assert!(marker.zen, "register(.., zen=true) records the zen flag");
         }
         assert!(!path.exists(), "Drop should remove the marker");
     }
@@ -423,7 +477,7 @@ mod tests {
     #[test]
     fn run_is_live_true_for_live_marker() {
         let dir = tempfile::tempdir().unwrap();
-        let guard = RunMarkerGuard::register(dir.path(), "BUG-233").unwrap();
+        let guard = RunMarkerGuard::register(dir.path(), "BUG-233", false).unwrap();
         // The marker records this process's PID, which is alive.
         assert!(run_is_live(dir.path(), guard.token()));
     }
@@ -446,6 +500,7 @@ mod tests {
                 pid: u32::MAX - 1, // no real process owns this
                 spec: "BUG-233".to_string(),
                 started_at: "now".to_string(),
+                zen: false,
             }
             .serialize(),
         )
