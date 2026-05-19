@@ -1,0 +1,26 @@
+id: 019e3f02-9f85-7782-85a6-6a50020a51db
+spec_id: STORY-330
+agreed_id: STORY-330
+title: 'Review PR-106: STORY-301: aida drain status — observable --auto-complete drains'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e3eeb`) for branch `story-301`.
+
+  - PR: <https://github.com/joemooney/aida/pull/106>
+  - Branch: `story-301` → `main`
+
+  ## Covers
+
+  - STORY-301
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 106` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T06:53:17.061367517Z
+modified_at: 2026-05-19T06:53:17.061367517Z
+req_type: Story
