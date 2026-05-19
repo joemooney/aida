@@ -110,7 +110,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:18:06.878953098Z
-modified_at: 2026-05-19T17:37:17.765411304Z
+modified_at: 2026-05-19T17:37:29.099555071Z
 req_type: Task
 tags:
 - aida-worker
@@ -173,3 +173,15 @@ comments:
     Origin: 2026-05-18 user — 'once the orchestrator is running I am blocked from signalling other work… a control message in the queue for role orchestrator… or the sentinel system although that does not have the same visibility.' The synthesis: separate directive channel (not the work queue), orchestrator-scoped (not all-roles), but inspectable (the visibility the queue would have given).
   created_at: 2026-05-19T05:33:29.429129010Z
   modified_at: 2026-05-19T05:33:29.429129010Z
+- id: 019e4150-680b-7913-98a1-6d8bcf5e7d72
+  author: joe
+  content: |-
+    Planning complete (2026-05-19). Plan: docs/plans/2026-05-19-task-294-aida-worker-bash-loop.md.
+
+    Folded both prior comments into the Acceptance section (3 slices): slice 1 = aida-worker bash function + watchdog + scoped-drain FIFO (the shippable tracer bullet); slice 2 = aida worker directives CLI command; slice 3 = directive surfacing in aida status / aida drain status. Heartbeat deferred to a followup (the spec marks it OPT-IN; the timeout watchdog covers the hang case).
+
+    Key design call: .aida/worker.cmd is a FIFO (one directive per line), drain lines consumed on completion — lets a user write a whole overnight plan as one heredoc. Mirrors the STORY-301 drain_state.rs pattern for the new aida worker subcommand. One genuine unknown flagged in the plan: whether timeout's signal reaches the spawned claude (process-group kill needs a real test).
+
+    Ready for implementation.
+  created_at: 2026-05-19T17:37:29.099555071Z
+  modified_at: 2026-05-19T17:37:29.099555071Z
