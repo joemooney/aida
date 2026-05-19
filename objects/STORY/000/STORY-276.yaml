@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-19T17:07:46.658674119Z
+modified_at: 2026-05-19T17:16:42.867726962Z
 req_type: Story
 tags:
 - auto-complete
@@ -106,3 +106,21 @@ comments:
   content: 'BLOCKED 2026-05-19 — hard dependency on STORY-332 (/aida-punt + NeedsAttention lifecycle status), which was filed today after STORY-276''s implementer found the prerequisite dangling (named in STORY-276''s title, never a spec). STORY-276 cannot complete until STORY-332 ships: 4 of its 6 acceptance criteria require /aida-punt. The batch:autonomy-modes drain should skip STORY-276 — it is blocked, not workable. Sequence to unblock: STORY-332 → STORY-276 → STORY-306.'
   created_at: 2026-05-19T14:13:42.150253509Z
   modified_at: 2026-05-19T14:13:42.150253509Z
+- id: 019e413d-63f3-7742-9c8a-ef5b48ddbf60
+  author: joe
+  content: |-
+    Plan: docs/plans/2026-05-19-story-276-headless-implementer.md (2026-05-19).
+
+    Prerequisite STORY-332 (/aida-punt + NeedsAttention) is now Completed (PR-110), so STORY-276 is unblocked. Approach — three focused pieces, NOT new launch plumbing (exec_claude_headless already exists and the reviewer phase already uses it):
+
+    1. Enable the launch — lift the --no-human=both kickoff rejection; RealPhaseDriver::run_implementer passes --no-human to its child 'aida queue work <spec>' when the mode wants a headless implementer; bare --no-human restored to mean 'both' (STORY-263's original intent; TASK-306 narrowed it only while both was unavailable).
+    2. Teach the implementer to punt — /aida-pickup skill gets a headless rule: under AIDA_HEADLESS=1, a kind:design-fork prompt becomes 'aida punt' instead of AskUserQuestion. SPIKE-7 Q4 proved headless Claude stops cleanly at a question; STORY-276 converts that clean stop into a recorded, triageable punt.
+    3. Make the orchestrator understand a punt — new third phase-1 outcome ImplementerOutcome::Punted, detected by reading the dispatched spec's status (NeedsAttention => punted). A punt is exit-0 (honest, not a failure): orchestrate skips phases 2-6; drain_batch advances to the next member instead of stopping. resolve_batch_members skips NeedsAttention so a punted member never resurfaces as the head.
+
+    No aida-core model change — STORY-332 already shipped PuntCategory / AttentionReason / NeedsAttention / the punt ledger.
+
+    Decision flagged for review: bare --no-human flips from reviewer-only to the riskier full-headless 'both' (per acceptance: 'unflagged --no-human enables headless phase 1'). Mitigated by a loud mode-specific kickoff banner + one-time ack.
+
+    Acceptance bullets 5-6 (real headless Claude punts / ships) are verified manually SPIKE-7-style (~$3/run real API spend, CI can't run them); automated tests cover the orchestrator's handling of a punt with a mock.
+  created_at: 2026-05-19T17:16:42.867726962Z
+  modified_at: 2026-05-19T17:16:42.867726962Z
