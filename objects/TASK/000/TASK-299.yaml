@@ -104,7 +104,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:39:26.005961879Z
-modified_at: 2026-05-17T06:39:26.005961879Z
+modified_at: 2026-05-19T18:02:51.801725372Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -113,3 +113,17 @@ tags:
 - documentation
 - release-tooling
 - spec-graph
+comments:
+- id: 019e4167-a419-70e3-9c8e-23b35b829e2a
+  author: joe
+  content: |-
+    Implementation plan: docs/plans/2026-05-19-task-299-changelog-generation.md
+
+    3-phase build (one cohesive feature, no child specs):
+      Phase 1 — tracer: new aida-cli/src/changelog.rs engine (git-tag walk + commit scan + spec-graph classify + render) wired to 'aida changelog generate'.
+      Phase 2 — 'preview' / 'refresh' / --out / --released-as / --since/--until.
+      Phase 3 — release.sh regenerates CHANGELOG.md before tagging (--released-as v<new>); CLAUDE.md doc sync.
+
+    Key decisions: new sibling module dispatched before storage init (Plan/Ultraplan pattern); categorize by precedence (Bug-type / tags / commit-type-prefix / spec-type fallback) into Features/Fixes/Documentation/Infrastructure/Internal/Other; one entry per spec per release (union of PRs); --released-as resolves the commit-before-tag chicken-and-egg; deterministic output for the no-flag path (idempotent refresh). No skill — release machinery, not an agent workflow.
+  created_at: 2026-05-19T18:02:51.801725372Z
+  modified_at: 2026-05-19T18:02:51.801725372Z
