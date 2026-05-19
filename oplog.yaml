@@ -7852,5 +7852,13 @@ operations:
       User asked 2026-05-16 after the EPIC-30 pushback / pruning session: "for the queue worker I am thinking of a 20 line bash function to begin with like you mentioned. The communication could be a simple text file that has a directive like 'exit', 'pause', 'drain'. Keep it simple. I just want to make steps towards being able to drain what I can without a human in the loop."
 
       This is the disciplined MVP — exactly what the pushback memory (`feedback_pushback_on_overengineering.md`) describes: bash-loop substitute for daemon-grade infrastructure.
-clock: 833
+- id: 019e4150-3bf3-7ce0-abdf-4962ada1708c
+  target_id: 019e33b9-fa9e-7911-953c-df8f54877525
+  author: aida
+  node_id: '1'
+  lamport: 834
+  timestamp: 2026-05-19T17:37:17.811748533Z
+  kind: !SetStatus
+    status: Planned
+clock: 834
 node_id: '1'
