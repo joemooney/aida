@@ -1,0 +1,6 @@
+# Embedded templates are compiled into the `aida` binary by build.rs; pin
+# them to LF so a Windows checkout (git autocrlf) cannot embed CRLF, which
+# would otherwise break frontmatter parsing of the starter memory pack.
+# Defense-in-depth — the load-bearing fix is parser-side line-ending
+# normalization (normalize_line_endings). trace:BUG-244
+aida-core/templates/** text eol=lf
