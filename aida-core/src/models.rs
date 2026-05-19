@@ -21,6 +21,14 @@ pub enum RequirementStatus {
     Done,
     Completed,
     Rejected,
+    /// Work was in progress but is now paused — an autonomous agent hit a
+    /// design-fork it could not safely resolve and punted (`aida punt` /
+    /// `/aida-punt`) instead of guessing. A human or advisor must decide
+    /// something before it can proceed. Reached only from `InProgress`;
+    /// resolved out to `Approved` / `InProgress` / `Rejected`. The structured
+    /// why lives in `Requirement::attention_reason`.
+    /// trace:STORY-332 | ai:claude
+    NeedsAttention,
 }
 
 impl fmt::Display for RequirementStatus {
@@ -33,7 +41,150 @@ impl fmt::Display for RequirementStatus {
             RequirementStatus::Done => write!(f, "Done"),
             RequirementStatus::Completed => write!(f, "Completed"),
             RequirementStatus::Rejected => write!(f, "Rejected"),
+            RequirementStatus::NeedsAttention => write!(f, "Needs Attention"),
         }
+    }
+}
+
+/// The kind of obstacle that triggered a punt — the machine-readable category
+/// `aida punt` / `/aida-punt` records on a [`RequirementStatus::NeedsAttention`]
+/// spec (STORY-332).
+///
+/// This taxonomy is deliberately **obstacle-type**, not escalation-reason.
+/// Punt-time categories must be *observable facts* an agent can pick
+/// honestly at the moment it gets stuck — "what kind of obstacle is this" —
+/// not competence self-judgments. The escalation-reason taxonomy
+/// (`lack-of-synthesis`, `unrecorded-preference`, `needs-human-judgment`, …)
+/// is STORY-325's *ledger-derived, advisor-reviewed* layer; it is computed
+/// from punt history, never asserted at punt time. Do not "improve" this enum
+/// into escalation-reason — the two live at different layers on purpose.
+///
+/// A `BlockedDependency` punt is a direct signal to file a blocked-by
+/// relationship (STORY-333): the punt feeds the graph that prevents the next.
+/// trace:STORY-332 | ai:claude
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum PuntCategory {
+    /// Multiple genuinely-valid designs; the spec does not say which.
+    DesignFork,
+    /// The spec itself is unclear or self-contradictory.
+    AmbiguousSpec,
+    /// Needs information or context the agent does not have.
+    MissingContext,
+    /// Cannot proceed — depends on work that is not done.
+    BlockedDependency,
+    /// Catch-all for an obstacle that fits none of the above.
+    Other,
+}
+
+impl fmt::Display for PuntCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PuntCategory::DesignFork => write!(f, "design-fork"),
+            PuntCategory::AmbiguousSpec => write!(f, "ambiguous-spec"),
+            PuntCategory::MissingContext => write!(f, "missing-context"),
+            PuntCategory::BlockedDependency => write!(f, "blocked-dependency"),
+            PuntCategory::Other => write!(f, "other"),
+        }
+    }
+}
+
+impl PuntCategory {
+    /// Parse a category from its kebab-case CLI form. Tolerant of casing,
+    /// surrounding whitespace, and `_`/` ` separators.
+    pub fn from_str(s: &str) -> Option<Self> {
+        let normalized: String = s
+            .trim()
+            .chars()
+            .filter_map(|c| match c {
+                ' ' | '-' | '_' => Some('-'),
+                c if c.is_ascii_alphabetic() => Some(c.to_ascii_lowercase()),
+                _ => Some(c),
+            })
+            .collect();
+        match normalized.as_str() {
+            "design-fork" => Some(PuntCategory::DesignFork),
+            "ambiguous-spec" => Some(PuntCategory::AmbiguousSpec),
+            "missing-context" => Some(PuntCategory::MissingContext),
+            "blocked-dependency" => Some(PuntCategory::BlockedDependency),
+            "other" => Some(PuntCategory::Other),
+            _ => None,
+        }
+    }
+
+    /// Every category, in declaration order — for help text and validation.
+    pub fn all() -> [PuntCategory; 5] {
+        [
+            PuntCategory::DesignFork,
+            PuntCategory::AmbiguousSpec,
+            PuntCategory::MissingContext,
+            PuntCategory::BlockedDependency,
+            PuntCategory::Other,
+        ]
+    }
+}
+
+/// Why a spec is paused in [`RequirementStatus::NeedsAttention`] — the
+/// structured record `aida punt` writes onto the spec (STORY-332).
+///
+/// `detail` is named `detail`, not `comment`, to avoid overloading AIDA's
+/// existing spec comments. `lean` is kept distinct from `detail` so the punt
+/// ledger (STORY-325) can separate *the fork* (`detail`) from *the agent's
+/// best guess if forced to choose* (`lean`) — the recoverable-punt signal.
+/// Deliberately carries no `escalation_reason`: that is STORY-325's derived,
+/// advisor-reviewed layer, not punt-time data.
+/// trace:STORY-332 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct AttentionReason {
+    /// The kind of obstacle that triggered the punt.
+    pub category: PuntCategory,
+    /// Human-readable description of the fork / obstacle the agent hit.
+    pub detail: String,
+    /// The raiser's best-guess answer if forced to pick — distinct from
+    /// `detail` so the fork and the lean stay separable. `None` when the
+    /// agent had no defensible lean.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lean: Option<String>,
+    /// Role / agent that raised the punt (the active session role, or
+    /// `None` when no role context was available).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raised_by: Option<String>,
+    /// When the punt was raised.
+    pub raised_at: DateTime<Utc>,
+}
+
+/// Validate a status transition against the STORY-332 NeedsAttention rules.
+///
+/// Returns `Some(error message)` when the transition is forbidden, `None`
+/// when it is allowed. Only the two edges that *touch* `NeedsAttention` are
+/// constrained — every other transition returns `None`, so AIDA's otherwise
+/// free-form status edits are not regressed:
+///   - **into** `NeedsAttention`: only from `InProgress` (via `aida punt`);
+///   - **out of** `NeedsAttention`: only to `Approved` / `InProgress` /
+///     `Rejected` (triage outcomes).
+/// trace:STORY-332 | ai:claude
+pub fn forbidden_attention_transition(
+    from: &RequirementStatus,
+    to: &RequirementStatus,
+) -> Option<String> {
+    use RequirementStatus::*;
+    match (from, to) {
+        // No-op stays allowed.
+        (NeedsAttention, NeedsAttention) => None,
+        // Entering NeedsAttention.
+        (_, NeedsAttention) if !matches!(from, InProgress) => Some(
+            "a spec can only enter Needs Attention from In Progress \
+             (an autonomous agent hits a design-fork mid-work) — \
+             use `aida punt` to do this"
+                .to_string(),
+        ),
+        // Leaving NeedsAttention.
+        (NeedsAttention, to) if !matches!(to, Approved | InProgress | Rejected) => Some(
+            "a Needs Attention spec can only be triaged to Approved, \
+             In Progress, or Rejected"
+                .to_string(),
+        ),
+        _ => None,
     }
 }
 
@@ -3104,6 +3255,13 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ai_evaluation: Option<StoredAiEvaluation>,
 
+    /// Why this spec is paused — set by `aida punt` when status flips to
+    /// `NeedsAttention`, cleared when it is triaged back out. Answers "why is
+    /// this *currently* paused"; the punt ledger keeps the durable history.
+    /// trace:STORY-332 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attention_reason: Option<AttentionReason>,
+
     /// Version number for optimistic locking (SQLite only)
     /// Incremented on each update, used to detect concurrent modifications
     #[serde(skip)]
@@ -3145,6 +3303,7 @@ impl Requirement {
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
+            attention_reason: None,
             urls: Vec::new(),
             attachments: Vec::new(),
             trace_links: Vec::new(),
@@ -3231,6 +3390,10 @@ impl Requirement {
             }
             "rejected" => {
                 self.status = RequirementStatus::Rejected;
+                self.custom_status = None;
+            }
+            "needsattention" => {
+                self.status = RequirementStatus::NeedsAttention;
                 self.custom_status = None;
             }
             _ => {
@@ -6127,6 +6290,101 @@ mod tests {
         assert_eq!(req.status, RequirementStatus::Completed);
         assert_eq!(req.custom_status, None);
         assert_eq!(req.effective_status(), "Completed");
+    }
+
+    /// STORY-332: the NeedsAttention status round-trips through Display and
+    /// every spelling `set_status_from_str` should canonicalise.
+    #[test]
+    fn needs_attention_status_round_trips() {
+        assert_eq!(
+            RequirementStatus::NeedsAttention.to_string(),
+            "Needs Attention"
+        );
+        let mut req = Requirement::new("t".into(), "d".into());
+        for s in &[
+            "NeedsAttention",
+            "needs-attention",
+            "Needs Attention",
+            "needs_attention",
+            "NEEDS-ATTENTION",
+        ] {
+            req.custom_status = Some("stale".into());
+            req.set_status_from_str(s);
+            assert_eq!(
+                req.status,
+                RequirementStatus::NeedsAttention,
+                "{s:?} should map to NeedsAttention"
+            );
+            assert_eq!(req.custom_status, None, "{s:?} should clear custom_status");
+        }
+    }
+
+    /// STORY-332: a punt can enter NeedsAttention only from In Progress.
+    #[test]
+    fn forbidden_attention_transition_into_only_from_in_progress() {
+        use RequirementStatus::*;
+        // The one allowed entry.
+        assert!(forbidden_attention_transition(&InProgress, &NeedsAttention).is_none());
+        // Every other source is forbidden.
+        for from in [Draft, Approved, Planned, Done, Completed, Rejected] {
+            assert!(
+                forbidden_attention_transition(&from, &NeedsAttention).is_some(),
+                "{from} → NeedsAttention should be forbidden"
+            );
+        }
+        // Idempotent no-op stays allowed.
+        assert!(forbidden_attention_transition(&NeedsAttention, &NeedsAttention).is_none());
+    }
+
+    /// STORY-332: a NeedsAttention spec resolves only to Approved /
+    /// In Progress / Rejected.
+    #[test]
+    fn forbidden_attention_transition_out_only_to_triage_outcomes() {
+        use RequirementStatus::*;
+        for to in [Approved, InProgress, Rejected] {
+            assert!(
+                forbidden_attention_transition(&NeedsAttention, &to).is_none(),
+                "NeedsAttention → {to} should be allowed"
+            );
+        }
+        for to in [Draft, Planned, Done, Completed] {
+            assert!(
+                forbidden_attention_transition(&NeedsAttention, &to).is_some(),
+                "NeedsAttention → {to} should be forbidden"
+            );
+        }
+    }
+
+    /// STORY-332: transitions that do not touch NeedsAttention are never
+    /// constrained — the rule must not regress AIDA's free-form status edits.
+    #[test]
+    fn forbidden_attention_transition_none_for_unrelated_edges() {
+        use RequirementStatus::*;
+        let states = [
+            Draft, Approved, Planned, InProgress, Done, Completed, Rejected,
+        ];
+        for from in &states {
+            for to in &states {
+                assert!(
+                    forbidden_attention_transition(from, to).is_none(),
+                    "{from} → {to} touches no NeedsAttention edge — must stay allowed"
+                );
+            }
+        }
+    }
+
+    /// STORY-332: PuntCategory parses its kebab form and is tolerant of
+    /// casing / separator drift.
+    #[test]
+    fn punt_category_parse_round_trips() {
+        for cat in PuntCategory::all() {
+            assert_eq!(PuntCategory::from_str(&cat.to_string()), Some(cat));
+        }
+        assert_eq!(
+            PuntCategory::from_str("Design_Fork"),
+            Some(PuntCategory::DesignFork)
+        );
+        assert_eq!(PuntCategory::from_str("nonsense"), None);
     }
 
     #[test]

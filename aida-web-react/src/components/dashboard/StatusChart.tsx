@@ -23,6 +23,8 @@ export function StatusChart({ requirements }: StatusChartProps) {
     Approved: '#3b82f6',
     Planned: '#8b5cf6',
     InProgress: '#f59e0b',
+    // STORY-332: NeedsAttention — fuchsia, mirroring the CLI punt palette.
+    NeedsAttention: '#d946ef',
     Done: '#84cc16',
     Completed: '#10b981',
     Rejected: '#ef4444',

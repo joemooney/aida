@@ -12,6 +12,9 @@ fn generate_types_content() -> String {
     let decls: Vec<String> = vec![
         // Models from aida_core::models
         models::RequirementStatus::decl(),
+        // STORY-332: punt / NeedsAttention types
+        models::PuntCategory::decl(),
+        models::AttentionReason::decl(),
         models::RequirementPriority::decl(),
         models::RequirementType::decl(),
         models::MetaSubtype::decl(),

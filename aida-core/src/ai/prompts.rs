@@ -42,7 +42,9 @@ AIDA's status lifecycle is: Draft → Approved → Planned → In Progress → D
 - **Done**: work finished on a branch but NOT yet merged to the default branch. Set by `aida queue done <id>` when the implementer finishes coding. PRs that are open or awaiting review sit at Done.
 - **Completed**: merged to the default branch. Reached via the auto-bump scan in `aida pull` when a commit referencing the spec lands on main, OR manually via `aida edit <id> --status completed`.
 
-When suggesting status transitions or generating child specs, prefer `Done` over `Completed` for "finished but not yet shipped" work, and only call something `Completed` when it has actually merged. trace:STORY-86, TASK-215 | ai:claude"#,
+There is also an off-mainline pause state, **Needs Attention**: an autonomous agent was working the spec (In Progress) but hit a design-fork it could not safely resolve and punted (`aida punt`) instead of guessing. It carries a structured reason and awaits human or advisor triage back to Approved / In Progress / Rejected.
+
+When suggesting status transitions or generating child specs, prefer `Done` over `Completed` for "finished but not yet shipped" work, and only call something `Completed` when it has actually merged. trace:STORY-86, TASK-215, STORY-332 | ai:claude"#,
         if store.title.is_empty() {
             &store.name
         } else {
