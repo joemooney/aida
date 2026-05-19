@@ -636,3 +636,10 @@
   note: auto-queued by `session end` (019e3ecb); covers 1 spec
   added_at: 2026-05-19T06:22:14.664233505Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e3f02-9f85-7782-85a6-6a50020a51db
+  position: 124000
+  added_by: joe
+  note: auto-queued by `aida pr` (019e3eeb); covers 1 spec
+  added_at: 2026-05-19T06:53:22.837182920Z
+  for_role: reviewer
