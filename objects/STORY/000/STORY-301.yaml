@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:38:10.232248536Z
-modified_at: 2026-05-19T06:29:10.495408091Z
+modified_at: 2026-05-19T06:49:54.656962197Z
 req_type: Story
 tags:
 - alpha-readiness
@@ -19,3 +19,9 @@ tags:
 - from-self-test
 - observability
 - orchestrator
+comments:
+- id: 019e3eff-88e0-7fc1-8b86-cd858bd851e3
+  author: joe
+  content: Commit e12c53fb references this requirement
+  created_at: 2026-05-19T06:49:54.656962197Z
+  modified_at: 2026-05-19T06:49:54.656962197Z
