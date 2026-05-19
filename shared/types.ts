@@ -4,7 +4,34 @@
 
 // It is used to keep Rust and TypeScript types in sync.
 
-export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected";
+export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected" | "NeedsAttention";
+
+export type PuntCategory = "design-fork" | "ambiguous-spec" | "missing-context" | "blocked-dependency" | "other";
+
+export type AttentionReason = { 
+/**
+ * The kind of obstacle that triggered the punt.
+ */
+category: PuntCategory, 
+/**
+ * Human-readable description of the fork / obstacle the agent hit.
+ */
+detail: string, 
+/**
+ * The raiser's best-guess answer if forced to pick — distinct from
+ * `detail` so the fork and the lean stay separable. `None` when the
+ * agent had no defensible lean.
+ */
+lean?: string | null, 
+/**
+ * Role / agent that raised the punt (the active session role, or
+ * `None` when no role context was available).
+ */
+raised_by?: string | null, 
+/**
+ * When the punt was raised.
+ */
+raised_at: string, };
 
 export type RequirementPriority = "High" | "Medium" | "Low";
 
@@ -806,7 +833,14 @@ implementation_info?: ImplementationInfo | null,
  * Cached AI evaluation results
  * Automatically populated by background evaluator when requirement changes
  */
-ai_evaluation?: StoredAiEvaluation | null, };
+ai_evaluation?: StoredAiEvaluation | null, 
+/**
+ * Why this spec is paused — set by `aida punt` when status flips to
+ * `NeedsAttention`, cleared when it is triaged back out. Answers "why is
+ * this *currently* paused"; the punt ledger keeps the durable history.
+ * trace:STORY-332 | ai:claude
+ */
+attention_reason?: AttentionReason | null, };
 
 export type RequirementSnapshot = { 
 /**

@@ -1,20 +1,24 @@
 import type { RequirementStatus, RequirementPriority, RequirementType } from '@shared/types';
 
 export const STATUS_ORDER: RequirementStatus[] = [
-  'Draft', 'Approved', 'Planned', 'InProgress', 'Done', 'Completed', 'Rejected',
+  'Draft', 'Approved', 'Planned', 'InProgress', 'NeedsAttention', 'Done', 'Completed', 'Rejected',
 ];
 
 // STORY-86: Done sits between InProgress and Completed. Lime-400 reads
 // as "almost there" — visually distinct from Completed's settled
 // emerald without looking like a different lifecycle stage.
+// STORY-332: NeedsAttention is the off-mainline punt/pause state —
+// fuchsia mirrors the CLI's bold-magenta palette and reads as "stop,
+// decide something here", distinct from every on-track stage.
 export const STATUS_CONFIG: Record<RequirementStatus, { color: string; bg: string; dot: string; label: string }> = {
-  Draft:      { color: 'text-gray-400',    bg: 'bg-gray-500/10',    dot: 'bg-gray-400',    label: 'Draft' },
-  Approved:   { color: 'text-blue-400',    bg: 'bg-blue-500/10',    dot: 'bg-blue-400',    label: 'Approved' },
-  Planned:    { color: 'text-violet-400',  bg: 'bg-violet-500/10',  dot: 'bg-violet-400',  label: 'Planned' },
-  InProgress: { color: 'text-amber-400',   bg: 'bg-amber-500/10',   dot: 'bg-amber-400',   label: 'In Progress' },
-  Done:       { color: 'text-lime-400',    bg: 'bg-lime-500/10',    dot: 'bg-lime-400',    label: 'Done' },
-  Completed:  { color: 'text-emerald-400', bg: 'bg-emerald-500/10', dot: 'bg-emerald-400', label: 'Completed' },
-  Rejected:   { color: 'text-red-400',     bg: 'bg-red-500/10',     dot: 'bg-red-400',     label: 'Rejected' },
+  Draft:          { color: 'text-gray-400',    bg: 'bg-gray-500/10',    dot: 'bg-gray-400',    label: 'Draft' },
+  Approved:       { color: 'text-blue-400',    bg: 'bg-blue-500/10',    dot: 'bg-blue-400',    label: 'Approved' },
+  Planned:        { color: 'text-violet-400',  bg: 'bg-violet-500/10',  dot: 'bg-violet-400',  label: 'Planned' },
+  InProgress:     { color: 'text-amber-400',   bg: 'bg-amber-500/10',   dot: 'bg-amber-400',   label: 'In Progress' },
+  NeedsAttention: { color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', dot: 'bg-fuchsia-400', label: 'Needs Attention' },
+  Done:           { color: 'text-lime-400',    bg: 'bg-lime-500/10',    dot: 'bg-lime-400',    label: 'Done' },
+  Completed:      { color: 'text-emerald-400', bg: 'bg-emerald-500/10', dot: 'bg-emerald-400', label: 'Completed' },
+  Rejected:       { color: 'text-red-400',     bg: 'bg-red-500/10',     dot: 'bg-red-400',     label: 'Rejected' },
 };
 
 export const PRIORITY_CONFIG: Record<RequirementPriority, { color: string; icon: string; label: string }> = {

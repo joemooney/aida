@@ -22,6 +22,9 @@ enum RequirementStatus {
     // STORY-86: work finished on a branch; auto-bumps to COMPLETED when
     // the referencing commit lands on the default branch.
     REQUIREMENT_STATUS_DONE = 7;
+    // STORY-332: work was in progress but is paused — an autonomous agent
+    // punted a design-fork it could not safely resolve; awaits triage.
+    REQUIREMENT_STATUS_NEEDS_ATTENTION = 8;
 }
 
 // Requirement priority enum

@@ -18,6 +18,7 @@
 //! | Done        | bright green (bold) | ◉     |
 //! | Completed   | green               | ✓     |
 //! | Rejected    | red                 | ✗     |
+//! | NeedsAttention | magenta (bold)   | ⚠     |
 //!
 //! `colored` auto-degrades to plain text under `NO_COLOR` / a non-TTY, so the
 //! NO_COLOR acceptance criterion holds for free. Glyphs are plain Unicode and
@@ -51,6 +52,8 @@ pub(crate) fn status_glyph(status: &str) -> &'static str {
         "done" => "◉",
         "completed" => "✓",
         "rejected" => "✗",
+        // STORY-332: a punted spec — paused mid-work, awaiting triage.
+        "needsattention" => "⚠",
         _ => "·",
     }
 }
@@ -74,6 +77,9 @@ pub(crate) fn paint_status(text: &str, status: &str) -> ColoredString {
         "done" => text.bright_green().bold(),
         "completed" => text.green(),
         "rejected" => text.red(),
+        // STORY-332: bold magenta — a colour no other status uses, so a
+        // punted spec visibly pops out of a list as "decide something here".
+        "needsattention" => text.magenta().bold(),
         // History rows can carry a synthetic "(deleted)" status.
         "(deleted)" => text.red().dimmed(),
         _ => text.normal(),
@@ -102,6 +108,22 @@ mod tests {
         assert_eq!(status_glyph("Done"), "◉");
         assert_eq!(status_glyph("Completed"), "✓");
         assert_eq!(status_glyph("Rejected"), "✗");
+        // trace:STORY-332 | ai:claude
+        assert_eq!(status_glyph("Needs Attention"), "⚠");
+        assert_eq!(status_glyph("NeedsAttention"), "⚠");
+    }
+
+    #[test]
+    fn paint_status_needs_attention_is_magenta() {
+        // STORY-332: punted specs paint magenta — verify the arm resolves
+        // (and isn't swallowed by the unknown-status `_` fallback).
+        colored::control::set_override(true);
+        let painted = paint_status("Needs Attention", "Needs Attention").to_string();
+        colored::control::unset_override();
+        assert!(
+            painted.contains("\u{1b}[35m") || painted.contains("\u{1b}[1;35m"),
+            "expected a magenta escape: {painted:?}"
+        );
     }
 
     #[test]

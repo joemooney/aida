@@ -54,11 +54,11 @@ Every spec in AIDA travels the same path, from "filed an idea" to "users have it
    └────┬────┘
         │   aida queue work SPEC   → spawns a Claude session in a fresh worktree
         ▼
-   ┌─────────────┐
-   │ In Progress │   Claude implements · git commit
-   └──────┬──────┘
-          │   /aida-pr   → push branch + open PR
-          ▼
+   ┌─────────────┐                ┌────────────────┐
+   │ In Progress │ ──aida punt──► │ Needs Attention │  paused — an agent
+   └──────┬──────┘                └────────────────┘  punted a design-fork
+          │   /aida-pr   → push branch + open PR        it couldn't resolve;
+          ▼                                             awaits triage
    ┌────────┐
    │  Done  │   PR open on GitHub, awaiting CI + review
    └───┬────┘
@@ -88,6 +88,8 @@ Every spec in AIDA travels the same path, from "filed an idea" to "users have it
 | [**Released**](docs/lifecycle.md#released) | A version is tagged and binaries published | cross-spec — many merges aggregate per release |
 
 The default meaning of "shipped" in AIDA's docs is **merged to `main`** — the developer-facing "out the door." For "available to download with a version number," say **released** (e.g. v0.8.0). A merge does not auto-release.
+
+One status sits **off** this mainline: **Needs Attention**. An autonomous drain that hits a design-fork it can't safely resolve runs `aida punt` (the [`/aida-punt`](docs/lifecycle.md#the-off-mainline-state-needs-attention) skill) instead of guessing — the spec pauses with a structured reason and surfaces in `aida findings` for triage, rather than landing a silent wrong implementation.
 
 ### Commands at each stage
 

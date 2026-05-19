@@ -2926,7 +2926,8 @@ pub enum Command {
         #[clap(long, conflicts_with_all = ["description", "description_from_file"])]
         description_stdin: bool,
 
-        /// Status of the requirement (draft, approved, completed, rejected)
+        /// Status of the requirement (draft, approved, planned, in-progress,
+        /// done, completed, rejected)
         #[clap(long)]
         status: Option<String>,
 
@@ -3118,7 +3119,8 @@ pub enum Command {
         #[clap(long)]
         description: Option<String>,
 
-        /// New status (draft, approved, completed, rejected)
+        /// New status (draft, approved, planned, in-progress, done,
+        /// completed, rejected). Needs Attention is set via `aida punt`.
         #[clap(long)]
         status: Option<String>,
 
@@ -3177,6 +3179,29 @@ pub enum Command {
     // trace:STORY-278 trace:STORY-285 | ai:claude
     #[clap(subcommand)]
     Findings(FindingsCommand),
+
+    /// Punt a spec to Needs Attention — pause it with a structured reason
+    /// instead of guessing past a design-fork. The safety net an autonomous
+    /// drain reaches for when it hits a decision it cannot safely make.
+    // trace:STORY-332 | ai:claude
+    Punt {
+        /// The spec (UUID or SPEC-ID) to punt. Must currently be In Progress.
+        id: String,
+
+        /// The kind of obstacle. One of: design-fork, ambiguous-spec,
+        /// missing-context, blocked-dependency, other.
+        #[clap(long, short = 'c')]
+        category: String,
+
+        /// Human-readable description of the fork / obstacle that stopped you.
+        #[clap(long, short = 'r')]
+        reason: String,
+
+        /// Optional best-guess answer if forced to choose — recorded
+        /// distinctly from the reason so triage can see the agent's lean.
+        #[clap(long, short = 'l')]
+        lean: Option<String>,
+    },
 
     /// Feature management commands
     #[clap(subcommand, hide = true)]
