@@ -48,7 +48,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:41.521260612Z
-modified_at: 2026-05-18T15:10:42.404691027Z
+modified_at: 2026-05-19T06:49:57.222839915Z
 req_type: Task
 tags:
 - atomic-write
@@ -82,6 +82,11 @@ comments:
     Test status: aida-core lib 251/251 + aida-cli bin 631/631 green; cargo fmt + clippy clean on touched files.
   created_at: 2026-05-18T15:01:12.155396767Z
   modified_at: 2026-05-18T15:01:12.155396767Z
+- id: 019e3eff-92e6-78c1-9da9-1fcd2de14d19
+  author: joe
+  content: Commit e12c53fb references this requirement
+  created_at: 2026-05-19T06:49:57.222839915Z
+  modified_at: 2026-05-19T06:49:57.222839915Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T15:00:13.311923849Z
