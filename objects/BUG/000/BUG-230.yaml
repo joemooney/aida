@@ -3,63 +3,29 @@ spec_id: BUG-230
 agreed_id: BUG-230
 title: zen auto-resolves Exit action but cannot synthesize Ctrl-D to close Claude Code REPL in interactive mode
 description: |-
-  \`--zen\` auto-resolves \`kind:confirmation\` prompts in skill flows correctly — it prints the auto-resolve annotation and skips rendering the 3-option menu. **But the Claude Code REPL stays open** waiting for the user. The annotation says \"Exit\"; the session doesn't actually exit. The user still has to hit Ctrl-D for the orchestrator to advance.
+  ## RESOLVED — superseded by TASK-329 (Fix A.5). No code change.
 
-  ## Root cause
+  BUG-230's actual fix shipped as **TASK-329** (sentinel-file graceful exit signal — \`aida-cli/src/exit_signal.rs\`, PR #83, Completed). The orchestrator reaps the Claude REPL via the sentinel; the residual Ctrl-D is *eliminated* in orchestrated mode, not merely annotated. \`docs/autonomous-drain.md\`, \`docs/aida-discipline/skill-prompt-kinds.md\`, and the four core skill templates already describe the sentinel correctly.
 
-  Inner Claude (running in Claude Code) can't synthesize EOF on its own stdin to close the REPL it's running inside of. In interactive mode, only a human Ctrl-D or the headless invocation (\`claude -p\` self-terminates after prompt completion — STORY-276) can close the session. The skill-template auto-resolve fires at the \"which option to render\" layer; the action behind \"Exit\" (literally sending EOF) is out of reach in interactive mode.
+  **The original Fix A (honest annotation — "tell the user a Ctrl-D remains") is MOOT.** Implementing it would now *regress* correct docs by falsely re-asserting a Ctrl-D that TASK-329 removed. The acceptance criteria below mandated Fix A; they were never updated when the fix path was redirected to TASK-329 on 2026-05-17 — that was an advisor process miss (refinement recorded in a comment, acceptance not updated). This header is the reconciliation.
 
-  ## Symptom (TASK-318 drain, 2026-05-17)
+  Closed Completed as resolved-by-TASK-329. No bug-230 branch, no PR — TASK-329 did the work.
 
-  End-of-drain annotation:
+  ---
 
-  \`\`\`
-  ↳ zen: auto-resolved \"next step\" → ⇒ Exit — let the orchestrator continue
-  \`\`\`
+  ## Original bug (historical — the problem as understood when filed)
 
-  Claude Code REPL then stayed open at \`❯\`. Orchestrator subprocess was blocked on \`.status()\`. User had to manually Ctrl-D.
+  \`--zen\` auto-resolved the end-of-session "Exit" prompt but could not synthesize the EOF that closes an interactive Claude Code REPL — so the orchestrator stayed blocked waiting for a human Ctrl-D. Originally scoped with Fix A (honest annotation — reframe docs to admit the residual Ctrl-D) and Fix B (headless, STORY-276). Fix A.5 — the sentinel-file mechanism — was identified 2026-05-17 as the superior path: it *removes* the click rather than reframing it, and was filed and shipped as TASK-329.
 
-  ## Two valid fixes
+  ## Original acceptance (SUPERSEDED — do not implement)
 
-  ### A. Honest annotation (interim)
-
-  Change Exit-class kind:confirmation auto-resolves to print:
-
-  \`\`\`
-  ↳ zen: auto-resolved \"next step\" → ⇒ Exit — send EOF (Ctrl-D) when ready
-  \`\`\`
-
-  Documentation: --zen reduces babysitting **clicks** (menu reading + arrow-keying + selection), not **keystrokes** (the final EOF stays human in interactive mode).
-
-  ### B. Structural (STORY-276 dependency)
-
-  Under headless \`claude -p\`, no REPL = no EOF needed. --zen's Exit auto-resolve becomes a true no-op because the process self-terminates after the prompt task completes.
-
-  ## Acceptance
-
-  - [ ] Fix A: Exit-class auto-resolve annotations say \"send EOF when ready\" not \"continue\" (honest about what user must still do)
-  - [ ] Fix A: \`docs/aida-discipline/skill-prompt-kinds.md\` clarifies --zen reduces clicks not keystrokes in interactive mode
-  - [ ] Fix A: \`docs/autonomous-drain.md\` 3-mode table --zen row says \"Friction after\: very low; one Ctrl-D per spec exit remains in interactive mode\"
-  - [ ] This BUG closes when Fix A lands; Fix B is tracked under STORY-276
-  - [ ] Test: simulated --zen drain → Exit annotation reads \"send EOF\" not \"continue\"
-
-  ## Composes with
-
-  - **STORY-287** (--zen mode shipped — this BUG is its first real-world friction-mapping)
-  - **STORY-276** (headless implementer — structural fix B)
-  - **TASK-306** (mode-flag clarity — documentation companion; honest --zen claims)
-  - **TASK-326** (JSONL auto-resolve logging — should log \"action requires EOF\" so observability captures the residual click)
-  - \`feedback_precise_lifecycle_vocabulary.md\` (don't conflate \"decided to exit\" with \"exited\")
-
-  ## Origin
-
-  2026-05-17 first --zen drain (TASK-318). 3 of 3 menu prompts auto-resolved cleanly. Final \"Exit\" auto-resolve left REPL open. User: *\"but it did not exit the session and move on to the PR.\"* Friction reduction is substantial (~80% in interactive mode) but the claim that --zen eliminates all phase-1 babysitting was over-stated. Honest framing: --zen reduces clicks; --no-human=both (STORY-276) eliminates the EOF too.
+  The Fix-A annotation criteria are obsolete per the RESOLVED header above. TASK-329's acceptance is the one that was actually delivered.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:04:34.050931963Z
-modified_at: 2026-05-18T06:22:24.980654523Z
+modified_at: 2026-05-19T01:22:57.522156248Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
