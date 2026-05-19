@@ -1,7 +1,7 @@
 id: 019e3b8e-4d4e-7670-a031-8117c9b1b36a
 spec_id: BUG-241
 agreed_id: BUG-241
-title: Orchestrator reports phase-3 FALSE failure when the reviewer escalates the merge to a human — crashes the batch, reports 'shipped 0' on work that succeeded
+title: Orchestrator declares FALSE phase failures — must reconcile against reality (PR/spec state) before failing ANY phase
 description: |-
   The orchestrator's phase-3 handshake polls for a verdict file at \`.aida/review-verdicts/PR-N.json\`. When the reviewer **escalates the merge decision to a human** (correct behavior — conservative escalation on an uncertain signal) and the human handles the merge out-of-band, the reviewer session ends **without writing a verdict file** — and the orchestrator declares **phase-3 failure**, crashes the batch, and reports **"shipped 0"** for work that actually fully succeeded.
 
@@ -61,7 +61,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:47:22.190733508Z
-modified_at: 2026-05-19T01:24:20.402037577Z
+modified_at: 2026-05-19T01:26:30.912209388Z
 req_type: Bug
 tags:
 - auto-complete
