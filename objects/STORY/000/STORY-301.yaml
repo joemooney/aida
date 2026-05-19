@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:38:10.232248536Z
-modified_at: 2026-05-19T06:50:18.391985327Z
+modified_at: 2026-05-19T06:50:39.814972921Z
 req_type: Story
 tags:
 - alpha-readiness
@@ -35,6 +35,13 @@ comments:
   content: Commit e12c53fb references this requirement
   created_at: 2026-05-19T06:49:54.656962197Z
   modified_at: 2026-05-19T06:49:54.656962197Z
+- id: 019e3f00-3ad2-7222-b162-a324c85b48d6
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-18-story-301-drain-status.md
+    filed 3 task(s): TASK-343, TASK-344, TASK-345
+  created_at: 2026-05-19T06:50:40.210624254Z
+  modified_at: 2026-05-19T06:50:40.210624254Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T06:50:18.391985327Z
