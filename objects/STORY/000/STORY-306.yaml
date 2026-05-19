@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:38:45.451756021Z
-modified_at: 2026-05-19T14:13:43.181224047Z
+modified_at: 2026-05-19T17:26:22.842785368Z
 req_type: Story
 tags:
 - advisor-tier
@@ -135,3 +135,8 @@ comments:
   content: 'Dependency note 2026-05-19: STORY-306 (advisor escalation tier) depends on STORY-332 (/aida-punt + NeedsAttention) — punting a design-fork to the advisor IS the escalation, and /aida-punt + the NeedsAttention status are its mechanism. STORY-306 was already gated on STORY-276; both now trace to STORY-332 as the foundation. Unblock order: STORY-332 → STORY-276 → STORY-306.'
   created_at: 2026-05-19T14:13:43.181224047Z
   modified_at: 2026-05-19T14:13:43.181224047Z
+- id: 019e4146-3d7a-7222-adbb-538627e0010b
+  author: joe
+  content: 'Plan written 2026-05-19: docs/plans/2026-05-19-story-306-advisor-escalation-tier.md. Five-slice build order; Slice 1 (reviewer escalation handshake, BUG-241 items 4-5) is independently shippable since it needs only the reviewer phase, not STORY-276. Slices 3-5 (the advisor tier proper) are gated on STORY-276 merging first. Folds in the design-expansion comments: orchestrator assembles the rich ultraplan-grade payload (implementer just punts well), v1 fresh-advisor + rich payload is the build target, punt-ledger records emitted from day one (PuntRecord extended with classification/escalation_reason/answer fields), A/B/C calibration enforced structurally in the /aida-advise skill prompt, --escalate-blocks default vs --escalate-defaults.'
+  created_at: 2026-05-19T17:26:22.842785368Z
+  modified_at: 2026-05-19T17:26:22.842785368Z
