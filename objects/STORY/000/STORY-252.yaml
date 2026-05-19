@@ -155,7 +155,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:10:49.715594843Z
-modified_at: 2026-05-16T19:10:49.715594843Z
+modified_at: 2026-05-19T17:53:59.056448863Z
 req_type: Story
 tags:
 - advisor
@@ -170,3 +170,18 @@ relationships:
 - rel_type: Child
   target_id: 019e1cca-9950-78a0-bf56-b1393eacdcc5
   created_at: 2026-05-16T19:10:52.622343543Z
+comments:
+- id: 019e415f-8310-7170-ac0b-7639e638c8ad
+  author: joe
+  content: |-
+    Planned — implementation plan: docs/plans/2026-05-19-story-252-aida-digest.md
+
+    CLI-centric, structured-from-data (per the explicit 'AI tone-rewrite OUT of scope' boundary). New aida-cli/src/digest.rs module; main.rs gets only the clap variant + thin handler. Built in 4 commit-sized phases, no child specs:
+      1. Tracer: parse_digest_since (Nd/date/tag/marker) + Released + Completed sections + markdown render
+      2. Audience/format enums + remaining sections + cluster-PR collapse + typo/chore filter + supersedes detection
+      3. Cadence marker (.aida/last-digest.toml) + --reset + --out
+      4. /aida-digest skill + command + scaffolding wiring + CLAUDE.md skill count
+
+    Editorial logic is mechanical (commit-type filter, cluster-PR grouping, rejected-with-supersedes). Memory section is best-effort (D9). Marker is .aida/* deny-by-default — no allow line (D10).
+  created_at: 2026-05-19T17:53:59.056448863Z
+  modified_at: 2026-05-19T17:53:59.056448863Z
