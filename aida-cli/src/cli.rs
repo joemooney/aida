@@ -2789,15 +2789,28 @@ pub enum QueueCommand {
     },
 }
 
-/// `aida findings` — triage review findings filed by the headless reviewer.
-// trace:STORY-278 | ai:claude
+/// `aida findings` — triage findings filed by headless drain phases: the
+/// reviewer (`from-review:`, STORY-278) and the implementer (`from-implementer:`,
+/// STORY-285).
+// trace:STORY-278 trace:STORY-285 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum FindingsCommand {
-    /// List draft findings awaiting triage, grouped by PR and severity-sorted.
+    /// List draft findings awaiting triage, grouped by source then origin and
+    /// severity-sorted.
     List {
-        /// Narrow to findings raised against one PR.
+        /// Narrow to review findings raised against one PR.
         #[clap(long, value_name = "N")]
         pr: Option<u32>,
+
+        /// Narrow to findings from one phase: `review` or `implementer`.
+        #[clap(long, value_enum)]
+        source: Option<crate::findings::FindingSource>,
+
+        /// Narrow to findings carrying `kind:<value>` (implementer findings
+        /// only — `deviation`, `design-choice`, `bug-spotted`,
+        /// `followup-suggestion`).
+        #[clap(long, value_name = "KIND")]
+        kind: Option<String>,
 
         /// Print just the pending-finding count (for session-start surfacing).
         #[clap(long)]
@@ -3160,8 +3173,8 @@ pub enum Command {
         yes: bool,
     },
 
-    /// Triage review findings filed by the headless reviewer.
-    // trace:STORY-278 | ai:claude
+    /// Triage findings filed by headless drain phases (reviewer + implementer).
+    // trace:STORY-278 trace:STORY-285 | ai:claude
     #[clap(subcommand)]
     Findings(FindingsCommand),
 

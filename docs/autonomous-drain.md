@@ -193,29 +193,41 @@ at current Opus prices (SPIKE-7 measured ~$3.80 across its test suite). An
 overnight drain of a 20-item batch is a ~$60 run. Size your batches
 accordingly.
 
-## Review findings reach the advisor (STORY-278)
+## Findings reach the advisor (STORY-278, STORY-285)
 
-A headless reviewer surfaces non-blocking findings — clippy noise, drifted
-refs, small bugs — that a human would normally hand to the `dialog`/advisor
-role to file as follow-up TASKs. With no human in the loop those follow-ups
-would be lost when the drain moves on. So the headless reviewer files them
-itself:
+A headless drain phase surfaces things a human would normally hand to the
+`dialog`/advisor role to file as follow-up TASKs. With no human in the loop
+those follow-ups would be lost when the drain moves on. So each headless
+phase files them itself, and the advisor triages the lot on its next session
+through one shared surface — `aida findings`.
 
-- AIDA exports `AIDA_HEADLESS=1` for every headless `claude -p` launch.
-- `/aida-review` step 7b keys on it: after posting the consolidated PR
-  comment, it files each non-blocking finding as a draft TASK tagged
-  `from-review:PR-N,severity:<cosmetic|minor|major>`. It is idempotent — a
-  re-review of the same PR skips filing if `from-review:PR-N` TASKs already
-  exist.
-- The advisor triages on its next session. `aida findings list` shows the
-  pending findings grouped by PR and severity-sorted; the `dialog`-role
-  SessionStart hook and `/aida-pickup` surface a one-line pending count.
-  `aida findings promote <ID>` sends one to the work queue;
-  `aida findings dismiss <ID>` rejects it with an audit comment.
+AIDA exports `AIDA_HEADLESS=1` for every headless `claude -p` launch; both
+phases below key on it and skip filing entirely in an interactive session.
+
+**Reviewer side (phase 3).** A headless reviewer surfaces non-blocking
+findings — clippy noise, drifted refs, small bugs. `/aida-review` step 7b,
+after posting the consolidated PR comment, files each as a draft TASK tagged
+`from-review:PR-N,severity:<cosmetic|minor|major>`. Idempotent — a re-review
+of the same PR skips filing if `from-review:PR-N` TASKs already exist.
+
+**Implementer side (phase 1).** A headless implementer raises conversational
+flags at the end of a spec — a deviation from the acceptance criteria, a
+non-obvious design call, a pre-existing bug spotted in passing, a follow-up
+suggestion. `/aida-pickup` step 5b files each as a draft TASK tagged
+`from-implementer:SPEC-ID,kind:<deviation|design-choice|bug-spotted|followup-suggestion>,severity:<level>`.
+Idempotent — keyed on the `from-implementer:SPEC-ID` tag. (This fires once
+the implementer phase itself runs headless — STORY-276.)
+
+**Triage.** `aida findings list` shows pending findings grouped by source
+(*From review* / *From implementer*), then origin, severity-sorted;
+`--source review|implementer` and `--kind bug-spotted` narrow it. The
+`dialog`-role SessionStart hook and `/aida-pickup` surface a one-line pending
+count. `aida findings promote <ID>` sends one to the work queue;
+`aida findings dismiss <ID>` rejects it with an audit comment.
 
 A finding is always a `task` — the advisor re-types it to `bug` on promote
-if warranted. "Findings" is a query (`from-review:` tag), not a new
-requirement type.
+if warranted. "Findings" is a query (a `from-review:` / `from-implementer:`
+tag), not a new requirement type.
 
 ## Limits of this cut
 
