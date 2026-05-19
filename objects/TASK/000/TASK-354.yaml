@@ -10,3 +10,7 @@ feature: Uncategorized
 created_at: 2026-05-19T17:49:31.974136670Z
 modified_at: 2026-05-19T17:49:31.974136670Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 019e345e-123b-70e3-9ae9-1ba23e7ca064
+  created_at: 2026-05-19T17:49:36.612385742Z
