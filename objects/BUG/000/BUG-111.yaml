@@ -34,11 +34,11 @@ description: |-
 
   User running \`make release-minor YES=1\` for v0.8.0 after EPIC-26's TUI default-flip landed. Manual fix unblocked the release; this BUG ensures the next release doesn't hit the same trap.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T01:49:24.323883905Z
-modified_at: 2026-05-16T01:49:24.323883905Z
+modified_at: 2026-05-19T05:17:05.447271970Z
 req_type: Bug
 tags:
 - intra-workspace
