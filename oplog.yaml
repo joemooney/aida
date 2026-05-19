@@ -7359,5 +7359,57 @@ operations:
   timestamp: 2026-05-19T01:26:30.957798066Z
   kind: !SetTitle
     title: Orchestrator declares FALSE phase failures — must reconcile against reality (PR/spec state) before failing ANY phase
-clock: 803
+- id: 019e3dd7-7b38-79e2-a487-9173a113c2eb
+  target_id: 019e3b8e-4d4e-7670-a031-8117c9b1b36a
+  author: aida
+  node_id: '1'
+  lamport: 804
+  timestamp: 2026-05-19T01:26:32.505011243Z
+  kind: !SetDescription
+    description: |-
+      The orchestrator's per-phase success/failure detection equates **"phase ended without the artifact I poll for"** with **"phase failed."** Those are not the same thing. When a phase ends without its expected artifact (a verdict file, an open PR) — but the spec actually **succeeded out-of-band** or **legitimately needed no work** — the orchestrator declares a false failure, crashes the batch, and reports work as un-shipped. The fix must be **phase-agnostic**: reconcile against reality before declaring a failure at *any* phase.
+
+      ## Two verified instances (2026-05-18, batch:orchestrator-hardening drain)
+
+      **Instance A — phase 3 (reviewer escalation).** BUG-233 / PR-94: the phase-3 reviewer correctly escalated the merge decision to a human (uncertain AIDA_ZEN), paused ~461 min, the human merged PR-94 out-of-band, the reviewer session ended **without writing a verdict file**. Orchestrator:
+      \`\`\`
+      ✗ phase 3 failed: the reviewer session produced no verdict file
+      ✗ batch stopped at BUG-233 — already shipped (0): (none)
+      \`\`\`
+      Reality: PR-94 MERGED, BUG-233 Completed, \`orchestrator.rs\` on main. Every clause false.
+
+      **Instance B — phase 1 (spec needs no work).** BUG-230: resolved-by-supersession — TASK-329 had already shipped the actual fix, so the implementer phase found nothing to code and exited with **no PR**. Orchestrator phase-1 \`detect_open_pr_for_branch\` → \`PrLookup::NoOpenPr\` → declares phase-1 failure, stops the batch. Reality: BUG-230 is legitimately Completed; it correctly needed zero code.
+
+      ## Root cause (phase-agnostic)
+
+      The orchestrator has **no concept of a valid abnormal-but-successful phase outcome**:
+      - a reviewer that escalates to a human and the human handles the merge → phase 3 "succeeded" out-of-band
+      - a spec already resolved (superseded, or no code needed) → phase 1 correctly produces no PR
+
+      Both look identical to a crash from the orchestrator's narrow "did the artifact appear?" check. The fix is one principle applied at every phase, not a phase-3 patch.
+
+      ## Fix — reconcile against reality before declaring ANY phase failure
+
+      - [ ] **Phase-agnostic reconcile step**: before the orchestrator declares *any* phase a failure, it checks ground truth — is the PR merged? is the spec Completed/Done? has main advanced with the spec's commits? If reality shows the work succeeded → treat the phase as succeeded, advance the batch. Do NOT report "shipped 0" / crash.
+      - [ ] **Phase 1**: implementer exits with no PR → before failing, check the spec's status — if it's Completed (or otherwise legitimately needs no code), the phase succeeded-with-no-output; advance. Only fail when the spec is still open AND no PR exists AND no commits landed.
+      - [ ] **Phase 3**: reviewer ends with no verdict file → before failing, check — is the PR merged + spec Completed? If yes → succeeded out-of-band; advance. Only fail when the verdict is genuinely absent AND the PR is unmerged.
+      - [ ] **Reviewer writes a verdict file even when escalating** — when it defers the merge to a human, still write the verdict (\`verdict: Approved\`, \`merge: escalated-to-human\`), so the handshake artifact exists.
+      - [ ] **Orchestrator recognizes distinct non-failure states** — "reviewer paused for human input" and "spec needed no work" are first-class outcomes, not lumped with "phase crashed."
+      - [ ] Tests: phase-3 reviewer-escalation + out-of-band merge → reconcile → batch advances, spec reported shipped. Phase-1 no-work spec (already Completed) → reconcile → batch advances. Genuine failures (spec open, no PR, no progress) → still correctly reported as failures.
+      - [ ] Genuine-failure regression guard: the reconcile step must NOT mask a real failure — if reality confirms nothing shipped, the phase failure stands.
+
+      ## Composes with
+
+      - **BUG-233** (instance A's spec; corroboration fix now merged)
+      - **BUG-230** (instance B's spec; resolved-by-supersession, closed Completed)
+      - **STORY-263** (the verdict-file handshake this BUG patches)
+      - **STORY-306** (advisor escalation tier — escalation becomes MORE common; the orchestrator must treat it as first-class, never a failure)
+      - **BUG-226** (reviewer verdict-file discipline — sibling)
+      - **BUG-236** (orchestrator recovery-hint accuracy — sibling false-signal family)
+      - **STORY-301** (drain-state file — a reconcile-evidence source)
+
+      ## Origin
+
+      2026-05-18 batch:orchestrator-hardening drain. Filed first for instance A (phase-3 reviewer escalation crashing the batch with a false "shipped 0"). Broadened 2026-05-18 to phase-agnostic after instance B surfaced: BUG-230, resolved-by-supersession, produced a phase-1 \`PrLookup::NoOpenPr\` false failure for the identical root reason — the orchestrator's phase model has no concept of a valid abnormal-but-successful outcome. One principle (reconcile against reality before failing) fixes both; writing the fix as phase-3-only would leave instance B — and every future no-work spec — still crashing the batch.
+clock: 804
 node_id: '1'
