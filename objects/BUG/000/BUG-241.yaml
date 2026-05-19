@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:47:22.190733508Z
-modified_at: 2026-05-19T03:45:58.240410786Z
+modified_at: 2026-05-19T04:01:54.192320805Z
 req_type: Bug
 tags:
 - auto-complete
@@ -73,3 +73,13 @@ comments:
   content: 'Acceptance broadened 2026-05-18 (per advisor+user decision): scope generalized from phase-3-only to PHASE-AGNOSTIC. The reconcile-against-reality fix now bindingly covers both instance A (phase-3 reviewer escalation) and instance B (phase-1 no-work spec, BUG-230 class). Title + description + acceptance all updated. This supersedes the earlier ''sibling case'' comment — the phase-1 case is no longer a flag, it''s in the acceptance.'
   created_at: 2026-05-19T01:26:33.714446606Z
   modified_at: 2026-05-19T01:26:33.714446606Z
+- id: 019e3e65-b810-7ed0-b566-3a17d402af25
+  author: joe
+  content: |-
+    ACCEPTANCE AMENDMENT 2026-05-18 (implementer design-checkpoint → advisor call): BUG-241 ships **items 1, 2, 3, 6, 7 only** — the phase-agnostic reconcile-against-reality step + its tests + the genuine-failure regression guard. That fully fixes both verified instances (A: phase-3 out-of-band merge; B: phase-1 no-work spec).
+
+    Items **4 and 5** (reviewer writes a verdict file on escalation; orchestrator 'escalated-to-human' first-class outcome) are **STRUCK from BUG-241 and MOVED to STORY-306**. Rationale: they are the escalation HANDSHAKE — STORY-306's (advisor escalation tier) mechanism — and STORY-306 now carries a coherent escalation design (A/B/C calibration, punt channel, v1/v2 advisor). A partial handshake built in BUG-241 would risk pre-empting/contradicting that. They are also belt-and-suspenders: instance A's actual trigger (uncertain AIDA_ZEN) is already fixed by BUG-237 (merged), so the reconcile step is the durable fix.
+
+    BUG-241's acceptance is hereby items 1,2,3,6,7. The reviewer reviews BUG-241's PR against those five. This amendment is binding for the in-flight implementation (synchronous design-checkpoint resolution — the implementer asked, this is the answer).
+  created_at: 2026-05-19T04:01:54.192320805Z
+  modified_at: 2026-05-19T04:01:54.192320805Z
