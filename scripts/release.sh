@@ -16,13 +16,18 @@
 # Conventions enforced by this script:
 #   - workspace.package.version uses full form ("0.5.0")
 #   - aida-crate package version uses full form ("0.5.0")
-#   - aida-core path-dep version constraints use short form ("0.5") —
+#   - intra-workspace path-dep version constraints use short form ("0.5") —
 #     cargo treats this and "0.5.0" identically for matching, but short
-#     form survives patch bumps without churn
+#     form survives patch bumps without churn. The full set of pins is
+#     discovered generically from [workspace.members] (BUG-111), so a new
+#     workspace crate is bumped automatically — no hardcoded crate list.
 #
 # trace:EPIC-1-001 | ai:claude
 
 set -euo pipefail
+
+# Load the intra-workspace dependency-pin discovery helpers. trace:BUG-111
+. "$(dirname "$0")/workspace-deps.sh"
 
 # Parse args first so --help works in any repo state. Support `--yes` /
 # `-y` to skip the interactive prompt (also satisfied by env
@@ -113,17 +118,59 @@ rm -f Cargo.toml.bak
 sed -i.bak -E "0,/^version = \"$current\"/ s/^version = \"$current\"/version = \"$new\"/" aida-crate/Cargo.toml
 rm -f aida-crate/Cargo.toml.bak
 
-# Bump aida-core path-dep version constraints in dependents (short form).
-# Match either short ("0.4") or any full ("0.4.x") form on the way in;
-# always emit short ("0.5") on the way out.
-short_current=$(echo "$current" | awk -F. '{print $1"."$2}')
+# Bump every intra-workspace path-dependency version pin to the new
+# version. The set of pins is discovered generically from
+# [workspace.members] (see scripts/workspace-deps.sh) rather than from a
+# hardcoded crate list, so a newly-added workspace crate is picked up
+# automatically — the trap BUG-111 was filed for. trace:BUG-111 | ai:claude
 short_new=$(echo "$new" | awk -F. '{print $1"."$2}')
-sed -i.bak -E "s/aida-core = \\{ version = \"$short_current(\\.[0-9]+)?\"/aida-core = { version = \"$short_new\"/" \
-    aida-cli/Cargo.toml aida-crate/Cargo.toml
-rm -f aida-cli/Cargo.toml.bak aida-crate/Cargo.toml.bak
+echo
+echo "─── Bumping intra-workspace dependency pins -> $short_new ───"
+ws_bump_intra_pins "." "$short_new"
 
-# Refresh Cargo.lock.
-cargo build --workspace --offline >/dev/null 2>&1 || cargo build --workspace
+# Manifests a version bump can touch: the workspace root, Cargo.lock, and
+# every member Cargo.toml (any of which may carry a bumped dep pin). Used
+# for the diff preview and the release commit so a new crate's manifest is
+# never left unstaged. trace:BUG-111
+manifest_paths=("Cargo.toml" "Cargo.lock")
+while IFS= read -r _m; do
+    [ -n "$_m" ] && [ -f "$_m/Cargo.toml" ] && manifest_paths+=("$_m/Cargo.toml")
+done < <(ws_discover_members ".")
+
+# Verify the bump before committing. (1) A self-check that names any
+# intra-workspace pin the discovery left stale; (2) cargo check --workspace,
+# which resolves the whole graph authoritatively (a missed pin surfaces as
+# "failed to select a version for the requirement") and refreshes
+# Cargo.lock. trace:BUG-111 | ai:claude
+echo
+echo "─── Verifying intra-workspace dependency pins ───"
+if ! ws_verify_intra_pins "." "$short_new"; then
+    cat <<EOM >&2
+
+error: an intra-workspace dependency pin was not bumped to $short_new.
+scripts/workspace-deps.sh discovery missed a crate — fix it before releasing.
+
+The version bump is in your working tree but not committed. Discard with:
+  git restore ${manifest_paths[*]}
+EOM
+    exit 1
+fi
+echo "  ok — all intra-workspace pins point at $short_new"
+
+echo
+echo "─── cargo check --workspace ───"
+if ! cargo check --workspace; then
+    cat <<EOM >&2
+
+error: cargo check --workspace failed after the v$new bump.
+A "failed to select a version for the requirement" error means a workspace
+crate's path-dependency pin is still at the old version.
+
+The version bump is in your working tree but not committed. Discard with:
+  git restore ${manifest_paths[*]}
+EOM
+    exit 1
+fi
 
 # Generate tag notes from `git log <prev_tag>..HEAD`. Saved to a temp file
 # so we can both display them and feed them to `git tag -a -F`. The temp
@@ -146,7 +193,7 @@ notes_file=$(mktemp -t aida-release-notes-XXXXXX)
 # Show the version-bump diff and the proposed tag notes.
 echo
 echo "─── Version bump diff ───"
-git --no-pager diff Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
+git --no-pager diff "${manifest_paths[@]}"
 echo
 echo "─── Tag notes (will be used for v$new) ───"
 cat "$notes_file"
@@ -173,8 +220,7 @@ step requires confirmation. Pick one:
   - set the env:                       AIDA_RELEASE_YES=1 $0 $bump
 
 The version bump is still in your working tree. Either commit it manually,
-or run \`git restore Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml\`
-to discard.
+or run \`git restore ${manifest_paths[*]}\` to discard.
 
 Tag notes saved at: $notes_file
 EOM
@@ -192,14 +238,14 @@ cancelled. The version bump is in your working tree but not committed.
 Pick one:
 
   1. Proceed manually (use the auto-generated tag notes):
-       git add Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
+       git add ${manifest_paths[*]}
        git commit -m "chore: release v$new"
        git tag -a v$new -F $notes_file
        git push origin main
        git push origin v$new
 
   2. Discard the bump (stay on v$current):
-       git restore Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
+       git restore ${manifest_paths[*]}
 
   3. Re-run the script after deciding (a clean working tree is required).
 
@@ -235,7 +281,7 @@ EOM
     fi
 fi
 
-git add Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
+git add "${manifest_paths[@]}"
 git commit -m "chore: release v$new"
 git tag -a "v$new" -F "$notes_file"
 git push origin HEAD
