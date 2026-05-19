@@ -81,40 +81,54 @@ impl AutoCompleteVariant {
 /// `--no-human` makes the orchestrator launch a phase's Claude session with
 /// `claude -p` (headless, single-turn, no Ctrl+D) instead of the interactive
 /// `exec claude`. This first cut wires the *reviewer* (phase 3) only — the
-/// SPIKE-7 "safe first cut"; the headless implementer (phase 1) is STORY-276.
-/// Under [`NoHumanMode::Both`] the orchestrator still runs phase 1
-/// interactively and prints a note pointing at STORY-276 — the flag grammar
-/// is forward-compatible, STORY-276 only has to wire the phase-1 launch.
-/// trace:STORY-263 | ai:claude
+/// SPIKE-7 "safe first cut". [`NoHumanMode::Both`] (the headless implementer
+/// too) is the forward-compatible variant, but the headless implementer is
+/// not shipped: `--no-human=both` is rejected at kickoff until STORY-276
+/// wires the phase-1 headless launch. Bare `--no-human` therefore resolves
+/// to [`ReviewerOnly`](Self::ReviewerOnly) — the honest default of what the
+/// flag actually does today. trace:STORY-263, TASK-306 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NoHumanMode {
     /// Headless reviewer (phase 3) only; the implementer (phase 1) stays
-    /// interactive. The explicit `--no-human=reviewer-only`.
+    /// interactive. Bare `--no-human` and `--no-human=reviewer-only` both
+    /// resolve here. trace:TASK-306
     ReviewerOnly,
-    /// Headless implementer + reviewer. Bare `--no-human` resolves here. The
-    /// implementer half is STORY-276 — until it lands, phase 1 runs
-    /// interactively with a deferral note.
+    /// Headless implementer + reviewer. The headless implementer is STORY-276
+    /// — until it lands, `--no-human=both` is rejected at kickoff. The variant
+    /// stays so the flag grammar is forward-compatible.
     Both,
 }
 
 impl NoHumanMode {
     /// Parse the `--no-human[=MODE]` value. Bare `--no-human` arrives as
-    /// `"both"` (clap `default_missing_value`).
+    /// `"reviewer-only"` (clap `default_missing_value`); an empty string maps
+    /// there too. trace:TASK-306 | ai:claude
     pub(crate) fn parse(s: &str) -> Result<Self, String> {
         match s.trim().to_ascii_lowercase().as_str() {
-            "" | "both" => Ok(Self::Both),
-            "reviewer-only" | "reviewer_only" | "revieweronly" | "reviewer" => {
+            "" | "reviewer-only" | "reviewer_only" | "revieweronly" | "reviewer" => {
                 Ok(Self::ReviewerOnly)
             }
+            "both" => Ok(Self::Both),
             other => Err(format!(
-                "unknown --no-human mode `{other}` (expected: both, reviewer-only)"
+                "unknown --no-human mode `{other}` (expected: reviewer-only, both)"
             )),
         }
     }
 
+    /// Stable slug — the spelling [`parse`](Self::parse) accepts, and the
+    /// value the orchestrator propagates to phase children as
+    /// `AIDA_NO_HUMAN_MODE` so the statusline can show the headless scope.
+    /// trace:TASK-306 | ai:claude
+    pub(crate) fn slug(self) -> &'static str {
+        match self {
+            Self::ReviewerOnly => "reviewer-only",
+            Self::Both => "both",
+        }
+    }
+
     /// Does this mode *request* a headless implementer (phase 1)? True for
-    /// [`Both`](Self::Both). The phase-1 headless launch itself is STORY-276;
-    /// until then the orchestrator reads this only to print the deferral note.
+    /// [`Both`](Self::Both). The phase-1 headless launch is STORY-276; until
+    /// it ships the kickoff gate reads this to reject `--no-human=both`.
     pub(crate) fn wants_headless_implementer(self) -> bool {
         matches!(self, Self::Both)
     }
@@ -1735,14 +1749,14 @@ mod tests {
         }
     }
 
-    // --- NoHumanMode (STORY-263) ------------------------------------------
+    // --- NoHumanMode (STORY-263, TASK-306) --------------------------------
 
     #[test]
     fn no_human_mode_parse_accepts_all_forms() {
-        // Bare `--no-human` arrives as "both".
-        assert_eq!(NoHumanMode::parse(""), Ok(NoHumanMode::Both));
-        assert_eq!(NoHumanMode::parse("both"), Ok(NoHumanMode::Both));
-        assert_eq!(NoHumanMode::parse("BOTH"), Ok(NoHumanMode::Both));
+        // TASK-306: bare `--no-human` (clap default-missing) and an empty
+        // string resolve to reviewer-only — the honest default of what the
+        // flag does today (the headless implementer is not shipped).
+        assert_eq!(NoHumanMode::parse(""), Ok(NoHumanMode::ReviewerOnly));
         assert_eq!(
             NoHumanMode::parse("reviewer-only"),
             Ok(NoHumanMode::ReviewerOnly)
@@ -1755,6 +1769,10 @@ mod tests {
             NoHumanMode::parse("  reviewer "),
             Ok(NoHumanMode::ReviewerOnly)
         );
+        // `both` still parses — the kickoff gate, not the grammar, is what
+        // rejects it until the headless implementer ships.
+        assert_eq!(NoHumanMode::parse("both"), Ok(NoHumanMode::Both));
+        assert_eq!(NoHumanMode::parse("BOTH"), Ok(NoHumanMode::Both));
         assert!(NoHumanMode::parse("bogus").is_err());
     }
 
@@ -1762,6 +1780,17 @@ mod tests {
     fn no_human_mode_only_both_wants_headless_implementer() {
         assert!(NoHumanMode::Both.wants_headless_implementer());
         assert!(!NoHumanMode::ReviewerOnly.wants_headless_implementer());
+    }
+
+    #[test]
+    fn no_human_mode_slug_round_trips_through_parse() {
+        // TASK-306: the slug is the propagated `AIDA_NO_HUMAN_MODE` value and
+        // must parse back to the same mode.
+        for mode in [NoHumanMode::ReviewerOnly, NoHumanMode::Both] {
+            assert_eq!(NoHumanMode::parse(mode.slug()), Ok(mode));
+        }
+        assert_eq!(NoHumanMode::ReviewerOnly.slug(), "reviewer-only");
+        assert_eq!(NoHumanMode::Both.slug(), "both");
     }
 
     // --- OrchestrationResult telemetry fields (TASK-266) ------------------

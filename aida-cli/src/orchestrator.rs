@@ -56,6 +56,19 @@ pub(crate) const AUTO_COMPLETE_ENV: &str = "AIDA_AUTO_COMPLETE";
 /// [`AUTO_COMPLETE_ENV`] on every phase child.
 pub(crate) const TOKEN_ENV: &str = "AIDA_AUTO_COMPLETE_TOKEN";
 
+/// The 1-based phase index (`1`..=`6`) the current process is running, set by
+/// the orchestrator on each Claude-launching phase child (phase 1 implementer,
+/// phase 3 reviewer). The child's statusline reads it to show `auto:N/6` so an
+/// interactive phase advertises that it is an orchestrator step the user must
+/// act in. Unset for a standalone session. trace:TASK-306 | ai:claude
+pub(crate) const PHASE_ENV: &str = "AIDA_AUTO_COMPLETE_PHASE";
+
+/// The `--no-human` mode slug (`reviewer-only` | `both`) in effect for an
+/// `--auto-complete` run, propagated to phase children so the statusline can
+/// show the headless scope alongside the phase. Absent for a fully
+/// interactive run. trace:TASK-306 | ai:claude
+pub(crate) const NO_HUMAN_MODE_ENV: &str = "AIDA_NO_HUMAN_MODE";
+
 /// Subdirectory of `.aida/` holding one marker file per *live* orchestrator
 /// run. Gitignored by the deny-by-default `.aida/*` rule — pure runtime state.
 const RUNS_SUBDIR: &str = "orchestrator-runs";
