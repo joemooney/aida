@@ -114,7 +114,38 @@ mod tests {
             std::thread::spawn(move || {
                 let mut reads = 0u64;
                 while !stop.load(Ordering::Relaxed) {
-                    let observed = std::fs::read_to_string(&*path).unwrap();
+                    // A concurrent open can transiently fail on Windows
+                    // (ERROR_ACCESS_DENIED / ERROR_FILE_NOT_FOUND) while a
+                    // writer's atomic rename is in flight — POSIX rename has
+                    // no such window. That is not a torn write, so retry it;
+                    // a torn write surfaces instead as a *successful* read of
+                    // out-of-set content, caught by the assert below.
+                    // trace:BUG-246 | ai:claude
+                    let observed = {
+                        let mut attempts = 0u32;
+                        loop {
+                            match std::fs::read_to_string(&*path) {
+                                Ok(s) => break s,
+                                Err(e)
+                                    if matches!(
+                                        e.kind(),
+                                        std::io::ErrorKind::PermissionDenied
+                                            | std::io::ErrorKind::NotFound
+                                    ) =>
+                                {
+                                    attempts += 1;
+                                    assert!(
+                                        attempts < 200,
+                                        "reader: transient read failure persisted: {e}"
+                                    );
+                                    std::thread::sleep(std::time::Duration::from_millis(1));
+                                }
+                                Err(e) => {
+                                    panic!("reader: unexpected read error: {e}")
+                                }
+                            }
+                        }
+                    };
                     assert!(
                         valid.contains(&observed),
                         "reader observed a torn write ({} bytes)",
