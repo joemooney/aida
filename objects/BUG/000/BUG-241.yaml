@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:47:22.190733508Z
-modified_at: 2026-05-19T04:14:24.087966681Z
+modified_at: 2026-05-19T04:17:24.191965920Z
 req_type: Bug
 tags:
 - auto-complete
@@ -88,6 +88,18 @@ comments:
   content: 'Scope (implementer, 2026-05-19): this PR ships the phase-agnostic reconcile step only — items 1,2,3,6,7. orchestrate() now routes every phase failure through PhaseDriver::reconcile_failure before declaring a failure; RealPhaseDriver checks ground truth (a merged PR via gh, the spec''s status in the git store) and reports ShippedOutOfBand when reality shows the spec shipped. This independently fixes both verified instances: A (phase-3 out-of-band merge) and B (phase-1 no-work spec). Items 4-5 (the escalation handshake — reviewer writes a verdict file on escalation; orchestrator''s first-class escalated-to-human outcome) were folded into STORY-306''s acceptance criteria, not filed as a standalone TASK — they are STORY-306''s escalation mechanism and belong with its A/B/C calibration + punt-channel design. Reconcile gates by phase (1 and 3 only): phases 2/4/5/6 fail by a gate or command genuinely not passing, so reconciling them would mask real failures.'
   created_at: 2026-05-19T04:12:43.022888581Z
   modified_at: 2026-05-19T04:12:43.022888581Z
+- id: 019e3e73-e8df-76f2-b570-836ce8177799
+  author: joe
+  content: |-
+    Implemented via branch `bug-241` (commit 860b20da):
+
+    - orchestrate() now routes every phase failure through the new PhaseDriver::reconcile_failure hook before declaring a failure. RealPhaseDriver checks ground truth — a merged PR (gh pr view) and the spec's status in the git store — and reports ShippedOutOfBand when reality shows the spec shipped despite a missing artifact; finish_reconciled then returns a success so the batch advances instead of crashing with a false "shipped 0".
+    - Fixes both verified instances: A (phase-3 out-of-band merge) and B (phase-1 no-work spec). Reconcile is gated to phases 1 & 3; phases 2/4/5/6 fail genuinely (red CI, failed merge, divergent pull, broken build), so reconciling them would mask a real failure.
+
+    Test status: 679/679 aida-cli tests green; cargo fmt --check clean
+    Follow-up: items 4-5 (escalation handshake) folded into STORY-306's acceptance criteria, not a standalone TASK
+  created_at: 2026-05-19T04:17:24.191965920Z
+  modified_at: 2026-05-19T04:17:24.191965920Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T04:14:24.087966681Z
