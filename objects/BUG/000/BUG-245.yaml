@@ -1,0 +1,61 @@
+id: 019e40af-c2a9-7482-bb61-693da72960ad
+spec_id: BUG-245
+agreed_id: BUG-245
+title: Orchestrator reports the dispatched spec as 'shipped' when phase-1 actually shipped a different spec
+description: |-
+  \`aida queue work --auto-complete\` dispatches phase-1 for a spec, runs phases 2-6 on whatever PR phase-1 produces, and reports completion against the **dispatched spec id** — it never re-checks what the PR actually shipped.
+
+  ## Observed — 2026-05-19, batch:autonomy-modes drain
+
+  The orchestrator dispatched phase-1 for **STORY-276** (queue head). STORY-276 was blocked on STORY-332 (/aida-punt, unbuilt). The phase-1 implementer correctly found STORY-276 unworkable and pragmatically worked **BUG-244** (the v0.8.0 release-blocker) instead. PR #108 carries one commit: \`(BUG-244)\`.
+
+  The orchestrator ran phases 2-6 on PR #108 and reported:
+
+      ✓ STORY-276 shipped (425m 24s)
+
+  **False.** STORY-276 is still \`Approved\`, still the queue head, untouched. BUG-244 shipped. The orchestrator credited the dispatched id, not the PR's actual \`(SPEC-ID)\`.
+
+  The same drain output then contradicts itself:
+
+      ✗ batch drain stopped — STORY-276 stayed at the head after a successful run (queue did not advance)
+        → check STORY-276's status — it may not have been dequeued
+
+  The halt-on-no-advance safety net caught the *symptom* — but the \`✓ … shipped\` line had already printed the false claim. A user reading an unattended overnight drain log would believe STORY-276 was done.
+
+  ## Fix
+
+  When phase-1 ends, the orchestrator already discovers the PR. Read the PR's commit \`(SPEC-ID)\` and compare to the dispatched spec:
+
+  - **Match** → report \`✓ <spec> shipped\` as today.
+  - **Mismatch** → report the truth: \`phase-1 for STORY-276 shipped BUG-244 instead (STORY-276 blocked / untouched)\`. Credit the spec the PR actually shipped, leave the dispatched spec queued, and surface the mismatch as an explicit drain anomaly — do not print \`✓ STORY-276 shipped\`.
+
+  ## Acceptance
+
+  - [ ] Orchestrator derives the "shipped" spec id from the merged PR's commit \`(SPEC-ID)\`, not the dispatched id
+  - [ ] Dispatched≠shipped mismatch is reported as a named anomaly, not silently mis-credited
+  - [ ] The dispatched spec, if untouched, is left queued with an accurate reason (not "shipped")
+  - [ ] Drain summary is self-consistent — never "✓ X shipped" + "✗ X stayed at head" for the same X in one run
+  - [ ] Test: dispatch phase-1 for spec A, have it produce a PR for spec B → drain reports B shipped, A still queued
+
+  ## Composes with
+
+  - **STORY-333** (typed \`blocked-by\` — would skip blocked STORY-276 at pickup so the orchestrator never dispatches a doomed phase-1; this bug is the *other* path — the implementer improvises onto a different spec for a non-blocked reason too)
+  - **BUG-241** (orchestrator outcome model — this is the **inverse symptom**: BUG-241 = false-*failure*; this = false-*success-attribution*. Same root: the orchestrator trusts dispatch intent over PR reality. Worth implementing together.)
+  - **BUG-233** (orchestrator cannot verify its own execution context)
+
+  ## Origin
+
+  2026-05-19 batch:autonomy-modes drain. The implementer's improvisation — work the release-blocker when the dispatched spec is blocked — was *correct* and shipped v0.8.0's blocker. But it broke the orchestrator's spec↔PR mapping, producing a false "✓ STORY-276 shipped" in the drain log.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-19T14:42:01.001513842Z
+modified_at: 2026-05-19T14:42:01.001513842Z
+req_type: Bug
+tags:
+- autonomous-drain
+- batch:orchestrator-hardening
+- from-self-test:STORY-276
+- misattribution
+- orchestrator
