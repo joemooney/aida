@@ -55,12 +55,12 @@ description: |-
   ## Origin
 
   2026-05-19: STORY-276's implementer (a batch:autonomy-modes drain pickup) found STORY-276 hard-blocked — \`/aida-punt\` named as a required prerequisite but never filed; EPIC-28's children are prose only; \`NeedsAttention\` not in the state machine. Advisor mistake: STORY-276 + STORY-306 were filed with a hard dependency on /aida-punt without /aida-punt being a spec. This STORY files it properly. STORY-276/306 are gated on it.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:13:34.298400649Z
-modified_at: 2026-05-19T16:36:31.655649808Z
+modified_at: 2026-05-19T16:36:57.306839616Z
 req_type: Story
 tags:
 - aida-punt
@@ -76,3 +76,7 @@ comments:
   content: Commit 59beb1f0 references this requirement
   created_at: 2026-05-19T16:36:31.655649808Z
   modified_at: 2026-05-19T16:36:31.655649808Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-19T16:36:57.306839616Z
+  implemented_by: joe
