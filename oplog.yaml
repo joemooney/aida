@@ -7318,5 +7318,30 @@ operations:
   timestamp: 2026-05-18T16:56:47.829063442Z
   kind: !SetStatus
     status: In Progress
-clock: 800
+- id: 019e3dd4-339d-7fb3-a6d4-df5a3e698d65
+  target_id: 019e3866-1282-7bb1-be3e-aca1c62e163d
+  author: aida
+  node_id: '1'
+  lamport: 801
+  timestamp: 2026-05-19T01:22:57.565175974Z
+  kind: !SetDescription
+    description: |-
+      ## RESOLVED — superseded by TASK-329 (Fix A.5). No code change.
+
+      BUG-230's actual fix shipped as **TASK-329** (sentinel-file graceful exit signal — \`aida-cli/src/exit_signal.rs\`, PR #83, Completed). The orchestrator reaps the Claude REPL via the sentinel; the residual Ctrl-D is *eliminated* in orchestrated mode, not merely annotated. \`docs/autonomous-drain.md\`, \`docs/aida-discipline/skill-prompt-kinds.md\`, and the four core skill templates already describe the sentinel correctly.
+
+      **The original Fix A (honest annotation — "tell the user a Ctrl-D remains") is MOOT.** Implementing it would now *regress* correct docs by falsely re-asserting a Ctrl-D that TASK-329 removed. The acceptance criteria below mandated Fix A; they were never updated when the fix path was redirected to TASK-329 on 2026-05-17 — that was an advisor process miss (refinement recorded in a comment, acceptance not updated). This header is the reconciliation.
+
+      Closed Completed as resolved-by-TASK-329. No bug-230 branch, no PR — TASK-329 did the work.
+
+      ---
+
+      ## Original bug (historical — the problem as understood when filed)
+
+      \`--zen\` auto-resolved the end-of-session "Exit" prompt but could not synthesize the EOF that closes an interactive Claude Code REPL — so the orchestrator stayed blocked waiting for a human Ctrl-D. Originally scoped with Fix A (honest annotation — reframe docs to admit the residual Ctrl-D) and Fix B (headless, STORY-276). Fix A.5 — the sentinel-file mechanism — was identified 2026-05-17 as the superior path: it *removes* the click rather than reframing it, and was filed and shipped as TASK-329.
+
+      ## Original acceptance (SUPERSEDED — do not implement)
+
+      The Fix-A annotation criteria are obsolete per the RESOLVED header above. TASK-329's acceptance is the one that was actually delivered.
+clock: 801
 node_id: '1'
