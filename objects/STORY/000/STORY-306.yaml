@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:38:45.451756021Z
-modified_at: 2026-05-19T04:12:01.611737885Z
+modified_at: 2026-05-19T14:13:43.181224047Z
 req_type: Story
 tags:
 - advisor-tier
@@ -130,3 +130,8 @@ comments:
   content: 'Scope absorption 2026-05-18: the escalation HANDSHAKE — (a) the reviewer writes a verdict file even when it escalates a merge decision to a human, and (b) the orchestrator treats ''escalated-to-human'' as a first-class non-failure outcome (a new outcome type alongside Approved/RequestChanges) — is now STORY-306''s scope. These were BUG-241 items 4-5; moved here because they are STORY-306''s escalation mechanism and should be designed coherently with the A/B/C calibration + punt channel rather than half-built in BUG-241. Fold into STORY-306''s plan + acceptance: the escalation handshake is part of how the advisor tier signals back to the orchestrator. BUG-241 ships only the reconcile-against-reality step (which independently fixes both its verified false-failure instances); the handshake rides with STORY-306.'
   created_at: 2026-05-19T04:01:55.253905199Z
   modified_at: 2026-05-19T04:01:55.253905199Z
+- id: 019e4095-da8d-7cd0-9415-a73a50de7da4
+  author: joe
+  content: 'Dependency note 2026-05-19: STORY-306 (advisor escalation tier) depends on STORY-332 (/aida-punt + NeedsAttention) — punting a design-fork to the advisor IS the escalation, and /aida-punt + the NeedsAttention status are its mechanism. STORY-306 was already gated on STORY-276; both now trace to STORY-332 as the foundation. Unblock order: STORY-332 → STORY-276 → STORY-306.'
+  created_at: 2026-05-19T14:13:43.181224047Z
+  modified_at: 2026-05-19T14:13:43.181224047Z
