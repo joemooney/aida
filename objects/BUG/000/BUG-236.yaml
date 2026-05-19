@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T05:39:42.574770218Z
-modified_at: 2026-05-19T02:10:08.327500413Z
+modified_at: 2026-05-19T02:10:42.664190965Z
 req_type: Bug
 tags:
 - auto-complete
@@ -65,6 +65,11 @@ tags:
 - recovery-hint
 - reviewer-phase
 - rework
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e3dff-db88-7b11-b5cc-a013eca56288
+  created_at: 2026-05-19T02:10:42.664179235Z
+  created_by: joe
 comments:
 - id: 019e3dff-6547-73b1-bf6e-fbf8bd7451e1
   author: joe
