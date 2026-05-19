@@ -215,6 +215,16 @@ aida comment add <SPEC-ID> "Implementation complete. Files modified: src/foo.rs,
 aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
 ```
 
+4. **Under a headless drain (`AIDA_HEADLESS=1`)** — file conversational
+   flags raised at the end of the spec (a deviation from the acceptance
+   criteria, a non-obvious design call, a pre-existing bug spotted, a
+   follow-up suggestion) as draft `from-implementer:<SPEC-ID>` findings so
+   they reach the advisor instead of vanishing into conversation history.
+   The full procedure — categories, severity rubric, idempotency probe — is
+   `/aida-pickup` Step 5b; the queue-driven pickup loop is the canonical
+   home for it. In an interactive session a human reads the flags directly;
+   skip this step. trace:STORY-285
+
 ## State Transitions
 
 During implementation, requirements should transition through:

@@ -894,8 +894,9 @@ fn run() -> Result<()> {
             );
         }
         Command::Findings(_) => {
-            // `aida findings` queries the cache for `from-review:` tags; the
-            // deprecated SQLite backend has no equivalent. trace:STORY-278 | ai:claude
+            // `aida findings` queries the cache for `from-review:` /
+            // `from-implementer:` tags; the deprecated SQLite backend has no
+            // equivalent. trace:STORY-278 trace:STORY-285 | ai:claude
             anyhow::bail!(
                 "aida findings requires the distributed git-canonical store \
                  (run `aida init` to migrate, or this project is on the \
@@ -908,28 +909,41 @@ fn run() -> Result<()> {
 }
 
 /// Handle `aida findings {list,dismiss,promote}` — the advisor's triage surface
-/// over review findings the headless reviewer files as draft `from-review:`
-/// TASKs. `list` is a read-only query; `dismiss`/`promote` are status flips
-/// guarded so they only act on real findings. trace:STORY-278 | ai:claude
+/// over findings the headless drain files as draft TASKs: review findings
+/// (`from-review:`, STORY-278) and implementer findings (`from-implementer:`,
+/// STORY-285). `list` is a read-only query; `dismiss`/`promote` are status
+/// flips guarded so they only act on real findings of either source.
+/// trace:STORY-278 trace:STORY-285 | ai:claude
 fn handle_findings_command(
     cmd: &FindingsCommand,
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
 ) -> Result<()> {
     match cmd {
-        FindingsCommand::List { pr, count } => {
-            // Findings are draft requirements carrying a `from-review:` tag.
-            // `aida list --tags` is exact-match, so the `from-review:` prefix
-            // glob can't be a list filter — query all drafts, then prefix-match
-            // in build_findings_view. The draft set is small. Role scope is
-            // deliberately NOT applied: the finding cohort is its own axis.
+        FindingsCommand::List {
+            pr,
+            source,
+            kind,
+            count,
+        } => {
+            // Findings are draft requirements carrying a `from-review:` or
+            // `from-implementer:` tag. `aida list --tags` is exact-match, so
+            // the prefix glob can't be a list filter — query all drafts, then
+            // prefix-match in build_findings_view. The draft set is small.
+            // Role scope is deliberately NOT applied: the finding cohort is
+            // its own axis. trace:STORY-285 | ai:claude
             let filter = aida_core::ListFilter {
                 status: Some("draft".to_string()),
                 ..Default::default()
             };
             let summaries = backend.list_summaries(&filter)?;
-            let groups = findings::build_findings_view(&summaries, *pr);
-            let total: usize = groups.iter().map(|g| g.rows.len()).sum();
+            let view_filter = findings::FindingsFilter {
+                pr: *pr,
+                source: *source,
+                kind: kind.clone(),
+            };
+            let sections = findings::build_findings_view(&summaries, &view_filter);
+            let total = findings::count_findings(&sections);
 
             if *count {
                 println!("{total}");
@@ -941,20 +955,33 @@ fn handle_findings_command(
             }
 
             println!("{}", format!("Findings awaiting triage ({total})").bold());
-            for group in &groups {
+            for section in &sections {
                 println!();
-                let pr_label = match group.pr {
-                    Some(n) => format!("PR-{n}"),
-                    None => "(no PR tag)".to_string(),
-                };
-                println!("{}", pr_label.cyan().bold());
-                for row in &group.rows {
-                    println!(
-                        "  {:<9} {:<14} {}",
-                        row.severity.label(),
-                        row.display_id,
-                        row.title
-                    );
+                println!(
+                    "{}",
+                    format!("From {}", section.source.label()).magenta().bold()
+                );
+                for group in &section.groups {
+                    println!("  {}", group.origin.cyan().bold());
+                    for row in &group.rows {
+                        match &row.kind {
+                            // Implementer findings carry a `kind:` category —
+                            // show it; review findings don't. trace:STORY-285
+                            Some(k) => println!(
+                                "    {:<20} {:<9} {:<14} {}",
+                                k,
+                                row.severity.label(),
+                                row.display_id,
+                                row.title
+                            ),
+                            None => println!(
+                                "    {:<9} {:<14} {}",
+                                row.severity.label(),
+                                row.display_id,
+                                row.title
+                            ),
+                        }
+                    }
                 }
             }
             println!();
@@ -971,10 +998,10 @@ fn handle_findings_command(
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             let tags: Vec<String> = req.tags.iter().cloned().collect();
-            if !findings::is_review_finding(&tags) {
+            if !findings::is_finding(&tags) {
                 anyhow::bail!(
-                    "{id} is not a review finding (no `from-review:` tag) — \
-                     `aida findings` only triages reviewer-filed findings. \
+                    "{id} is not a finding (no `from-review:`/`from-implementer:` tag) — \
+                     `aida findings` only triages headless-drain findings. \
                      Use `aida edit {id} --status rejected` for a general status change."
                 );
             }
@@ -1000,10 +1027,10 @@ fn handle_findings_command(
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             let tags: Vec<String> = req.tags.iter().cloned().collect();
-            if !findings::is_review_finding(&tags) {
+            if !findings::is_finding(&tags) {
                 anyhow::bail!(
-                    "{id} is not a review finding (no `from-review:` tag) — \
-                     `aida findings` only triages reviewer-filed findings. \
+                    "{id} is not a finding (no `from-review:`/`from-implementer:` tag) — \
+                     `aida findings` only triages headless-drain findings. \
                      Use `aida edit {id} --status approved` for a general status change."
                 );
             }
@@ -1028,9 +1055,9 @@ fn handle_findings_command(
     Ok(())
 }
 
-/// Add a promoted review finding to a role's work queue.
+/// Add a promoted finding to a role's work queue.
 ///
-/// Findings are review follow-ups that need an implementer, so the default
+/// Findings are follow-ups that usually need an implementer, so the default
 /// route is the `implementer` queue; `for_override` (the `--for` flag) picks
 /// a different role. Returns the role it routed to so the caller can name it
 /// in the success message.
@@ -1058,7 +1085,7 @@ fn queue_promoted_finding(
         position: i64::MAX,
         added_by: user_id,
         note: Some(format!(
-            "Promoted from review finding {display_id} via `aida findings promote`"
+            "Promoted from finding {display_id} via `aida findings promote`"
         )),
         added_at: chrono::Utc::now(),
         for_role: Some(role.clone()),
