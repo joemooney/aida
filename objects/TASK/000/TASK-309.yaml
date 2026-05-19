@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:37:48.249754232Z
-modified_at: 2026-05-17T15:37:48.249754232Z
+modified_at: 2026-05-19T05:22:57.791526306Z
 req_type: Task
 tags:
 - changelog
@@ -49,3 +49,18 @@ tags:
 - stash-recovery
 - version-bump
 - wip-rescue
+comments:
+- id: 019e3eaf-ee7f-7632-b993-76dfb1c1a247
+  author: joe
+  content: |-
+    Recovery-method update 2026-05-19: the stash's **version-bump content is now obsolete** — once BUG-111 is fixed, `release.sh` does the v0.x bump properly (workspace + package + all intra-workspace dep pins). The stash's manual Cargo.toml/Cargo.lock bump hunks are superseded.
+
+    So when recovering the stash, do NOT `git stash pop` it whole — its Cargo.toml bump hunks will **conflict** with release.sh's bump. Extract ONLY the README.md polish hunk:
+      `git checkout stash@{0} -- README.md`   (or `git stash show -p stash@{0} -- README.md | git apply`)
+    then drop the stash (`git stash drop stash@{0}`).
+
+    Stash identity: `stash@{0}` as of 2026-05-19 — message 'WIP: v0.7.0→v0.8.0 bump + README positioning polish (pre-PR-65 autostash)'. `stash@{1}` is an unrelated GUI WIP — leave it. Verify by message before acting; stash indices shift.
+
+    Net: TASK-309 collapses to 'salvage the README.md positioning polish, drop the stash' — the version-bump half is handled by release.sh + BUG-111. Sharpens the existing 'restore the README polish separately' acceptance bullet.
+  created_at: 2026-05-19T05:22:57.791526306Z
+  modified_at: 2026-05-19T05:22:57.791526306Z
