@@ -1,0 +1,60 @@
+id: 019e45c3-ce62-7de3-b403-e1b8b05b4ee2
+spec_id: TASK-398
+agreed_id: TASK-398
+title: aida headless tail — clean tailer for headless drain logs
+description: |-
+  ## Problem
+
+  When a \`--no-human=both\` drain is running, the user wants to follow what the implementer / reviewer / advisor is doing. The natural move is \`tail -f .aida/headless-logs/<spec>-<lease>.jsonl | jq ...\`, but the naive filter \`select(.type==\"assistant\") | .message.content[0].text\` returns \`null\` for every assistant message whose first content block is a \`tool_use\` or \`thinking\` block — which is most of them under headless mode. The user sees pages of \`null\` interleaved with occasional real text.
+
+  The correct filter exists but it is non-obvious:
+
+  \`\`\`
+  jq -r 'select(.type==\"assistant\") | .message.content[] | select(.type==\"text\") | .text'
+  \`\`\`
+
+  Two changes (iterate blocks, filter by block type) that the user shouldn't have to discover. Worse: there's no way to see tool calls in the same stream without a second pane with a different jq filter. The friction is real and recurring — every overnight drain produces this question.
+
+  ## Approach
+
+  Add an \`aida headless tail [<spec>|<lease>] [flags]\` command that wraps the right jq filtering, picks the latest log file by mtime when no argument is given, and surfaces both text and tool-use streams cleanly. Stays a thin tail wrapper — no buffering, no daemon, no parsing into a structured DB; just \`tail -f\` + a clean filter.
+
+  ## Acceptance
+
+  - \`aida headless tail\` (no args) — picks the most-recently-modified log file under \`.aida/headless-logs/\` and follows it.
+  - \`aida headless tail <spec-id>\` — picks the latest log for that spec.
+  - \`aida headless tail <lease-id>\` — picks the specific log for that lease (disambiguates when multiple drains have touched the same spec).
+  - \`aida headless tail --list\` — lists all logs under \`.aida/headless-logs/\` with spec, lease, mtime, size; exits.
+  - Default output: clean text stream — one block of assistant text per message, blank line between messages. No \`null\`, no JSON debris.
+  - \`--with-tools\` — interleaves tool invocations as \`[ToolName] <first-120-chars-of-input>\` lines, color-coded distinct from text.
+  - \`--tools-only\` — only tool invocations, no text. Useful for watching \"what commands is the implementer running.\"
+  - \`--include-user\` — also surface \`type==\"user\"\` messages (tool_result content), formatted distinctly. Off by default since headless mode rarely has interactive user content.
+  - \`--no-follow\` / \`-n\` — print existing content and exit (don't \`-f\`). Useful for piping into pagers.
+  - \`--since <duration>\` — skip log entries older than the given duration (e.g. \`--since 10m\`).
+  - Graceful handling of malformed JSONL lines (skip + count, summary in stderr on exit).
+  - Exits cleanly on Ctrl-C with no jq stack traces.
+  - No daemon, no buffering, no parsing into the cache.db. Stays a thin wrapper.
+
+  ## Out of scope
+
+  - TASK-395 (tee-able headless drain output during the drain itself — the WRITE side of this). They compose but solve different gaps.
+  - Per-message search / grep inside the log (could be a follow-up \`aida headless search\` if useful).
+  - Cross-log correlation (e.g. \"show advisor + implementer interleaved for spec X\"). Could be a follow-up if the lease IDs make it easy.
+  - A TUI viewer. Plain text streaming is the smallest-valuable-slice.
+
+  ## Related
+
+  - TASK-395 — tee-able drain output (the WRITE side). Composes naturally.
+  - Memory \`feedback_explicit_paste_ready_prompts\` — the original friction was the user being given a jq pipeline to paste, then having to debug it. \`aida headless tail\` removes the debug step.
+  - STORY-263 / STORY-276 / STORY-306 — the headless drain machinery that produces these logs.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T14:22:00.802820936Z
+modified_at: 2026-05-20T14:22:00.802820936Z
+req_type: Task
+tags:
+- autonomy
+- cli
+- observability
