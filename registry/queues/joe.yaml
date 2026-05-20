@@ -5,6 +5,12 @@
   added_at: 2026-05-19T14:28:01.808107377Z
   for_role: implementer
 - user_id: joe
+  requirement_id: 019e40af-c2a9-7482-bb61-693da72960ad
+  position: 4500
+  added_by: joe
+  added_at: 2026-05-19T14:42:04.374445035Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 019e1a4d-8d9c-7a00-8539-364579481756
   position: 5000
   added_by: joe
@@ -633,12 +639,6 @@
   note: auto-queued by `session end` (019e3f25); covers 1 spec
   added_at: 2026-05-19T14:32:45.663396295Z
   for_role: reviewer
-- user_id: joe
-  requirement_id: 019e40af-c2a9-7482-bb61-693da72960ad
-  position: 128000
-  added_by: joe
-  added_at: 2026-05-19T14:42:04.374445035Z
-  for_role: implementer
 - user_id: joe
   requirement_id: 019e40c8-a7a6-7500-a44c-1371a9067476
   position: 129000
