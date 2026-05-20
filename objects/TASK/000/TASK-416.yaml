@@ -1,0 +1,40 @@
+id: 019e4688-08ad-7a73-9281-e7dc12772759
+spec_id: TASK-416
+agreed_id: TASK-416
+title: 'state-snapshot --json: PlanRow serialization shape-inconsistent with PrRow'
+description: |
+  TASK-391 (PR-131) ships `aida state-snapshot --json`. Two enums sit side-by-side in `StateSnapshot`:
+
+  - `PrRow` carries `#[serde(tag = "state", rename_all = "kebab-case")]` →
+    - `None` → `{"state":"none"}`
+    - `Open{number,url}` → `{"state":"open","number":N,"url":"..."}`
+
+  - `PlanRow` has NO serde annotations →
+    - `None` → bare string `"None"`
+    - `File("x")` → `{"File":"x"}`
+
+  So `--json` consumers branch on a string-vs-object check just for `plan`,
+  even though the doc comment promises "stable field names" for Step 5b
+  finding metadata. The `render_json_round_trips` unit test only exercises
+  `PlanRow::File`, so the asymmetric `"None"` shape is unobserved by the
+  suite — a regression here would not surface in CI.
+
+  Fix: add `#[serde(tag = "state", rename_all = "kebab-case")]` to PlanRow
+  (mirroring PrRow), then extend the JSON test to assert both variants render
+  as `{"state":"..."}`.
+
+  Files:
+  - aida-cli/src/state_snapshot.rs:96-99  (PlanRow definition)
+  - aida-cli/src/state_snapshot.rs:311-323 (render_json_round_trips test)
+
+  Raised in review of PR-131: https://github.com/joemooney/aida/pull/131
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T17:56:20.781303333Z
+modified_at: 2026-05-20T17:56:20.781303333Z
+req_type: Task
+tags:
+- from-review:PR-131
+- severity:minor
