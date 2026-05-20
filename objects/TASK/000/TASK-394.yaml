@@ -1,0 +1,44 @@
+id: 019e4597-c424-7561-8118-41c702e0f206
+spec_id: TASK-394
+agreed_id: TASK-394
+title: Persistent --no-human=both acknowledgment via file marker (eliminate per-loop env-var dance)
+description: |-
+  The `--no-human=both` kickoff prompt requires either an interactive `y` keystroke OR `AIDA_NO_HUMAN_ACKNOWLEDGED=1` exported in the calling shell. For an overnight loop that runs `aida queue work --auto-complete --no-human=both` per iteration, every iteration re-prompts because each invocation is its own process. Forgetting to export the env var ahead of the loop means the loop stalls at iteration 2 (and 3, and 4…) waiting for a `y` that's not coming until you check on it.
+
+  ## User's framing (verbatim)
+
+  *"It would be nice if maybe we touched a file to indicate we acknowledged and not have to do that in the future — kind of a license agreement."*
+
+  ## Fix direction
+
+  A **persistent acknowledgment marker** — a file the user touches once on a given machine (or per-project), and the orchestrator's pre-flight checks it in addition to the env var. Candidates:
+
+  - `~/.aida/no-human-acknowledged` — machine-wide, persists across all projects on this host.
+  - `.aida/no-human-acknowledged` — project-scoped, fresh per-project (might be too aggressive if user wants the safety on a new project).
+  - `[behavior] no_human_acknowledged = true` in `.aida/config.toml` — config-driven, project-scoped.
+
+  The check becomes: prompt UNLESS any of (env var set / marker file present / config true). A `aida no-human acknowledge` verb that touches the right file is the most discoverable path; the file itself is the durable mechanism.
+
+  ## Acceptance
+
+  - [ ] A file or config marker, set once, persists the acknowledgment across `aida queue work --auto-complete --no-human=both` invocations
+  - [ ] `AIDA_NO_HUMAN_ACKNOWLEDGED=1` env var still works (don't break the existing path)
+  - [ ] A discoverable verb: `aida no-human acknowledge` (or similar) touches the marker; `aida no-human revoke` removes it
+  - [ ] Documentation in CLAUDE.md + `docs/autonomous-drain.md` updated
+
+  ## Origin
+
+  2026-05-20, overnight drain — the loop stalled at iteration 2 because `AIDA_NO_HUMAN_ACKNOWLEDGED=1` wasn't exported before the `for` loop ran. Advisor's loop-construction prompt didn't include the export, but even with discipline the env-var-only mechanism is awkward for the recurring overnight-drain pattern.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T13:33:54.596276481Z
+modified_at: 2026-05-20T13:33:54.596276481Z
+req_type: Task
+tags:
+- autonomous-drain
+- backlog
+- cli-ux
+- from-user-request
+- no-human
