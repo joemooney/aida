@@ -85,6 +85,9 @@ aida ultraplan <spec> --json           # Emit prompt + warnings + token estimate
 aida goal --batch <name>               # Derive a machine-checkable /goal completion condition from AIDA metadata (TASK-242)
 aida goal --epic <ID> --pr <N>         # Flags (--batch/--epic/--spec/--pr/--queue-empty) compose with AND
 aida goal --spec <ID> --copy           # --copy → clipboard; --invoke → bare `/goal …` line for scripting
+aida changelog generate                # Print structured CHANGELOG.md to stdout — every release + [Unreleased] (TASK-299)
+aida changelog refresh                 # Rewrite CHANGELOG.md (idempotent — same git state → byte-identical output)
+aida changelog preview                 # Stdout-only preview of the [Unreleased] section
 ```
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
@@ -143,7 +146,7 @@ aida-off                               # alias for: eval "$(aida dev deactivate)
 
 `aida dev activate` prepends `target/{release,debug}/` to PATH — prefers the binary whose embedded git SHA matches (or is an ancestor of) the current branch HEAD (TASK-221), so switching branches between builds doesn't silently leave you on a binary built from the other branch's source. Falls back to most-recently-built with a `Warning:` when neither binary matches the current HEAD. `aida dev status` shows the active binary's SHA, current HEAD, and the match verdict (`exact match` / `ancestor of HEAD` / `DIVERGED from HEAD`). Prefixes the shell prompt with `(aida-debug)` or `(aida-release)` so the active build is visible at a glance. `aida dev deactivate` undoes both.
 
-For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the workspace version, generates tag notes from `git log <prev>..HEAD`, commits, tags, and pushes (which triggers `.github/workflows/release.yml` to build and publish binary tarballs).
+For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the workspace version, regenerates `CHANGELOG.md` via `aida changelog refresh --released-as v<new>` so the changelog commits *with* the version bump (TASK-299), generates tag notes from `git log <prev>..HEAD`, commits, tags, and pushes (which triggers `.github/workflows/release.yml` to build and publish binary tarballs).
 
 **CI is split for alpha cycle time** (TASK-257). PR CI (`.github/workflows/ci.yml`) is **Linux-only** — ~3-5 min cycle. Windows + macOS are validated by `.github/workflows/cross-platform.yml`, which runs on a nightly cron (06:00 UTC) and on manual `workflow_dispatch`. Check the latest nightly results before relying on cross-platform behaviour: <https://github.com/joemooney/aida/actions/workflows/cross-platform.yml>. **Releases require cross-platform CI green within 24h of tagging** — `scripts/release.sh` calls `scripts/pre-release-check.sh` before the tag step, which reuses a `<24h` green run or dispatches a fresh `gh workflow run cross-platform.yml` and blocks on it. Opt out with `--skip-xplat-check` / `AIDA_SKIP_XPLAT_CHECK=1` (not recommended for a published release). Re-add Windows + macOS to PR CI once there are non-Linux users and the cross-platform matrix has been quiet for 2+ weeks.
 

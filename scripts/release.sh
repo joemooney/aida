@@ -172,6 +172,22 @@ EOM
     exit 1
 fi
 
+echo
+echo "─── Regenerating CHANGELOG.md ───"
+# Regenerate CHANGELOG.md so it lands with the version-bump commit. Use
+# `cargo run` rather than the PATH `aida` to guarantee the *current
+# branch's* code runs (a pre-feature binary on PATH would not know the
+# `changelog` subcommand). cargo's incremental graph is warm from the
+# preceding `cargo check --workspace`, so this rebuilds only the final
+# `aida` binary. A failure is non-fatal — the release still proceeds with
+# whatever CHANGELOG.md is already tracked. trace:TASK-299 | ai:claude
+if cargo run -q -p aida-cli -- changelog refresh --released-as "v$new"; then
+    manifest_paths+=("CHANGELOG.md")
+    echo "  ok — CHANGELOG.md regenerated for v$new"
+else
+    echo "  warning: 'aida changelog' unavailable (pre-feature binary) — skipping" >&2
+fi
+
 # Generate tag notes from `git log <prev_tag>..HEAD`. Saved to a temp file
 # so we can both display them and feed them to `git tag -a -F`. The temp
 # file is preserved if the user cancels — they can use it to tag manually.
