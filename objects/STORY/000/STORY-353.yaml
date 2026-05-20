@@ -1,0 +1,26 @@
+id: 019e4658-b72c-7202-b3f0-4619896dd4b7
+spec_id: STORY-353
+agreed_id: STORY-353
+title: 'Review PR-129: [AI:claude] docs(skills): annotate orchestrator advise-row as conditional (TASK-393)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4652`) for branch `task-393`.
+
+  - PR: <https://github.com/joemooney/aida/pull/129>
+  - Branch: `task-393` → `main`
+
+  ## Covers
+
+  - TASK-393
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 129` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T17:04:39.724641653Z
+modified_at: 2026-05-20T17:04:39.724641653Z
+req_type: Story
