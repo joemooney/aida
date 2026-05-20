@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:27:58.404097978Z
-modified_at: 2026-05-20T03:05:59.589403917Z
+modified_at: 2026-05-20T03:11:36.020967593Z
 req_type: Story
 tags:
 - blocked-by
@@ -77,3 +77,14 @@ tags:
 - orchestrator
 - queue
 - typed-relationship
+comments:
+- id: 019e435e-0654-75a1-9c85-3b5deb58303f
+  author: joe
+  content: |-
+    Plan saved: docs/plans/2026-05-19-story-333-blocked-by-human-only.md
+
+    Approach: typed BlockedBy/Blocks RelationshipType variants + human_only: bool field on Requirement + centralized pickability(req, store) helper wired into the four pickup sites (queue next, queue work head, resolve_batch_members, cluster resolver). queue list grows a Blocked section + ⚠ on inverted-order entries. queue add/move emit a warning (never reject). doctor verify-relationships composes for free.
+
+    Build-order: types → helper → CLI wiring → render polish → live-example wire-up. ~600 prod LOC / 1 PR / risk medium.
+  created_at: 2026-05-20T03:11:36.020967593Z
+  modified_at: 2026-05-20T03:11:36.020967593Z
