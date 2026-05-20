@@ -1,0 +1,27 @@
+id: 019e46a0-9169-7f20-8cad-c782cef9309d
+spec_id: TASK-419
+agreed_id: TASK-419
+title: 'aida headless tail --list: split lease into its own column'
+description: |-
+  Cosmetic gap surfaced during PR-132 review of TASK-398.
+
+  `aida headless tail --list` currently prints columns KIND / SPEC / MTIME / SIZE / FILE. The acceptance criterion for TASK-398 named "spec, lease, mtime, size"; the lease IS visible (embedded in the FILE filename), so the criterion is satisfied strictly, but a strict reader expects LEASE to be a dedicated column.
+
+  Where: `aida-cli/src/headless_tail.rs` — `print_log_list` (lines 312-342) and the header definition (lines 318-321).
+
+  Why it matters: when multiple drains have touched the same spec, the user needs to type the lease prefix to disambiguate; pulling that ID out of a long filename is mild friction. A dedicated LEASE column would let them eyeball-copy without parsing the filename.
+
+  Suggested fix: add a LEASE column rendering `entry.lease.as_deref().unwrap_or("-")`, truncated to ~12 chars (UUID prefix). Width budget: drop FILE width or move it last.
+
+  Raised in review of PR-132: https://github.com/joemooney/aida/pull/132#issuecomment-4501371548
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T18:23:08.649702012Z
+modified_at: 2026-05-20T18:23:08.649702012Z
+req_type: Task
+tags:
+- cli
+- from-review:PR-132
+- severity:cosmetic
