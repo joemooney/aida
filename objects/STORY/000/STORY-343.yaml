@@ -1,0 +1,26 @@
+id: 019e4441-9a45-7803-b34e-9eaa204719c2
+spec_id: STORY-343
+agreed_id: STORY-343
+title: 'Review PR-119: fix(blocks): warn on aggregate remaining across all blocks, not lowest (BUG-115)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e4435`) for branch `bug-115`.
+
+  - PR: <https://github.com/joemooney/aida/pull/119>
+  - Branch: `bug-115` → `main`
+
+  ## Covers
+
+  - BUG-115
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 119` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T07:20:10.565304649Z
+modified_at: 2026-05-20T07:20:10.565304649Z
+req_type: Story
