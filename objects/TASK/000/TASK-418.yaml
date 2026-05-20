@@ -1,0 +1,36 @@
+id: 019e4695-748b-76b0-9934-3def29d2b278
+spec_id: TASK-418
+agreed_id: TASK-418
+title: headless tail --since filters only events carrying a timestamp
+description: |
+  TASK-398's `--since <duration>` filters events that carry a `timestamp` field
+  (user / tool_result events) and lets events without a timestamp pass through
+  unfiltered (assistant text + tool_use blocks, system / result / rate_limit
+  events all lack `timestamp` in the Claude Code stream-json schema).
+
+  This is the conservative reading of the acceptance criterion ("Skip log
+  entries older than the given duration") — a stricter reading would drop ALL
+  events emitted before the first in-window user event. The current behavior:
+  a user running `aida headless tail --since 5m` against a 1h-old session
+  still sees the assistant text + tool calls (interleaved with the
+  now-filtered user echo) — slightly leakier than strict cutoff.
+
+  Two follow-up shapes if the advisor decides strict is right:
+
+  1. Track the most-recently-seen timestamp on prior lines; events without a
+     timestamp inherit it (so old assistant lines vanish too).
+  2. Skip the file altogether when its mtime is older than `--since`.
+
+  Raised by the implementer while working TASK-398.
+  Branch: task-398  ·  Commit: <pending>  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T18:11:00.363548308Z
+modified_at: 2026-05-20T18:11:00.363548308Z
+req_type: Task
+tags:
+- from-implementer:TASK-398
+- kind:design-choice
+- severity:minor
