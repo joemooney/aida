@@ -225,6 +225,24 @@ aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
    home for it. In an interactive session a human reads the flags directly;
    skip this step. trace:STORY-285
 
+5. **Finish-state communication (TASK-359).** When this skill is the
+   skill that ends the session — either a structured *"how should I
+   finish?"* menu or a closing summary block under autonomous drive —
+   apply the six-element finish-state rubric: labelled **State
+   snapshot**, **deciding factor** when one is in play, explicit
+   **recommendation + rationale** (or **`→ Next:` line** naming the
+   user-action on a closing summary), **per-option drain-state +
+   reversibility**, an **advise escape** when the call is genuinely
+   ambiguous, and **decoupled coupled decisions** (push/PR is one
+   prompt, followup-filing the next — never bundled). Silence on the
+   next user-action is not acceptable: a closing summary must name
+   *"→ Press Ctrl+D to advance the orchestrator"* or *"→ session will
+   auto-exit; nothing else needed"* explicitly. Full rubric:
+   `docs/aida-discipline/session-discipline.md` § *Finish-state
+   communication rubric*. The worked templates live in `/aida-pickup`
+   Step 6 (menu) and `/aida-pr` orchestrator-mode (closing block).
+   trace:TASK-359
+
 ## State Transitions
 
 During implementation, requirements should transition through:

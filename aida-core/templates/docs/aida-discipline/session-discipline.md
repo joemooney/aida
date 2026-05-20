@@ -87,3 +87,65 @@ Some artifacts (a competitive analysis, an architecture overview) go stale
 fast. Treat them as living documents with a refresh cadence and dated
 snapshots, not one-shot outputs — each refresh adds a delta rather than
 re-doing the work from scratch.
+
+## Finish-state communication rubric
+
+Any time a skill *ends a phase* — the implementer wrapping up phase 1, the
+reviewer writing the verdict, `/aida-pr` after opening the PR — the closing
+output is finish-state communication, and it must be self-contained. The
+reader (a human at the keyboard, the next session's headless advisor, or a
+log-trawler tomorrow) should not have to infer current state or guess what
+should happen next. Two surfaces share the same rubric: the structured
+**"how should I finish?" menu** when there are real choices to pick, and
+the **closing summary block** an autonomous-drive session emits when it
+finishes a phase. Both surfaces must carry all six elements below.
+
+1. **State snapshot.** A labelled section naming the load-bearing facts:
+   commits, push status, PR status / URL, drain phase, test + fmt status,
+   plan file. The reader should not have to run `git status` or
+   `gh pr view` to know where things stand.
+2. **The deciding factor.** Any load-bearing risk that frames the choice —
+   a smoke-test gate, a plan deviation, an unusually large change, a
+   subprocess plumbing that is mock-tested only — surfaced *next to* the
+   options (or the recommendation), not buried in the upstream preamble
+   where the choice can't see it.
+3. **A recommendation with rationale.** Not a flat neutral menu. The
+   skill has the analysis; lead with *"I recommend X because Y"* and mark
+   the row `← recommended`. For a closing summary, this is the explicit
+   *"→ next: <action>"* line that names the user-action.
+4. **Per-option downstream consequence + reversibility.** For a menu, each
+   option's row states what the orchestrator / drain does next (*"advances
+   to phase 4 → merge"*, *"halts at phase 3 with the recovery hint"*) and
+   how reversible it is. For a closing summary, this is one line stating
+   what happens after the user exits.
+5. **An explicit `advise` escape.** Treat *route this to the advisor* as
+   a first-class option — not a fallback "type something." Today the
+   advisor is reached via the user relaying; once STORY-306's advisor
+   tier ships the orchestrator routes punted forks automatically.
+6. **Decouple coupled decisions.** Push/PR is one decision, followup-filing
+   is another, merge timing a third. Bundling them locks them; ask in
+   sequence — the second prompt only fires after the first resolves.
+
+The corollary on the closing-summary side: *silence is not an acceptable
+signal.* If the session auto-exits via a sentinel (`$AIDA_EXIT_SENTINEL`
+under `$AIDA_ZEN` or `--no-human=both`), the summary must say so
+explicitly (*"→ session will auto-exit; nothing else needed"*) rather
+than leave the user wondering whether to press a key. If a key is
+required, name it (*"→ Press Ctrl+D to advance the orchestrator"*) — never
+end on a vague *"Session is done."* and assume the user infers the rest.
+
+Worked examples that follow this rubric:
+- The reviewer's loud exit block in `aida-review.md` step 7 (TASK-291 /
+  BUG-226) — written *before* this rubric was named, but already embodies
+  it: labelled verdict line, explicit drain phases that follow, named key
+  to press, sentinel touch under zen.
+- The implementer's orchestrator-mode templates in `aida-pickup.md` step 6
+  and `aida-pr.md` (TASK-359) — the rubric's first deliberate application
+  to the implementer + PR surfaces.
+
+Origin: 2026-05-19, captured as TASK-359 and the discipline memory
+`feedback_finish_checkpoint_clarity.md`. The user saw the same gap on two
+different surfaces in one day — a menu with no recommendation or advise
+escape (STORY-306 finish), and a closing summary that listed what shipped
+but never named the next user-action (BUG-245 finish). Two surfaces, same
+rubric, same fix.
