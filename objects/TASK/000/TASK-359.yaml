@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T02:23:58.408972956Z
-modified_at: 2026-05-20T07:55:28.100812725Z
+modified_at: 2026-05-20T07:59:56.660303827Z
 req_type: Task
 tags:
 - advisor-routing
@@ -66,3 +66,9 @@ tags:
 - from-user-feedback
 - implementer
 - skill-template
+comments:
+- id: 019e4466-02f4-77d2-99a7-324c148122dc
+  author: joe
+  content: Commit 9c9cfc6c references this requirement
+  created_at: 2026-05-20T07:59:56.660303827Z
+  modified_at: 2026-05-20T07:59:56.660303827Z
