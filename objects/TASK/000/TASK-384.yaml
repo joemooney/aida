@@ -1,0 +1,12 @@
+id: 019e43c7-efa9-7e70-bbd1-841f69a075d0
+spec_id: TASK-384
+agreed_id: TASK-384
+title: 'CI freshness gate: a workflow step running `aida changelog refresh && git'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T05:07:17.033476633Z
+modified_at: 2026-05-20T05:07:17.033476633Z
+req_type: Task
