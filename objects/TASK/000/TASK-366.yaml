@@ -1,0 +1,12 @@
+id: 019e4380-f4b9-78a1-a6fc-b8f110e53633
+spec_id: TASK-366
+agreed_id: TASK-366
+title: '`aida queue list --tree` annotation for `blocked-by` edges in the tree view'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T03:49:45.273866937Z
+modified_at: 2026-05-20T03:49:45.273866937Z
+req_type: Task
