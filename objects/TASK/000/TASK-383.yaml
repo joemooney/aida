@@ -1,0 +1,45 @@
+id: 019e43c1-766f-7423-8b59-fffdb5700e37
+spec_id: TASK-383
+agreed_id: TASK-383
+title: 'Planning-pass discipline: don''t leave untracked plan files in main''s docs/plans/ (they conflict with later PR merges)'
+description: |-
+  When the advisor runs a "planning pass" (loop of `claude -p "/aida-plan SPEC"` over N queue items) from the main repo, each generated plan file lands as an untracked file in `docs/plans/`. Later, when an implementer's PR lands its own plan at the same path, `git pull --ff-only` aborts with:
+
+      error: The following untracked working tree files would be overwritten by merge:
+          docs/plans/2026-05-19-<spec>.md
+
+  ## Observed 2026-05-19 — twice in one session
+
+  - TASK-294's PR #112 merge → planning-pass had left `2026-05-19-task-294-aida-worker-bash-loop.md` untracked → pull aborted.
+  - STORY-252's PR #114 merge → planning-pass had left `2026-05-19-story-252-aida-digest.md` untracked → pull aborted → cascaded into a phase-6 build failure (missing template files on local main while present on origin/main) (see BUG-XXX for the orchestrator-side silent failure).
+
+  ## Fix options (any one is sufficient)
+
+  - **Draft directory**: planning-pass writes to `docs/plans/_draft/` (gitignored). The implementer promotes a draft to `docs/plans/` only when they adopt it. Avoids the entire conflict class.
+  - **Auto-commit**: planning-pass commits each plan to a dedicated `aida/planning-drafts` branch (never main); a `git fetch` exposes them without polluting main's working tree.
+  - **`/aida-plan --draft` flag**: explicit opt-in for drafts vs landed plans.
+  - **At minimum**: a discipline note in CLAUDE.md and advisor memories that a planning pass run from main must `git add` each plan before exiting, OR move them aside, never leave them untracked.
+
+  ## Acceptance
+
+  - [ ] A planning pass does not produce untracked-file conflicts at later PR merges
+  - [ ] Mechanism is documented (CLAUDE.md / discipline doc) and obvious
+  - [ ] Existing `/aida-plan` skill (or a flag) supports the chosen mechanism
+
+  ## Origin
+
+  2026-05-19 — hit twice in one autonomy-keystone-sprint session, both times caught only when an orchestrator `aida pull` (phase 5) aborted.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T05:00:12.783237551Z
+modified_at: 2026-05-20T05:00:12.783237551Z
+req_type: Task
+tags:
+- advisor-discipline
+- backlog
+- from-self-test
+- papercut
+- planning-pass
+- workflow
