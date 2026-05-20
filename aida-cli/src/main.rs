@@ -10,6 +10,7 @@ mod drain_state;
 mod exit_signal;
 mod findings;
 mod global_queue;
+mod headless_tail;
 mod history;
 mod mcp;
 mod not_found;
@@ -75,11 +76,11 @@ use aida_core::{
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand, GitHubCommand,
-    GitLabCommand, JiraCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
-    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
-    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand, WorkerCommand,
-    ZenCommand,
+    GitLabCommand, HeadlessCommand, JiraCommand, NodeCommand, OrchestratorCommand, PlanCommand,
+    PrCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand,
+    RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand,
+    SessionCommand, SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand,
+    WorkerCommand, ZenCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -433,6 +434,12 @@ fn run() -> Result<()> {
         return handle_worker_command(worker_cmd);
     }
 
+    // TASK-398: headless-log tailer. Dispatched before storage init — reads
+    // only `.aida/headless-logs/`, no requirement store. trace:TASK-398
+    if let Command::Headless(headless_cmd) = &cli.command {
+        return handle_headless_command(headless_cmd);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -755,6 +762,7 @@ fn run() -> Result<()> {
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
+        Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -2637,6 +2645,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
+        Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::List {
             status,
             r#type,
@@ -49216,6 +49225,45 @@ fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 println!("  {line}");
             }
             Ok(())
+        }
+    }
+}
+
+/// `aida headless tail` — clean tailer for `.aida/headless-logs/<spec>-<lease>.jsonl`
+/// (TASK-398). Wraps the right JSONL filtering so the user doesn't have to
+/// remember (and debug) the non-obvious jq pipeline that picks text content
+/// out of multi-block assistant messages. trace:TASK-398
+fn handle_headless_command(cmd: &HeadlessCommand) -> Result<()> {
+    match cmd {
+        HeadlessCommand::Tail {
+            target,
+            list,
+            with_tools,
+            tools_only,
+            include_user,
+            no_follow,
+            since,
+        } => {
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let since_duration = match since {
+                Some(s) => Some(headless_tail::parse_since(s)?),
+                None => None,
+            };
+            let color = std::io::IsTerminal::is_terminal(&std::io::stdout())
+                && std::env::var_os("NO_COLOR").is_none();
+            let opts = headless_tail::TailOptions {
+                selector: target.clone(),
+                list: *list,
+                with_tools: *with_tools,
+                tools_only: *tools_only,
+                include_user: *include_user,
+                follow: !*no_follow,
+                since: since_duration,
+                color,
+            };
+            headless_tail::handle_tail(&project_root, &opts)
         }
     }
 }
