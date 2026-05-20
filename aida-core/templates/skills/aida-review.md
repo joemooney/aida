@@ -342,12 +342,35 @@ EOF
   a consumer tell a one-off review from an orchestrator handshake artifact.
 - `comment_url` — URL of the consolidated comment posted in step 7. Omit the
   field when no comment was posted (e.g. `--merge-only`).
+- `merge` — **escalation handshake.** Normally omit this field. Set it to
+  `escalated-to-human` only when, under a headless `--no-human` drain, the
+  *merge* decision turns on something you should not decide unattended —
+  `--zen` provenance you cannot corroborate, an irreversible call (a schema
+  migration, a release tag), genuine strategic uncertainty. The code review
+  still stands: write your real `verdict` (`Approved` if the code passed)
+  **and** `"merge": "escalated-to-human"`.
+
+**Escalating the merge decision.** Escalating is the honest move when you
+would otherwise be *guessing* whether to merge — it is distinct from
+`RequestChanges` (the code itself needs work) and from a crash. A merge
+escalation **still writes the verdict file**: the orchestrator's phase-3
+handshake artifact must always exist, so an escalation is never mistaken
+for a crashed reviewer that wrote nothing. The orchestrator then stops
+cleanly — no merge, exit `0`, *not* a failure — and leaves the PR for a
+human to merge. Example:
+
+```bash
+cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
+{"verdict": "Approved", "merge": "escalated-to-human", "summary": "code passes, but the migration in this PR is irreversible — a human should own the merge", "mode": "orchestrator-phase-3"}
+EOF
+```
 
 The orchestrator reads this file after the session exits: `Approved` → it
-merges; anything else → it stops at phase 3 with exit code 3 and prints the
-recovery hint. A standalone run's `aida queue work` reads the same file to
-print its end-of-command summary (`verdict` + `comment_url` + the artifact
-paths); `--quiet` suppresses that summary.
+merges; `merge: escalated-to-human` → it stops cleanly at phase 3 (exit `0`,
+no merge, the PR left for a human); anything else → it stops at phase 3 with
+exit code 3 and prints the recovery hint. A standalone run's `aida queue
+work` reads the same file to print its end-of-command summary (`verdict` +
+`comment_url` + the artifact paths); `--quiet` suppresses that summary.
 
 Under a headless drain (`AIDA_HEADLESS=1`), step 7b re-writes this file
 afterwards to add a `findings_filed` array — see 7b. trace:STORY-278 | ai:claude

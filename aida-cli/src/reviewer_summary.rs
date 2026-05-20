@@ -84,6 +84,12 @@ pub fn parse_result_event(jsonl: &str) -> Option<ResultEvent> {
     None
 }
 
+/// The `merge` field value a reviewer writes into its verdict file when it
+/// escalates the merge decision to a human rather than auto-deciding it.
+/// The orchestrator's phase-3 handshake keys off this exact string.
+/// trace:STORY-306 | ai:claude
+pub const MERGE_ESCALATED_TO_HUMAN: &str = "escalated-to-human";
+
 /// The `/aida-review` skill's view of the `.aida/review-verdicts/PR-N.json`
 /// verdict file — the fields the standalone summary renders.
 ///
@@ -92,8 +98,9 @@ pub fn parse_result_event(jsonl: &str) -> Option<ResultEvent> {
 /// one-off review from an orchestrator handshake artifact; the summary
 /// itself has no use for it (a standalone summary is always reading a
 /// standalone file), so it is not deserialized here. serde ignores it.
-/// The `verdict` field is the only hard requirement — the orchestrator's
-/// `read_verdict_file` reads just that. trace:BUG-226 | ai:claude
+/// The `verdict` field is the load-bearing one; the orchestrator's
+/// `read_verdict_file` additionally honours `merge` (STORY-306).
+/// trace:BUG-226 | ai:claude
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct VerdictFile {
     /// `Approved` | `RequestChanges` | `Rejected`.
@@ -107,6 +114,15 @@ pub struct VerdictFile {
     /// IDs of follow-up TASKs a headless drain filed (STORY-278).
     #[serde(default)]
     pub findings_filed: Option<Vec<String>>,
+    /// STORY-306: `escalated-to-human` when the reviewer escalated the *merge*
+    /// decision to a human rather than auto-deciding it (uncertain zen
+    /// provenance, an irreversible call). Absent — or any other value — means
+    /// the reviewer reached a normal verdict. The `--auto-complete`
+    /// orchestrator reads this to stop cleanly (exit `0`, no merge), leaving
+    /// the PR for a person; the verdict file always exists so the phase-3
+    /// handshake artifact is never missing. trace:STORY-306 | ai:claude
+    #[serde(default)]
+    pub merge: Option<String>,
 }
 
 /// Parse a verdict file's JSON. `None` on absent/unreadable/malformed —
@@ -251,6 +267,17 @@ pub fn format_reviewer_summary(
         }
     }
 
+    // STORY-306: a standalone reviewer that escalated the merge decision to
+    // a human — surface it so the one-off review's escalation isn't silent.
+    if verdict
+        .as_ref()
+        .and_then(|v| v.merge.as_deref())
+        .map(str::trim)
+        == Some(MERGE_ESCALATED_TO_HUMAN)
+    {
+        out.push_str("  merge: escalated to a human — left unmerged for a person to decide\n");
+    }
+
     // Comment URL — when the verdict file recorded one.
     if let Some(url) = verdict
         .as_ref()
@@ -365,6 +392,25 @@ mod tests {
             Some(0),
         );
         assert!(!none.contains("findings filed:"), "{none}");
+    }
+
+    #[test]
+    fn summary_surfaces_merge_escalation() {
+        // STORY-306: a standalone reviewer that escalated the merge decision.
+        let verdict = r#"{"verdict":"Approved","merge":"escalated-to-human","summary":"irreversible migration"}"#;
+        let s = format_reviewer_summary(65, Some(verdict), None, &vpath(), None, Some(0));
+        assert!(s.contains("verdict: PASS"), "{s}");
+        assert!(s.contains("merge: escalated to a human"), "{s}");
+        // A normal verdict file shows no merge line.
+        let normal = format_reviewer_summary(
+            65,
+            Some(r#"{"verdict":"Approved"}"#),
+            None,
+            &vpath(),
+            None,
+            Some(0),
+        );
+        assert!(!normal.contains("merge:"), "{normal}");
     }
 
     #[test]

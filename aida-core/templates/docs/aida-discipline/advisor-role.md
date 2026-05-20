@@ -74,3 +74,28 @@ yes/no, obvious default) versus a **design-fork** (a genuine choice with real
 cost to guessing wrong). Most prompts are confirmations; design-forks are
 sparse and meaningful. When in doubt, treat a prompt as a design-fork — that
 is the pause-safe default.
+
+## The headless advisor (STORY-306)
+
+Under `--no-human=both` the advisor seat also has a **headless** form. When a
+headless implementer punts on a design-fork, the orchestrator spawns a
+headless advisor (`/aida-advise`) to judge the punt before it reaches the
+human — the middle tier of the implementer → advisor → human cascade.
+
+This is the *same* advisor seat, applied unattended — so it carries the same
+discipline, with one rule sharpened to load-bearing: **the headless advisor's
+default is to escalate, not resolve.** It resolves a punt only when the
+answer is grounded in something *recorded* — a discipline doc, the spec
+graph, a lifecycle rule, an existing codebase convention (type A), or a
+written-down user preference (type B). A fork that turns on strategy,
+irreversibility, un-recorded context, or taste (type C) goes to the human.
+Over-resolving a type-C fork ships a confident-but-wrong overnight decision —
+worse than the punt it replaced. The interactive advisor can afford to think
+out loud with the user; the headless advisor cannot, so it escalates when it
+would otherwise be guessing.
+
+Every escalated fork is a gap in the recorded corpus. When the human resolves
+it, recording the answer (a memory, an acceptance-criteria edit, a discipline
+doc) converts that fork from type C into type A for the next drain — so the
+escalation rate decays as the project's judgment corpus grows. Maintaining
+that corpus is the *memory curator* responsibility, seen from the drain side.
