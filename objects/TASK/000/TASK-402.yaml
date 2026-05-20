@@ -1,0 +1,60 @@
+id: 019e45fe-457c-7050-90f2-868a63ca82dd
+spec_id: TASK-402
+agreed_id: TASK-402
+title: 'aida queue work --resume: resume-after-failure path UX cleanup (4-friction cluster)'
+description: |-
+  ## Problem
+
+  The recovery path after a phase-1 failure (transient API error, abort, etc.) exposes a cluster of UX frictions. A single recovery — TASK-358 on 2026-05-20 after an Anthropic API 529 mid-implementation — surfaced four distinct papercuts in one sitting. Consolidated rather than filing as four separate tasks since they share the same code area and are best fixed together.
+
+  ## Acceptance — four frictions, four fixes
+
+  ### 1. Lease-ID vs Claude-session-ID confusion
+
+  The orchestrator's phase-1 kickoff prominently displays the AIDA lease ID (e.g. \`✓ session 019e45cfc559 started\`). That ID is what the user sees and remembers. But \`aida queue work <spec> --resume <id>\` expects the **Claude session UUID** (e.g. \`019e45cf-acea-73c1-9476-d044fe19d8e4\`), not the AIDA lease ID. Pasting the visible ID produces \`Error: no recorded claude session matches\`.
+
+  **Fix:** \`--resume\` accepts EITHER form — AIDA lease ID (long form, 12 chars) or Claude session UUID short prefix. Or: the kickoff banner displays both IDs side-by-side and labels which is which. Or: the error message points at the right ID format and suggests \`--list-sessions\` more visibly.
+
+  ### 2. Role-tag drift in --list-sessions
+
+  \`aida queue work TASK-358 --list-sessions\` shows role \`dialog\` for a session that was launched with \`role: implementer (--role flag)\` in the orchestrator's kickoff banner. The session resume still works correctly — it's metadata-tracking drift, not a functional bug. But the wrong role tag is confusing during recovery (the user wonders \"did the orchestrator launch the wrong role?\").
+
+  **Fix:** trace the role tagging from orchestrator launch through session-record creation; ensure the recorded role matches what the orchestrator actually launched. Possibly the orchestrator's \`--role\` flag isn't propagating to session metadata, or \`dialog\` is being used as a default placeholder before the actual role is recorded.
+
+  ### 3. Dead-lease detection + error message
+
+  After a phase-1 failure, the lease is left in a recorded state with no live process. \`aida queue work <spec> --resume <id>\` then fails with \`Error: scope X is owned by lease Y — pass --steal to end that session first\`. The error doesn't say the lease is **orphaned** (process exited at a known time, log shows clean termination); it sounds like the lease is live and you're being told to forcibly take it. The user must mentally distinguish \"is this lease alive or dead?\" from process-listing or log inspection.
+
+  **Fix:** detect orphan leases proactively. If the recorded session's headless log shows a terminal exit (1, 0-with-no-PR, etc.) AND no live process matches the lease's launched-pid, the error should say *\"lease appears orphaned (last activity Xm ago, exit Y, no live process) — pass \`--steal\` to take over\"* rather than the current generic ownership-block. Or: auto-release orphan leases on detection rather than requiring \`--steal\`.
+
+  ### 4. --steal couples lease-end with worktree-removal
+
+  The current \`--steal\` flow's listed effects: \`delete lease ... run git worktree remove ... (branch kept; merge/discard manually)\`. But during a resume-after-failure, the **worktree is exactly where the unfinished work lives** — and \`--steal\` then removes it. Worse: if the worktree has uncommitted changes (almost certain after a mid-implementation API failure), \`--steal\` errors out unless the user passes \`--force\` (which discards the work). The user is forced to commit WIP first, then accept worktree-removal-and-recreation.
+
+  **Fix:** decouple lease-end from worktree-removal in \`--steal\`. Default: keep the worktree (the resume needs it). Add \`--remove-worktree\` flag for the case where worktree-cleanup IS the intent. Document the default change. Acceptable alternative: \`--steal\` auto-detects uncommitted changes and offers to either commit-WIP-and-continue or remove-after-confirmation, but doesn't silently fail.
+
+  ## Out of scope
+
+  - Auto-resume on phase-1 inconclusive (separate decision; BUG-266 covers the classification fix that would enable this).
+  - Phase-resumability across orchestrator restarts (TASK-396 territory).
+  - The interactive-vs-headless lease distinction (different code area).
+
+  ## Related
+
+  - BUG-266 — when phase 1 is classified inconclusive (Anthropic API failure), resume becomes the standard recovery path, magnifying the value of fixing these frictions.
+  - TASK-401 — pre-exit \`/aida-pr\` enforcement; when fixed, commit-and-exit failures stop generating orphan-lease+uncommitted-WIP combos.
+  - TASK-358 — the spec whose recovery surfaced all four frictions in one sitting.
+  - Memory \`feedback_capture_over_concentration\` — file the cluster, don't wait for the user to remember.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T15:25:52.380628259Z
+modified_at: 2026-05-20T15:25:52.380628259Z
+req_type: Task
+tags:
+- cli-ux
+- from-user-friction
+- orchestrator
+- resume
+- session-management
