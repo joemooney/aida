@@ -473,11 +473,51 @@ start the reviewer) — the table's row order is the recommended order, and
 the second row's Why states the dependency explicitly. Full convention:
 `docs/skills-convention.md`.
 
-**Templates.** Each shows prose lead-in lines followed by the next-steps
-table — print the lead-ins as normal text, then the table as a real GFM
-markdown table (no surrounding code fence):
+**Apply the finish-state communication rubric (TASK-359).** `/aida-pr`'s
+closing block is finish-state communication — the same six-element rubric
+that governs `/aida-pickup` Step 6 applies here. The orchestrator-mode
+template below carries all six: a labelled **State snapshot**, the
+**deciding factor** when one is in play, an explicit **`→ next:` line**
+naming the user-action (the recommendation in summary form), a per-option
+**downstream consequence + reversibility**, an **advise escape** row,
+and decoupled coupled decisions (the reviewer-queue story is filed
+independently in step 11, not bundled into the exit row). Full rubric:
+`docs/aida-discipline/session-discipline.md` § *Finish-state communication
+rubric*. Print the State preamble verbatim above the table — silence is
+not an acceptable signal, especially on the conclusion surface.
+
+**Templates.** Each shows the State preamble, an optional Deciding-factor
+line, prose lead-in lines, the next-steps table, and a *loud closing
+block* naming the next user-action — print the State preamble as
+fixed-width text, the lead-ins as normal sentences, the table as a real
+GFM markdown table (no surrounding code fence), and the closing block as
+its own visually-distinct stanza:
 
 *Orchestrator mode (`aida orchestrator status` = `orchestrated`) — TASK-286:*
+
+Print the State preamble first (substitute concrete values; omit rows
+genuinely absent, never leave a vague placeholder):
+
+```
+State:
+  Spec:    <SPEC-ID>  <title>     (Status: Done)
+  Branch:  <branch>   <N> commits ahead of main   pushed
+  PR:      #<N> open: <url>
+  Drain:   phase 1/6 → phase 2/6 next   orchestrator on
+  Tests:   <last cargo test summary>
+  Fmt:     <cargo fmt --check summary>
+  Plan:    <docs/plans/...md>   |  none
+```
+
+Then the Deciding-factor line *only when one is in play* (otherwise omit
+entirely):
+
+```
+Deciding factor: <one sentence — e.g. "Reviewer story STORY-X covers PR-N;
+nothing here blocks merge.">
+```
+
+Lead-in:
 
 PR-<N> opened: <url>
 
@@ -489,8 +529,9 @@ end` yourself — that is the orchestrator's phase 2; just exit cleanly.
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ⇒ Exit — let the orchestrator continue | Interactive: press Ctrl+D. Under `$AIDA_ZEN` / headless: the skill instead runs `touch "$AIDA_EXIT_SENTINEL"` as its absolute last action (see below) | The orchestrator detects the open PR and reaps this session — within ~100ms once the sentinel is touched — then runs phases 2-6 automatically |
-| ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — PR-<N> stays open but CI / review / merge will not run |
+| ⇒ Exit — let the orchestrator continue ← recommended | Interactive: press Ctrl+D. Under `$AIDA_ZEN` / headless: the skill instead runs `touch "$AIDA_EXIT_SENTINEL"` as its absolute last action (see below) | The PR is open and the State snapshot above shows no blocker — exiting hands phases 2-6 (CI → review → merge → pull → build) to the orchestrator. Reversible: a `RequestChanges` verdict halts the chain at phase 3 with the recovery hint. |
+| ⊕ Route to the advisor | `/aida-advise <SPEC-ID>` — today: copy this block to the dialog/advisor seat; STORY-306's tier handles punts automatically | When the State snapshot or deciding factor above flags something the implementer cannot grade (a risk that should hold the PR, a deviation worth a human's eyes), park the call with the advisor instead of releasing the chain. |
+| ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — PR-<N> stays open but CI / review / merge will not run. Reversible: re-queue and re-run `aida queue work <SPEC-ID>` later. |
 
 **Graceful exit signal (TASK-329).** A skill cannot synthesize the Ctrl+D
 the `⇒` row names. So under `$AIDA_ZEN` (or a headless drain), where this
@@ -514,6 +555,48 @@ zen annotation and stop:
 In default (non-`$AIDA_ZEN`) interactive mode, do **not** touch the sentinel
 — render the table and let the user press Ctrl+D. Full protocol:
 `docs/aida-discipline/skill-prompt-kinds.md`.
+
+**Loud closing block — name the next user-action (TASK-359).** After the
+table (interactive) or in place of it (auto-resolved zen / headless), the
+session's final stanza must be a visually-distinct hand-off that names
+the exact action and what happens after it. Don't end on a vague *"Final
+state"* listing that omits the user-action — the gap from BUG-245 was
+precisely this: the implementer summarized what shipped but never told
+the user to press Ctrl+D, and the orchestrator silently waited.
+
+Pick the variant by mode (substitute real PR number, spec IDs, drain
+flag — concrete is the point):
+
+  *Interactive (`AIDA_ZEN` unset, `AIDA_HEADLESS` unset) — user-driven exit:*
+
+  ```
+  ✓ PR-<N> opened: <url>
+  ✓ Implementer session is done — nothing left for this Claude to do.
+
+  → Next: press Ctrl+D to exit. The --auto-complete orchestrator then runs:
+    - Phase 2/6  End session         (aida session end)
+    - Phase 3/6  Review              (auto-queued story <STORY-X>)
+    - Phase 4/6  Merge PR-<N>        (gh pr merge <N> --squash --delete-branch)
+    - Phase 5/6  Pull + auto-bump    (<SPEC-IDS> Done → Completed)
+    - Phase 6/6  Build verify        (cargo build --release)
+  ```
+
+  *Under `$AIDA_ZEN` or `--no-human=both` (skill auto-touches the sentinel) — no user-action required:*
+
+  ```
+  ✓ PR-<N> opened: <url>
+  ✓ Implementer session is done — nothing left for this Claude to do.
+
+  → Next: session will auto-exit via $AIDA_EXIT_SENTINEL; nothing else needed.
+    The orchestrator reaps this REPL within ~100ms and continues with
+    phases 2-6 (end → review → merge → pull → build).
+  ```
+
+The closing block fires **only** in orchestrator mode (`aida orchestrator
+status` = `orchestrated`). Plain `--zen` (without `--auto-complete`)
+renders its own template below; the auto-queue and ⚠ recovery templates
+below carry their own simpler hand-offs since there is no orchestrator
+chain to advance. trace:TASK-359
 
 Render this block instead of the three below whenever `aida orchestrator
 status` is `orchestrated`. The reviewer-queue story still gets filed (step 11) — the orchestrator

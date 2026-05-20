@@ -559,10 +559,75 @@ worktree implication of each path, never just restates the action. A
 single linear next-step stays a compact one-liner — the table is for 2+
 options only. Full convention: `docs/skills-convention.md`.
 
+**Apply the finish-state communication rubric (TASK-359).** Every template
+below is finish-state communication, so it must carry all six rubric
+elements: a **labelled State snapshot** preamble, the **deciding factor**
+surfaced beside the options when one is in play, a **recommendation with
+rationale** marked `← recommended` on the primary row, a **per-option
+drain-state + reversibility** in the Why cell, an explicit **advise
+escape** row (`⊕`) when an advisor seat is reachable, and **decoupled
+followup-filing** — when a plan's `## Followups` section has unfiled
+bullets, ask the filing question *after* the path is chosen, not bundled
+into the path row. Full rubric:
+`docs/aida-discipline/session-discipline.md` § *Finish-state
+communication rubric*.
+
+The preamble has a fixed shape, printed verbatim above the table:
+
+```
+State:
+  Spec:    <SPEC-ID>  <title>            (Status: Done)
+  Branch:  <branch>   <N> commits ahead of main   <pushed|local>
+  PR:      <#N open: url>   |  no PR yet
+  Drain:   phase 1/6 <interactive|--zen|--no-human=both>   orchestrator <on|off>
+  Tests:   <last cargo test summary or "not run">
+  Fmt:     <cargo fmt --check summary or "not run">
+  Plan:    <docs/plans/...md>   |  none
+
+Deciding factor: <one sentence — only when a load-bearing risk is in play>
+```
+
+Omit a row only when the data is genuinely absent (no PR yet → print "no
+PR yet", don't drop the row). The **Deciding factor** line is conditional:
+print it only when a real risk frames the choice (a smoke-gate, a plan
+deviation, an unusually large change, mock-only subprocess plumbing).
+When there is no deciding factor, omit the line entirely — silence
+beats a vacuous *"none."*
+
+**Recommendation rationale.** The `▶` row's Why cell must lead with the
+*reason* this is the recommendation, not just the operational effect — one
+sentence, then the lease / worktree implication. Mark the row
+`▶ <action> ← recommended`. The user (or the standby advisor) reads the
+rationale first; they read the alternative rows knowing what was passed
+over and why.
+
+**Advise escape.** When a checkpoint is genuinely ambiguous — competing
+defensible paths, a risk the implementer cannot grade itself — add an
+`⊕ Route to the advisor` row. The row's What cell is *"`/aida-advise
+<SPEC-ID>` (today: copy the menu to the dialog/advisor seat; STORY-306's
+advisor tier routes punts automatically)."* This is the rubric's `advise`
+escape — a first-class option, not a fallback. Omit the row when the
+recommendation is clear-cut and a relay would be busywork.
+
+**Followup-filing is a separate prompt.** When the picked-up spec has a
+plan file with a `## Followups` section and the auto-filer hasn't already
+processed it (no `[aida:followups]` marker comment on the spec — TASK-96),
+the filing question comes *after* the path table resolves, not bundled
+into the path row. Render it as a second `kind:confirmation` prompt:
+
+> File the N follow-ups from `<plan-file>` as child TASKs? [Y/n/per-bullet]
+
+`aida queue done` already prompts per bullet in its non-auto-bump path;
+the table above is for the case where you want to file before / outside
+that auto-prompt (e.g. the auto-bump fired and you want to add a missed
+bullet). Bundling filing into the path row is the failure mode the rubric
+calls out — keep it sequential.
+
 **Templates** (substitute `<session-id>`, `<cluster-id>`, `<NAME>`, etc.
-from detection above). Each shows a prose lead-in line followed by the
-next-steps table — print the lead-in as a normal sentence, then the table
-as a real GFM markdown table (no surrounding code fence):
+from detection above). Each shows the State preamble, an optional
+Deciding-factor line, a prose lead-in line, then the next-steps table —
+print the lead-in as a normal sentence, then the table as a real GFM
+markdown table (no surrounding code fence):
 
 *Orchestrator mode (`aida orchestrator status` = `orchestrated`) — TASK-286:*
 
@@ -578,17 +643,21 @@ session end` would break the chain.
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ⇒ Submit the PR | `/aida-pr` | Opens the PR for <SPEC-ID>; the orchestrator detects it when this session exits and continues with CI → review → merge → pull → build |
-| ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — ends this spec and bails; phases 2-6 will not run |
+| ⇒ Submit the PR ← recommended | `/aida-pr` | The orchestrator is already driving this spec — opening the PR is the only mechanical step that keeps the chain moving (phases 2-6 follow automatically). Reversible: closing the PR halts at phase 3. |
+| ⊕ Route to the advisor | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the implementation surfaced a load-bearing risk the implementer can't grade itself (smoke-test gate, deviation from the plan, larger-than-expected change), park the decision with the advisor instead of guessing the path forward. |
+| ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — ends this spec and bails; phases 2-6 will not run. Reversible: re-queue with `aida queue work <SPEC-ID>`. |
 
-Orchestrator mode shows only these two rows on purpose: there is no "grab
-the next item" (the orchestrator picks up the next spec only after this
-one's *full* lifecycle completes, never mid-chain) and no plain "stop here"
-(`aida session end` is the orchestrator's phase 2 — it runs it for you, so
-a manual one would race it). This template overrides batch / cluster /
-simple mode — when `aida orchestrator status` is `orchestrated`, render it
-and nothing else.
-trace:TASK-286
+Orchestrator mode shows only these three rows on purpose: there is no
+"grab the next item" (the orchestrator picks up the next spec only after
+this one's *full* lifecycle completes, never mid-chain) and no plain
+"stop here" (`aida session end` is the orchestrator's phase 2 — it runs
+it for you, so a manual one would race it). The `⊕` row is the rubric's
+advise escape (TASK-359): omit it when the recommendation is unambiguous
+and a relay would be busywork; include it when the deciding factor above
+the table flags a risk the implementer cannot grade. This template
+overrides batch / cluster / simple mode — when `aida orchestrator
+status` is `orchestrated`, render it and nothing else.
+trace:TASK-286 trace:TASK-359
 
 **Graceful exit signal (TASK-329).** Under `$AIDA_ZEN`, `/aida-pickup`
 auto-takes the `⇒ Submit the PR` row — it hands off to `/aida-pr`, which
