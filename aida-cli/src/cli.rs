@@ -3182,6 +3182,21 @@ pub enum Command {
         // trace:TASK-47 | ai:claude
         #[clap(long)]
         force: bool,
+
+        /// Mark this spec as work no agent can do — a person-in-the-room
+        /// task, sign-off, or physical activity. Pre-pickup gate skips
+        /// human-only specs so the orchestrator never spawns a doomed
+        /// phase-1 implementer on them.
+        // trace:STORY-333 | ai:claude
+        #[clap(long, conflicts_with = "no_human_only")]
+        human_only: bool,
+
+        /// Clear the human-only marker (inverse of `--human-only`). Use
+        /// when a spec previously thought to be human-only turns out to
+        /// be agent-doable.
+        // trace:STORY-333 | ai:claude
+        #[clap(long, conflicts_with = "human_only")]
+        no_human_only: bool,
     },
 
     /// Delete a requirement

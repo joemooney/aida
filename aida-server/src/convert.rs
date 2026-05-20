@@ -139,6 +139,13 @@ pub fn rel_type_to_proto(rel_type: &CoreRelType) -> (proto::RelationshipType, St
         CoreRelType::Verifies => (proto::RelationshipType::Verifies, String::new()),
         CoreRelType::VerifiedBy => (proto::RelationshipType::VerifiedBy, String::new()),
         CoreRelType::References => (proto::RelationshipType::References, String::new()),
+        // STORY-333: proto schema has no dedicated BlockedBy/Blocks
+        // variants yet — wire them as Custom-with-name so existing gRPC
+        // clients keep working. The string forms round-trip back to the
+        // typed variants via `RelationshipType::from_str` on the receive
+        // side. trace:STORY-333 | ai:claude
+        CoreRelType::BlockedBy => (proto::RelationshipType::Custom, "blocked-by".to_string()),
+        CoreRelType::Blocks => (proto::RelationshipType::Custom, "blocks".to_string()),
         CoreRelType::Custom(name) => (proto::RelationshipType::Custom, name.clone()),
     }
 }
@@ -151,7 +158,12 @@ pub fn proto_to_rel_type(rel_type: proto::RelationshipType, custom_name: &str) -
         proto::RelationshipType::Verifies => CoreRelType::Verifies,
         proto::RelationshipType::VerifiedBy => CoreRelType::VerifiedBy,
         proto::RelationshipType::References => CoreRelType::References,
-        proto::RelationshipType::Custom => CoreRelType::Custom(custom_name.to_string()),
+        // STORY-333: route Custom-with-name through `from_str` so the
+        // typed `blocked-by` / `blocks` strings sent over the wire land
+        // as the typed variants on the receive side. Unknown custom
+        // names still fall through to `Custom(name)`.
+        // trace:STORY-333 | ai:claude
+        proto::RelationshipType::Custom => CoreRelType::from_str(custom_name),
         proto::RelationshipType::Unspecified => CoreRelType::References,
     }
 }

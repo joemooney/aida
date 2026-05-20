@@ -574,6 +574,11 @@ impl SqliteBackend {
                 // STORY-332: the legacy centralized SQLite backend is
                 // deprecated and does not persist punt metadata.
                 attention_reason: None,
+                // STORY-333: the legacy centralized SQLite backend is
+                // deprecated and does not persist the human-only marker;
+                // un-pickability is a git-canonical concern.
+                // trace:STORY-333 | ai:claude
+                human_only: false,
                 version,
             });
         }
@@ -1491,6 +1496,9 @@ impl DatabaseBackend for SqliteBackend {
                     ai_evaluation,
                     // STORY-332: legacy centralized backend — not persisted.
                     attention_reason: None,
+                    // STORY-333: legacy centralized backend — not persisted.
+                    // trace:STORY-333 | ai:claude
+                    human_only: false,
                     version,
                 }))
             }
