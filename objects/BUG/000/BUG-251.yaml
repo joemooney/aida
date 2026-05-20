@@ -1,0 +1,54 @@
+id: 019e4387-dd2f-7c12-b4ef-0cc9ce52d998
+spec_id: BUG-251
+agreed_id: BUG-251
+title: Spec YAML parser fails hard on unknown enum variants / unknown fields — needs forward-compat reading for cross-binary version skew
+description: |-
+  When one machine ships a YAML format change (a new `RelationshipType` enum variant, a new `Requirement` field), other machines reading those YAML files with an older `aida` binary fail hard with a parse error. The on-screen recovery message is informative — but the underlying parser strictness is the bug: unknown variants/fields should be handled forward-compat-gracefully, not fatally.
+
+  ## Observed — 2026-05-19, recurring across the session
+
+  Most recently, on the imac after STORY-333's `BlockedBy` typed variant + live-example wiring landed in the store:
+
+      Warning: failed to load STORY-276 (parse error)
+        Detail: Failed to parse .../STORY-276.yaml
+        Likely cause: binary version mismatch — the file may have been written by a newer
+        aida than the one reading it (a new enum variant, a renamed field, etc.).
+
+  STORY-333's implementation wrote typed `BlockedBy` relationships into STORY-276/306's YAML. The imac's `aida-debug` predated STORY-333 → couldn't parse → noisy warnings on every `aida queue list` until rebuild.
+
+  ## Why it matters
+
+  The user works across multiple machines with the store shared via origin. Any YAML format change creates a window where the trailing machine sees parse errors until it pulls + rebuilds. The pattern recurs every time a binary lands new fields/variants; it scales badly as more machines / more contributors / more format evolution happen.
+
+  ## Fix direction
+
+  Two complementary moves:
+
+  - **Unknown enum variants → `Custom(value)` fallback at parse time.** `RelationshipType::from_str` already does this for relationship types; audit all spec-graph enums and apply the same pattern.
+  - **Unknown fields → serde forward-compat on top-level types** (`#[serde(other)]` collector, or explicit unknown-field-bucket per type). An older binary reading a newer `human_only` field → ignored, not fatal.
+
+  ## Acceptance
+
+  - [ ] Older `aida` reading YAML written with a newer enum variant does not error; the variant falls through to a sensible default (e.g., `Custom(name)`)
+  - [ ] Older `aida` reading YAML with an unknown field does not error; the field is silently ignored on read
+  - [ ] Round-trip preservation (best effort): an older binary reading + writing a YAML with unknown content preserves the unknown content where feasible
+  - [ ] Tests: synthetic YAML with a future enum variant + future field reads cleanly via the older parser
+
+  ## Origin
+
+  2026-05-19 — recurring during the autonomy-keystone sprint. The cross-machine version-skew pattern has hit multiple times; the fix would prevent the whole class.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T03:57:17.999455016Z
+modified_at: 2026-05-20T03:57:17.999455016Z
+req_type: Bug
+tags:
+- backlog
+- cross-binary
+- forward-compat
+- from-self-test
+- multi-machine
+- version-skew
+- yaml-parser
