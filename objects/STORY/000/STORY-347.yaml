@@ -1,0 +1,61 @@
+id: 019e45bc-451a-7260-8b42-e3cb2b2f390c
+spec_id: STORY-347
+agreed_id: STORY-347
+title: Cold-boot vs live-advisor calibration ledger (toggleable learning mode)
+description: |-
+  ## Problem
+
+  Substrate-enrichment is open-loop today: the advisor writes memories they *think* matter, but there is no empirical signal on whether the substrate is actually narrowing the cold-boot-vs-live-advisor reasoning gap. Disagreements between what a cold-boot headless advisor would decide and what the live advisor would decide are invisible — they exist, but they are not surfaced, recorded, or triaged.
+
+  Because the model is the same in both seats, any disagreement is by construction a *context-availability* gap, not a capability gap. That makes disagreements interpretable: each one is either a memory that should exist but doesn't, an inherently in-flight framing that cannot easily be externalized, or a case where the cold-boot's fresh read of the substrate was actually cleaner than the live advisor's potentially-stale in-session context.
+
+  ## Approach
+
+  Add a **calibration mode** — a toggleable learning mode the user turns on when they want to mine substrate gaps, and off when they want to trust the substrate. When the mode is ON and a live advisor session is registered, every punt produces a side-by-side verdict comparison:
+
+  1. Cold-boot advisor renders \`V_cold\` (drives the drain as today — no behavioural change).
+  2. Fork-from-live advisor (per SPIKE-11) renders \`V_aged\` in shadow.
+  3. Both verdicts + reasoning traces are recorded in \`.aida/punts/<punt-id>/calibration.yaml\`.
+  4. A review surface lists disagreements for live-advisor triage.
+
+  When calibration mode is OFF (the default), the drain runs exactly as today — no shadow fork, no extra cost.
+
+  ## Acceptance
+
+  - **Toggleable mode**: config setting \`[advisor] calibration_mode = \"off\" | \"on\"\` in \`.aida/config.toml\`; per-drain override via \`aida queue work ... --calibrate\` / \`--no-calibrate\`. Default off. Persistent across drains.
+  - **Shadow-fork on punt**: when calibration mode is ON AND a live advisor session is registered (per SPIKE-11's discovery mechanism), the orchestrator fires a fork-from-live verdict in parallel with the cold-boot verdict. The fork's result does NOT drive drain behaviour.
+  - **Graceful skip**: calibration mode ON but no live advisor session registered → log a single line (\"calibration: no live advisor registered, skipping fork\") and proceed with cold-boot only. Not an error.
+  - **Recording**: \`.aida/punts/<punt-id>/calibration.yaml\` captures both verdicts, both reasoning traces, timestamps, and which (if either) drove the drain.
+  - **Review surface**: \`aida findings calibration [--since <window>] [--agreement|--disagreement]\` lists punts with both verdicts side-by-side. Default view shows disagreements; \`--all\` includes agreements.
+  - **Triage annotation**: the review surface accepts a one-line annotation per disagreement (\`aida findings calibration annotate <punt-id> \"<note>\"\`). Annotation categories suggested but not enforced: \`gap → wrote memory <name>\`, \`inherently in-flight, accept\`, \`cold-boot was actually correct\`.
+  - **Rolling metric**: \`aida findings calibration --stats\` shows agreement rate over the last N punts (default last 50), trend over the last 4 weeks, and disagreement-category histogram derived from annotation prefixes.
+  - **No drain impact**: with calibration mode OFF, behaviour is byte-identical to today's drains. With it ON, the cold-boot path is still the verdict that drives the drain — the fork is shadow only.
+
+  ## Out of scope
+
+  - Auto-tuning fork-from-live based on calibration data (e.g. \"category X has 95% agreement, skip fork; category Y has 40% agreement, always fork\"). That is a follow-up once we have data.
+  - Multi-advisor calibration (live advisor A vs live advisor B). SPIKE-10 territory.
+  - Retraining the model. We never retrain Claude; we enrich the substrate.
+
+  ## Blocked by
+
+  - SPIKE-11 — fork-from-live primitive must be verified viable before this can build.
+
+  ## Related
+
+  - SPIKE-11 — the fork mechanism this story depends on.
+  - Memory \`feedback_headless_advisor_is_cold_boot\` — the load-bearing fact this story responds to.
+  - Memory \`feedback_memory_pack_hygiene\` — calibration-triage compose naturally with the audit cycle (concrete inputs to the audit).
+  - STORY-306 — the punt-routing infrastructure this layers on.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T14:13:46.906023859Z
+modified_at: 2026-05-20T14:13:46.906023859Z
+req_type: Story
+tags:
+- advisor
+- architecture
+- autonomy
+- learning-mode
