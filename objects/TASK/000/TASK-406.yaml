@@ -1,0 +1,76 @@
+id: 019e4616-00dc-7b11-a334-8ce1c086e038
+spec_id: TASK-406
+agreed_id: TASK-406
+title: 'Recovery flow: gh pr merge --delete-branch trips on main-in-worktree; document worktree-aware merge sequence'
+description: |-
+  ## Problem
+
+  When a recovery flow ends with a manual merge of a PR opened from an AIDA worktree, the natural \`gh pr merge <N> --squash --delete-branch\` sequence trips on a cosmetic-but-confusing error:
+
+  \`\`\`
+  failed to run git: fatal: 'main' is already used by worktree at '/home/joe/ai/aida'
+  \`\`\`
+
+  This fires when the user is *inside* the spec's worktree at merge time (typical during recovery — they just inspected things or ran commands there). gh's \`--delete-branch\` does a local \`git branch -d\`; that command, run from a worktree where the *main* branch is checked out elsewhere, fails. The remote merge + remote branch delete both succeeded; only the local branch cleanup fails. Easy to read as a real failure on first encounter.
+
+  Hit at least three times in the 2026-05-20 recovery thread (TASK-358 final merge, plus earlier in this session per the conversation summary).
+
+  ## Approach
+
+  Two complementary moves, in order of value:
+
+  ### 1. Document the worktree-aware merge sequence
+
+  The right sequence when merging from inside a worktree:
+
+  \`\`\`bash
+  # from /home/joe/ai/aida (main worktree):
+  gh pr merge <N> --squash --delete-branch
+  aida pull
+  aida session end <lease-id>    # handles worktree removal + local branch cleanup
+  \`\`\`
+
+  Or, if merging from inside the spec's worktree:
+
+  \`\`\`bash
+  gh pr merge <N> --squash       # NO --delete-branch
+  cd /home/joe/ai/aida
+  aida pull
+  aida session end <lease-id>    # this cleans up both the worktree and the local branch
+  \`\`\`
+
+  Add to \`docs/autonomous-drain.md\` (recovery section) and the README's recovery-narrative section if/when that lands (TASK-403).
+
+  ### 2. Optional wrapper: \`aida pr merge <N>\`
+
+  Thin wrapper that: detects cwd vs worktree, calls gh with the right flag set, runs \`aida pull\` and \`aida session end\` in the right order. Single command replaces the three-line sequence. Lower priority since (1) plus muscle memory works.
+
+  ## Acceptance
+
+  - \`docs/autonomous-drain.md\` recovery section includes the worktree-aware merge sequence with both cwd variants.
+  - The error message itself could be intercepted at AIDA's level — when \`aida session end\` runs after a gh-merge with \`--delete-branch\` and finds the branch already gone, it succeeds quietly instead of complaining. (Verify: does \`aida session end\` already handle this? If yes, just document; if no, file a follow-up.)
+  - (Optional) \`aida pr merge <N>\` wrapper command.
+
+  ## Out of scope
+
+  - Asking gh upstream to handle the worktree-in-use case more gracefully (a real bug there, but not our fight).
+  - Auto-detecting and auto-merging on CI-green (separate scope — TASK-405's territory once it lands).
+
+  ## Related
+
+  - TASK-405 — PR-only orchestrator invocation; would obviate manual merge for the normal flow but recovery flow still hits this.
+  - TASK-402 — resume-after-failure UX cluster; this is the *next* recovery friction after that one.
+  - Recovery narrative for TASK-403 writeup — this is one of the rough edges the writeup will need to acknowledge or work around.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T15:51:47.676266249Z
+modified_at: 2026-05-20T15:51:47.676266249Z
+req_type: Task
+tags:
+- cli-ux
+- docs
+- papercut
+- recovery
+- worktrees
