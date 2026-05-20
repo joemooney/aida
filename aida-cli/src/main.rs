@@ -599,6 +599,8 @@ fn run() -> Result<()> {
             owner,
             feature,
             tags,
+            add_tag,
+            remove_tag,
             interactive,
             strict: _, // legacy SQLite path ignores session leases
             force: _,  // TASK-47 guard only applies to git-canonical Edit
@@ -609,6 +611,7 @@ fn run() -> Result<()> {
             no_human_only: _,
         } => {
             // If any flags provided, use non-interactive mode; otherwise interactive
+            // trace:TASK-351 | ai:claude — --add-tag / --remove-tag count too
             let has_flags = title.is_some()
                 || description.is_some()
                 || status.is_some()
@@ -616,7 +619,9 @@ fn run() -> Result<()> {
                 || r#type.is_some()
                 || owner.is_some()
                 || feature.is_some()
-                || tags.is_some();
+                || tags.is_some()
+                || !add_tag.is_empty()
+                || !remove_tag.is_empty();
 
             if *interactive || !has_flags {
                 edit_requirement_interactive(&storage, id)?;
@@ -632,6 +637,8 @@ fn run() -> Result<()> {
                     owner,
                     feature,
                     tags,
+                    add_tag,
+                    remove_tag,
                 )?;
             }
         }
@@ -3515,6 +3522,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             owner,
             feature,
             tags,
+            add_tag,
+            remove_tag,
             strict,
             force,
             human_only,
@@ -3657,8 +3666,20 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if let Some(t) = tags {
                 req.tags.clear();
                 for tag in t.split(',') {
-                    req.tags.insert(tag.trim().to_string());
+                    let trimmed = tag.trim();
+                    if !trimmed.is_empty() {
+                        req.tags.insert(trimmed.to_string());
+                    }
                 }
+                changed = true;
+            }
+            // TASK-351: partial tag edits that don't clobber the rest.
+            // `--tags` is full-replace; `--add-tag` / `--remove-tag` are
+            // additive/subtractive. Clap's `conflicts_with` keeps the two
+            // forms mutually exclusive. Adding a present tag or removing
+            // an absent one is a graceful no-op.
+            // trace:TASK-351 | ai:claude
+            if apply_tag_deltas(&mut req.tags, add_tag, remove_tag) {
                 changed = true;
             }
             // STORY-333: `--human-only` / `--no-human-only` flip the typed
@@ -6036,6 +6057,124 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
 }
 
 // trace:REQ-0232 | ai:claude:high
+/// Apply additive (`--add-tag`) and subtractive (`--remove-tag`) tag deltas
+/// without disturbing tags the caller didn't name. Empty / whitespace-only
+/// entries are ignored. Adding a present tag or removing an absent one is
+/// a graceful no-op. Returns whether the set actually changed.
+// trace:TASK-351 | ai:claude
+fn apply_tag_deltas(tags: &mut HashSet<String>, add: &[String], remove: &[String]) -> bool {
+    let mut changed = false;
+    for raw in add {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() && tags.insert(trimmed.to_string()) {
+            changed = true;
+        }
+    }
+    for raw in remove {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() && tags.remove(trimmed) {
+            changed = true;
+        }
+    }
+    changed
+}
+
+#[cfg(test)]
+mod apply_tag_deltas_tests {
+    use super::apply_tag_deltas;
+    use std::collections::HashSet;
+
+    fn set(items: &[&str]) -> HashSet<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn vec(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn add_inserts_new_tag_and_preserves_others() {
+        let mut tags = set(&["a", "b", "c"]);
+        let changed = apply_tag_deltas(&mut tags, &vec(&["x"]), &[]);
+        assert!(changed);
+        assert_eq!(tags, set(&["a", "b", "c", "x"]));
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn remove_drops_named_tag_and_preserves_others() {
+        let mut tags = set(&["a", "b", "c"]);
+        let changed = apply_tag_deltas(&mut tags, &[], &vec(&["b"]));
+        assert!(changed);
+        assert_eq!(tags, set(&["a", "c"]));
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn add_and_remove_compose_in_one_call() {
+        let mut tags = set(&["a", "b"]);
+        let changed = apply_tag_deltas(&mut tags, &vec(&["x", "y"]), &vec(&["a"]));
+        assert!(changed);
+        assert_eq!(tags, set(&["b", "x", "y"]));
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn adding_present_tag_is_noop() {
+        let mut tags = set(&["a", "b"]);
+        let changed = apply_tag_deltas(&mut tags, &vec(&["a"]), &[]);
+        assert!(!changed);
+        assert_eq!(tags, set(&["a", "b"]));
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn removing_absent_tag_is_noop() {
+        let mut tags = set(&["a", "b"]);
+        let changed = apply_tag_deltas(&mut tags, &[], &vec(&["z"]));
+        assert!(!changed);
+        assert_eq!(tags, set(&["a", "b"]));
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn whitespace_entries_are_ignored() {
+        let mut tags = set(&["a"]);
+        let changed = apply_tag_deltas(&mut tags, &vec(&["", "  "]), &vec(&[" "]));
+        assert!(!changed);
+        assert_eq!(tags, set(&["a"]));
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn entries_are_trimmed() {
+        let mut tags = set(&["a"]);
+        let changed = apply_tag_deltas(&mut tags, &vec(&["  x  "]), &vec(&[" a "]));
+        assert!(changed);
+        assert_eq!(tags, set(&["x"]));
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn empty_inputs_make_no_change() {
+        let mut tags = set(&["a", "b"]);
+        let changed = apply_tag_deltas(&mut tags, &[], &[]);
+        assert!(!changed);
+        assert_eq!(tags, set(&["a", "b"]));
+    }
+
+    // trace:TASK-351 | ai:claude
+    #[test]
+    fn add_then_remove_same_tag_in_one_call_is_net_zero_if_present() {
+        // remove runs after add, so add x + remove x with x absent yields {} change net
+        let mut tags = set(&["a"]);
+        let changed = apply_tag_deltas(&mut tags, &vec(&["x"]), &vec(&["x"]));
+        assert!(changed); // x was inserted then removed — both ops registered changes
+        assert_eq!(tags, set(&["a"]));
+    }
+}
+
 /// Edit a requirement non-interactively using CLI flags
 fn edit_requirement_cli(
     storage: &Storage,
@@ -6048,6 +6187,9 @@ fn edit_requirement_cli(
     owner: &Option<String>,
     feature: &Option<String>,
     tags: &Option<String>,
+    // trace:TASK-351 | ai:claude
+    add_tag: &[String],
+    remove_tag: &[String],
 ) -> Result<()> {
     // Load requirements
     let store_for_lookup = storage.load()?;
@@ -6201,6 +6343,19 @@ fn edit_requirement_cli(
         if new_tags != req.tags {
             changes.push(Requirement::field_change("tags", old_tags, new_tags_str));
             req.tags = new_tags;
+        }
+    }
+
+    // TASK-351: partial tag edits — additive / subtractive variants that
+    // don't clobber the rest. `--tags` and `--add-tag`/`--remove-tag` are
+    // mutually exclusive at the clap layer, so at most one of the two
+    // blocks fires.
+    // trace:TASK-351 | ai:claude
+    if !add_tag.is_empty() || !remove_tag.is_empty() {
+        let old_tags: String = req.tags.iter().cloned().collect::<Vec<_>>().join(", ");
+        if apply_tag_deltas(&mut req.tags, add_tag, remove_tag) {
+            let new_tags_str: String = req.tags.iter().cloned().collect::<Vec<_>>().join(", ");
+            changes.push(Requirement::field_change("tags", old_tags, new_tags_str));
         }
     }
 
