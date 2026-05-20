@@ -1,0 +1,27 @@
+id: 019e467f-f4fb-7cd3-8e14-2a09d6f9afea
+spec_id: TASK-415
+agreed_id: TASK-415
+title: 'aida-pickup.md + aida-pr.md: replace hand-written State preamble blocks with aida state-snapshot calls'
+description: |-
+  TASK-391 shipped the deterministic `aida state-snapshot --spec <SPEC-ID>` command but did not migrate the six finish-state templates in aida-core/templates/skills/aida-pickup.md (orchestrator / batch / cluster-drained / cluster-partial / simple-more / simple-empty) or the one in aida-pr.md (orchestrator-mode) to call it.
+
+  Today each template still embeds the seven-row "State:" block as fixed-width text that the skill author hand-substitutes from `git status`, `gh pr view`, `aida show`, `aida session show`. The substitution drifts — that drift is exactly what TASK-391 fixed at the engine layer. The remaining work is to thread the call through each template so a reader sees the State preamble materialise from one command instead of seven manual lookups.
+
+  Acceptance:
+  - Each template's State preamble block is replaced by a directive to run `aida state-snapshot --spec <SPEC-ID> [--tests "..."] [--fmt "..."]` and emit its output verbatim above the table.
+  - The skill prose mentions `aida state-snapshot --json` as the Step 5b finding-metadata source.
+  - Templates' golden examples in the skill body update to match the deterministic command's output shape (any drift surfaces during the rewrite).
+
+  Raised by the implementer while completing TASK-391.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T17:47:31.451020038Z
+modified_at: 2026-05-20T17:47:31.451020038Z
+req_type: Task
+tags:
+- from-implementer:TASK-391
+- kind:followup-suggestion
+- severity:minor
+- skill-template
