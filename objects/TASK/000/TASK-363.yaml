@@ -1,0 +1,12 @@
+id: 019e4342-a544-7362-8450-24fbba608889
+spec_id: TASK-363
+agreed_id: TASK-363
+title: Raise or auto-tune `AIDA_WORKER_SPEC_TIMEOUT` once headless `--auto-complete` durations (incl. CI waits) are measured
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T02:41:41.700738985Z
+modified_at: 2026-05-20T02:41:41.700738985Z
+req_type: Task
