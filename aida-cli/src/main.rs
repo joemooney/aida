@@ -3,6 +3,7 @@ mod auto_complete_telemetry;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod digest;
 mod docs;
 mod drain_state;
 mod exit_signal;
@@ -697,6 +698,12 @@ fn run() -> Result<()> {
         Command::Pull { .. } => {
             anyhow::bail!(
                 "`aida pull` requires a git-canonical store. Run `aida init` (or upgrade from \
+                 the deprecated centralized backend with `aida db export-git`)."
+            );
+        }
+        Command::Digest { .. } => {
+            anyhow::bail!(
+                "`aida digest` requires a git-canonical store. Run `aida init` (or upgrade from \
                  the deprecated centralized backend with `aida db export-git`)."
             );
         }
@@ -1507,14 +1514,14 @@ fn fnv1a_hex(data: &[u8]) -> String {
 /// `build.rs` then embeds verbatim — without this the `---\n` frontmatter
 /// fence never matches and the template is reported malformed.
 /// trace:BUG-244 | ai:claude
-fn normalize_line_endings(s: &str) -> String {
+pub(crate) fn normalize_line_endings(s: &str) -> String {
     s.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 /// Split a markdown file into (frontmatter, body) at the leading `---`
 /// fenced YAML block. Returns `None` when there is no frontmatter. Callers
 /// pass LF-normalized input (see `normalize_line_endings`).
-fn split_md_frontmatter(content: &str) -> Option<(&str, &str)> {
+pub(crate) fn split_md_frontmatter(content: &str) -> Option<(&str, &str)> {
     let rest = content.strip_prefix("---\n")?;
     let end = rest.find("\n---\n")?;
     Some((&rest[..end], &rest[end + 5..]))
@@ -1523,7 +1530,7 @@ fn split_md_frontmatter(content: &str) -> Option<(&str, &str)> {
 /// Read a top-level scalar frontmatter field. Indented (nested) keys are
 /// ignored on purpose — `originSessionId` must be a top-level key for the
 /// refresh check to see it. trace:STORY-255 | ai:claude
-fn frontmatter_field<'a>(frontmatter: &'a str, key: &str) -> Option<&'a str> {
+pub(crate) fn frontmatter_field<'a>(frontmatter: &'a str, key: &str) -> Option<&'a str> {
     let prefix = format!("{key}: ");
     frontmatter
         .lines()
@@ -2425,6 +2432,27 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *failures,
                 *pattern,
                 store.as_ref(),
+            );
+        }
+        Command::Digest {
+            since,
+            audience,
+            format,
+            include_next,
+            include_process,
+            out,
+            reset,
+        } => {
+            let store = backend.load()?;
+            return handle_digest_command(
+                since.as_deref(),
+                *audience,
+                *format,
+                *include_next,
+                *include_process,
+                out.clone(),
+                *reset,
+                &store,
             );
         }
         Command::Push {
@@ -30787,7 +30815,7 @@ fn locate_aida_server_binary(cwd: &std::path::Path) -> Result<std::path::PathBuf
 
 /// Parse `Nd` / `Nh` / `Nm` into seconds. Mirrors the parser used by
 /// `aida queue progress --since`. Returns an error on malformed input.
-fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
+pub(crate) fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         anyhow::bail!("--since cannot be empty");
@@ -31053,6 +31081,45 @@ fn handle_usage_command(
     }
 
     Ok(())
+}
+
+// ----------------------------------------------------------------------------
+// `aida digest` — narrative work digest (STORY-252).
+// ----------------------------------------------------------------------------
+
+#[allow(clippy::too_many_arguments)]
+fn handle_digest_command(
+    since_raw: Option<&str>,
+    audience: digest::DigestAudience,
+    format: digest::DigestFormat,
+    include_next: Option<bool>,
+    include_process: Option<bool>,
+    out: Option<std::path::PathBuf>,
+    reset: bool,
+    store: &RequirementsStore,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+    let until = chrono::Utc::now();
+    let since = digest::parse_digest_since(since_raw, &project_root)?;
+    if since > until {
+        anyhow::bail!(
+            "--since resolves to {} which is after now; nothing to digest",
+            since.to_rfc3339()
+        );
+    }
+    let include_next = include_next.unwrap_or(true);
+    let include_process =
+        include_process.unwrap_or_else(|| !matches!(audience, digest::DigestAudience::Customer));
+    let opts = digest::DigestOptions {
+        since,
+        until,
+        audience,
+        format,
+        include_next,
+        include_process,
+        out,
+    };
+    digest::run(opts, &project_root, store, reset)
 }
 
 // ----------------------------------------------------------------------------
@@ -40060,7 +40127,7 @@ fn extract_acceptance_section(description: &str) -> Option<String> {
 /// prose, sub-commit lines in squash bodies) and are returned by
 /// [`extract_referenced_spec_ids_from_commit`] instead. trace:BUG-85 | ai:claude
 /// trace:STORY-67 | ai:claude
-fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
+pub(crate) fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     let subject = message.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
     let mut out = Vec::new();
     push_paren_spec_ids_from_line(subject, &mut out);
@@ -40070,7 +40137,7 @@ fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
 /// Extract a trailing `(#N)` PR-number suffix from a commit subject (the
 /// shape `gh` writes when squash-merging a PR). Returns None when the
 /// subject doesn't end with `(#<digits>)`. trace:BUG-102 | ai:claude
-fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64> {
+pub(crate) fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64> {
     let subject = message.lines().find(|l| !l.trim().is_empty())?;
     let trimmed = subject.trim();
     if !trimmed.ends_with(')') {
@@ -40101,7 +40168,7 @@ fn parse_review_story_pr_number(title: &str) -> Option<u64> {
 /// deliver them per AIDA's "one (REQ-ID) trailer in the subject" convention.
 /// IDs already present in the subject are excluded so the two lists are
 /// disjoint. trace:BUG-85 | ai:claude
-fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<String> {
+pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<String> {
     let delivered = extract_spec_ids_from_commit(message);
     let mut lines = message.lines();
     // Skip blank prefix + subject line.
