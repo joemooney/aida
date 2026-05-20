@@ -24,12 +24,12 @@ description: |-
 
   - Workflow gap discovered 2026-05-20 during the post-overnight findings-backlog triage of TASK-397 (BUG-254 store-leg propagation design choice). Rationale would have gone unrecorded if it weren't captured separately.
   - Memory \`feedback_capture_over_concentration\` — the no-permission discipline says capture every observation; the dismiss-with-rationale path should make that one command.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:38:26.264283119Z
-modified_at: 2026-05-20T15:38:26.264283119Z
+modified_at: 2026-05-20T18:25:35.744452323Z
 req_type: Task
 tags:
 - cli-ux
