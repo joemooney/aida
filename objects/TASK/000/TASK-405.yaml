@@ -1,0 +1,55 @@
+id: 019e4610-62df-7d62-8d20-61480a3e5b50
+spec_id: TASK-405
+agreed_id: TASK-405
+title: 'aida queue work: support PR-only invocation (drive phases 3-6 when implementation shipped outside the orchestrator)'
+description: |-
+  ## Problem
+
+  When the orchestrator's normal flow breaks (Anthropic API outage, manual recovery, partial drain), the user ends up with a PR open but phases 3-6 (review / merge / pull / build) still to run. There's no clean way to re-engage the orchestrator on those phases.
+
+  \`aida queue work PR-125 --auto-complete\` returns \`✗ no requirement matches \`PR-125\`\` — only SPEC ids resolve. \`aida queue work TASK-358 --auto-complete\` would refuse with the TASK-217 status-aware hint (\`Done → aida queue rework\`) since the spec is already Done. \`aida queue rework\` is for reviewer-finds-issues-needs-fixup, not for \"drive merge through.\" There is no single-command path for *\"the PR is open, drive review + merge + pull + build.\"*
+
+  Users fall back to hand-merging (\`gh pr merge ...\` + \`aida pull\`), which works but is exactly the kind of manual sequence \`--auto-complete\` was designed to eliminate.
+
+  ## Approach
+
+  Either:
+  - **(a) Extend \`aida queue work\` to accept a \`PR-N\` form** — resolves PR number → spec via commit/branch metadata → re-engages orchestrator at phase 3 (or whichever phase is appropriate given current state). Composes naturally with \`--auto-complete\`.
+  - **(b) Add a separate \`aida pr drive <PR-N>\` command** — same effect, different surface. Distinct command may be clearer than overloading \`queue work\`.
+
+  Either works. (a) is fewer new verbs; (b) is more discoverable.
+
+  ## Acceptance
+
+  - \`aida queue work PR-N\` (or equivalent) accepts a PR number, resolves it to the underlying spec, and drives the remaining orchestrator phases.
+  - Detects current state correctly: if PR is open + CI not yet started → start at phase 2 (end-session/CI). If CI is green → start at phase 3 (reviewer). If reviewer is done + verdict is merge → start at phase 4. Etc.
+  - Refuses cleanly when PR is closed or merged — no zombie launches.
+  - Composes with \`--auto-complete\` and its variants (\`through-ci\`, \`through-merge\`, \`skip-build\`).
+  - Status-aware: if the spec is already Completed (PR merged), refuses with a clear message. If Done (PR open, awaiting merge), proceeds.
+  - Bonus: \`aida queue work\` without args could detect an open PR on the current branch and offer to drive its remaining phases — saves typing the PR number.
+
+  ## Out of scope
+
+  - Phase-resumability across orchestrator restarts (TASK-396 — different problem; this is about engaging a fresh orchestrator on an externally-progressed PR).
+  - Auto-resuming after a partial drain failure (a flavour of TASK-396 too).
+  - The TASK-402 friction cluster (different recovery path — that's about resuming the implementer, this is about advancing past the implementer).
+
+  ## Related
+
+  - TASK-358 / PR-125 — the spec whose recovery surfaced this gap (manual implementation + manual PR, no easy way to re-engage orchestrator for review/merge).
+  - TASK-396 — phase-resumability (different scope but adjacent).
+  - TASK-402 — resume-after-failure UX cluster (different leg of recovery: this is what happens AFTER you've gotten past phase 1).
+  - Memory \`feedback_check_orchestrator_before_manual_steps\` — once this lands, the \"is the orchestrator driving this?\" check has a clean answer for the manual-recovery path.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T15:45:39.551220261Z
+modified_at: 2026-05-20T15:45:39.551220261Z
+req_type: Task
+tags:
+- auto-complete
+- cli-ux
+- from-user-friction
+- orchestrator
+- recovery
