@@ -43,12 +43,12 @@ description: |-
   ## Origin
 
   2026-05-19 — TASK-299 `--auto-complete` drain hit a transient GH-API error during PR lookup, mis-classified as phase-1 failure. The conflation made diagnosis harder than it needed to be.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:28:40.252645413Z
-modified_at: 2026-05-20T14:26:29.543938948Z
+modified_at: 2026-05-20T14:34:13.711639272Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -95,3 +95,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-20T14:24:02.089490344Z
   implemented_by: joe
+  completed_at: 2026-05-20T14:34:13.711639272Z
+  completion_sha: 3820227d2f1f4b410793a2fcd0aa2674151c10c7
