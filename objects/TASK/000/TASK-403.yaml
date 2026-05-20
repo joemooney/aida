@@ -1,0 +1,50 @@
+id: 019e45fe-53b7-7b21-861c-047dd665e22b
+spec_id: TASK-403
+agreed_id: TASK-403
+title: 'Demo: record an overnight autonomy-keystone drain with recovery narrative (asciinema + writeup)'
+description: |-
+  ## Problem
+
+  AIDA's autonomy keystone (STORY-276 + STORY-306 + STORY-332 + STORY-333 + BUG-257 + the calibration ledger STORY-347) is genuinely novel — no other coding-agent project ships the punt → headless advisor → escalation → calibration loop as a coherent architecture. But the keystone lives in the codebase and the user's terminal; it has no demo artifact, no public narrative, no shareable evidence that the system works.
+
+  Per the advocacy directive (\`feedback_advocate_not_be_passive\`), AIDA's adoption risk is **visibility, not capability**. The demo is the Trojan horse's horse.
+
+  ## Why the recovery narrative is stronger than a clean drain
+
+  The 2026-05-20 overnight drain produced exactly the right story: BUG-257 merged cleanly through the keystone; an Anthropic API 529 hit TASK-358 mid-implementation; the orchestrator detected the failure; recovery the next morning was mechanical (\`aida queue work TASK-358 --resume <id> --steal\`); work continued from where the API choked. A clean six-spec overnight drain is a feature demo. **The recovery story is a resilience demo.** \"The system shipped one spec, hit an external API outage, recovered cleanly, shipped the rest\" is what people remember.
+
+  ## Acceptance
+
+  - **Wait for the right base state.** BUG-266 (Anthropic 529 → inconclusive classification) and TASK-401 (pre-exit \`/aida-pr\` enforcement) must land first — they fix the rough edges the demo would otherwise have to explain away.
+  - **Pick a representative spec batch.** 4-6 specs from the queue, mixing simple + complex, ideally including one that would naturally hit a punt-able design fork (to show the advisor escalation tier in action) and ideally one that triggers a transient-error retry (to show the resilience path).
+  - **Record an asciinema** of one full overnight session: queue setup → launch → key phase transitions → at least one punt-and-advise → final merge of all shipped specs the next morning. Edit for length (real time → 5-10 min playback) but preserve the narrative arc.
+  - **Write the narrative** as a companion piece. ~800-1500 words. Frames the keystone as: substrate-driven autonomy with structured escape valves (punt → advisor → human). Highlights the architectural distinctness vs Cursor / Cline / Aider / Devin (none of which have this loop).
+  - **Publish surface**: user decides. Options include the AIDA repo README (linked at top), a public Gist, a blog post on a personal/team site, an Anthropic / Claude Code community thread. The point is *external* visibility — somewhere a non-user can stumble on it.
+  - **Date the prior art.** Whatever surface, the writeup is dated. If the three-trajectory framing (substrate / fork-from-live / persistent entity, calibration as measurement) becomes industry-standard reasoning later, AIDA's prior art is on record.
+
+  ## Out of scope
+
+  - A polished marketing site. Single asciinema + writeup is the smallest-valuable-slice.
+  - Multi-platform demos (CI matrix, IDE plugins, etc.). One Linux drain is the demo; cross-platform comes after a user is hooked.
+  - Engaging Anthropic directly. May be a follow-up, but not coupled to this task.
+
+  ## Related
+
+  - BUG-266 — must land before recording.
+  - TASK-401 — must land before recording.
+  - STORY-276 / STORY-306 / STORY-332 / STORY-333 / BUG-257 / STORY-347 — the keystone arc the demo showcases.
+  - Memory \`feedback_advocate_not_be_passive\` — this task IS the advocacy in operational form.
+  - Memory \`feedback_competitive_analysis_is_living_doc\` — the writeup is a chance to refresh the public-facing comparative positioning.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T15:25:56.023469640Z
+modified_at: 2026-05-20T15:25:56.023469640Z
+req_type: Task
+tags:
+- autonomy-keystone
+- demo
+- marketing
+- visibility
+- wedge
