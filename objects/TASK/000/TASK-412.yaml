@@ -1,0 +1,30 @@
+id: 019e4665-b172-79e1-b96c-559f605b4a26
+spec_id: TASK-412
+agreed_id: TASK-412
+title: simple-mode-empty template ▶ row contradicts Step 5c — recommend Stop here when PR already open
+description: |
+  While applying TASK-390's rubric markers to the five non-orchestrator templates in aida-pickup.md Step 6, the *simple-mode-empty* template kept its original primary row ▶ "Open PR for what shipped" → `/aida-pr`. This row is in tension with Step 5c (TASK-401)'s atomic-shipping-unit gate, which says *"never render this table while the branch is committed-but-unshipped"* — i.e. by the time Step 6 renders, the PR is already open.
+
+  TASK-390's scope is just adding rubric markers (State preamble, `← recommended`, `⊕` row), not restructuring rows, so I kept the ▶ row content and added a parenthetical *"(no-op if Step 5c already opened it)"* to the What cell as a workaround. The Why cell similarly hedges: *"the rare no-op when Step 5c already fired falls straight through."*
+
+  The honest fix: when the queue is empty AND the PR is already open (the common case under Step 5c), the natural primary action is ▶ "Stop here" (release the lease, the PR continues independently) — not "Open PR" on a PR that exists. Maybe the template should grow a state-conditional split:
+  - If `pr_open >= 1`: ▶ "Stop here ← recommended", ⇒ "Switch hats and queue more"
+  - If `commits_ahead == 0` (Step 5c skipped, no-op pickup): ▶ "Stop here ← recommended", ⇒ "Switch hats" (no PR row at all)
+  - If `commits_ahead > 0` AND `pr_open == 0` (Step 5c bypassed somehow — rare): ▶ "Open PR for what shipped ← recommended"
+
+  Same shape question applies to batch mode (one PR at batch end — does Step 5c gate trigger mid-batch?) but the batch template is at least internally consistent about the "no PR yet" assumption. The simple-mode-empty template is the one with the visible contradiction in the State preamble (`PR: #<N> open: <url>`) vs the ▶ row action.
+
+  Raised by the implementer while working TASK-390.
+  Branch: task-390  ·  Commit: pending  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T17:18:50.226672965Z
+modified_at: 2026-05-20T17:18:50.226672965Z
+req_type: Task
+tags:
+- from-implementer:TASK-390
+- kind:design-choice
+- severity:minor
+- template-shape
