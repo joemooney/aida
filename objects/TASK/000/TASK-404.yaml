@@ -1,0 +1,38 @@
+id: 019e4609-c658-7f21-9c4b-ab20afcec1a0
+spec_id: TASK-404
+agreed_id: TASK-404
+title: 'aida findings dismiss: accept --reason flag to record rationale in the audit comment'
+description: |-
+  ## Problem
+
+  \`aida findings dismiss <ID>\` records an audit comment automatically but accepts no rationale flag. Dismissing with explanation today requires two commands: \`aida findings dismiss <ID>\` then a separate \`aida comment add <parent-spec> \"dismissed because...\"\` to capture WHY. Users frequently forget the second step, so dismiss-without-rationale is the default in practice — the audit comment exists but says nothing about reasoning.
+
+  ## Acceptance
+
+  - \`aida findings dismiss <ID> --reason \"<text>\"\` accepts a rationale string.
+  - When \`--reason\` is provided, the auto-generated audit comment includes the rationale verbatim (e.g. *\"Dismissed by joe 2026-05-20: <reason text>\"*) rather than the bare *\"Dismissed\"* marker.
+  - Backward compatible: \`aida findings dismiss <ID>\` without \`--reason\` still works (current behaviour preserved).
+  - Same flag added to \`aida findings promote <ID> --reason \"<text>\"\` if symmetry is desired — the rationale for promoting (\"this is more important than its priority tag suggests\") is also worth capturing.
+  - Update \`aida findings dismiss --help\` and any docs that show the workflow.
+
+  ## Out of scope
+
+  - A multi-line interactive prompt for reason (single-line flag is enough).
+  - Auto-suggesting reason templates by finding-type (cosmetic dismissed-as-stale, design-choice dismissed-as-accepted, etc.).
+
+  ## Related
+
+  - Workflow gap discovered 2026-05-20 during the post-overnight findings-backlog triage of TASK-397 (BUG-254 store-leg propagation design choice). Rationale would have gone unrecorded if it weren't captured separately.
+  - Memory \`feedback_capture_over_concentration\` — the no-permission discipline says capture every observation; the dismiss-with-rationale path should make that one command.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T15:38:26.264283119Z
+modified_at: 2026-05-20T15:38:26.264283119Z
+req_type: Task
+tags:
+- cli-ux
+- findings
+- from-user-friction
+- papercut
