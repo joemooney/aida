@@ -3359,6 +3359,55 @@ pub enum Command {
         pattern: bool,
     },
 
+    /// Generate a curated narrative work digest — Released / Major progress /
+    /// Strategic direction / Next iteration / Process artifacts — for a time
+    /// window. Editorial logic is mechanical: drop typo/chore/style commits,
+    /// collapse cluster-PRs to one theme line, keep rejected specs only when
+    /// they carry a supersedes/pivoted-from link, strip SPEC-IDs in customer
+    /// mode. Default audience is `customer`, default window is
+    /// `.aida/last-digest.toml` marker → 24h.
+    // trace:STORY-252
+    Digest {
+        /// Window start: `Nd`/`Nh`/`Nm` duration, ISO date (`YYYY-MM-DD`), or a
+        /// git tag/ref. Absent: marker's window_end, else last 24h.
+        #[clap(long, value_name = "WINDOW")]
+        since: Option<String>,
+        /// Tailor framing + SPEC-ID visibility for the reader.
+        #[clap(long, value_enum, default_value_t = crate::digest::DigestAudience::Customer)]
+        audience: crate::digest::DigestAudience,
+        /// Output format.
+        #[clap(long, value_enum, default_value_t = crate::digest::DigestFormat::Markdown)]
+        format: crate::digest::DigestFormat,
+        /// Include forward-looking "Next iteration" section. Default on; pass
+        /// `--include-next=false` to suppress.
+        #[clap(
+            long,
+            value_name = "BOOL",
+            num_args = 0..=1,
+            default_missing_value = "true",
+            require_equals = true
+        )]
+        include_next: Option<bool>,
+        /// Include "Process artifacts" memory-pack section. Default: on for
+        /// team/self, off for customer. Pass `--include-process=false` to
+        /// suppress, bare `--include-process` to force on.
+        #[clap(
+            long,
+            value_name = "BOOL",
+            num_args = 0..=1,
+            default_missing_value = "true",
+            require_equals = true
+        )]
+        include_process: Option<bool>,
+        /// Write digest to this file instead of stdout.
+        #[clap(long, value_name = "PATH")]
+        out: Option<PathBuf>,
+        /// Clear the cadence marker and exit without rendering. Use when the
+        /// next digest should not auto-resume from the current window_end.
+        #[clap(long)]
+        reset: bool,
+    },
+
     /// Push code branch AND orphan aida-store branch to origin. Use
     /// --code-only or --store-only to scope. Equivalent to running
     /// `git push` on the current branch followed by `aida db sync
