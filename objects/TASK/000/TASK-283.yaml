@@ -36,12 +36,12 @@ description: |-
 
   - **TASK-257** (CI split) — same script; ship as part of the fixup PR or as follow-up
   - **STORY-254** (review of PR-51) — explicit follow-up to a review note
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:09:53.777068711Z
-modified_at: 2026-05-20T06:43:13.419008650Z
+modified_at: 2026-05-20T06:43:18.101580597Z
 req_type: Task
 tags:
 - comment-accuracy
@@ -54,3 +54,7 @@ relationships:
   target_id: 019e441f-a9c1-74d2-a3eb-1c6f68b133f4
   created_at: 2026-05-20T06:43:13.419003991Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T06:43:18.101580597Z
+  implemented_by: joe
