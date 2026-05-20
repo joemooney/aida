@@ -239,6 +239,111 @@ A finding is always a `task` — the advisor re-types it to `bug` on promote
 if warranted. "Findings" is a query (a `from-review:` / `from-implementer:`
 tag), not a new requirement type.
 
+## `aida-worker` — the autonomous-drain loop (TASK-294)
+
+`--auto-complete` finishes one drain and exits. The `aida-worker` bash
+function (emitted by `aida dev shell-init`) wraps it in a loop so an
+overnight session can chain multiple drains, pause itself when something
+breaks, and stop cleanly on demand — all driven by a single per-project
+control file.
+
+### Quick start
+
+```bash
+aida dev shell-init --install        # one-time: lands the function in your rc
+source ~/.aida/shell-init.sh         # or open a new shell
+
+# Drain whatever the queue head is until it bails.
+aida-worker
+```
+
+### The directive file: `.aida/worker.cmd`
+
+A FIFO — one directive per line — that the worker reads at the top of each
+loop iteration. Blank lines and `#`-comment lines are skipped, so you can
+annotate the plan.
+
+| Directive       | Effect                                                                                                  |
+|-----------------|---------------------------------------------------------------------------------------------------------|
+| _absent file_   | Same as `drain` — pick the queue head and run a full `--auto-complete` lifecycle.                       |
+| `drain`         | Same as the absent-file case (the line persists; bare drain has no args to pop).                        |
+| `drain <args>`  | Run `aida queue work <args> --auto-complete`. **Line is consumed on success** so a FIFO drains itself.  |
+| `pause`         | Log and sleep 30s; line persists. Worker stays paused until you edit the file.                          |
+| `exit`          | Return 0. Worker stops cleanly.                                                                         |
+| _anything else_ | Defensively treated as `pause`.                                                                         |
+
+The directive line *is* the configuration channel: every `aida queue work`
+flag rides on it. `drain batch:autonomy-modes --zen` runs the batch in zen
+mode; `drain --no-human=both` goes fully headless; `drain next3 --zen`
+drains the next three queue items.
+
+### An overnight plan
+
+```bash
+printf 'drain batch:autonomy-modes --zen\ndrain batch:cleanup --no-human=both\nexit\n' \
+    > .aida/worker.cmd
+aida-worker
+```
+
+Three lines, three drains, then stop. Each `drain` line is popped from the
+FIFO when its lifecycle ships green, so the file shrinks as you go. Append
+new lines mid-night (`>>`) and they survive into the next iteration;
+overwriting (`>`) is racey only while a drain is mid-pop.
+
+### Inspecting the directive queue
+
+```bash
+aida worker directives             # human view: counts + verbs + args
+aida worker directives --json      # machine view: [{verb, args, raw}, …]
+```
+
+The same pending-directive summary surfaces in `aida status` and `aida drain
+status` so a glance at either tells you what the worker will do next.
+Silent when the file is empty (quiet projects stay quiet).
+
+### Watchdog — `AIDA_WORKER_SPEC_TIMEOUT`
+
+Each drain is wrapped in `timeout` (default **1800s**; configurable via
+`AIDA_WORKER_SPEC_TIMEOUT`). Exit 124 → log `TIMED OUT` and auto-pause; any
+other non-zero exit → log `halted` and auto-pause. The output substring
+`nothing to drive` is treated specially: the worker sleeps 30s and
+re-checks (the queue may fill from another session) rather than pausing.
+
+A `--auto-complete` drain that blocks on CI for >30 min wants the timeout
+raised — set `AIDA_WORKER_SPEC_TIMEOUT=5400` (90 min) in your shell or
+project-local env file. Watch for `TIMED OUT` in the worker log when
+calibrating; that's the signal you set it too low.
+
+### What the watchdog reaches — and what it doesn't
+
+`timeout --kill-after=5s` is what the worker uses. It puts the drain in a
+new process group and signals the whole group on expiry, then SIGKILLs 5s
+later if the SIGTERM was ignored. Verified to reach exec-chained children,
+backgrounded children, and intermediate scripts. **It does not reach
+descendants that `setsid()` out of the process group** — those orphans
+survive the watchdog. If you see leaked processes after a `TIMED OUT`
+event, that's the case; the heartbeat followup (`.aida/worker.heartbeat`)
+addresses it.
+
+### Stopping the worker
+
+Three escalating choices:
+
+1. Cleanest: append `exit` to `.aida/worker.cmd`. The worker finishes the
+   in-flight drain (if any), reads `exit` next iteration, returns 0.
+2. Quicker: append `pause`. The worker finishes the in-flight drain and
+   then sits in the pause loop; Ctrl+C the parent shell when convenient.
+3. Hard stop: Ctrl+C the worker. Kills the in-flight `aida queue work`
+   with it; the directive file is left intact, so re-running `aida-worker`
+   picks up where you stopped.
+
+### Where the file lives, and the gitignore convention
+
+`.aida/worker.cmd` lives next to `.aida/drain-state.json` (STORY-301) and
+all other per-clone runtime state. The deny-by-default `.aida/*` rule
+already gitignores it — no `.gitignore` change is needed when you create
+the file.
+
 ## Limits of this cut
 
 - There is no liveness watchdog yet: a genuinely stuck headless run is not
