@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:27:58.404097978Z
-modified_at: 2026-05-20T03:49:39.420865693Z
+modified_at: 2026-05-20T03:50:02.211267621Z
 req_type: Story
 tags:
 - blocked-by
@@ -109,6 +109,13 @@ comments:
   content: Commit 436220f5 references this requirement
   created_at: 2026-05-20T03:48:48.970590067Z
   modified_at: 2026-05-20T03:48:48.970590067Z
+- id: 019e4381-372c-76e0-836c-268e1e305b72
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-19-story-333-blocked-by-human-only.md
+    filed 5 task(s): TASK-365, TASK-366, TASK-367, TASK-368, TASK-369
+  created_at: 2026-05-20T03:50:02.284104813Z
+  modified_at: 2026-05-20T03:50:02.284104813Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T03:49:39.420865693Z
