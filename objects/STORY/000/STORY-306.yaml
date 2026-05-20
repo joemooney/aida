@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:38:45.451756021Z
-modified_at: 2026-05-20T02:05:55.672257539Z
+modified_at: 2026-05-20T02:05:57.317291945Z
 req_type: Story
 tags:
 - advisor-tier
@@ -140,6 +140,20 @@ comments:
   content: 'Plan written 2026-05-19: docs/plans/2026-05-19-story-306-advisor-escalation-tier.md. Five-slice build order; Slice 1 (reviewer escalation handshake, BUG-241 items 4-5) is independently shippable since it needs only the reviewer phase, not STORY-276. Slices 3-5 (the advisor tier proper) are gated on STORY-276 merging first. Folds in the design-expansion comments: orchestrator assembles the rich ultraplan-grade payload (implementer just punts well), v1 fresh-advisor + rich payload is the build target, punt-ledger records emitted from day one (PuntRecord extended with classification/escalation_reason/answer fields), A/B/C calibration enforced structurally in the /aida-advise skill prompt, --escalate-blocks default vs --escalate-defaults.'
   created_at: 2026-05-19T17:26:22.842785368Z
   modified_at: 2026-05-19T17:26:22.842785368Z
+- id: 019e4321-ee63-7022-926e-b2ca87cab55e
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-19-story-306-advisor-escalation-tier.md
+    filed 0 task(s)
+    declined 6:
+      - STORY-325 — the punt-ledger analysis layer: classification patterns →
+      - v2 persistent advisor — a session alive across the drain, accumulating
+      - `--max-budget-usd` / `--model` cost knobs for the advisor + resume spawns
+      - Automate the corpus-growth loop: on a human triage-resolving a `needs-human`
+      - Robust worktree cleanup for an escalate-blocks spec whose phase-1 lease is
+      - `aida drain status` live "advisor triage" sub-state while `run_advisor` runs
+  created_at: 2026-05-20T02:05:57.731418034Z
+  modified_at: 2026-05-20T02:05:57.731418034Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T02:05:55.672257539Z
