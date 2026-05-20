@@ -1,0 +1,29 @@
+id: 019e46b1-7fdf-7980-8eae-171c3f229013
+spec_id: TASK-420
+agreed_id: TASK-420
+title: findings dismiss/promote --help embeds example SPEC-IDs (BUG-254, PR-219) per TASK-268 convention
+description: |-
+  The `///` doc comments on the new `reason` clap fields in `aida-cli/src/cli.rs` use example rationale strings that mention SPEC-IDs:
+
+  - `findings dismiss --help`: *"Dismissed by joe 2026-05-20: duplicates BUG-254"*
+  - `findings promote --help`: *"more important than its priority suggests", "blocks PR-219"*
+
+  Because `///` doc comments on clap fields render as `--help` output, this leaks SPEC-IDs into user-facing text — exactly the `--help` surface CLAUDE.md TASK-268 / docs/user-facing-text-conventions.md asks to keep SPEC-ID-free. The `// trace:TASK-404` marker itself is correctly kept as a plain `//` comment.
+
+  Easy fix: reword the examples to be SPEC-ID-free:
+  - *"duplicates an earlier filing"* (instead of *"duplicates BUG-254"*)
+  - *"blocks another open PR"* (instead of *"blocks PR-219"*)
+
+  Non-blocking cosmetic — raised in review of PR-133, did not gate the merge. Surface for advisor triage.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T18:41:38.271073741Z
+modified_at: 2026-05-20T18:41:38.271073741Z
+req_type: Task
+tags:
+- cli-ux
+- from-review:PR-133
+- papercut
+- severity:cosmetic
