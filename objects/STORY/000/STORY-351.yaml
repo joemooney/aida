@@ -1,0 +1,26 @@
+id: 019e4640-ef71-7b80-ac6c-5893ce7447fd
+spec_id: STORY-351
+agreed_id: STORY-351
+title: 'Review PR-127: [AI:claude] feat(skills): aida-pickup pre-exit gate enforces push + PR before exit (TASK-401)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4635`) for branch `task-401`.
+
+  - PR: <https://github.com/joemooney/aida/pull/127>
+  - Branch: `task-401` → `main`
+
+  ## Covers
+
+  - TASK-401
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 127` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T16:38:41.265323418Z
+modified_at: 2026-05-20T16:38:41.265323418Z
+req_type: Story
