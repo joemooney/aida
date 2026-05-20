@@ -2877,6 +2877,25 @@ pub enum ZenCommand {
     },
 }
 
+/// Worker-directive introspection (TASK-294). The `aida-worker` shell function
+/// reads pending directives from `.aida/worker.cmd` (a FIFO — one directive
+/// per line); this subcommand lists them so a user can see "what will the
+/// worker do next?" without `cat`ing a runtime file. Pairs with the
+/// `aida-worker` function emitted by `aida dev shell-init`.
+// trace:TASK-294 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum WorkerCommand {
+    /// List pending directives from `.aida/worker.cmd` in FIFO order — the
+    /// next directive the `aida-worker` shell function will act on is at the
+    /// top. Prints `No pending directives.` (exit 0) when the file is empty
+    /// or absent.
+    Directives {
+        /// Emit the directive list as JSON instead of the human summary.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 /// Drain-state introspection (STORY-301). An `aida queue work --auto-complete`
 /// orchestrator writes `.aida/drain-state.json` while a drain is live; this
 /// subcommand reads it so a user inside the orchestrator-spawned session can
@@ -3527,6 +3546,13 @@ pub enum Command {
     // trace:STORY-301 | ai:claude
     #[clap(subcommand)]
     Drain(DrainCommand),
+
+    /// Inspect the `aida-worker` shell function's directive channel —
+    /// `aida worker directives` lists the FIFO of pending directives the
+    /// worker will act on next.
+    // trace:TASK-294 | ai:claude
+    #[clap(subcommand)]
+    Worker(WorkerCommand),
 
     /// One-line project + role summary suitable for shell prompts and
     /// the `statusLine.command` setting in ~/.claude/settings.json.
