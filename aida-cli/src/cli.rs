@@ -2925,6 +2925,61 @@ pub enum WorkerCommand {
     },
 }
 
+/// Headless-log introspection (TASK-398). A `--no-human` drain writes one
+/// JSONL file per child session under `.aida/headless-logs/`; this subcommand
+/// wraps the right block-type filtering so the user gets a clean text stream
+/// instead of the pages of `null` a naive `jq` filter produces. trace:TASK-398
+#[derive(Subcommand, Debug)]
+pub enum HeadlessCommand {
+    /// Stream a headless-drain JSONL log as clean text — one block of
+    /// assistant prose per message, blank line between messages. No daemon,
+    /// no parsing into cache.db. With no argument, picks the most-recently-
+    /// modified log under `.aida/headless-logs/`; pass a SPEC-ID (`TASK-398`)
+    /// to pick the newest log for that spec, or a lease/session id prefix
+    /// (`019e4400`) to disambiguate between concurrent drains.
+    Tail {
+        /// SPEC-ID (e.g. `TASK-398`) or lease/session id prefix. Optional —
+        /// when omitted, the most-recently-modified log is followed.
+        target: Option<String>,
+
+        /// List every log file under `.aida/headless-logs/` (kind, spec,
+        /// mtime, size, filename) and exit. Useful for picking a lease id
+        /// when multiple drains have touched the same spec.
+        #[clap(long, conflicts_with_all = ["target", "with_tools", "tools_only", "include_user", "no_follow", "since"])]
+        list: bool,
+
+        /// Interleave tool invocations as `[ToolName] <preview>` lines,
+        /// alongside the assistant text. Off by default — most users only
+        /// want the narration.
+        #[clap(long)]
+        with_tools: bool,
+
+        /// Print only tool invocations, no assistant text. Useful for
+        /// watching what commands the implementer is running.
+        #[clap(long, conflicts_with = "list")]
+        tools_only: bool,
+
+        /// Also surface `type=="user"` messages (tool_result payloads). Off
+        /// by default — headless mode rarely has interactive user content,
+        /// and tool_results add a lot of noise.
+        #[clap(long)]
+        include_user: bool,
+
+        /// Print existing content and exit instead of staying attached with
+        /// `tail -f`-style polling. Useful for piping into a pager.
+        #[clap(long, short = 'n')]
+        no_follow: bool,
+
+        /// Skip entries older than the given duration (e.g. `10m`, `2h`,
+        /// `1d`). Bare integers are interpreted as seconds. Compared
+        /// against `timestamp` fields when the event carries one; events
+        /// without a timestamp (assistant messages, system events) pass
+        /// through unfiltered.
+        #[clap(long, value_name = "DURATION")]
+        since: Option<String>,
+    },
+}
+
 /// Drain-state introspection (STORY-301). An `aida queue work --auto-complete`
 /// orchestrator writes `.aida/drain-state.json` while a drain is live; this
 /// subcommand reads it so a user inside the orchestrator-spawned session can
@@ -3654,6 +3709,14 @@ pub enum Command {
     // trace:STORY-301 | ai:claude
     #[clap(subcommand)]
     Drain(DrainCommand),
+
+    /// Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the
+    /// non-obvious jq filter (assistant content blocks, text-only by default,
+    /// `--with-tools` to interleave tool calls) so the user gets clean text
+    /// instead of pages of `null`.
+    // trace:TASK-398 | ai:claude
+    #[clap(subcommand)]
+    Headless(HeadlessCommand),
 
     /// Inspect the `aida-worker` shell function's directive channel —
     /// `aida worker directives` lists the FIFO of pending directives the
