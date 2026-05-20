@@ -849,11 +849,20 @@ pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String
 /// [`spawn_claude_headless`] for the orchestrator's advisor-resume leg — the
 /// parent stays alive to classify the resumed implementer's outcome. Claude's
 /// stream-json stdout is redirected to `log_path`; `AIDA_HEADLESS=1` is set so
-/// the resumed skill knows it is unattended. trace:STORY-306 | ai:claude
+/// the resumed skill knows it is unattended.
+///
+/// `cwd` must be the working directory the original session was created in
+/// (typically the implementer's worktree). Claude Code persists each session
+/// at `~/.claude/projects/<cwd-slug>/<session-id>.jsonl` — the slug is
+/// derived from cwd, so a resume from a different directory looks in the
+/// wrong slug folder and fails with "No conversation found." The original
+/// SPIKE-7 verification of this code missed this because the unit test
+/// exercises only the argv. trace:STORY-306 | ai:claude
 pub fn spawn_claude_headless_resume(
     prompt: &str,
     session_id: &str,
     log_path: &Path,
+    cwd: &Path,
 ) -> Result<std::process::ExitStatus> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -863,6 +872,7 @@ pub fn spawn_claude_headless_resume(
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     Command::new("claude")
+        .current_dir(cwd)
         .args(claude_headless_resume_args(prompt, session_id))
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))

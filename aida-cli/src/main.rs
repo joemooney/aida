@@ -49794,6 +49794,13 @@ struct RealPhaseDriver {
     /// implementer re-enters its own conversation with the working model it
     /// had built. `None` until `run_implementer` mints it.
     implementer_session: Option<String>,
+    /// STORY-306: the worktree the phase-1 implementer ran in. Required by
+    /// `resume_implementer`: `claude --resume` finds the persisted session
+    /// only when its cwd matches the cwd the session was created with (Claude
+    /// derives the project slug under `~/.claude/projects/<slug>/` from cwd),
+    /// so the resume must `current_dir(<this worktree>)`. `None` until
+    /// `run_implementer` locates the lease.
+    implementer_worktree: Option<std::path::PathBuf>,
 }
 
 impl RealPhaseDriver {
@@ -49819,6 +49826,7 @@ impl RealPhaseDriver {
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),
             run_token,
             implementer_session: None,
+            implementer_worktree: None,
         }
     }
 
@@ -49990,6 +49998,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let (lease_id, recorded_branch, worktree_path) =
             self.discover_orchestrated_lease(&session_uuid)?;
         self.implementer_lease = Some(lease_id.clone());
+        // STORY-306: remember the worktree — `resume_implementer` must run
+        // `claude --resume` with this exact cwd so Claude's project-slug
+        // derivation finds the persisted session.
+        self.implementer_worktree = Some(worktree_path.clone());
 
         // STORY-276: did the implementer punt? `aida punt` dropped the signal
         // file and the spec is now parked in NeedsAttention — there is no PR
@@ -50653,6 +50665,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "advisor tier: no implementer session id to resume",
             )
         })?;
+        let worktree = self.implementer_worktree.clone().ok_or_else(|| {
+            PhaseFailure::of(
+                FailureKind::Internal,
+                "advisor tier: no implementer worktree recorded for the resume",
+            )
+        })?;
 
         let prompt = format!(
             "You punted spec {spec} on a design-fork. A headless advisor has now \
@@ -50680,13 +50698,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "◆".cyan()
             );
         }
-        let status = session::spawn_claude_headless_resume(&prompt, &session_id, &log_path)
-            .map_err(|e| {
-                PhaseFailure::of(
-                    FailureKind::Spawn,
-                    format!("advisor tier: could not resume the implementer session: {e}"),
-                )
-            })?;
+        let status =
+            session::spawn_claude_headless_resume(&prompt, &session_id, &log_path, &worktree)
+                .map_err(|e| {
+                    PhaseFailure::of(
+                        FailureKind::Spawn,
+                        format!("advisor tier: could not resume the implementer session: {e}"),
+                    )
+                })?;
         if !status.success() {
             return Err(PhaseFailure::new(format!(
                 "the resumed implementer session exited {} — see {}",
