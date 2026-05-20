@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:27:58.404097978Z
-modified_at: 2026-05-20T03:11:36.020967593Z
+modified_at: 2026-05-20T03:48:48.970590067Z
 req_type: Story
 tags:
 - blocked-by
@@ -88,3 +88,8 @@ comments:
     Build-order: types → helper → CLI wiring → render polish → live-example wire-up. ~600 prod LOC / 1 PR / risk medium.
   created_at: 2026-05-20T03:11:36.020967593Z
   modified_at: 2026-05-20T03:11:36.020967593Z
+- id: 019e4380-18ca-7432-a9ea-4dcc4b6e1b65
+  author: joe
+  content: Commit 436220f5 references this requirement
+  created_at: 2026-05-20T03:48:48.970590067Z
+  modified_at: 2026-05-20T03:48:48.970590067Z
