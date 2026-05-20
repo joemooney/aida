@@ -1,0 +1,26 @@
+id: 019e464a-0aa1-77b0-b924-56a75f9f787b
+spec_id: STORY-352
+agreed_id: STORY-352
+title: 'Review PR-128: docs: align "→ Next:" capitalization across rubric prose (TASK-392)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e4647`) for branch `task-392`.
+
+  - PR: <https://github.com/joemooney/aida/pull/128>
+  - Branch: `task-392` → `main`
+
+  ## Covers
+
+  - TASK-392
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 128` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T16:48:38.049523979Z
+modified_at: 2026-05-20T16:48:38.049523979Z
+req_type: Story
