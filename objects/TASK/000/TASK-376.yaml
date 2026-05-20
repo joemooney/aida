@@ -1,0 +1,12 @@
+id: 019e43b0-9810-7f93-86de-61e0d0ee17ec
+spec_id: TASK-376
+agreed_id: TASK-376
+title: '`/aida-daily-digest` cron sibling skill that runs `aida digest` on a cadence'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T04:41:47.280202172Z
+modified_at: 2026-05-20T04:41:47.280202172Z
+req_type: Task
