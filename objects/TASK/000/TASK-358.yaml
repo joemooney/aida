@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T02:21:15.784867728Z
-modified_at: 2026-05-20T15:51:50.260197084Z
+modified_at: 2026-05-20T15:52:06.497108995Z
 req_type: Task
 tags:
 - autonomous-drain
@@ -43,6 +43,14 @@ relationships:
 - rel_type: Parent
   target_id: 019e4616-32e1-7e40-b427-46313d670c5d
   created_at: 2026-05-20T15:52:04.592297705Z
+comments:
+- id: 019e4616-4c18-7253-a7bf-d632b8760607
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-20-task-358-escalation-cleanup.md
+    filed 2 task(s): TASK-407, TASK-408
+  created_at: 2026-05-20T15:52:06.936808955Z
+  modified_at: 2026-05-20T15:52:06.936808955Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-20T15:51:50.260197084Z
