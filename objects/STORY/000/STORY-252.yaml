@@ -155,7 +155,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:10:49.715594843Z
-modified_at: 2026-05-20T04:42:29.035194114Z
+modified_at: 2026-05-20T04:43:24.852916235Z
 req_type: Story
 tags:
 - advisor
@@ -233,6 +233,20 @@ comments:
     filed 7 task(s): TASK-376, TASK-377, TASK-378, TASK-379, TASK-380, TASK-381, TASK-382
   created_at: 2026-05-20T04:42:29.466036256Z
   modified_at: 2026-05-20T04:42:29.466036256Z
+- id: 019e43b2-1534-73a0-8156-fb450cd3d72c
+  author: joe
+  content: |-
+    Implemented via commit 44b13f98 (PR pending).
+
+    - New `aida-cli/src/digest.rs` module: 7 sections (Released, Major progress, Strategic direction, Next iteration, Notable plans, Process artifacts), 4 formats (markdown/plain/json/brief), 3 audiences (customer/team/self), cadence marker at `.aida/last-digest.toml`.
+    - Editorial logic is mechanical (`is_noise_commit`, `collapse_cluster_prs`, `strip_spec_ids`, supersedes-link extraction) — no AI tone-rewrite (explicitly OUT per STORY-252).
+    - Skill at `aida-core/templates/skills/aida-digest.md` + slash command + scaffolding wiring (33 skills scaffolded now).
+
+    Test status: 11/11 digest unit tests green; full workspace cargo test --workspace passes (1062 tests). Plan verify clean.
+
+    Follow-up: 7 plan-derived TASKs filed at `aida queue done` time (TASK-376..382).
+  created_at: 2026-05-20T04:43:24.852916235Z
+  modified_at: 2026-05-20T04:43:24.852916235Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T04:40:50.731949710Z
