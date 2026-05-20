@@ -29,12 +29,12 @@ description: |-
   ## Origin
 
   2026-05-19 tag-curation friction while dropping one tag from a 7-tag spec.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:46:27.066347440Z
-modified_at: 2026-05-20T07:36:14.308253382Z
+modified_at: 2026-05-20T07:37:05.170790241Z
 req_type: Task
 tags:
 - cli-ux
@@ -42,3 +42,7 @@ tags:
 - from-user-request
 - papercut
 - tags
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T07:37:05.170790241Z
+  implemented_by: joe
