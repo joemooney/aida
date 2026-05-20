@@ -1,0 +1,32 @@
+id: 019e446f-30bb-7903-9dde-8118afccbfb4
+spec_id: TASK-392
+agreed_id: TASK-392
+title: Align "→ next:" / "→ Next:" capitalization between finish-state rubric and skill templates
+description: |-
+  TASK-359 added the finish-state communication rubric in `aida-core/templates/docs/aida-discipline/session-discipline.md` and its first applications in `aida-pickup.md` (Step 6) and `aida-pr.md` (orchestrator-mode closing block).
+
+  The rubric writes the closing-summary lead-in as **`"→ next: <action>"`** (lowercase 'n'):
+
+  > For conclusions: an explicit *"→ next: <action>"* line that names the user-action.
+
+  But both implemented closing-block templates write it as **`"→ Next:"`** (capital N):
+
+  - `aida-core/templates/skills/aida-pr.md` interactive variant: `→ Next: press Ctrl+D to exit...`
+  - `aida-core/templates/skills/aida-pr.md` auto-exit variant: `→ Next: session will auto-exit via $AIDA_EXIT_SENTINEL...`
+
+  Pure cosmetics — a human reading either understands both. But if a future rubric-compliance grep checks templates against the canonical rubric string, the two will not match.
+
+  Fix: pick one (capitalized 'Next:' reads more like a heading marker — preferred) and align the rubric prose. Two-character edit in `session-discipline.md`; no behavioural change.
+
+  Raised in review of PR-121: https://github.com/joemooney/aida/pull/121#issuecomment-4496061354
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T08:09:58.203850724Z
+modified_at: 2026-05-20T08:09:58.203850724Z
+req_type: Task
+tags:
+- from-review:PR-121
+- kind:rubric-drift
+- severity:cosmetic
