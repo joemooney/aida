@@ -13,12 +13,12 @@ description: |
 
   Raised by the implementer while working TASK-359.
   Branch: task-359  ·  Commit: 9c9cfc6ca715f71fc5b7f348e815e86887f33754  (PR link added on merge)
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:00:21.418436461Z
-modified_at: 2026-05-20T08:00:21.418436461Z
+modified_at: 2026-05-20T15:37:43.221840205Z
 req_type: Task
 tags:
 - from-implementer:TASK-359
