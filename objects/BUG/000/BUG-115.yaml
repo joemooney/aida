@@ -32,12 +32,12 @@ description: |-
   ## Origin
 
   Dialog session 2026-05-15 to 2026-05-16: warnings fired ~5 times during the session for blocks that had higher-numbered blocks available with 100 IDs each. Cosmetic but noise. Captured during \`/aida-capture\` sweep.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:13:21.970743293Z
-modified_at: 2026-05-20T07:17:17.862868726Z
+modified_at: 2026-05-20T07:17:29.864636810Z
 req_type: Bug
 tags:
 - block-status
@@ -52,3 +52,7 @@ comments:
   content: Commit 06933819 references this requirement
   created_at: 2026-05-20T07:17:17.862868726Z
   modified_at: 2026-05-20T07:17:17.862868726Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T07:17:29.864636810Z
+  implemented_by: joe
