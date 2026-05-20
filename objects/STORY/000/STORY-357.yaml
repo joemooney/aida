@@ -1,0 +1,26 @@
+id: 019e46ab-e309-7c50-bab8-653dfa16d272
+spec_id: STORY-357
+agreed_id: STORY-357
+title: 'Review PR-133: feat(cli): aida findings dismiss/promote accept --reason flag (TASK-404)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e46a2`) for branch `task-404`.
+
+  - PR: <https://github.com/joemooney/aida/pull/133>
+  - Branch: `task-404` → `main`
+
+  ## Covers
+
+  - TASK-404
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 133` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T18:35:30.441253616Z
+modified_at: 2026-05-20T18:35:30.441253616Z
+req_type: Story
