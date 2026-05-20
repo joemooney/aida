@@ -377,6 +377,15 @@ pub enum RelationshipType {
     VerifiedBy,
     /// General reference relationship
     References,
+    /// This requirement is blocked by the target — a hard dependency.
+    /// The blocked spec is un-pickable until the blocker reaches
+    /// `Completed`; if the blocker is `Rejected`, the block is permanent
+    /// and needs re-scoping. Consumed by `pickability` for the pre-pickup
+    /// gate. trace:STORY-333 | ai:claude
+    BlockedBy,
+    /// This requirement blocks the target (inverse of `BlockedBy`).
+    /// trace:STORY-333 | ai:claude
+    Blocks,
     /// Custom relationship type with user-defined name
     Custom(String),
 }
@@ -390,6 +399,8 @@ impl fmt::Display for RelationshipType {
             RelationshipType::Verifies => write!(f, "verifies"),
             RelationshipType::VerifiedBy => write!(f, "verified-by"),
             RelationshipType::References => write!(f, "references"),
+            RelationshipType::BlockedBy => write!(f, "blocked-by"),
+            RelationshipType::Blocks => write!(f, "blocks"),
             RelationshipType::Custom(name) => write!(f, "{}", name),
         }
     }
@@ -405,6 +416,8 @@ impl RelationshipType {
             "verifies" => RelationshipType::Verifies,
             "verified-by" | "verified_by" | "verifiedby" => RelationshipType::VerifiedBy,
             "references" => RelationshipType::References,
+            "blocked-by" | "blocked_by" | "blockedby" => RelationshipType::BlockedBy,
+            "blocks" => RelationshipType::Blocks,
             _ => RelationshipType::Custom(s.to_string()),
         }
     }
@@ -417,6 +430,8 @@ impl RelationshipType {
             RelationshipType::Verifies => Some(RelationshipType::VerifiedBy),
             RelationshipType::VerifiedBy => Some(RelationshipType::Verifies),
             RelationshipType::Duplicate => Some(RelationshipType::Duplicate),
+            RelationshipType::BlockedBy => Some(RelationshipType::Blocks),
+            RelationshipType::Blocks => Some(RelationshipType::BlockedBy),
             RelationshipType::References => None,
             RelationshipType::Custom(_) => None,
         }
@@ -431,6 +446,8 @@ impl RelationshipType {
             RelationshipType::Verifies => "verifies".to_string(),
             RelationshipType::VerifiedBy => "verified_by".to_string(),
             RelationshipType::References => "references".to_string(),
+            RelationshipType::BlockedBy => "blocked_by".to_string(),
+            RelationshipType::Blocks => "blocks".to_string(),
             RelationshipType::Custom(name) => name.clone(),
         }
     }
@@ -3262,6 +3279,16 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attention_reason: Option<AttentionReason>,
 
+    /// Marks this spec as work no agent can do — a person-in-the-room task,
+    /// a sign-off, a physical activity. The pre-pickup gate
+    /// (`crate::pickability`) skips any spec with this flag set so the
+    /// orchestrator/queue never spawn a doomed phase-1 implementer on it.
+    /// Distinct from `BlockedBy` (which clears when the blocker ships):
+    /// `human_only` is a permanent property of the spec, cleared only by
+    /// the human explicitly flipping it off. trace:STORY-333 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub human_only: bool,
+
     /// Version number for optimistic locking (SQLite only)
     /// Incremented on each update, used to detect concurrent modifications
     #[serde(skip)]
@@ -3304,6 +3331,8 @@ impl Requirement {
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
             attention_reason: None,
+            // trace:STORY-333 | ai:claude
+            human_only: false,
             urls: Vec::new(),
             attachments: Vec::new(),
             trace_links: Vec::new(),
@@ -6070,6 +6099,67 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// STORY-333: typed `BlockedBy` round-trips cleanly through the canonical
+    /// string form. A regression here would silently downgrade typed edges
+    /// to `Custom("blocked-by")` and break the pickability gate.
+    /// trace:STORY-333 | ai:claude
+    #[test]
+    fn relationship_type_blocked_by_round_trips_through_string() {
+        let parsed = RelationshipType::from_str("blocked-by");
+        assert_eq!(parsed, RelationshipType::BlockedBy);
+        assert_eq!(parsed.to_string(), "blocked-by");
+        // Aliases all land on the typed variant.
+        assert_eq!(
+            RelationshipType::from_str("blocked_by"),
+            RelationshipType::BlockedBy
+        );
+        assert_eq!(
+            RelationshipType::from_str("blockedby"),
+            RelationshipType::BlockedBy
+        );
+        assert_eq!(
+            RelationshipType::from_str("BLOCKED-BY"),
+            RelationshipType::BlockedBy
+        );
+    }
+
+    /// STORY-333: `BlockedBy` has a known inverse `Blocks` so bidirectional
+    /// rels stay consistent and the doctor check can walk either direction.
+    /// trace:STORY-333 | ai:claude
+    #[test]
+    fn relationship_type_blocked_by_inverse_is_blocks_and_back() {
+        assert_eq!(
+            RelationshipType::BlockedBy.inverse(),
+            Some(RelationshipType::Blocks)
+        );
+        assert_eq!(
+            RelationshipType::Blocks.inverse(),
+            Some(RelationshipType::BlockedBy)
+        );
+    }
+
+    /// STORY-333: `human_only` defaults to `false` on a fresh Requirement and
+    /// serializes absent (skip_serializing_if), so existing specs round-trip
+    /// unchanged through yaml.
+    /// trace:STORY-333 | ai:claude
+    #[test]
+    fn requirement_default_human_only_is_false_and_serializes_absent() {
+        let r = Requirement::new("t".into(), "d".into());
+        assert!(!r.human_only);
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        assert!(
+            !yaml.contains("human_only"),
+            "default human_only=false must not appear in yaml; got:\n{}",
+            yaml
+        );
+
+        // When set, it must appear.
+        let mut r2 = r.clone();
+        r2.human_only = true;
+        let yaml2 = serde_yaml::to_string(&r2).unwrap();
+        assert!(yaml2.contains("human_only: true"));
+    }
 
     /// `RequirementType::Doc` is the EPIC-24 living-documentation type. Lock
     /// in its prefix + display string so a careless rename doesn't silently
