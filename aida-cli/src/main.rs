@@ -13998,7 +13998,9 @@ fn maybe_hint_after_queue_drain(storage: &Storage, user_id: &str) {
         (Some(b), Some(n)) if n > 0 => match detect_open_pr_for_branch(&project_root, b) {
             PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
             PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
-            PrLookup::GhMissing | PrLookup::GhFailed(_) => workflow_hints::PrState::Unknown,
+            PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_) => {
+                workflow_hints::PrState::Unknown
+            }
         },
         _ => workflow_hints::PrState::Unknown,
     };
@@ -15405,17 +15407,29 @@ struct OpenPrInfo {
 /// user reading `aida session end` output) can tell "no PR yet" from "gh
 /// isn't installed" from "gh blew up". The old None-everything return type
 /// hid the difference and made BUG-72 hard to diagnose.
-/// trace:BUG-72 | ai:claude
+///
+/// BUG-257 split `GhFailed` further: a *transient* `GhUnreachable` (the GH
+/// API was unreachable) is distinct from a `GhFailed` (auth, parse, gh
+/// itself errored). The orchestrator's phase-1 reports the first as
+/// *Inconclusive* (drain pauses, retry later) and the second as a phase
+/// failure — same as before. Conflating the two made every network blip
+/// look like a "no PR" failure with a misleading recovery hint.
+/// trace:BUG-72 BUG-257 | ai:claude
 enum PrLookup {
     Found(OpenPrInfo),
     /// `gh` ran cleanly but reported no open PR for this branch.
     NoOpenPr,
     /// `gh` is not on $PATH (binary missing).
     GhMissing,
-    /// `gh` was found but its invocation failed (auth, network, parse).
+    /// `gh` was found but its invocation failed (auth, parse, ...). The
     /// String carries the trimmed stderr / parse error so the user sees
     /// the actual cause instead of a silent no-op.
     GhFailed(String),
+    /// `gh` ran but could not reach the GitHub API — a *transient* network
+    /// error (DNS, TCP, TLS, githubstatus pointer). The orchestrator treats
+    /// this as Inconclusive (the API outage means we cannot tell whether a
+    /// PR exists), not as a phase failure. trace:BUG-257 | ai:claude
+    GhUnreachable(String),
 }
 
 /// Look up a single open PR for `branch` via `gh`. Never panics; never
@@ -15652,6 +15666,13 @@ fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if gh_stderr_is_network_error(&stderr) {
+            return PrLookup::GhUnreachable(if stderr.is_empty() {
+                format!("gh exited {}", out.status)
+            } else {
+                stderr
+            });
+        }
         return PrLookup::GhFailed(if stderr.is_empty() {
             format!("gh exited {}", out.status)
         } else {
@@ -15661,12 +15682,110 @@ fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup
     parse_gh_pr_line(&String::from_utf8_lossy(&out.stdout))
 }
 
+/// Classify a `gh` stderr line as a transient network error (the GH API
+/// was unreachable) rather than an auth/parse/other failure. Used by
+/// [`gh_pr_list_first`] to split `PrLookup::GhFailed` into the
+/// `GhUnreachable` variant so the orchestrator can report *Inconclusive*
+/// instead of conflating "no PR" with "can't reach the API".
+///
+/// Patterns are taken from real-world `gh` output (the Go HTTP client +
+/// gh's own diagnostic suffixes). The match is conservative —
+/// case-insensitive substring matching against a small allow-list — so an
+/// auth/parse failure never gets re-classified as a transient network
+/// blip. trace:BUG-257 | ai:claude
+fn gh_stderr_is_network_error(stderr: &str) -> bool {
+    let s = stderr.to_ascii_lowercase();
+    // The most stable signal: gh's own diagnostic suffix that fires for
+    // every dial/TLS error against api.github.com.
+    if s.contains("githubstatus.com") {
+        return true;
+    }
+    // Connectivity error families from the Go `net` and `crypto/tls`
+    // packages that gh wraps without rephrasing.
+    const NETWORK_MARKERS: &[&str] = &[
+        "error connecting to api.github.com",
+        "connecting to api.github.com",
+        "no such host",
+        "could not resolve host",
+        "name resolution",
+        "name or service not known",
+        "temporary failure in name resolution",
+        "network is unreachable",
+        "no route to host",
+        "connection refused",
+        "connection reset",
+        "connection timed out",
+        "i/o timeout",
+        "request canceled",
+        "tls handshake timeout",
+        "tls: handshake failure",
+        "dial tcp",
+    ];
+    NETWORK_MARKERS.iter().any(|m| s.contains(m))
+}
+
 /// Look up a single open PR keyed on `branch`. The richer [`PrLookup`]
 /// return shape lets callers print an honest skip reason (no PR yet / gh
 /// missing / gh failed) instead of collapsing every case to `None`.
 /// trace:STORY-66 BUG-72 BUG-74 | ai:claude
 fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
     gh_pr_list_first(project_root, &["--head", branch, "--state", "open"])
+}
+
+/// BUG-257: the three states `probe_branch_on_origin` can settle on when the
+/// orchestrator narrows a `PrLookup::GhUnreachable` with `git ls-remote`. The
+/// existing `aida_core::git_ops::remote_branch_exists` collapses `Absent` and
+/// `LsRemoteFailed` into one `false` — exactly the conflation BUG-257 must
+/// avoid here, so we keep this enum and the probe local to the orchestrator
+/// caller. trace:BUG-257 | ai:claude
+enum BranchOriginProbe {
+    /// `git ls-remote` reported the branch is on origin — a PR may exist.
+    Present,
+    /// `git ls-remote` ran cleanly and reported the branch is absent — no
+    /// PR can exist regardless of GH-API state.
+    Absent,
+    /// `git ls-remote` itself failed (network down end-to-end, auth, ...).
+    /// Cannot narrow the diagnosis at all.
+    LsRemoteFailed,
+}
+
+/// BUG-257: narrow a `PrLookup::GhUnreachable` outcome with `git ls-remote`
+/// against `origin`. The git protocol is HTTPS-API-independent, so when the
+/// GH API is down `ls-remote` often still works — and a missing branch
+/// proves no PR can exist (the implementer never pushed). When the branch
+/// IS present we still cannot tell whether a PR was opened against it
+/// without the API; that case becomes Inconclusive. When `ls-remote` also
+/// fails, the orchestrator has no way to tell and stays Inconclusive.
+/// Best-effort: short timeout so a hung connection never blocks phase 1.
+/// trace:BUG-257 | ai:claude
+fn probe_branch_on_origin(project_root: &std::path::Path, branch: &str) -> BranchOriginProbe {
+    let out = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args([
+            "-c",
+            // Keep the probe bounded — a hung HTTPS dial against origin
+            // would otherwise re-introduce the freeze BUG-257 is fixing.
+            "http.lowSpeedLimit=1000",
+            "-c",
+            "http.lowSpeedTime=10",
+            "ls-remote",
+            "--exit-code",
+            "--heads",
+            "origin",
+            &format!("refs/heads/{branch}"),
+        ])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => BranchOriginProbe::Present,
+        // `git ls-remote --exit-code` exits 2 when the ref is missing on a
+        // remote it could otherwise reach. Distinguish that from a true
+        // ls-remote failure (network down, auth) by checking the exit code.
+        Ok(o) => match o.status.code() {
+            Some(2) => BranchOriginProbe::Absent,
+            _ => BranchOriginProbe::LsRemoteFailed,
+        },
+        Err(_) => BranchOriginProbe::LsRemoteFailed,
+    }
 }
 
 /// Fallback PR lookup for BUG-223: find an open PR that references `spec` in
@@ -16598,6 +16717,12 @@ fn try_auto_queue_pr_review(
         PrLookup::GhFailed(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: `gh pr list` failed for branch `{}` ({}) — no reviewer story filed",
+                branch, reason
+            ));
+        }
+        PrLookup::GhUnreachable(reason) => {
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: GH API unreachable for branch `{}` ({}) — no reviewer story filed (transient; retry once the API is reachable)",
                 branch, reason
             ));
         }
@@ -21761,6 +21886,94 @@ mod bug_88_pr_lookup_parse_tests {
         match parse_gh_pr_line(stdout) {
             PrLookup::Found(p) => assert_eq!(p.number, 11),
             other => panic!("expected Found, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+}
+
+/// BUG-257: `gh_stderr_is_network_error` classifies a `gh` stderr line as a
+/// transient network error vs. an auth/parse/other failure. The split powers
+/// the `PrLookup::GhUnreachable` variant so the orchestrator can report
+/// *Inconclusive* (drain pauses) instead of conflating "no PR" with "can't
+/// reach the API". trace:BUG-257 | ai:claude
+#[cfg(test)]
+mod bug_257_gh_stderr_network_classifier_tests {
+    use super::*;
+
+    /// Real-world stderr from the BUG-257 origin incident — exactly what the
+    /// orchestrator saw. Must classify as network. trace:BUG-257 | ai:claude
+    #[test]
+    fn observed_origin_incident_stderr_is_network() {
+        let stderr = "error connecting to api.github.com\n\
+                      check your internet connection or https://githubstatus.com";
+        assert!(gh_stderr_is_network_error(stderr));
+    }
+
+    /// gh's own diagnostic suffix is the most stable signal — its presence
+    /// alone is sufficient even when the surrounding message changes.
+    /// trace:BUG-257 | ai:claude
+    #[test]
+    fn githubstatus_pointer_alone_is_network() {
+        assert!(gh_stderr_is_network_error(
+            "something went wrong — see https://githubstatus.com for status"
+        ));
+    }
+
+    /// Go `net` and `crypto/tls` error families that gh wraps verbatim.
+    /// trace:BUG-257 | ai:claude
+    #[test]
+    fn dial_dns_tls_error_families_are_network() {
+        for s in [
+            "dial tcp 140.82.112.5:443: i/o timeout",
+            "no such host",
+            "could not resolve host: api.github.com",
+            "Temporary failure in name resolution",
+            "connection refused",
+            "connection reset by peer",
+            "connection timed out",
+            "network is unreachable",
+            "no route to host",
+            "tls handshake timeout",
+            "tls: handshake failure",
+            "request canceled while waiting for connection",
+        ] {
+            assert!(
+                gh_stderr_is_network_error(s),
+                "expected network classification for: {s:?}"
+            );
+        }
+    }
+
+    /// Case-insensitivity — a gh upgrade that capitalizes a phrase must
+    /// not silently re-classify the error as auth/parse.
+    /// trace:BUG-257 | ai:claude
+    #[test]
+    fn classification_is_case_insensitive() {
+        assert!(gh_stderr_is_network_error(
+            "Error Connecting To Api.GitHub.Com — check status"
+        ));
+        assert!(gh_stderr_is_network_error("DIAL TCP: I/O TIMEOUT"));
+    }
+
+    /// Auth, parse, and miscellaneous gh failures stay `GhFailed` — they
+    /// are not transient and a different recovery hint applies.
+    /// trace:BUG-257 | ai:claude
+    #[test]
+    fn non_network_failures_are_not_network() {
+        for s in [
+            "",
+            "gh exited 1",
+            "HTTP 401: Bad credentials",
+            "HTTP 403: API rate limit exceeded",
+            "HTTP 404: Not Found",
+            "could not find any commits between ...",
+            "no remotes configured for this repository",
+            "could not parse gh output: \"garbled\"",
+            "permission denied: missing scopes",
+        ] {
+            assert!(
+                !gh_stderr_is_network_error(s),
+                "expected NON-network classification for: {s:?}"
+            );
         }
     }
 }
@@ -28798,6 +29011,11 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                             "  {}         {}",
                             "PR".bold(),
                             "gh lookup failed — PR state unknown".dimmed()
+                        ),
+                        PrLookup::GhUnreachable(_) => println!(
+                            "  {}         {}",
+                            "PR".bold(),
+                            "GH API unreachable — PR state unknown (transient)".dimmed()
                         ),
                     }
                 }
@@ -48665,6 +48883,7 @@ fn emit_batch_drain_summary(
             BatchDrainOutcome::Failed(_) => "failed",
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
+            BatchDrainOutcome::Inconclusive => "inconclusive",
         };
         let mut obj = serde_json::Map::new();
         obj.insert(
@@ -48831,6 +49050,26 @@ fn emit_batch_drain_summary(
                 dispatched,
                 dispatched,
                 shipped,
+            );
+        }
+        // BUG-257: a transient GH-API outage during phase-1 PR lookup paused
+        // the drain. The spec is left in its current state — neither shipped
+        // nor failed — so a retry once the API is reachable proceeds without
+        // any cleanup. trace:BUG-257 | ai:claude
+        BatchDrainOutcome::Inconclusive => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch `batch:{batch_name}` drain paused at {} — phase 1 \
+                 inconclusive (GH API unreachable)",
+                "⏸".yellow().bold(),
+                stopped.bold(),
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} transient — retry once the API is reachable: \
+                 `gh api /rate_limit` then re-run \
+                 `aida queue work --batch {batch_name} --auto-complete`",
+                "→".dimmed()
             );
         }
     }
@@ -49119,6 +49358,7 @@ fn emit_next_n_drain_summary(
             BatchDrainOutcome::Failed(_) => "failed",
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
+            BatchDrainOutcome::Inconclusive => "inconclusive",
         };
         let mut obj = serde_json::Map::new();
         obj.insert(
@@ -49292,6 +49532,28 @@ fn emit_next_n_drain_summary(
                 dispatched,
                 dispatched,
                 shipped,
+            );
+        }
+        // BUG-257: a transient GH-API outage during phase-1 PR lookup paused
+        // the drain. The spec stays in its current state for retry.
+        // trace:BUG-257 | ai:claude
+        BatchDrainOutcome::Inconclusive => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} next {n} drain paused at {} — phase 1 inconclusive \
+                 (GH API unreachable)",
+                "⏸".yellow().bold(),
+                stopped.bold(),
+            );
+            eprintln!(
+                "  {} already shipped ({count}): {}",
+                "✓".green(),
+                shipped_list
+            );
+            eprintln!(
+                "  {} transient — retry once the API is reachable: \
+                 `gh api /rate_limit` then re-run",
+                "→".dimmed()
             );
         }
     }
@@ -50352,6 +50614,44 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     "could not look up the PR for `{branch}`: {why}"
                 )));
             }
+            // BUG-257: the GH API was unreachable — *transient*, not "no PR".
+            // Narrow with `git ls-remote` (git protocol, separate from the
+            // HTTPS API): if the branch isn't on origin no PR can exist
+            // regardless, and that case collapses to a genuine NoPR failure.
+            // Otherwise the orchestrator cannot tell whether a PR was opened
+            // — return Inconclusive so the drain pauses (not fails).
+            // trace:BUG-257 | ai:claude
+            PrLookup::GhUnreachable(why) => {
+                match probe_branch_on_origin(&self.project_root, &branch) {
+                    BranchOriginProbe::Absent => {
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::NoPr,
+                            format!(
+                                "GH API unreachable ({why}), and `git ls-remote` confirms \
+                             branch `{branch}` is not on origin — no PR can exist. \
+                             Resume the session and push: `aida queue work {spec} --resume`",
+                                spec = self.spec
+                            ),
+                        ));
+                    }
+                    BranchOriginProbe::Present => {
+                        return Ok(auto_complete::ImplementerOutcome::Inconclusive {
+                            reason: format!(
+                                "GH API unreachable ({why}); branch `{branch}` is on origin \
+                             so a PR may exist — cannot confirm without the API"
+                            ),
+                        });
+                    }
+                    BranchOriginProbe::LsRemoteFailed => {
+                        return Ok(auto_complete::ImplementerOutcome::Inconclusive {
+                            reason: format!(
+                                "GH API unreachable ({why}); `git ls-remote` also failed — \
+                             cannot determine whether a PR exists for `{branch}`"
+                            ),
+                        });
+                    }
+                }
+            }
         };
 
         match pr {
@@ -51027,6 +51327,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 return Err(PhaseFailure::new(format!(
                     "could not look up the PR after the implementer resume: {why}"
                 )));
+            }
+            // BUG-257: a transient GH-API outage on the resumed-implementer PR
+            // lookup is Inconclusive, not a failure. Drain pauses; the next
+            // retry re-attempts the lookup once the API is reachable.
+            // trace:BUG-257 | ai:claude
+            PrLookup::GhUnreachable(why) => {
+                return Ok(ImplementerOutcome::Inconclusive {
+                    reason: format!("GH API unreachable after the implementer resume: {why}"),
+                });
             }
         };
         match pr {

@@ -397,6 +397,14 @@ pub(crate) struct HintContext {
 /// failure (nothing broke) nor a ship (no PR), so it is a first-class third
 /// outcome of phase 1: the orchestrator stops the pipeline cleanly and a
 /// batch drain advances to the next member. trace:STORY-276 | ai:claude
+///
+/// BUG-257 adds a fourth outcome: *Inconclusive*. When the orchestrator can
+/// neither confirm a PR nor confirm its absence — a transient GH-API
+/// network error during the post-implementer PR lookup — the run halts
+/// without ruling either way. The drain *pauses* (exit `0`, no
+/// `failed_phase`) rather than crashing the batch with a false "no PR"
+/// failure; the spec stays where it is, and the next drain retries.
+/// trace:BUG-257 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ImplementerOutcome {
     /// The implementer opened a PR — the pipeline continues to CI (phase 2).
@@ -405,6 +413,11 @@ pub(crate) enum ImplementerOutcome {
     /// summary (category + detail) surfaced in the run epilogue. The punt is
     /// already durably recorded by `aida punt` (status flip + ledger).
     Punted { reason: String },
+    /// BUG-257: the orchestrator could not determine whether a PR was opened
+    /// (transient GH-API network error). `reason` is the one-line
+    /// diagnostic surfaced in the run epilogue. The drain pauses, the spec
+    /// is left in its current state for retry. trace:BUG-257 | ai:claude
+    Inconclusive { reason: String },
 }
 
 /// The outcome of phase 3 — the reviewer session. The reviewer either
@@ -512,6 +525,13 @@ pub(crate) struct OrchestrationResult {
     /// the caller can log the run and a batch drain can sort the spec apart
     /// from a clean ship. trace:STORY-306 | ai:claude
     pub(crate) escalation: Option<EscalationSummary>,
+    /// BUG-257: set when phase 1 ended *inconclusively* — the orchestrator
+    /// could not determine whether a PR exists (a transient GH-API network
+    /// error). Like `punt_reason` this is a non-failure stop (`exit_code` `0`,
+    /// `failed_phase` `None`); the spec is left in its current state for the
+    /// next drain to retry. A batch drain stops at the spec without claiming
+    /// it shipped, punted, or failed. trace:BUG-257 | ai:claude
+    pub(crate) inconclusive_reason: Option<String>,
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -888,6 +908,7 @@ fn finish_success(
         punt_reason: None,
         shipped_spec_id,
         escalation: None,
+        inconclusive_reason: None,
     }
 }
 
@@ -961,6 +982,7 @@ fn finish_punted(
         punt_reason: Some(reason.to_string()),
         shipped_spec_id: None,
         escalation: None,
+        inconclusive_reason: None,
     }
 }
 
@@ -1044,6 +1066,83 @@ fn finish_escalated(
             kind,
             reason: reason.to_string(),
         }),
+        inconclusive_reason: None,
+    }
+}
+
+/// Print the inconclusive epilogue and build a *non-failure* terminal
+/// [`OrchestrationResult`] (BUG-257). When phase 1 ends and the orchestrator's
+/// PR lookup hits a transient GH-API network error, it cannot tell whether a
+/// PR exists. Conflating that with "no PR opened" (the pre-BUG-257 behaviour)
+/// gave the operator a wrong recovery hint ("run `/aida-pr`") and crashed the
+/// batch on a network blip. The honest outcome is *Inconclusive*: the run
+/// halts cleanly (exit `0`, no `failed_phase`), the spec is left in its
+/// current state, the batch drain pauses at this spec (it neither shipped nor
+/// failed), and the next drain retries once the API is reachable.
+/// trace:BUG-257 | ai:claude
+fn finish_inconclusive(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+    reason: &str,
+) -> OrchestrationResult {
+    let elapsed = start.elapsed().as_millis();
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                Phase::Implementer.slug(),
+                "inconclusive",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "inconclusive",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+    } else {
+        eprintln!();
+        eprintln!(
+            "{} phase 1 (implementer session) inconclusive: {}",
+            "⏸".yellow().bold(),
+            reason
+        );
+        eprintln!(
+            "  {} {}",
+            "→".dimmed(),
+            "transient — retry once the GH API is reachable: \
+             `gh api /rate_limit` then re-run `aida queue work --auto-complete`"
+                .cyan()
+        );
+        eprintln!();
+        eprintln!(
+            "{} {} inconclusive ({}) — drain paused, spec left for retry",
+            "⏸".yellow().bold(),
+            spec.bold(),
+            fmt_duration(elapsed)
+        );
+    }
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: durations,
+        total_ms: elapsed,
+        punt_reason: None,
+        shipped_spec_id: None,
+        escalation: None,
+        inconclusive_reason: Some(reason.to_string()),
     }
 }
 
@@ -1109,6 +1208,7 @@ fn finish_failure(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        inconclusive_reason: None,
     }
 }
 
@@ -1176,6 +1276,7 @@ fn finish_reconciled(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        inconclusive_reason: None,
     }
 }
 
@@ -1341,6 +1442,16 @@ fn resume_after_advisor(
             durations.to_vec(),
             &reason,
         )),
+        // BUG-257: an Inconclusive on the resumed implementer (a transient
+        // GH-API blip during PR lookup) is terminal — the drain pauses for
+        // retry, no second advisor round.
+        Ok(ImplementerOutcome::Inconclusive { reason }) => PuntFlow::Terminal(finish_inconclusive(
+            spec,
+            json,
+            start,
+            durations.to_vec(),
+            &reason,
+        )),
     }
 }
 
@@ -1414,6 +1525,15 @@ pub(crate) fn orchestrate(
         Ok(ImplementerOutcome::PrOpened) => {
             durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
             emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+        }
+        // BUG-257: the orchestrator could not determine whether a PR was
+        // opened (transient GH-API network error). The pipeline halts cleanly
+        // — exit `0`, no `failed_phase` — and the spec is left in its current
+        // state for the next drain. Distinct from a punt (no design-fork was
+        // raised) and from a failure (nothing is broken). trace:BUG-257
+        Ok(ImplementerOutcome::Inconclusive { reason }) => {
+            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+            return finish_inconclusive(spec, json, &start, durations, &reason);
         }
     }
 
@@ -1570,6 +1690,13 @@ pub(crate) enum BatchDrainOutcome {
     /// can inspect rather than loop on the un-advanced head. `dispatched`
     /// equals the run's `stopped_at`. trace:BUG-245 | ai:claude
     Mismatched { dispatched: String, shipped: String },
+    /// BUG-257: phase 1 ended *inconclusively* — the orchestrator could not
+    /// determine whether a PR was opened (transient GH-API network error).
+    /// The drain pauses at this spec (it is left in its current state for
+    /// retry); the next drain re-attempts once the API is reachable. Exit
+    /// `0`: a network blip is not a phase failure, so the batch summary does
+    /// not crash with a false "shipped 0". trace:BUG-257 | ai:claude
+    Inconclusive,
 }
 
 /// Outcome of a [`drain_batch`] run — what shipped, where it stopped, and the
@@ -1676,6 +1803,22 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
                 exit_code: result.exit_code,
             };
         }
+        // BUG-257: an inconclusive run pauses the drain. The spec stays in
+        // its current state — no ship, no punt, no escalate — so the next
+        // drain re-attempts once the GH API is reachable. Continuing here
+        // would either stall on the un-advanced head or skip the spec
+        // entirely; both are worse than the explicit pause.
+        // trace:BUG-257 | ai:claude
+        if result.inconclusive_reason.is_some() {
+            return BatchDrainResult {
+                shipped,
+                punted,
+                escalated,
+                stopped_at: Some(head),
+                outcome: BatchDrainOutcome::Inconclusive,
+                exit_code: 0,
+            };
+        }
         // BUG-245: phase 1 shipped a different spec than the dispatched
         // head. Credit the truth (the id the PR's commits name), leave the
         // dispatched head queued for its own pickup, and stop the drain —
@@ -1747,6 +1890,11 @@ mod tests {
         /// STORY-306: what `resume_implementer` returns; `None` ⇒ the trait
         /// default error. Set by `resume_opens_pr` / `resume_repunts`.
         resume: Option<ImplementerOutcome>,
+        /// BUG-257: when `Some`, `run_implementer` returns
+        /// [`ImplementerOutcome::Inconclusive`] with this reason — the
+        /// orchestrator's phase-1 PR lookup hit a transient GH-API blip and
+        /// cannot tell whether a PR was opened. The drain pauses.
+        inconclusive: Option<String>,
     }
 
     impl MockPhaseDriver {
@@ -1765,6 +1913,7 @@ mod tests {
                 advisor: None,
                 advisor_calls: 0,
                 resume: None,
+                inconclusive: None,
             }
         }
 
@@ -1791,6 +1940,16 @@ mod tests {
         fn punting_at_implementer(reason: &str) -> Self {
             Self {
                 punt: Some(reason.to_string()),
+                ..Self::base()
+            }
+        }
+
+        /// BUG-257: make `run_implementer` return
+        /// [`ImplementerOutcome::Inconclusive`] — the phase-1 PR lookup hit
+        /// a transient GH-API blip and cannot confirm a PR either way.
+        fn inconclusive_at_implementer(reason: &str) -> Self {
+            Self {
+                inconclusive: Some(reason.to_string()),
                 ..Self::base()
             }
         }
@@ -1867,6 +2026,11 @@ mod tests {
     impl PhaseDriver for MockPhaseDriver {
         fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure> {
             self.record(Phase::Implementer)?;
+            if let Some(reason) = &self.inconclusive {
+                return Ok(ImplementerOutcome::Inconclusive {
+                    reason: reason.clone(),
+                });
+            }
             match &self.punt {
                 Some(reason) => Ok(ImplementerOutcome::Punted {
                     reason: reason.clone(),
@@ -2080,6 +2244,120 @@ mod tests {
     fn escalate_mode_from_flags_defaults_to_blocks() {
         assert_eq!(EscalateMode::from_flags(false), EscalateMode::Blocks);
         assert_eq!(EscalateMode::from_flags(true), EscalateMode::Defaults);
+    }
+
+    // --- BUG-257: Inconclusive phase-1 outcome ---------------------------
+    //
+    // A transient GH-API network error during the post-implementer PR lookup
+    // must NOT be reported as a phase-1 failure (that gave the operator a
+    // wrong recovery hint and crashed batch drains on a network blip). It is
+    // a first-class non-failure outcome: the run exits 0, no `failed_phase`,
+    // `inconclusive_reason` is set, and no later phase runs.
+
+    /// Acceptance #4 — "Test with a mocked API failure: orchestrator reports
+    /// `Inconclusive`, drain pauses (not fails)." trace:BUG-257 | ai:claude
+    #[test]
+    fn orchestrate_inconclusive_at_phase1_is_not_a_failure() {
+        let mut driver = MockPhaseDriver::inconclusive_at_implementer(
+            "GH API unreachable (error connecting to api.github.com); \
+             branch `bug-257` is on origin so a PR may exist",
+        );
+        let result = orchestrate(
+            &mut driver,
+            "BUG-257",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(
+            result.exit_code, 0,
+            "an inconclusive run is a clean exit, not a failure"
+        );
+        assert!(
+            result.failed_phase.is_none(),
+            "no `failed_phase` — the drain paused, nothing crashed",
+        );
+        assert!(result.failure.is_none(), "no `PhaseFailure` payload");
+        assert!(
+            result.inconclusive_reason.is_some(),
+            "`inconclusive_reason` distinguishes this from a clean ship",
+        );
+        assert!(result.punt_reason.is_none(), "not a punt");
+        assert!(result.escalation.is_none(), "not an escalation");
+        assert!(result.shipped_spec_id.is_none(), "nothing shipped");
+        // Phases 2-6 never ran — the drain paused at phase 1.
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// `BatchDrainOutcome::Inconclusive` — a batch drain that hits a phase-1
+    /// inconclusive run stops at that spec without claiming ship / punt /
+    /// fail, leaves the head un-advanced, and exits 0 so the next drain
+    /// retries once the API is reachable. trace:BUG-257 | ai:claude
+    #[test]
+    fn drain_batch_inconclusive_pauses_without_advancing() {
+        struct OneInconclusiveDriver {
+            queue: Vec<String>,
+            ran: Vec<String>,
+        }
+        impl BatchDriver for OneInconclusiveDriver {
+            fn next_head(&mut self) -> Option<String> {
+                self.queue.first().cloned()
+            }
+            fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
+                self.ran.push(spec.to_string());
+                OrchestrationResult {
+                    exit_code: 0,
+                    failed_phase: None,
+                    failure: None,
+                    phase_durations: Vec::new(),
+                    total_ms: 0,
+                    punt_reason: None,
+                    shipped_spec_id: None,
+                    escalation: None,
+                    inconclusive_reason: Some("GH API unreachable — cannot confirm PR".to_string()),
+                }
+            }
+        }
+        let mut driver = OneInconclusiveDriver {
+            queue: vec!["BUG-257".to_string(), "TASK-260".to_string()],
+            ran: Vec::new(),
+        };
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 0, "inconclusive is a clean exit");
+        assert_eq!(result.outcome, BatchDrainOutcome::Inconclusive);
+        assert_eq!(result.stopped_at.as_deref(), Some("BUG-257"));
+        assert!(result.shipped.is_empty(), "the spec did not ship");
+        assert!(result.punted.is_empty(), "the spec did not punt");
+        assert!(result.escalated.is_empty(), "the spec did not escalate");
+        // The head was not advanced — only the inconclusive spec was driven.
+        // The queued TASK-260 stays for the next drain.
+        assert_eq!(driver.ran, vec!["BUG-257"]);
+    }
+
+    /// A re-punt on the resumed implementer is terminal; symmetrically, an
+    /// inconclusive on the resumed implementer is also terminal — the drain
+    /// pauses, no second advisor round. trace:BUG-257 | ai:claude
+    #[test]
+    fn orchestrate_resume_inconclusive_is_terminal_pause() {
+        let mut driver =
+            MockPhaseDriver::punting_at_implementer("first fork").advisor_resolves("answer A");
+        driver.resume = Some(ImplementerOutcome::Inconclusive {
+            reason: "GH API unreachable after the implementer resume".to_string(),
+        });
+        let result = orchestrate(
+            &mut driver,
+            "BUG-257",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failed_phase.is_none());
+        assert!(result.inconclusive_reason.is_some());
+        assert!(result.punt_reason.is_none());
+        // Phases 2-6 never ran; the advisor was spawned exactly once.
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+        assert_eq!(driver.advisor_calls, 1, "no second advisor round");
     }
 
     // --- Variant gating ---------------------------------------------------
@@ -2956,6 +3234,7 @@ mod tests {
             punt_reason: None,
             shipped_spec_id: None,
             escalation: None,
+            inconclusive_reason: None,
         }
     }
 
@@ -2969,6 +3248,7 @@ mod tests {
             punt_reason: None,
             shipped_spec_id: None,
             escalation: None,
+            inconclusive_reason: None,
         }
     }
 
@@ -2984,6 +3264,7 @@ mod tests {
             punt_reason: Some("mock punt: design-fork".to_string()),
             shipped_spec_id: None,
             escalation: None,
+            inconclusive_reason: None,
         }
     }
 
@@ -3000,6 +3281,7 @@ mod tests {
             punt_reason: None,
             shipped_spec_id: Some(shipped.to_string()),
             escalation: None,
+            inconclusive_reason: None,
         }
     }
 
@@ -3018,6 +3300,7 @@ mod tests {
                 kind: EscalationKind::MergeDecision,
                 reason: "mock escalation: merge decision".to_string(),
             }),
+            inconclusive_reason: None,
         }
     }
 
