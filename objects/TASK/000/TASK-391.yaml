@@ -22,12 +22,12 @@ description: |
 
   Raised by the implementer while working TASK-359.
   Branch:   ·  Commit:   (PR link added on merge)
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:00:40.636427753Z
-modified_at: 2026-05-20T17:46:16.502938968Z
+modified_at: 2026-05-20T17:47:03.341423788Z
 req_type: Task
 tags:
 - from-implementer:TASK-359
@@ -39,3 +39,7 @@ comments:
   content: Commit 81c9b8fe references this requirement
   created_at: 2026-05-20T17:46:16.502938968Z
   modified_at: 2026-05-20T17:46:16.502938968Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T17:47:03.341423788Z
+  implemented_by: joe
