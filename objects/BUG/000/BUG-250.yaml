@@ -1,0 +1,60 @@
+id: 019e4356-9397-7b72-8723-3be1ab88979c
+spec_id: BUG-250
+agreed_id: BUG-250
+title: 'Orchestrator outcome model: ''PR deliberately held'' is mis-classified as phase-1 failure (BUG-241 extension)'
+description: |-
+  The orchestrator's phase-1 outcome model treats *"implementer session exited without opening a PR"* as failure. That's correct only when the absence of a PR is unintended. Under a deliberate **push-branch, hold-PR** finish (a legitimate finish-checkpoint outcome — branch backed up on origin while the operator runs a manual gate before opening the PR), no PR is the **desired** state. The orchestrator currently mis-classifies it as failure and prints a misleading recovery hint.
+
+  ## Observed — 2026-05-19, STORY-306
+
+  STORY-306's finish-checkpoint: the advisor's call (user-confirmed) was push-hold-PR — the spec's `claude -p` subprocess plumbing needed a SPIKE-7 smoke before merge. Branch pushed, PR deliberately held, implementer session exited cleanly. The orchestrator then reported:
+
+      ✗ phase 1 (implementer session) failed: the implementer session exited cleanly but opened no PR
+        → run `/aida-pr` inside the session before exiting
+      ✗ STORY-306 — auto-complete failed at phase 1 (506m 53s)
+
+  That recovery hint is *wrong* for the deliberate-hold case — opening the PR before the smoke would ship unsmoke-tested subprocess code. The "failure" is a category error.
+
+  ## Relation to BUG-241
+
+  BUG-241 fixed the orchestrator declaring failures when work *succeeded* (reconcile against reality before failing). This case is adjacent but distinct: work succeeded, the artifact (PR) was deliberately not opened. The reconcile should also recognize "PR deliberately held" as a clean phase-1 outcome — natural BUG-241 extension.
+
+  ## Fix direction
+
+  Distinguish at phase-1 end:
+  - **Real failure** — work didn't happen, no commit on the branch, error state.
+  - **Succeeded, PR open** — proceed to phase 2.
+  - **Succeeded, PR deliberately held** — drain halts cleanly with a `deliberate-hold` outcome (not failure). Signal: branch pushed + commits ahead of main + a session-end marker (e.g. `aida session end --no-pr` or a manifest `intent: hold-pr` field set by the finish-checkpoint when the operator picks "push-hold-PR").
+
+  ## Acceptance
+
+  - [ ] A deliberate push-hold-PR finish does not register as phase-1 failure
+  - [ ] Drain halts with a clean `deliberate-hold` outcome (distinct exit code / log line)
+  - [ ] The recovery hint matches the actual state: "ready for review when you are — `gh pr create` then `aida queue work PR-N --role reviewer`" instead of "run /aida-pr inside the session"
+  - [ ] Test: phase 1 ends with branch pushed, no PR → drain reports clean hold, not failure
+  - [ ] Composes with TASK-359 (finish-checkpoint UX — the menu's options should communicate which outcome each produces)
+
+  ## Composes with
+
+  - **BUG-241** (orchestrator outcome model — original false-failure reconcile)
+  - **TASK-359** (finish-checkpoint UX — outcome-signalling)
+  - **STORY-306** (the spec whose finish exposed this gap)
+
+  ## Origin
+
+  2026-05-19 — STORY-306's "push branch, hold PR" finish (advisor's call) was mis-classified as phase-1 failure. The advisor explicitly held the PR until a SPIKE-7 smoke; the orchestrator treated that deliberate choice as failure with a wrong recovery hint.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T03:03:27.895703170Z
+modified_at: 2026-05-20T03:03:27.895703170Z
+req_type: Bug
+tags:
+- autonomous-drain
+- backlog
+- bug-241-extension
+- false-failure
+- from-self-test:STORY-306
+- orchestrator
+- outcome-model
