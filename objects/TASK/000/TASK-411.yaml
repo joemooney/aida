@@ -1,0 +1,12 @@
+id: 019e4628-afb0-7043-8917-15af316267c2
+spec_id: TASK-411
+agreed_id: TASK-411
+title: '**Auto-retry with bounded backoff.** Out of scope for BUG-266 (a'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T16:12:12.080028842Z
+modified_at: 2026-05-20T16:12:12.080028842Z
+req_type: Task
