@@ -23,12 +23,12 @@ description: |-
   ## Origin
 
   2026-05-19 — STORY-306 followup, the load-bearing one. STORY-306 deliberately stopped ending the implementer's session on a punt because the advisor-resume needs the worktree alive — that creates a worktree leak for escalations that never get resumed. This TASK closes that leak.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T02:21:15.784867728Z
-modified_at: 2026-05-20T02:21:15.784867728Z
+modified_at: 2026-05-20T14:35:35.392881579Z
 req_type: Task
 tags:
 - autonomous-drain
