@@ -25,14 +25,20 @@ description: |
   File: aida-cli/src/main.rs (handle_pull_command, final match arm).
   Raised by the implementer while working BUG-254.
   Branch: bug-254  ·  Commit: b6e6c204388b4b535f32a3f70ad5a16ec500e8a8  (PR link added on merge)
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T13:53:12.984594928Z
-modified_at: 2026-05-20T13:53:12.984594928Z
+modified_at: 2026-05-20T15:39:52.730580937Z
 req_type: Task
 tags:
 - from-implementer:BUG-254
 - kind:design-choice
 - severity:minor
+comments:
+- id: 019e460b-181a-7692-ab93-0fa6281911ab
+  author: joe
+  content: Dismissed by advisor during findings triage.
+  created_at: 2026-05-20T15:39:52.730580937Z
+  modified_at: 2026-05-20T15:39:52.730580937Z
