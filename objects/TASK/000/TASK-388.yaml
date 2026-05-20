@@ -1,0 +1,55 @@
+id: 019e43c8-fcde-75f2-a788-4041096548b2
+spec_id: TASK-388
+agreed_id: TASK-388
+title: Verification scripts use worktree-blind relative target/debug/aida — fails when run from a worktree
+description: |-
+  Verification scripts (e.g. the Definition-of-Done checks in plan files) sometimes use the relative path `target/debug/aida` to locate the built binary. From a worktree this resolves to nothing, because AIDA's cargo setup puts build output at the **main repo's** `target/` (shared target-dir), not under each worktree's `target/`. The worktree's CWD has no local `target/`.
+
+  ## Observed — 2026-05-19, TASK-299 verification
+
+      $ ls -t target/debug/aida 2>/dev/null | head -1
+      (empty — file not in worktree's relative path; 2>/dev/null swallowed the "not found")
+      $ ls -la target/debug/aida
+      ls: cannot access 'target/debug/aida': No such file or directory
+      $ ls -la /home/joe/ai/aida/target/debug/aida
+      -rwxrwxr-x ... 236809384 ...     ← actually exists, at the absolute path
+
+  The implementer self-corrected on the third attempt by using the absolute path. The first attempt silently produced an empty `$AIDA_BIN` (because of `2>/dev/null`), which then made `$AIDA_BIN --version` collapse to bare ` --version` — bash tried to execute `--version` as a command.
+
+  ## Fix direction
+
+  Plan templates and verification scripts should resolve the binary path worktree-agnostically. Best→worst:
+
+  - **`cargo run --bin aida -- ...`** — cleanest, cargo finds the target dir itself.
+  - **`$(cargo metadata --no-deps --format-version 1 | jq -r .target_directory)/debug/aida`** — explicit, portable.
+  - **Absolute path** — works but not portable across machines.
+  - (Avoid) **relative `target/debug/aida`** — what bit here.
+
+  A small `aida bin-path` helper (returns the absolute resolved binary path for the active toolchain) would be the most ergonomic for scripts.
+
+  ## Acceptance
+
+  - [ ] `docs/plans/_TEMPLATE.md`'s Verification section example uses a worktree-agnostic binary resolution
+  - [ ] Optional: an `aida bin-path` (or equivalent) helper for scripts
+  - [ ] An advisor-discipline note in CLAUDE.md / discipline pack about this gotcha
+
+  ## Composes with
+
+  - TASK-0396 (cross-worktree cargo gotcha — different surface, adjacent root)
+
+  ## Origin
+
+  2026-05-19 — TASK-299's verification script tripped on this; the implementer self-corrected with an absolute path.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T05:08:25.950472276Z
+modified_at: 2026-05-20T05:08:25.950472276Z
+req_type: Task
+tags:
+- backlog
+- cross-worktree
+- from-self-test:TASK-299
+- papercut
+- verification-scripts
