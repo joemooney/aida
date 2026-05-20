@@ -99,12 +99,12 @@ description: |-
   ## Origin
 
   User asked 2026-05-17 whether patch-per-PR versioning made sense. Pushback recommended against patch granularity at this stage; CHANGELOG.md from spec graph is the higher-leverage prerequisite to making version granularity useful when alpha users actually start tracking versions.
-status: Planned
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:39:26.005961879Z
-modified_at: 2026-05-19T18:02:53.372873586Z
+modified_at: 2026-05-20T04:57:16.288602174Z
 req_type: Task
 tags:
 - alpha-readiness
