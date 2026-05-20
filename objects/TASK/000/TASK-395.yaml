@@ -1,0 +1,47 @@
+id: 019e4597-d1ff-7561-92b1-918bc4bd118d
+spec_id: TASK-395
+agreed_id: TASK-395
+title: Stream / follow headless drain output (aida logs tail) — pretty rather than raw JSONL
+description: |-
+  Today's `--no-human=both` drain streams its full Claude SDK transcript to `.aida/headless-logs/<spec>.jsonl` per phase — captured but not user-friendly. A user watching an overnight drain has to know the path, find the right file (worktree-specific), and pipe it through `jq` to get a human-readable view.
+
+  ## User's framing (verbatim)
+
+  *"I think we should at least optionally tee the output from the conversations, maybe that is not possible."*
+
+  It IS possible — the artifacts exist — just not polished.
+
+  ## Fix direction
+
+  - **`aida logs tail [<spec>|--latest|--all]`** — a verb that locates the right log file(s) across worktrees and tails them with human-readable filtering applied (assistant-text turns, tool-call summaries, errors).
+  - Or: `aida queue work --auto-complete --no-human=both --tee <file>` — flag that simultaneously writes a human-readable transcript alongside the JSONL.
+  - Either way: a default filter that hides the SDK noise (raw token usage, system prompts) and shows the agent's reasoning + tool-results trail.
+
+  ## Acceptance
+
+  - [ ] A way to follow headless drain output across one or all in-flight specs without knowing the worktree path
+  - [ ] Output is human-readable by default (assistant turns + tool summaries), with a `--raw` flag for the JSONL stream
+  - [ ] Works concurrently with the drain — no impact on the headless session itself
+  - [ ] Documentation in `docs/autonomous-drain.md`
+
+  ## Composes with
+
+  - [[feedback_finish_checkpoint_clarity]] (visibility-into-agent-behaviour is the same family — make the substrate observable, don't leave the user guessing)
+
+  ## Origin
+
+  2026-05-20, overnight drain — user wanted to watch what the headless drain was doing without finding `.aida/headless-logs/<long-uuid>.jsonl` paths manually.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T13:33:58.143177440Z
+modified_at: 2026-05-20T13:33:58.143177440Z
+req_type: Task
+tags:
+- backlog
+- cli-ux
+- from-user-request
+- headless
+- no-human
+- visibility
