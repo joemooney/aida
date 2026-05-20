@@ -1,0 +1,12 @@
+id: 019e4342-7484-7e60-8aec-96527b01cacd
+spec_id: TASK-361
+agreed_id: TASK-361
+title: '`aida worker` controls beyond `directives` — e.g. `aida worker pause` / `aida worker stop` as typed wrappers over editing `worker.cmd`'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T02:41:29.220165883Z
+modified_at: 2026-05-20T02:41:29.220165883Z
+req_type: Task
