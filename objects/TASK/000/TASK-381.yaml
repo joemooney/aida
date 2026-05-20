@@ -1,0 +1,12 @@
+id: 019e43b1-0c6f-7061-bec4-29e0e417df7c
+spec_id: TASK-381
+agreed_id: TASK-381
+title: '`aida digest --copy` clipboard flag (helper already exists)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T04:42:17.071598997Z
+modified_at: 2026-05-20T04:42:17.071598997Z
+req_type: Task
