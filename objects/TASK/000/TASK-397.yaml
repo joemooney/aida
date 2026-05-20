@@ -1,0 +1,38 @@
+id: 019e45a9-7118-7070-a641-0c6ddcd2ae4b
+spec_id: TASK-397
+agreed_id: TASK-397
+title: BUG-254 fix also propagates store-leg failures (spec only called out code-leg)
+description: |
+  While fixing BUG-254 (code-leg failure swallowed) I also extended the
+  exit-status propagation to store-leg failures — the spec's Fix section
+  only explicitly called out the code leg, but the same bug class existed
+  for the store leg (Err from `git_ops::pull_rebase` was logged as a
+  Warning and swallowed too).
+
+  Reasoning: acceptance #1's phrasing "not OR-reduction across legs" reads
+  as "any leg's failure must propagate, not be masked by the other leg's
+  success." And the implementation was simpler when both legs share a
+  single tracking pattern (Option<String> per leg, single bail at the end).
+
+  Worth a heads-up because:
+  1. It widens the behavior change beyond the spec's Fix wording.
+  2. Any caller that ran `aida pull` knowing the store leg could fail
+     silently — none in the orchestrator path, but worth confirming.
+  3. `aida db sync --pull` mirrors this pattern (see main.rs near line
+     32787 `git_ops::pull_rebase`) and was NOT touched — keep an eye on
+     parity if a sibling bug surfaces there.
+
+  File: aida-cli/src/main.rs (handle_pull_command, final match arm).
+  Raised by the implementer while working BUG-254.
+  Branch: bug-254  ·  Commit: b6e6c204388b4b535f32a3f70ad5a16ec500e8a8  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T13:53:12.984594928Z
+modified_at: 2026-05-20T13:53:12.984594928Z
+req_type: Task
+tags:
+- from-implementer:BUG-254
+- kind:design-choice
+- severity:minor
