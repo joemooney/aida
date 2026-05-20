@@ -104,8 +104,11 @@ if [ "$refresh" = "1" ]; then
     exit $?
 fi
 
-# Inspect the most recent cross-platform run on main. `-q` yields an empty
-# string when the array is empty, which we treat as "no prior run".
+# Inspect the most recent cross-platform run on main. When there are no
+# runs, `gh` emits `[]`; `.[0]` yields null which `@tsv` renders as a row
+# of empty/null fields (not an empty string). The `[ -z "$line" ]` check
+# below only catches the truly-empty case (`gh` errored, `|| true`
+# swallowed it), treated as "no prior run". trace:TASK-283 | ai:claude
 line=$(gh run list --workflow="$WORKFLOW" --branch main --limit 1 \
         --json status,conclusion,createdAt,databaseId,url \
         -q '.[0] | [.status, .conclusion, .createdAt, (.databaseId|tostring), .url] | @tsv' \
