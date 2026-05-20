@@ -1,0 +1,12 @@
+id: 019e4342-5f25-7153-a29c-453b92ba64e6
+spec_id: TASK-360
+agreed_id: TASK-360
+title: 'Opt-in heartbeat: worker touches `.aida/worker.heartbeat`, kills a child whose mtime goes stale'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T02:41:23.749766739Z
+modified_at: 2026-05-20T02:41:23.749766739Z
+req_type: Task
