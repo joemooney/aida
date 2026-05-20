@@ -110,7 +110,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:18:06.878953098Z
-modified_at: 2026-05-20T02:41:48.999718415Z
+modified_at: 2026-05-20T02:42:39.824176672Z
 req_type: Task
 tags:
 - aida-worker
@@ -210,6 +210,21 @@ comments:
     filed 4 task(s): TASK-360, TASK-361, TASK-362, TASK-363
   created_at: 2026-05-20T02:41:49.436509219Z
   modified_at: 2026-05-20T02:41:49.436509219Z
+- id: 019e4343-8850-7590-b532-63152fc664ad
+  author: joe
+  content: |-
+    Implemented via PR-pending (commit 028fb95e):
+
+    - `aida-worker` bash function emitted by `aida dev shell-init` — loops over `.aida/worker.cmd` directives (drain/drain-args/pause/exit/unknown→pause), wrapped in `timeout --kill-after=5s` (default 1800s, knob AIDA_WORKER_SPEC_TIMEOUT)
+    - Scoped `drain <args>` lines pop from the FIFO on success so an overnight heredoc plan drains itself; `nothing to drive` substring triggers sleep (not pause) so a productive worker doesn't wedge on an empty queue
+    - New `aida worker directives` subcommand (aida-cli/src/worker.rs) — pre-storage dispatch mirroring STORY-301's `aida drain` pattern, human + --json output
+    - Pending directives surface in both `aida status` and `aida drain status` as a one-line "Worker directives: N pending (next: <verb>)" summary
+    - Verified the plan's risk #1: GNU timeout reaches exec-chained + forked descendants; setsid-escaped grandchildren survive (documented as the residual the heartbeat followup addresses)
+
+    Test status: 728/728 aida-cli unit tests green + 256/256 aida-core green + 8/8 new shell integration tests (tests/test_aida_worker.sh) + 12/12 new worker.rs unit tests
+    Follow-up: TASK-360 (opt-in heartbeat), TASK-361 (typed wrapper subcommands), TASK-362 (promote EPIC-30 if multi-user limits hit), TASK-363 (auto-tune AIDA_WORKER_SPEC_TIMEOUT)
+  created_at: 2026-05-20T02:42:39.824176672Z
+  modified_at: 2026-05-20T02:42:39.824176672Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T02:41:20.247312038Z
