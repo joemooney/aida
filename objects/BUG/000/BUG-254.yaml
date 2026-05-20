@@ -1,0 +1,64 @@
+id: 019e43c1-6a31-70b3-8ee6-a1eacf6b9a0a
+spec_id: BUG-254
+agreed_id: BUG-254
+title: aida pull / orchestrator phase 5 reports 'phase 5 complete' when code-leg git pull failed (silent failure)
+description: |-
+  `aida pull` (which the orchestrator runs as phase 5 of `--auto-complete`) prints `✓ phase 5 complete` after both code and store legs run, **even when the code-leg `git pull --ff-only` aborted** (e.g., an untracked working-tree file would be overwritten by the merge). The warning is visible inline but the phase reports success.
+
+  ## Observed — 2026-05-19, STORY-252 `--zen --auto-complete` drain
+
+      Updating ef5f7c09..068c82d5
+      error: The following untracked working tree files would be overwritten by merge:
+          docs/plans/2026-05-19-story-252-aida-digest.md
+      Please move or remove them before you merge.
+      Aborting
+        Warning: git pull --ff-only exited with status exit status: 1 — your branch may have diverged from origin/main.
+      Pulling store aida-store ← origin
+        store pull complete
+        (no new commits)
+        ✓ phase 5 complete    ← misleading: code leg actually failed
+
+  ## Downstream consequences
+
+  - Local main not fast-forwarded; phase 6 (build verify) operates on stale code.
+  - The **auto-bump scan (part of the code pull) is silently skipped** — Done specs that merged in the missed commits stay Done forever until manual `aida db reconcile-status`.
+  - Phase 6 then fails with confusing errors (e.g. missing template files that exist on origin/main but not local), masking the real root cause.
+
+  ## Fix
+
+  Phase 5 must reflect the code leg's actual exit status. Options:
+  - **Hard fail**: phase 5 reports failure when code-leg `git pull` exits non-zero; drain halts with a clear recovery hint (remove the listed files, then re-pull).
+  - **Soft / asymmetric**: when store leg succeeds but code leg fails, surface that in the phase status (`⚠ phase 5 partial — code leg failed, store leg succeeded`).
+
+  Either way: do not print `✓ phase 5 complete` when one of the two legs failed.
+
+  ## Acceptance
+
+  - [ ] `aida pull` exit status reflects code-leg failure (not OR-reduction across legs)
+  - [ ] Orchestrator phase 5 fails (or surfaces a clear "partial" status) when the code leg fails
+  - [ ] Recovery hint includes the untracked-file conflict resolution path
+  - [ ] Auto-bump skip is explicit when phase 5 partial-fails
+
+  ## Composes with
+
+  - BUG-250 (orchestrator outcome model — same class: outcomes mis-reported)
+  - BUG-241 (false-failure reconcile — opposite symptom, same root concept)
+
+  ## Origin
+
+  2026-05-19 — STORY-252 drain. Code-leg pull aborted on an untracked-file conflict, but phase 5 said "complete" and phase 6 then failed with template-not-found errors masking the real cause.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T05:00:09.649032232Z
+modified_at: 2026-05-20T05:00:09.649032232Z
+req_type: Bug
+tags:
+- auto-pull
+- backlog
+- false-success
+- from-self-test:STORY-252
+- orchestrator
+- phase-5
+- silent-failure
