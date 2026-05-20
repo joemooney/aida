@@ -233,7 +233,9 @@ step 3d → `/aida-punt`), which parks the spec in Needs Attention.
 `--source review|implementer` and `--kind bug-spotted` narrow it. The
 `dialog`-role SessionStart hook and `/aida-pickup` surface a one-line pending
 count. `aida findings promote <ID>` sends one to the work queue;
-`aida findings dismiss <ID>` rejects it with an audit comment.
+`aida findings dismiss <ID>` rejects it with an audit comment. Both accept
+`--reason "<text>"` to record the *why* in that audit comment in one command
+instead of two (TASK-404).
 
 A finding is always a `task` — the advisor re-types it to `bug` on promote
 if warranted. "Findings" is a query (a `from-review:` / `from-implementer:`

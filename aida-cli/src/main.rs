@@ -1187,7 +1187,7 @@ fn handle_findings_command(
             }
         }
 
-        FindingsCommand::Dismiss { id } => {
+        FindingsCommand::Dismiss { id, reason } => {
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -1200,10 +1200,22 @@ fn handle_findings_command(
                 );
             }
             let now = chrono::Utc::now();
+            let author = get_default_author();
+            // TASK-404: the bare "Dismissed" marker said nothing about *why*,
+            // so rationale used to require a separate `aida comment add` —
+            // which most dismissals skipped. With `--reason`, the rationale
+            // lands in the same audit comment in one command.
+            let content = match reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                Some(text) => format!(
+                    "Dismissed by {author} {date}: {text}",
+                    date = now.format("%Y-%m-%d")
+                ),
+                None => "Dismissed by advisor during findings triage.".to_string(),
+            };
             req.comments.push(Comment {
                 id: Uuid::now_v7(),
-                content: "Dismissed by advisor during findings triage.".to_string(),
-                author: get_default_author(),
+                content,
+                author,
                 created_at: now,
                 modified_at: now,
                 parent_id: None,
@@ -1216,7 +1228,7 @@ fn handle_findings_command(
             println!("Dismissed finding {id} — status → Rejected.");
         }
 
-        FindingsCommand::Promote { id, r#for } => {
+        FindingsCommand::Promote { id, r#for, reason } => {
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -1240,8 +1252,28 @@ fn handle_findings_command(
             let role = queue_promoted_finding(store_path, req.id, display_id, r#for.as_deref())?;
             record_role_activity(display_id, "queue-add");
 
+            let now = chrono::Utc::now();
+            // TASK-404: parallel to dismiss — capture the *why* in the same
+            // command. The queue note already records the bare promotion;
+            // an audit comment with rationale survives alongside the spec.
+            if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                let author = get_default_author();
+                req.comments.push(Comment {
+                    id: Uuid::now_v7(),
+                    content: format!(
+                        "Promoted by {author} {date}: {text}",
+                        date = now.format("%Y-%m-%d")
+                    ),
+                    author,
+                    created_at: now,
+                    modified_at: now,
+                    parent_id: None,
+                    replies: Vec::new(),
+                    reactions: Vec::new(),
+                });
+            }
             req.status = RequirementStatus::Approved;
-            req.modified_at = chrono::Utc::now();
+            req.modified_at = now;
             backend.update_requirement(&req)?;
             println!("Promoted finding {id} — status → Approved, queued for {role}.");
         }
