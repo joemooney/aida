@@ -46,12 +46,12 @@ description: |-
   ## Origin
 
   2026-05-19 batch:autonomy-modes drain. The implementer's improvisation — work the release-blocker when the dispatched spec is blocked — was *correct* and shipped v0.8.0's blocker. But it broke the orchestrator's spec↔PR mapping, producing a false "✓ STORY-276 shipped" in the drain log.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:42:01.001513842Z
-modified_at: 2026-05-20T06:04:22.837779101Z
+modified_at: 2026-05-20T06:04:56.114307985Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -65,3 +65,7 @@ comments:
   content: Commit 1b11a3ff references this requirement
   created_at: 2026-05-20T06:04:22.837779101Z
   modified_at: 2026-05-20T06:04:22.837779101Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T06:04:56.114307985Z
+  implemented_by: joe
