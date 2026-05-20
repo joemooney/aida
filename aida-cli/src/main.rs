@@ -3101,15 +3101,31 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                         skipped.join(", ")
                                     );
                                 }
-                                if let Some((agreed_id, is_low)) = dispensed {
-                                    if is_low {
+                                if let Some((agreed_id, _is_low_per_block)) = dispensed {
+                                    // BUG-115: warn on the aggregate remaining
+                                    // across all of this node's non-exhausted
+                                    // blocks for the type. The pre-fix per-
+                                    // block check fired on every `aida add`
+                                    // when the lowest-numbered block was near
+                                    // empty, even though a higher block with
+                                    // full capacity had already been claimed.
+                                    // trace:BUG-115 | ai:claude
+                                    if registry.aggregate_is_low(&node_id, &type_prefix) {
+                                        let aggregate =
+                                            registry.aggregate_remaining(&node_id, &type_prefix);
+                                        let active =
+                                            registry.active_block_count(&node_id, &type_prefix);
+                                        let span = if active == 1 {
+                                            "in 1 block".to_string()
+                                        } else {
+                                            format!("across {} blocks", active)
+                                        };
                                         eprintln!(
-                                            "{} {} block running low ({} remaining). Run `aida db block claim --type {}` soon.",
+                                            "{} {} block running low ({} remaining {}). Run `aida db block claim --type {}` soon.",
                                             "WARNING:".yellow().bold(),
                                             type_prefix,
-                                            registry.find_active_block(&node_id, &type_prefix)
-                                                .map(|i| registry.blocks[i].remaining())
-                                                .unwrap_or(0),
+                                            aggregate,
+                                            span,
                                             type_prefix
                                         );
                                     }
@@ -3921,56 +3937,56 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // TASK-36: surface agreed-id block utilization so users spot
             // imminent exhaustion before it bites at `aida add` time.
             // Aggregates across nodes (sum within each type prefix).
-            // trace:TASK-36 | ai:claude
+            //
+            // BUG-115: remaining sums across every non-exhausted block
+            // of the type. The pre-fix code reported only the highest-
+            // numbered block's `remaining`, so a near-empty lower block
+            // looked invisible and a near-empty higher block masked
+            // healthy lower ones.
+            // trace:TASK-36 | trace:BUG-115 | ai:claude
             let blocks_path = store_path.join("registry").join("blocks.yaml");
             if let Ok(registry) = aida_core::BlockRegistry::load(&blocks_path) {
                 if !registry.blocks.is_empty() {
                     println!();
                     println!("{}", "Agreed-id blocks".bold());
                     use std::collections::BTreeMap;
-                    #[derive(Default)]
-                    struct Agg {
-                        end: u32,
-                        next: u32,
-                        exhausted: bool,
-                        blocks: u32,
-                    }
-                    let mut by_prefix: BTreeMap<String, Agg> = BTreeMap::new();
+                    let mut by_prefix: BTreeMap<String, Vec<&aida_core::AgreedIdBlock>> =
+                        BTreeMap::new();
                     for b in &registry.blocks {
-                        let key = b.type_prefix.to_uppercase();
-                        let agg = by_prefix.entry(key).or_default();
-                        agg.blocks += 1;
-                        if b.range_end > agg.end {
-                            agg.end = b.range_end;
-                            agg.next = b.next;
-                            agg.exhausted = b.is_exhausted();
-                        }
+                        by_prefix
+                            .entry(b.type_prefix.to_uppercase())
+                            .or_default()
+                            .push(b);
                     }
-                    for (prefix, agg) in &by_prefix {
+                    for (prefix, blocks) in &by_prefix {
                         let pad = format!("{:<8}", format!("{}:", prefix));
-                        if agg.exhausted {
+                        let total: u32 =
+                            blocks.iter().map(|b| b.range_end - b.range_start + 1).sum();
+                        let remaining: u32 = blocks
+                            .iter()
+                            .filter(|b| !b.is_exhausted())
+                            .map(|b| b.remaining())
+                            .sum();
+                        let active_count = blocks.iter().filter(|b| !b.is_exhausted()).count();
+                        if active_count == 0 {
+                            let last_end = blocks.iter().map(|b| b.range_end).max().unwrap_or(0);
                             println!(
                                 "  {} {}  (last: {}-{}; falling back to node-aware)",
                                 pad,
                                 "EXHAUSTED".red().bold(),
                                 prefix,
-                                agg.end
+                                last_end
                             );
                         } else {
-                            let remaining = if agg.next > agg.end {
-                                0
-                            } else {
-                                agg.end - agg.next + 1
-                            };
-                            let issued = agg.end - remaining;
+                            let issued = total - remaining;
                             println!(
                                 "  {} {}/{}  ({} remaining, {} block{})",
                                 pad,
                                 issued,
-                                agg.end,
+                                total,
                                 remaining,
-                                agg.blocks,
-                                if agg.blocks == 1 { "" } else { "s" }
+                                blocks.len(),
+                                if blocks.len() == 1 { "" } else { "s" }
                             );
                         }
                     }
@@ -7324,7 +7340,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
 
         BlockCommand::Status => {
             let registry = BlockRegistry::load(&blocks_path)?;
-            let my_blocks: Vec<_> = registry
+            let my_blocks: Vec<&aida_core::AgreedIdBlock> = registry
                 .blocks
                 .iter()
                 .filter(|b| b.node_id == node_id)
@@ -7338,36 +7354,74 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
             }
             println!("Blocks for node {}:", node_id);
             println!("{}", "─".repeat(50));
-            for b in my_blocks {
-                let remaining = b.remaining();
-                if b.is_exhausted() {
+
+            // BUG-115: group by type prefix and report the aggregate
+            // remaining across all the user's non-exhausted blocks for
+            // that type. Pre-fix, the warning fired on the lowest-
+            // numbered block's remaining even when a higher block with
+            // full capacity had already been claimed — nagging the user
+            // on every `aida add` despite plenty of headroom.
+            // trace:BUG-115 | ai:claude
+            use std::collections::BTreeMap;
+            let mut by_prefix: BTreeMap<String, Vec<&aida_core::AgreedIdBlock>> = BTreeMap::new();
+            for b in &my_blocks {
+                by_prefix
+                    .entry(b.type_prefix.to_uppercase())
+                    .or_default()
+                    .push(*b);
+            }
+            for (prefix, blocks) in &by_prefix {
+                let mut active: Vec<&aida_core::AgreedIdBlock> = blocks
+                    .iter()
+                    .copied()
+                    .filter(|b| !b.is_exhausted())
+                    .collect();
+                active.sort_by_key(|b| b.range_start);
+
+                if active.is_empty() {
+                    let last = blocks
+                        .iter()
+                        .copied()
+                        .max_by_key(|b| b.range_end)
+                        .expect("non-empty by construction");
                     println!(
                         "  {} {}: {} (exhausted — run `aida db block claim --type {}`)",
                         "".red(),
-                        b.type_prefix,
-                        format!("{}-{}..{}", b.type_prefix, b.range_start, b.range_end),
-                        b.type_prefix
+                        prefix,
+                        format!("{}-{}..{}", prefix, last.range_start, last.range_end),
+                        prefix
                     );
-                } else if b.is_low() {
+                    continue;
+                }
+
+                let aggregate: u32 = active.iter().map(|b| b.remaining()).sum();
+                let ranges = active
+                    .iter()
+                    .map(|b| format!("{}-{}..{}", prefix, b.range_start, b.range_end))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let span = if active.len() == 1 {
+                    format!("({})", ranges)
+                } else {
+                    format!("across {} blocks ({})", active.len(), ranges)
+                };
+
+                if aggregate <= aida_core::BlockRegistry::AGGREGATE_LOW_THRESHOLD {
                     println!(
-                        "  {} {}: {} remaining ({}-{}..{}) — {} Low, claim soon",
+                        "  {} {}: {} remaining {} — {} Low, claim soon",
                         "".yellow(),
-                        b.type_prefix,
-                        remaining,
-                        b.type_prefix,
-                        b.range_start,
-                        b.range_end,
+                        prefix,
+                        aggregate,
+                        span,
                         "WARNING:".yellow().bold()
                     );
                 } else {
                     println!(
-                        "  {} {}: {} remaining ({}-{}..{})",
+                        "  {} {}: {} remaining {}",
                         "".green(),
-                        b.type_prefix,
-                        remaining,
-                        b.type_prefix,
-                        b.range_start,
-                        b.range_end
+                        prefix,
+                        aggregate,
+                        span
                     );
                 }
             }
@@ -37487,58 +37541,59 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
 
                     // TASK-36: show block utilization so users can spot an
                     // imminent exhaustion before it bites at `aida add` time.
-                    // trace:TASK-36 | ai:claude
+                    //
+                    // BUG-115: remaining sums across every non-exhausted
+                    // block of the type (pre-fix only used the highest-
+                    // numbered block's `remaining`, so a near-empty
+                    // higher block masked healthy lower ones and vice
+                    // versa).
+                    // trace:TASK-36 | trace:BUG-115 | ai:claude
                     let blocks_path = requirements_path.join("registry").join("blocks.yaml");
                     if let Ok(registry) = aida_core::BlockRegistry::load(&blocks_path) {
                         if !registry.blocks.is_empty() {
                             println!();
                             println!("{}", "Agreed-id blocks".bold());
                             println!("{}", "─".repeat(40));
-                            // Aggregate per type prefix (sum across nodes).
                             use std::collections::BTreeMap;
-                            #[derive(Default)]
-                            struct Agg {
-                                next: u32,
-                                end: u32,
-                                exhausted: bool,
-                                blocks: u32,
-                            }
-                            let mut by_prefix: BTreeMap<String, Agg> = BTreeMap::new();
+                            let mut by_prefix: BTreeMap<String, Vec<&aida_core::AgreedIdBlock>> =
+                                BTreeMap::new();
                             for b in &registry.blocks {
-                                let key = b.type_prefix.to_uppercase();
-                                let agg = by_prefix.entry(key).or_default();
-                                agg.blocks += 1;
-                                if b.range_end > agg.end {
-                                    agg.end = b.range_end;
-                                    agg.next = b.next;
-                                    agg.exhausted = b.is_exhausted();
-                                }
+                                by_prefix
+                                    .entry(b.type_prefix.to_uppercase())
+                                    .or_default()
+                                    .push(b);
                             }
-                            for (prefix, agg) in &by_prefix {
+                            for (prefix, blocks) in &by_prefix {
                                 let pad = format!("{:<8}", format!("{}:", prefix));
-                                if agg.exhausted {
+                                let total: u32 =
+                                    blocks.iter().map(|b| b.range_end - b.range_start + 1).sum();
+                                let remaining: u32 = blocks
+                                    .iter()
+                                    .filter(|b| !b.is_exhausted())
+                                    .map(|b| b.remaining())
+                                    .sum();
+                                let active_count =
+                                    blocks.iter().filter(|b| !b.is_exhausted()).count();
+                                if active_count == 0 {
+                                    let last_end =
+                                        blocks.iter().map(|b| b.range_end).max().unwrap_or(0);
                                     println!(
                                         "  {} {}  (last: {}-{}; falling back to node-aware)",
                                         pad,
                                         "EXHAUSTED".red().bold(),
                                         prefix,
-                                        agg.end,
+                                        last_end,
                                     );
                                 } else {
-                                    let remaining = if agg.next > agg.end {
-                                        0
-                                    } else {
-                                        agg.end - agg.next + 1
-                                    };
-                                    let issued = agg.end - remaining;
+                                    let issued = total - remaining;
                                     println!(
                                         "  {} {}/{}  ({} remaining, {} block{})",
                                         pad,
                                         issued,
-                                        agg.end,
+                                        total,
                                         remaining,
-                                        agg.blocks,
-                                        if agg.blocks == 1 { "" } else { "s" },
+                                        blocks.len(),
+                                        if blocks.len() == 1 { "" } else { "s" },
                                     );
                                 }
                             }
