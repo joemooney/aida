@@ -8089,5 +8089,13 @@ operations:
       ## Origin
 
       2026-05-19 — observed twice in one day. First: STORY-306's finish-checkpoint menu produced a 4-option list the user judged unclear (no recommendation, smoke-test gate disconnected, decisions bundled, no advisor-escape). Captured as the discipline memory `feedback_finish_checkpoint_clarity.md` and as this TASK. Second: BUG-245's autonomous-drain conclusion message listed what shipped but never named the required user action (Ctrl-D to advance the orchestrator), reproducing the gap on a different surface. Two surfaces, same rubric, same TASK — capture-vs-enforcement distinction made explicit.
-clock: 850
+- id: 019e441e-f23f-7722-97a5-26f75049e1ae
+  target_id: 019e3268-dd71-7370-b9c9-145bf672d855
+  author: aida
+  node_id: '1'
+  lamport: 851
+  timestamp: 2026-05-20T06:42:19.327254060Z
+  kind: !SetStatus
+    status: In Progress
+clock: 851
 node_id: '1'
