@@ -22,12 +22,12 @@ description: |
 
   Raised by the implementer while working TASK-359.
   Branch:   ·  Commit:   (PR link added on merge)
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:00:40.636427753Z
-modified_at: 2026-05-20T17:50:31.002964651Z
+modified_at: 2026-05-20T17:57:22.406753178Z
 req_type: Task
 tags:
 - from-implementer:TASK-359
@@ -52,3 +52,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-20T17:47:03.341423788Z
   implemented_by: joe
+  completed_at: 2026-05-20T17:57:22.406753178Z
+  completion_sha: dcc9f91fd3ec8337090800812bf342a894ceaf33
