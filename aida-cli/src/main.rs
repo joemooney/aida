@@ -20,6 +20,7 @@ mod session;
 mod session_manifest;
 mod status_display;
 mod usage;
+mod worker;
 mod workflow_hints;
 mod zen;
 
@@ -74,7 +75,8 @@ use crate::cli::{
     GitLabCommand, JiraCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
     QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand, ZenCommand,
+    SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand, WorkerCommand,
+    ZenCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -415,6 +417,13 @@ fn run() -> Result<()> {
         return handle_drain_command(drain_cmd);
     }
 
+    // TASK-294: worker-directive introspection. Dispatched before storage
+    // init — reads only `.aida/worker.cmd`, no requirement store. Mirrors
+    // the STORY-301 drain dispatch pattern exactly. trace:TASK-294 | ai:claude
+    if let Command::Worker(worker_cmd) = &cli.command {
+        return handle_worker_command(worker_cmd);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -717,6 +726,7 @@ fn run() -> Result<()> {
         }
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
+        Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -2498,6 +2508,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
+        Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::List {
             status,
             r#type,
@@ -29909,6 +29920,182 @@ aida() {
 }
 "#;
 
+/// TASK-294: the `aida-worker` autonomous-drain loop, emitted alongside the
+/// `aida()` wrapper by `aida dev shell-init`. The function reads directives
+/// from `.aida/worker.cmd` (a FIFO — one directive per line) and drives a
+/// loop:
+///
+/// - bare/absent file or a `drain` line → run the queue head through a full
+///   `aida queue work --auto-complete` lifecycle.
+/// - `drain <args>` → run `aida queue work <args> --auto-complete`; the line
+///   is consumed (popped) on success so a user can write an overnight plan
+///   as a heredoc.
+/// - `pause` → log and sleep 30s; line persists.
+/// - `exit` → return 0.
+/// - unknown verb → defensively treated as `pause`.
+///
+/// Each drain is wrapped in `timeout` (knob: `AIDA_WORKER_SPEC_TIMEOUT`,
+/// default 1800s) so a hung session can't block the loop. The 2026-05-16
+/// watchdog comment explicitly asked for this — it applies even today's
+/// interactive Claude, where a walked-away user's Ctrl+D-blocked session
+/// would otherwise wedge.
+///
+/// Empty-queue handling is *separate* from failure handling: the
+/// canonical `aida queue work` error message contains the literal substring
+/// `nothing to drive` for both an empty queue and an all-in-flight queue.
+/// The worker greps for that and sleeps 30s (the queue may fill from another
+/// session) — it does *not* auto-pause, which would wedge a productive
+/// drain the moment it drained everything.
+///
+/// MUST call `command aida …` (not bare `aida`) so it bypasses the `aida()`
+/// wrapper above and gets raw stdout/exit codes.
+///
+/// trace:TASK-294 | ai:claude
+const WORKER_FUNCTION: &str = r#"
+# AIDA autonomous-drain worker (TASK-294).
+#
+# Loop: read .aida/worker.cmd, act on the head directive, re-read.
+#
+# Directives (one per line, blank/`#` lines skipped):
+#   drain                  pick queue head; run `aida queue work --auto-complete`
+#   drain <args>           run `aida queue work <args> --auto-complete`; line is
+#                          consumed on success (FIFO)
+#   pause                  sleep 30s; line persists (worker stays paused until edited)
+#   exit                   return 0
+#   <anything else>        defensively treated as `pause`
+#
+# An overnight plan is just a heredoc:
+#   printf 'drain batch:autonomy-modes --zen\ndrain batch:cleanup\nexit\n' \
+#       > .aida/worker.cmd
+#   aida-worker
+#
+# Knob: AIDA_WORKER_SPEC_TIMEOUT (default 1800s) — per-spec watchdog.
+# Exit 124 from `timeout` → log "TIMED OUT" + auto-pause; other non-zero →
+# log "halted" + auto-pause; "nothing to drive" output → sleep 30s only.
+aida-worker() {
+    local project_root cmd_file head verb rest args raw output rc
+    local sleep_short=30
+    project_root="$(pwd)"
+    while [ ! -d "$project_root/.aida" ] && [ "$project_root" != "/" ]; do
+        project_root="$(dirname "$project_root")"
+    done
+    if [ ! -d "$project_root/.aida" ]; then
+        echo "aida-worker: no .aida/ directory found from $(pwd); refusing to run" >&2
+        return 1
+    fi
+    cmd_file="$project_root/.aida/worker.cmd"
+    echo "aida-worker: starting; directive file = $cmd_file"
+    while true; do
+        head=""
+        if [ -f "$cmd_file" ]; then
+            # Read the first non-blank, non-comment line.
+            head=$(awk 'NF && $1 !~ /^#/ {print; exit}' "$cmd_file" 2>/dev/null || true)
+        fi
+        if [ -z "$head" ]; then
+            verb="drain"
+            rest=""
+            raw=""
+        else
+            verb=$(printf '%s\n' "$head" | awk '{print $1}')
+            rest=$(printf '%s\n' "$head" | awk '{$1=""; sub(/^ /, ""); print}')
+            raw="$head"
+        fi
+        case "$verb" in
+            exit)
+                echo "aida-worker: exit directive — stopping (rc=0)"
+                return 0
+                ;;
+            pause)
+                echo "aida-worker: pause directive — sleeping ${sleep_short}s (edit $cmd_file to resume)"
+                sleep "$sleep_short"
+                continue
+                ;;
+            drain)
+                if [ -n "$rest" ]; then
+                    echo "aida-worker: drain $rest"
+                else
+                    echo "aida-worker: drain (head pickup)"
+                fi
+                # Build argv. Word-splitting `$rest` is the point — directives
+                # like `drain batch:x --zen` forward each word as a separate
+                # arg to `aida queue work`. Note: NO `command` prefix here —
+                # `timeout` invokes its child via execvp(), bypassing shell
+                # function lookup entirely, and `command` is a bash builtin
+                # that execvp() cannot resolve (it would fail with rc 127).
+                #
+                # `--kill-after=5s` is defense in depth: if the child ignores
+                # the initial SIGTERM, a SIGKILL follows 5s later.
+                # (Verified: GNU `timeout` reaches normal forking children
+                # and exec-chains via its process-group SIGTERM. A child that
+                # `setsid()`s out of the group survives — that is the residual
+                # the heartbeat followup addresses.)
+                # shellcheck disable=SC2086
+                output=$(timeout --kill-after=5s "${AIDA_WORKER_SPEC_TIMEOUT:-1800}" aida queue work $rest --auto-complete 2>&1)
+                rc=$?
+                printf '%s\n' "$output"
+                case "$rc" in
+                    0)
+                        echo "aida-worker: drain succeeded"
+                        # Pop the consumed line on a scoped drain (one
+                        # whose directive was a literal line in the file).
+                        # A bare/absent-file `drain` has nothing to pop.
+                        if [ -n "$raw" ] && [ -f "$cmd_file" ]; then
+                            _aida_worker_pop_head "$cmd_file" "$raw"
+                        fi
+                        ;;
+                    124)
+                        echo "aida-worker: TIMED OUT after ${AIDA_WORKER_SPEC_TIMEOUT:-1800}s; auto-pausing"
+                        printf 'pause\n' > "$cmd_file"
+                        ;;
+                    *)
+                        if printf '%s' "$output" | grep -q 'nothing to drive'; then
+                            echo "aida-worker: queue empty — sleeping ${sleep_short}s"
+                            sleep "$sleep_short"
+                        else
+                            echo "aida-worker: halted (exit $rc); auto-pausing"
+                            printf 'pause\n' > "$cmd_file"
+                        fi
+                        ;;
+                esac
+                ;;
+            *)
+                echo "aida-worker: unknown directive '$verb' — treating as pause (sleeping ${sleep_short}s)"
+                sleep "$sleep_short"
+                ;;
+        esac
+    done
+}
+
+# Pop the first non-blank, non-comment line whose text matches $2 from $1.
+# Re-reads the file fresh so directives the user *appended* during a multi-
+# minute drain survive (overwrites mid-drain are documented as racey).
+_aida_worker_pop_head() {
+    local file="$1"
+    local target="$2"
+    local tmp
+    tmp=$(mktemp "${file}.XXXXXX") || return 0
+    awk -v target="$target" '
+        BEGIN { popped = 0 }
+        {
+            if (!popped) {
+                line = $0
+                t = line
+                sub(/^[ \t]+/, "", t)
+                if (length(t) == 0 || t ~ /^#/) {
+                    print line
+                    next
+                }
+                if (t == target) {
+                    popped = 1
+                    next
+                }
+            }
+            print
+        }
+    ' "$file" > "$tmp" 2>/dev/null && mv "$tmp" "$file" || rm -f "$tmp"
+}
+"#;
+
 const HELPERS_BEGIN_MARKER: &str = "# >>> aida shell helpers >>>";
 const HELPERS_END_MARKER: &str = "# <<< aida shell helpers <<<";
 
@@ -29936,7 +30123,7 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
          # Re-run that command to regenerate this file (e.g. after upgrading aida).\n\n",
         env_export,
         SHELL_HELPERS,
-        ""
+        WORKER_FUNCTION
     );
 
     if !install {
@@ -35588,6 +35775,15 @@ fn handle_status_command_distributed(
         print_status_pr_section(&user_ctx, false);
     }
     print_status_queue_section(&user_ctx, false);
+
+    // TASK-294: a one-line pending-directive summary so the worker control
+    // channel has the same visibility as the work queue. Silent when the
+    // directive file is empty/absent.
+    let directives = worker::parse_directives(&worker::worker_cmd_path(&project_root));
+    if let Some(line) = worker::status_line(&directives) {
+        println!("  {}", line);
+        println!();
+    }
 
     println!("{}", "─── Project ───".bold());
     let name = if store.name.is_empty() {
@@ -46676,6 +46872,43 @@ fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 drain_state::DrainStatus::Stale(state) => {
                     print!("{}", drain_state::render_human(&state, true));
                 }
+            }
+            // TASK-294: equal visibility for the worker control channel —
+            // the directive FIFO surfaces here alongside the drain summary
+            // so a user sees both at once. Silent when no directives are
+            // pending so quiet projects stay quiet.
+            let directives = worker::parse_directives(&worker::worker_cmd_path(&project_root));
+            if let Some(line) = worker::status_line(&directives) {
+                println!();
+                println!("  {line}");
+            }
+            Ok(())
+        }
+    }
+}
+
+/// `aida worker directives` — list the FIFO of pending directives the
+/// `aida-worker` shell function will act on next (TASK-294). Reads
+/// `.aida/worker.cmd` only — no requirement-store dependency, so it
+/// dispatches pre-storage like `aida drain status`. Prints "No pending
+/// directives." (exit 0) when the file is empty or absent so a quiet
+/// project never errors. trace:TASK-294 | ai:claude
+fn handle_worker_command(cmd: &WorkerCommand) -> Result<()> {
+    match cmd {
+        WorkerCommand::Directives { json } => {
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let path = worker::worker_cmd_path(&project_root);
+            let directives = worker::parse_directives(&path);
+            if *json {
+                println!("{}", worker::render_json(&directives));
+                return Ok(());
+            }
+            if directives.is_empty() {
+                println!("No pending directives.");
+            } else {
+                print!("{}", worker::render_human(&directives));
             }
             Ok(())
         }
