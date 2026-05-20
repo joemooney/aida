@@ -477,7 +477,7 @@ the second row's Why states the dependency explicitly. Full convention:
 closing block is finish-state communication — the same six-element rubric
 that governs `/aida-pickup` Step 6 applies here. The orchestrator-mode
 template below carries all six: a labelled **State snapshot**, the
-**deciding factor** when one is in play, an explicit **`→ next:` line**
+**deciding factor** when one is in play, an explicit **`→ Next:` line**
 naming the user-action (the recommendation in summary form), a per-option
 **downstream consequence + reversibility**, an **advise escape** row,
 and decoupled coupled decisions (the reviewer-queue story is filed

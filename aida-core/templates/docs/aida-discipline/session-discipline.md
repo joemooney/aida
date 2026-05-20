@@ -112,7 +112,7 @@ finishes a phase. Both surfaces must carry all six elements below.
 3. **A recommendation with rationale.** Not a flat neutral menu. The
    skill has the analysis; lead with *"I recommend X because Y"* and mark
    the row `← recommended`. For a closing summary, this is the explicit
-   *"→ next: <action>"* line that names the user-action.
+   *"→ Next: <action>"* line that names the user-action.
 4. **Per-option downstream consequence + reversibility.** For a menu, each
    option's row states what the orchestrator / drain does next (*"advances
    to phase 4 → merge"*, *"halts at phase 3 with the recovery hint"*) and
