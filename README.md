@@ -283,6 +283,28 @@ $ aida queue work STORY-1 --auto-complete
 
 It drives the implementer session, waits for CI, runs the reviewer, merges the PR, pulls, and bumps STORY-1 to Completed — no further input. Run the loop manually first so you can see each stage; reach for `--auto-complete` once the rhythm is familiar. The trade-off (interactive = better decisions, autonomous = better throughput) and the headless overnight-drain variants are covered in [`docs/lifecycle.md`](docs/lifecycle.md#autonomous-drains-and---auto-complete) and [`docs/autonomous-drain.md`](docs/autonomous-drain.md).
 
+Concretely, `--auto-complete` is a process tree — the orchestrator process spawns short-lived Claude sessions for the two phases that need judgment (implementer, reviewer) and runs the deterministic steps itself:
+
+```
+   $ aida queue work SPEC --auto-complete       ← orchestrator process (your terminal)
+   │
+   ├─▶ Phase 1: spawn implementer Claude  ─────►  [Claude session — implements SPEC,
+   │   (waits for it to exit)                     runs /aida-pr, exits]
+   │◀──── detects exit ────────────────────────────────────────────────────────────┘
+   │
+   ├─▶ Phase 2: end session + wait for CI       (deterministic — no Claude session)
+   │
+   ├─▶ Phase 3: spawn reviewer Claude  ────────►  [Claude session — reviews PR,
+   │   (waits for it to exit)                     writes verdict, exits]
+   │◀──── detects exit ────────────────────────────────────────────────────────────┘
+   │
+   ├─▶ Phase 4: gh pr merge                     (deterministic)
+   ├─▶ Phase 5: aida pull + auto-bump           (deterministic)
+   └─▶ Phase 6: cargo build verify              (deterministic)
+```
+
+Two Claude sessions get spawned (phase 1 + phase 3), each in its own worktree; the orchestrator process itself does phases 2, 4, 5, 6 directly. `--zen` and `--no-human` change *which prompts pause for input vs auto-resolve*, not the process shape.
+
 > **Want to see AIDA on a real project?** This walkthrough carries *one* spec. [`docs/first-project.md`](docs/first-project.md) builds a whole tiny project — a TODO CLI, six specs, a real parent/child graph driven to merged — so you can see what the graph is *for*, not just how each command works.
 
 ## What you get
