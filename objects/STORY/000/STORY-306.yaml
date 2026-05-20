@@ -65,12 +65,12 @@ description: |-
   2026-05-18, user describing the future direction: *\"in the --no-human mode eventually I think we want the possibility of punting to an advisor, the advisor tries to answer, if the advisor wants a human then it is punted to the human, otherwise the advisor responds and the chat can be resumed with the answer.\"*
 
   Explicitly an \"eventually\" — it sits on top of STORY-276 + STORY-285 + TASK-323, none shipped. Filed now to capture the architecture while it's clearly articulated; correctly gated so it doesn't jump its dependencies.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:38:45.451756021Z
-modified_at: 2026-05-19T17:55:32.210210845Z
+modified_at: 2026-05-20T02:05:55.672257539Z
 req_type: Story
 tags:
 - advisor-tier
@@ -140,3 +140,7 @@ comments:
   content: 'Plan written 2026-05-19: docs/plans/2026-05-19-story-306-advisor-escalation-tier.md. Five-slice build order; Slice 1 (reviewer escalation handshake, BUG-241 items 4-5) is independently shippable since it needs only the reviewer phase, not STORY-276. Slices 3-5 (the advisor tier proper) are gated on STORY-276 merging first. Folds in the design-expansion comments: orchestrator assembles the rich ultraplan-grade payload (implementer just punts well), v1 fresh-advisor + rich payload is the build target, punt-ledger records emitted from day one (PuntRecord extended with classification/escalation_reason/answer fields), A/B/C calibration enforced structurally in the /aida-advise skill prompt, --escalate-blocks default vs --escalate-defaults.'
   created_at: 2026-05-19T17:26:22.842785368Z
   modified_at: 2026-05-19T17:26:22.842785368Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T02:05:55.672257539Z
+  implemented_by: joe
