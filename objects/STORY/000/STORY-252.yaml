@@ -155,7 +155,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:10:49.715594843Z
-modified_at: 2026-05-20T04:41:43.542467111Z
+modified_at: 2026-05-20T04:42:29.035194114Z
 req_type: Story
 tags:
 - advisor
@@ -226,6 +226,13 @@ comments:
   content: Commit 44b13f98 references this requirement
   created_at: 2026-05-20T04:40:41.304187265Z
   modified_at: 2026-05-20T04:40:41.304187265Z
+- id: 019e43b1-3cda-7680-8088-b268a2a6bbb6
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-19-story-252-aida-digest.md
+    filed 7 task(s): TASK-376, TASK-377, TASK-378, TASK-379, TASK-380, TASK-381, TASK-382
+  created_at: 2026-05-20T04:42:29.466036256Z
+  modified_at: 2026-05-20T04:42:29.466036256Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T04:40:50.731949710Z
