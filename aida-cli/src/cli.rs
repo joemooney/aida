@@ -3176,9 +3176,24 @@ pub enum Command {
         #[clap(long)]
         feature: Option<String>,
 
-        /// New tags (comma-separated, replaces existing)
+        /// New tags (comma-separated, replaces existing).
+        /// Use --add-tag/--remove-tag for partial edits that don't clobber.
         #[clap(long)]
         tags: Option<String>,
+
+        /// Add a tag without touching existing tags. Repeatable
+        /// (--add-tag x --add-tag y). Adding a present tag is a no-op.
+        /// Conflicts with --tags.
+        // trace:TASK-351 | ai:claude
+        #[clap(long = "add-tag", value_name = "TAG", conflicts_with = "tags")]
+        add_tag: Vec<String>,
+
+        /// Remove a tag without touching the rest. Repeatable
+        /// (--remove-tag x --remove-tag y). Removing an absent tag is a no-op.
+        /// Conflicts with --tags.
+        // trace:TASK-351 | ai:claude
+        #[clap(long = "remove-tag", value_name = "TAG", conflicts_with = "tags")]
+        remove_tag: Vec<String>,
 
         /// Use interactive mode (launches editor)
         #[clap(long, short = 'i')]
