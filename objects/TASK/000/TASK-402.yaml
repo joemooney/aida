@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:25:52.380628259Z
-modified_at: 2026-05-20T15:25:52.380628259Z
+modified_at: 2026-05-20T15:30:33.825172133Z
 req_type: Task
 tags:
 - cli-ux
@@ -58,3 +58,14 @@ tags:
 - orchestrator
 - resume
 - session-management
+comments:
+- id: 019e4602-90e1-77d1-b20b-43abebee2363
+  author: joe
+  content: |-
+    Fifth friction in the same cluster (2026-05-20 recovery): `claude --resume <uuid>` is project-slug scoped, so a headless session launched in the worktree (`/home/joe/ai/aida-task-358`) is invisible from the main repo's cwd (`/home/joe/ai/aida`) — the user must remember to `cd` into the worktree first. Combined with friction #1 (prefix vs full UUID), the user hits two failures in a row trying to resume.
+
+    Acceptance addition (5th bullet for the consolidated TASK):
+
+    - **Surface the resume-from cwd requirement.** When the orchestrator's phase-1 banner advertises a resume command, it should advertise the *full* command including the `cd <worktree>` step, with the *full* Claude session UUID (not the AIDA lease ID), as a single paste-ready block. Or: `aida queue work <spec> --resume` (without --steal-baggage) auto-cd's into the worktree and runs `claude --resume <full-uuid>` for the user, so the cwd-and-UUID dance is hidden.
+  created_at: 2026-05-20T15:30:33.825172133Z
+  modified_at: 2026-05-20T15:30:33.825172133Z
