@@ -1,0 +1,26 @@
+id: 019e4620-464b-7133-a298-bc9686a78a5e
+spec_id: STORY-349
+agreed_id: STORY-349
+title: 'Review PR-124: fix(scripts): pre-release-check.sh empty-array path (TASK-389)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e45e6`) for branch `task-389`.
+
+  - PR: <https://github.com/joemooney/aida/pull/124>
+  - Branch: `task-389` → `main`
+
+  ## Covers
+
+  - TASK-389
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 124` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T16:03:00.811725625Z
+modified_at: 2026-05-20T16:03:00.811725625Z
+req_type: Story
