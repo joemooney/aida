@@ -27,9 +27,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:00:40.636427753Z
-modified_at: 2026-05-20T17:32:56.440631371Z
+modified_at: 2026-05-20T17:46:16.502938968Z
 req_type: Task
 tags:
 - from-implementer:TASK-359
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 019e467e-d036-7510-9bf9-5b61104ed5c1
+  author: joe
+  content: Commit 81c9b8fe references this requirement
+  created_at: 2026-05-20T17:46:16.502938968Z
+  modified_at: 2026-05-20T17:46:16.502938968Z
