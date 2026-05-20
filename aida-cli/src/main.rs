@@ -15474,6 +15474,68 @@ fn pr_is_merged(project_root: &std::path::Path, pr: u32) -> Option<bool> {
     )
 }
 
+/// BUG-245: which SPEC-ID does the PR's commits actually credit?
+///
+/// Reads the PR's commit subjects via `gh pr view <N> --json commits` and
+/// parses `(SPEC-ID)` trailers out of each. Returns:
+///   - `Some(dispatched)` when the dispatched id appears among the credits —
+///     the common path. No mismatch.
+///   - `Some(other)` when the dispatched id is *absent* and a different id is
+///     credited. The orchestrator reports this as a `shipped-mismatch`
+///     anomaly and credits the truth.
+///   - `None` when the PR cannot be inspected, no commit names any spec, or
+///     `gh` is unreachable — "cannot determine" resolves to "trust the
+///     dispatched id", so the reconcile only ratifies a real mismatch.
+///
+/// Picks the first credited id when multiple non-dispatched ids appear. The
+/// observed BUG-245 case is one commit / one trailer; a PR carrying multiple
+/// genuinely-different specs is an open-ended case the operator must triage.
+/// trace:BUG-245 | ai:claude
+fn pr_credited_spec_id(
+    project_root: &std::path::Path,
+    pr: u32,
+    dispatched: &str,
+) -> Option<String> {
+    let gh = resolve_gh_binary()?;
+    let out = std::process::Command::new(&gh)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "view",
+            &pr.to_string(),
+            "--json",
+            "commits",
+            "-q",
+            ".commits[].messageHeadline",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    pick_credited_spec(stdout.as_ref(), dispatched)
+}
+
+/// Pure selector for the credited spec id, given newline-separated commit
+/// subjects (one per commit on the PR) and the dispatched id. Split out so
+/// the precedence rules are unit-testable without spawning `gh`.
+/// trace:BUG-245 | ai:claude
+fn pick_credited_spec(commit_subjects: &str, dispatched: &str) -> Option<String> {
+    let mut first_other: Option<String> = None;
+    for subject in commit_subjects.lines() {
+        for id in extract_spec_ids_from_commit(subject) {
+            if id == dispatched {
+                return Some(id);
+            }
+            if first_other.is_none() {
+                first_other = Some(id);
+            }
+        }
+    }
+    first_other
+}
+
 /// Parse a single tab-separated `gh pr list -q ...` line into a
 /// `PrLookup`. Extracted for unit-testing the empty / well-formed /
 /// malformed shapes without spawning `gh`. trace:BUG-88 | ai:claude
@@ -20619,6 +20681,63 @@ cargo test -p aida-cli
         // Multi-line input — only subject (first non-blank line) is scanned.
         let s = "subject (#7)\n\nbody mentions (#9)\n";
         assert_eq!(extract_pr_number_from_commit_subject(s), Some(7));
+    }
+
+    /// BUG-245: `pick_credited_spec` precedence. Given the PR's commit
+    /// subjects (one per line) and the dispatched id, returns:
+    ///   - the dispatched id when it appears among the credits
+    ///   - the first non-dispatched id otherwise
+    ///   - `None` when no commit names any spec
+    /// trace:BUG-245 | ai:claude
+    #[test]
+    fn pick_credited_spec_returns_dispatched_when_credited() {
+        // Single commit crediting the dispatched id — no mismatch.
+        let subjects = "[AI:claude] feat(scope): description (STORY-276)";
+        assert_eq!(
+            pick_credited_spec(subjects, "STORY-276"),
+            Some("STORY-276".to_string())
+        );
+
+        // Multi-commit PR carrying both the dispatched id and another —
+        // dispatched wins, no mismatch fires.
+        let subjects = "[AI:claude] fix(scope): unrelated (BUG-244)\n\
+            [AI:claude] feat(scope): description (STORY-276)";
+        assert_eq!(
+            pick_credited_spec(subjects, "STORY-276"),
+            Some("STORY-276".to_string())
+        );
+    }
+
+    /// BUG-245: the observed case — PR-108 crediting BUG-244 while STORY-276
+    /// was dispatched. The dispatched id is absent from the credits, so the
+    /// first non-dispatched id is returned. trace:BUG-245 | ai:claude
+    #[test]
+    fn pick_credited_spec_returns_other_when_dispatched_absent() {
+        let subjects = "[AI:claude] fix(release): v0.8.0 blocker (BUG-244)";
+        assert_eq!(
+            pick_credited_spec(subjects, "STORY-276"),
+            Some("BUG-244".to_string())
+        );
+
+        // First non-dispatched wins when the PR carries multiple unrelated
+        // ids.
+        let subjects = "[AI:claude] fix: a (TASK-77)\n[AI:claude] feat: b (BUG-244)";
+        assert_eq!(
+            pick_credited_spec(subjects, "STORY-276"),
+            Some("TASK-77".to_string())
+        );
+    }
+
+    /// BUG-245: `None` when the PR's commits credit no spec at all — the
+    /// orchestrator treats this as "cannot determine", which preserves the
+    /// pre-BUG-245 dispatched-id credit. trace:BUG-245 | ai:claude
+    #[test]
+    fn pick_credited_spec_returns_none_when_no_spec_credited() {
+        // No `(SPEC-ID)` trailers anywhere.
+        let subjects = "chore: bump dep version\nrefactor: rename helper";
+        assert_eq!(pick_credited_spec(subjects, "STORY-276"), None);
+        // Empty PR — defensive, shouldn't happen in practice.
+        assert_eq!(pick_credited_spec("", "STORY-276"), None);
     }
 
     /// BUG-102: title-to-PR parser used to match Done review stories
@@ -48048,6 +48167,7 @@ fn emit_batch_drain_summary(
             BatchDrainOutcome::MaxReached => "max-reached",
             BatchDrainOutcome::Failed(_) => "failed",
             BatchDrainOutcome::Stalled => "stalled",
+            BatchDrainOutcome::Mismatched { .. } => "mismatched",
         };
         let mut obj = serde_json::Map::new();
         obj.insert(
@@ -48169,6 +48289,32 @@ fn emit_batch_drain_summary(
                 "  {} check {stopped}'s status (`aida show {stopped}`) — it may not have \
                  been dequeued",
                 "→".dimmed()
+            );
+        }
+        // BUG-245: phase 1 shipped a different spec than the dispatched head.
+        // Credit the truth, name what stayed queued, and tell the operator
+        // how to advance — either pick the dispatched spec back up or skip
+        // it. trace:BUG-245 | ai:claude
+        BatchDrainOutcome::Mismatched {
+            dispatched,
+            shipped,
+        } => {
+            eprintln!(
+                "{} batch `batch:{batch_name}` drain stopped — phase 1 was dispatched \
+                 for {} but the PR credited {}",
+                "ⓘ".cyan().bold(),
+                dispatched.bold(),
+                shipped.bold(),
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} {} is still queued — pick it back up with `aida queue work {}`, \
+                 or remove it with `aida queue remove {}` if {} subsumed it",
+                "→".dimmed(),
+                dispatched,
+                dispatched,
+                dispatched,
+                shipped,
             );
         }
     }
@@ -48436,6 +48582,7 @@ fn emit_next_n_drain_summary(
             BatchDrainOutcome::MaxReached => "max-reached",
             BatchDrainOutcome::Failed(_) => "failed",
             BatchDrainOutcome::Stalled => "stalled",
+            BatchDrainOutcome::Mismatched { .. } => "mismatched",
         };
         let mut obj = serde_json::Map::new();
         obj.insert(
@@ -48562,6 +48709,34 @@ fn emit_next_n_drain_summary(
                 "  {} check {stopped}'s status (`aida show {stopped}`) — it may not have \
                  been dequeued",
                 "→".dimmed()
+            );
+        }
+        // BUG-245: phase 1 shipped a different spec than the dispatched head.
+        // Credit the truth, name what stayed queued. trace:BUG-245 | ai:claude
+        BatchDrainOutcome::Mismatched {
+            dispatched,
+            shipped,
+        } => {
+            eprintln!(
+                "{} next {n} drain stopped — phase 1 was dispatched for {} \
+                 but the PR credited {}",
+                "ⓘ".cyan().bold(),
+                dispatched.bold(),
+                shipped.bold(),
+            );
+            eprintln!(
+                "  {} already shipped ({count}): {}",
+                "✓".green(),
+                shipped_list
+            );
+            eprintln!(
+                "  {} {} is still queued — pick it back up with `aida queue work {}`, \
+                 or remove it with `aida queue remove {}` if {} subsumed it",
+                "→".dimmed(),
+                dispatched,
+                dispatched,
+                dispatched,
+                shipped,
             );
         }
     }
@@ -49842,6 +50017,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             Some(RequirementStatus::Completed)
         );
         reconcile_verdict(merged_pr, completed, &self.spec)
+    }
+
+    /// BUG-245: read the PR's commit subjects to see which SPEC-ID they
+    /// actually credit. Called by `orchestrate` after phase 1 confirms an
+    /// open PR; on a dispatched≠credited mismatch the success epilogue
+    /// credits the truth and the dispatched spec is left queued. Returns
+    /// `None` when there is no PR yet, or `gh` cannot answer — "cannot
+    /// determine" preserves the pre-BUG-245 behaviour (dispatched id is
+    /// credited). trace:BUG-245 | ai:claude
+    fn shipped_spec_id(&mut self) -> Option<String> {
+        let pr = self.pr_number?;
+        pr_credited_spec_id(&self.project_root, pr, &self.spec)
     }
 }
 

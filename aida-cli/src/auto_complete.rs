@@ -393,6 +393,16 @@ pub(crate) struct OrchestrationResult {
     /// is *not* a failure (`exit_code` is `0`, `failed_phase` is `None`), so
     /// this is the only field that distinguishes a punt from a clean ship.
     pub(crate) punt_reason: Option<String>,
+    /// BUG-245: when phase 1's PR credits a *different* spec than the
+    /// dispatched id (e.g., the dispatched spec was blocked and the
+    /// implementer pragmatically shipped a release blocker instead), this
+    /// carries the id the PR actually credits. The batch drain records *this*
+    /// id as shipped and stops with [`BatchDrainOutcome::Mismatched`] so the
+    /// dispatched spec stays queued with an accurate reason rather than a
+    /// false `✓ shipped`. `None` when dispatched == shipped (the common path)
+    /// or when the driver could not determine an id from the PR's commits.
+    /// trace:BUG-245 | ai:claude
+    pub(crate) shipped_spec_id: Option<String>,
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -429,6 +439,21 @@ pub(crate) trait PhaseDriver {
     /// only ever ratify a success, never invent one. trace:BUG-241 | ai:claude
     fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
         PhaseReconcile::GenuineFailure
+    }
+    /// BUG-245: the spec id the PR's commits actually credit (the `(SPEC-ID)`
+    /// at the end of each commit subject), or `None` when the PR cannot be
+    /// inspected or its commits name no spec. The orchestrator calls this
+    /// right after phase 1 confirms an open PR and, on a mismatch with the
+    /// dispatched id, switches the success epilogue to credit the truth and
+    /// surfaces the mismatch as an explicit anomaly. The default is `None`
+    /// (a driver with no PR-introspection capability behaves exactly as
+    /// before — the dispatched id is credited, matching pre-BUG-245
+    /// behaviour). An implementation that finds the dispatched id among the
+    /// PR's commit credits should return `Some(<dispatched>)` so no mismatch
+    /// fires; only return a different id when the PR genuinely credits a
+    /// different spec. trace:BUG-245 | ai:claude
+    fn shipped_spec_id(&mut self) -> Option<String> {
+        None
     }
 }
 
@@ -641,25 +666,76 @@ fn emit_done(phase: Phase, spec: &str, json: bool, elapsed: u128) {
     }
 }
 
+/// BUG-245: announce that phase 1's PR credits a different spec than the
+/// dispatched id. The orchestrator continues phases 2-6 against the same PR
+/// (those are PR-anchored, not spec-anchored) and `finish_success` will credit
+/// `shipped`; the dispatched spec is left queued for its own future pickup.
+/// trace:BUG-245 | ai:claude
+fn emit_shipped_mismatch(dispatched: &str, shipped: &str, json: bool, elapsed: u128) {
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                Phase::Implementer.slug(),
+                "shipped-mismatch",
+                dispatched,
+                elapsed,
+                None,
+                &[("shipped", shipped)],
+            )
+        );
+    } else {
+        eprintln!(
+            "  {} phase 1 was dispatched for {} but the PR credits {} — \
+             crediting {}, {} stays queued",
+            "ⓘ".cyan(),
+            dispatched.bold(),
+            shipped.bold(),
+            shipped,
+            dispatched,
+        );
+    }
+}
+
 /// Print the success epilogue and build the success [`OrchestrationResult`].
+///
+/// `dispatched` is the spec the orchestrator was launched for; `credited` is
+/// the id reported in the `✓ shipped` line. They differ only in the BUG-245
+/// mismatch case — phase 1's PR named a different spec than the dispatched id
+/// — so on a match (the common path) the caller passes `dispatched` for both
+/// and the JSON event + epilogue read exactly as pre-BUG-245.
+/// trace:BUG-245 | ai:claude
 fn finish_success(
-    spec: &str,
+    dispatched: &str,
+    credited: &str,
     json: bool,
     start: &Instant,
     durations: Vec<(Phase, u128)>,
 ) -> OrchestrationResult {
     let elapsed = start.elapsed().as_millis();
+    let shipped_spec_id = (credited != dispatched).then(|| credited.to_string());
     if json {
+        let mut extra: Vec<(&str, &str)> = Vec::new();
+        if let Some(id) = shipped_spec_id.as_deref() {
+            extra.push(("shipped", id));
+        }
         println!(
             "{}",
-            phase_event("auto-complete", "success", spec, elapsed, Some(0), &[])
+            phase_event(
+                "auto-complete",
+                "success",
+                dispatched,
+                elapsed,
+                Some(0),
+                &extra
+            )
         );
     } else {
         eprintln!();
         eprintln!(
             "{} {} shipped ({})",
             "✓".green().bold(),
-            spec.bold(),
+            credited.bold(),
             fmt_duration(elapsed)
         );
     }
@@ -670,6 +746,7 @@ fn finish_success(
         phase_durations: durations,
         total_ms: elapsed,
         punt_reason: None,
+        shipped_spec_id,
     }
 }
 
@@ -741,6 +818,7 @@ fn finish_punted(
         phase_durations: durations,
         total_ms: elapsed,
         punt_reason: Some(reason.to_string()),
+        shipped_spec_id: None,
     }
 }
 
@@ -804,6 +882,7 @@ fn finish_failure(
         phase_durations: durations,
         total_ms: elapsed,
         punt_reason: None,
+        shipped_spec_id: None,
     }
 }
 
@@ -869,6 +948,7 @@ fn finish_reconciled(
         phase_durations: durations,
         total_ms: elapsed,
         punt_reason: None,
+        shipped_spec_id: None,
     }
 }
 
@@ -955,6 +1035,24 @@ pub(crate) fn orchestrate(
     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
     emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
 
+    // BUG-245: before running phases 2-6 on the PR, ask the driver whose
+    // SPEC-ID the PR's commits actually credit. The implementer can
+    // pragmatically ship a *different* spec — e.g., the dispatched spec was
+    // blocked and the implementer worked a release blocker instead. Phases
+    // 2-6 (CI / reviewer / merge / pull / build) are PR-anchored, not spec-
+    // anchored, so they run unchanged on whichever PR is open; the change
+    // is in *attribution*: on mismatch, credit the truth in the success
+    // epilogue and surface the mismatch as an explicit anomaly. A driver
+    // that cannot inspect the PR returns `None`, which preserves pre-BUG-245
+    // behaviour (the dispatched id is credited). trace:BUG-245 | ai:claude
+    let credited = driver
+        .shipped_spec_id()
+        .filter(|id| id != spec)
+        .unwrap_or_else(|| spec.to_string());
+    if credited != spec {
+        emit_shipped_mismatch(spec, &credited, json, start.elapsed().as_millis());
+    }
+
     // Phase 2 — end + wait for CI.
     emit_start(Phase::Ci, spec, json, start.elapsed().as_millis());
     let phase_start = Instant::now();
@@ -965,7 +1063,7 @@ pub(crate) fn orchestrate(
     durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
     emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 2 {
-        return finish_success(spec, json, &start, durations);
+        return finish_success(spec, &credited, json, &start, durations);
     }
 
     // Phase 3 — reviewer session.
@@ -1015,7 +1113,7 @@ pub(crate) fn orchestrate(
     durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
     emit_done(Phase::Merge, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 4 {
-        return finish_success(spec, json, &start, durations);
+        return finish_success(spec, &credited, json, &start, durations);
     }
 
     // Phase 5 — pull + auto-bump.
@@ -1028,7 +1126,7 @@ pub(crate) fn orchestrate(
     durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
     emit_done(Phase::Pull, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 5 {
-        return finish_success(spec, json, &start, durations);
+        return finish_success(spec, &credited, json, &start, durations);
     }
 
     // Phase 6 — build verify.
@@ -1041,7 +1139,7 @@ pub(crate) fn orchestrate(
     durations.push((Phase::Build, phase_start.elapsed().as_millis()));
     emit_done(Phase::Build, spec, json, start.elapsed().as_millis());
 
-    finish_success(spec, json, &start, durations)
+    finish_success(spec, &credited, json, &start, durations)
 }
 
 // --- Batch drain (TASK-285) -------------------------------------------------
@@ -1066,6 +1164,13 @@ pub(crate) enum BatchDrainOutcome {
     /// A run reported success but the head did not advance — stopped to
     /// avoid an infinite loop on the same spec.
     Stalled,
+    /// BUG-245: phase 1's PR shipped a *different* spec than the dispatched
+    /// head (the implementer pragmatically worked another spec — typically a
+    /// release blocker). The drain credits the truth in `shipped`, leaves
+    /// `dispatched` queued for the next pickup, and stops so the operator
+    /// can inspect rather than loop on the un-advanced head. `dispatched`
+    /// equals the run's `stopped_at`. trace:BUG-245 | ai:claude
+    Mismatched { dispatched: String, shipped: String },
 }
 
 /// Outcome of a [`drain_batch`] run — what shipped, where it stopped, and the
@@ -1162,6 +1267,25 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
                 exit_code: result.exit_code,
             };
         }
+        // BUG-245: phase 1 shipped a different spec than the dispatched
+        // head. Credit the truth (the id the PR's commits name), leave the
+        // dispatched head queued for its own pickup, and stop the drain —
+        // the dispatched head did not advance, so a continued drain would
+        // either stall on it or double-credit the actual shipped spec.
+        // trace:BUG-245 | ai:claude
+        if let Some(actual) = result.shipped_spec_id.clone() {
+            shipped.push(actual.clone());
+            return BatchDrainResult {
+                shipped,
+                punted,
+                stopped_at: Some(head.clone()),
+                outcome: BatchDrainOutcome::Mismatched {
+                    dispatched: head,
+                    shipped: actual,
+                },
+                exit_code: 0,
+            };
+        }
         // STORY-276: a punt is a clean exit (`exit_code` 0) — the drain
         // advances — but the spec parked, it did not ship. Sort it accordingly.
         if result.punt_reason.is_some() {
@@ -1191,6 +1315,10 @@ mod tests {
         /// [`ImplementerOutcome::Punted`] with this reason instead of opening
         /// a PR — the headless-implementer design-fork punt.
         punt: Option<String>,
+        /// BUG-245: what [`PhaseDriver::shipped_spec_id`] returns. `None`
+        /// (default) preserves the pre-BUG-245 behaviour — the dispatched id
+        /// is credited.
+        shipped_spec_id: Option<String>,
     }
 
     impl MockPhaseDriver {
@@ -1201,6 +1329,7 @@ mod tests {
                 verdict: Verdict::Approved,
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
+                shipped_spec_id: None,
             }
         }
 
@@ -1211,6 +1340,7 @@ mod tests {
                 verdict: Verdict::Approved,
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
+                shipped_spec_id: None,
             }
         }
 
@@ -1221,6 +1351,7 @@ mod tests {
                 verdict,
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
+                shipped_spec_id: None,
             }
         }
 
@@ -1233,7 +1364,16 @@ mod tests {
                 verdict: Verdict::Approved,
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: Some(reason.to_string()),
+                shipped_spec_id: None,
             }
+        }
+
+        /// BUG-245: make this driver's [`PhaseDriver::shipped_spec_id`] return
+        /// `Some(id)` — phase 1's PR credits this spec instead of the
+        /// dispatched id, so the orchestrator must report the mismatch.
+        fn shipping_as(mut self, shipped: &str) -> Self {
+            self.shipped_spec_id = Some(shipped.to_string());
+            self
         }
 
         /// BUG-241: make this driver's [`PhaseDriver::reconcile_failure`]
@@ -1291,6 +1431,9 @@ mod tests {
         }
         fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
             self.reconcile.clone()
+        }
+        fn shipped_spec_id(&mut self) -> Option<String> {
+            self.shipped_spec_id.clone()
         }
     }
 
@@ -2040,6 +2183,7 @@ mod tests {
             phase_durations: Vec::new(),
             total_ms: 0,
             punt_reason: None,
+            shipped_spec_id: None,
         }
     }
 
@@ -2051,6 +2195,7 @@ mod tests {
             phase_durations: Vec::new(),
             total_ms: 0,
             punt_reason: None,
+            shipped_spec_id: None,
         }
     }
 
@@ -2064,6 +2209,22 @@ mod tests {
             phase_durations: Vec::new(),
             total_ms: 0,
             punt_reason: Some("mock punt: design-fork".to_string()),
+            shipped_spec_id: None,
+        }
+    }
+
+    /// BUG-245: a success [`OrchestrationResult`] where phase 1 credited a
+    /// different spec than the dispatched id — the shape `finish_success`
+    /// returns on a dispatched≠shipped mismatch. trace:BUG-245 | ai:claude
+    fn mismatch_result(shipped: &str) -> OrchestrationResult {
+        OrchestrationResult {
+            exit_code: 0,
+            failed_phase: None,
+            failure: None,
+            phase_durations: Vec::new(),
+            total_ms: 0,
+            punt_reason: None,
+            shipped_spec_id: Some(shipped.to_string()),
         }
     }
 
@@ -2078,6 +2239,11 @@ mod tests {
         fail_at: Option<(String, Phase)>,
         stall_spec: Option<String>,
         punt_spec: Option<String>,
+        /// BUG-245: when `run_spec` is called for `dispatched`, return a
+        /// success result crediting `shipped` instead. The dispatched head
+        /// stays in `heads` (matching reality — the implementer dequeued the
+        /// shipped spec, not the dispatched one). trace:BUG-245 | ai:claude
+        mismatch: Option<(String, String)>,
         runs: Vec<String>,
     }
 
@@ -2088,6 +2254,7 @@ mod tests {
                 fail_at: None,
                 stall_spec: None,
                 punt_spec: None,
+                mismatch: None,
                 runs: Vec::new(),
             }
         }
@@ -2104,6 +2271,15 @@ mod tests {
 
         fn punting(mut self, spec: &str) -> Self {
             self.punt_spec = Some(spec.to_string());
+            self
+        }
+
+        /// BUG-245: when `run_spec` runs `dispatched`, return a success that
+        /// credits `shipped`. The dispatched head is *not* consumed — that
+        /// mirrors a real run where the implementer worked a different spec
+        /// and the dispatched one is still queued. trace:BUG-245 | ai:claude
+        fn mismatching(mut self, dispatched: &str, shipped: &str) -> Self {
+            self.mismatch = Some((dispatched.to_string(), shipped.to_string()));
             self
         }
     }
@@ -2130,6 +2306,15 @@ mod tests {
                 // queue, exactly like a shipped spec, so the drain advances.
                 self.heads.retain(|h| h != spec);
                 return punt_result();
+            }
+            if let Some((dispatched, shipped)) = &self.mismatch {
+                if dispatched == spec {
+                    // BUG-245: the dispatched head stays in `heads` (the
+                    // implementer dequeued `shipped`, not the dispatched
+                    // spec). drain_batch is expected to stop without
+                    // re-running the dispatched head. trace:BUG-245
+                    return mismatch_result(shipped);
+                }
             }
             // Normal success — the completed spec leaves the queue.
             self.heads.retain(|h| h != spec);
@@ -2238,5 +2423,106 @@ mod tests {
         // TASK-2 ran once, was re-yielded as the head, and the guard fired
         // before a second run.
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2"]);
+    }
+
+    // --- BUG-245: dispatched≠shipped attribution ---------------------------
+
+    /// Acceptance: dispatch phase-1 for STORY-A; phase 1 produces a PR
+    /// crediting STORY-B (the implementer pragmatically worked a release
+    /// blocker). The orchestrator credits B in the success epilogue and
+    /// carries the mismatch into `OrchestrationResult::shipped_spec_id` so
+    /// the batch drain records the truth. trace:BUG-245 | ai:claude
+    #[test]
+    fn orchestrate_credits_shipped_when_pr_mismatches_dispatched() {
+        let mut driver = MockPhaseDriver::all_ok().shipping_as("BUG-244");
+        let result = orchestrate(&mut driver, "STORY-276", AutoCompleteVariant::Full, false);
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.failed_phase, None);
+        assert_eq!(result.shipped_spec_id, Some("BUG-244".to_string()));
+        // Phases 2-6 still ran on the PR (CI, reviewer, merge, pull, build) —
+        // the mismatch only re-attributes the credit, it doesn't truncate
+        // the pipeline.
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
+    }
+
+    /// When phase 1's PR credits the dispatched spec (the common path), no
+    /// mismatch fires and the result carries no `shipped_spec_id`. A driver
+    /// that explicitly reports the dispatched id behaves the same as one
+    /// that returns `None` — both mean "the dispatched spec is what
+    /// shipped". trace:BUG-245 | ai:claude
+    #[test]
+    fn orchestrate_no_mismatch_when_pr_credits_dispatched() {
+        // The default driver returns `None` for shipped_spec_id — no
+        // mismatch.
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate(&mut driver, "STORY-276", AutoCompleteVariant::Full, false);
+        assert_eq!(result.shipped_spec_id, None);
+
+        // A driver that names the dispatched id is also not a mismatch.
+        let mut driver = MockPhaseDriver::all_ok().shipping_as("STORY-276");
+        let result = orchestrate(&mut driver, "STORY-276", AutoCompleteVariant::Full, false);
+        assert_eq!(result.shipped_spec_id, None);
+    }
+
+    /// Acceptance test from BUG-245's description: a batch drain whose head
+    /// is dispatched but ships a different spec. The drain credits the
+    /// actual shipped id in `shipped`, leaves the dispatched id queued
+    /// (still in `heads`), and stops with `Mismatched` rather than looping
+    /// on the un-advanced head. trace:BUG-245 | ai:claude
+    #[test]
+    fn drain_batch_credits_actual_shipped_on_mismatch() {
+        let mut driver =
+            MockBatchDriver::new(&["STORY-276", "TASK-99"]).mismatching("STORY-276", "BUG-244");
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 0, "a mismatch is not a failure");
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::Mismatched {
+                dispatched: "STORY-276".to_string(),
+                shipped: "BUG-244".to_string(),
+            }
+        );
+        // The truth — BUG-244 — is what `shipped` records, not STORY-276.
+        assert_eq!(result.shipped, vec!["BUG-244"]);
+        // The dispatched spec is reported as where the drain stopped.
+        assert_eq!(result.stopped_at, Some("STORY-276".to_string()));
+        // STORY-276 is still queued — the drain did not run TASK-99 either,
+        // it stopped at the mismatched head for operator inspection.
+        assert_eq!(driver.runs, vec!["STORY-276"]);
+        assert!(driver.heads.contains(&"STORY-276".to_string()));
+    }
+
+    /// Self-consistency invariant from BUG-245's acceptance: the drain
+    /// summary must never claim a spec shipped *and* report it stayed at
+    /// the head in the same run. The mismatch outcome credits the actual
+    /// shipped id (not the dispatched one) in `shipped`, so a reader cannot
+    /// see "✓ X shipped" alongside "X stayed at head" for the same X.
+    /// trace:BUG-245 | ai:claude
+    #[test]
+    fn drain_batch_mismatch_summary_is_self_consistent() {
+        let mut driver = MockBatchDriver::new(&["STORY-276"]).mismatching("STORY-276", "BUG-244");
+        let result = drain_batch(&mut driver, None);
+        // The dispatched head appears in `stopped_at` (queue did not
+        // advance) — it must NOT also appear in `shipped`.
+        let dispatched = result.stopped_at.as_deref().unwrap();
+        assert!(
+            !result.shipped.iter().any(|s| s == dispatched),
+            "dispatched spec must not be credited as shipped"
+        );
+        // And `shipped` must carry the spec the PR actually shipped.
+        assert!(
+            result.shipped.iter().any(|s| s == "BUG-244"),
+            "actual shipped spec must be credited"
+        );
     }
 }
