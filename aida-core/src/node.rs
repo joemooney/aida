@@ -768,6 +768,54 @@ impl BlockRegistry {
         let is_low = block.is_low();
         Some((id, is_low))
     }
+
+    /// Aggregate-low threshold across all non-exhausted blocks owned by a
+    /// single (node, type) pair. The per-block [`AgreedIdBlock::LOW_THRESHOLD`]
+    /// (10) still controls `is_low()` for individual blocks; user-facing
+    /// "claim soon" warnings branch off the aggregate so a near-empty
+    /// lower block does not nag when a fresh higher block has been
+    /// claimed. trace:BUG-115 | ai:claude
+    pub const AGGREGATE_LOW_THRESHOLD: u32 = 20;
+
+    /// Sum of remaining IDs across every non-exhausted block owned by
+    /// `node_id` for `type_prefix`. Exhausted blocks contribute zero;
+    /// they are kept in the registry for history but no longer reduce
+    /// the user's headroom. Case-insensitive on the type prefix.
+    /// trace:BUG-115 | ai:claude
+    pub fn aggregate_remaining(&self, node_id: &str, type_prefix: &str) -> u32 {
+        let prefix = type_prefix.to_uppercase();
+        self.blocks
+            .iter()
+            .filter(|b| {
+                b.node_id == node_id && b.type_prefix.to_uppercase() == prefix && !b.is_exhausted()
+            })
+            .map(|b| b.remaining())
+            .sum()
+    }
+
+    /// Count of non-exhausted blocks owned by `node_id` for `type_prefix`.
+    /// Used to render the "across N blocks" suffix in user-facing output.
+    /// trace:BUG-115 | ai:claude
+    pub fn active_block_count(&self, node_id: &str, type_prefix: &str) -> usize {
+        let prefix = type_prefix.to_uppercase();
+        self.blocks
+            .iter()
+            .filter(|b| {
+                b.node_id == node_id && b.type_prefix.to_uppercase() == prefix && !b.is_exhausted()
+            })
+            .count()
+    }
+
+    /// True when the user has at least one active block for the type AND
+    /// the aggregate remaining across those active blocks is at or below
+    /// [`AGGREGATE_LOW_THRESHOLD`]. Returns false when every block is
+    /// exhausted — that state is surfaced as a separate
+    /// "exhausted, run claim" message, not a "low" warning.
+    /// trace:BUG-115 | ai:claude
+    pub fn aggregate_is_low(&self, node_id: &str, type_prefix: &str) -> bool {
+        self.active_block_count(node_id, type_prefix) > 0
+            && self.aggregate_remaining(node_id, type_prefix) <= Self::AGGREGATE_LOW_THRESHOLD
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1153,6 +1201,86 @@ registered = "2026-05-09T00:00:00Z"
         // 10 remain at this point — exactly at threshold, is_low = true
         let (_, is_low) = registry.dispense("1", "FR").unwrap();
         assert!(is_low);
+    }
+
+    // trace:BUG-115 | ai:claude
+    #[test]
+    fn test_aggregate_remaining_sums_across_blocks() {
+        let mut registry = BlockRegistry::default();
+        registry.claim_block("1".into(), "a".into(), "h".into(), "BUG".into(), 100);
+        registry.claim_block("1".into(), "a".into(), "h".into(), "BUG".into(), 100);
+        // Drain the first block down to 3 remaining (97 dispensed).
+        for _ in 0..97 {
+            registry.dispense("1", "BUG");
+        }
+        // 3 remaining in lowest block + 100 in highest = 103 aggregate.
+        assert_eq!(registry.aggregate_remaining("1", "BUG"), 103);
+        // Lowest block alone is "low" per the per-block rule, but the
+        // aggregate is well above the warning threshold — no nag.
+        assert!(!registry.aggregate_is_low("1", "BUG"));
+        assert_eq!(registry.active_block_count("1", "BUG"), 2);
+    }
+
+    // trace:BUG-115 | ai:claude
+    #[test]
+    fn test_aggregate_is_low_only_when_aggregate_dips() {
+        let mut registry = BlockRegistry::default();
+        registry.claim_block("1".into(), "a".into(), "h".into(), "BUG".into(), 15);
+        registry.claim_block("1".into(), "a".into(), "h".into(), "BUG".into(), 15);
+        // Drain both blocks down so aggregate falls to 20 (== threshold).
+        // First block: dispense 10 → 5 remaining. Second untouched (15).
+        for _ in 0..10 {
+            registry.dispense("1", "BUG");
+        }
+        // 5 + 15 = 20, exactly the threshold → low.
+        assert_eq!(registry.aggregate_remaining("1", "BUG"), 20);
+        assert!(registry.aggregate_is_low("1", "BUG"));
+    }
+
+    // trace:BUG-115 | ai:claude
+    #[test]
+    fn test_aggregate_ignores_exhausted_blocks() {
+        let mut registry = BlockRegistry::default();
+        registry.claim_block("1".into(), "a".into(), "h".into(), "BUG".into(), 5);
+        registry.claim_block("1".into(), "a".into(), "h".into(), "BUG".into(), 100);
+        // Drain the first block to exhaustion (5 dispenses on a size-5 block).
+        for _ in 0..5 {
+            registry.dispense("1", "BUG");
+        }
+        assert!(registry.blocks[0].is_exhausted());
+        // Aggregate counts only the still-active second block.
+        assert_eq!(registry.aggregate_remaining("1", "BUG"), 100);
+        assert_eq!(registry.active_block_count("1", "BUG"), 1);
+        assert!(!registry.aggregate_is_low("1", "BUG"));
+    }
+
+    // trace:BUG-115 | ai:claude
+    #[test]
+    fn test_aggregate_zero_when_all_exhausted() {
+        let mut registry = BlockRegistry::default();
+        registry.claim_block("1".into(), "a".into(), "h".into(), "BUG".into(), 3);
+        for _ in 0..3 {
+            registry.dispense("1", "BUG");
+        }
+        assert_eq!(registry.aggregate_remaining("1", "BUG"), 0);
+        assert_eq!(registry.active_block_count("1", "BUG"), 0);
+        // `aggregate_is_low` is false when no active blocks remain — the
+        // user gets a separate "exhausted, claim" message, not "low".
+        assert!(!registry.aggregate_is_low("1", "BUG"));
+    }
+
+    // trace:BUG-115 | ai:claude
+    #[test]
+    fn test_aggregate_scopes_to_node_and_type() {
+        let mut registry = BlockRegistry::default();
+        registry.claim_block("1".into(), "a".into(), "h".into(), "BUG".into(), 50);
+        registry.claim_block("2".into(), "b".into(), "h".into(), "BUG".into(), 50);
+        registry.claim_block("1".into(), "a".into(), "h".into(), "FR".into(), 50);
+        assert_eq!(registry.aggregate_remaining("1", "BUG"), 50);
+        assert_eq!(registry.aggregate_remaining("2", "BUG"), 50);
+        assert_eq!(registry.aggregate_remaining("1", "FR"), 50);
+        // Case-insensitive on the type prefix.
+        assert_eq!(registry.aggregate_remaining("1", "bug"), 50);
     }
 
     #[cfg(feature = "native")]
