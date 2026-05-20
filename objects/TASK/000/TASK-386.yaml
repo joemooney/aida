@@ -1,0 +1,12 @@
+id: 019e43c8-1bae-7be2-a27d-2c516d6d98ab
+spec_id: TASK-386
+agreed_id: TASK-386
+title: Optional `.aida/changelog-headlines.toml` per-release headline override
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T05:07:28.302217654Z
+modified_at: 2026-05-20T05:07:28.302217654Z
+req_type: Task
