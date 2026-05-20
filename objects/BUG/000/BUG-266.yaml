@@ -39,12 +39,12 @@ description: |-
   - BUG-257 / PR-123 — the GH-API parallel that this BUG mirrors.
   - TASK-358 — the spec whose drain attempt produced the evidence (still has commits on \`task-358\` branch worth resuming).
   - Memory \`feedback_headless_advisor_is_cold_boot\` — the headless implementer's external-dependency surface is broader than just the substrate.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:15:14.171355679Z
-modified_at: 2026-05-20T15:57:54.684991936Z
+modified_at: 2026-05-20T16:11:56.254312427Z
 req_type: Bug
 tags:
 - anthropic-api
@@ -71,3 +71,7 @@ comments:
     Filing this here rather than as a separate BUG since the two cases share the same detection code and should be implemented together.
   created_at: 2026-05-20T15:33:50.242290736Z
   modified_at: 2026-05-20T15:33:50.242290736Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T16:11:56.254312427Z
+  implemented_by: joe
