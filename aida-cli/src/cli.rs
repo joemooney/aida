@@ -3662,6 +3662,37 @@ pub enum Command {
     #[clap(subcommand)]
     Worker(WorkerCommand),
 
+    /// Emit the seven-row finish-state preamble (Spec / Branch / PR / Drain
+    /// / Tests / Fmt / Plan) deterministically. One source of truth for
+    /// every `/aida-pickup` and `/aida-pr` next-steps template — the rows
+    /// used to be filled in by hand from `git status`, `gh pr view`,
+    /// `aida show`, `aida session show`, and drifted between sibling
+    /// skills. Hidden: skill-internal, not a daily-driver command.
+    // trace:TASK-391 | ai:claude
+    #[clap(name = "state-snapshot", hide = true)]
+    StateSnapshot {
+        /// SPEC-ID whose title + status appear on the Spec row.
+        #[clap(long)]
+        spec: String,
+
+        /// Free-form summary of the last `cargo test` run, used as the
+        /// Tests row. Default `"not run"` — the caller (skill) is the
+        /// authoritative source for transient runtime state.
+        #[clap(long, default_value = "not run")]
+        tests: String,
+
+        /// Free-form summary of the last `cargo fmt --check`, used as the
+        /// Fmt row. Default `"not run"` — same rationale as `--tests`.
+        #[clap(long, default_value = "not run")]
+        fmt: String,
+
+        /// Emit the snapshot as JSON instead of the fixed-width text block.
+        /// For Step 5b finding metadata (machine-readable snapshot beside
+        /// the finding's prose body).
+        #[clap(long)]
+        json: bool,
+    },
+
     /// One-line project + role summary suitable for shell prompts and
     /// the `statusLine.command` setting in ~/.claude/settings.json.
     /// Sub-50ms (reads the cache + the orphan-store queue YAML). Format:
