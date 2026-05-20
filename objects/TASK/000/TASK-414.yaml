@@ -1,0 +1,35 @@
+id: 019e466d-f21a-7461-9c1e-5f769b1ffce4
+spec_id: TASK-414
+agreed_id: TASK-414
+title: simple-mode-with-more-items State preamble PR row should include 'no PR yet' variant
+description: |
+  In `aida-core/templates/skills/aida-pickup.md` § Step 6 *Simple mode, queue has more items routed to this role* template (PR-130, around line 853):
+
+  ```
+  PR:      #<N> open: <url>
+  ```
+
+  The alternate `⇒ Wrap up what's shipped as a PR` row in the same template (line 874) explicitly acknowledges Step 5c could skip:
+
+  > Use when Step 5c skipped (e.g. follow-up commits landed since); still this session — ships the current branch before picking up more
+
+  So a "no PR yet" case is real for this template. For symmetry with the simple-mode-empty template (line 887, which reads `PR:      #<N> open: <url>   |  no PR yet`), the simple-mode-with-more-items preamble should also include the variant:
+
+  ```
+  PR:      #<N> open: <url>   |  no PR yet
+  ```
+
+  Cosmetic — a reader hand-filling the preamble would otherwise leave the PR row inaccurate when Step 5c was skipped.
+
+  Raised in review of PR-130: https://github.com/joemooney/aida/pull/130
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T17:27:51.066453970Z
+modified_at: 2026-05-20T17:27:51.066453970Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-130
+- severity:cosmetic
