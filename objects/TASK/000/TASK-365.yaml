@@ -1,0 +1,12 @@
+id: 019e4380-e579-7462-a47e-797968f7e6fb
+spec_id: TASK-365
+agreed_id: TASK-365
+title: Convert remaining prose "(requires X)" / "blocked on X" comments across the spec base into typed `blocked-by` edges
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T03:49:41.369116294Z
+modified_at: 2026-05-20T03:49:41.369116294Z
+req_type: Task
