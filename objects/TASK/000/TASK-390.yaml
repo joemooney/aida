@@ -18,12 +18,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:00:21.418436461Z
-modified_at: 2026-05-20T17:19:24.319412490Z
+modified_at: 2026-05-20T17:20:07.183088322Z
 req_type: Task
 tags:
 - from-implementer:TASK-359
 - kind:design-choice
 - severity:minor
+comments:
+- id: 019e4666-de0f-7bd1-9e06-dbc18272c1a7
+  author: joe
+  content: |-
+    Implemented via PR-pending (commit 6a67d87e):
+
+    - Embedded the State preamble block, optional Deciding-factor line, `← recommended` rationale marker, and conditional `⊕ Route to the advisor` row into all five non-orchestrator templates (batch, cluster-drained, cluster-partial, simple-mode-with-more, simple-mode-empty).
+    - Each template's Drain line is tailored to its mode (batch progress / cluster progress / interactive); each ⊕ row's Why is mode-specific (when to route the keep-draining-vs-pivot call vs. ship-vs-revisit, etc.).
+    - Closing prose updated to declare all six templates carry the rubric inline, with trace markers (TASK-390, TASK-359, TASK-393).
+
+    Side note filed as TASK-412: simple-mode-empty's `▶ Open PR for what shipped` row is in mild tension with Step 5c's gate (which guarantees PR is open by Step 6 render). Worked around with a `(no-op if Step 5c already opened it)` parenthetical; cleaner fix is state-conditional row selection.
+
+    Test status: cargo build --workspace green (pre-existing warnings only; markdown-only edit)
+  created_at: 2026-05-20T17:20:07.183088322Z
+  modified_at: 2026-05-20T17:20:07.183088322Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T17:19:24.319412490Z
