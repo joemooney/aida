@@ -8024,5 +8024,13 @@ operations:
       ## Origin
 
       2026-05-19 — STORY-306's "push branch, hold PR" finish (advisor's call) was mis-classified as phase-1 failure. The advisor explicitly held the PR until a SPIKE-7 smoke; the orchestrator treated that deliberate choice as failure with a wrong recovery hint. Later the same day, attempting to re-enter the dormant worktree via `aida queue work STORY-306 --resume 019e415c` errored *"isn't queued. Status is Done"* — same outcome-model gap, second symptom: the queue verbs don't recognise `deliberate-hold` as a re-enterable state.
-clock: 848
+- id: 019e4418-f420-71a2-a026-a1d7321b5e94
+  target_id: 019e4418-5622-71e2-a1af-d394dc039818
+  author: aida
+  node_id: '1'
+  lamport: 849
+  timestamp: 2026-05-20T06:35:46.592366580Z
+  kind: !SetStatus
+    status: In Progress
+clock: 849
 node_id: '1'
