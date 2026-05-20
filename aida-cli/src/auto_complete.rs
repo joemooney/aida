@@ -134,6 +134,42 @@ impl NoHumanMode {
     }
 }
 
+/// How a `--no-human=both` drain handles an advisor *escalation* — when the
+/// headless advisor judges a punted design-fork un-resolvable and kicks it
+/// to a human (STORY-306).
+///
+/// `Blocks` is the default and the conservative choice: a confident-but-wrong
+/// overnight default is worse than a paused spec, so the default escalate
+/// behaviour is "pause, don't guess". `Defaults` exists for mechanical
+/// batches where throughput beats per-spec correctness.
+/// trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EscalateMode {
+    /// Leave the spec parked (`NeedsAttention`), file the `needs-human`
+    /// finding, advance the batch — this spec waits for a human. The default;
+    /// the `--escalate-blocks` flag is its explicit spelling.
+    Blocks,
+    /// Resume the implementer told to proceed with its stated lean / the most
+    /// defensible default, and file a `needs-human` finding for post-hoc
+    /// review. The `--escalate-defaults` flag.
+    Defaults,
+}
+
+impl EscalateMode {
+    /// Resolve the mode from the `--escalate-defaults` flag — absent ⇒ the
+    /// conservative [`Blocks`](Self::Blocks) default. (`--escalate-blocks` is
+    /// the explicit spelling of that default; clap's `conflicts_with` keeps
+    /// the two flags mutually exclusive, so a single bool resolves it.)
+    /// trace:STORY-306 | ai:claude
+    pub(crate) fn from_flags(escalate_defaults: bool) -> Self {
+        if escalate_defaults {
+            Self::Defaults
+        } else {
+            Self::Blocks
+        }
+    }
+}
+
 /// One lifecycle phase. The integer value doubles as the process exit code
 /// for a failure in that phase (success is always 0).
 /// trace:STORY-246 | ai:claude
@@ -371,6 +407,72 @@ pub(crate) enum ImplementerOutcome {
     Punted { reason: String },
 }
 
+/// The outcome of phase 3 — the reviewer session. The reviewer either
+/// reaches a [`Verdict`] (the normal path — `Approved` continues to merge,
+/// anything else stops the pipeline), or *escalates the merge decision to a
+/// human*. Under `--no-human` the reviewer cannot reach a person, so when
+/// the merge call turns on something it should not decide unattended
+/// (uncertain zen provenance, an irreversible call) it writes its verdict
+/// file with `merge: escalated-to-human` and the orchestrator stops cleanly
+/// — exit `0`, no merge, no failure — leaving the PR for a human. An
+/// escalation is the reviewer's honest "I will not auto-merge this": it is
+/// neither a crash nor a `RequestChanges`, so it is a first-class third
+/// outcome of phase 3 (BUG-241 items 4-5). trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReviewerOutcome {
+    /// The reviewer reached a verdict — phase 3 proceeds on it.
+    Verdict(Verdict),
+    /// The reviewer escalated the *merge* decision to a human. `reason` is
+    /// the one-line "why" surfaced in the run epilogue.
+    EscalatedToHuman { reason: String },
+}
+
+/// Which tier escalated a decision to a human — selects the
+/// [`finish_escalated`] epilogue wording. An escalated *merge* decision (the
+/// reviewer would not auto-merge) and an escalated *design-fork* (the
+/// headless advisor would not resolve a punt) are the same orchestration
+/// outcome — exit `0`, the drain advances, a human triages — so they share
+/// one terminal path, distinguished only for the epilogue wording.
+/// trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EscalationKind {
+    /// The reviewer escalated a merge decision (phase 3).
+    MergeDecision,
+    /// The headless advisor escalated a punted design-fork (phase 1 tier).
+    DesignFork,
+}
+
+/// Set on an [`OrchestrationResult`] when the run ended in an escalation — a
+/// first-class non-failure stop (BUG-241 items 4-5, STORY-306). Mirrors
+/// STORY-276's `punt_reason`: the run exits `0` with no `failed_phase`, and
+/// this is the field that distinguishes an escalation from a clean ship.
+/// trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EscalationSummary {
+    /// Which tier escalated — picks the epilogue wording.
+    pub(crate) kind: EscalationKind,
+    /// One-line "why a human is needed", surfaced in the run epilogue.
+    pub(crate) reason: String,
+}
+
+/// The headless advisor's verdict on a punted design-fork (STORY-306). The
+/// advisor either *resolves* the fork — it was confident enough to judge it
+/// — or *escalates* it to a human. The conservative-escalation bias (resolve
+/// only what is provably grounded, escalate everything else) lives in the
+/// `/aida-advise` skill prompt; this enum is just the orchestrator's view of
+/// the answer it wrote back. trace:STORY-306 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AdvisorOutcome {
+    /// The advisor judged the fork. `answer` is the decision the implementer
+    /// resumes with; `reasoning` is the audited "why" — recorded to the
+    /// ledger and left as a spec comment.
+    Resolved { answer: String, reasoning: String },
+    /// The advisor escalated the fork to a human. `reason` is its framing of
+    /// *why* it could not safely decide; `category` is the categorized
+    /// escalation reason (strategy / irreversible / unrecorded-context / …).
+    Escalated { reason: String, category: String },
+}
+
 /// Outcome of an [`orchestrate`] run — the process exit code plus the
 /// telemetry the caller needs to log the run and, on failure, auto-draft a
 /// BUG. Returning this instead of a bare `i32` keeps `orchestrate` pure: it
@@ -403,6 +505,13 @@ pub(crate) struct OrchestrationResult {
     /// or when the driver could not determine an id from the PR's commits.
     /// trace:BUG-245 | ai:claude
     pub(crate) shipped_spec_id: Option<String>,
+    /// STORY-306: set when the run ended in an escalation — the reviewer would
+    /// not auto-merge, or the headless advisor would not resolve a punted
+    /// design-fork. Like `punt_reason` this is a non-failure stop (`exit_code`
+    /// `0`, `failed_phase` `None`); it carries the escalation kind + reason so
+    /// the caller can log the run and a batch drain can sort the spec apart
+    /// from a clean ship. trace:STORY-306 | ai:claude
+    pub(crate) escalation: Option<EscalationSummary>,
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -419,7 +528,11 @@ pub(crate) trait PhaseDriver {
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
     /// Phase 3 — run the reviewer Claude session and read its verdict file.
-    fn run_reviewer(&mut self) -> Result<Verdict, PhaseFailure>;
+    /// Returns [`ReviewerOutcome::Verdict`] on a normal review, or
+    /// [`ReviewerOutcome::EscalatedToHuman`] when the reviewer wrote
+    /// `merge: escalated-to-human` rather than auto-deciding the merge
+    /// (STORY-306).
+    fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure>;
     /// Phase 4 — merge the PR.
     fn merge(&mut self) -> Result<(), PhaseFailure>;
     /// Phase 5 — `aida pull` (auto-bumps Done → Completed).
@@ -454,6 +567,33 @@ pub(crate) trait PhaseDriver {
     /// different spec. trace:BUG-245 | ai:claude
     fn shipped_spec_id(&mut self) -> Option<String> {
         None
+    }
+
+    /// STORY-306 advisor tier — judge a punted design-fork. When phase 1
+    /// punts, the orchestrator assembles a rich payload and spawns a headless
+    /// advisor, which either resolves the fork or escalates it to a human.
+    /// The default impl errors with [`FailureKind::Internal`] — a driver that
+    /// supports the advisor tier overrides it; a driver that does not (a mock
+    /// for a non-advisor test) never reaches it. trace:STORY-306 | ai:claude
+    fn run_advisor(&mut self) -> Result<AdvisorOutcome, PhaseFailure> {
+        Err(PhaseFailure::of(
+            FailureKind::Internal,
+            "internal: this driver does not support the advisor tier",
+        ))
+    }
+
+    /// STORY-306 advisor tier — resume the punted phase-1 implementer session
+    /// with `answer` (the advisor's judged decision, or, under
+    /// `--escalate-defaults`, an authorization to proceed with the defensible
+    /// default). Returns the implementer's outcome on resume — a PR opened,
+    /// or a fresh punt (terminal: one advisor round per spec). The default
+    /// impl errors; overridden by a driver that supports it.
+    /// trace:STORY-306 | ai:claude
+    fn resume_implementer(&mut self, _answer: &str) -> Result<ImplementerOutcome, PhaseFailure> {
+        Err(PhaseFailure::of(
+            FailureKind::Internal,
+            "internal: this driver does not support resuming the implementer",
+        ))
     }
 }
 
@@ -747,6 +887,7 @@ fn finish_success(
         total_ms: elapsed,
         punt_reason: None,
         shipped_spec_id,
+        escalation: None,
     }
 }
 
@@ -819,6 +960,90 @@ fn finish_punted(
         total_ms: elapsed,
         punt_reason: Some(reason.to_string()),
         shipped_spec_id: None,
+        escalation: None,
+    }
+}
+
+/// Print the escalation epilogue and build a *non-failure* terminal
+/// [`OrchestrationResult`] (STORY-306). Two tiers escalate to a human and
+/// share this path: the reviewer that will not auto-merge a PR
+/// ([`EscalationKind::MergeDecision`], BUG-241 items 4-5) and the headless
+/// advisor that will not resolve a punted design-fork
+/// ([`EscalationKind::DesignFork`]). Both are honest stops, not failures —
+/// the run exits `0` with no `failed_phase`, the PR / spec is left for a
+/// human, and a batch drain advances. `escalation` is the field that
+/// distinguishes the run from a clean ship; the human triages it via
+/// `aida findings`. trace:STORY-306 | ai:claude
+fn finish_escalated(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+    kind: EscalationKind,
+    reason: &str,
+) -> OrchestrationResult {
+    let elapsed = start.elapsed().as_millis();
+    // The escalation surfaced in a specific phase — phase 3 for a merge
+    // decision, phase 1 (the punt) for a design-fork.
+    let phase = match kind {
+        EscalationKind::MergeDecision => Phase::Reviewer,
+        EscalationKind::DesignFork => Phase::Implementer,
+    };
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                phase.slug(),
+                "escalated",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "escalated",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", reason)],
+            )
+        );
+    } else {
+        let what = match kind {
+            EscalationKind::MergeDecision => "the reviewer escalated the merge decision to a human",
+            EscalationKind::DesignFork => "the advisor escalated a design-fork to a human",
+        };
+        eprintln!();
+        eprintln!("{} {}: {}", "⏸".yellow().bold(), what, reason);
+        eprintln!(
+            "  {} {}",
+            "→".dimmed(),
+            "left for a human — triage it with `aida findings list`".cyan()
+        );
+        eprintln!();
+        eprintln!(
+            "{} {} escalated ({}) — drain continues, a human decides",
+            "⏸".yellow().bold(),
+            spec.bold(),
+            fmt_duration(elapsed)
+        );
+    }
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: durations,
+        total_ms: elapsed,
+        punt_reason: None,
+        shipped_spec_id: None,
+        escalation: Some(EscalationSummary {
+            kind,
+            reason: reason.to_string(),
+        }),
     }
 }
 
@@ -883,6 +1108,7 @@ fn finish_failure(
         total_ms: elapsed,
         punt_reason: None,
         shipped_spec_id: None,
+        escalation: None,
     }
 }
 
@@ -949,6 +1175,7 @@ fn finish_reconciled(
         total_ms: elapsed,
         punt_reason: None,
         shipped_spec_id: None,
+        escalation: None,
     }
 }
 
@@ -981,6 +1208,142 @@ fn resolve_phase_failure(
     }
 }
 
+/// The result of routing a phase-1 punt through the advisor tier
+/// ([`resolve_punt_via_advisor`]). Either the drain *proceeds* — the advisor
+/// resolved the fork and the resumed implementer opened a PR, so phases 2-6
+/// run — or it is *terminal*: the orchestration ended inside the advisor tier
+/// (escalated, re-punted, or a phase failed) and the carried result is what
+/// `orchestrate` returns. trace:STORY-306 | ai:claude
+enum PuntFlow {
+    /// The advisor resolved the punt and the implementer resumed with a PR —
+    /// `orchestrate` continues to phase 2.
+    Proceed,
+    /// The orchestration ended inside the advisor tier — return this result.
+    Terminal(OrchestrationResult),
+}
+
+/// The instruction handed to a resumed implementer under `--escalate-defaults`
+/// when the advisor escalated rather than resolved: there is no judged
+/// answer, so proceed with the defensible default rather than punting again.
+/// trace:STORY-306 | ai:claude
+const ADVISOR_DEFAULT_PROMPT: &str =
+    "No advisor judgment is available for this design-fork — the headless \
+     advisor escalated it and `--escalate-defaults` is in effect. Proceed with \
+     your stated lean, or, if you gave no lean, the most defensible reading of \
+     the spec. Do not punt again; ship the defensible default.";
+
+/// STORY-306 advisor tier — route a phase-1 punt through a headless advisor
+/// before it reaches a human. Spawns the advisor ([`PhaseDriver::run_advisor`]);
+/// on a resolve, resumes the implementer with the judged answer; on an
+/// escalate, either stops clean ([`EscalateMode::Blocks`]) or resumes with the
+/// defensible default ([`EscalateMode::Defaults`]). A re-punt after a resume is
+/// terminal — one advisor round per spec per drain. Returns
+/// [`PuntFlow::Proceed`] only when the resumed implementer opened a PR; every
+/// other outcome is [`PuntFlow::Terminal`]. trace:STORY-306 | ai:claude
+fn resolve_punt_via_advisor(
+    driver: &mut dyn PhaseDriver,
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: &[(Phase, u128)],
+    punt_reason: &str,
+    escalate_mode: EscalateMode,
+) -> PuntFlow {
+    if !json {
+        eprintln!();
+        eprintln!(
+            "{} design-fork punted — escalating to a headless advisor: {}",
+            "◆".cyan().bold(),
+            punt_reason
+        );
+    }
+    match driver.run_advisor() {
+        Err(f) => PuntFlow::Terminal(resolve_phase_failure(
+            driver,
+            Phase::Implementer,
+            spec,
+            json,
+            start,
+            &f,
+            durations.to_vec(),
+        )),
+        Ok(AdvisorOutcome::Resolved { answer, .. }) => {
+            if !json {
+                eprintln!(
+                    "  {} advisor resolved the fork — resuming the implementer with the answer",
+                    "✓".green()
+                );
+            }
+            resume_after_advisor(driver, spec, json, start, durations, &answer)
+        }
+        Ok(AdvisorOutcome::Escalated { reason, .. }) => match escalate_mode {
+            EscalateMode::Blocks => {
+                if !json {
+                    eprintln!(
+                        "  {} advisor escalated the fork to a human — drain advances, the \
+                         spec waits",
+                        "⏸".yellow()
+                    );
+                }
+                PuntFlow::Terminal(finish_escalated(
+                    spec,
+                    json,
+                    start,
+                    durations.to_vec(),
+                    EscalationKind::DesignFork,
+                    &reason,
+                ))
+            }
+            EscalateMode::Defaults => {
+                if !json {
+                    eprintln!(
+                        "  {} advisor escalated — `--escalate-defaults`: resuming with the \
+                         defensible default",
+                        "⏵".yellow()
+                    );
+                }
+                resume_after_advisor(driver, spec, json, start, durations, ADVISOR_DEFAULT_PROMPT)
+            }
+        },
+    }
+}
+
+/// The resume leg shared by the advisor's resolve path and the
+/// `--escalate-defaults` path: resume the implementer with `answer`, then
+/// classify the outcome. A PR opened ⇒ [`PuntFlow::Proceed`]; a re-punt is
+/// terminal ([`finish_punted`] — one advisor round per spec); a failure routes
+/// through the BUG-241 reconcile. trace:STORY-306 | ai:claude
+fn resume_after_advisor(
+    driver: &mut dyn PhaseDriver,
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: &[(Phase, u128)],
+    answer: &str,
+) -> PuntFlow {
+    match driver.resume_implementer(answer) {
+        Err(f) => PuntFlow::Terminal(resolve_phase_failure(
+            driver,
+            Phase::Implementer,
+            spec,
+            json,
+            start,
+            &f,
+            durations.to_vec(),
+        )),
+        Ok(ImplementerOutcome::PrOpened) => PuntFlow::Proceed,
+        // A re-punt after a resume is terminal — one advisor round per spec
+        // per drain; a new fork is a fresh punt, not a conversation.
+        Ok(ImplementerOutcome::Punted { reason }) => PuntFlow::Terminal(finish_punted(
+            spec,
+            json,
+            start,
+            durations.to_vec(),
+            &reason,
+        )),
+    }
+}
+
 /// Drive the phases in order, stopping at the variant's last phase or at the
 /// first failure. Returns an [`OrchestrationResult`] — the process exit code
 /// (`0` on success, else the 1-based index of the phase that failed) plus
@@ -992,6 +1355,7 @@ pub(crate) fn orchestrate(
     spec: &str,
     variant: AutoCompleteVariant,
     json: bool,
+    escalate_mode: EscalateMode,
 ) -> OrchestrationResult {
     let start = Instant::now();
     // Per-phase wall time, captured as each phase runs so a failure carries
@@ -1007,10 +1371,12 @@ pub(crate) fn orchestrate(
         );
     }
 
-    // Phase 1 — implementer session. Three outcomes: a PR was opened (run on),
-    // a genuine failure (reconcile then report), or a punt — a headless
-    // implementer hit a design-fork and parked the spec; the pipeline stops
-    // here cleanly, not as a failure. trace:STORY-276 | ai:claude
+    // Phase 1 — implementer session. Outcomes: a PR was opened (run on), a
+    // genuine failure (reconcile then report), or a punt. STORY-306: a punt no
+    // longer stops the drain outright — it routes through the headless advisor
+    // tier, which resolves the fork (the implementer resumes, the pipeline
+    // continues) or escalates it (the run ends per `escalate_mode`).
+    // trace:STORY-276, STORY-306 | ai:claude
     emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
     let phase_start = Instant::now();
     match driver.run_implementer() {
@@ -1028,12 +1394,28 @@ pub(crate) fn orchestrate(
         }
         Ok(ImplementerOutcome::Punted { reason }) => {
             durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-            return finish_punted(spec, json, &start, durations, &reason);
+            match resolve_punt_via_advisor(
+                driver,
+                spec,
+                json,
+                &start,
+                &durations,
+                &reason,
+                escalate_mode,
+            ) {
+                PuntFlow::Terminal(result) => return result,
+                // The advisor resolved the fork and the implementer resumed
+                // with a PR — the pipeline continues to CI.
+                PuntFlow::Proceed => {
+                    emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+                }
+            }
         }
-        Ok(ImplementerOutcome::PrOpened) => {}
+        Ok(ImplementerOutcome::PrOpened) => {
+            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+            emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+        }
     }
-    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-    emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
 
     // BUG-245: before running phases 2-6 on the PR, ask the driver whose
     // SPEC-ID the PR's commits actually credit. The implementer can
@@ -1082,7 +1464,24 @@ pub(crate) fn orchestrate(
                 durations,
             );
         }
-        Ok(verdict) if verdict != Verdict::Approved => {
+        // STORY-306: the reviewer escalated the merge decision to a human
+        // rather than auto-deciding it (uncertain zen provenance, an
+        // irreversible call). A clean stop, not a failure — exit `0`, no
+        // merge runs, the PR is left for a human. Distinct from a
+        // non-Approved verdict (which still fails the phase below) and from a
+        // crashed reviewer. trace:STORY-306 | ai:claude
+        Ok(ReviewerOutcome::EscalatedToHuman { reason }) => {
+            durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+            return finish_escalated(
+                spec,
+                json,
+                &start,
+                durations,
+                EscalationKind::MergeDecision,
+                &reason,
+            );
+        }
+        Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
             durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
             let f = PhaseFailure::new(format!(
                 "reviewer verdict is {} — not Approved",
@@ -1098,7 +1497,7 @@ pub(crate) fn orchestrate(
                 durations,
             );
         }
-        Ok(_) => {}
+        Ok(ReviewerOutcome::Verdict(_)) => {}
     }
     durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
     emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
@@ -1186,6 +1585,11 @@ pub(crate) struct BatchDrainResult {
     /// (the punted spec leaves the queue on its own) but it did *not* ship, so
     /// the batch summary must not claim it did.
     pub(crate) punted: Vec<String>,
+    /// STORY-306: spec-ids the drain *escalated to a human*, in drain order —
+    /// the reviewer would not auto-merge, or the headless advisor would not
+    /// resolve a punted design-fork. Like `punted`, an escalation advances the
+    /// drain but did not ship; kept apart so the batch summary is honest.
+    pub(crate) escalated: Vec<String>,
     /// The spec the drain stopped on — set for `Failed` / `Stalled`, `None`
     /// for a clean `Drained` / `MaxReached`.
     pub(crate) stopped_at: Option<String>,
@@ -1216,6 +1620,7 @@ pub(crate) trait BatchDriver {
 pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> BatchDrainResult {
     let mut shipped: Vec<String> = Vec::new();
     let mut punted: Vec<String> = Vec::new();
+    let mut escalated: Vec<String> = Vec::new();
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
@@ -1223,18 +1628,20 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
             return BatchDrainResult {
                 shipped,
                 punted,
+                escalated,
                 stopped_at: None,
                 outcome: BatchDrainOutcome::Drained,
                 exit_code: 0,
             };
         };
-        // `--max` bounds how many members the drain *acts on* — shipped or
-        // punted, both consume a slot (each ran a full phase-1 attempt).
+        // `--max` bounds how many members the drain *acts on* — shipped,
+        // punted, or escalated, each consumed a slot (a full phase attempt).
         if let Some(limit) = max {
-            if shipped.len() + punted.len() >= limit {
+            if shipped.len() + punted.len() + escalated.len() >= limit {
                 return BatchDrainResult {
                     shipped,
                     punted,
+                    escalated,
                     stopped_at: None,
                     outcome: BatchDrainOutcome::MaxReached,
                     exit_code: 0,
@@ -1244,13 +1651,14 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
         // A spec we already acted on resurfacing as the head means the queue
         // did not advance — its run reported success but it never left the
         // queue, so it was not really shipped. Drop it from `shipped` and
-        // stop rather than loop forever on it. (A punted spec leaves the
-        // queue via `NeedsAttention`, so it cannot resurface this way.)
+        // stop rather than loop forever on it. (A punted / escalated spec
+        // leaves the queue, so it cannot resurface this way.)
         if shipped.iter().any(|s| s == &head) {
             shipped.retain(|s| s != &head);
             return BatchDrainResult {
                 shipped,
                 punted,
+                escalated,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Stalled,
                 exit_code: 1,
@@ -1262,6 +1670,7 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
             return BatchDrainResult {
                 shipped,
                 punted,
+                escalated,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Failed(phase),
                 exit_code: result.exit_code,
@@ -1278,6 +1687,7 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
             return BatchDrainResult {
                 shipped,
                 punted,
+                escalated,
                 stopped_at: Some(head.clone()),
                 outcome: BatchDrainOutcome::Mismatched {
                     dispatched: head,
@@ -1286,10 +1696,14 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
                 exit_code: 0,
             };
         }
-        // STORY-276: a punt is a clean exit (`exit_code` 0) — the drain
-        // advances — but the spec parked, it did not ship. Sort it accordingly.
+        // A punt and an escalation are both clean exits (`exit_code` 0) — the
+        // drain advances — but the spec did not ship. Sort each accordingly so
+        // the batch summary never claims a parked / escalated spec shipped.
+        // trace:STORY-276, STORY-306 | ai:claude
         if result.punt_reason.is_some() {
             punted.push(head);
+        } else if result.escalation.is_some() {
+            escalated.push(head);
         } else {
             shipped.push(head);
         }
@@ -1319,10 +1733,27 @@ mod tests {
         /// (default) preserves the pre-BUG-245 behaviour — the dispatched id
         /// is credited.
         shipped_spec_id: Option<String>,
+        /// STORY-306: when `Some`, `run_reviewer` returns
+        /// [`ReviewerOutcome::EscalatedToHuman`] with this reason instead of a
+        /// verdict — the reviewer escalated the merge decision.
+        reviewer_escalates: Option<String>,
+        /// STORY-306: what `run_advisor` returns; `None` ⇒ the trait default
+        /// (an `Internal` error). Set by `advisor_resolves` /
+        /// `advisor_escalates`.
+        advisor: Option<AdvisorOutcome>,
+        /// STORY-306: how many times `run_advisor` was called — a re-punt
+        /// after a resume must not spawn a second advisor.
+        advisor_calls: usize,
+        /// STORY-306: what `resume_implementer` returns; `None` ⇒ the trait
+        /// default error. Set by `resume_opens_pr` / `resume_repunts`.
+        resume: Option<ImplementerOutcome>,
     }
 
     impl MockPhaseDriver {
-        fn all_ok() -> Self {
+        /// The all-defaults base — every phase green, no punt / escalate /
+        /// advisor. The named constructors tweak it with struct-update syntax,
+        /// so a new field is added in exactly one place.
+        fn base() -> Self {
             Self {
                 calls: Vec::new(),
                 fail_at: None,
@@ -1330,28 +1761,28 @@ mod tests {
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
                 shipped_spec_id: None,
+                reviewer_escalates: None,
+                advisor: None,
+                advisor_calls: 0,
+                resume: None,
             }
+        }
+
+        fn all_ok() -> Self {
+            Self::base()
         }
 
         fn failing_at(phase: Phase) -> Self {
             Self {
-                calls: Vec::new(),
                 fail_at: Some(phase),
-                verdict: Verdict::Approved,
-                reconcile: PhaseReconcile::GenuineFailure,
-                punt: None,
-                shipped_spec_id: None,
+                ..Self::base()
             }
         }
 
         fn with_verdict(verdict: Verdict) -> Self {
             Self {
-                calls: Vec::new(),
-                fail_at: None,
                 verdict,
-                reconcile: PhaseReconcile::GenuineFailure,
-                punt: None,
-                shipped_spec_id: None,
+                ..Self::base()
             }
         }
 
@@ -1359,12 +1790,17 @@ mod tests {
         /// [`ImplementerOutcome::Punted`] with `reason`.
         fn punting_at_implementer(reason: &str) -> Self {
             Self {
-                calls: Vec::new(),
-                fail_at: None,
-                verdict: Verdict::Approved,
-                reconcile: PhaseReconcile::GenuineFailure,
                 punt: Some(reason.to_string()),
-                shipped_spec_id: None,
+                ..Self::base()
+            }
+        }
+
+        /// STORY-306: make `run_reviewer` escalate the merge decision —
+        /// phase 3 returns [`ReviewerOutcome::EscalatedToHuman`] with `reason`.
+        fn reviewer_escalates_merge(reason: &str) -> Self {
+            Self {
+                reviewer_escalates: Some(reason.to_string()),
+                ..Self::base()
             }
         }
 
@@ -1381,6 +1817,40 @@ mod tests {
         /// consults before declaring a phase failed.
         fn reconciles_as(mut self, reconcile: PhaseReconcile) -> Self {
             self.reconcile = reconcile;
+            self
+        }
+
+        /// STORY-306: make `run_advisor` resolve the punted fork with `answer`.
+        fn advisor_resolves(mut self, answer: &str) -> Self {
+            self.advisor = Some(AdvisorOutcome::Resolved {
+                answer: answer.to_string(),
+                reasoning: "mock advisor reasoning".to_string(),
+            });
+            self
+        }
+
+        /// STORY-306: make `run_advisor` escalate the punted fork to a human.
+        fn advisor_escalates(mut self, reason: &str) -> Self {
+            self.advisor = Some(AdvisorOutcome::Escalated {
+                reason: reason.to_string(),
+                category: "strategy".to_string(),
+            });
+            self
+        }
+
+        /// STORY-306: make `resume_implementer` open a PR — the resumed
+        /// implementer shipped on the advisor's answer.
+        fn resume_opens_pr(mut self) -> Self {
+            self.resume = Some(ImplementerOutcome::PrOpened);
+            self
+        }
+
+        /// STORY-306: make `resume_implementer` punt again — the re-punt that
+        /// must be terminal (one advisor round per spec).
+        fn resume_repunts(mut self, reason: &str) -> Self {
+            self.resume = Some(ImplementerOutcome::Punted {
+                reason: reason.to_string(),
+            });
             self
         }
 
@@ -1407,9 +1877,14 @@ mod tests {
         fn finish_ci(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Ci)
         }
-        fn run_reviewer(&mut self) -> Result<Verdict, PhaseFailure> {
+        fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure> {
             self.record(Phase::Reviewer)?;
-            Ok(self.verdict)
+            match &self.reviewer_escalates {
+                Some(reason) => Ok(ReviewerOutcome::EscalatedToHuman {
+                    reason: reason.clone(),
+                }),
+                None => Ok(ReviewerOutcome::Verdict(self.verdict)),
+            }
         }
         fn merge(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Merge)
@@ -1435,6 +1910,20 @@ mod tests {
         fn shipped_spec_id(&mut self) -> Option<String> {
             self.shipped_spec_id.clone()
         }
+        fn run_advisor(&mut self) -> Result<AdvisorOutcome, PhaseFailure> {
+            self.advisor_calls += 1;
+            self.advisor.clone().ok_or_else(|| {
+                PhaseFailure::of(FailureKind::Internal, "mock: no advisor outcome configured")
+            })
+        }
+        fn resume_implementer(
+            &mut self,
+            _answer: &str,
+        ) -> Result<ImplementerOutcome, PhaseFailure> {
+            self.resume.clone().ok_or_else(|| {
+                PhaseFailure::of(FailureKind::Internal, "mock: no resume outcome configured")
+            })
+        }
     }
 
     // --- Core orchestration: the mock-Claude integration test -------------
@@ -1442,7 +1931,14 @@ mod tests {
     #[test]
     fn orchestrate_full_pipeline_runs_all_six_phases() {
         let mut driver = MockPhaseDriver::all_ok();
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 0);
         assert_eq!(
             driver.calls,
@@ -1457,26 +1953,133 @@ mod tests {
         );
     }
 
-    /// STORY-276 acceptance: a headless implementer that hits a design-fork
-    /// punts rather than guessing. `orchestrate` stops cleanly after phase 1 —
-    /// no CI / review / merge runs — exits `0`, and the result carries the
-    /// punt reason so the run is not mistaken for a clean ship.
+    // --- STORY-306: the headless advisor tier -----------------------------
+
+    /// A punt the advisor is confident about: it resolves the fork, the
+    /// implementer resumes and opens a PR, and the full pipeline runs. The
+    /// run is a clean success — neither an escalation nor a punt.
     #[test]
-    fn orchestrate_punt_at_implementer_stops_clean() {
-        let mut driver = MockPhaseDriver::punting_at_implementer(
-            "two valid auth flows — the spec does not say which",
+    fn orchestrate_punt_advisor_resolves_then_resume_runs_full_pipeline() {
+        let mut driver = MockPhaseDriver::punting_at_implementer("auth flow fork")
+            .advisor_resolves("use OAuth — the recorded convention")
+            .resume_opens_pr();
+        let result = orchestrate(
+            &mut driver,
+            "STORY-306",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
         );
-        let result = orchestrate(&mut driver, "STORY-276", AutoCompleteVariant::Full, false);
-        assert_eq!(result.exit_code, 0, "a punt is a clean exit, not a failure");
+        assert_eq!(result.exit_code, 0);
+        assert!(
+            result.escalation.is_none(),
+            "a resolved punt is not an escalation"
+        );
+        assert!(
+            result.punt_reason.is_none(),
+            "a resolved-and-resumed punt is not a punt"
+        );
+        // All six phases ran — the resumed implementer's PR flows through CI.
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
+        assert_eq!(driver.advisor_calls, 1);
+    }
+
+    /// A punt the advisor cannot safely judge, under `--escalate-blocks`: the
+    /// advisor escalates, the run stops clean after phase 1 — phases 2-6 never
+    /// run — exits `0`, and the result carries the escalation.
+    #[test]
+    fn orchestrate_punt_advisor_escalates_blocks_skips_phases_2_to_6() {
+        let mut driver = MockPhaseDriver::punting_at_implementer("project-strategy fork")
+            .advisor_escalates("a strategy call with no recorded principle");
+        let result = orchestrate(
+            &mut driver,
+            "STORY-306",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0, "an escalation is a clean exit");
         assert_eq!(result.failed_phase, None);
-        assert!(result.failure.is_none());
+        let escalation = result.escalation.expect("escalation recorded");
+        assert_eq!(escalation.kind, EscalationKind::DesignFork);
+        // The pipeline stopped at phase 1 — only the implementer ran.
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+        assert_eq!(driver.advisor_calls, 1);
+    }
+
+    /// A punt the advisor escalates, under `--escalate-defaults`: instead of
+    /// stopping, the implementer is resumed with the defensible-default
+    /// instruction, opens a PR, and the full pipeline runs.
+    #[test]
+    fn orchestrate_punt_advisor_escalates_defaults_resumes_with_default() {
+        let mut driver = MockPhaseDriver::punting_at_implementer("flag-naming fork")
+            .advisor_escalates("no recorded flag convention")
+            .resume_opens_pr();
+        let result = orchestrate(
+            &mut driver,
+            "STORY-306",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Defaults,
+        );
+        assert_eq!(result.exit_code, 0);
+        // `--escalate-defaults` resumes rather than stopping → a full ship.
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
+        assert_eq!(driver.advisor_calls, 1);
+    }
+
+    /// A re-punt after a resume is terminal — one advisor round per spec per
+    /// drain. The resumed implementer punts again; the run ends via
+    /// `finish_punted` (exit `0`, `punt_reason` set) and the advisor is
+    /// spawned exactly once.
+    #[test]
+    fn orchestrate_advisor_resume_repunt_is_terminal() {
+        let mut driver = MockPhaseDriver::punting_at_implementer("first fork")
+            .advisor_resolves("answer A")
+            .resume_repunts("a fresh fork the answer surfaced");
+        let result = orchestrate(
+            &mut driver,
+            "STORY-306",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0, "a re-punt is a clean exit");
         assert_eq!(
             result.punt_reason.as_deref(),
-            Some("two valid auth flows — the spec does not say which"),
-            "the punt reason is what distinguishes a punt from a clean ship",
+            Some("a fresh fork the answer surfaced"),
         );
-        // The pipeline stopped dead at phase 1 — no CI, review, or merge ran.
+        // Phases 2-6 never ran; the advisor was spawned exactly once.
         assert_eq!(driver.calls, vec![Phase::Implementer]);
+        assert_eq!(driver.advisor_calls, 1, "no second advisor round");
+    }
+
+    /// `EscalateMode::from_flags` — `--escalate-defaults` set ⇒ `Defaults`;
+    /// absent ⇒ the conservative `Blocks` default.
+    #[test]
+    fn escalate_mode_from_flags_defaults_to_blocks() {
+        assert_eq!(EscalateMode::from_flags(false), EscalateMode::Blocks);
+        assert_eq!(EscalateMode::from_flags(true), EscalateMode::Defaults);
     }
 
     // --- Variant gating ---------------------------------------------------
@@ -1491,6 +2094,7 @@ mod tests {
             "TASK-247",
             AutoCompleteVariant::ThroughCi,
             false,
+            EscalateMode::Blocks,
         )
         .exit_code;
         assert_eq!(code, 0);
@@ -1505,6 +2109,7 @@ mod tests {
             "TASK-247",
             AutoCompleteVariant::ThroughMerge,
             false,
+            EscalateMode::Blocks,
         )
         .exit_code;
         assert_eq!(code, 0);
@@ -1522,6 +2127,7 @@ mod tests {
             "TASK-247",
             AutoCompleteVariant::SkipBuild,
             false,
+            EscalateMode::Blocks,
         )
         .exit_code;
         assert_eq!(code, 0);
@@ -1542,7 +2148,14 @@ mod tests {
     #[test]
     fn failure_injection_implementer_exits_1() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Implementer);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 1);
         assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
@@ -1550,7 +2163,14 @@ mod tests {
     #[test]
     fn failure_injection_reviewer_exits_3() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Reviewer);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 3);
         assert_eq!(
             driver.calls,
@@ -1561,21 +2181,42 @@ mod tests {
     #[test]
     fn failure_injection_merge_exits_4() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Merge);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 4);
     }
 
     #[test]
     fn failure_injection_pull_exits_5() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Pull);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 5);
     }
 
     #[test]
     fn failure_injection_build_exits_6() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Build);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 6);
     }
 
@@ -1584,7 +2225,14 @@ mod tests {
     #[test]
     fn ci_red_stops_at_phase_2() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Ci);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 2);
         // The reviewer phase must NOT have run.
         assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
@@ -1595,7 +2243,14 @@ mod tests {
     #[test]
     fn reviewer_rejected_stops_at_phase_3() {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::Rejected);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 3);
         // Reviewer ran; merge did not.
         assert_eq!(
@@ -1607,15 +2262,82 @@ mod tests {
     #[test]
     fn reviewer_request_changes_stops_at_phase_3() {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::RequestChanges);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 3);
     }
 
     #[test]
     fn reviewer_approved_proceeds_to_merge() {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::Approved);
-        let code = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false).exit_code;
+        let code = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        )
+        .exit_code;
         assert_eq!(code, 0);
+    }
+
+    // --- STORY-306: reviewer escalates the merge decision to a human ------
+
+    /// The reviewer escalates the merge decision rather than auto-deciding
+    /// it. `orchestrate` stops cleanly after phase 3 — no merge / pull /
+    /// build — exits `0`, and the result carries the escalation so the run
+    /// is mistaken for neither a clean ship nor a failure.
+    #[test]
+    fn orchestrate_reviewer_escalated_to_human_skips_merge() {
+        let mut driver = MockPhaseDriver::reviewer_escalates_merge(
+            "uncertain whether the zen run was corroborated — a human should merge",
+        );
+        let result = orchestrate(
+            &mut driver,
+            "BUG-241",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0, "an escalation is a clean exit");
+        assert_eq!(result.failed_phase, None);
+        assert!(result.failure.is_none());
+        let escalation = result.escalation.expect("escalation recorded");
+        assert_eq!(escalation.kind, EscalationKind::MergeDecision);
+        assert!(
+            escalation.reason.contains("zen run"),
+            "{}",
+            escalation.reason
+        );
+        // The pipeline stopped at phase 3 — merge / pull / build never ran.
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer, Phase::Ci, Phase::Reviewer]
+        );
+    }
+
+    /// Regression guard — an escalation is a *distinct* outcome from a
+    /// non-Approved verdict. A plain `RequestChanges` verdict still routes
+    /// through the phase-3 failure path (exit `3`), unchanged.
+    #[test]
+    fn orchestrate_reviewer_request_changes_still_fails() {
+        let mut driver = MockPhaseDriver::with_verdict(Verdict::RequestChanges);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        assert!(result.escalation.is_none());
     }
 
     // --- BUG-241: reconcile against reality before declaring a failure ----
@@ -1632,7 +2354,13 @@ mod tests {
                 reason: "BUG-230 is Completed — the spec needed no further work".to_string(),
             },
         );
-        let result = orchestrate(&mut driver, "BUG-230", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "BUG-230",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(
             result.exit_code, 0,
             "a reconciled phase-1 failure is a success"
@@ -1654,7 +2382,13 @@ mod tests {
                 reason: "PR-94 is merged and BUG-233 is Completed".to_string(),
             },
         );
-        let result = orchestrate(&mut driver, "BUG-233", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "BUG-233",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.exit_code, 0);
         assert!(result.failed_phase.is_none());
         assert_eq!(
@@ -1672,7 +2406,13 @@ mod tests {
                 reason: "PR-94 is already merged".to_string(),
             },
         );
-        let result = orchestrate(&mut driver, "BUG-233", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "BUG-233",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.exit_code, 0);
         assert!(result.failed_phase.is_none());
     }
@@ -1683,7 +2423,13 @@ mod tests {
     #[test]
     fn orchestrate_genuine_phase1_failure_still_fails() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Implementer);
-        let result = orchestrate(&mut driver, "BUG-241", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "BUG-241",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.exit_code, 1);
         assert_eq!(result.failed_phase, Some(Phase::Implementer));
         assert!(result.failure.is_some());
@@ -1694,7 +2440,13 @@ mod tests {
     #[test]
     fn orchestrate_genuine_phase3_failure_still_fails() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Reviewer);
-        let result = orchestrate(&mut driver, "BUG-241", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "BUG-241",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.exit_code, 3);
         assert_eq!(result.failed_phase, Some(Phase::Reviewer));
     }
@@ -2115,7 +2867,13 @@ mod tests {
     #[test]
     fn result_success_records_every_phase_duration_in_order() {
         let mut driver = MockPhaseDriver::all_ok();
-        let result = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.exit_code, 0);
         assert!(result.failed_phase.is_none());
         assert!(result.failure.is_none());
@@ -2141,6 +2899,7 @@ mod tests {
             "TASK-247",
             AutoCompleteVariant::ThroughCi,
             false,
+            EscalateMode::Blocks,
         );
         let phases: Vec<Phase> = result.phase_durations.iter().map(|(p, _)| *p).collect();
         assert_eq!(phases, vec![Phase::Implementer, Phase::Ci]);
@@ -2149,7 +2908,13 @@ mod tests {
     #[test]
     fn result_failure_carries_failed_phase_and_reason() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Reviewer);
-        let result = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.exit_code, 3);
         assert_eq!(result.failed_phase, Some(Phase::Reviewer));
         let failure = result.failure.expect("failure detail should be set");
@@ -2162,7 +2927,13 @@ mod tests {
     #[test]
     fn result_rejected_verdict_records_reviewer_as_failed_phase() {
         let mut driver = MockPhaseDriver::with_verdict(Verdict::Rejected);
-        let result = orchestrate(&mut driver, "TASK-247", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.failed_phase, Some(Phase::Reviewer));
         assert!(result
             .failure
@@ -2184,6 +2955,7 @@ mod tests {
             total_ms: 0,
             punt_reason: None,
             shipped_spec_id: None,
+            escalation: None,
         }
     }
 
@@ -2196,6 +2968,7 @@ mod tests {
             total_ms: 0,
             punt_reason: None,
             shipped_spec_id: None,
+            escalation: None,
         }
     }
 
@@ -2210,6 +2983,7 @@ mod tests {
             total_ms: 0,
             punt_reason: Some("mock punt: design-fork".to_string()),
             shipped_spec_id: None,
+            escalation: None,
         }
     }
 
@@ -2225,6 +2999,25 @@ mod tests {
             total_ms: 0,
             punt_reason: None,
             shipped_spec_id: Some(shipped.to_string()),
+            escalation: None,
+        }
+    }
+
+    /// STORY-306: an escalated [`OrchestrationResult`] — exit `0`, no
+    /// `failed_phase`, `escalation` set. The shape `finish_escalated` returns.
+    fn escalated_result() -> OrchestrationResult {
+        OrchestrationResult {
+            exit_code: 0,
+            failed_phase: None,
+            failure: None,
+            phase_durations: Vec::new(),
+            total_ms: 0,
+            punt_reason: None,
+            shipped_spec_id: None,
+            escalation: Some(EscalationSummary {
+                kind: EscalationKind::MergeDecision,
+                reason: "mock escalation: merge decision".to_string(),
+            }),
         }
     }
 
@@ -2244,6 +3037,7 @@ mod tests {
         /// stays in `heads` (matching reality — the implementer dequeued the
         /// shipped spec, not the dispatched one). trace:BUG-245 | ai:claude
         mismatch: Option<(String, String)>,
+        escalate_spec: Option<String>,
         runs: Vec<String>,
     }
 
@@ -2255,6 +3049,7 @@ mod tests {
                 stall_spec: None,
                 punt_spec: None,
                 mismatch: None,
+                escalate_spec: None,
                 runs: Vec::new(),
             }
         }
@@ -2280,6 +3075,12 @@ mod tests {
         /// and the dispatched one is still queued. trace:BUG-245 | ai:claude
         fn mismatching(mut self, dispatched: &str, shipped: &str) -> Self {
             self.mismatch = Some((dispatched.to_string(), shipped.to_string()));
+            self
+        }
+
+        /// STORY-306: mark `spec` so its run returns an escalated result.
+        fn escalating(mut self, spec: &str) -> Self {
+            self.escalate_spec = Some(spec.to_string());
             self
         }
     }
@@ -2315,6 +3116,12 @@ mod tests {
                     // re-running the dispatched head. trace:BUG-245
                     return mismatch_result(shipped);
                 }
+            }
+            if self.escalate_spec.as_deref() == Some(spec) {
+                // An escalation leaves the queue and advances the drain, like
+                // a punt — but lands in `escalated`, not `shipped`.
+                self.heads.retain(|h| h != spec);
+                return escalated_result();
             }
             // Normal success — the completed spec leaves the queue.
             self.heads.retain(|h| h != spec);
@@ -2410,6 +3217,21 @@ mod tests {
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
     }
 
+    /// STORY-306: an escalated member advances the drain like a punt — it
+    /// leaves the queue, the batch keeps going — but it lands in `escalated`,
+    /// not `shipped`, so the summary does not claim it shipped.
+    #[test]
+    fn drain_batch_escalated_member_advances_the_drain() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]).escalating("TASK-2");
+        let result = drain_batch(&mut driver, None);
+        assert_eq!(result.exit_code, 0, "an escalation does not fail the drain");
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-3"]);
+        assert_eq!(result.escalated, vec!["TASK-2"]);
+        assert!(result.punted.is_empty());
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
+    }
+
     /// A "successful" run that leaves the head in place is caught by the
     /// non-advancing-queue guard rather than looping forever.
     #[test]
@@ -2435,7 +3257,13 @@ mod tests {
     #[test]
     fn orchestrate_credits_shipped_when_pr_mismatches_dispatched() {
         let mut driver = MockPhaseDriver::all_ok().shipping_as("BUG-244");
-        let result = orchestrate(&mut driver, "STORY-276", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "STORY-276",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.exit_code, 0);
         assert_eq!(result.failed_phase, None);
         assert_eq!(result.shipped_spec_id, Some("BUG-244".to_string()));
@@ -2465,12 +3293,24 @@ mod tests {
         // The default driver returns `None` for shipped_spec_id — no
         // mismatch.
         let mut driver = MockPhaseDriver::all_ok();
-        let result = orchestrate(&mut driver, "STORY-276", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "STORY-276",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.shipped_spec_id, None);
 
         // A driver that names the dispatched id is also not a mismatch.
         let mut driver = MockPhaseDriver::all_ok().shipping_as("STORY-276");
-        let result = orchestrate(&mut driver, "STORY-276", AutoCompleteVariant::Full, false);
+        let result = orchestrate(
+            &mut driver,
+            "STORY-276",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
         assert_eq!(result.shipped_spec_id, None);
     }
 

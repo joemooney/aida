@@ -320,6 +320,25 @@ to the next item; the advisor triages it later (`aida findings list`). Then
 **No genuine fork → proceed to Step 4** and implement normally. The common
 case is a clean spec that ships straight through headless.
 
+### Step 3e: Resumed with an advisor answer (`AIDA_HEADLESS=1`) — trace:STORY-306
+
+If this session **punted** on a design-fork (Step 3d) and is now being
+*resumed* — the incoming message opens with `ADVISOR DECISION:` and names the
+spec — the STORY-306 advisor tier has judged the fork. A decision has been
+made; do **not** re-evaluate whether to punt.
+
+1. Take the spec back out of Needs Attention:
+   `aida edit <spec_id> --status in-progress`.
+2. Apply the advisor's decision exactly as stated — it is the answer to the
+   fork you punted on. (Under `--escalate-defaults` the "decision" instead
+   authorizes the *defensible default*: proceed with your stated lean, or the
+   most defensible reading of the spec.)
+3. Implement, commit, and open the PR with `/aida-pr` — finish the spec.
+4. **Do not punt again on the same fork.** One advisor round per spec: a
+   re-punt is terminal — the drain stops the spec, no second advisor round.
+   Punt again *only* if a genuinely new, distinct fork surfaces while
+   applying the answer.
+
 ### Step 4: Do the work
 
 Drive the actual implementation. Read the requirement (`aida show <spec_id>`),

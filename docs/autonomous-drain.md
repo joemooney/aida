@@ -343,6 +343,69 @@ Three escalating choices:
 all other per-clone runtime state. The deny-by-default `.aida/*` rule
 already gitignores it — no `.gitignore` change is needed when you create
 the file.
+## The advisor escalation tier (STORY-306)
+
+Under `--no-human=both` a design-fork no longer goes straight from the
+implementer's punt to the morning human queue. STORY-306 inserts a middle
+tier — a **headless advisor** — turning the flat punt into a three-tier
+escalation cascade:
+
+```
+  implementer (punts) ──► headless advisor ──► human
+                          │
+                  resolves │ or │ escalates
+```
+
+1. The headless implementer hits a design-fork it cannot safely resolve and
+   punts (`/aida-punt`) — exactly as before.
+2. The orchestrator assembles a rich, ultraplan-grade payload (the spec, its
+   acceptance, graph context, trace-graph helpers) and spawns a **headless
+   advisor** — `claude -p /aida-advise`, in the advisor role.
+3. The advisor does one of two things:
+   - **Resolves** the fork — it writes the judged answer, and the
+     orchestrator resumes the *exact* punted implementer session
+     (`claude -p --resume`) with that answer. The drain continues with a
+     decided call, not a default guess.
+   - **Escalates** the fork — it judges the fork genuinely needs a human and
+     writes that decision instead.
+
+**The advisor's default bias is ESCALATE.** A headless advisor applying
+judgment unattended is exactly where drain quality silently degrades: an
+over-resolved fork ships a confident-but-wrong overnight decision, which is
+worse than the safe-default punt. The `/aida-advise` skill enforces an A/B/C
+calibration — it resolves only a fork grounded in a **recorded principle**
+(type A) or a **recorded user preference** (type B); anything turning on
+strategy, irreversibility, un-recorded context, or taste (type C) is
+escalated. When in doubt, escalate.
+
+**`--escalate-blocks` (default) vs `--escalate-defaults`.** When the advisor
+escalates, what the drain does next is a flag:
+
+- `--escalate-blocks` (the default) — leave the spec parked in Needs
+  Attention and advance the drain. The spec waits for a human; a paused spec
+  beats a guessed one.
+- `--escalate-defaults` — resume the implementer told to ship the defensible
+  default, and file a `needs-human` finding for post-hoc review. For
+  mechanical batches where throughput beats per-spec correctness.
+
+Both flags are `--no-human=both`-only and mutually exclusive.
+
+**One advisor round per spec.** If the resumed implementer's work surfaces a
+fresh fork, that re-punt is terminal — the drain stops the spec; there is no
+advisor↔implementer conversation.
+
+**Every advisor decision is auditable.** Each resolve / escalate appends a
+record to `.aida/punts.jsonl` (with the A/B/C classification), a resolved
+fork leaves the advisor's answer + rationale as a spec comment, and an
+escalated fork is tagged `needs-human`. `aida findings list` prints an
+**Advisor decisions (recent)** footer — resolved-vs-escalated counts and the
+escalated rows — so the morning triage sees what the overnight advisor did.
+
+The escalation handshake also covers the **reviewer**: a headless reviewer
+that will not auto-merge a PR writes its verdict file with
+`merge: escalated-to-human`, and the orchestrator treats that as a
+first-class non-failure outcome (exit 0, no merge, the PR left for a human) —
+distinct from a non-Approved verdict and from a crashed phase.
 
 ## Limits of this cut
 
@@ -350,6 +413,12 @@ the file.
   auto-detected. The `stream-json` log is written so the watchdog can be
   added (TASK-298). Until then, treat a drain that has not progressed for a
   long time as needing a look.
+- The advisor tier is v1 — a *fresh* advisor per punt with a rich payload. A
+  persistent advisor session (one alive across the drain, accumulating
+  context) is gated behind ledger evidence that v1 escalates too often for
+  genuine lack of synthesis (STORY-325).
+- An `--escalate-blocks` spec whose punted phase-1 worktree is never consumed
+  by a resume leaves that worktree behind — robust cleanup is a followup.
 - Skill templates have not been audited for interactive prompts beyond the
   reviewer/merge path (TASK-297).
 
@@ -359,3 +428,5 @@ the file.
   flag and caveat above.
 - STORY-246 — the `--auto-complete` orchestrator.
 - TASK-285 — `--batch --auto-complete`; `--no-human` composes with it.
+- STORY-306 — the advisor escalation tier + `--escalate-blocks` /
+  `--escalate-defaults`; `docs/plans/2026-05-19-story-306-advisor-escalation-tier.md`.
