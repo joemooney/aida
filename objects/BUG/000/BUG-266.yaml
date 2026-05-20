@@ -1,0 +1,54 @@
+id: 019e45f4-887b-7281-a4cb-ae7f1dfe6166
+spec_id: BUG-266
+agreed_id: BUG-266
+title: 'Headless implementer: transient Anthropic API errors (529/overloaded) should be inconclusive, not failed'
+description: |-
+  ## Symptom
+
+  TASK-358 ran for 24m 25s in a \`--no-human=both\` drain on 2026-05-20. The headless implementer was deep into real work — picked up the spec, made data-shape changes (\`escalated_to_human\` field on \`SessionLease\`), added helpers (\`session_prune_escalations\`, \`mark_implementer_lease_escalated\`), wired into \`edit_requirement_cli\`, ran build sanity checks, was about to add tests in \`main.rs\` — when the Anthropic API returned:
+
+  \`\`\`
+  API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check status.claude.com.
+  \`\`\`
+
+  The headless implementer exited 1. The orchestrator classified phase 1 as **failed** (\`✗ phase 1 (implementer session) failed: the implementer session exited 1 — it was aborted or errored\`). The next drain iteration moved on; the partial work on branch \`task-358\` is salvageable but the spec is marked failed.
+
+  ## Why this is wrong
+
+  This is the same pattern BUG-257 (\`fix(orchestrator): phase-1 inconclusive on transient GH-API network error\`, merged in 3820227d as PR #123) addressed for the GH-API leg. A transient external-infrastructure outage during phase 1 is not the same as the implementer attempting the work and failing — it is **inconclusive** (resume-eligible) rather than **failed** (escalate-eligible).
+
+  BUG-257 covered \`gh\` network errors. This is the parallel case for the Anthropic API: when the headless implementer's Claude session terminates because the **upstream model API was unreachable or overloaded**, the right classification is inconclusive + resumable, not failed.
+
+  ## Acceptance
+
+  - Detect Anthropic-API transient-error patterns in the headless implementer's exit context. Patterns to recognize: \`API Error: 5\\d\\d\`, \`Overloaded\`, \`upstream connect error\`, \`stream timeout\` — surfaced either in the JSONL log's last assistant message or via a non-zero exit code that maps to API failure (not in-session abort).
+  - On detection: classify phase 1 as **inconclusive** (matching BUG-257's terminology), not failed.
+  - Inconclusive specs land in a resume-eligible state: \`aida queue work <spec> --resume <lease>\` picks up where the implementer left off rather than restarting from a fresh \`/aida-pickup\`.
+  - Orchestrator outputs the right hint: instead of \`✗ phase 1 failed\`, emit \`⊘ phase 1 inconclusive — Anthropic API was unavailable; resume with: aida queue work <spec> --resume <lease>\`.
+  - Compose with BUG-257: the inconclusive classification path is shared between the two leg-types (GH-API + Anthropic-API).
+  - Add at least one classifier test covering the 529 case (string-pattern match on the synthetic JSONL fixture).
+
+  ## Out of scope
+
+  - Auto-retry inside the headless session (would require modifying Claude Code's session resilience — out of our control).
+  - Retry-with-backoff in the orchestrator (separate decision; this BUG only fixes the classification + recovery hint).
+  - The full taxonomy of \"why did phase 1 exit\" (separate work; this is one specific recoverable case).
+
+  ## Related
+
+  - BUG-257 / PR-123 — the GH-API parallel that this BUG mirrors.
+  - TASK-358 — the spec whose drain attempt produced the evidence (still has commits on \`task-358\` branch worth resuming).
+  - Memory \`feedback_headless_advisor_is_cold_boot\` — the headless implementer's external-dependency surface is broader than just the substrate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T15:15:14.171355679Z
+modified_at: 2026-05-20T15:15:14.171355679Z
+req_type: Bug
+tags:
+- anthropic-api
+- from-user-friction
+- headless
+- orchestrator
+- resilience
