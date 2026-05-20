@@ -1,0 +1,82 @@
+id: 019e444b-1dd9-7bf1-8d28-b7d0412aed6a
+spec_id: SPIKE-10
+agreed_id: SPIKE-10
+title: 'SPIKE: Multi-advisor coordination — subsystem-scoped advisors + parent→sibling initiation + bidirectional substrate propagation'
+description: |-
+  **Goal:** explore the design space for multi-advisor coordination — how a project's advisor mentors / trains / initiates an advisor for a subsystem or sibling project. Today AIDA assumes one advisor per `aida init`'d project; substrate is project-scoped and uniform. As projects grow complex enough to want subsystem-level focus, or as parents spawn siblings, multi-advisor coordination becomes necessary. This SPIKE captures the dimensions, the existing partial mechanisms, the gaps, and proposes a path forward.
+
+  ## What exists today
+
+  - **Per-project advisor.** One `dialog` role per project; one memory pack at `~/.claude/projects/<slug>/memory/`.
+  - **Scaffolding-pack as one-way propagation.** Generic discipline travels parent → every new project via `aida init --with-memories`. Push-only.
+  - **Manual handoff briefs.** Ad-hoc artifacts like `aida-tutor/docs/2026-05-18-advisor-handoff.md` — a parent advisor writes vision + decided-things + latitude into a checked-in markdown the sibling reads at boot. Effective but not a verb.
+
+  ## Four gaps to explore
+
+  ### 1. Subsystem-advisor within a monolithic repo
+
+  Today every advisor session loads the entire pack. For a project with subsystems (orchestrator, TUI, MCP server, web dashboard, etc.), an advisor focused on the orchestrator should only load: universal advisor discipline + orchestrator-scoped memories. 29 memories is fine; 200+ memories per project (the inevitable trajectory) is not — too big to load with attention, and cross-subsystem noise dilutes focus.
+
+  *Possible mechanism:* memories tagged `subsystem:` (e.g., `subsystem: orchestrator`). Advisor sessions take a `--focus orchestrator` flag that loads only universal + scope-matched memories. TUI / status line surfaces the active focus.
+
+  ### 2. Sibling-advisor initiation as a verb
+
+  Today: `aida init` scaffolds discipline + the generic pack. What's missing: the parent's STRATEGIC and SCOPE-RELEVANT context. When AIDA's advisor initiates aida-tutor's advisor, the sibling needs (a) a vision brief in the parent's broader context, (b) decided-things (don't relitigate), (c) a scope-relevant slice of the parent's substrate, (d) explicit latitude (sibling's call vs parent's already-decided territory).
+
+  *Possible mechanism:* `aida advisor handoff --to <project> --focus <topic>` produces a versioned, checked-in handoff brief, parameterised by what slice of the parent's substrate is relevant.
+
+  ### 3. Mentor relationship over time
+
+  Initiation is one-shot. Mentoring is ongoing. The parent advisor should periodically read the sibling's recent work (spec activity + memory writes), surface lessons the sibling missed, update both packs with what the sibling discovered that applies more broadly, and course-correct strategic drift.
+
+  *Possible mechanism:* a `mentor` session pattern — periodic (weekly? per-keystone-ship?) where the parent advisor reads the sibling's substrate, runs the audit cycle (per `feedback_memory_pack_hygiene`), and writes a mentor brief.
+
+  ### 4. Bidirectional substrate propagation
+
+  Scaffolding-pack memories flow parent → child. But when a sibling advisor discovers universally-applicable discipline, there's no return path. The discipline stays stuck in the child until manually copied back.
+
+  *Possible mechanism:* sibling memories taggable `propagation: candidate-for-parent` — flagged for the parent advisor's mentor-session to review and promote (or decline). Governance lives at the parent; the proposal flow is bottom-up.
+
+  ## Out of scope (initially)
+
+  - Code-level scope enforcement (memory loaders that physically filter). The SPIKE captures design; implementation comes after design is decided.
+  - Federation across unrelated AIDA projects (multi-user / multi-org).
+  - AI-generated handoff briefs — possible follow-up; SPIKE focuses on verbs + flows.
+
+  ## Output
+
+  A strategic doc at `docs/multi-advisor-coordination.md` capturing:
+
+  - The four gaps above + the mechanisms considered for each.
+  - Decisions on which sub-problems become STORYs (with rough scope).
+  - Open questions / unknowns flagged for follow-up SPIKE if needed.
+  - Revisit triggers.
+
+  ## Composes with
+
+  - **EPIC-26** (TUI is the product — the TUI is the surface where focus + advisor session would manifest)
+  - **EPIC-1** (agent collaboration — the substrate of which is the memory + discipline pack)
+  - [[feedback_propagate_generic_discipline_via_scaffolding]] (the existing one-way propagation; this SPIKE explores the bidirectional + subsystem variants)
+  - [[feedback_memory_pack_hygiene]] (audit cycle; mentor sessions apply the same questions cross-advisor)
+  - [[feedback_dialog_role_responsibilities]] (advisor role definition; multi-advisor extends this to N advisors)
+
+  ## Origin
+
+  2026-05-19, near end of the keystone-closing day. User observation: *"at some point a system becomes sufficiently complicated that we need to have different subsystems that need to be developed separately. We do this in rust by breaking into crates. A project may want to remain a monolithic repo. We will need a way for an advisor to mentor/train/initiate an advisor for some subsystem or other sibling project if we want to divide and conquer."*
+
+  The autonomy keystone closing today handles ONE advisor in ONE project. This SPIKE asks the next-horizon question: what does N advisors look like?
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T07:30:34.073658760Z
+modified_at: 2026-05-20T07:30:34.073658760Z
+req_type: Spike
+tags:
+- advisor-mentoring
+- design-spike
+- from-user-question
+- multi-advisor
+- strategic-thinking
+- substrate-propagation
+- subsystem-scoping
