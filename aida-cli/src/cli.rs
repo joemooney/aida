@@ -2850,6 +2850,14 @@ pub enum FindingsCommand {
     Dismiss {
         /// The finding's ID (UUID or SPEC-ID).
         id: String,
+
+        /// Rationale for the dismissal. When provided, the audit comment
+        /// includes the text verbatim (e.g. *"Dismissed by joe 2026-05-20:
+        /// duplicates BUG-254"*) instead of the bare "Dismissed" marker —
+        /// so the *why* lands in one command instead of two.
+        // trace:TASK-404 | ai:claude
+        #[clap(long, value_name = "TEXT")]
+        reason: Option<String>,
     },
 
     /// Promote a finding — sets status Approved and adds it to a work queue.
@@ -2861,6 +2869,14 @@ pub enum FindingsCommand {
         /// to `implementer` — a promoted finding is implementation work.
         #[clap(long = "for", value_name = "ROLE")]
         r#for: Option<String>,
+
+        /// Rationale for the promotion ("more important than its priority
+        /// suggests", "blocks PR-219", etc.). When provided, the rationale
+        /// is appended as an audit comment so the *why* survives alongside
+        /// the queue note.
+        // trace:TASK-404 | ai:claude
+        #[clap(long, value_name = "TEXT")]
+        reason: Option<String>,
     },
 }
 

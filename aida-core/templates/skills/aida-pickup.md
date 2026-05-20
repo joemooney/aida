@@ -466,7 +466,9 @@ If nothing was filed, say so: `No implementer findings filed for <SPEC-ID>.`
 surfaces them grouped under a *From implementer* section, `aida findings list
 --source implementer` narrows to them, `aida findings list --kind bug-spotted`
 isolates the file-worthy ones, `aida findings promote <ID>` sends one to the
-work queue, `aida findings dismiss <ID>` rejects it.
+work queue, `aida findings dismiss <ID>` rejects it. Both accept
+`--reason "<text>"` so the rationale lands in the audit comment in one
+command (TASK-404).
 
 ### Step 5c: Pre-exit checklist — the atomic shipping unit (TASK-401)
 
