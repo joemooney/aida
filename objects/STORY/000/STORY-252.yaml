@@ -155,7 +155,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:10:49.715594843Z
-modified_at: 2026-05-20T04:13:39.351034147Z
+modified_at: 2026-05-20T04:40:41.304187265Z
 req_type: Story
 tags:
 - advisor
@@ -185,3 +185,8 @@ comments:
     Editorial logic is mechanical (commit-type filter, cluster-PR grouping, rejected-with-supersedes). Memory section is best-effort (D9). Marker is .aida/* deny-by-default — no allow line (D10).
   created_at: 2026-05-19T17:53:59.056448863Z
   modified_at: 2026-05-19T17:53:59.056448863Z
+- id: 019e43af-9658-7c62-8269-3cc7b32d697a
+  author: joe
+  content: Commit 44b13f98 references this requirement
+  created_at: 2026-05-20T04:40:41.304187265Z
+  modified_at: 2026-05-20T04:40:41.304187265Z
