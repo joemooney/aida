@@ -1,0 +1,48 @@
+id: 019e45b6-764c-7b21-a06a-42cd5851db0a
+spec_id: SPIKE-11
+agreed_id: SPIKE-11
+title: Evaluate session-forking as the rich-context advisor path
+description: |-
+  ## Problem
+
+  Today, when a drain hits a punt under `--no-human=both`, the orchestrator spawns a fresh `claude -p` process with the `/aida-advise` skill. That process boots cold: it loads only the persistent substrate (memory pack, CLAUDE.md, discipline docs, spec graph). None of the in-flight context of a live advisor session — design decisions made conversationally, framings still half-formed — reaches it. See memory `feedback_headless_advisor_is_cold_boot`.
+
+  A daemon advisor (MCP-bus / long-running process) would solve the context gap but introduces operational complexity that may not be warranted for a single-developer tool: a server to start, monitor, crash-recover, version-skew against. The cold-boot model's lack of moving parts is a real virtue worth preserving.
+
+  ## Hypothesis
+
+  Claude Code stores sessions as JSONL transcripts at `~/.claude/projects/<slug>/<session-uuid>.jsonl`. `claude --resume <uuid>` resumes a session from its JSONL. **By copy-then-resume** — `cp \$LIVE.jsonl \$FORK.jsonl && claude --resume \$FORK -p \"<punt-context>\"` — we should get a fork that boots with the full conversation context of the live advisor at the moment of fork, handles the punt one-shot, terminates, and leaves the original session unaffected (the fork writes to its own JSONL).
+
+  If true, this gives a rich-context advisor path that uses Claude Code primitives, requires no daemon, and falls back gracefully to cold-boot when no live advisor session exists.
+
+  ## Acceptance
+
+  - Verify mechanically: copy a real session JSONL to a new UUID, run \`claude --resume <new-uuid> -p \"test prompt\"\`. Does Claude Code accept it? Are there locks, internal indexes, or permission-state caches that prevent it from working cleanly? Does the fork's transcript stay isolated from the original?
+  - Measure cost of a typical fork: token count of a 100-turn / 200-turn / 500-turn advisor session; latency from spawn to first verdict token; \$ cost per fork at current model pricing. Establish whether fork-on-punt is economically viable for ~hourly punts.
+  - Identify a session-discovery mechanism: how does the orchestrator find \"the live advisor session\" to fork? Sketch options (env var \`AIDA_ADVISOR_SESSION_ID\`, \`aida advisor register\` registration command, latest session by mtime under the project slug, explicit \`--advisor-session <uuid>\` flag on \`aida queue work\`).
+  - Document the staleness window: a fork made at T=0 sees only the JSONL state at T=0. Characterize the typical lag between the in-flight session and its on-disk JSONL (per-turn flush? on-buffer-fill? on-exit?).
+  - Render a verdict: viable / not viable / viable-with-conditions. If viable, sketch the smallest-valuable-slice implementation — which orchestrator code path changes (likely \`auto_complete.rs::run_advisor\`), what config gates it (e.g. \`[autonomy] advisor_mode = \"fork\" | \"cold-boot\"\`), what fallback fires when no live advisor session exists.
+  - Decide: is fork-from-live the default when a live advisor is registered, with cold-boot as fallback? Or opt-in per drain via a flag? Recommendation in the verdict.
+
+  ## Out of scope
+
+  - Implementation. This is a SPIKE — investigation and verdict only.
+  - Multi-advisor coordination (SPIKE-10's territory; orthogonal direction).
+  - Daemon / MCP-bus architecture (deferred pending evidence; this SPIKE explores the simpler alternative first).
+
+  ## Related
+
+  - STORY-306 — headless advisor escalation tier (the cold-boot version this would augment).
+  - SPIKE-10 — multi-advisor coordination (orthogonal direction; both could ship).
+  - Memory \`feedback_headless_advisor_is_cold_boot\` — the load-bearing fact this SPIKE responds to.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T14:07:26.284942480Z
+modified_at: 2026-05-20T14:07:26.284942480Z
+req_type: Spike
+tags:
+- advisor
+- architecture
+- autonomy
