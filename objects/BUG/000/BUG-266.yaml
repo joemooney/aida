@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:15:14.171355679Z
-modified_at: 2026-05-20T16:11:56.254312427Z
+modified_at: 2026-05-20T16:12:18.083294649Z
 req_type: Bug
 tags:
 - anthropic-api
@@ -81,6 +81,13 @@ comments:
     Filing this here rather than as a separate BUG since the two cases share the same detection code and should be implemented together.
   created_at: 2026-05-20T15:33:50.242290736Z
   modified_at: 2026-05-20T15:33:50.242290736Z
+- id: 019e4628-c8ed-7521-a8cd-179547d1933d
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-20-bug-266-anthropic-api-inconclusive.md
+    filed 3 task(s): TASK-409, TASK-410, TASK-411
+  created_at: 2026-05-20T16:12:18.541779967Z
+  modified_at: 2026-05-20T16:12:18.541779967Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T16:11:56.254312427Z
