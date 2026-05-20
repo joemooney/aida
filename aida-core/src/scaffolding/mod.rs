@@ -484,6 +484,9 @@ pub struct ScaffoldConfig {
     pub include_aida_standup_skill: bool,
     /// Include aida-import-plan skill for importing saved /ultraplan output
     pub include_aida_import_plan_skill: bool,
+    /// Include aida-digest skill for advisor-curated narrative work reports.
+    /// trace:STORY-252
+    pub include_aida_digest_skill: bool,
     /// Generate git hooks for traceability validation
     pub generate_git_hooks: bool,
     /// Include commit-msg hook for AI attribution validation
@@ -541,6 +544,8 @@ impl Default for ScaffoldConfig {
             include_aida_search_skill: true,
             include_aida_standup_skill: true,
             include_aida_import_plan_skill: true,
+            // trace:STORY-252
+            include_aida_digest_skill: true,
             generate_git_hooks: true,
             include_commit_msg_hook: true,
             include_pre_commit_hook: false, // Optional, disabled by default
@@ -1320,6 +1325,30 @@ impl Scaffolder {
 
                 artifacts.push(artifact);
             }
+
+            // Add aida-digest skill. trace:STORY-252
+            if self.config.include_aida_digest_skill {
+                let path = PathBuf::from(".claude/skills/aida-digest.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_digest_skill(),
+                    "Skill for curated narrative work digests".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
         }
 
         // .codex/skills/ directory
@@ -1350,6 +1379,8 @@ impl Scaffolder {
                     "aida-import-plan",
                     self.config.include_aida_import_plan_skill,
                 ),
+                // trace:STORY-252
+                ("aida-digest", self.config.include_aida_digest_skill),
             ];
 
             for (name, enabled) in codex_skill_defs {
@@ -1814,6 +1845,12 @@ impl Scaffolder {
                 "aida-import-plan",
                 "Import a saved /ultraplan plan file into AIDA conventions",
             ),
+            // trace:STORY-252
+            (
+                "commands/aida-digest.md",
+                "aida-digest",
+                "Curated narrative work digest for a time window",
+            ),
         ];
 
         command_defs
@@ -2054,6 +2091,16 @@ Use this skill when:
             .get("skills/aida-import-plan.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Import Plan Skill\n\n(template not found)".to_string())
+    }
+
+    /// Generate aida-digest skill content (loads from embedded template).
+    /// trace:STORY-252
+    fn generate_aida_digest_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-digest.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Digest Skill\n\n(template not found)".to_string())
     }
 
     /// Generate Codex skill content from an embedded Claude skill template.
