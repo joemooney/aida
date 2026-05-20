@@ -25,11 +25,42 @@
 #
 # trace:TASK-257 | ai:claude
 
-set -euo pipefail
-
 WORKFLOW="cross-platform.yml"
 MAX_AGE_HOURS=24
 refresh=0
+
+# parse_iso_to_epoch <iso8601-timestamp> — echo Unix epoch seconds.
+#
+# Portable between GNU date (Linux: `date -d <str>`) and BSD date (macOS:
+# `date -j -u -f <fmt> <str>`). GitHub's createdAt timestamps are ISO 8601
+# UTC ("2026-05-19T12:34:56Z"); the `-u` on the BSD branch keeps the parse
+# in UTC so the trailing `Z` is honoured. Echoes `0` if neither form parses
+# the input — callers MUST treat `0` as "unknown age" and not as 1970.
+#
+# Why both branches: `date -d` is a GNU extension absent from BSD coreutils,
+# so on macOS it fails silently and `created_epoch` would always be 0,
+# defeating the freshness gate. trace:TASK-284 | ai:claude
+parse_iso_to_epoch() {
+    local iso="$1" out
+    if out=$(date -d "$iso" +%s 2>/dev/null); then
+        echo "$out"
+        return 0
+    fi
+    if out=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$iso" +%s 2>/dev/null); then
+        echo "$out"
+        return 0
+    fi
+    echo 0
+}
+
+# Allow `source pre-release-check.sh` from tests without running the main
+# flow. Direct invocation (`./pre-release-check.sh` or `bash …`) proceeds
+# as normal.
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+    return 0
+fi
+
+set -euo pipefail
 
 for arg in "$@"; do
     case "$arg" in
@@ -123,7 +154,7 @@ fi
 IFS=$'\t' read -r status conclusion created_at run_id run_url <<<"$line"
 
 if [ "$status" = "completed" ] && [ "$conclusion" = "success" ]; then
-    created_epoch=$(date -d "$created_at" +%s 2>/dev/null || echo 0)
+    created_epoch=$(parse_iso_to_epoch "$created_at")
     now_epoch=$(date +%s)
     if [ "$created_epoch" -ne 0 ]; then
         age_hours=$(( (now_epoch - created_epoch) / 3600 ))
