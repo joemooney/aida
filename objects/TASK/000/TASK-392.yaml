@@ -19,12 +19,12 @@ description: |-
   Fix: pick one (capitalized 'Next:' reads more like a heading marker — preferred) and align the rubric prose. Two-character edit in `session-discipline.md`; no behavioural change.
 
   Raised in review of PR-121: https://github.com/joemooney/aida/pull/121#issuecomment-4496061354
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:09:58.203850724Z
-modified_at: 2026-05-20T08:09:58.203850724Z
+modified_at: 2026-05-20T15:37:39.482940123Z
 req_type: Task
 tags:
 - from-review:PR-121
