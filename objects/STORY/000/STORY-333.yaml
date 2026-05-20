@@ -63,12 +63,12 @@ description: |-
   ## Origin
 
   2026-05-19: STORY-276's implementer found it hard-blocked on STORY-332, burned a pickup discovering it, and STORY-276 then sat at the queue head where every head-pickup would re-trip on it. The block was prose-only — invisible to the orchestrator/queue. Later the same day, aida-tutor's TASK-2 (a human-only AC-1 gate) showed the second flavour: an `aida queue work epic-5 --auto-complete` cluster drain would try to auto-work a person-in-the-room task. Typed `blocked-by` + `human-only` markers + a pre-pickup check make un-pickable specs machine-visible and skipped cleanly, instead of discovered the hard way one doomed phase at a time. The ordering-time warning (fix point 6) and the `human-only` marker (point 7) were folded in 2026-05-19.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:27:58.404097978Z
-modified_at: 2026-05-20T04:01:56.627210380Z
+modified_at: 2026-05-20T04:10:16.248891319Z
 req_type: Story
 tags:
 - blocked-by
@@ -124,3 +124,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-20T03:49:39.420865693Z
   implemented_by: joe
+  completed_at: 2026-05-20T04:10:16.248891319Z
+  completion_sha: 4c687ec0f4653da5ee7676c26effc7de9b8f24da
