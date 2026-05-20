@@ -1,0 +1,57 @@
+id: 019e4332-6bc8-7350-aaa1-8206bdec5a7a
+spec_id: TASK-359
+agreed_id: TASK-359
+title: 'Implementer finish-checkpoint UX: structured menu with state, recommendation, consequences, and an advise escape'
+description: |-
+  The implementer's "How should I finish?" prompt at the end of phase 1 (`aida queue work --auto-complete`) currently presents a flat menu of options with critical gaps. Observed 2026-05-19 on STORY-306's finish-checkpoint — the user's verbatim reaction: *"I was not presented with clear instructions."*
+
+  ## The gaps the menu had
+
+  1. **Deciding factor disconnected.** The implementer's preamble flagged the load-bearing risk (`run_advisor` / `resume_implementer` subprocess plumbing is mock-tested only — needs a SPIKE-7 smoke before merge). The menu listed three options as if neutral — no link from the risk to the choice.
+  2. **No downstream-consequence info.** *"Open the PR for the reviewer"* — does the `--zen --auto-complete` orchestrator advance to phase 3? halt? merge? Each option needed one line on what the drain does next + reversibility.
+  3. **Coupled decisions bundled.** Option 1 included *"file the 5 followups, skip the STORY-325 dup"*; options 2/3 left filing ambiguous. Push/PR is one decision, followup-filing is a separate one.
+  4. **No `advise` escape.** Despite the session routing every checkpoint to the advisor, the menu didn't offer it explicitly — ironic on STORY-306's *own* finish (the spec that automates this routing).
+  5. **No recommendation.** The implementer had the full analysis; the menu should lead with *"I recommend B because Y"* and present alternatives as variants, not a flat neutral list.
+
+  ## Fix — required structure for finish-checkpoint output
+
+  1. **State snapshot** — commits, push status, PR status, drain phase, test/fmt status, plan file.
+  2. **Deciding factor** — load-bearing risks (smoke gate, plan deviations, change size) surfaced *next to* the options, not only in the preamble.
+  3. **Recommendation** — implementer's pick + one-sentence rationale, marked `← recommended`.
+  4. **Options** — each with: what it does, what the drain does next (advances / halts / stalls), reversibility.
+  5. **Explicit `advise` escape** — route the checkpoint to the advisor. Today: a surfaced option for the user to relay manually. Once STORY-306 ships: automatic.
+  6. **Decouple coupled decisions** — followup-filing asked as a *separate* question after push/PR is decided.
+
+  ## Acceptance
+
+  - [ ] Finish-checkpoint output renders a labelled State snapshot section
+  - [ ] Deciding factor surfaced directly above the options
+  - [ ] One option marked `← recommended` with a one-sentence rationale
+  - [ ] Each option lists its downstream-drain-state + reversibility
+  - [ ] Explicit `advise` escape option (today: nudges the user to relay; STORY-306 makes it automatic)
+  - [ ] Followup-filing is a separate question asked next, not bundled
+  - [ ] Structure lives in the master skill template under `aida-core/templates/skills/` so it propagates everywhere
+
+  ## Composes with
+
+  - **STORY-306** (advisor escalation tier — once merged, the `advise` escape becomes a real routing path)
+  - **BUG-241** (orchestrator outcome model — a deliberately-held PR should not register as phase-1 failure; closely related)
+  - `[[feedback_pause_for_design_input]]` and `[[feedback_finish_checkpoint_clarity]]` (the discipline memory filed with this TASK)
+
+  ## Origin
+
+  2026-05-19 — STORY-306's finish-checkpoint produced a 4-option menu the user correctly judged unclear. Captured as the discipline memory `feedback_finish_checkpoint_clarity.md` and as this TASK to update the skill template.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T02:23:58.408972956Z
+modified_at: 2026-05-20T02:23:58.408972956Z
+req_type: Task
+tags:
+- advisor-routing
+- cli-ux
+- finish-checkpoint
+- from-user-feedback
+- implementer
+- skill-template
