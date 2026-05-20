@@ -37,7 +37,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:13:21.970743293Z
-modified_at: 2026-05-20T07:17:29.864636810Z
+modified_at: 2026-05-20T07:18:32.130965586Z
 req_type: Bug
 tags:
 - block-status
@@ -52,6 +52,19 @@ comments:
   content: Commit 06933819 references this requirement
   created_at: 2026-05-20T07:17:17.862868726Z
   modified_at: 2026-05-20T07:17:17.862868726Z
+- id: 019e4440-19c2-7ac0-8835-3694ff1ed8cc
+  author: joe
+  content: |-
+    Implemented via PR-pending (commit 06933819):
+
+    - Add `BlockRegistry::aggregate_remaining`, `active_block_count`, `aggregate_is_low`, and `AGGREGATE_LOW_THRESHOLD = 20`
+    - Rewrite `aida db block status` to group by type prefix and report `X remaining across N blocks (RANGE-A, RANGE-B)`; warn only when the per-(node, type) aggregate dips to the threshold
+    - Update the `aida add` warning to fire on aggregate (not the per-block `is_low()`); no more nags after a fresh higher block is claimed
+    - Same root-pattern fix applied to the `aida db info` agreed-id-blocks display (was reporting only the highest block's remaining instead of the sum)
+
+    Test status: 273/273 aida-core lib tests green (5 new aggregate tests added)
+  created_at: 2026-05-20T07:18:32.130965586Z
+  modified_at: 2026-05-20T07:18:32.130965586Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T07:17:29.864636810Z
