@@ -59,12 +59,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:09:29.404339079Z
-modified_at: 2026-05-11T04:19:41.968488888Z
+modified_at: 2026-05-20T04:40:38.935933300Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-11T04:09:30.616861179Z
+comments:
+- id: 019e43af-8d17-7a80-bf75-96cbaae3e9f4
+  author: joe
+  content: Commit 44b13f98 references this requirement
+  created_at: 2026-05-20T04:40:38.935933300Z
+  modified_at: 2026-05-20T04:40:38.935933300Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T04:19:41.968488888Z
