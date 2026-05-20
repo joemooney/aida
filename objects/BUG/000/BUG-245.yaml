@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:42:01.001513842Z
-modified_at: 2026-05-20T05:44:18.929863130Z
+modified_at: 2026-05-20T06:04:22.837779101Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -59,3 +59,9 @@ tags:
 - from-self-test:STORY-276
 - misattribution
 - orchestrator
+comments:
+- id: 019e43fc-35b5-77e3-b181-3c117430f75f
+  author: joe
+  content: Commit 1b11a3ff references this requirement
+  created_at: 2026-05-20T06:04:22.837779101Z
+  modified_at: 2026-05-20T06:04:22.837779101Z
