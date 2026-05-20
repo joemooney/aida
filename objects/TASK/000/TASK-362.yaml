@@ -1,0 +1,12 @@
+id: 019e4342-8c1a-7ce1-ae8a-0d09f91ba7c3
+spec_id: TASK-362
+agreed_id: TASK-362
+title: Promote EPIC-30 if the file-directive channel hits real multi-user / multi-machine limits
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T02:41:35.258652855Z
+modified_at: 2026-05-20T02:41:35.258652855Z
+req_type: Task
