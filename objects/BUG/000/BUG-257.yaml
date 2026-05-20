@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:28:40.252645413Z
-modified_at: 2026-05-20T14:24:18.810952093Z
+modified_at: 2026-05-20T14:25:32.706273887Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -74,6 +74,19 @@ comments:
     filed 2 task(s): TASK-399, TASK-400
   created_at: 2026-05-20T14:24:19.234433957Z
   modified_at: 2026-05-20T14:24:19.234433957Z
+- id: 019e45c7-0a22-79b3-89b2-14505205f1d1
+  author: joe
+  content: |-
+    Implemented via commit 132a68a8 (PR pending):
+
+    - Split `PrLookup::GhFailed` into `GhFailed` + `GhUnreachable` via a new conservative `gh_stderr_is_network_error` allow-list (Go net/tls families + gh's `githubstatus.com` diagnostic suffix)
+    - Added `ImplementerOutcome::Inconclusive { reason }` as a first-class third phase-1 outcome (paired with `OrchestrationResult.inconclusive_reason`, `finish_inconclusive` epilogue, `BatchDrainOutcome::Inconclusive`) so a network blip pauses the drain at exit 0 instead of crashing it
+    - Added a bounded `git ls-remote --heads origin <branch>` narrowing probe (`probe_branch_on_origin`, 10s low-speed timeout) over the git protocol — when the branch is absent from origin the outcome collapses to a definite `NoPR` failure; otherwise stays `Inconclusive`
+    - Wired both phase-1 and the resumed-implementer paths (post-advisor) through the same classifier
+
+    Test status: 798/798 aida-cli tests green; 8 new tests cover the classifier (5) and the orchestrator/drain (3).
+  created_at: 2026-05-20T14:25:32.706273887Z
+  modified_at: 2026-05-20T14:25:32.706273887Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T14:24:02.089490344Z
