@@ -417,8 +417,15 @@ distinct from a non-Approved verdict and from a crashed phase.
   persistent advisor session (one alive across the drain, accumulating
   context) is gated behind ledger evidence that v1 escalates too often for
   genuine lack of synthesis (STORY-325).
-- An `--escalate-blocks` spec whose punted phase-1 worktree is never consumed
-  by a resume leaves that worktree behind — robust cleanup is a followup.
+- An `--escalate-blocks` spec's lingering phase-1 worktree now cleans up
+  automatically: the orchestrator stamps the lease `escalated_to_human` on
+  the Blocks path, and `aida edit --status` (out of Needs Attention) — the
+  morning-triage step — removes the marked worktree + lease + manifest as
+  part of the same edit. `aida session prune --escalations` is the explicit
+  recovery surface for cases where the auto-clean didn't fire (older
+  triages that pre-date this code, a sibling-worktree edit). The
+  `--escalate-defaults` resume path deliberately leaves the marker absent
+  so its worktree is preserved for the resume. trace:TASK-358
 - Skill templates have not been audited for interactive prompts beyond the
   reviewer/merge path (TASK-297).
 

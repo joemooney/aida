@@ -722,6 +722,18 @@ pub enum SessionCommand {
         // trace:TASK-70 | ai:claude
         #[clap(long)]
         orphans: bool,
+
+        /// Sweep lingering session worktrees from `--escalate-blocks`
+        /// punts whose spec has since been triaged out of Needs Attention.
+        /// The autonomous-drain escalation path deliberately leaves the
+        /// worktree alive in case the advisor's resume tier needs it; this
+        /// flag finds the ones that never were resumed and removes the
+        /// worktree + lease + manifest. Leases whose spec is still in
+        /// Needs Attention are skipped (still awaiting triage). Composes
+        /// with `--dry-run` and `--yes`. `--days` is ignored.
+        // trace:TASK-358 | ai:claude
+        #[clap(long, conflicts_with = "orphans")]
+        escalations: bool,
     },
 
     /// Forget a single tracked Claude Code session — delete its `.jsonl`

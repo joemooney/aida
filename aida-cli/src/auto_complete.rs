@@ -615,6 +615,17 @@ pub(crate) trait PhaseDriver {
             "internal: this driver does not support resuming the implementer",
         ))
     }
+
+    /// TASK-358: stamp the phase-1 implementer's session lease as
+    /// `escalated_to_human` — the marker a later triage (`aida edit --status`
+    /// out of `NeedsAttention`) or explicit prune
+    /// (`aida session prune --escalations`) uses to know the lingering
+    /// worktree is safe to remove. Called from the `--escalate-blocks` arm
+    /// of [`resolve_punt_via_advisor`] before `finish_escalated` stops the
+    /// run. The default impl is a no-op so test drivers without a real lease
+    /// stay simple; `RealPhaseDriver` implements it.
+    /// trace:TASK-358 | ai:claude
+    fn mark_implementer_lease_escalated(&mut self) {}
 }
 
 /// Build a `--json` phase-transition event line. Pure — unit-tested directly.
@@ -1386,6 +1397,13 @@ fn resolve_punt_via_advisor(
                         "⏸".yellow()
                     );
                 }
+                // TASK-358: stamp the lease so a later triage (or explicit
+                // `aida session prune --escalations`) knows the lingering
+                // worktree is safe to clean. The advisor-resume path
+                // (escalate-defaults below) deliberately omits this so its
+                // worktree is preserved for the resume.
+                // trace:TASK-358 | ai:claude
+                driver.mark_implementer_lease_escalated();
                 PuntFlow::Terminal(finish_escalated(
                     spec,
                     json,
@@ -1895,6 +1913,12 @@ mod tests {
         /// orchestrator's phase-1 PR lookup hit a transient GH-API blip and
         /// cannot tell whether a PR was opened. The drain pauses.
         inconclusive: Option<String>,
+        /// TASK-358: how many times `mark_implementer_lease_escalated` was
+        /// called. The `--escalate-blocks` path stamps it once before
+        /// `finish_escalated`; the `--escalate-defaults` resume path and
+        /// every non-escalation flow must leave it at zero so an advisor
+        /// resume's worktree is preserved.
+        mark_escalated_calls: usize,
     }
 
     impl MockPhaseDriver {
@@ -1914,6 +1938,7 @@ mod tests {
                 advisor_calls: 0,
                 resume: None,
                 inconclusive: None,
+                mark_escalated_calls: 0,
             }
         }
 
@@ -2088,6 +2113,9 @@ mod tests {
                 PhaseFailure::of(FailureKind::Internal, "mock: no resume outcome configured")
             })
         }
+        fn mark_implementer_lease_escalated(&mut self) {
+            self.mark_escalated_calls += 1;
+        }
     }
 
     // --- Core orchestration: the mock-Claude integration test -------------
@@ -2161,6 +2189,12 @@ mod tests {
     /// A punt the advisor cannot safely judge, under `--escalate-blocks`: the
     /// advisor escalates, the run stops clean after phase 1 — phases 2-6 never
     /// run — exits `0`, and the result carries the escalation.
+    ///
+    /// TASK-358: also asserts the orchestrator stamps the implementer's lease
+    /// (`mark_implementer_lease_escalated`) exactly once on this path — the
+    /// marker is what `aida edit --status` out of `NeedsAttention` and
+    /// `aida session prune --escalations` later use to clean up the
+    /// otherwise-lingering worktree. trace:TASK-358 | ai:claude
     #[test]
     fn orchestrate_punt_advisor_escalates_blocks_skips_phases_2_to_6() {
         let mut driver = MockPhaseDriver::punting_at_implementer("project-strategy fork")
@@ -2179,11 +2213,22 @@ mod tests {
         // The pipeline stopped at phase 1 — only the implementer ran.
         assert_eq!(driver.calls, vec![Phase::Implementer]);
         assert_eq!(driver.advisor_calls, 1);
+        // TASK-358: the lease was stamped escalated_to_human exactly once.
+        assert_eq!(
+            driver.mark_escalated_calls, 1,
+            "--escalate-blocks must mark the lease so the lingering worktree gets cleaned"
+        );
     }
 
     /// A punt the advisor escalates, under `--escalate-defaults`: instead of
     /// stopping, the implementer is resumed with the defensible-default
     /// instruction, opens a PR, and the full pipeline runs.
+    ///
+    /// TASK-358: also asserts the orchestrator does NOT stamp the lease as
+    /// escalated_to_human on this path — the resume needs the worktree alive,
+    /// and a stray marker would have a later triage out of NeedsAttention
+    /// (the implementer's own `aida edit --status in-progress` on resume)
+    /// nuke the worktree under its feet. trace:TASK-358 | ai:claude
     #[test]
     fn orchestrate_punt_advisor_escalates_defaults_resumes_with_default() {
         let mut driver = MockPhaseDriver::punting_at_implementer("flag-naming fork")
@@ -2210,6 +2255,12 @@ mod tests {
             ]
         );
         assert_eq!(driver.advisor_calls, 1);
+        // TASK-358: the lease must stay un-stamped so the resume's worktree
+        // is preserved — the resume is what consumes it.
+        assert_eq!(
+            driver.mark_escalated_calls, 0,
+            "--escalate-defaults must NOT mark the lease — the resume relies on its worktree"
+        );
     }
 
     /// A re-punt after a resume is terminal — one advisor round per spec per

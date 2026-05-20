@@ -3662,6 +3662,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 changed = true;
             }
             let mut new_status_for_manifest: Option<String> = None;
+            // TASK-358: triage out of NeedsAttention — captured here, applied
+            // after the backend save below. trace:TASK-358 | ai:claude
+            let mut left_needs_attention = false;
             if let Some(s) = status {
                 let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
                 // STORY-332: enforce the NeedsAttention transition rules —
@@ -3680,6 +3683,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // (`.aida/punts.jsonl`) keeps the durable history.
                 if was_needs_attention && !matches!(req.status, RequirementStatus::NeedsAttention) {
                     req.attention_reason = None;
+                    left_needs_attention = true;
                 }
                 changed = true;
                 new_status_for_manifest = Some(canonical.to_string());
@@ -3791,6 +3795,20 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     let storage = Storage::new(store_path.to_path_buf());
                     let user_id = current_user_id(None);
                     maybe_hint_after_queue_drain(&storage, &user_id);
+                }
+
+                // TASK-358: triage out of NeedsAttention — clean up any
+                // orchestrator-escalated worktree for this spec. The lease's
+                // `escalated_to_human` marker (stamped by the
+                // `--escalate-blocks` path) is the safety gate: an
+                // interactive user session on the same spec, or an
+                // `--escalate-defaults` advisor-resume, has the marker
+                // absent and is left alone. trace:TASK-358 | ai:claude
+                if left_needs_attention {
+                    if let Ok(project_root) = find_project_root() {
+                        let spec_id = req.spec_id.as_deref().unwrap_or(id);
+                        cleanup_escalated_leases_for_spec(&project_root, spec_id);
+                    }
                 }
             } else {
                 println!("No changes specified. Use --title, --status, --priority, etc.");
@@ -6297,6 +6315,7 @@ fn edit_requirement_cli(
     }
 
     // Update status
+    let mut left_needs_attention = false;
     if let Some(status_str) = status {
         let new_status = match status_str.to_lowercase().as_str() {
             "draft" => RequirementStatus::Draft,
@@ -6316,6 +6335,14 @@ fn edit_requirement_cli(
             anyhow::bail!(msg);
         }
         if new_status != req.status {
+            // TASK-358: a triage that takes a spec out of NeedsAttention is
+            // the trigger for cleaning up any orchestrator-escalated worktree
+            // for it. Capture the transition direction before the field
+            // changes — the actual cleanup fires after the store save so a
+            // failed save doesn't leave a half-cleaned state.
+            // trace:TASK-358 | ai:claude
+            left_needs_attention = matches!(req.status, RequirementStatus::NeedsAttention)
+                && !matches!(new_status, RequirementStatus::NeedsAttention);
             changes.push(Requirement::field_change(
                 "status",
                 format!("{:?}", req.status),
@@ -6444,6 +6471,18 @@ fn edit_requirement_cli(
         spec_id,
         changes.len()
     );
+
+    // TASK-358: triage out of NeedsAttention — clean up any orchestrator-
+    // escalated worktree for this spec. The lease's `escalated_to_human`
+    // marker (stamped by the `--escalate-blocks` path) is the safety gate:
+    // an interactive user session on the same spec, or an
+    // `--escalate-defaults` advisor-resume, has the marker absent and is
+    // left alone. trace:TASK-358 | ai:claude
+    if left_needs_attention {
+        if let Ok(project_root) = find_project_root() {
+            cleanup_escalated_leases_for_spec(&project_root, &spec_id);
+        }
+    }
 
     Ok(())
 }
@@ -11851,7 +11890,8 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             dry_run,
             yes,
             orphans,
-        } => session_prune(*days, *dry_run, *yes, *orphans),
+            escalations,
+        } => session_prune(*days, *dry_run, *yes, *orphans, *escalations),
         SessionCommand::Forget {
             id,
             force,
@@ -11943,6 +11983,18 @@ struct SessionLease {
     /// trace:BUG-237 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     zen_intent_token: Option<String>,
+    /// TASK-358: when the orchestrator's `--escalate-blocks` path parks a
+    /// punted spec for a human, it stamps this timestamp on the implementer's
+    /// lease. The marker has two readers: `aida edit --status` (out of
+    /// `NeedsAttention`) cleans up any lease carrying it for the triaged spec
+    /// — STORY-306 deliberately left the worktree alive for the advisor's
+    /// resume path, but a never-resumed escalation otherwise leaks; and
+    /// `aida session prune --escalations` lists the same set for explicit
+    /// bulk cleanup. Absent for interactive user sessions and for the
+    /// advisor-resume path, so neither is touched.
+    /// trace:TASK-358 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    escalated_to_human: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -13641,6 +13693,11 @@ fn session_start(
         zen_intent_token: std::env::var(zen::ZEN_TOKEN_ENV)
             .ok()
             .filter(|t| !t.is_empty()),
+        // TASK-358: a fresh session is never an escalation; the orchestrator
+        // stamps this later via `mark_lease_escalated_to_human` if and when
+        // its `--escalate-blocks` path parks the spec for a human.
+        // trace:TASK-358 | ai:claude
+        escalated_to_human: None,
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -17303,6 +17360,280 @@ fn humanize_age_secs(secs: u64) -> String {
 /// jsonls in the dir → treat as orphan (the dir is content-less).
 /// Falls back to the lossy dir-name decode (replace `-` with `/`) when
 /// the jsonl lacks a `"cwd":` field. trace:TASK-70 | ai:claude
+/// TASK-358: mechanically tear down a lease + its worktree without the
+/// interactive ceremony of [`session_end`] — no CI probe, no live-claude
+/// refusal, no dirty-tree refusal, no prompts. Only callers that already
+/// know the lease is safe to remove (e.g. the orchestrator's
+/// `--escalate-blocks` marker [`SessionLease::escalated_to_human`]) should
+/// reach this. Mirrors `session_end`'s interior writes — strip runtime
+/// symlinks → unlink lease/manifest/activity log → `git worktree remove
+/// --force` — and warns rather than errors on partial failure so a sweep
+/// that hits one stuck worktree still tries the rest. Returns `true` when
+/// the worktree was removed cleanly.
+/// trace:TASK-358 | ai:claude
+fn force_cleanup_lease(project_root: &std::path::Path, lease: &SessionLease) -> bool {
+    // Snapshot the lease's authoritative on-disk path before we strip the
+    // worktree's symlinks (which can break the symlink chain). Mirrors
+    // BUG-56's pattern in `session_end`.
+    let lease_file_via_symlink = lease_path(project_root, &lease.id);
+    let canonical_lease = lease_file_via_symlink.canonicalize().ok();
+
+    // Aggregate the session's activity log into project-level role activity
+    // before we delete the log — same ordering as `session_end`.
+    aggregate_session_activity_into_roles(project_root, &lease.id);
+    let activity_file = session_activity_path(project_root, &lease.id);
+    let canonical_activity = activity_file.canonicalize().ok();
+    let activity_target: std::path::PathBuf = canonical_activity
+        .clone()
+        .unwrap_or_else(|| activity_file.clone());
+
+    // Strip the runtime symlinks `session_start` installed so `git
+    // worktree remove` doesn't refuse on untracked files (BUG-52).
+    let store_link = lease.worktree_path.join(".aida-store");
+    if store_link.is_symlink() {
+        let _ = std::fs::remove_file(&store_link);
+    }
+    let aida_dir = lease.worktree_path.join(".aida");
+    for runtime in &[
+        "sessions",
+        "roles",
+        "cache.db",
+        "cache.db-shm",
+        "cache.db-wal",
+        "pgdata",
+    ] {
+        let p = aida_dir.join(runtime);
+        if p.is_symlink() {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+
+    // Lease file first — once gone the session no longer counts as active.
+    let lease_target: &std::path::Path = canonical_lease
+        .as_deref()
+        .unwrap_or(&lease_file_via_symlink);
+    match std::fs::remove_file(lease_target) {
+        Ok(_) | Err(_) => {}
+    }
+
+    // Companion files — quiet on missing.
+    let manifest_target = session_manifest::manifest_path(project_root, &lease.id);
+    if manifest_target.exists() {
+        let _ = std::fs::remove_file(&manifest_target);
+    }
+    if activity_target.exists() {
+        let _ = std::fs::remove_file(&activity_target);
+    }
+
+    // `git worktree remove --force` — `--force` because the dirty-tree
+    // refusal in `session_end` is gated by interactive prompts; an
+    // escalation cleanup never had a chance to commit, so we just remove.
+    let res = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "worktree",
+            "remove",
+            "--force",
+            lease.worktree_path.to_str().unwrap_or_default(),
+        ])
+        .output();
+    let removed = matches!(&res, Ok(o) if o.status.success());
+    if !removed {
+        eprintln!(
+            "  {} could not remove worktree {} — remove manually with \
+             `git worktree remove --force {}`",
+            "Warning:".yellow().bold(),
+            lease.worktree_path.display(),
+            lease.worktree_path.display(),
+        );
+    }
+    removed
+}
+
+/// TASK-358: on a triage that takes a spec out of `NeedsAttention`, find any
+/// orchestrator-escalated lease for it and clean up the lingering worktree.
+/// The lease's `escalated_to_human` marker is the load-bearing gate: only
+/// leases set by `--escalate-blocks` are touched, so an interactive user
+/// session on the same spec stays put, and the advisor-resume path
+/// (which never sets the marker) preserves its worktree as STORY-306
+/// requires. Best-effort: a missing project root or zero matching leases
+/// is a quiet no-op. trace:TASK-358 | ai:claude
+fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, spec_id: &str) {
+    let leases = list_leases(project_root);
+    let mut cleaned = 0usize;
+    for lease in leases {
+        if lease.escalated_to_human.is_none() {
+            continue;
+        }
+        if !lease.scope.eq_ignore_ascii_case(spec_id) {
+            continue;
+        }
+        eprintln!(
+            "  {} cleaning up escalated worktree for {}: {}",
+            "→".dimmed(),
+            spec_id.cyan(),
+            lease.worktree_path.display().to_string().dimmed(),
+        );
+        force_cleanup_lease(project_root, &lease);
+        cleaned += 1;
+    }
+    if cleaned > 0 {
+        eprintln!(
+            "  {} {} escalated worktree{} cleaned up",
+            "✓".green(),
+            cleaned,
+            if cleaned == 1 { "" } else { "s" },
+        );
+    }
+}
+
+/// TASK-358 tests — the `--escalate-blocks` worktree cleanup.
+///
+/// The wiring exercised here:
+///   1. `mark_lease_escalated_to_human` stamps the timestamp on the lease
+///      file and round-trips through TOML.
+///   2. `cleanup_escalated_leases_for_spec` only touches leases that
+///      (a) carry the marker AND (b) match the spec by scope. A bare
+///      interactive lease on the same spec is ignored (preserves user work),
+///      and an escalated lease for an unrelated spec is ignored (the triage
+///      hook is per-spec).
+///
+/// trace:TASK-358 | ai:claude
+#[cfg(test)]
+mod task_358_escalation_cleanup_tests {
+    use super::*;
+
+    /// Build a minimal usable lease, write it to a temp project's
+    /// `.aida/sessions/<id>.toml`, return both lease + path.
+    fn write_test_lease(
+        project_root: &std::path::Path,
+        id: &str,
+        scope: &str,
+        escalated: bool,
+    ) -> std::path::PathBuf {
+        let sessions = leases_dir(project_root);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let lease = SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_lowercase(),
+            owner: "tester".into(),
+            // A non-existent path is fine — the unit tests do not invoke the
+            // git-worktree-remove leg of force_cleanup_lease.
+            worktree_path: project_root.join(format!("wt-{}", id)),
+            branch: format!("br-{}", id),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: if escalated {
+                Some(chrono::Utc::now())
+            } else {
+                None
+            },
+        };
+        let path = sessions.join(format!("{id}.toml"));
+        std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
+        path
+    }
+
+    /// `mark_lease_escalated_to_human` stamps a None marker → Some, and the
+    /// stamped lease round-trips through TOML so list_leases sees it.
+    #[test]
+    fn mark_lease_escalated_to_human_stamps_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_test_lease(root, "abc123", "TASK-358", false);
+
+        // Sanity: starts unmarked.
+        let before: SessionLease =
+            toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(before.escalated_to_human.is_none());
+
+        mark_lease_escalated_to_human(root, "abc123").unwrap();
+
+        let after: SessionLease = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(
+            after.escalated_to_human.is_some(),
+            "the stamp must persist on disk"
+        );
+    }
+
+    /// An interactive user lease on the same spec (no marker) is NOT a
+    /// cleanup target. This is the load-bearing safety property — if the
+    /// gate dropped, an interactive `aida edit TASK-X --status approved`
+    /// could nuke a user's own session worktree on TASK-X.
+    #[test]
+    fn cleanup_skips_lease_without_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let lease_path = write_test_lease(root, "user01", "TASK-358", /* escalated */ false);
+
+        cleanup_escalated_leases_for_spec(root, "TASK-358");
+
+        assert!(
+            lease_path.exists(),
+            "an unmarked lease on the same spec must survive the cleanup"
+        );
+    }
+
+    /// A marked lease for a *different* spec is also untouched — the
+    /// per-spec cleanup hook must not touch escalations for other specs.
+    #[test]
+    fn cleanup_skips_escalated_lease_for_other_spec() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let lease_path = write_test_lease(root, "esc01", "TASK-999", /* escalated */ true);
+
+        cleanup_escalated_leases_for_spec(root, "TASK-358");
+
+        assert!(
+            lease_path.exists(),
+            "an escalated lease for an unrelated spec must survive"
+        );
+    }
+
+    /// A legacy lease TOML written before this field existed deserializes
+    /// fine with `escalated_to_human` as `None` — backward compatibility.
+    #[test]
+    fn legacy_lease_without_field_deserializes_with_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        let wt = root.join("wt");
+        std::fs::create_dir_all(&wt).unwrap();
+        let toml_text = format!(
+            r#"
+id = "legacy01"
+scope = "TASK-358"
+slug = "task-358"
+owner = "u"
+worktree_path = "{}"
+branch = "task-358"
+started_at = "2026-05-19T00:00:00Z"
+hostname = "h"
+"#,
+            wt.canonicalize().unwrap().display()
+        );
+        let sessions = leases_dir(&root);
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(sessions.join("legacy01.toml"), toml_text).unwrap();
+
+        let leases = list_leases(&root);
+        assert_eq!(leases.len(), 1, "the legacy lease loads");
+        assert!(
+            leases[0].escalated_to_human.is_none(),
+            "field defaults to None when absent"
+        );
+    }
+}
+
 fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
     let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;
     let projects = home.join(".claude/projects");
@@ -17485,7 +17816,140 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
     Ok(())
 }
 
-fn session_prune(days: u32, dry_run: bool, yes: bool, orphans: bool) -> Result<()> {
+/// TASK-358: explicit pruner for `--escalate-blocks` worktrees whose
+/// underlying spec has been triaged out of `NeedsAttention`. The auto-clean
+/// in `edit_requirement_cli` covers the happy path; this verb is the
+/// recovery surface for cases where the auto-clean didn't fire (an older
+/// triage that pre-dates this code, a write that errored, a sibling
+/// worktree at edit time). A lease with the marker but whose spec is still
+/// in `NeedsAttention` is left alone — the human hasn't triaged yet.
+/// trace:TASK-358 | ai:claude
+fn session_prune_escalations(dry_run: bool, yes: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let leases = list_leases(&project_root);
+
+    // Two buckets: the prune-eligible (marker set AND spec out of
+    // NeedsAttention) and the still-parked (marker set AND spec still in
+    // NeedsAttention — left alone, surfaced as info).
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let store = storage.load().ok();
+    let lookup_status = |spec: &str| -> Option<RequirementStatus> {
+        store.as_ref().and_then(|s| {
+            s.requirements
+                .iter()
+                .find(|r| {
+                    r.spec_id
+                        .as_deref()
+                        .map(|sid| sid.eq_ignore_ascii_case(spec))
+                        .unwrap_or(false)
+                })
+                .map(|r| r.status.clone())
+        })
+    };
+
+    let mut eligible: Vec<(SessionLease, Option<RequirementStatus>)> = Vec::new();
+    let mut still_parked: Vec<SessionLease> = Vec::new();
+    for lease in leases {
+        if lease.escalated_to_human.is_none() {
+            continue;
+        }
+        let status = lookup_status(&lease.scope);
+        match &status {
+            Some(RequirementStatus::NeedsAttention) => still_parked.push(lease),
+            _ => eligible.push((lease, status)),
+        }
+    }
+
+    if !still_parked.is_empty() {
+        println!(
+            "Skipping {} escalated worktree{} — spec still in Needs Attention:",
+            still_parked.len(),
+            if still_parked.len() == 1 { "" } else { "s" }
+        );
+        for l in &still_parked {
+            println!(
+                "  {}  {}  ({})",
+                l.scope.cyan(),
+                l.worktree_path.display().to_string().dimmed(),
+                "awaiting human triage".dimmed(),
+            );
+        }
+        println!();
+    }
+
+    if eligible.is_empty() {
+        println!(
+            "(no prune-eligible escalated worktrees{})",
+            if still_parked.is_empty() {
+                ""
+            } else {
+                " — all marked sessions are still in Needs Attention"
+            }
+        );
+        return Ok(());
+    }
+
+    println!(
+        "Found {} escalated worktree{} whose spec has been triaged:",
+        eligible.len(),
+        if eligible.len() == 1 { "" } else { "s" }
+    );
+    for (l, status) in &eligible {
+        let status_label = status
+            .as_ref()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        println!(
+            "  {}  {}  → {}",
+            l.scope.cyan(),
+            l.worktree_path.display().to_string().dimmed(),
+            status_label.green(),
+        );
+    }
+    println!();
+
+    if dry_run {
+        println!("{} (--dry-run; nothing removed)", "Dry run".dimmed());
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        eprint!(
+            "Remove these {} escalated worktree(s)? [y/N] ",
+            eligible.len()
+        );
+        std::io::stderr().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let mut removed = 0usize;
+    for (l, _) in &eligible {
+        if force_cleanup_lease(&project_root, l) {
+            removed += 1;
+        }
+    }
+    println!(
+        "{} removed {} escalated worktree{}",
+        "✓".green(),
+        removed,
+        if removed == 1 { "" } else { "s" }
+    );
+    Ok(())
+}
+
+fn session_prune(
+    days: u32,
+    dry_run: bool,
+    yes: bool,
+    orphans: bool,
+    escalations: bool,
+) -> Result<()> {
     // TASK-70: orphan-sweep mode short-circuits the per-file age path.
     // Iterates every project dir under ~/.claude/projects and removes any
     // whose recorded cwd no longer exists on disk (stranded by an
@@ -17493,6 +17957,14 @@ fn session_prune(days: u32, dry_run: bool, yes: bool, orphans: bool) -> Result<(
     // trace:TASK-70 | ai:claude
     if orphans {
         return session_prune_orphans(dry_run, yes);
+    }
+    // TASK-358: escalations-sweep mode — find lingering `--escalate-blocks`
+    // worktrees whose spec has been triaged out of NeedsAttention and clean
+    // them up. The auto-clean in `edit_requirement_cli` covers the happy
+    // path; this is the explicit recovery surface.
+    // trace:TASK-358 | ai:claude
+    if escalations {
+        return session_prune_escalations(dry_run, yes);
     }
 
     let cwd = std::env::current_dir().context("could not determine cwd")?;
@@ -21373,6 +21845,7 @@ cargo test -p aida-cli
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         };
 
         // No routing tags = visible everywhere.
@@ -21688,6 +22161,7 @@ hostname = "h"
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         };
         std::fs::write(
             leases.join("abcdef123456.toml"),
@@ -22237,6 +22711,7 @@ mod lease_enforcement_tests {
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         }
     }
 
@@ -22453,6 +22928,7 @@ mod scope_fallback_tests {
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         }
     }
 
@@ -22696,6 +23172,7 @@ mod session_end_resolution_tests {
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         }
     }
 
@@ -28256,6 +28733,7 @@ mod task_250_review_state_tests {
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         };
         std::fs::write(
             dir.join(format!("{}.toml", id)),
@@ -35075,6 +35553,7 @@ mod queue_work_tests {
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         }
     }
 
@@ -50178,6 +50657,24 @@ fn update_lease_branch(project_root: &std::path::Path, lease_id: &str, branch: &
     Ok(())
 }
 
+/// TASK-358: stamp the lease's `escalated_to_human` timestamp. The
+/// orchestrator's `--escalate-blocks` path calls this after the advisor
+/// escalates a punted design-fork to a human — the marker tells later
+/// cleanup paths (`aida edit --status` out of `NeedsAttention`,
+/// `aida session prune --escalations`) that this lease is safe to remove.
+/// trace:TASK-358 | ai:claude
+fn mark_lease_escalated_to_human(project_root: &std::path::Path, lease_id: &str) -> Result<()> {
+    let path = lease_path(project_root, lease_id);
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("reading lease {}", path.display()))?;
+    let mut lease: SessionLease =
+        toml::from_str(&body).with_context(|| format!("parsing lease {}", path.display()))?;
+    lease.escalated_to_human = Some(chrono::Utc::now());
+    let content = toml::to_string_pretty(&lease)?;
+    write_atomic(&path, &content).with_context(|| format!("writing lease {}", path.display()))?;
+    Ok(())
+}
+
 /// Re-derive the worktree's current branch and, when it has drifted from
 /// the branch the lease recorded at session-start, rewrite the lease so
 /// every downstream consumer (`aida session end`, `aida session leases`)
@@ -51353,6 +51850,28 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )),
         }
     }
+
+    /// TASK-358: stamp the phase-1 implementer's lease as
+    /// `escalated_to_human` once the orchestrator's `--escalate-blocks`
+    /// path has decided this punt will not be resumed. The marker is read
+    /// by `aida edit --status` (out of `NeedsAttention`) and
+    /// `aida session prune --escalations` to know the lingering worktree
+    /// is safe to remove. Best-effort: a stamp failure must not block the
+    /// terminal `finish_escalated` — the cleanup just falls to the explicit
+    /// prune verb instead. trace:TASK-358 | ai:claude
+    fn mark_implementer_lease_escalated(&mut self) {
+        let Some(lease_id) = self.implementer_lease.clone() else {
+            return;
+        };
+        if let Err(e) = mark_lease_escalated_to_human(&self.project_root, &lease_id) {
+            eprintln!(
+                "  {} could not stamp lease {} as escalated: {e} — \
+                 `aida session prune --escalations` can clean it up later",
+                "Note:".dimmed(),
+                lease_id,
+            );
+        }
+    }
 }
 
 /// TASK-84: pure resolver for `aida queue work` permission-mode.
@@ -51910,6 +52429,7 @@ mod queue_work_resume_tests {
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         };
         std::fs::write(
             sessions.join("019eabcd-1234.toml"),
@@ -51973,6 +52493,7 @@ mod queue_work_resume_tests {
             pr_base_sha: None,
             pr_base_ref: None,
             zen_intent_token: None,
+            escalated_to_human: None,
         };
         std::fs::write(
             sessions.join("019eaaaa-bbbb.toml"),
