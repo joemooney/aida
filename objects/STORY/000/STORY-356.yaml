@@ -1,0 +1,26 @@
+id: 019e4697-b623-7850-ba26-98a77fb5b441
+spec_id: STORY-356
+agreed_id: STORY-356
+title: 'Review PR-132: TASK-398: aida headless tail — clean tailer for headless drain logs'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e468a`) for branch `task-398`.
+
+  - PR: <https://github.com/joemooney/aida/pull/132>
+  - Branch: `task-398` → `main`
+
+  ## Covers
+
+  - TASK-398
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 132` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T18:13:28.227845783Z
+modified_at: 2026-05-20T18:13:28.227845783Z
+req_type: Story
