@@ -27,12 +27,12 @@ description: |-
   ## Origin
 
   2026-05-19, surfaced by BUG-246 at the v0.8.0 cross-platform CI gate. Not release-blocking — the test fix unblocks v0.8.0; this hardens production for real Windows users.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T15:09:12.486243638Z
-modified_at: 2026-05-19T15:09:12.486243638Z
+modified_at: 2026-05-20T15:07:46.582587432Z
 req_type: Task
 tags:
 - cross-platform
