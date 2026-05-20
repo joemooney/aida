@@ -1,0 +1,26 @@
+id: 019e4682-a1d3-7bf1-a6c4-103bb45f18be
+spec_id: STORY-355
+agreed_id: STORY-355
+title: 'Review PR-131: feat(cli): aida state-snapshot --spec emits the finish-state preamble deterministically (TASK-391)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e466f`) for branch `task-391`.
+
+  - PR: <https://github.com/joemooney/aida/pull/131>
+  - Branch: `task-391` → `main`
+
+  ## Covers
+
+  - TASK-391
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 131` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T17:50:26.771109553Z
+modified_at: 2026-05-20T17:50:26.771109553Z
+req_type: Story
