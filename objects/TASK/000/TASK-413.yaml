@@ -1,0 +1,28 @@
+id: 019e466d-da4a-7153-8738-8b06e126c0a9
+spec_id: TASK-413
+agreed_id: TASK-413
+title: Closing summary in aida-pickup Step 6 over-claims State preamble for orchestrator template
+description: |
+  The closing paragraph in `aida-core/templates/skills/aida-pickup.md` § Step 6 (line 917-923, added in PR-130 / TASK-390) says:
+
+  > Every template above (orchestrator, batch, cluster-drained, cluster-partial, simple-more, simple-empty) carries the full finish-state rubric: a **State preamble** block, an **optional Deciding-factor** line, a primary row marked `← recommended` with rationale-first Why, and a conditional `⊕ Route to the advisor` row.
+
+  The orchestrator template (line 695, unmodified by PR-130) actually uses an `ⓘ` note instead of a labelled `State:` preamble. The rubric prose at line 625 says "Every template below … must carry … a labelled State snapshot preamble," so this is a pre-existing gap that the closing claim now papers over.
+
+  Two non-blocking fix options:
+
+  1. Tighten the closing summary to acknowledge the orchestrator variant (e.g. "every template carries the rubric — the orchestrator uses an ⓘ phases-2-6 note in place of the State preamble"), OR
+  2. Add a `State:` preamble to the orchestrator template too (probably the better fix — completes TASK-359's rubric in the case-study template as well).
+
+  Raised in review of PR-130: https://github.com/joemooney/aida/pull/130
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T17:27:44.970022344Z
+modified_at: 2026-05-20T17:27:44.970022344Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-130
+- severity:minor
