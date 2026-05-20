@@ -468,12 +468,75 @@ surfaces them grouped under a *From implementer* section, `aida findings list
 isolates the file-worthy ones, `aida findings promote <ID>` sends one to the
 work queue, `aida findings dismiss <ID>` rejects it.
 
+### Step 5c: Pre-exit checklist — the atomic shipping unit (TASK-401)
+
+**Commit + push + PR + exit is the single atomic shipping unit. No partial
+states under any mode.** Step 5 marked the spec Done locally; the work is
+not *shipped* until a PR is open against `origin/main`. Before Step 6 may
+render — and before any "what next?" framing reaches the operator — run a
+three-part precondition check on the branch:
+
+```bash
+git fetch --quiet origin main 2>/dev/null || true
+commits_ahead=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
+branch=$(git rev-parse --abbrev-ref HEAD)
+pushed=$(git rev-parse --verify --quiet "origin/${branch}" >/dev/null 2>&1 \
+  && [ "$(git rev-list --count "${branch}..origin/${branch}" 2>/dev/null || echo 1)" = "0" ] \
+  && [ "$(git rev-list --count "origin/${branch}..${branch}" 2>/dev/null || echo 1)" = "0" ] \
+  && echo yes || echo no)
+pr_open=$(gh pr list --head "$branch" --json number --jq 'length' 2>/dev/null || echo 0)
+```
+
+- **`commits_ahead == 0`** → no work to ship; **skip 5c**, render Step 6
+  normally. (Edge case: a docs-only or rebase-revert pickup that intentionally
+  leaves the branch empty.)
+- **`commits_ahead > 0` AND `pushed == yes` AND `pr_open >= 1`** → atomic
+  shipping unit complete; render Step 6 normally.
+- **Anything else** (commits exist and either not pushed or no PR open) → the
+  branch is committed-but-unshipped. **Do not render Step 6 yet.** The only
+  valid next move is `/aida-pr` — invoke it now and let it open the PR. Once
+  `/aida-pr` returns with an open PR, *then* render Step 6.
+
+The framing *"Want me to grab the next queue item or stop here?"* must only
+fire AFTER the precondition is satisfied. A committed-but-unshipped exit is
+the failure mode TASK-401 was filed against: the implementer's good work
+sits on a local branch, the orchestrator can do nothing with it, and a
+human has to recover it by hand.
+
+**Headless mode (`AIDA_HEADLESS=1`): punt if `/aida-pr` cannot complete.**
+Under an unattended drain there is no operator to fix a `gh auth` issue, a
+push-permission denial, or a stale-base rebase prompt mid-`/aida-pr`. If
+`/aida-pr` fails for *any* reason in headless mode, invoke `/aida-punt`
+instead of exiting cleanly — the spec lands in Needs Attention with a
+structured reason the advisor can triage, and the drain advances:
+
+```bash
+aida punt <SPEC-ID> --category other \
+  --reason "work complete locally but unable to publish: <one-line cause from /aida-pr>" \
+  --lean "<one-line — e.g. 'branch is ready; re-run /aida-pr after fixing <cause>'>"
+```
+
+Exiting cleanly with a local-only commit is **never** correct in headless
+mode. The orchestrator's phase-1 `gh pr list --head <branch>` detector
+catches the bare case (and emits `FailureKind::NoPr` with the resume hint
+`aida queue work <SPEC> --resume <session>`), but the punt gives the advisor
+the structured *why* — far more actionable than a bare "no PR opened."
+
+**Interactive mode: this is still mandatory, just with a person in the
+loop.** Surface the precondition state to the operator and proceed to
+`/aida-pr` (do not ask "should I open the PR?" as a confirm — the rule is
+not optional; only the *timing* is). If `/aida-pr` itself surfaces a
+genuine design-fork (which base? which title?) the human resolves it. Once
+the PR is open, fall through to Step 6.
+
 ### Step 6: Next steps (state-aware) — trace:TASK-87 trace:TASK-260
 
 <!-- kind:confirmation -->
-After step 5 succeeds, surface a structured next-steps table so the
-workflow self-guides instead of relying on improvised "want me to push?"
-prompts. Don't auto-execute — the user picks.
+After step 5 succeeds **and Step 5c's pre-exit checklist passes** (commit
++ push + PR is the atomic shipping unit — never render this table while
+the branch is committed-but-unshipped), surface a structured next-steps
+table so the workflow self-guides instead of relying on improvised "want
+me to push?" prompts. Don't auto-execute — the user picks.
 
 When zen mode is corroborated (`aida zen status` = `zen`, STORY-287 /
 BUG-237) this menu is a `kind:confirmation` prompt, but *which* row
@@ -731,6 +794,40 @@ Print exactly one block — don't dump all six templates. In default mode,
 don't auto-loop without confirmation: the user may want to break, review,
 switch roles, or call it for the day. Under `$AIDA_ZEN` the user has
 pre-authorized that loop — auto-take the primary row as described above.
+
+## Discipline: the atomic shipping unit (TASK-401)
+
+A spec is *worked* when its branch has the implementing commits. A spec is
+*shipped* when those commits are pushed and a PR is open. The two are not
+the same — and the `/aida-pickup` exit gate enforces it:
+
+> **commit + push + PR + exit is the single atomic shipping unit; no
+> partial states under any mode.**
+
+The failure mode this rule prevents: a headless implementer that does
+excellent work, marks the spec Done, writes a finish-state summary, and
+closes its closing-question on the assumption a human will answer — then
+exits cleanly with no push and no PR. The work is sitting on a local
+branch the orchestrator cannot advance. The recovery is manual; the
+drain's value collapses.
+
+The rule is mode-independent on purpose. Interactive sessions can defer
+the PR for *seconds* (e.g. step away from the keyboard, return to invoke
+`/aida-pr`), but they cannot *exit* with the PR unopened — `/aida-pickup`
+will not surface the "grab next item or stop here?" prompt until Step 5c
+passes. Headless sessions take the same gate one stricter step: if
+`/aida-pr` cannot complete, the spec is *punted* (`/aida-punt`) with a
+structured *"unable to publish"* reason, not exited.
+
+Pairs with:
+
+- `aida queue done`'s built-in workflow hint (BUG-232): when the branch
+  carries committed-but-unshipped work, it already nudges toward
+  `/aida-pr`. Step 5c hardens that nudge into a gate.
+- The orchestrator's phase-1 detector (`FailureKind::NoPr`): catches
+  *any* implementer that exits with no PR, but only after the fact. The
+  in-skill gate is the prevention; the orchestrator detector is the
+  safety net.
 
 ## Producer side reminder
 

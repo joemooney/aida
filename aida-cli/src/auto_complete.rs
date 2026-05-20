@@ -3064,6 +3064,19 @@ mod tests {
         let hint = recovery_hint(Phase::Implementer, FailureKind::NoPr, &ctx());
         assert!(hint.contains("without opening a PR"));
         assert!(hint.contains("/aida-pr"));
+        // TASK-401: the orchestrator's phase-1 detector fires when a
+        // headless implementer commits + exits without pushing or opening
+        // a PR (the failure mode `/aida-pickup` Step 5c enforces against).
+        // The exit hint is the operator's only thread back into the
+        // session — it must name the resume verb with the session ID, so
+        // it's a one-command re-entry. A bare "run /aida-pr" without the
+        // resume context leaves the operator hunting for the lease.
+        // trace:TASK-401 | ai:claude
+        assert!(
+            hint.contains("aida queue work TASK-247 --resume 019e2f423e7c"),
+            "no-PR hint must give the operator a one-command resume back into \
+             the phase-1 session, not just a bare `/aida-pr` reference: {hint}"
+        );
     }
 
     #[test]
