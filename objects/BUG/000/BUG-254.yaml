@@ -47,12 +47,12 @@ description: |-
   ## Origin
 
   2026-05-19 — STORY-252 drain. Code-leg pull aborted on an untracked-file conflict, but phase 5 said "complete" and phase 6 then failed with template-not-found errors masking the real cause.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:00:09.649032232Z
-modified_at: 2026-05-20T13:46:22.351946230Z
+modified_at: 2026-05-20T13:52:46.704547288Z
 req_type: Bug
 tags:
 - auto-pull
@@ -62,3 +62,7 @@ tags:
 - orchestrator
 - phase-5
 - silent-failure
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T13:52:46.704547288Z
+  implemented_by: joe
