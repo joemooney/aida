@@ -1,0 +1,12 @@
+id: 019e4381-06b2-7ee3-95b7-f72a0b38be21
+spec_id: TASK-367
+agreed_id: TASK-367
+title: Statusline indicator when a session is on a `human-only` spec (shouldn't happen — but cheap defensive UX)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T03:49:49.874648797Z
+modified_at: 2026-05-20T03:49:49.874648797Z
+req_type: Task
