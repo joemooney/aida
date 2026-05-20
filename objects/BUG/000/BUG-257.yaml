@@ -1,0 +1,61 @@
+id: 019e43db-843c-7a52-97ec-8aef985179bd
+spec_id: BUG-257
+agreed_id: BUG-257
+title: Orchestrator phase-1 misclassifies transient GH-API network error during PR lookup as 'no PR opened' failure
+description: |-
+  When the orchestrator queries the GH API at phase-1 end to look up a PR for the branch, a **transient network error** (api.github.com unreachable) is currently conflated with **"no PR exists"** — both produce *"phase 1 failed: could not look up the PR"*. The diagnosis is then ambiguous and the recovery hint can be wrong.
+
+  ## Observed — 2026-05-19, TASK-299 --auto-complete drain
+
+      ✗ phase 1 (implementer session) failed: could not look up the PR for `task-299`:
+        error connecting to api.github.com
+        check your internet connection or https://githubstatus.com
+        → Continue the implementer session: `aida queue work TASK-299 --resume 019e43be0f5a`
+
+  In this specific case no PR genuinely existed (the implementer had skipped `/aida-pr`), so the bottom-line classification ("phase 1 failed") was correct — but the diagnosis was confused, and the recovery hint addressed only one branch of the disjunction.
+
+  ## The disjunction the outcome model should distinguish
+
+  1. **No PR exists** — implementer didn't open one → phase-1 failure (already correct, modulo BUG-250's deliberately-held case). Recovery: resume the session and run `/aida-pr`.
+  2. **GH API unreachable** — orchestrator can't tell whether a PR exists → `Inconclusive`, not a failure. Recovery: retry once `gh api /rate_limit` works.
+
+  A `git ls-remote --heads origin <branch>` check (git protocol — survives GH-API outages) can narrow the diagnosis without depending on the API: if the branch isn't even on origin, no PR can exist regardless of the API.
+
+  ## Fix direction
+
+  - Phase-1 outcome variants: `Failed(NoPR)` vs `Inconclusive(NetworkError)` (today they collapse into one).
+  - Recovery hint matches the variant.
+  - Optional fallback: `git ls-remote` to confirm the branch state when the GH API fails.
+
+  ## Composes with
+
+  - BUG-241 — orchestrator false-failure reconcile (parent class)
+  - BUG-250 — deliberately-held PR mis-classified (same outcome-model class)
+  - BUG-254 — phase-5 false-success (same family: outcome reporting doesn't reflect underlying state)
+
+  ## Acceptance
+
+  - [ ] Phase-1 distinguishes "no PR exists" from "couldn't reach GH API"
+  - [ ] Recovery hint matches the actual outcome variant
+  - [ ] (Optional) `git ls-remote` fallback narrows the diagnosis when the API is down
+  - [ ] Test with a mocked API failure: orchestrator reports `Inconclusive`, drain pauses (not fails)
+
+  ## Origin
+
+  2026-05-19 — TASK-299 `--auto-complete` drain hit a transient GH-API error during PR lookup, mis-classified as phase-1 failure. The conflation made diagnosis harder than it needed to be.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T05:28:40.252645413Z
+modified_at: 2026-05-20T05:28:40.252645413Z
+req_type: Bug
+tags:
+- autonomous-drain
+- backlog
+- false-failure
+- from-self-test:TASK-299
+- gh-api
+- network
+- orchestrator
+- outcome-model
