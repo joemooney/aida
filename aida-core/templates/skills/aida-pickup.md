@@ -735,13 +735,37 @@ trace:TASK-329
 
 *Batch mode (`batch:<NAME>` still has queued members) — TASK-272:*
 
+Print the State preamble first (substitute concrete values; omit rows
+genuinely absent, never leave a vague placeholder):
+
+```
+State:
+  Spec:    <SPEC-ID>  <title>            (Status: Done)
+  Branch:  <branch>   <N> commits ahead of main   <pushed|local>
+  PR:      no PR yet (one cluster PR at batch end)
+  Drain:   phase 1/6 batch <NAME> (<done>/<total> done, <remaining> queued)   orchestrator off
+  Tests:   <last cargo test summary or "not run">
+  Fmt:     <cargo fmt --check summary or "not run">
+  Plan:    <docs/plans/...md>   |  none
+```
+
+Then the Deciding-factor line *only when one is in play* (otherwise omit
+entirely — silence beats a vacuous "none"):
+
+```
+Deciding factor: <one sentence — e.g. "Last batch member touched the public
+API surface named in the plan brief; worth a human's eyes before more
+cluster commits compound the decision.">
+```
+
 ✓ <SPEC-ID> done. Batch `<NAME>` has <N> more queued (next: <NEXT-SPEC>).
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ▶ Continue the batch | `/aida-pickup --batch <NAME>` | Same branch + session — the next batch member accumulates as commits in this cluster; one PR at the end |
+| ▶ Continue the batch ← recommended | `/aida-pickup --batch <NAME>` | The batch IS the consent record — cluster-mode continuation is the whole point: one branch + one PR for the batch, no re-entry cost. Same session + same lease; the next member accumulates as commits in this cluster. Reversible: Ctrl+D pauses; `aida queue work --batch <NAME>` resumes later. |
 | ⇒ Wrap the batch as one PR | `/aida-pr` | Ships every batch member committed so far as a single cluster PR; the remaining queued members wait for a later session |
 | ⇒ Pause the drain | Ctrl+D | Step out to test / debug; the batch marker is on the manifest — resume later with `aida queue work --batch <NAME>` from the parent shell |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-shipped batch member surfaced a load-bearing risk the implementer can't grade itself (an unexpected API change, a deviation from the batch plan, a scope realization), park the keep-draining-vs-pause call with the advisor before more cluster commits compound it. |
 | ⏸ Ship just this spec, drop the batch | `/aida-pr`, then `aida session end <session-id>` from the parent shell | Solo PR for <SPEC-ID> only; abandons the rest of the batch — pick the remaining members up individually later |
 
 The ▶/⇒ ordering is the point (TASK-272): cluster-mode continuation is
@@ -752,48 +776,151 @@ form).
 
 *Cluster drained:*
 
+Print the State preamble first (substitute concrete values; omit rows
+genuinely absent):
+
+```
+State:
+  Spec:    <last-SPEC-ID>  <title>     (Status: Done)
+  Branch:  <branch>   <N> commits ahead of main   <pushed|local>
+  PR:      no PR yet
+  Drain:   phase 1/6 cluster <cluster-id> drained (<N>/<N> done)   orchestrator off
+  Tests:   <last cargo test summary or "not run">
+  Fmt:     <cargo fmt --check summary or "not run">
+  Plan:    <docs/plans/...md>   |  none
+```
+
+Then the Deciding-factor line *only when one is in play* (otherwise omit
+entirely):
+
+```
+Deciding factor: <one sentence — e.g. "One cluster member missed a test
+the plan promised; worth raising before the cluster PR goes up.">
+```
+
 Drained <N> items from <cluster-id>.
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ▶ Open PR for this batch | `/aida-pr` | Same session, same lease — the batch is done; ship it before the context goes cold |
+| ▶ Open PR for this batch ← recommended | `/aida-pr` | The cluster is complete and the manifest's reasoning is still in scrollback — shipping the batch as one PR now beats coming back cold. Same session, same lease. Reversible: close the PR if review surfaces a blocker. |
 | ⇒ Pick up a different cluster | `aida queue work <EPIC-M>` | New scope → new lease + worktree; end this session first or the leases conflict |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <last-SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When a cluster member surfaced something the implementer can't grade (a deviation from the plan, an unexpected size, a coverage gap), park the ship-now-vs-revisit call with the advisor instead of guessing. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the cluster lease — the drained work is safe, the PR can wait |
 
 *Cluster partial:*
+
+Print the State preamble first (substitute concrete values; omit rows
+genuinely absent):
+
+```
+State:
+  Spec:    <last-SPEC-ID>  <title>     (Status: Done)
+  Branch:  <branch>   <N> commits ahead of main   <pushed|local>
+  PR:      no PR yet
+  Drain:   phase 1/6 cluster <cluster-id> (<done>/<total> done, <remaining> remaining)   orchestrator off
+  Tests:   <last cargo test summary or "not run">
+  Fmt:     <cargo fmt --check summary or "not run">
+  Plan:    <docs/plans/...md>   |  none
+```
+
+Then the Deciding-factor line *only when one is in play* (otherwise omit
+entirely):
+
+```
+Deciding factor: <one sentence — e.g. "Last finished member touched a file
+every remaining member also touches; worth re-reading the plan before
+the next pickup.">
+```
 
 <N>/<total> done on <cluster-id> (<remaining> remaining).
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ▶ Keep draining this cluster | `aida queue work` (no-arg = next planned item) | Same role + lease + worktree — the manifest is the consent record, no re-confirm |
+| ▶ Keep draining this cluster ← recommended | `aida queue work` (no-arg = next planned item) | The manifest is the consent record — staying in the cluster preserves momentum, lease, and worktree; no re-confirm, no context-switch cost. Reversible: pause anytime with Ctrl+D; the `[planned:by-<session>]` chips keep remaining members claimed. |
 | ⇒ Pause + check on something else | `aida queue list --all` | Read-only peek; doesn't drop the lease, you can return to the drain |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <last-SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-finished member surfaced something the implementer can't grade (an emerging shared-file conflict, a plan deviation, a scope realization), park the keep-draining-vs-pivot call with the advisor instead of guessing through more cluster commits. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease mid-cluster; `[planned:by-<session>]` chips keep the rest claimed for next time |
 
 *Simple mode, queue has more items routed to this role:*
+
+Print the State preamble first (substitute concrete values; omit rows
+genuinely absent):
+
+```
+State:
+  Spec:    <SPEC-ID>  <title>            (Status: Done)
+  Branch:  <branch>   <N> commits ahead of main   pushed
+  PR:      #<N> open: <url>
+  Drain:   phase 1/6 interactive   orchestrator off
+  Tests:   <last cargo test summary or "not run">
+  Fmt:     <cargo fmt --check summary or "not run">
+  Plan:    <docs/plans/...md>   |  none
+```
+
+Then the Deciding-factor line *only when one is in play* (otherwise omit
+entirely):
+
+```
+Deciding factor: <one sentence — e.g. "Just-shipped spec was materially
+larger than its plan estimated; worth pausing before pulling the next
+item.">
+```
 
 ✓ <SPEC-ID> done. <N> more items queued for <role>.
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ▶ Grab next item | `/aida-pickup` | Same role + lease + worktree — reuse this session, no re-entry cost |
-| ⇒ Wrap up what's shipped as a PR | `/aida-pr` | Still this session; ships the current branch before picking up more |
+| ▶ Grab next item ← recommended | `/aida-pickup` | The Step 5c gate already opened the PR and the queue still has work — staying in this session reuses the role + lease + worktree with zero re-entry cost. Reversible: stop anytime with Ctrl+D; the remaining items stay routed to <role>. |
+| ⇒ Wrap up what's shipped as a PR | `/aida-pr` | Use when Step 5c skipped (e.g. follow-up commits landed since); still this session — ships the current branch before picking up more |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-shipped spec surfaced something worth a human's eyes before chaining more work (an unexpected size, a deviation, a coverage gap), park the grab-next-vs-pause call with the advisor instead of letting it ride. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; the queued items stay routed to <role> for later |
 
 *Simple mode, queue empty:*
+
+Print the State preamble first (substitute concrete values; omit rows
+genuinely absent):
+
+```
+State:
+  Spec:    <SPEC-ID>  <title>            (Status: Done)
+  Branch:  <branch>   <N> commits ahead of main   pushed
+  PR:      #<N> open: <url>   |  no PR yet
+  Drain:   phase 1/6 interactive   orchestrator off
+  Tests:   <last cargo test summary or "not run">
+  Fmt:     <cargo fmt --check summary or "not run">
+  Plan:    <docs/plans/...md>   |  none
+```
+
+Then the Deciding-factor line *only when one is in play* (otherwise omit
+entirely):
+
+```
+Deciding factor: <one sentence — e.g. "Just-shipped spec opened a
+follow-up shape the dialog seat should triage before more work queues
+up.">
+```
 
 ✓ <SPEC-ID> done. Queue empty for <role>.
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ▶ Open PR for what shipped | `/aida-pr` | Same session — nothing left queued, so ship the branch now |
+| ▶ Open PR for what shipped ← recommended | `/aida-pr` (no-op if Step 5c already opened it) | Nothing is left queued, so the only outstanding obligation is the PR — close the atomic shipping unit before stepping away. Same session reuses the role + lease + worktree; the rare no-op when Step 5c already fired falls straight through. Reversible: PR can be closed or amended later. |
 | ⇒ Switch hats and queue more | `eval "$(aida role enter dialog)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; dialog is the producer seat that refills the queue |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-shipped spec surfaced something the dialog seat should triage before the queue refills (a follow-up shape, a strategic concern, a memory worth capturing), park it with the advisor instead of dropping the lease cold. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; nothing is queued, so it's a clean stopping point |
 
 Print exactly one block — don't dump all six templates. In default mode,
 don't auto-loop without confirmation: the user may want to break, review,
 switch roles, or call it for the day. Under `$AIDA_ZEN` the user has
 pre-authorized that loop — auto-take the primary row as described above.
+
+Every template above (orchestrator, batch, cluster-drained, cluster-partial,
+simple-more, simple-empty) carries the full finish-state rubric: a
+**State preamble** block, an **optional Deciding-factor** line, a primary
+row marked `← recommended` with rationale-first Why, and a conditional
+`⊕ Route to the advisor` row. Each template stands on its own — a reader
+skimming a single one sees the rubric applied, not just the upstream
+prose pointing at it. trace:TASK-390 trace:TASK-359 trace:TASK-393
 
 ## Discipline: the atomic shipping unit (TASK-401)
 
