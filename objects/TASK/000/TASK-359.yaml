@@ -52,12 +52,12 @@ description: |-
   ## Origin
 
   2026-05-19 — observed twice in one day. First: STORY-306's finish-checkpoint menu produced a 4-option list the user judged unclear (no recommendation, smoke-test gate disconnected, decisions bundled, no advisor-escape). Captured as the discipline memory `feedback_finish_checkpoint_clarity.md` and as this TASK. Second: BUG-245's autonomous-drain conclusion message listed what shipped but never named the required user action (Ctrl-D to advance the orchestrator), reproducing the gap on a different surface. Two surfaces, same rubric, same TASK — capture-vs-enforcement distinction made explicit.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T02:23:58.408972956Z
-modified_at: 2026-05-20T07:59:56.660303827Z
+modified_at: 2026-05-20T08:00:53.556324363Z
 req_type: Task
 tags:
 - advisor-routing
@@ -72,3 +72,7 @@ comments:
   content: Commit 9c9cfc6c references this requirement
   created_at: 2026-05-20T07:59:56.660303827Z
   modified_at: 2026-05-20T07:59:56.660303827Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-20T08:00:53.556324363Z
+  implemented_by: joe
