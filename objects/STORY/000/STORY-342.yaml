@@ -1,0 +1,26 @@
+id: 019e4426-9b98-79e3-8073-f8d2fefd766b
+spec_id: STORY-342
+agreed_id: STORY-342
+title: 'Review PR-117: docs(scripts): correct pre-release-check comment about jq @tsv on empty array (TASK-283)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e441d`) for branch `task-283`.
+
+  - PR: <https://github.com/joemooney/aida/pull/117>
+  - Branch: `task-283` → `main`
+
+  ## Covers
+
+  - TASK-283
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 117` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T06:50:41.432540240Z
+modified_at: 2026-05-20T06:50:41.432540240Z
+req_type: Story
