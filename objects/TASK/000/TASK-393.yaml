@@ -20,12 +20,12 @@ description: |-
   Lowest-friction: option 1 (in-row annotation). The acceptance criterion `Menu surface: explicit `advise` escape option` is already satisfied by the row's presence; this is purely about making the conditional rendering legible from the template alone.
 
   Raised in review of PR-121: https://github.com/joemooney/aida/pull/121#issuecomment-4496061354
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:10:08.198595509Z
-modified_at: 2026-05-20T17:04:44.397517398Z
+modified_at: 2026-05-20T17:08:01.323772915Z
 req_type: Task
 tags:
 - from-review:PR-121
@@ -40,3 +40,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-20T17:00:19.642146548Z
   implemented_by: joe
+  completed_at: 2026-05-20T17:08:01.323772915Z
+  completion_sha: 2c2e6e3426e1742737c862e2e2aa150a09624439
