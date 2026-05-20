@@ -24566,6 +24566,32 @@ mod handle_pull_command_tests {
         run_git_in(&work, &["push", "origin", "main", "--quiet"]);
     }
 
+    /// BUG-254: like `push_remote_commit_referencing`, but lets the test
+    /// choose the filename + content so it can set up an untracked-file
+    /// conflict on the local clone. trace:BUG-254 | ai:claude
+    fn push_remote_file(bare: &std::path::Path, name: &str, content: &str, spec_id: &str) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let work = tmp.path().to_path_buf();
+        run_git_in(
+            &work,
+            &[
+                "clone",
+                "--quiet",
+                bare.to_str().unwrap(),
+                work.to_str().unwrap(),
+            ],
+        );
+        run_git_in(&work, &["config", "user.email", "test@example.com"]);
+        run_git_in(&work, &["config", "user.name", "Test"]);
+        std::fs::write(work.join(name), content).unwrap();
+        run_git_in(&work, &["add", name]);
+        run_git_in(
+            &work,
+            &["commit", "-m", &format!("feat: add {} ({})", name, spec_id)],
+        );
+        run_git_in(&work, &["push", "origin", "main", "--quiet"]);
+    }
+
     fn seed_done_spec_at(store_path: &std::path::Path, spec_id: &str) {
         let storage = Storage::new(store_path.to_path_buf());
         let mut store = storage.load().unwrap_or_default();
@@ -24605,6 +24631,52 @@ mod handle_pull_command_tests {
             matches!(req.status, RequirementStatus::Completed),
             "BUG-95: --code-only should have auto-bumped {} to Completed, was {:?}",
             spec_id,
+            req.status
+        );
+    }
+
+    /// BUG-254: when the code-leg `git pull --ff-only` fails (here: an
+    /// untracked file would be overwritten by the merge), `handle_pull_command`
+    /// must return Err so `aida pull` exits non-zero — the orchestrator's
+    /// phase 5 then halts instead of falsely announcing `✓ phase 5 complete`
+    /// over a stale tree (which used to break phase 6 with confusing
+    /// missing-file errors). trace:BUG-254 | ai:claude
+    #[test]
+    fn pull_code_leg_failure_returns_err() {
+        let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        let storage = Storage::new(store_path.clone());
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        // Remote adds `conflict.txt`. Locally we leave an untracked
+        // `conflict.txt` with different content — `git pull --ff-only`
+        // refuses (`The following untracked working tree files would be
+        // overwritten by merge`).
+        let spec_id = "STORY-99254".to_string();
+        seed_done_spec_at(&store_path, &spec_id);
+        push_remote_file(&bare, "conflict.txt", "from remote\n", &spec_id);
+        std::fs::write(project_root.join("conflict.txt"), "from local untracked\n").unwrap();
+
+        // code_only=true isolates the code leg so the test can't be
+        // rescued by a successful store leg masking the code failure.
+        let result = handle_pull_command(&store_path, true, false, true, true);
+        let err = result
+            .expect_err("BUG-254: handle_pull_command must return Err when code-leg ff-only fails");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("code leg"),
+            "BUG-254: error message should name the code leg, got: {msg}"
+        );
+
+        // Defensive: the Done spec must NOT have been auto-bumped — the
+        // commit referencing it never landed locally.
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "BUG-254: failed code leg must not auto-bump; status was {:?}",
             req.status
         );
     }
@@ -32678,6 +32750,15 @@ fn handle_pull_command(
     // TASK-106: pre-pull summary (interactive only, no prompt).
     print_pull_plan(&project_root, store_path, code_only, store_only);
 
+    // BUG-254: track per-leg failures so the function's exit reflects what
+    // actually happened. Before this, a non-zero `git pull --ff-only` was
+    // logged as a Warning and swallowed — `aida pull` returned 0 and the
+    // orchestrator's phase 5 then announced `✓ phase 5 complete` over a
+    // stale tree, breaking the auto-bump scan and confusing phase 6.
+    // trace:BUG-254 | ai:claude
+    let mut code_failed: Option<String> = None;
+    let mut store_failed: Option<String> = None;
+
     // ---- Code pull (current branch on the project repo) ----
     if !store_only {
         if !git_ops::has_remote(&project_root, "origin") {
@@ -32735,15 +32816,34 @@ fn handle_pull_command(
                     }
                 }
                 Ok(s) => {
+                    // BUG-254: surface the recovery hint and an explicit
+                    // auto-bump-skipped note. The hint covers the two
+                    // common causes — an untracked file that would be
+                    // overwritten, and a diverged branch — because
+                    // `git pull --ff-only` itself prints which case
+                    // applies right above this line. trace:BUG-254
                     eprintln!(
                         "  {} git pull --ff-only exited with status {} — \
-                         your branch may have diverged from origin/{}. Use \
-                         `git pull --rebase` or `git pull --no-rebase` once \
-                         you've decided how to reconcile.",
+                         your branch may have diverged from origin/{}, or \
+                         the merge would overwrite an untracked file.\n  \
+                         To recover:\n    \
+                         - Untracked-file conflict: remove or rename the \
+                         listed files, then re-run `aida pull`.\n    \
+                         - Diverged branch: `git pull --rebase origin {}` \
+                         (resolve conflicts), or `git pull --no-rebase`.\n  \
+                         {} auto-bump skipped — code leg did not advance, \
+                         so any Done→Completed bumps for the missed \
+                         commits will fire on the next successful pull.",
                         "Warning:".yellow().bold(),
                         s,
-                        branch
+                        branch,
+                        branch,
+                        "Note:".dimmed(),
                     );
+                    code_failed = Some(format!(
+                        "git pull --ff-only exited {} on branch {}",
+                        s, branch
+                    ));
                 }
                 Err(e) => anyhow::bail!("git pull failed: {}", e),
             }
@@ -32838,11 +32938,24 @@ fn handle_pull_command(
                     e,
                     store_path.display()
                 );
+                store_failed = Some(format!("store leg pull_rebase failed: {}", e));
             }
         }
     }
 
-    Ok(())
+    // BUG-254: any leg failure → non-zero exit, so the orchestrator's
+    // phase 5 reports failure instead of `✓ phase 5 complete` over a
+    // tree that did not advance. The detail names which legs failed so
+    // the headless drain's JSONL log captures the cause.
+    // trace:BUG-254 | ai:claude
+    match (code_failed.as_deref(), store_failed.as_deref()) {
+        (None, None) => Ok(()),
+        (Some(c), None) => anyhow::bail!("aida pull: code leg failed ({c})"),
+        (None, Some(s)) => anyhow::bail!("aida pull: store leg failed ({s})"),
+        (Some(c), Some(s)) => {
+            anyhow::bail!("aida pull: code leg failed ({c}); store leg failed ({s})")
+        }
+    }
 }
 
 /// `aida fetch` — read-only refresh of remote refs for both legs (code
@@ -50507,8 +50620,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             })?;
         if !status.success() {
+            // BUG-254: `aida pull` now exits non-zero when either leg
+            // failed; the per-leg detail + recovery hint was printed by
+            // the subprocess. Halting here keeps phase 6 from running
+            // over a stale tree and masking the real cause.
+            // trace:BUG-254 | ai:claude
             return Err(auto_complete::PhaseFailure::new(
-                "`aida pull` failed — the branch may have diverged",
+                "`aida pull` failed — the code or store leg did not advance \
+                 (see the subprocess output above for the recovery hint)",
             ));
         }
         Ok(())
