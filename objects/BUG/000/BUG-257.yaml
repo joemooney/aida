@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:28:40.252645413Z
-modified_at: 2026-05-20T14:24:02.089490344Z
+modified_at: 2026-05-20T14:24:18.810952093Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -66,6 +66,14 @@ relationships:
 - rel_type: Parent
   target_id: 019e45c5-d216-7773-bff7-0cf5821c3662
   created_at: 2026-05-20T14:24:16.557283048Z
+comments:
+- id: 019e45c5-eb22-7f63-96eb-0256f1ac914d
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-20-bug-257-orchestrator-pr-lookup-inconclusive.md
+    filed 2 task(s): TASK-399, TASK-400
+  created_at: 2026-05-20T14:24:19.234433957Z
+  modified_at: 2026-05-20T14:24:19.234433957Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T14:24:02.089490344Z
