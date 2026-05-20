@@ -3,7 +3,7 @@ spec_id: BUG-250
 agreed_id: BUG-250
 title: 'Orchestrator outcome model: ''PR deliberately held'' is mis-classified as phase-1 failure (BUG-241 extension)'
 description: |-
-  The orchestrator's phase-1 outcome model treats *"implementer session exited without opening a PR"* as failure. That's correct only when the absence of a PR is unintended. Under a deliberate **push-branch, hold-PR** finish (a legitimate finish-checkpoint outcome — branch backed up on origin while the operator runs a manual gate before opening the PR), no PR is the **desired** state. The orchestrator currently mis-classifies it as failure and prints a misleading recovery hint.
+  The orchestrator's phase-1 outcome model treats *"implementer session exited without opening a PR"* as failure. That's correct only when the absence of a PR is unintended. Under a deliberate **push-branch, hold-PR** finish (a legitimate finish-checkpoint outcome — branch backed up on origin while the operator runs a manual gate before opening the PR), no PR is the **desired** state. The orchestrator currently mis-classifies it as failure and prints a misleading recovery hint, and the *re-entry* path (resuming the dormant session to finish the deferred PR) is also blocked because the spec is Done + dequeued.
 
   ## Observed — 2026-05-19, STORY-306
 
@@ -14,6 +14,15 @@ description: |-
       ✗ STORY-306 — auto-complete failed at phase 1 (506m 53s)
 
   That recovery hint is *wrong* for the deliberate-hold case — opening the PR before the smoke would ship unsmoke-tested subprocess code. The "failure" is a category error.
+
+  Later the same day, attempting to re-enter the dormant implementer session to finish the deferred steps (run the smoke, then `/aida-pr`):
+
+      $ aida queue work STORY-306 --resume 019e415c
+      Error: `STORY-306` isn't queued. Status is Done (work finished on a branch).
+        If review found issues and more commits are needed: `aida queue rework STORY-306 --work`
+        If just waiting for merge: nothing to do — auto-bump fires when the PR merges.
+
+  Neither recovery hint fits the deliberate-hold case (we're not reworking; we're not yet waiting for merge — the PR hasn't been opened). The bypass that worked: `cd <worktree> && claude --resume <session-id>`, which sidesteps `aida queue work`'s lease/pull bookkeeping. Both symptoms share root: the queue/orchestrator verbs lack a `deliberate-hold` state distinct from queued / Done / Completed.
 
   ## Relation to BUG-241
 
@@ -26,12 +35,15 @@ description: |-
   - **Succeeded, PR open** — proceed to phase 2.
   - **Succeeded, PR deliberately held** — drain halts cleanly with a `deliberate-hold` outcome (not failure). Signal: branch pushed + commits ahead of main + a session-end marker (e.g. `aida session end --no-pr` or a manifest `intent: hold-pr` field set by the finish-checkpoint when the operator picks "push-hold-PR").
 
+  `aida queue work --resume` should recognise the `deliberate-hold` state as re-enterable — flowing through its existing pull + lease + worktree bookkeeping — so the operator can drop back in to run the manual gate and then `/aida-pr` without bypass tricks.
+
   ## Acceptance
 
   - [ ] A deliberate push-hold-PR finish does not register as phase-1 failure
   - [ ] Drain halts with a clean `deliberate-hold` outcome (distinct exit code / log line)
   - [ ] The recovery hint matches the actual state: "ready for review when you are — `gh pr create` then `aida queue work PR-N --role reviewer`" instead of "run /aida-pr inside the session"
   - [ ] Test: phase 1 ends with branch pushed, no PR → drain reports clean hold, not failure
+  - [ ] **`aida queue work --resume <session-id>` allows resumption when the spec is in the `deliberate-hold` state** — today errors *"`<spec>` isn't queued. Status is Done"* and blocks re-entry to the implementer worktree for the deferred `/aida-pr` step after the manual gate. Sufficient: the verb recognises `deliberate-hold` as a re-enterable state distinct from queued / Completed / "needs rework" (today the bypass is `cd <worktree> && claude --resume <session>`, which sidesteps the verb's lease/pull bookkeeping)
   - [ ] Composes with TASK-359 (finish-checkpoint UX — the menu's options should communicate which outcome each produces)
 
   ## Composes with
@@ -42,13 +54,13 @@ description: |-
 
   ## Origin
 
-  2026-05-19 — STORY-306's "push branch, hold PR" finish (advisor's call) was mis-classified as phase-1 failure. The advisor explicitly held the PR until a SPIKE-7 smoke; the orchestrator treated that deliberate choice as failure with a wrong recovery hint.
+  2026-05-19 — STORY-306's "push branch, hold PR" finish (advisor's call) was mis-classified as phase-1 failure. The advisor explicitly held the PR until a SPIKE-7 smoke; the orchestrator treated that deliberate choice as failure with a wrong recovery hint. Later the same day, attempting to re-enter the dormant worktree via `aida queue work STORY-306 --resume 019e415c` errored *"isn't queued. Status is Done"* — same outcome-model gap, second symptom: the queue verbs don't recognise `deliberate-hold` as a re-enterable state.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:03:27.895703170Z
-modified_at: 2026-05-20T03:03:27.895703170Z
+modified_at: 2026-05-20T05:46:16.010633238Z
 req_type: Bug
 tags:
 - autonomous-drain
