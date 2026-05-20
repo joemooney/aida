@@ -1,0 +1,45 @@
+id: 019e4688-22cb-7600-a6fd-f93b24a1becb
+spec_id: TASK-417
+agreed_id: TASK-417
+title: describe_drain_mode duplicates STATE_QUEUED/STATE_COMPLETED string literals
+description: |
+  TASK-391 (PR-131) adds `describe_drain_mode` in main.rs, which compares
+  drain-member state against bare string literals:
+
+  ```rust
+  let done = state.members.iter().filter(|m| m.state == "completed").count();
+  let queued = state.members.iter().filter(|m| m.state == "queued").count();
+  ```
+
+  But `aida-cli/src/drain_state.rs:41-43` already defines:
+
+  ```rust
+  const STATE_QUEUED: &str = "queued";
+  const STATE_COMPLETED: &str = "completed";
+  ```
+
+  The constants are crate-private (no `pub(crate)` export), which is the
+  only reason `main.rs` re-spells the strings. Probe-1 cross-reference: if
+  either constant is ever renamed, the silent failure is that drain counts
+  read 0/0 — no compile-time signal, and the unit test for
+  `drain_line_formats_phase_and_orchestrator` builds a `DrainRow`
+  directly, so it never exercises the count derivation either.
+
+  Fix: bump the constants to `pub(crate)` and reference them from
+  describe_drain_mode.
+
+  Files:
+  - aida-cli/src/main.rs:49083-49101 (describe_drain_mode)
+  - aida-cli/src/drain_state.rs:41-45  (state constants)
+
+  Raised in review of PR-131: https://github.com/joemooney/aida/pull/131
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T17:56:27.467733934Z
+modified_at: 2026-05-20T17:56:27.467733934Z
+req_type: Task
+tags:
+- from-review:PR-131
+- severity:cosmetic
