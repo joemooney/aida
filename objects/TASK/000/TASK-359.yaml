@@ -3,9 +3,12 @@ spec_id: TASK-359
 agreed_id: TASK-359
 title: 'Implementer finish-checkpoint UX: structured menu with state, recommendation, consequences, and an advise escape'
 description: |-
-  The implementer's "How should I finish?" prompt at the end of phase 1 (`aida queue work --auto-complete`) currently presents a flat menu of options with critical gaps. Observed 2026-05-19 on STORY-306's finish-checkpoint — the user's verbatim reaction: *"I was not presented with clear instructions."*
+  The implementer's finish-state communication at the end of phase 1 (`aida queue work --auto-complete`) currently has critical gaps. **Two surfaces share the same rubric:** the structured *"How should I finish?"* menu (shown when there are real options to pick), and the terminal *"summary block"* conclusion an implementer emits when it finishes a phase under autonomous drive. Both must follow the rubric — both currently fail it.
 
-  ## The gaps the menu had
+  User's verbatim reaction (2026-05-19, STORY-306 menu): *"I was not presented with clear instructions."*
+  User's verbatim reaction (2026-05-19, BUG-245 conclusion): *"It is not obvious what would happen or what should be done based on the feedback the agent provided."*
+
+  ## The gaps the menu had (STORY-306 case)
 
   1. **Deciding factor disconnected.** The implementer's preamble flagged the load-bearing risk (`run_advisor` / `resume_implementer` subprocess plumbing is mock-tested only — needs a SPIKE-7 smoke before merge). The menu listed three options as if neutral — no link from the risk to the choice.
   2. **No downstream-consequence info.** *"Open the PR for the reviewer"* — does the `--zen --auto-complete` orchestrator advance to phase 3? halt? merge? Each option needed one line on what the drain does next + reversibility.
@@ -13,40 +16,48 @@ description: |-
   4. **No `advise` escape.** Despite the session routing every checkpoint to the advisor, the menu didn't offer it explicitly — ironic on STORY-306's *own* finish (the spec that automates this routing).
   5. **No recommendation.** The implementer had the full analysis; the menu should lead with *"I recommend B because Y"* and present alternatives as variants, not a flat neutral list.
 
-  ## Fix — required structure for finish-checkpoint output
+  ## The same gap in conclusion messages (BUG-245 case)
+
+  After BUG-245's phase 1 finished, the implementer emitted a "Final state" summary listing PR URL, branch, spec status, test count, format check — but **never named the next required user action**. Under `--zen --auto-complete`, phase 1 is an interactive Claude session that doesn't auto-exit; the orchestrator is silently waiting for the process to terminate. The user has to know to **Ctrl-D**. The summary didn't say that. Same root as the menu gaps: finish-state communication omits *"what happens next / what should I do."*
+
+  ## Fix — required structure for ALL finish-state communication
+
+  Both surfaces (menu *and* conclusion summary) must include:
 
   1. **State snapshot** — commits, push status, PR status, drain phase, test/fmt status, plan file.
-  2. **Deciding factor** — load-bearing risks (smoke gate, plan deviations, change size) surfaced *next to* the options, not only in the preamble.
-  3. **Recommendation** — implementer's pick + one-sentence rationale, marked `← recommended`.
-  4. **Options** — each with: what it does, what the drain does next (advances / halts / stalls), reversibility.
-  5. **Explicit `advise` escape** — route the checkpoint to the advisor. Today: a surfaced option for the user to relay manually. Once STORY-306 ships: automatic.
-  6. **Decouple coupled decisions** — followup-filing asked as a *separate* question after push/PR is decided.
+  2. **Deciding factor** — load-bearing risks (smoke gate, plan deviations, change size) surfaced *next to* the options/conclusion, not only in the preamble.
+  3. **Recommendation / next action** — for menus: implementer's pick + rationale, marked `← recommended`. For conclusions: an explicit *"→ next: Ctrl-D to advance the orchestrator"* (or *"→ next: open the PR"*, etc.) line that names the user-action.
+  4. **Options / consequences** — for menus: each option lists drain-next + reversibility. For conclusions: a line stating what happens after the user exits (e.g., *"phases 2-6 run autonomously after exit"*).
+  5. **Explicit `advise` escape** — route the checkpoint to the advisor (today: surfaced for the user to relay; STORY-306 automates).
+  6. **Decouple coupled decisions** — push/PR vs followup-filing asked sequentially, not bundled.
 
   ## Acceptance
 
-  - [ ] Finish-checkpoint output renders a labelled State snapshot section
-  - [ ] Deciding factor surfaced directly above the options
-  - [ ] One option marked `← recommended` with a one-sentence rationale
-  - [ ] Each option lists its downstream-drain-state + reversibility
-  - [ ] Explicit `advise` escape option (today: nudges the user to relay; STORY-306 makes it automatic)
-  - [ ] Followup-filing is a separate question asked next, not bundled
-  - [ ] Structure lives in the master skill template under `aida-core/templates/skills/` so it propagates everywhere
+  - [ ] Menu surface: finish-checkpoint output renders a labelled State snapshot section
+  - [ ] Menu surface: deciding factor surfaced directly above the options
+  - [ ] Menu surface: one option marked `← recommended` with a one-sentence rationale
+  - [ ] Menu surface: each option lists its downstream-drain-state + reversibility
+  - [ ] Menu surface: explicit `advise` escape option (today: nudges the user to relay; STORY-306 makes it automatic)
+  - [ ] Menu surface: followup-filing is a separate question asked next, not bundled
+  - [ ] **Conclusion-message surface:** when an implementer finishes phase 1 under autonomous drive (`--zen --auto-complete` or `--no-human`-flavoured), its closing summary explicitly names the next required user action (e.g. *"→ Ctrl-D to advance the orchestrator"* or *"→ exit this session; phases 2-6 run autonomously after"*) — not just a list of what shipped. The rubric applies to ANY finish-state communication, not only the structured menu.
+  - [ ] **Conclusion-message surface:** if there's no required user action (e.g., under `--no-human=both` the session auto-exits via the sentinel), the summary says so explicitly (*"→ session will auto-exit; nothing else needed"*) — silence is not an acceptable signal.
+  - [ ] Structure lives in the master skill template under `aida-core/templates/skills/` so it propagates everywhere — to both the menu-generator and the conclusion-summary template
 
   ## Composes with
 
   - **STORY-306** (advisor escalation tier — once merged, the `advise` escape becomes a real routing path)
   - **BUG-241** (orchestrator outcome model — a deliberately-held PR should not register as phase-1 failure; closely related)
-  - `[[feedback_pause_for_design_input]]` and `[[feedback_finish_checkpoint_clarity]]` (the discipline memory filed with this TASK)
+  - `[[feedback_pause_for_design_input]]` and `[[feedback_finish_checkpoint_clarity]]` (the discipline memory filed with this TASK; the memory's rubric applies to all finish-state surfaces)
 
   ## Origin
 
-  2026-05-19 — STORY-306's finish-checkpoint produced a 4-option menu the user correctly judged unclear. Captured as the discipline memory `feedback_finish_checkpoint_clarity.md` and as this TASK to update the skill template.
+  2026-05-19 — observed twice in one day. First: STORY-306's finish-checkpoint menu produced a 4-option list the user judged unclear (no recommendation, smoke-test gate disconnected, decisions bundled, no advisor-escape). Captured as the discipline memory `feedback_finish_checkpoint_clarity.md` and as this TASK. Second: BUG-245's autonomous-drain conclusion message listed what shipped but never named the required user action (Ctrl-D to advance the orchestrator), reproducing the gap on a different surface. Two surfaces, same rubric, same TASK — capture-vs-enforcement distinction made explicit.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T02:23:58.408972956Z
-modified_at: 2026-05-20T02:23:58.408972956Z
+modified_at: 2026-05-20T06:40:17.219281256Z
 req_type: Task
 tags:
 - advisor-routing
