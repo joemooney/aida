@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:15:14.171355679Z
-modified_at: 2026-05-20T16:12:18.083294649Z
+modified_at: 2026-05-20T16:14:03.437300523Z
 req_type: Bug
 tags:
 - anthropic-api
@@ -88,6 +88,22 @@ comments:
     filed 3 task(s): TASK-409, TASK-410, TASK-411
   created_at: 2026-05-20T16:12:18.541779967Z
   modified_at: 2026-05-20T16:12:18.541779967Z
+- id: 019e462a-62ad-79a0-bd5c-e829b21c9305
+  author: joe
+  content: |-
+    Implemented via commit 9fbbeb53 (PR pending):
+
+    - Extended `ImplementerOutcome::Inconclusive` with `retry_hint: Option<String>` so BUG-266's Anthropic-API leg composes with BUG-257's GH-API path
+    - New pure helper `claude_log_indicates_api_outage` classifies the headless `claude -p` JSONL log against four transient-outage families: `API Error: 5\d\d`, `Overloaded`, `upstream connect error`, `stream timeout`/`stream disconnected`
+    - `RealPhaseDriver::run_implementer` + `resume_implementer` classify non-zero exits via the new helpers; on match → `Ok(Inconclusive { reason, retry_hint: Some("aida queue work <spec> --resume <session-uuid>") })` instead of `PhaseFailure`
+    - `finish_inconclusive` now takes `retry_hint: Option<&str>`; the 3 existing BUG-257 GH sites pass `None` to preserve their wording
+
+    Test status: 812 unit + 277 cli + 51 tui workspace tests green; 9 new BUG-266 classifier tests + 1 orchestrator-boundary test + 5 BUG-257 regression tests + 4 inconclusive tests all green; cargo fmt --check clean.
+
+    Plan: docs/plans/2026-05-20-bug-266-anthropic-api-inconclusive.md
+    Followups: TASK-409 (audit real headless-log corpus), TASK-410 (telemetry on inconclusive path), TASK-411 (auto-retry with backoff)
+  created_at: 2026-05-20T16:14:03.437300523Z
+  modified_at: 2026-05-20T16:14:03.437300523Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T16:11:56.254312427Z
