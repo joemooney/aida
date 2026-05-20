@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:15:14.171355679Z
-modified_at: 2026-05-20T15:15:14.171355679Z
+modified_at: 2026-05-20T15:33:50.242290736Z
 req_type: Bug
 tags:
 - anthropic-api
@@ -52,3 +52,22 @@ tags:
 - headless
 - orchestrator
 - resilience
+comments:
+- id: 019e4605-9022-7cc0-bdbc-5ef4ea1f36e7
+  author: joe
+  content: |-
+    Empirical recovery pattern, 2026-05-20: when Claude Code hits a 529 mid-turn (not on session boot), the session is NOT killed — the user can type `continue` and the session retries the interrupted operation. Verified during TASK-358 recovery: the resumed implementer hit a second 529 while running `cargo test`, the user typed `continue`, the session resumed its work.
+
+    Implication for this BUG's acceptance — there are actually TWO 529 cases to handle, with different recovery strategies:
+
+    1. **529 mid-headless-turn (session still alive)** — the headless `claude -p` process can recover with a `continue` retry. The orchestrator could detect a 529 in the JSONL stream and inject a `continue` message rather than waiting for exit + classify-as-failed. Cheapest recovery; preserves all context.
+
+    2. **529 on session boot / fatal (process exited)** — the current scope of this BUG: classify as inconclusive, surface resume hint, require user to retry. No way to inject retry mid-stream because the process is gone.
+
+    Possible acceptance addition (5th bullet):
+
+    - **Orchestrator-side mid-stream retry on transient API errors:** when the orchestrator detects a 529/overloaded/transient-API pattern in the live headless JSONL stream AND the process is still alive (PID check), it sends a single `continue` message to the headless session before treating it as failed. Bounded retry count (1-2 max) prevents infinite loop on persistent outage; after the bound, fall through to the inconclusive-classification path.
+
+    Filing this here rather than as a separate BUG since the two cases share the same detection code and should be implemented together.
+  created_at: 2026-05-20T15:33:50.242290736Z
+  modified_at: 2026-05-20T15:33:50.242290736Z
