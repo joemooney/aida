@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-20T03:40:43.368978809Z
+modified_at: 2026-05-20T03:41:15.739135221Z
 req_type: Story
 tags:
 - auto-complete
@@ -69,10 +69,6 @@ relationships:
 - rel_type: Parent
   target_id: 019e415b-b7e4-7e72-8085-c86559ab2377
   created_at: 2026-05-19T17:49:53.995603841Z
-- rel_type: !Custom blocked-by
-  target_id: 019e4095-b7da-7621-921e-1316079f0f3f
-  created_at: 2026-05-20T03:40:43.368969678Z
-  created_by: joe
 comments:
 - id: 019e3462-c12d-7580-acaf-bfa57c69df1c
   author: joe
