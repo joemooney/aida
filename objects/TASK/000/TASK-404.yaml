@@ -29,13 +29,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:38:26.264283119Z
-modified_at: 2026-05-20T18:31:25.640592226Z
+modified_at: 2026-05-20T18:35:35.107174508Z
 req_type: Task
 tags:
 - cli-ux
 - findings
 - from-user-friction
 - papercut
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e46ab-e309-7c50-bab8-653dfa16d272
+  created_at: 2026-05-20T18:35:35.107163192Z
+  created_by: joe
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T18:31:25.640592226Z
