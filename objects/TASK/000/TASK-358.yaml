@@ -1,0 +1,38 @@
+id: 019e432f-f088-7f20-8464-a53a7f8d4caf
+spec_id: TASK-358
+agreed_id: TASK-358
+title: Clean up lingering worktrees from unresumed --escalate-blocks punts
+description: |-
+  STORY-306 changed `run_implementer`'s punt path so it no longer calls `aida session end` — the advisor-resume needs the worktree alive. That's correct for the resume case.
+
+  But under `--escalate-blocks`, a punt that escalates to the human and is **never resumed** leaves the worktree (and lease) behind indefinitely. Over time `aida-*` worktrees accumulate, one per never-resumed escalation, with no cleanup pass.
+
+  ## Fix direction (implementer picks)
+
+  - **Tie cleanup to the triage step** — when the spec leaves `NeedsAttention` (via `aida edit --status` or whatever the triage verb is), end the associated `--escalate-blocks` worktree + lease automatically. Cleanest semantic.
+  - **An explicit pruner** — `aida session prune --escalations` (or a flag on the existing `--orphans`) ends leases for escalation-punted specs whose punt has been resolved.
+  - Combination is fine.
+
+  ## Acceptance
+
+  - [ ] Lingering worktrees from unresumed `--escalate-blocks` punts have a clear cleanup path
+  - [ ] Cleanup is invoked automatically when the underlying punt's spec leaves `NeedsAttention` (and/or via an explicit prune verb)
+  - [ ] The advisor-resume path's worktree-alive requirement is preserved — cleanup only fires for punts that will NOT be resumed
+  - [ ] Test: `--escalate-blocks` punt → spec triaged out of `NeedsAttention` → worktree + lease gone
+
+  ## Origin
+
+  2026-05-19 — STORY-306 followup, the load-bearing one. STORY-306 deliberately stopped ending the implementer's session on a punt because the advisor-resume needs the worktree alive — that creates a worktree leak for escalations that never get resumed. This TASK closes that leak.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T02:21:15.784867728Z
+modified_at: 2026-05-20T02:21:15.784867728Z
+req_type: Task
+tags:
+- autonomous-drain
+- escalate-blocks
+- from-followup-of:STORY-306
+- parent:STORY-306
+- worktree-cleanup
