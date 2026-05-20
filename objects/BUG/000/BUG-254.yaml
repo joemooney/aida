@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:00:09.649032232Z
-modified_at: 2026-05-20T13:52:46.704547288Z
+modified_at: 2026-05-20T13:54:02.296520530Z
 req_type: Bug
 tags:
 - auto-pull
@@ -62,6 +62,22 @@ tags:
 - orchestrator
 - phase-5
 - silent-failure
+comments:
+- id: 019e45aa-31b8-7410-87e7-293ad1255588
+  author: joe
+  content: |-
+    Implemented via commit b6e6c204:
+
+    - handle_pull_command now tracks per-leg failures and returns Err on any non-zero `git pull --ff-only` exit or store-leg pull_rebase failure (instead of swallowing the warning).
+    - Code-leg failure now prints an explicit recovery hint covering both the untracked-file conflict and the diverged-branch case, plus an explicit "auto-bump skipped" note.
+    - Orchestrator phase 5 (`fn pull`) inherits the new behavior via its existing status.success() check; its failure message now points at the subprocess output's per-leg detail.
+    - Regression test `pull_code_leg_failure_returns_err` reproduces the BUG-254 scenario (remote adds conflict.txt, local has it as an untracked file) and asserts Err + no auto-bump.
+
+    Test status: 790/790 tests green in `cargo test -p aida-cli --bin aida`
+    Fmt: clean (`cargo fmt --all -- --check`)
+    Follow-up filed: TASK-397 (design-choice — the fix also propagates store-leg failures, which the spec only explicitly called out for code-leg).
+  created_at: 2026-05-20T13:54:02.296520530Z
+  modified_at: 2026-05-20T13:54:02.296520530Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T13:52:46.704547288Z
