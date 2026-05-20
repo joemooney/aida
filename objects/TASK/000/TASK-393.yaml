@@ -1,0 +1,33 @@
+id: 019e446f-57c6-7993-bd1c-a681f0d12833
+spec_id: TASK-393
+agreed_id: TASK-393
+title: Make the ⊕ advise-row inclusion explicit in the orchestrator-mode templates
+description: |-
+  TASK-359 added an `⊕ Route to the advisor` row to the orchestrator-mode tables in `aida-pickup.md` (Step 6) and `aida-pr.md`.
+
+  The surrounding prose says the row is *conditional*:
+
+  > Omit the row when the recommendation is clear-cut and a relay would be busywork.
+
+  But the rendered templates *always* show three rows: `▶/⇒ primary ← recommended` / `⊕ Route to the advisor` / `⏏ Abort the chain`. A skill author or reviewer pattern-matching on the template (rather than reading the prose above it) will include the `⊕` row every time — defeating the conditional intent.
+
+  Fix options (pick one):
+
+  1. Inline a conditional annotation in the template: e.g. `| ⊕ Route to the advisor *(only when the deciding factor flags a risk the implementer cannot grade)* | ... | ... |` — keeps the row but signals the conditionality at the point of rendering.
+  2. HTML-comment gate: `<!-- include only when deciding-factor is present -->` above the `⊕` row.
+  3. Two template variants (`with-advise` / `without-advise`), selected by author judgement.
+
+  Lowest-friction: option 1 (in-row annotation). The acceptance criterion `Menu surface: explicit `advise` escape option` is already satisfied by the row's presence; this is purely about making the conditional rendering legible from the template alone.
+
+  Raised in review of PR-121: https://github.com/joemooney/aida/pull/121#issuecomment-4496061354
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T08:10:08.198595509Z
+modified_at: 2026-05-20T08:10:08.198595509Z
+req_type: Task
+tags:
+- from-review:PR-121
+- kind:template-shape
+- severity:cosmetic
