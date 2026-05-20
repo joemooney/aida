@@ -528,6 +528,8 @@ act on it. An empty array (nothing filed, or an idempotency skip) is fine.
 **The advisor picks these up** on its next session: `aida findings list`
 surfaces them grouped by PR and severity-sorted, `aida findings promote
 <ID>` sends one to the work queue, `aida findings dismiss <ID>` rejects it.
+Both accept `--reason "<text>"` so the rationale lands in the audit comment
+in one command (TASK-404).
 
 ### 8. Confirm with the user before merge
 
