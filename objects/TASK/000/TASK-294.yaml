@@ -110,7 +110,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:18:06.878953098Z
-modified_at: 2026-05-20T02:41:20.247312038Z
+modified_at: 2026-05-20T02:41:48.999718415Z
 req_type: Task
 tags:
 - aida-worker
@@ -203,6 +203,13 @@ comments:
   content: Commit 028fb95e references this requirement
   created_at: 2026-05-20T02:41:14.446389627Z
   modified_at: 2026-05-20T02:41:14.446389627Z
+- id: 019e4342-c37c-76e0-a291-f032ac19f043
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-19-task-294-aida-worker-bash-loop.md
+    filed 4 task(s): TASK-360, TASK-361, TASK-362, TASK-363
+  created_at: 2026-05-20T02:41:49.436509219Z
+  modified_at: 2026-05-20T02:41:49.436509219Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T02:41:20.247312038Z
