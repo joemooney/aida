@@ -44,12 +44,12 @@ description: |-
   - [ ] No behavior change for the normal (runs-exist) path
 
   Discovered during TASK-283 (comment-only fix to the same block).
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T06:43:06.305116987Z
-modified_at: 2026-05-20T06:43:12.449439387Z
+modified_at: 2026-05-20T15:00:27.303279173Z
 req_type: Task
 tags:
 - bug
