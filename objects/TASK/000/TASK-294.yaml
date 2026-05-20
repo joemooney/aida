@@ -110,7 +110,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:18:06.878953098Z
-modified_at: 2026-05-20T02:19:28.229049415Z
+modified_at: 2026-05-20T02:41:14.446389627Z
 req_type: Task
 tags:
 - aida-worker
@@ -185,3 +185,8 @@ comments:
     Ready for implementation.
   created_at: 2026-05-19T17:37:29.099555071Z
   modified_at: 2026-05-19T17:37:29.099555071Z
+- id: 019e4342-3ace-7520-8af2-79d532dc6505
+  author: joe
+  content: Commit 028fb95e references this requirement
+  created_at: 2026-05-20T02:41:14.446389627Z
+  modified_at: 2026-05-20T02:41:14.446389627Z
