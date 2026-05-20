@@ -416,6 +416,10 @@ impl PostgresBackend {
             // STORY-332: punt metadata is not persisted by the Postgres
             // backend (opt-in, behind the `postgres` feature).
             attention_reason: None,
+            // STORY-333: the human-only marker is not persisted by the
+            // Postgres backend (opt-in, behind the `postgres` feature).
+            // trace:STORY-333 | ai:claude
+            human_only: false,
             version,
         })
     }

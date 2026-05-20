@@ -18,6 +18,8 @@ pub mod models;
 pub mod node;
 pub mod object_store;
 pub mod oplog;
+/// trace:STORY-333 | ai:claude
+pub mod pickability;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]

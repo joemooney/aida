@@ -594,6 +594,11 @@ fn run() -> Result<()> {
             interactive,
             strict: _, // legacy SQLite path ignores session leases
             force: _,  // TASK-47 guard only applies to git-canonical Edit
+            // STORY-333: legacy centralized backend does not persist the
+            // human-only marker; ignore the flags here.
+            // trace:STORY-333 | ai:claude
+            human_only: _,
+            no_human_only: _,
         } => {
             // If any flags provided, use non-interactive mode; otherwise interactive
             let has_flags = title.is_some()
@@ -3459,6 +3464,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             tags,
             strict,
             force,
+            human_only,
+            no_human_only,
             ..
         } => {
             // BUG-68: record activity AFTER successful lookup AND
@@ -3599,6 +3606,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 for tag in t.split(',') {
                     req.tags.insert(tag.trim().to_string());
                 }
+                changed = true;
+            }
+            // STORY-333: `--human-only` / `--no-human-only` flip the typed
+            // marker that the pickability gate consults. Clap's
+            // `conflicts_with` keeps the two flags mutually exclusive, so
+            // at most one branch fires per invocation.
+            // trace:STORY-333 | ai:claude
+            if *human_only && !req.human_only {
+                req.human_only = true;
+                changed = true;
+            }
+            if *no_human_only && req.human_only {
+                req.human_only = false;
                 changed = true;
             }
 
@@ -3953,6 +3973,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 "verifies" => RelationshipType::Verifies,
                 "verified-by" | "verifiedby" => RelationshipType::VerifiedBy,
                 "references" => RelationshipType::References,
+                // STORY-333: typed `blocked-by` + `blocks` so the pickability
+                // gate can match by variant rather than by string content.
+                // trace:STORY-333 | ai:claude
+                "blocked-by" | "blocked_by" | "blockedby" => RelationshipType::BlockedBy,
+                "blocks" => RelationshipType::Blocks,
                 other => RelationshipType::Custom(other.to_string()),
             };
 
@@ -3994,13 +4019,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
 
             if *bidirectional {
                 let mut to_req = backend.get_requirement_by_spec_id(to)?.unwrap();
-                let inverse_type = match &rel_type {
-                    RelationshipType::Parent => RelationshipType::Child,
-                    RelationshipType::Child => RelationshipType::Parent,
-                    RelationshipType::Verifies => RelationshipType::VerifiedBy,
-                    RelationshipType::VerifiedBy => RelationshipType::Verifies,
-                    other => other.clone(),
-                };
+                // STORY-333: use the canonical inverse helper so new typed
+                // variants (BlockedBy ↔ Blocks) compose automatically.
+                // trace:STORY-333 | ai:claude
+                let inverse_type = rel_type.inverse().unwrap_or_else(|| rel_type.clone());
                 let inv_rel = aida_core::models::Relationship {
                     rel_type: inverse_type.clone(),
                     target_id: from_req.id,
@@ -5901,6 +5923,11 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
                     RelationshipType::Verifies => format!("verifies"),
                     RelationshipType::VerifiedBy => format!("is verified by"),
                     RelationshipType::References => format!("references"),
+                    // STORY-333: typed `blocked-by` / `blocks` surface as
+                    // human-readable prose so `aida show` reads naturally.
+                    // trace:STORY-333 | ai:claude
+                    RelationshipType::BlockedBy => format!("is blocked by"),
+                    RelationshipType::Blocks => format!("blocks"),
                     RelationshipType::Custom(name) => format!("{}", name),
                 };
 
@@ -37983,6 +38010,9 @@ fn rel_type_label(rt: &RelationshipType) -> String {
         RelationshipType::Verifies => "verifies".to_string(),
         RelationshipType::VerifiedBy => "verified-by".to_string(),
         RelationshipType::References => "references".to_string(),
+        // trace:STORY-333 | ai:claude
+        RelationshipType::BlockedBy => "blocked-by".to_string(),
+        RelationshipType::Blocks => "blocks".to_string(),
         RelationshipType::Custom(s) => s.clone(),
     }
 }
@@ -38035,6 +38065,9 @@ fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
                 RelationshipType::Verifies => "verifies".to_string(),
                 RelationshipType::VerifiedBy => "is verified by".to_string(),
                 RelationshipType::References => "references".to_string(),
+                // trace:STORY-333 | ai:claude
+                RelationshipType::BlockedBy => "is blocked by".to_string(),
+                RelationshipType::Blocks => "blocks".to_string(),
                 RelationshipType::Custom(name) => name.clone(),
             };
 
@@ -39845,12 +39878,21 @@ fn render_spec_card(
     println!();
 
     // One-liner: ID · type · priority · status (badged — TASK-269).
+    // STORY-333: surface `[human-only]` chip when the marker is set, so a
+    // reader scanning the spec card can see at a glance why the orchestrator
+    // skips it. trace:STORY-333 | ai:claude
+    let human_only_chip = if req.human_only {
+        format!(" · {}", "[human-only]".magenta().bold())
+    } else {
+        String::new()
+    };
     println!(
-        "  {} · {} · {} · {}",
+        "  {} · {} · {} · {}{}",
         id.bold(),
         req_type,
         priority,
-        status_display::status_badge(&status)
+        status_display::status_badge(&status),
+        human_only_chip,
     );
     println!();
 
@@ -42329,6 +42371,94 @@ fn entry_matches_role_filter(
     }
 }
 
+/// STORY-333: print a one-line warning if placing `req` at `intended_position`
+/// inverts a `BlockedBy` ordering with any already-queued spec. Two shapes:
+///
+/// - **Forward**: `req` itself is the dependent (has `BlockedBy` edges) and
+///   lands ahead of a queued blocker — surface `dependent queued ahead of
+///   blocker`.
+/// - **Reverse**: `req` is the *blocker* of an already-queued dependent that
+///   sits ahead of the position `req` will land at — surface the same
+///   message from the dependent's perspective.
+///
+/// Never refuses (AC8) — staging work ahead of its blocker is sometimes
+/// deliberate (e.g. branching from the blocker's branch and building atop
+/// it). Caller passes the intended position so we can detect inversion
+/// against `i64::MAX` sentinel values (which `queue_add` resolves to
+/// "max+1000"). trace:STORY-333 | ai:claude
+fn warn_if_queued_ahead_of_blocker(
+    req: &aida_core::Requirement,
+    intended_position: i64,
+    store: &aida_core::RequirementsStore,
+    storage: &Storage,
+    user_id: &str,
+) {
+    let raw_entries = match storage.queue_list(user_id, true) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let dep_display = |r: &aida_core::Requirement| -> String {
+        r.agreed_id
+            .as_deref()
+            .or(r.spec_id.as_deref())
+            .unwrap_or("?")
+            .to_string()
+    };
+
+    // Forward: this spec has BlockedBy edges pointing at queued blockers
+    // that sit at a *later* position than `intended_position`.
+    for rel in req
+        .relationships
+        .iter()
+        .filter(|r| matches!(r.rel_type, aida_core::RelationshipType::BlockedBy))
+    {
+        let Some(target) = store.requirements.iter().find(|r| r.id == rel.target_id) else {
+            continue;
+        };
+        if matches!(target.status, aida_core::RequirementStatus::Completed) {
+            continue;
+        }
+        let Some(blocker_entry) = raw_entries.iter().find(|e| e.requirement_id == target.id) else {
+            continue;
+        };
+        if intended_position < blocker_entry.position {
+            eprintln!(
+                "  {}  {} queued ahead of {}, which blocks it",
+                "⚠".yellow().bold(),
+                dep_display(req).bold(),
+                dep_display(target).bold(),
+            );
+        }
+    }
+
+    // Reverse: this spec *is* the blocker. Walk queued specs and warn
+    // about any whose BlockedBy points at us and whose queued position
+    // would land ahead of where this spec is going.
+    for entry in &raw_entries {
+        if entry.requirement_id == req.id {
+            continue;
+        }
+        let Some(other) = store
+            .requirements
+            .iter()
+            .find(|r| r.id == entry.requirement_id)
+        else {
+            continue;
+        };
+        let points_at_us = other.relationships.iter().any(|r| {
+            matches!(r.rel_type, aida_core::RelationshipType::BlockedBy) && r.target_id == req.id
+        });
+        if points_at_us && entry.position < intended_position {
+            eprintln!(
+                "  {}  {} queued ahead of {}, which blocks it",
+                "⚠".yellow().bold(),
+                dep_display(other).bold(),
+                dep_display(req).bold(),
+            );
+        }
+    }
+}
+
 // trace:STORY-0368 | ai:claude
 /// Handle queue commands
 fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
@@ -42565,6 +42695,74 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 })
                 .collect();
 
+            // STORY-333: split `entries` into pickable + blocked. Blocked
+            // entries render in a sibling "Blocked" section (below
+            // "Done — awaiting merge"); pickable entries continue through
+            // the existing render path. Additionally collect a set of
+            // entries that are queued *ahead* of their unsatisfied
+            // blocked-by blocker (AC9) so the main render can decorate
+            // them with a ⚠. trace:STORY-333 | ai:claude
+            #[derive(Clone)]
+            struct BlockedEntry<'a> {
+                req: &'a aida_core::Requirement,
+                reason: aida_core::pickability::BlockedReason,
+            }
+            let mut blocked_entries: Vec<BlockedEntry<'_>> = Vec::new();
+            let entries: Vec<&aida_core::QueueEntry> = entries
+                .into_iter()
+                .filter(|e| {
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    else {
+                        return true;
+                    };
+                    match aida_core::pickability::pickability(req, &store) {
+                        aida_core::pickability::Pickability::Pickable => true,
+                        aida_core::pickability::Pickability::Blocked(reason) => {
+                            blocked_entries.push(BlockedEntry { req, reason });
+                            false
+                        }
+                    }
+                })
+                .collect();
+            // Set of UUIDs (dependent specs) whose queue position is
+            // ahead of a queued, unsatisfied `BlockedBy` target.
+            // Computed across ALL queue entries — including ones the
+            // pickability gate filtered into `blocked_entries` — because
+            // the inversion is a queue-ordering concern regardless of
+            // whether the dependent is currently pickable. trace:STORY-333
+            let inverted_ahead_of_blocker: std::collections::HashSet<uuid::Uuid> = {
+                use std::collections::HashSet;
+                let mut out: HashSet<uuid::Uuid> = HashSet::new();
+                let raw_position_by_uuid: std::collections::HashMap<uuid::Uuid, i64> = raw_entries
+                    .iter()
+                    .map(|e| (e.requirement_id, e.position))
+                    .collect();
+                for (uuid, my_pos) in &raw_position_by_uuid {
+                    let Some(req) = store.requirements.iter().find(|r| &r.id == uuid) else {
+                        continue;
+                    };
+                    for rel in req
+                        .relationships
+                        .iter()
+                        .filter(|r| matches!(r.rel_type, aida_core::RelationshipType::BlockedBy))
+                    {
+                        let target = store.requirements.iter().find(|r| r.id == rel.target_id);
+                        if let Some(t) = target {
+                            if matches!(t.status, aida_core::RequirementStatus::Completed) {
+                                continue;
+                            }
+                        }
+                        let Some(blocker_pos) = raw_position_by_uuid.get(&rel.target_id) else {
+                            continue;
+                        };
+                        if my_pos < blocker_pos {
+                            out.insert(*uuid);
+                        }
+                    }
+                }
+                out
+            };
+
             // Load global entries for the active role unless --local was passed.
             // The global queue is role-scoped (one file per role) — it only
             // makes sense when there's a routed-role filter in effect.
@@ -42647,10 +42845,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         }
                     );
                 }
-                if in_flight_specs.is_empty() {
+                // STORY-333: keep going if the Blocked section has
+                // anything to surface — even when the pickable list is
+                // empty. The user's queue isn't really empty if
+                // un-pickable items are sitting there waiting to be
+                // unblocked or triaged. trace:STORY-333 | ai:claude
+                if in_flight_specs.is_empty() && blocked_entries.is_empty() {
                     return Ok(());
                 }
-                // fall through to in-flight section
+                // fall through to in-flight + blocked sections
             }
 
             // TASK-222: skip the regular-queue render entirely when only
@@ -43028,6 +43231,66 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
             } // end of `if !skip_regular_render { ... }` — trace:TASK-222
 
+            // STORY-333: ahead-of-blocker warning. Surface every queued
+            // entry (pickable OR blocked) whose blocked-by target is
+            // ALSO queued at a later position — the operator queued the
+            // dependent before the blocker, which is sometimes deliberate
+            // but worth flagging at list time. AC9: never refuse the
+            // ordering; just warn. trace:STORY-333 | ai:claude
+            if !skip_regular_render && !inverted_ahead_of_blocker.is_empty() {
+                let mut lines: Vec<String> = Vec::new();
+                let mut seen: std::collections::HashSet<uuid::Uuid> =
+                    std::collections::HashSet::new();
+                for uuid in &inverted_ahead_of_blocker {
+                    if !seen.insert(*uuid) {
+                        continue;
+                    }
+                    let Some(req) = store.requirements.iter().find(|r| &r.id == uuid) else {
+                        continue;
+                    };
+                    let dep_display = req
+                        .agreed_id
+                        .as_deref()
+                        .or(req.spec_id.as_deref())
+                        .unwrap_or("?");
+                    let mut blocker_displays: Vec<String> = Vec::new();
+                    for rel in req
+                        .relationships
+                        .iter()
+                        .filter(|r| matches!(r.rel_type, aida_core::RelationshipType::BlockedBy))
+                    {
+                        if let Some(target) =
+                            store.requirements.iter().find(|r| r.id == rel.target_id)
+                        {
+                            if matches!(target.status, aida_core::RequirementStatus::Completed) {
+                                continue;
+                            }
+                            let t_display = target
+                                .agreed_id
+                                .as_deref()
+                                .or(target.spec_id.as_deref())
+                                .unwrap_or("?");
+                            blocker_displays.push(t_display.to_string());
+                        }
+                    }
+                    if blocker_displays.is_empty() {
+                        continue;
+                    }
+                    lines.push(format!(
+                        "  ⚠  {} queued ahead of {}, which blocks it",
+                        dep_display.bold(),
+                        blocker_displays.join(", ").bold()
+                    ));
+                }
+                if !lines.is_empty() {
+                    println!();
+                    println!("{}", "Out-of-order blockers:".yellow().bold());
+                    for l in &lines {
+                        println!("{}", l.yellow());
+                    }
+                }
+            }
+
             // TASK-222: in-flight section. Done specs are work-in-flight
             // (branch finished, not yet merged to main). They aren't in
             // the queue anymore (queue done removed them), but they're
@@ -43064,6 +43327,49 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
             } else if *in_flight_only {
                 println!("{}", "No in-flight (Done-status) specs.".dimmed());
+            }
+
+            // STORY-333: Blocked section — sibling of "Done — awaiting
+            // merge". Lists every queued entry that the pre-pickup gate
+            // would skip, with its reason (blocked-by target +
+            // target status, REJECTED → permanent, human-only). Each
+            // entry is visible — never silently swallowed — and the
+            // permanent-block case shouts red. trace:STORY-333 | ai:claude
+            if !blocked_entries.is_empty() && !*in_flight_only {
+                println!();
+                println!(
+                    "{} ({} item{})",
+                    "Blocked".yellow().bold(),
+                    blocked_entries.len(),
+                    if blocked_entries.len() == 1 { "" } else { "s" }
+                );
+                println!("{}", "─".repeat(80));
+                for be in &blocked_entries {
+                    let display_id = be
+                        .req
+                        .agreed_id
+                        .as_deref()
+                        .or(be.req.spec_id.as_deref())
+                        .unwrap_or("???");
+                    let reason_label = aida_core::pickability::pickability_reason_label(&be.reason);
+                    let label_styled = match be.reason {
+                        aida_core::pickability::BlockedReason::PermanentlyBlocked { .. } => {
+                            reason_label.red().bold().to_string()
+                        }
+                        aida_core::pickability::BlockedReason::HumanOnly => {
+                            reason_label.magenta().to_string()
+                        }
+                        aida_core::pickability::BlockedReason::UnsatisfiedBlocker { .. } => {
+                            reason_label.yellow().to_string()
+                        }
+                    };
+                    println!(
+                        "  · {}  {}  —  {}",
+                        display_id.bold(),
+                        be.req.title,
+                        label_styled,
+                    );
+                }
             }
         }
         QueueCommand::Add {
@@ -43245,6 +43551,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 );
                 return Ok(());
             }
+
+            // STORY-333: warn — never refuse — if this placement puts
+            // the new entry ahead of a queued blocker. Operator may have
+            // a reason (e.g. branching from the blocker's branch
+            // intentionally), so the warning is informational only.
+            // trace:STORY-333 | ai:claude
+            warn_if_queued_ahead_of_blocker(req, position, &store, &storage, &user_id);
 
             let entry = aida_core::QueueEntry {
                 user_id: user_id.clone(),
@@ -43521,6 +43834,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 );
             };
 
+            // STORY-333: warn if the new position lands this entry ahead
+            // of its blocked-by target. Same shape as `queue add`.
+            // trace:STORY-333 | ai:claude
+            warn_if_queued_ahead_of_blocker(req, new_position, &store, storage, &user_id);
+
             storage.queue_reorder(&user_id, &[(req.id, new_position)])?;
             // BUG-81: short id when present. trace:BUG-81 | ai:claude
             let display_id = req
@@ -43599,6 +43917,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let lease_filter_active =
                 !leases.is_empty() && enforcement_mode != SessionEnforcement::Off;
             let mut skipped_for_lease: Vec<(String, String)> = Vec::new();
+            // STORY-333: track specs skipped by the pre-pickup gate so
+            // `queue next` can hint why (without a hint, an un-pickable
+            // head looks like "queue is empty"). trace:STORY-333 | ai:claude
+            let mut skipped_unpickable: Vec<(String, String)> = Vec::new();
 
             let next_entry = raw_entries
                 .iter()
@@ -43634,6 +43956,32 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     };
                     !is_terminal_status(&req.status)
                         && !matches!(req.status, RequirementStatus::NeedsAttention)
+                })
+                .filter(|e| {
+                    // STORY-333: pre-pickup gate. A spec that is blocked-by
+                    // an unsatisfied blocker, or marked human-only, is never
+                    // the right "next" to pick up. Record the skip so the
+                    // user sees why instead of an empty-queue silence.
+                    // trace:STORY-333 | ai:claude
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    else {
+                        return true;
+                    };
+                    match aida_core::pickability::pickability(req, &store) {
+                        aida_core::pickability::Pickability::Pickable => true,
+                        aida_core::pickability::Pickability::Blocked(reason) => {
+                            let display = req
+                                .agreed_id
+                                .clone()
+                                .or_else(|| req.spec_id.clone())
+                                .unwrap_or_else(|| "?".to_string());
+                            skipped_unpickable.push((
+                                display,
+                                aida_core::pickability::pickability_reason_label(&reason),
+                            ));
+                            false
+                        }
+                    }
                 })
                 .filter(|e| {
                     if !lease_filter_active {
@@ -43788,6 +44136,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         eprintln!("  · {}  →  scope {}", spec.cyan(), scope.cyan());
                     }
                 }
+                // STORY-333: same shape for the pickability gate — name the
+                // un-pickable specs and their reasons so the user sees why
+                // the queue head was skipped.
+                // trace:STORY-333 | ai:claude
+                if !skipped_unpickable.is_empty() {
+                    eprintln!();
+                    eprintln!(
+                        "{} {} un-pickable item(s) skipped (run `aida queue list` to see the Blocked section):",
+                        "Note:".yellow().bold(),
+                        skipped_unpickable.len()
+                    );
+                    for (spec, reason) in &skipped_unpickable {
+                        eprintln!("  · {}  —  {}", spec.cyan(), reason.dimmed());
+                    }
+                }
                 // STORY-63: nudge toward `aida list --status approved` when
                 // even the scope fallback came up empty, so the user has a
                 // concrete next step rather than a dead-end.
@@ -43812,6 +44175,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     "{} {} other-session item(s) skipped (run `aida session leases` to see who)",
                     "Note:".dimmed(),
                     skipped_for_lease.len()
+                );
+            }
+            // STORY-333: un-pickable skips surfaced before the next-item
+            // render so the user sees what was bypassed.
+            // trace:STORY-333 | ai:claude
+            if !skipped_unpickable.is_empty() {
+                eprintln!(
+                    "{} {} un-pickable item(s) skipped: {}",
+                    "Note:".dimmed(),
+                    skipped_unpickable.len(),
+                    skipped_unpickable
+                        .iter()
+                        .map(|(s, r)| format!("{} ({})", s, r))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 );
             }
 
@@ -45397,6 +45775,11 @@ fn resolve_queue_work_plan(
         let role_filter: Option<String> = std::env::var("AIDA_SESSION_ROLE")
             .ok()
             .filter(|s| !s.is_empty());
+        // STORY-333: collect un-pickable specs (blocked-by / human-only)
+        // skipped during head resolution so the kickoff banner can name
+        // them. Silent skipping looks like "queue is empty" — we surface
+        // the reason instead. trace:STORY-333 | ai:claude
+        let mut skipped_unpickable: Vec<(String, String)> = Vec::new();
         let head = entries
             .iter()
             .filter(|e| match &role_filter {
@@ -45409,14 +45792,66 @@ fn resolve_queue_work_plan(
                 };
                 !is_terminal_status(&req.status)
             })
+            .filter(|e| {
+                // STORY-333: pre-pickup gate. Skip un-pickable specs so the
+                // orchestrator never spawns a doomed phase-1 implementer on
+                // them. Reasons are recorded for the banner.
+                let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                    return true;
+                };
+                match aida_core::pickability::pickability(req, &store) {
+                    aida_core::pickability::Pickability::Pickable => true,
+                    aida_core::pickability::Pickability::Blocked(reason) => {
+                        let display = req
+                            .agreed_id
+                            .clone()
+                            .or_else(|| req.spec_id.clone())
+                            .unwrap_or_else(|| "?".to_string());
+                        skipped_unpickable.push((
+                            display,
+                            aida_core::pickability::pickability_reason_label(&reason),
+                        ));
+                        false
+                    }
+                }
+            })
             .min_by_key(|e| e.position)
             .cloned()
             .ok_or_else(|| {
+                let suffix = if skipped_unpickable.is_empty() {
+                    String::new()
+                } else {
+                    let listed = skipped_unpickable
+                        .iter()
+                        .map(|(s, r)| format!("{} ({})", s, r))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!(
+                        "\n  Skipped {} un-pickable spec(s): {}\n  \
+                         (Run `aida queue list` to see the Blocked section.)",
+                        skipped_unpickable.len(),
+                        listed
+                    )
+                };
                 anyhow::anyhow!(
-                    "queue is empty for {}; pass an id explicitly or run `aida queue list`",
-                    role_filter.as_deref().unwrap_or("any role")
+                    "queue is empty for {}; pass an id explicitly or run `aida queue list`{}",
+                    role_filter.as_deref().unwrap_or("any role"),
+                    suffix
                 )
             })?;
+        if !skipped_unpickable.is_empty() {
+            let listed = skipped_unpickable
+                .iter()
+                .map(|(s, r)| format!("{} ({})", s, r))
+                .collect::<Vec<_>>()
+                .join(", ");
+            eprintln!(
+                "  {} skipped {} un-pickable spec(s) ahead of head: {}",
+                "ℹ".cyan(),
+                skipped_unpickable.len(),
+                listed
+            );
+        }
         let req = store
             .requirements
             .iter()
@@ -45593,6 +46028,23 @@ fn resolve_queue_work_plan(
             // queue but defensive).
             if is_terminal_status(&req.status) {
                 return false;
+            }
+            // STORY-333: cluster drains must skip un-pickable members so
+            // the orchestrator never spawns phase 1 on a blocked-by /
+            // human-only spec. Same gate as head pickup + batch drain.
+            // trace:STORY-333 | ai:claude
+            match aida_core::pickability::pickability(req, &store) {
+                aida_core::pickability::Pickability::Pickable => {}
+                aida_core::pickability::Pickability::Blocked(reason) => {
+                    eprintln!(
+                        "  {} cluster {} — skipping un-pickable {} ({})",
+                        "ℹ".cyan(),
+                        anchor_id_upper,
+                        req.display_id(),
+                        aida_core::pickability::pickability_reason_label(&reason),
+                    );
+                    return false;
+                }
             }
             // Match by explicit for_scope.
             let scope_match = e
@@ -47301,6 +47753,24 @@ fn resolve_batch_members(
         // and don't need draining.
         if is_terminal_status(&req.status) {
             continue;
+        }
+        // STORY-333: skip un-pickable members so the batch drain never
+        // spawns a doomed phase-1 implementer on a blocked-by /
+        // human-only spec. The dropped members are reported to stderr
+        // so the operator sees the batch shrank and why.
+        // trace:STORY-333 | ai:claude
+        match aida_core::pickability::pickability(req, &store) {
+            aida_core::pickability::Pickability::Pickable => {}
+            aida_core::pickability::Pickability::Blocked(reason) => {
+                eprintln!(
+                    "  {} batch:{} — skipping un-pickable member {} ({})",
+                    "ℹ".cyan(),
+                    batch_name,
+                    req.display_id(),
+                    aida_core::pickability::pickability_reason_label(&reason),
+                );
+                continue;
+            }
         }
         members.push((
             entry,
