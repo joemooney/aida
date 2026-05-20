@@ -1,0 +1,61 @@
+id: 019e45a1-7be1-7991-bbb7-93d44b2d7b56
+spec_id: TASK-396
+agreed_id: TASK-396
+title: Orchestrator should detect phase artifacts on rerun and resume at the right phase (don't restart phase 1 unconditionally)
+description: |-
+  Today `aida queue work --auto-complete` unconditionally starts at **phase 1 (implementer)** on every invocation, regardless of whether artifacts from a previous attempt already exist on the branch. For a spec whose phase 1 actually completed (commits + open PR) but whose drain was interrupted before phase 4 (merge) or phase 5 (pull) or phase 6 (build), a rerun should detect the artifacts and resume at the appropriate phase — not pointlessly re-spawn a phase-1 implementer that would just discover its own work already shipped.
+
+  ## User's framing (verbatim)
+
+  *"if we just work bug-249 again, will it just gracefully see that it already completed phase 1 and move on to phase 2. That would be nicest, i think?"*
+
+  ## The probes already exist — they're just not wired into pre-flight
+
+  The orchestrator already runs these checks at phase-1 *end*:
+
+  - `detect_open_pr_for_branch` (used to decide phase-1 success/failure).
+  - `pr_credited_spec_id` (BUG-245 — derive the shipped spec from the PR's commit).
+
+  A pre-flight check at phase-1 *start* could use the same probes:
+
+  - If the branch has an open PR → phase 1 already produced its artifact. Skip phase 1, jump to phase 2 (CI wait) or phase 3 (reviewer) depending on PR/CI state.
+  - If the PR is merged but the spec is still Done (not Completed) → phase 5 auto-bump was missed. Skip phases 1-4, jump to phase 5 (or just run `aida db reconcile-status --spec X`).
+  - If everything's at the spec-Completed state → drain is a no-op; report and exit 0.
+
+  ## Fix direction
+
+  Add a `pre_flight_phase_check(spec, branch)` in `aida-cli/src/auto_complete.rs` that returns `StartAt::Phase(n)` (or `StartAt::AlreadyComplete` for the no-op case). The orchestrator's main loop reads it and dispatches at the right phase. Each phase already has its own entry point; this is sequencing, not new phase logic.
+
+  ## Acceptance
+
+  - [ ] `aida queue work SPEC --auto-complete` on a spec with an open PR on its branch → skips phase 1, starts at phase 2 (CI wait) or phase 3 (reviewer) per PR/CI state
+  - [ ] On a spec where the PR is merged but the spec is still Done → skips phases 1-4, runs phase 5 auto-bump, exits
+  - [ ] On a fully-Completed spec → reports "already shipped" and exits 0 without spinning up sessions
+  - [ ] On a spec with no artifacts → starts at phase 1 (today's behaviour)
+  - [ ] Logged decision: "starting at phase N because X" for transparency
+  - [ ] Test: each branch of the decision tree
+
+  ## Composes with
+
+  - **BUG-245** (the `pr_credited_spec_id` + `shipped_spec_id` probes — reused at pre-flight, not just end-of-phase)
+  - **BUG-241** (orchestrator outcome model — same family: reconcile against reality before acting)
+  - **BUG-250** (deliberately-held PR — composes — a pre-flight check for "PR pushed but no PR opened" could similarly enter `deliberate-hold` state)
+  - **BUG-254** (phase-5 false-success — phase-resumability would fix the silent-bump-skipped case at the *next* run automatically)
+
+  ## Origin
+
+  2026-05-20 — overnight drain, BUG-249. User asked the right question after a partial run was interrupted: shouldn't a rerun pick up where it left off? Today it doesn't; the orchestrator's design assumes start-from-scratch every time. The probes that would enable resumability already exist (they run at end-of-phase); this TASK wires them to pre-flight.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T13:44:31.457273448Z
+modified_at: 2026-05-20T13:44:31.457273448Z
+req_type: Task
+tags:
+- autonomous-drain
+- backlog
+- from-user-question
+- orchestrator
+- phase-resumability
+- ux
