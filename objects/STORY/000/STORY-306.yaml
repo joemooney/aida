@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:38:45.451756021Z
-modified_at: 2026-05-20T03:40:44.723487021Z
+modified_at: 2026-05-20T03:41:16.738519734Z
 req_type: Story
 tags:
 - advisor-tier
@@ -80,11 +80,6 @@ tags:
 - eventually
 - headless-advisor
 - no-human
-relationships:
-- rel_type: !Custom blocked-by
-  target_id: 019e345e-123b-70e3-9ae9-1ba23e7ca064
-  created_at: 2026-05-20T03:40:44.723480114Z
-  created_by: joe
 comments:
 - id: 019e3e00-ee9e-7c81-885c-06d233badc85
   author: joe
