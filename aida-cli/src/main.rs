@@ -15781,6 +15781,122 @@ fn gh_stderr_is_network_error(stderr: &str) -> bool {
     NETWORK_MARKERS.iter().any(|m| s.contains(m))
 }
 
+/// BUG-266: classify a headless `claude -p` JSONL log as evidence the
+/// upstream Anthropic API took the session out (a transient outage), not
+/// that the implementer attempted the work and failed. The orchestrator
+/// uses the returned reason to flip phase 1 from *failed* to *Inconclusive*
+/// (the BUG-257 path), so a 529 / 5xx / stream-timeout no longer marks a
+/// spec as failed-by-implementer.
+///
+/// Patterns are taken from real Anthropic error text plus the proxy /
+/// upstream connectivity families that surface in `claude -p`'s output.
+/// Match is anchored and conservative — `Overloaded` and `API Error: 5\d\d`
+/// are Anthropic's own wording, `upstream connect error` is the Envoy /
+/// proxy convention, `stream timeout` is the SSE-stream variant. Returns
+/// the first matching diagnostic line so the orchestrator's epilogue can
+/// echo what the substrate said. trace:BUG-266 | ai:claude
+fn claude_log_indicates_api_outage(content: &str) -> Option<String> {
+    if content.is_empty() {
+        return None;
+    }
+    for line in content.lines() {
+        // The log is JSON stream-output; the human-readable phrase appears
+        // verbatim inside an event payload, so substring matching on each
+        // line works without parsing JSON. Skip lines that have no error
+        // shape — keeps the false-positive surface small.
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        // Anthropic's own 5xx wording — `API Error: 5\d\d` covers 500-599.
+        if let Some(idx) = lower.find("api error: 5") {
+            let tail = &lower[idx + "api error: 5".len()..];
+            let digits_after = tail.chars().take(2).filter(|c| c.is_ascii_digit()).count();
+            if digits_after == 2 {
+                return Some(reason_excerpt(trimmed, idx));
+            }
+        }
+        // Anthropic's explicit overload signal — emitted with 529s and the
+        // capacity-shed envelope. Conservative: anchor on the full word.
+        if lower.contains("overloaded") {
+            return Some(reason_excerpt(trimmed, lower.find("overloaded").unwrap()));
+        }
+        // Proxy / load-balancer connectivity errors from the model edge.
+        if lower.contains("upstream connect error") {
+            return Some(reason_excerpt(
+                trimmed,
+                lower.find("upstream connect error").unwrap(),
+            ));
+        }
+        // SSE-stream timeout — surfaces when the model started responding
+        // and the connection dropped before completion.
+        if lower.contains("stream timeout") || lower.contains("stream disconnected") {
+            return Some(reason_excerpt(
+                trimmed,
+                lower
+                    .find("stream timeout")
+                    .or_else(|| lower.find("stream disconnected"))
+                    .unwrap(),
+            ));
+        }
+    }
+    None
+}
+
+/// Capture a short diagnostic excerpt centered on the matched phrase — the
+/// orchestrator's epilogue is one line, so we cap at ~160 chars rather
+/// than echoing a full assistant turn. Pure helper for the classifier.
+fn reason_excerpt(line: &str, match_start: usize) -> String {
+    const MAX: usize = 160;
+    if line.len() <= MAX {
+        return line.to_string();
+    }
+    // Anchor the excerpt window around the match so the matched phrase is
+    // always visible, then trim to char boundaries to avoid splitting UTF-8.
+    let begin = match_start.saturating_sub(20);
+    let mut end = (begin + MAX).min(line.len());
+    while !line.is_char_boundary(end) && end > begin {
+        end -= 1;
+    }
+    let mut start = begin;
+    while !line.is_char_boundary(start) && start < end {
+        start += 1;
+    }
+    format!("…{}…", &line[start..end])
+}
+
+/// BUG-266: locate the headless implementer's JSONL log by the session UUID
+/// the orchestrator minted (the filename pattern is
+/// `<branch>-<session-uuid>.jsonl` under `.aida/headless-logs/`). Glob by
+/// suffix because the branch isn't known at the failure point in
+/// `run_implementer` (it is discovered AFTER the implementer exits, via the
+/// session lease — but a failed-to-spawn or early-crashed implementer may
+/// not have a lease yet, so we can't depend on the branch). Returns the log
+/// contents on success; `None` if the directory doesn't exist, no matching
+/// file is found, or the file can't be read. Best-effort by design —
+/// classification is a refinement, not a gate. trace:BUG-266 | ai:claude
+fn read_headless_log_for_session(
+    project_root: &std::path::Path,
+    session_uuid: &str,
+) -> Option<String> {
+    let dir = project_root.join(".aida").join("headless-logs");
+    let suffix = format!("-{session_uuid}.jsonl");
+    let entries = std::fs::read_dir(&dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.ends_with(&suffix))
+            .unwrap_or(false)
+        {
+            return std::fs::read_to_string(&path).ok();
+        }
+    }
+    None
+}
+
 /// Look up a single open PR keyed on `branch`. The richer [`PrLookup`]
 /// return shape lets callers print an honest skip reason (no PR yet / gh
 /// missing / gh failed) instead of collapsing every case to `None`.
@@ -22449,6 +22565,152 @@ mod bug_257_gh_stderr_network_classifier_tests {
                 "expected NON-network classification for: {s:?}"
             );
         }
+    }
+}
+
+/// BUG-266: `claude_log_indicates_api_outage` classifies the headless
+/// implementer's JSONL log as evidence the upstream Anthropic API took the
+/// session out (a transient outage), rather than the implementer attempting
+/// the work and failing. The orchestrator flips that phase from *failed* to
+/// *Inconclusive* (the BUG-257 path), so a 529 / 5xx / stream-timeout no
+/// longer marks a spec failed-by-implementer. trace:BUG-266 | ai:claude
+#[cfg(test)]
+mod bug_266_anthropic_api_outage_classifier_tests {
+    use super::*;
+
+    /// Verbatim 529 incident text from the BUG-266 origin (TASK-358 drain on
+    /// 2026-05-20). Must classify as outage, and the returned reason must
+    /// surface the matched phrasing so the orchestrator's epilogue echoes it.
+    /// trace:BUG-266 | ai:claude
+    #[test]
+    fn verbatim_529_overloaded_is_outage() {
+        let log = "{\"type\":\"assistant\",\"text\":\"API Error: 529 Overloaded. \
+                   This is a server-side issue, usually temporary — try again in \
+                   a moment. If it persists, check status.claude.com.\"}\n";
+        let reason = claude_log_indicates_api_outage(log).expect("529 must classify");
+        assert!(
+            reason.to_ascii_lowercase().contains("api error: 5")
+                || reason.to_ascii_lowercase().contains("overloaded"),
+            "reason must echo the matched diagnostic, got: {reason}",
+        );
+    }
+
+    /// The 5xx family beyond 529 — 500, 502, 503, 504 are all transient
+    /// upstream classes. trace:BUG-266 | ai:claude
+    #[test]
+    fn api_error_5xx_family_is_outage() {
+        for code in [500, 502, 503, 504, 520, 599] {
+            let log = format!(
+                "{{\"type\":\"assistant\",\"text\":\"API Error: {code} Service Unavailable\"}}"
+            );
+            assert!(
+                claude_log_indicates_api_outage(&log).is_some(),
+                "API Error: {code} must classify as outage",
+            );
+        }
+    }
+
+    /// The capitalized `Overloaded` keyword alone is sufficient — Anthropic's
+    /// shorthand for capacity-shed responses. trace:BUG-266 | ai:claude
+    #[test]
+    fn overloaded_keyword_alone_is_outage() {
+        let log = "{\"type\":\"system\",\"subtype\":\"error\",\"message\":\"Overloaded\"}";
+        assert!(claude_log_indicates_api_outage(log).is_some());
+    }
+
+    /// Proxy / load-balancer connectivity errors from the model edge —
+    /// Envoy's `upstream connect error` is the canonical phrasing.
+    /// trace:BUG-266 | ai:claude
+    #[test]
+    fn upstream_connect_error_is_outage() {
+        let log = "{\"type\":\"error\",\"text\":\"upstream connect error or disconnect/\
+                   reset before headers. reset reason: connection failure\"}";
+        assert!(claude_log_indicates_api_outage(log).is_some());
+    }
+
+    /// SSE-stream disconnects — the connection dropped while the model was
+    /// mid-response. Indistinguishable from an outage from the client side.
+    /// trace:BUG-266 | ai:claude
+    #[test]
+    fn stream_timeout_is_outage() {
+        for line in [
+            "{\"type\":\"error\",\"text\":\"stream timeout after 600s\"}",
+            "{\"type\":\"error\",\"text\":\"stream disconnected unexpectedly\"}",
+        ] {
+            assert!(
+                claude_log_indicates_api_outage(line).is_some(),
+                "stream-error variant must classify: {line}",
+            );
+        }
+    }
+
+    /// Case-insensitivity — an Anthropic rephrasing that uppercases or
+    /// lowercases a phrase must not silently re-classify the error.
+    /// trace:BUG-266 | ai:claude
+    #[test]
+    fn classification_is_case_insensitive() {
+        assert!(claude_log_indicates_api_outage("API ERROR: 503 OVERLOADED").is_some());
+        assert!(claude_log_indicates_api_outage("api error: 529 overloaded").is_some());
+        assert!(claude_log_indicates_api_outage("Upstream Connect Error: ...").is_some());
+    }
+
+    /// A clean session log (no errors, just normal tool/assistant events)
+    /// must NOT classify as an outage. Empty log returns `None`.
+    /// trace:BUG-266 | ai:claude
+    #[test]
+    fn clean_session_log_is_not_outage() {
+        assert!(claude_log_indicates_api_outage("").is_none());
+        let clean = "{\"type\":\"system\",\"subtype\":\"init\"}\n\
+                     {\"type\":\"assistant\",\"text\":\"Reading the file.\"}\n\
+                     {\"type\":\"tool_use\",\"name\":\"Read\"}\n\
+                     {\"type\":\"result\",\"subtype\":\"success\"}\n";
+        assert!(claude_log_indicates_api_outage(clean).is_none());
+    }
+
+    /// Non-outage failure modes — permission errors, parse errors, in-session
+    /// aborts — stay outside the outage classifier. The orchestrator should
+    /// keep treating these as phase-1 failures. trace:BUG-266 | ai:claude
+    #[test]
+    fn non_outage_failures_are_not_outage() {
+        for s in [
+            "{\"type\":\"error\",\"text\":\"permission denied: bash blocked\"}",
+            "{\"type\":\"error\",\"text\":\"HTTP 401 Unauthorized\"}",
+            "{\"type\":\"error\",\"text\":\"HTTP 403 Forbidden\"}",
+            "{\"type\":\"error\",\"text\":\"HTTP 429 rate limited\"}",
+            "{\"type\":\"error\",\"text\":\"API Error: 400 Bad Request\"}",
+            "{\"type\":\"error\",\"text\":\"invalid JSON in response\"}",
+            "{\"type\":\"assistant\",\"text\":\"Note: status.claude.com listed a past 5xx incident yesterday.\"}",
+        ] {
+            // The trailing assistant note is the only marginal one — it
+            // mentions `5xx` but not `API Error: 5` or `Overloaded`, so it
+            // must not match. The 400 mentions `API Error:` but with `4`,
+            // not `5`, so the 5xx anchor must reject it.
+            assert!(
+                claude_log_indicates_api_outage(s).is_none(),
+                "expected NON-outage classification for: {s:?}",
+            );
+        }
+    }
+
+    /// The returned reason must stay short — the orchestrator's epilogue is
+    /// one line and a multi-KB assistant turn would smear the terminal.
+    /// trace:BUG-266 | ai:claude
+    #[test]
+    fn reason_excerpt_is_bounded() {
+        let mut long = String::from("preamble ");
+        long.push_str(&"x".repeat(2000));
+        long.push_str(" API Error: 503 Overloaded ");
+        long.push_str(&"y".repeat(2000));
+        let reason = claude_log_indicates_api_outage(&long).expect("must classify");
+        assert!(
+            reason.len() <= 200,
+            "excerpt must be bounded (got {} chars)",
+            reason.len(),
+        );
+        assert!(
+            reason.to_ascii_lowercase().contains("api error: 5"),
+            "excerpt must include the matched phrase, got: {reason}",
+        );
     }
 }
 
@@ -51005,6 +51267,41 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         })?;
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
+                // BUG-266: before classifying this as a phase-1 failure,
+                // inspect the headless `claude -p` JSONL log for telltale
+                // signs that the Anthropic API took the session out
+                // (529 / 5xx / `Overloaded` / `upstream connect error` /
+                // `stream timeout`). A transient upstream outage is not the
+                // implementer attempting and failing the work — it is
+                // *Inconclusive*, on the same terms BUG-257 introduced for
+                // the GH-API leg. The drain pauses cleanly; the operator
+                // resumes with the printed `aida queue work <spec> --resume
+                // <session-id>` hint, which re-attaches to this exact
+                // session via Claude Code's persisted JSONL.
+                // trace:BUG-266 | ai:claude
+                if self
+                    .no_human
+                    .map(|m| m.wants_headless_implementer())
+                    .unwrap_or(false)
+                {
+                    if let Some(reason_line) =
+                        read_headless_log_for_session(&self.project_root, &session_uuid)
+                            .as_deref()
+                            .and_then(claude_log_indicates_api_outage)
+                    {
+                        let hint = format!(
+                            "Anthropic API was unavailable; resume with: \
+                             `aida queue work {spec} --resume {session_uuid}`",
+                            spec = self.spec,
+                        );
+                        return Ok(auto_complete::ImplementerOutcome::Inconclusive {
+                            reason: format!(
+                                "Anthropic API outage during the headless implementer: {reason_line}"
+                            ),
+                            retry_hint: Some(hint),
+                        });
+                    }
+                }
                 return Err(auto_complete::PhaseFailure::new(format!(
                     "the implementer session exited {} — it was aborted or errored",
                     status
@@ -51137,6 +51434,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 "GH API unreachable ({why}); branch `{branch}` is on origin \
                              so a PR may exist — cannot confirm without the API"
                             ),
+                            retry_hint: None,
                         });
                     }
                     BranchOriginProbe::LsRemoteFailed => {
@@ -51145,6 +51443,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 "GH API unreachable ({why}); `git ls-remote` also failed — \
                              cannot determine whether a PR exists for `{branch}`"
                             ),
+                            retry_hint: None,
                         });
                     }
                 }
@@ -51778,6 +52077,29 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     )
                 })?;
         if !status.success() {
+            // BUG-266: same Anthropic-API outage classification on the
+            // advisor-resume leg — `spawn_claude_headless_resume` is the
+            // same headless `claude -p` substrate, so a 529/5xx mid-resume
+            // is still Inconclusive (terminal here per the BUG-257 path: no
+            // second advisor round, drain pauses for retry). The resume
+            // hint points at the SAME session id so the operator's next
+            // retry resumes where the API outage interrupted.
+            // trace:BUG-266 | ai:claude
+            if let Ok(content) = std::fs::read_to_string(&log_path) {
+                if let Some(reason_line) = claude_log_indicates_api_outage(&content) {
+                    let hint = format!(
+                        "Anthropic API was unavailable; resume with: \
+                         `aida queue work {spec} --resume {session_id}`",
+                        spec = self.spec,
+                    );
+                    return Ok(ImplementerOutcome::Inconclusive {
+                        reason: format!(
+                            "Anthropic API outage during the advisor-resume implementer: {reason_line}"
+                        ),
+                        retry_hint: Some(hint),
+                    });
+                }
+            }
             return Err(PhaseFailure::new(format!(
                 "the resumed implementer session exited {} — see {}",
                 status
@@ -51832,6 +52154,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             PrLookup::GhUnreachable(why) => {
                 return Ok(ImplementerOutcome::Inconclusive {
                     reason: format!("GH API unreachable after the implementer resume: {why}"),
+                    retry_hint: None,
                 });
             }
         };
