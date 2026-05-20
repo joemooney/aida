@@ -768,3 +768,10 @@
   note: auto-queued by `aida pr` (019e468a); covers 1 spec
   added_at: 2026-05-20T18:13:33.833786275Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e46ab-e309-7c50-bab8-653dfa16d272
+  position: 166000
+  added_by: joe
+  note: auto-queued by `session end` (019e46a2); covers 1 spec
+  added_at: 2026-05-20T18:35:36.683498545Z
+  for_role: reviewer
