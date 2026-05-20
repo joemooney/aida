@@ -47,12 +47,12 @@ description: |-
   - TASK-395 — tee-able drain output (the WRITE side). Composes naturally.
   - Memory \`feedback_explicit_paste_ready_prompts\` — the original friction was the user being given a jq pipeline to paste, then having to debug it. \`aida headless tail\` removes the debug step.
   - STORY-263 / STORY-276 / STORY-306 — the headless drain machinery that produces these logs.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T14:22:00.802820936Z
-modified_at: 2026-05-20T14:22:00.802820936Z
+modified_at: 2026-05-20T17:59:32.709893647Z
 req_type: Task
 tags:
 - autonomy
