@@ -1,5 +1,6 @@
 mod auto_complete;
 mod auto_complete_telemetry;
+mod changelog;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
@@ -325,6 +326,12 @@ fn run() -> Result<()> {
     // dispatch the whole group early. trace:TASK-93 TASK-94 | ai:claude
     if let Command::Plan(plan_cmd) = &cli.command {
         return handle_plan_command(plan_cmd);
+    }
+
+    // `aida changelog` is self-contained: git + read-only store, no shared
+    // storage handle. Dispatch alongside Plan/Ultraplan. trace:TASK-299 | ai:claude
+    if let Command::Changelog(cl_cmd) = &cli.command {
+        return handle_changelog_command(cl_cmd);
     }
 
     // `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
@@ -725,6 +732,7 @@ fn run() -> Result<()> {
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
+        Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
@@ -2528,6 +2536,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
+        Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
@@ -26457,6 +26466,44 @@ fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
         PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),
         PlanCommand::Helpers { spec, append } => plan_helpers(spec, append.as_deref()),
     }
+}
+
+/// Dispatch `aida changelog <generate|refresh|preview>`. The whole engine
+/// lives in `crate::changelog`; this just maps the subcommand variant to a
+/// `ChangelogOptions` and calls `changelog::run`. trace:TASK-299 | ai:claude
+fn handle_changelog_command(cmd: &cli::ChangelogCommand) -> Result<()> {
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let opts = match cmd {
+        cli::ChangelogCommand::Generate { since, until, out } => changelog::ChangelogOptions {
+            window: if since.is_some() || until.is_some() {
+                changelog::Window::Range {
+                    since: since.clone(),
+                    until: until.clone(),
+                }
+            } else {
+                changelog::Window::All
+            },
+            sink: match out {
+                Some(p) => changelog::Sink::File(p.clone()),
+                None => changelog::Sink::Stdout,
+            },
+            released_as: None,
+        },
+        cli::ChangelogCommand::Refresh { released_as, out } => changelog::ChangelogOptions {
+            window: changelog::Window::All,
+            sink: match out {
+                Some(p) => changelog::Sink::File(p.clone()),
+                None => changelog::Sink::File(project_root.join("CHANGELOG.md")),
+            },
+            released_as: released_as.clone(),
+        },
+        cli::ChangelogCommand::Preview => changelog::ChangelogOptions {
+            window: changelog::Window::Unreleased,
+            sink: changelog::Sink::Stdout,
+            released_as: None,
+        },
+    };
+    changelog::run(opts, &project_root)
 }
 
 /// Walk up from the plan file to the enclosing git repo root. Paths inside

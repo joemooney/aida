@@ -4087,6 +4087,18 @@ pub enum Command {
     #[clap(subcommand)]
     Plan(PlanCommand),
 
+    /// Generate `CHANGELOG.md` mechanically from git tags + the spec
+    /// graph. Walks `v*` tags as release boundaries, scans commits
+    /// between them for `(SPEC-ID)` references, classifies each spec
+    /// (Features / Fixes / Documentation / Infrastructure / Internal /
+    /// Other), and renders one structured markdown section per release.
+    /// `generate` prints to stdout or `--out`; `refresh` writes
+    /// `CHANGELOG.md` (idempotent — same git state → byte-identical
+    /// output); `preview` is `[Unreleased]`-only.
+    // trace:TASK-299 | ai:claude
+    #[clap(subcommand)]
+    Changelog(ChangelogCommand),
+
     /// Assemble a rich, structured planning prompt for a SPEC and hand it
     /// to `/ultraplan`. Pulls the spec's description, acceptance criteria,
     /// related-spec context, the spec's enrichment comments, the AIDA
@@ -4204,6 +4216,50 @@ pub enum PlanCommand {
         #[clap(long)]
         append: Option<PathBuf>,
     },
+}
+
+/// Auto-generated changelog tooling. Mirrors `PlanCommand`'s shape.
+// trace:TASK-299 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum ChangelogCommand {
+    /// Print the full changelog (or a bounded slice) to stdout, or write
+    /// it to `--out`. The default scope is every `v*` tag plus an
+    /// `[Unreleased]` section for commits since the most recent tag.
+    Generate {
+        /// Only include releases at or after this tag (inclusive). May
+        /// be combined with `--until` to bound the span.
+        #[clap(long, value_name = "TAG")]
+        since: Option<String>,
+
+        /// Only include releases at or before this tag (inclusive).
+        #[clap(long, value_name = "TAG")]
+        until: Option<String>,
+
+        /// Write to this file instead of stdout.
+        #[clap(long, value_name = "PATH")]
+        out: Option<PathBuf>,
+    },
+
+    /// Regenerate `CHANGELOG.md` at the repo root with every release.
+    /// Idempotent — same git state + spec store → byte-identical output.
+    /// Used by `release.sh` to land an up-to-date changelog with the
+    /// version-bump commit.
+    Refresh {
+        /// Render commits-since-the-last-tag under `[<version>] —
+        /// <today>` instead of `[Unreleased]`. `release.sh` passes the
+        /// about-to-be-tagged version here so the changelog commits
+        /// with the bump (the new tag does not exist yet).
+        #[clap(long, value_name = "VERSION")]
+        released_as: Option<String>,
+
+        /// Write to this file instead of `<repo-root>/CHANGELOG.md`.
+        #[clap(long, value_name = "PATH")]
+        out: Option<PathBuf>,
+    },
+
+    /// Print only the `[Unreleased]` section (commits since the most
+    /// recent tag) — a quick "what would land in the next release" view.
+    Preview,
 }
 
 /// GitHub integration commands
