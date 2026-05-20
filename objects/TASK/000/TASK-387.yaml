@@ -1,0 +1,12 @@
+id: 019e43c8-381a-7d70-b8bf-23fd6da4e193
+spec_id: TASK-387
+agreed_id: TASK-387
+title: Shared git-tag + spec-graph extraction module factored out of `changelog.rs`
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-20T05:07:35.578530986Z
+modified_at: 2026-05-20T05:07:35.578530986Z
+req_type: Task
