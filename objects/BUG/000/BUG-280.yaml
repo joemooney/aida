@@ -55,12 +55,12 @@ description: |-
   ## Origin
 
   2026-05-20 evening drain, PR-150 phase-3 failure. User context: *"I want to focus on burning down the queue and ironing out any kinks we have."* This is one such kink — load-bearing for every reviewer phase under headless mode, so the queue can't drain reliably without fixing it.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T06:41:37.114943469Z
-modified_at: 2026-05-21T06:48:35.368709855Z
+modified_at: 2026-05-21T07:06:52.972574713Z
 req_type: Bug
 tags:
 - aida-review
@@ -70,3 +70,7 @@ tags:
 - phase-3
 - reviewer
 - verdict-file
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-21T07:06:52.972574713Z
+  implemented_by: joe
