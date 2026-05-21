@@ -1,0 +1,75 @@
+id: 019e4942-daa0-72c0-aec6-0025c5ab4f7f
+spec_id: STORY-377
+agreed_id: STORY-377
+title: Migrate aida-worker shell function to 'aida worker run' Rust subcommand
+description: |-
+  ## Problem
+
+  \`aida-worker\` is a ~50-line shell function emitted into the user's shell by \`aida dev shell-init --install\` (TASK-294). It runs a \`while true; do ... aida queue work ...; sleep ...; done\` loop reading \`.aida/worker.cmd\` directives. Nothing in the loop requires being a shell function — there's no PATH mutation, no \`cd\` of the parent shell, no env export. Bash got there first; nothing chose it.
+
+  The cost:
+  - **Discoverability** — \`aida --help\` doesn't surface the worker. Users (and the project's own advisor!) forget the primitive exists.
+  - **Cross-shell** — bash/sh only. Fish, nushell, zsh-with-strict-mode users have no worker.
+  - **Onboarding friction** — \`aida dev shell-init --install\` is an extra step.
+  - **Mental-model leak** — CLAUDE.md positions the CLI as the primary developer ergonomic; a shell-function-only feature breaks that principle.
+  - **Inconsistent capability surface** — \`aida worker directives\` is already a Rust subcommand; the runner being a shell function makes the worker namespace bifurcated.
+
+  ## Approach
+
+  Add \`aida worker run\` as a Rust subcommand that replicates and extends today's shell-function semantics:
+
+  \`\`\`
+  aida worker run [--once] [--sleep-short SECS] [--quiet] [--log FILE]
+  \`\`\`
+
+  - Reads \`.aida/worker.cmd\` at the top of each iteration (per-iteration freshness preserved — the file-watching property is unchanged).
+  - Handles the same directive set: \`drain\` / \`drain <args>\` / \`pause\` / \`exit\` (plus STORY-374's \`watch batch:X\` if that lands first).
+  - Spawns \`aida queue work --auto-complete\` (or the directive's parsed verb) as a child subprocess; streams its stdout/stderr through to the worker's stdout/stderr unchanged so existing \`2>&1 | tee\` patterns work.
+  - \`--once\` flag for cron-friendly single-pass execution; useful for testing.
+  - Ctrl-C: install a SIGINT handler; current drain is allowed to finish its current phase, then exit cleanly. Second Ctrl-C escalates to immediate stop.
+
+  ## Deprecate the shell function gracefully
+
+  - \`aida dev shell-init\` emits a stub \`aida-worker()\` that prints \`"aida-worker shell function is deprecated — use 'aida worker run' instead"\` and execs the new subcommand. Existing muscle memory works through the transition.
+  - Remove the stub one release later (~6 weeks).
+
+  ## Acceptance
+
+  - \`aida worker run\` subcommand exists, accepting the flags above. Matches today's directive semantics one-to-one.
+  - Existing \`.aida/worker.cmd\` files work unchanged.
+  - Subprocess output streaming: \`aida queue work --auto-complete\` output appears in the worker's stdout in real time, no buffering issues.
+  - Signal handling: one SIGINT pauses gracefully; two SIGINTs kill immediately.
+  - \`aida dev shell-init\`'s emitted \`aida-worker()\` function becomes a deprecation stub.
+  - \`aida worker --help\` describes \`run\` alongside the existing \`directives\` subcommand.
+  - Documentation updates: \`docs/autonomous-drain.md\` recommends \`aida worker run\` as the canonical drain-server; the shell-function section moves to a "legacy" appendix.
+  - Tests: existing aida-worker shell-function fixture tests get a parallel Rust-subcommand variant; both must pass during the deprecation period.
+
+  ## Composes with
+
+  - **STORY-374** — \`watch batch:NAME\` directive. Land that first OR in the same story so the new Rust runner ships with the full directive set.
+  - **STORY-361** (SPIKE-9 outcome) — when MCP coordination tools ship, the \`aida worker run\` runner becomes a natural target for MCP-driven directive injection (an MCP \`post_directive\` tool writes to \`worker.cmd\` and the running worker picks it up).
+
+  ## Out of scope
+
+  - Migrating \`aida-on\` / \`aida-off\` / \`aida role enter\` shell functions. Those have legitimate reasons to be shell functions (PATH mutation, env export, \`cd\` of parent shell). The category-1 vs category-2 distinction (mutates-shell-state vs pure-process-loop) is the criterion; only category-2 functions are candidates for binary consolidation.
+  - A long-running daemon model. The worker still runs foreground in a terminal the user can see and Ctrl-C; \`aida worker run\` is not a system service.
+
+  ## Origin
+
+  2026-05-20 evening, user direction: *"to be honest, we need to figure out if the aida binary itself can handle this instead of introducing different commands and shell dependencies ... I am unsure if the reasons we had remain valid ... from a user perspective I think aida as the vector into all the commands is preferable."*
+
+  Self-correction: I (the advisor) suggested aida-worker as the answer to a question about server-shape orchestration without first questioning whether the shell-function form was still the right answer. The user identified the architectural inconsistency that the existing implementation embeds.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T06:39:38.656170431Z
+modified_at: 2026-05-21T06:39:38.656170431Z
+req_type: Story
+tags:
+- aida-worker
+- cli-surface
+- consolidation
+- deprecation
+- from-user-direction
+- single-vector
