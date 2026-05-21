@@ -35,12 +35,12 @@ description: |-
   - STORY-306 — headless advisor escalation tier (the cold-boot version this would augment).
   - SPIKE-10 — multi-advisor coordination (orthogonal direction; both could ship).
   - Memory \`feedback_headless_advisor_is_cold_boot\` — the load-bearing fact this SPIKE responds to.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T14:07:26.284942480Z
-modified_at: 2026-05-20T14:07:26.284942480Z
+modified_at: 2026-05-21T02:10:15.289800728Z
 req_type: Spike
 tags:
 - advisor
