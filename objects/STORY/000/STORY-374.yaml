@@ -1,0 +1,54 @@
+id: 019e492f-3a0f-7f81-9374-064e60d9adba
+spec_id: STORY-374
+agreed_id: STORY-374
+title: 'aida-worker: ''watch batch:NAME'' directive that re-issues the drain on completion until file is edited'
+description: |-
+  ## Problem
+
+  \`aida-worker\` (TASK-294) is the server-shape primitive: long-running loop that reads \`.aida/worker.cmd\` directives and drives drains. Today's directives include \`drain batch:NAME\` which runs \`aida queue work --batch NAME --auto-complete\` once; when the batch is empty, the inner drain exits and the worker pops to the next directive.
+
+  The gap: there's no \"keep watching batch NAME for items added later\" mode. A user who wants to tag specs throughout the night and have the worker pick them up as tags arrive currently has to either (a) write many \`drain batch:NAME\` directives in advance (one per planned spec), or (b) keep editing \`worker.cmd\` to re-issue the directive as the queue empties.
+
+  ## Approach
+
+  Add a new directive \`watch batch:NAME\` to \`aida-worker\` that behaves like \`drain batch:NAME\` but, on empty-batch exit, **does not pop**. The worker re-issues the same directive after a short sleep (the existing \`sleep_short=30\` cadence) and re-evaluates. The directive persists until the user removes it from \`worker.cmd\` (or replaces with \`exit\` / \`pause\`).
+
+  ## Acceptance
+
+  - New directive \`watch batch:NAME [<extra-args>]\` recognized by \`aida-worker\` (the shell function in \`aida-cli/src/main.rs:32339\`).
+  - Behavior: identical to \`drain\` invocation while items exist; on empty-batch exit (\`BatchDrainOutcome::Drained\`), the worker sleeps \`sleep_short\` and re-checks rather than popping the directive.
+  - \`aida worker directives\` displays \`watch\` directives distinctly from \`drain\` (label or marker), so the user sees which directives are persistent.
+  - User can interrupt by editing \`worker.cmd\` (replacing the line with \`pause\` / \`exit\` / a different directive) — the next iteration's top-of-loop file read picks up the change.
+  - Document in the \`aida-worker\` shell function's emitted help, in \`aida worker --help\`, and in \`docs/autonomous-drain.md\`.
+  - Tests: synthetic worker.cmd fixtures showing \`watch batch:X\` persists across empty drains; replacing the line with \`exit\` causes clean exit.
+
+  ## Out of scope
+
+  - \`watch <SPEC-ID>\` (per-spec watching). Specs are atomic and don't \"refill\"; only batches make sense to watch.
+  - File-watch-based real-time triggering (sleep-poll is simpler and the cadence is fine).
+  - A separate long-running daemon. The aida-worker shell-function model stays; this just adds a directive type.
+
+  ## Composes with
+
+  - **TASK-294** — the aida-worker primitive this extends.
+  - **TASK-364** — leading-whitespace fix in worker.cmd parsing; lands first or in parallel.
+  - **STORY-361** (SPIKE-9 outcome) — when MCP coordination tools ship, \`watch\` directives can additionally be triggered/cancelled via MCP tools, opening cross-agent control of the server.
+
+  ## Origin
+
+  2026-05-20 evening, user question: *"the orchestrator when run could run a batch of items and we would not need a loop ... I am thinking that if it was draining a batch or items with a certain tag, then we tag other items (or reorder the queue) and then it would pick up those by reevaluating what is the first in the queue that has the tag. That would kind of make it into a server."*
+
+  The first half (re-evaluating between iterations) already works via \`drain_batch\` and \`--batch NAME --auto-complete\`. The second half (persistent watch / server-on-empty) is this story.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T06:18:12.367638695Z
+modified_at: 2026-05-21T06:18:12.367638695Z
+req_type: Story
+tags:
+- aida-worker
+- batch
+- from-user-question
+- server-mode
+- workstream-consumer
