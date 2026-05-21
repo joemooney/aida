@@ -16,6 +16,7 @@ mod history;
 mod mcp;
 mod not_found;
 mod orchestrator;
+mod pr_rebase;
 mod process_probe;
 mod prompts;
 mod punt;
@@ -17127,7 +17128,551 @@ fn render_auto_queue_outcome(outcome: &AutoQueueOutcome) {
 fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {
         PrCommand::AutoQueueReview { branch } => pr_auto_queue_review(branch.as_deref()),
+        PrCommand::Rebase {
+            n,
+            check,
+            interactive,
+            no_smoke,
+            base,
+        } => pr_rebase_handler(*n, *check, *interactive, *no_smoke, base.as_deref()),
     }
+}
+
+/// Mode selector for `aida pr rebase`. Computed once from the CLI
+/// flags so the rest of the handler is a flat match on intent.
+/// trace:TASK-308 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PrRebaseMode {
+    /// Default: auto-rebase if clean, abort + recipe on conflict.
+    Default,
+    /// `--check`: report-only.
+    Check,
+    /// `--interactive`: leave temp worktree on conflict for the user
+    /// to resolve, then continue + push.
+    Interactive,
+}
+
+/// `aida pr rebase <N>` — orchestrates the temp-worktree / fetch /
+/// rebase / smoke / force-push-with-lease / cleanup recipe.
+///
+/// trace:TASK-308 | ai:claude
+fn pr_rebase_handler(
+    n: u64,
+    check: bool,
+    interactive: bool,
+    no_smoke: bool,
+    base_override: Option<&str>,
+) -> Result<()> {
+    use pr_rebase::{
+        cross_fork_refusal, default_smoke_check, manual_recipe, parse_pr_info,
+        read_pr_rebase_config, resolve_smoke_check, temp_worktree_path,
+    };
+
+    let mode = if check {
+        PrRebaseMode::Check
+    } else if interactive {
+        PrRebaseMode::Interactive
+    } else {
+        PrRebaseMode::Default
+    };
+
+    let project_root = find_project_root()?;
+
+    // ---- Step 1: resolve PR metadata via `gh pr view`. ----
+    let info = fetch_pr_info_via_gh(&project_root, n)
+        .and_then(|j| parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
+        .context("could not resolve PR metadata — is `gh` installed and authenticated?")?;
+
+    // ---- Step 2: refuse cross-fork PRs. ----
+    if info.is_cross_repository {
+        let msg = cross_fork_refusal(n, info.head_repo_owner.as_deref());
+        eprintln!("{} {}", "✗".red().bold(), msg);
+        anyhow::bail!("cross-fork PR refused");
+    }
+
+    let base_ref = base_override
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| info.base_ref.clone());
+    let origin_base = format!("origin/{}", base_ref);
+
+    // ---- Step 3: fetch origin so origin/<base> + the PR's head are
+    // current. Required for both modes — --check reads ahead/behind
+    // off origin/<base>; default mode rebases onto it. The fetch is
+    // run in the *main* repo (refs are shared with the temp worktree
+    // we create later), so the temp worktree starts with fresh refs.
+    let fetch = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args(["fetch", "origin", "--prune"])
+        .status();
+    match fetch {
+        Ok(s) if s.success() => {}
+        Ok(_) => {
+            eprintln!(
+                "{} `git fetch origin` failed — refs may be stale",
+                "⚠".yellow()
+            );
+        }
+        Err(e) => {
+            eprintln!("{} could not invoke git fetch: {}", "⚠".yellow(), e);
+        }
+    }
+
+    // Also fetch the PR's head ref explicitly, so `pr-<n>` exists
+    // locally even when the PR is on a branch the local config
+    // doesn't normally fetch. Mirrors how `aida session start --pr`
+    // primes the worktree branch in EPIC-20.
+    let pr_local_branch = format!("pr-{}", n);
+    let pr_refspec = format!("+refs/pull/{n}/head:refs/heads/{pr_local_branch}");
+    let pr_fetch = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args(["fetch", "origin", pr_refspec.as_str()])
+        .status();
+    if !matches!(pr_fetch, Ok(s) if s.success()) {
+        anyhow::bail!(
+            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) — \
+             is the PR number correct and the remote reachable?"
+        );
+    }
+
+    // ---- Step 4 (--check only): report + exit zero. ----
+    if matches!(mode, PrRebaseMode::Check) {
+        return pr_rebase_check_report(&project_root, &info, &origin_base, &pr_local_branch);
+    }
+
+    // ---- Step 5: create the temp worktree on the PR branch. ----
+    let wt_path = temp_worktree_path(&project_root, n);
+    if wt_path.exists() {
+        // Leftover from a previous interrupted run. Remove --force so
+        // we don't strand the next attempt.
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args([
+                "worktree",
+                "remove",
+                "--force",
+                wt_path.to_str().unwrap_or(""),
+            ])
+            .status();
+        let _ = std::fs::remove_dir_all(&wt_path);
+    }
+    if let Some(parent) = wt_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let wt_add = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args([
+            "worktree",
+            "add",
+            wt_path.to_str().unwrap(),
+            pr_local_branch.as_str(),
+        ])
+        .status();
+    if !matches!(wt_add, Ok(s) if s.success()) {
+        anyhow::bail!(
+            "`git worktree add {} {}` failed — is the branch already \
+             checked out in another worktree?",
+            wt_path.display(),
+            pr_local_branch
+        );
+    }
+
+    let cleanup_worktree = || {
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args([
+                "worktree",
+                "remove",
+                "--force",
+                wt_path.to_str().unwrap_or(""),
+            ])
+            .status();
+        let _ = std::fs::remove_dir_all(&wt_path);
+    };
+
+    // ---- Step 6: rebase. ----
+    let rebase = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&wt_path)
+        .args(["rebase", &origin_base])
+        .status();
+    let rebase_ok = matches!(rebase, Ok(s) if s.success());
+
+    if !rebase_ok {
+        // Collect conflicting paths before aborting (default mode) or
+        // before handing control to the user (interactive).
+        let conflicts: Vec<String> = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&wt_path)
+            .args(["diff", "--name-only", "--diff-filter=U"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .map(|l| l.to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if matches!(mode, PrRebaseMode::Interactive) {
+            eprintln!(
+                "{} rebase hit {} conflict(s) in {}",
+                "⚠".yellow().bold(),
+                conflicts.len(),
+                wt_path.display()
+            );
+            for f in conflicts.iter().take(20) {
+                eprintln!("    {}", f.dimmed());
+            }
+            eprintln!();
+            eprintln!("Resolve in the worktree, then:");
+            eprintln!("  cd {} && git rebase --continue", wt_path.display());
+            eprintln!();
+            eprintln!(
+                "When done, press Enter to let aida force-push and clean up. \
+                 Ctrl-C to bail (leaves the worktree in place)."
+            );
+            use std::io::BufRead;
+            let mut line = String::new();
+            let _ = std::io::stdin().lock().read_line(&mut line);
+
+            // Verify the rebase actually finished — `.git/rebase-merge`
+            // or `rebase-apply` still present ⇒ user pressed Enter
+            // without resolving.
+            let still_rebasing = wt_path.join(".git").join("rebase-merge").exists()
+                || wt_path.join(".git").join("rebase-apply").exists();
+            // .git in a linked worktree is a file pointing at the
+            // gitdir; the rebase-merge marker actually lives at the
+            // gitdir. Use `git status --porcelain=v2 --branch` to ask
+            // git itself.
+            let status_says_rebasing = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&wt_path)
+                .args(["status", "--porcelain=v2", "--branch"])
+                .output()
+                .ok()
+                .map(|o| {
+                    let s = String::from_utf8_lossy(&o.stdout).to_string();
+                    s.contains("# branch.head (no branch)")
+                        || s.lines().any(|l| l.starts_with("u "))
+                })
+                .unwrap_or(false);
+            if still_rebasing || status_says_rebasing {
+                eprintln!(
+                    "{} rebase still in progress — leaving worktree at {}",
+                    "✗".red().bold(),
+                    wt_path.display()
+                );
+                anyhow::bail!("rebase not complete");
+            }
+            // Resolved — fall through to smoke check + push below.
+        } else {
+            // Default mode: abort, clean, print recipe, exit non-zero.
+            let _ = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&wt_path)
+                .args(["rebase", "--abort"])
+                .status();
+            eprintln!(
+                "{} rebase hit {} conflict(s) — aborted, worktree cleaned",
+                "✗".red().bold(),
+                conflicts.len()
+            );
+            for f in conflicts.iter().take(20) {
+                eprintln!("    {}", f.dimmed());
+            }
+            eprintln!();
+            eprintln!("{}", manual_recipe(n, &base_ref));
+            cleanup_worktree();
+            anyhow::bail!("rebase aborted due to conflicts");
+        }
+    }
+
+    // ---- Step 7: smoke check. ----
+    let cfg = read_pr_rebase_config(&project_root);
+    let project_default = default_smoke_check(&project_root);
+    let smoke_cmd = resolve_smoke_check(no_smoke, &cfg, &project_default);
+
+    if let Some(cmd) = smoke_cmd.as_deref() {
+        eprintln!("{} smoke check: {}", "→".cyan(), cmd.dimmed());
+        let status = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .current_dir(&wt_path)
+            .status();
+        let smoke_ok = matches!(status, Ok(s) if s.success());
+        if !smoke_ok {
+            eprintln!(
+                "{} smoke check `{}` failed — leaving worktree at {} for inspection",
+                "✗".red().bold(),
+                cmd,
+                wt_path.display()
+            );
+            anyhow::bail!("smoke check failed");
+        }
+    }
+
+    // ---- Step 8: force-with-lease push. ----
+    // `--force-with-lease=<refname>:<expected-sha>` anchors the lease
+    // to the PR head we resolved up-front, so a concurrent push from
+    // elsewhere makes this fail loudly instead of silently
+    // overwriting.
+    let lease = format!("{}:{}", info.head_ref, info.head_oid);
+    let push_status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&wt_path)
+        .args([
+            "push",
+            &format!("--force-with-lease={lease}"),
+            "origin",
+            &format!("HEAD:refs/heads/{}", info.head_ref),
+        ])
+        .status();
+    let push_ok = matches!(push_status, Ok(s) if s.success());
+    if !push_ok {
+        eprintln!(
+            "{} force-with-lease push failed — leaving worktree at {} for inspection",
+            "✗".red().bold(),
+            wt_path.display()
+        );
+        eprintln!(
+            "  {}",
+            "Likely cause: PR head moved on origin since we read it. \
+             Pull the new tip and re-run."
+                .dimmed()
+        );
+        anyhow::bail!("push failed");
+    }
+
+    // Report new SHA.
+    let new_sha = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&wt_path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .chars()
+                .take(12)
+                .collect::<String>()
+        })
+        .unwrap_or_else(|| "(unknown)".to_string());
+    eprintln!(
+        "{} PR-{} rebased onto {} — new head {}",
+        "✓".green().bold(),
+        n,
+        origin_base,
+        new_sha
+    );
+
+    // ---- Step 9: cleanup. ----
+    cleanup_worktree();
+
+    Ok(())
+}
+
+/// Run `gh pr view <N> --json …` and return the parsed JSON. Pulled
+/// out of `pr_rebase_handler` so the side-effecting call is isolated
+/// (parse rules are pinned by `pr_rebase::parse_pr_info` tests).
+/// trace:TASK-308 | ai:claude
+fn fetch_pr_info_via_gh(project_root: &std::path::Path, n: u64) -> Result<serde_json::Value> {
+    let n_str = n.to_string();
+    let out = std::process::Command::new("gh")
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "view",
+            n_str.as_str(),
+            "--json",
+            "baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+        ])
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+            } else {
+                anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
+            }
+        })?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "`gh pr view {}` exited {} — {}",
+            n,
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .with_context(|| format!("`gh pr view {}` returned non-JSON output", n))?;
+    Ok(json)
+}
+
+/// `aida pr rebase <N> --check` — print the stale-base / overlap /
+/// conflict-prediction report and exit zero. Modifies nothing.
+/// trace:TASK-308 | ai:claude
+fn pr_rebase_check_report(
+    project_root: &std::path::Path,
+    info: &pr_rebase::PrInfo,
+    origin_base: &str,
+    pr_local_branch: &str,
+) -> Result<()> {
+    use pr_rebase::{parse_merge_tree_conflicts, ConflictPrediction};
+
+    let n = info.n;
+
+    // Behind count: commits on origin/<base> that aren't on the PR.
+    let behind_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-list",
+            "--count",
+            &format!("{pr_local_branch}..{origin_base}"),
+        ])
+        .output()?;
+    let behind: u32 = String::from_utf8_lossy(&behind_out.stdout)
+        .trim()
+        .parse()
+        .unwrap_or(0);
+
+    // Files changed by the PR (PR.. base merge-base..HEAD).
+    let pr_files = files_in_range(project_root, &format!("{origin_base}...{pr_local_branch}"));
+    // Files changed on origin/<base> since the PR forked.
+    let base_files = files_in_range(project_root, &format!("{pr_local_branch}...{origin_base}"));
+    let pr_set: std::collections::HashSet<&String> = pr_files.iter().collect();
+    let overlap: Vec<String> = base_files
+        .iter()
+        .filter(|f| pr_set.contains(f))
+        .cloned()
+        .collect();
+
+    // Conflict prediction via `git merge-tree --write-tree`. Modern
+    // git (≥2.38) returns the tree SHA on clean merge and exits
+    // non-zero with `--name-only` output on conflict. We tolerate
+    // older git by falling back to "Unknown" if the command fails.
+    let mt = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            origin_base,
+            pr_local_branch,
+        ])
+        .output();
+    let prediction = match mt {
+        Ok(out) if out.status.success() => ConflictPrediction::Clean,
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let files = parse_merge_tree_conflicts(&stdout);
+            if files.is_empty() {
+                ConflictPrediction::Unknown
+            } else {
+                ConflictPrediction::Conflicting { files }
+            }
+        }
+        Err(_) => ConflictPrediction::Unknown,
+    };
+
+    println!("{} PR-{}", "Check:".bold(), n);
+    println!("  base       {}", origin_base);
+    println!("  state      {} behind", behind,);
+    println!("  pr files   {}", pr_files.len());
+    println!(
+        "  overlap    {} file{}",
+        overlap.len(),
+        if overlap.len() == 1 { "" } else { "s" }
+    );
+    for f in overlap.iter().take(10) {
+        println!("               {}", f.dimmed());
+    }
+    match &prediction {
+        ConflictPrediction::Clean => {
+            println!("  predict    {}", "rebase clean (safe)".green());
+            if behind > 0 {
+                println!(
+                    "  {}",
+                    format!("Recommendation: rebase needed (run `aida pr rebase {}`)", n).cyan()
+                );
+            } else {
+                println!("  {}", "Recommendation: PR is up to date".dimmed());
+            }
+        }
+        ConflictPrediction::Conflicting { files } => {
+            println!(
+                "  predict    {} ({} file{})",
+                "rebase will conflict".yellow(),
+                files.len(),
+                if files.len() == 1 { "" } else { "s" }
+            );
+            for f in files.iter().take(10) {
+                println!("               {}", f.dimmed());
+            }
+            println!(
+                "  {}",
+                format!(
+                    "Recommendation: manual rebase (`aida pr rebase {} --interactive`)",
+                    n
+                )
+                .yellow()
+            );
+        }
+        ConflictPrediction::Unknown => {
+            println!(
+                "  predict    {} (git merge-tree probe failed; rely on overlap)",
+                "unknown".dimmed()
+            );
+            if overlap.is_empty() {
+                println!(
+                    "  {}",
+                    "Recommendation: likely clean (no file overlap)".dimmed()
+                );
+            } else {
+                println!(
+                    "  {}",
+                    "Recommendation: overlap detected — rebase may conflict".yellow()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Files touched by `git log --name-only --pretty=format:` over a range.
+/// Local helper for `pr_rebase_check_report` so we don't depend on
+/// `aida_core::rebase`'s internal helpers (which are crate-private).
+/// trace:TASK-308 | ai:claude
+fn files_in_range(repo: &std::path::Path, range: &str) -> Vec<String> {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["log", "--name-only", "--pretty=format:", range])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+            let mut out: Vec<String> = Vec::new();
+            for line in String::from_utf8_lossy(&o.stdout).lines() {
+                let l = line.trim();
+                if !l.is_empty() && seen.insert(l.to_string()) {
+                    out.push(l.to_string());
+                }
+            }
+            out
+        })
+        .unwrap_or_default()
 }
 
 /// Implementation of `aida pr auto-queue-review` — files (or skips, if
