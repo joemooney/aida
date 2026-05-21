@@ -1,0 +1,31 @@
+id: 019e48c4-a606-70c3-9878-4d2d84224114
+spec_id: TASK-428
+agreed_id: TASK-428
+title: 'BUG-110 acceptance #4 covered by unit tests + manual recipe, not end-to-end automation'
+description: |
+  BUG-110 acceptance criterion #4 reads: *"Test: simulate SIGTERM during a running TUI, verify the parent shell's terminal is sane afterward."*
+
+  What landed:
+  - Unit tests for the AtomicBool restore-gate (aida-tui/src/term.rs::tests::restore_gate_is_single_writer) — verifies the Drop / panic / signal three-way race ends in exactly one restore.
+  - Manual smoke-test recipe in docs/tui/README.md "Terminal-state safety" section — a human can run `aida tui`, `kill <pid>` it from another terminal, and verify the prompt comes back with a visible cursor.
+
+  What did NOT land: an automated end-to-end test that spawns the real `aida tui` binary in a PTY (portable-pty), sends SIGTERM via libc, and asserts the PTY received the restore escape sequences. Skipped because:
+  1. Requires a separate helper bin (or `[[bin]]` target) + nix/libc dep for raise/kill — ~150 LOC of test plumbing.
+  2. ctrlc + crossterm are both well-tested upstream; the in-house logic is the 5-line atomic gate, which IS unit-tested.
+  3. CI runs without a real TTY — portable-pty works but adds a Windows-specific failure mode for cross-platform CI.
+
+  Advisor's call whether the unit tests + manual recipe is sufficient acceptance coverage for a defensive-restore bug, or whether the end-to-end automation is worth a follow-up TASK (it would also catch any future regression where a refactor accidentally removes install_signal_handler()).
+
+  Raised by the implementer while working BUG-110.
+  Branch: bug-110  ·  Commit: 2435b1269bca7d4f6020813d3bf33c0c29954e78  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T04:21:47.654331082Z
+modified_at: 2026-05-21T04:21:47.654331082Z
+req_type: Task
+tags:
+- from-implementer:BUG-110
+- kind:design-choice
+- severity:minor
