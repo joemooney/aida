@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:39:54.324945961Z
-modified_at: 2026-05-21T14:39:54.324945961Z
+modified_at: 2026-05-21T14:54:23.869286194Z
 req_type: Bug
 tags:
 - from-user-friction
@@ -94,3 +94,9 @@ tags:
 - resilience
 - retry
 - transient-error
+comments:
+- id: 019e4b07-d07d-7f63-b720-d8ff6c08b9d0
+  author: joe
+  content: 'Fresh evidence 2026-05-21 ~03:15: ''gh pr merge 151 --squash --delete-branch'' returned ''HTTP 502: 502 Bad Gateway (https://api.github.com/graphql)'' on first attempt. Immediate retry succeeded. Manual recovery cost: rerun one command. Under headless orchestrator phase 4 this would have stalled the spec the same way tonight''s other failures did. Strengthens the case for this BUG — 2nd transient gh-API blip in <12h (the first was the ''error connecting to api.github.com'' on TASK-416''s manual merge).'
+  created_at: 2026-05-21T14:54:23.869286194Z
+  modified_at: 2026-05-21T14:54:23.869286194Z
