@@ -1,0 +1,72 @@
+id: 019e4944-a95a-79b1-8a09-0395a557edcc
+spec_id: BUG-280
+agreed_id: BUG-280
+title: Reviewer skill under --no-human=both posts verdict to PR but skips verdict-file AND tries to AskUserQuestion
+description: |-
+  ## Symptom
+
+  PR-150 (TASK-338, machinery glossary docs) — drain on 2026-05-20 ~23:23. Phase 3 (reviewer headless session) failed despite the reviewer doing the work correctly.
+
+  Headless log shows:
+  1. Reviewer read the PR, ran \`aida review prompt\`, verified all 7 acceptance criteria, **posted a PASS verdict as a PR comment** (publicly on \`gh pr view 150\`).
+  2. Reviewer then called \`AskUserQuestion\` to ask the operator *\"Merge?\"* — permission denied under \`--no-human=both\` (AskUserQuestion is forbidden in headless mode; Claude bails ~10s).
+  3. Reviewer exited without writing \`.aida/review-verdicts/PR-150.json\` (the orchestrator's expected verdict-file artifact, STORY-263 convention).
+  4. Orchestrator: \`✗ phase 3 (reviewer session) failed: the reviewer session produced no verdict file — the review did not complete\`.
+  5. Recovery hint surfaced: \`aida queue work PR-150 --steal\`.
+
+  End state: PR is merge-ready with a public PASS verdict in the PR comments, but the orchestrator can't advance phases 4-6.
+
+  ## Two distinct issues, same skill-template gap
+
+  ### Issue A — reviewer asked instead of acting
+
+  Under \`--no-human=both\` the reviewer should:
+  - Write the verdict file
+  - If verdict is PASS, auto-merge (per STORY-306's autonomous-merge behavior — the orchestrator's phase-4 reads verdict + merges, OR the reviewer itself does \`gh pr merge\`)
+  - If not PASS, write the verdict file with the not-PASS verdict and exit; orchestrator escalates
+
+  It should NOT call AskUserQuestion under headless. The skill template likely has a generic \"confirm merge\" step that doesn't branch on autonomy mode.
+
+  ### Issue B — verdict file unwritten even setting aside (A)
+
+  Even if the AskUserQuestion call were removed, the verdict file should have been written *before* any merge-or-ask logic fires. The contract is *\"reviewer writes the verdict file; orchestrator reads it.\"* This reviewer wrote a public PR comment but never the file artifact. The file write is the load-bearing step for the orchestrator handshake; everything else is human-facing surface.
+
+  ## Acceptance
+
+  - The \`/aida-review\` skill template's headless path:
+    - **Always writes \`.aida/review-verdicts/PR-N.json\`** with the structured verdict before any other action (merge attempt, PR comment, exit). The file write is the first irreversible step.
+    - **Never calls AskUserQuestion** under \`--no-human=both\` / \`AIDA_HEADLESS=1\`. Confirmations auto-resolve to the default verdict-file value.
+    - **Posts the PR comment** (the human-readable surface) AFTER the verdict file is written, not instead of it.
+    - **Auto-merges on PASS** (per STORY-306's autonomous-merge behavior) OR writes the verdict and exits, letting phase 4 do the merge — whichever the keystone's contract specifies.
+  - Add a regression test: synthetic reviewer-session fixture under \`--no-human=both\` that simulates a PASS verdict; assert the verdict file exists at the expected path with the expected schema.
+  - Add a defensive check in the orchestrator: if phase 3 sees an AskUserQuestion event in the headless log AND no verdict file, the error message names the AskUserQuestion call as the likely cause (better diagnostic than the current generic \"no verdict file\").
+
+  ## Out of scope
+
+  - The wider question of \"should reviewer post to PR before or after verdict file?\" — covered by acceptance above; this BUG just enforces the order.
+  - Auto-merge policy under \`--no-human=both\` more broadly — that's STORY-306 territory; this BUG just ensures the verdict file lands so phase 4 can act on it.
+
+  ## Composes with
+
+  - **STORY-263** — reviewer verdict file format / contract.
+  - **STORY-306** — headless advisor escalation; the verdict-file-then-act flow is the same shape.
+  - **TASK-401 + BUG-269** — the implementer-side pre-exit enforcement (commit + push + PR before exit). This BUG is the reviewer-side parallel: write verdict file before any other action.
+
+  ## Origin
+
+  2026-05-20 evening drain, PR-150 phase-3 failure. User context: *"I want to focus on burning down the queue and ironing out any kinks we have."* This is one such kink — load-bearing for every reviewer phase under headless mode, so the queue can't drain reliably without fixing it.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T06:41:37.114943469Z
+modified_at: 2026-05-21T06:41:37.114943469Z
+req_type: Bug
+tags:
+- aida-review
+- askuserquestion
+- from-drain-failure
+- headless
+- phase-3
+- reviewer
+- verdict-file
