@@ -76,12 +76,12 @@ description: |-
   User report 2026-05-21 ~02:45: *\"gh pr merge 157 ... error connecting to api.github.com ... [retry succeeded immediately] ... so retry logic will be needed for this type of intermittent failure\"*
 
   The user was doing manual recovery for TASK-416 when the network blip hit; recovery succeeded on retry. Under a headless overnight drain the same blip would have stalled phase 4 silently. The orchestrator's per-phase retry layer is load-bearing for unattended operation.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:39:54.324945961Z
-modified_at: 2026-05-21T17:07:39.713258436Z
+modified_at: 2026-05-21T17:13:23.809075382Z
 req_type: Bug
 tags:
 - from-user-friction
@@ -125,3 +125,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-21T17:03:34.712535370Z
   implemented_by: joe
+  completed_at: 2026-05-21T17:13:23.809075382Z
+  completion_sha: dfd3b5d07e48c6132a4ea68b3284a59efba1ed90
