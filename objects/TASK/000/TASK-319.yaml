@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T20:25:17.257067895Z
-modified_at: 2026-05-21T05:58:22.955360216Z
+modified_at: 2026-05-21T06:00:15.701037253Z
 req_type: Task
 tags:
 - convention
@@ -60,3 +60,9 @@ tags:
 - historical-artifacts
 - propagation
 - scaffolding-pack
+comments:
+- id: 019e491e-cc55-7b81-81d5-191cf4bf425e
+  author: joe
+  content: Commit e215ea95 references this requirement
+  created_at: 2026-05-21T06:00:15.701037253Z
+  modified_at: 2026-05-21T06:00:15.701037253Z
