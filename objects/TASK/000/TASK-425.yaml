@@ -1,0 +1,24 @@
+id: 019e4868-5d8c-77e1-8e84-46341c963332
+spec_id: TASK-425
+agreed_id: TASK-425
+title: Verify actions/download-artifact@v5 multi-artifact layout still works on next release tag
+description: |-
+  release.yml:85 invokes `actions/download-artifact@v5` with `path: artifacts` and no `name:` — multi-artifact mode. The release job then references `artifacts/aida-linux-x86_64/aida-linux-x86_64.tar.gz` (and 3 sibling paths) at release.yml:93-96, which depends on v5 preserving the per-artifact subdirectory layout v4 used.
+
+  PR-142's body asserts "multi-artifact download by path, unaffected by the v5 single-by-ID path change" — likely correct, but CI cannot exercise the tag path on a PR. The next release tag is the first place this fires for real.
+
+  Action: on the next `scripts/release.sh` run, watch the Release workflow's `Download all artifacts` step output for the actual directory layout and confirm the four `files:` paths in `Create Release` resolve. If v5 flattened or renamed the layout, scripts/release.sh will surface a missing-file error; if so, file a fix-forward to add explicit `name:` per artifact or restructure the paths.
+
+  Raised in review of PR-142: https://github.com/joemooney/aida/pull/142#issuecomment-4504297695
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T02:40:59.788089262Z
+modified_at: 2026-05-21T02:40:59.788089262Z
+req_type: Task
+tags:
+- ci
+- from-review:PR-142
+- release
+- severity:minor
