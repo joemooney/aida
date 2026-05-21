@@ -711,6 +711,29 @@ markdown table (no surrounding code fence):
 
 *Orchestrator mode (`aida orchestrator status` = `orchestrated`) — TASK-286:*
 
+Print the State preamble first (substitute concrete values; omit rows
+genuinely absent):
+
+```
+State:
+  Spec:    <SPEC-ID>  <title>            (Status: Done)
+  Branch:  <branch>   <N> commits ahead of main   <pushed|local>
+  PR:      no PR yet (the `/aida-pr` row below opens it)
+  Drain:   phase 1/6 <interactive|--zen|--no-human=both>   orchestrator on
+  Tests:   <last cargo test summary or "not run">
+  Fmt:     <cargo fmt --check summary or "not run">
+  Plan:    <docs/plans/...md>   |  none
+```
+
+Then the Deciding-factor line *only when one is in play* (otherwise omit
+entirely):
+
+```
+Deciding factor: <one sentence — e.g. "Implementation surfaced a
+smoke-test gate the orchestrator can't grade on its own; worth routing
+to the advisor before `/aida-pr` hands off to phases 2-6.">
+```
+
 ✓ <SPEC-ID> done. This session runs under `--auto-complete` — the
 orchestrator drives the rest.
 
@@ -951,7 +974,7 @@ simple-more, simple-empty) carries the full finish-state rubric: a
 row marked `← recommended` with rationale-first Why, and a conditional
 `⊕ Route to the advisor` row. Each template stands on its own — a reader
 skimming a single one sees the rubric applied, not just the upstream
-prose pointing at it. trace:TASK-390 trace:TASK-359 trace:TASK-393
+prose pointing at it. trace:TASK-390 trace:TASK-359 trace:TASK-393 trace:TASK-413
 
 ## Discipline: the atomic shipping unit (TASK-401)
 
