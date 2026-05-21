@@ -82,17 +82,24 @@ pub fn ledger_path(project_root: &Path) -> PathBuf {
 
 /// Append one punt record to `.aida/punts.jsonl`, creating the file (and the
 /// `.aida/` directory) if needed. One JSON object per line.
+///
+/// STORY-361: the serialized line + `\n` is written in a single `write_all`
+/// call so POSIX `O_APPEND` atomicity holds under concurrent writers. (The
+/// earlier `writeln!` form made multiple `write(2)` syscalls per record, so
+/// two concurrent writers could interleave content and newline, producing
+/// a torn JSON line both consumers dropped.) trace:STORY-361
 pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Result<()> {
     let path = ledger_path(project_root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let line = serde_json::to_string(record)?;
+    let mut line = serde_json::to_string(record)?;
+    line.push('\n');
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)?;
-    writeln!(file, "{line}")?;
+    file.write_all(line.as_bytes())?;
     Ok(())
 }
 
