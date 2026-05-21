@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:02:16.201957127Z
-modified_at: 2026-05-21T05:43:20.225231653Z
+modified_at: 2026-05-21T05:46:50.234853441Z
 req_type: Task
 tags:
 - audit
@@ -51,6 +51,11 @@ tags:
 - spec-id-leak
 - user-facing-text
 - violates:TASK-268
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e4912-7045-7671-8dbf-59839f76233b
+  created_at: 2026-05-21T05:46:50.234837955Z
+  created_by: joe
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T05:43:20.225231653Z
