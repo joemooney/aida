@@ -31,12 +31,12 @@ description: |-
 
   - Surfaced during the 2026-05-20 autonomous 8-spec drain (TASK-404 phase 6 build output).
   - May have been introduced by one of the drain's earlier merges (BUG-266, TASK-401, TASK-358) — git blame will tell.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T00:40:07.620668478Z
-modified_at: 2026-05-21T02:07:41.233430261Z
+modified_at: 2026-05-21T02:14:47.230091704Z
 req_type: Task
 tags:
 - cleanup
@@ -74,3 +74,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-21T02:07:41.233430261Z
   implemented_by: joe
+  completed_at: 2026-05-21T02:14:47.230091704Z
+  completion_sha: 6b5ab61e95a55727255b54b0c890baea5e945830
