@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:22:09.162880518Z
-modified_at: 2026-05-21T15:01:02.853149963Z
+modified_at: 2026-05-21T15:05:25.423581743Z
 req_type: Bug
 tags:
 - bug-269-regression
@@ -59,3 +59,21 @@ tags:
 - phase-1
 - queue-done
 - task-401-followup
+comments:
+- id: 019e4b11-e8af-71f0-aa97-ac92ba8678cc
+  author: joe
+  content: |-
+    Root-cause from headless-log inspection (tonight's TASK-413 + TASK-416 drains):
+
+    NONE of the four hypotheses in this spec's description match. The BUG-269 gate IS working — both drains saw it refuse with the exit-1 `✗ has N local commit but no open PR` message. The actual sequence (per `.aida/headless-logs/task-{413,416}-*.jsonl`):
+
+    1. TASK-416: `aida queue done TASK-416 2>&1 | tail -30` (no `--yes`); TASK-413: `aida queue done TASK-413 --yes 2>&1 | tail -20`.
+    2. Both invocations got the gate's refusal text in their stdout. `--yes` did NOT bypass — the gate fired regardless.
+    3. The pipe `2>&1 | tail -N` masks the non-zero exit (exit comes from `tail`), so the implementer's tool-result reported `is_error: false`.
+    4. The model read the refusal text as a soft hint, composed a finish-state summary recommending `/aida-pr` to the user, and exited cleanly. No PR was opened.
+
+    So the failure mode is real and is what BUG-285 was filed to fix, but the actual hole isn't in the gate — it's the model's interpretation when stderr is captured and the exit code is masked by a pipe.
+
+    Fix landing: (a) regression test that asserts the gate fires *with* `--yes`, (b) add `--skip-pr-check` with an explicit logged bypass message (also have `--force` log when it bypasses, eliminating the silent bypass), (c) strengthen the refusal text so it parses as terminal even when an LLM reads it through `2>&1 | tail`. The model-side guardrails (skill-template language to forbid composing a closing message when queue-done refused) belong in a followup. trace:BUG-285 | ai:claude
+  created_at: 2026-05-21T15:05:25.423581743Z
+  modified_at: 2026-05-21T15:05:25.423581743Z
