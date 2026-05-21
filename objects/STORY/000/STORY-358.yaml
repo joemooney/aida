@@ -1,0 +1,26 @@
+id: 019e4838-9475-77f0-983e-53bdea549671
+spec_id: STORY-358
+agreed_id: STORY-358
+title: 'Review PR-136: fix(queue): refuse queue done without an open PR (BUG-269)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e4830`) for branch `bug-269`.
+
+  - PR: <https://github.com/joemooney/aida/pull/136>
+  - Branch: `bug-269` → `main`
+
+  ## Covers
+
+  - BUG-269
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 136` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T01:48:48.116995700Z
+modified_at: 2026-05-21T01:48:48.116995700Z
+req_type: Story
