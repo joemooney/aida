@@ -843,3 +843,10 @@
   note: Promoted from finding TASK-413 via `aida findings promote`
   added_at: 2026-05-21T04:48:46.699338872Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e466d-f21a-7461-9c1e-5f769b1ffce4
+  position: 184000
+  added_by: joe
+  note: Promoted from finding TASK-414 via `aida findings promote`
+  added_at: 2026-05-21T04:48:47.942973600Z
+  for_role: implementer
