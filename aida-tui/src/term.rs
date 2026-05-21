@@ -45,11 +45,15 @@ impl TermGuard {
     /// the early return would strand the terminal in raw mode with no
     /// guard to tear it down. trace:TASK-248 | ai:claude
     pub fn enter() -> Result<Self> {
-        terminal::enable_raw_mode().context("failed to enter terminal raw mode")?;
-        // Raw mode is on; arm the cross-thread restore gate before
-        // anything else so a signal that races with the guard's
-        // construction still finds it set. trace:BUG-110 | ai:claude
+        // Arm the cross-thread restore gate *before* enable_raw_mode so a
+        // signal landing in the microsecond-wide window between the two
+        // still finds the gate set. The inverse race (signal after the
+        // store, before raw mode is on) is benign: restore_terminal's
+        // disable_raw_mode / LeaveAlternateScreen / cursor::Show are all
+        // no-ops when their state was never entered.
+        // trace:BUG-110 | ai:claude trace:TASK-429 | ai:claude
         TERMINAL_NEEDS_RESTORE.store(true, Ordering::SeqCst);
+        terminal::enable_raw_mode().context("failed to enter terminal raw mode")?;
         // Own teardown now. Any `?` past this point drops `guard` on the
         // way out and runs the full restore.
         let guard = Self { active: true };
