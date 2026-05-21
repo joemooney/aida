@@ -1,0 +1,20 @@
+id: 019e4bc9-3bb9-77e1-8cff-922917589d3c
+spec_id: TASK-436
+agreed_id: TASK-436
+title: 'MCP tool_post_directive: validate verb against drain|pause|exit'
+description: |
+  `aida-cli/src/mcp.rs:1099` (`tool_post_directive`) appends whatever string the caller passes as `verb` to `.aida/worker.cmd`. The `inputSchema` documents `drain | pause | exit`, but no validation enforces it. `worker::parse_directives_from_str` (`aida-cli/src/worker.rs:60-64`) defensively maps unknown verbs to `pause`, so the failure is contained — but the caller still gets a "directive posted: <typo>" success response.
+
+  Fix: validate the verb against the known set up front and return an error from the tool when it doesn't match. Mirror the `PuntCategory::from_str` pattern `tool_post_punt` already uses (`mcp.rs:715`).
+
+  Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T18:25:39.769407423Z
+modified_at: 2026-05-21T18:25:39.769407423Z
+req_type: Task
+tags:
+- from-review:PR-162
+- severity:cosmetic
