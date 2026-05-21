@@ -1,0 +1,24 @@
+id: 019e48c4-7e69-7222-806d-24c888b1a03c
+spec_id: TASK-427
+agreed_id: TASK-427
+title: BUG-110 handler exits 130 for both SIGINT and SIGTERM
+description: |
+  The ctrlc handler installed in aida-tui/src/term.rs::install_signal_handler() calls std::process::exit(130) unconditionally. By convention a process killed by SIGTERM exits 143 (128 + 15); SIGINT exits 130 (128 + 2). The ctrlc crate collapses SIGTERM / SIGINT / CTRL_BREAK into one closure with no originating signum, so we picked the more common "user interrupted" code.
+
+  The parent shell still sees a non-zero exit + a sane terminal (the bug-fix's actual contract), so this is not a correctness issue — but a watching script that branches on `$?` to distinguish "user pressed Ctrl-C" vs "init sent SIGTERM" will see 130 in both cases.
+
+  Advisor's call whether it's worth replacing ctrlc with signal-hook directly to recover the signum, or living with the collapsed exit code given ctrlc's simpler cross-platform surface (it also handles Windows CTRL_C / CTRL_BREAK in the same API).
+
+  Raised by the implementer while working BUG-110.
+  Branch: bug-110  ·  Commit: 2435b1269bca7d4f6020813d3bf33c0c29954e78  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T04:21:37.513080534Z
+modified_at: 2026-05-21T04:21:37.513080534Z
+req_type: Task
+tags:
+- from-implementer:BUG-110
+- kind:design-choice
+- severity:minor
