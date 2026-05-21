@@ -1,0 +1,19 @@
+id: 019e4854-bf70-7952-8b8d-7ee5bcba04bf
+spec_id: STORY-364
+agreed_id: STORY-364
+title: aida advisor mentor --child <project> ongoing-relationship verb (SPIKE-10 Track B)
+description: 'Per SPIKE-10 strategic doc, Gap 3 implementation: `aida advisor mentor --child <project-path>` parent-side mentor session. Reads sibling''s recent activity (specs + memory writes + PRs), runs pack hygiene audit, surfaces missed lessons, identifies candidate-for-parent memories, writes mentor brief at `<child>/docs/<date>-mentor-brief.md`. Manual-trigger initially. Lower priority — file design now, implement when a second project genuinely exists.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T02:19:34.128826874Z
+modified_at: 2026-05-21T02:19:34.128826874Z
+req_type: Story
+tags:
+- advisor
+- from-spike
+- mentor
+- multi-project
+- ongoing-relationship
+- track-b
