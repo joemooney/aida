@@ -79,11 +79,11 @@ use aida_core::{
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand, GitHubCommand,
-    GitLabCommand, HeadlessCommand, JiraCommand, NodeCommand, OrchestratorCommand, PlanCommand,
-    PrCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand,
-    RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand,
-    SessionCommand, SessionManifestCommand, SessionWakeupCommand, TraceCommand, TypeCommand,
-    WorkerCommand, ZenCommand,
+    GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand, OrchestratorCommand,
+    PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
+    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
+    ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand, TraceCommand,
+    TypeCommand, WorkerCommand, ZenCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -477,7 +477,9 @@ fn run() -> Result<()> {
                     let yaml_backend = aida_core::YamlBackend::new(&cache_path);
                     aida_core::DatabaseBackend::save(&yaml_backend, &store)?;
                     let mcp_storage = Storage::new(cache_path);
-                    mcp::run_mcp_server(&mcp_storage)?;
+                    // STORY-361: project root = store_path's parent (the AIDA project root).
+                    let project_root = find_project_root().unwrap_or_else(|_| store_path.clone());
+                    mcp::run_mcp_server(&mcp_storage, project_root)?;
                     return Ok(());
                 }
                 return handle_git_backend_command(&store_path, &cli.command);
@@ -823,7 +825,14 @@ fn run() -> Result<()> {
             handle_jira_command(jira_cmd, &storage)?;
         }
         Command::McpServe => {
-            mcp::run_mcp_server(&storage)?;
+            // STORY-361: project root for coordination tools.
+            let project_root =
+                find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+            mcp::run_mcp_server(&storage, project_root)?;
+        }
+        Command::Mcp(mcp_cmd) => {
+            // STORY-361: management commands for the MCP coordination surface.
+            handle_mcp_command(mcp_cmd)?;
         }
         Command::Docs(docs_cmd) => {
             // trace:FR-1-077 | ai:claude
@@ -2525,6 +2534,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // trace:FR-1-077 | ai:claude
             let store = backend.load()?;
             return handle_docs_with_store(docs_cmd, &store);
+        }
+        Command::Mcp(mcp_cmd) => {
+            // trace:STORY-361 | ai:claude
+            return handle_mcp_command(mcp_cmd);
         }
         Command::Status {
             no_dev_context,
@@ -52351,6 +52364,101 @@ fn resolve_aida_exe() -> std::path::PathBuf {
     // Fall back to PATH search. Either current_exe() failed, or the
     // resolved path no longer points at an existing file.
     std::path::PathBuf::from("aida")
+}
+
+/// STORY-361: management commands for the MCP coordination surface.
+fn handle_mcp_command(cmd: &McpCommand) -> Result<()> {
+    match cmd {
+        McpCommand::RegisterAgent { name, print, force } => {
+            register_mcp_agent(name, *print, *force)
+        }
+    }
+}
+
+/// STORY-361: write (or print) a `.mcp.json` entry that points an MCP-speaking
+/// agent at this project's AIDA server.
+///
+/// The entry runs `aida mcp-serve` over stdio (Anthropic MCP spec — every
+/// MCP-speaking agent supports stdio transport). The printed `serverUrl` is
+/// `stdio://aida` for now; cross-machine transport (HTTP/SSE) is deferred to a
+/// follow-up SPIKE per STORY-361's acceptance.
+fn register_mcp_agent(name: &str, print_only: bool, force: bool) -> Result<()> {
+    let aida_exe = resolve_aida_exe();
+    let entry = serde_json::json!({
+        "command": aida_exe.to_string_lossy(),
+        "args": ["mcp-serve"],
+        "description": "AIDA — spec graph + coordination surface (STORY-361)"
+    });
+    let server_url = "stdio://aida";
+
+    if print_only {
+        println!("# AIDA MCP server registration");
+        println!();
+        println!("Name:       {}", name);
+        println!("Server URL: {}", server_url);
+        println!();
+        println!("`.mcp.json` entry (add under `\"mcpServers\"`):");
+        println!();
+        let pretty = serde_json::json!({ name: entry });
+        println!("{}", serde_json::to_string_pretty(&pretty)?);
+        println!();
+        println!("Tools exposed:");
+        let descriptors = mcp::tool_descriptors();
+        if let Some(arr) = descriptors.as_array() {
+            for tool in arr {
+                let n = tool.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                let d = tool
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                println!("  - {:<22} {}", n, d);
+            }
+        }
+        return Ok(());
+    }
+
+    // Write/update .mcp.json in the project root.
+    let project_root = find_project_root()
+        .with_context(|| "not inside an AIDA project (no .aida/config.toml found)")?;
+    let path = project_root.join(".mcp.json");
+    let mut root: serde_json::Value = if path.exists() {
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading {}", path.display()))?;
+        serde_json::from_str(&body).with_context(|| format!("parsing {}", path.display()))?
+    } else {
+        serde_json::json!({})
+    };
+
+    let servers = root
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!(".mcp.json must be a JSON object"))?
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
+
+    let servers_obj = servers
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("mcpServers must be a JSON object"))?;
+
+    if servers_obj.contains_key(name) && !force {
+        anyhow::bail!(
+            "entry '{}' already exists in {} — pass --force to overwrite",
+            name,
+            path.display()
+        );
+    }
+
+    servers_obj.insert(name.to_string(), entry);
+    let body = serde_json::to_string_pretty(&root)?;
+    std::fs::write(&path, body)?;
+
+    println!(
+        "Registered MCP agent '{}' in {} ({})",
+        name,
+        path.display(),
+        server_url
+    );
+    println!("MCP-speaking agents (Codex, Cursor, etc.) can now call AIDA's 21 tools — see `aida mcp register-agent --print` for the full surface.");
+    Ok(())
 }
 
 #[cfg(test)]

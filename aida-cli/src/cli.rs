@@ -4068,6 +4068,15 @@ pub enum Command {
     #[clap(hide = true)]
     McpServe,
 
+    /// MCP server management commands (register agents, list tool surface).
+    ///
+    /// STORY-361: the AIDA MCP server's coordination tools are how non-
+    /// Claude-Code agents (Codex, Cursor, …) participate in AIDA drains.
+    /// `aida mcp register-agent` writes the AIDA server's entry into a
+    /// project's `.mcp.json` so an MCP-speaking agent can connect.
+    #[clap(subcommand, hide = true)]
+    Mcp(McpCommand),
+
     /// Launch the AIDA TUI — a terminal-UI shell that PTY-hosts Claude
     /// Code sessions (EPIC-26).
     ///
@@ -4575,6 +4584,30 @@ pub enum GitHubCommand {
         /// Create default AIDA labels if missing
         #[clap(long)]
         create_missing: bool,
+    },
+}
+
+/// MCP server management.
+// trace:STORY-361 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum McpCommand {
+    /// Register the AIDA MCP server in `.mcp.json` so MCP-speaking agents
+    /// (Codex, Cursor, …) can call its coordination tools (STORY-361).
+    ///
+    /// For local single-machine use the entry runs `aida mcp-serve` over
+    /// stdio. Cross-machine MCP is deferred to a follow-up SPIKE; the
+    /// printed URL is `stdio://aida` so configs can switch transport later.
+    RegisterAgent {
+        /// Name to register the AIDA server under (default: "aida").
+        #[clap(long, default_value = "aida")]
+        name: String,
+        /// Print the rendered config and tool surface to stdout instead of
+        /// writing `.mcp.json`.
+        #[clap(long)]
+        print: bool,
+        /// Overwrite an existing entry with the same name.
+        #[clap(long)]
+        force: bool,
     },
 }
 
