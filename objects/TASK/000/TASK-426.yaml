@@ -1,0 +1,29 @@
+id: 019e4895-9942-7c31-a301-ed5392a43c27
+spec_id: TASK-426
+agreed_id: TASK-426
+title: headless_tee env-var tests share global state — comment is misleading
+description: |-
+  The three `from_env_and_flag_*` tests in `aida-cli/src/headless_tee.rs` (lines 628-650) all mutate the same global env var `AIDA_TEE_HEADLESS` via `std::env::set_var` / `remove_var`.
+
+  The `// SAFETY:` comment at line 631 says "use a unique var name to avoid stepping on parallel tests" — but they all use the SAME var name. Today the tests pass because each is <1ms and Rust's parallel scheduling happens to interleave them serially, but this is latent flake risk: a future test that holds `AIDA_TEE_HEADLESS` set for longer would race with these.
+
+  Two clean fixes:
+  - Serialize the three tests via a `Mutex<()>` guard or `#[serial]` (`serial_test` crate), or
+  - Refactor `from_env_and_flag` to accept the env-var value as a parameter (testable without global mutation), keeping a thin wrapper that reads from `std::env::var` for production.
+
+  Either way, fix the misleading comment.
+
+  Raised in review of PR-143: https://github.com/joemooney/aida/pull/143#issuecomment-4504523245
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T03:30:24.194068609Z
+modified_at: 2026-05-21T03:30:24.194068609Z
+req_type: Task
+tags:
+- env-vars
+- from-review:PR-143
+- headless-tee
+- severity:cosmetic
+- tests
