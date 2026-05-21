@@ -3139,6 +3139,34 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         None => req.req_type.default_prefix().to_string(),
                     };
 
+                    // TASK-281: auto-claim a fresh block before dispensing when
+                    // aggregate remaining drops below the configured threshold.
+                    // Skips when auto-claim is disabled, when there's no active
+                    // block yet (bootstrap is owned by `aida node acquire`), and
+                    // when we're still above threshold. A push failure is a
+                    // soft failure — the existing block still has SOME IDs, so
+                    // continue with the dispense rather than aborting the add.
+                    // trace:TASK-281 | ai:claude
+                    match ensure_block_capacity(store_path, &project_dir, &node_id, &type_prefix) {
+                        Ok(Some(outcome)) => {
+                            eprintln!(
+                                "{} Auto-claimed {} (threshold crossed: {} remaining → {})",
+                                "ℹ".cyan(),
+                                outcome.label,
+                                outcome.previous_remaining,
+                                outcome.new_remaining,
+                            );
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            eprintln!(
+                                "{} auto-claim failed ({}) — continuing with existing block",
+                                "Warning:".yellow().bold(),
+                                e
+                            );
+                        }
+                    }
+
                     if let Ok(mut registry) = aida_core::BlockRegistry::load(&blocks_path) {
                         match registry.find_active_block_or_global(&node_id, &type_prefix) {
                             None => {
@@ -5208,7 +5236,17 @@ fn handle_init_distributed_worktree(
          #                          → FR-1, BUG-1, EPIC-1, ... each type starts fresh\n\
          [id_format]\n\
          policy = \"blocks-then-fallback\"\n\
-         counter_scope = \"global\"\n",
+         counter_scope = \"global\"\n\
+         \n\
+         # trace:TASK-281 | ai:claude\n\
+         # Auto-claim a fresh block when aggregate remaining IDs drop below\n\
+         # threshold. On by default (threshold 20, size 100). Opt out with:\n\
+         #   [block_allocation]\n\
+         #   auto_claim = false\n\
+         # Per-type override (e.g. larger BUG blocks):\n\
+         #   [block_allocation.bug]\n\
+         #   auto_claim_threshold = 50\n\
+         #   auto_claim_size = 200\n",
         worktree_dir, branch_name
     );
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
@@ -5336,7 +5374,17 @@ fn handle_init_post_clone(
          #                          → FR-1, BUG-1, EPIC-1, ... each type starts fresh\n\
          [id_format]\n\
          policy = \"blocks-then-fallback\"\n\
-         counter_scope = \"global\"\n",
+         counter_scope = \"global\"\n\
+         \n\
+         # trace:TASK-281 | ai:claude\n\
+         # Auto-claim a fresh block when aggregate remaining IDs drop below\n\
+         # threshold. On by default (threshold 20, size 100). Opt out with:\n\
+         #   [block_allocation]\n\
+         #   auto_claim = false\n\
+         # Per-type override (e.g. larger BUG blocks):\n\
+         #   [block_allocation.bug]\n\
+         #   auto_claim_threshold = 50\n\
+         #   auto_claim_size = 200\n",
         worktree_dir, branch_name
     );
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
@@ -5674,7 +5722,17 @@ fn handle_init_distributed_sibling(
          #   blocks-then-fallback — try block first; fall through silently (default)\n\
          #   blocks-only          — error if no block is allocated for the type\n\
          [id_format]\n\
-         policy = \"blocks-then-fallback\"\n";
+         policy = \"blocks-then-fallback\"\n\
+         \n\
+         # trace:TASK-281 | ai:claude\n\
+         # Auto-claim a fresh block when aggregate remaining IDs drop below\n\
+         # threshold. On by default (threshold 20, size 100). Opt out with:\n\
+         #   [block_allocation]\n\
+         #   auto_claim = false\n\
+         # Per-type override (e.g. larger BUG blocks):\n\
+         #   [block_allocation.bug]\n\
+         #   auto_claim_threshold = 50\n\
+         #   auto_claim_size = 200\n";
     std::fs::write(aida_dir.join("config.toml"), config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
@@ -8722,6 +8780,20 @@ fn auto_allocate_initial_blocks_with_scope(
     Ok(allocated)
 }
 
+/// Why a block is being claimed — controls the idempotency guard and the
+/// commit message in `auto_allocate_block_inner`.
+///
+/// trace:TASK-281 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BlockClaimReason {
+    /// Initial allocation on `aida node acquire` — idempotent. Returns
+    /// None if an active block already exists for this (node, type).
+    OnAcquire,
+    /// Refill on auto-claim threshold cross — explicitly claims another
+    /// block alongside any existing active block.
+    OnThresholdCross,
+}
+
 /// Like `auto_allocate_block_for_type` but with an explicit size — used
 /// by the Global counter-scope path which wants a larger shared block.
 /// trace:FR-271 | ai:claude
@@ -8733,7 +8805,15 @@ fn auto_allocate_block_with_size(
     type_prefix: &str,
     size: u32,
 ) -> Result<Option<String>> {
-    auto_allocate_block_inner(store_path, node_id, hn, email, type_prefix, size)
+    auto_allocate_block_inner(
+        store_path,
+        node_id,
+        hn,
+        email,
+        type_prefix,
+        size,
+        BlockClaimReason::OnAcquire,
+    )
 }
 
 /// Allocate a single block for the given (node_id, type_prefix) if one
@@ -8747,7 +8827,15 @@ fn auto_allocate_block_for_type(
     email: Option<&str>,
     type_prefix: &str,
 ) -> Result<Option<String>> {
-    auto_allocate_block_inner(store_path, node_id, hn, email, type_prefix, 100)
+    auto_allocate_block_inner(
+        store_path,
+        node_id,
+        hn,
+        email,
+        type_prefix,
+        100,
+        BlockClaimReason::OnAcquire,
+    )
 }
 
 /// Shared CAS-loop allocator. Size differs by caller: per-type defaults
@@ -8755,7 +8843,14 @@ fn auto_allocate_block_for_type(
 /// is preserved verbatim so existing user-facing output looks unchanged
 /// under per-type, and the global label reads as `*-1..1000` (a clear
 /// visual signal that this is the shared block).
+///
+/// `reason = OnAcquire` skips when an active block already exists (the
+/// init-time idempotency contract). `reason = OnThresholdCross` always
+/// claims a fresh block alongside any existing ones (the TASK-281 auto-
+/// claim refill).
+///
 /// trace:FR-271 | ai:claude
+/// trace:TASK-281 | ai:claude
 fn auto_allocate_block_inner(
     store_path: &std::path::Path,
     node_id: &str,
@@ -8763,6 +8858,7 @@ fn auto_allocate_block_inner(
     email: Option<&str>,
     type_prefix: &str,
     size: u32,
+    reason: BlockClaimReason,
 ) -> Result<Option<String>> {
     use aida_core::BlockRegistry;
 
@@ -8785,7 +8881,9 @@ fn auto_allocate_block_inner(
         }
 
         let mut registry = BlockRegistry::load(&blocks_path)?;
-        if registry.find_active_block(node_id, type_prefix).is_some() {
+        if reason == BlockClaimReason::OnAcquire
+            && registry.find_active_block(node_id, type_prefix).is_some()
+        {
             return Ok(None);
         }
 
@@ -8800,14 +8898,18 @@ fn auto_allocate_block_inner(
         );
         registry.save(&blocks_path)?;
 
-        aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
-        aida_core::git_ops::commit(
-            store_path,
-            &format!(
+        let commit_subject = match reason {
+            BlockClaimReason::OnAcquire => format!(
                 "chore(registry): auto-allocate {}-{}..{} for node {} on acquire",
                 type_prefix, block.range_start, block.range_end, node_id
             ),
-        )?;
+            BlockClaimReason::OnThresholdCross => format!(
+                "chore(registry): auto-claim {}-{}..{} for node {} on threshold cross",
+                type_prefix, block.range_start, block.range_end, node_id
+            ),
+        };
+        aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
+        aida_core::git_ops::commit(store_path, &commit_subject)?;
 
         if local_only {
             return Ok(Some(format!(
@@ -8840,6 +8942,231 @@ fn auto_allocate_block_inner(
         type_prefix,
         max_retries
     );
+}
+
+/// Read the `[block_allocation]` section (and any `[block_allocation.<type>]`
+/// subsections) from `.aida/config.toml`. Returns the project's auto-claim
+/// defaults when the file or section is absent.
+///
+/// trace:TASK-281 | ai:claude
+fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::BlockAllocationConfig {
+    let config_path = project_dir.join(".aida").join("config.toml");
+    let Ok(content) = std::fs::read_to_string(&config_path) else {
+        return aida_core::BlockAllocationConfig::default();
+    };
+    let Ok(value) = content.parse::<toml::Value>() else {
+        return aida_core::BlockAllocationConfig::default();
+    };
+    let Some(section) = value.get("block_allocation").and_then(|v| v.as_table()) else {
+        return aida_core::BlockAllocationConfig::default();
+    };
+
+    let mut cfg = aida_core::BlockAllocationConfig::default();
+    if let Some(b) = section.get("auto_claim").and_then(|v| v.as_bool()) {
+        cfg.auto_claim = b;
+    }
+    for (key, subval) in section {
+        let Some(sub) = subval.as_table() else {
+            continue;
+        };
+        let mut tcfg = aida_core::BlockAllocationTypeConfig::default();
+        if let Some(b) = sub.get("auto_claim").and_then(|v| v.as_bool()) {
+            tcfg.auto_claim = Some(b);
+        }
+        if let Some(n) = sub.get("auto_claim_threshold").and_then(|v| v.as_integer()) {
+            if n >= 0 {
+                tcfg.auto_claim_threshold = Some(n as u32);
+            }
+        }
+        if let Some(n) = sub.get("auto_claim_size").and_then(|v| v.as_integer()) {
+            if n > 0 {
+                tcfg.auto_claim_size = Some(n as u32);
+            }
+        }
+        cfg.per_type.insert(key.to_ascii_lowercase(), tcfg);
+    }
+    cfg
+}
+
+/// Outcome of a successful auto-claim — used by `add_requirement_cli` to
+/// print the one-line info notice ("Auto-claimed BUG-517..616 (threshold
+/// crossed: 18 remaining → 118)"). `previous_remaining` is the aggregate
+/// before the claim; `new_remaining` is the aggregate after.
+/// trace:TASK-281 | ai:claude
+#[derive(Debug, Clone)]
+struct AutoClaimOutcome {
+    label: String,
+    previous_remaining: u32,
+    new_remaining: u32,
+}
+
+/// Ensure the (node, type) pair has at least `cfg.threshold_for(type)`
+/// IDs remaining; if not (and auto-claim is enabled per config), claim a
+/// fresh block of `cfg.size_for(type)`. Scope-aware: under
+/// `IdCounterScope::Global` the check + claim target the shared `*` block.
+///
+/// Returns:
+/// - `Ok(None)` — no action taken (auto-claim disabled OR above threshold).
+/// - `Ok(Some(outcome))` — a fresh block was claimed; caller should print
+///   the info notice.
+/// - `Err(e)` — the claim's push failed after retries. Callers should treat
+///   this as a soft failure (warn, fall through to dispense from existing
+///   block) per TASK-281 acceptance: "Network failure during claim: surface
+///   clear error, fall back to existing block".
+///
+/// trace:TASK-281 | ai:claude
+fn ensure_block_capacity(
+    store_path: &std::path::Path,
+    project_dir: &std::path::Path,
+    node_id: &str,
+    type_prefix: &str,
+) -> Result<Option<AutoClaimOutcome>> {
+    use aida_core::BlockRegistry;
+
+    let cfg = read_block_allocation_config(project_dir);
+    let scope = read_id_counter_scope(project_dir);
+
+    // Under Global scope the shared `*` block backs every type; check and
+    // claim against it. The user's per-type config sections still drive
+    // size/threshold when they explicitly configure `[block_allocation."*"]`.
+    let effective_prefix = if scope == aida_core::IdCounterScope::Global {
+        aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX.to_string()
+    } else {
+        type_prefix.to_uppercase()
+    };
+
+    if !cfg.is_enabled_for(&effective_prefix) {
+        return Ok(None);
+    }
+
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
+
+    // No active block for this (node, type) at all? Don't auto-claim here —
+    // that path is owned by `auto_allocate_initial_blocks` (on `aida node
+    // acquire`) and the explicit `aida db block claim` command. Auto-claim
+    // is for refilling capacity that's running low, not bootstrap.
+    if registry
+        .find_active_block_or_global(node_id, &effective_prefix)
+        .is_none()
+    {
+        return Ok(None);
+    }
+
+    let previous_remaining = registry.aggregate_remaining(node_id, &effective_prefix);
+    let threshold = cfg.threshold_for(&effective_prefix);
+    if previous_remaining >= threshold {
+        return Ok(None);
+    }
+
+    // Crossed the threshold — claim a fresh block of the configured size.
+    // Use OnThresholdCross so the inner allocator skips its init-time
+    // idempotency guard (which would otherwise refuse because we already
+    // have an active block — the whole point of this call is to add a
+    // second one).
+    let size = cfg.size_for(&effective_prefix);
+    let email = aida_core::git_ops::git_config_get("user.email").ok();
+    let hn = hostname();
+    let label = auto_allocate_block_inner(
+        store_path,
+        node_id,
+        &hn,
+        email.as_deref(),
+        &effective_prefix,
+        size,
+        BlockClaimReason::OnThresholdCross,
+    )?
+    .ok_or_else(|| anyhow::anyhow!("inner allocator returned None on OnThresholdCross"))?;
+
+    // Re-load to compute new_remaining off the persisted registry —
+    // a single source of truth, no in-memory math.
+    let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
+    let new_remaining = registry.aggregate_remaining(node_id, &effective_prefix);
+
+    Ok(Some(AutoClaimOutcome {
+        label,
+        previous_remaining,
+        new_remaining,
+    }))
+}
+
+#[cfg(test)]
+mod block_allocation_reader_tests {
+    use super::*;
+
+    fn write_config(dir: &std::path::Path, body: &str) {
+        std::fs::create_dir_all(dir.join(".aida")).unwrap();
+        std::fs::write(dir.join(".aida").join("config.toml"), body).unwrap();
+    }
+
+    #[test]
+    fn read_block_allocation_config_returns_defaults_when_file_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = read_block_allocation_config(tmp.path());
+        assert!(cfg.is_enabled_for("BUG"));
+        assert_eq!(cfg.threshold_for("BUG"), 20);
+        assert_eq!(cfg.size_for("BUG"), 100);
+    }
+
+    #[test]
+    fn read_block_allocation_config_returns_defaults_when_section_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[id_format]\npolicy = \"blocks-then-fallback\"\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert!(cfg.is_enabled_for("BUG"));
+        assert_eq!(cfg.threshold_for("TASK"), 20);
+    }
+
+    #[test]
+    fn read_block_allocation_config_parses_global_opt_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[block_allocation]\nauto_claim = false\n");
+        let cfg = read_block_allocation_config(tmp.path());
+        assert!(!cfg.is_enabled_for("BUG"));
+        assert!(!cfg.is_enabled_for("TASK"));
+    }
+
+    #[test]
+    fn read_block_allocation_config_parses_per_type_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation]\nauto_claim = true\n\n\
+             [block_allocation.bug]\nauto_claim_threshold = 50\nauto_claim_size = 200\n\n\
+             [block_allocation.story]\nauto_claim = false\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert!(cfg.is_enabled_for("BUG"));
+        assert_eq!(cfg.threshold_for("BUG"), 50);
+        assert_eq!(cfg.size_for("BUG"), 200);
+        assert!(!cfg.is_enabled_for("STORY"));
+        // Untouched types still use built-in defaults.
+        assert!(cfg.is_enabled_for("TASK"));
+        assert_eq!(cfg.threshold_for("TASK"), 20);
+    }
+
+    #[test]
+    fn read_block_allocation_config_handles_malformed_toml_gracefully() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "not [valid toml at all\n");
+        let cfg = read_block_allocation_config(tmp.path());
+        // Should not panic — falls back to defaults.
+        assert!(cfg.is_enabled_for("BUG"));
+    }
+
+    #[test]
+    fn read_block_allocation_config_ignores_negative_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation.bug]\nauto_claim_threshold = -5\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(cfg.threshold_for("BUG"), 20);
+    }
 }
 
 /// Truncate a string for table display, with an ellipsis when shortened.
