@@ -16,15 +16,19 @@ description: |
 
   Raised by the implementer while working TASK-390.
   Branch: task-390  ·  Commit: pending  (PR link added on merge)
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T17:18:50.226672965Z
-modified_at: 2026-05-21T07:33:20.504660123Z
+modified_at: 2026-05-21T07:41:20.336297531Z
 req_type: Task
 tags:
 - from-implementer:TASK-390
 - kind:design-choice
 - severity:minor
 - template-shape
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-21T07:41:20.336297531Z
+  implemented_by: joe
