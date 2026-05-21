@@ -61,12 +61,12 @@ description: |-
   - TASK-405 — PR-only orchestrator invocation; would obviate manual merge for the normal flow but recovery flow still hits this.
   - TASK-402 — resume-after-failure UX cluster; this is the *next* recovery friction after that one.
   - Recovery narrative for TASK-403 writeup — this is one of the rough edges the writeup will need to acknowledge or work around.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:51:47.676266249Z
-modified_at: 2026-05-21T17:23:04.963024134Z
+modified_at: 2026-05-21T17:27:00.114262019Z
 req_type: Task
 tags:
 - cli-ux
@@ -104,3 +104,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-21T17:19:05.070048078Z
   implemented_by: joe
+  completed_at: 2026-05-21T17:27:00.114262019Z
+  completion_sha: b7bd2f0002fa78aafbb464f3c75dd573bb247f15
