@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T01:49:24.951947371Z
-modified_at: 2026-05-21T07:18:35.420144764Z
+modified_at: 2026-05-21T07:25:00.410409524Z
 req_type: Task
 tags:
 - from-implementer:BUG-269
@@ -42,3 +42,15 @@ comments:
   content: 'Investigated 2026-05-20 evening. Confirmed real: /aida-pr Step 3 requires status Done|Completed; BUG-269''s gate requires PR open before queue-done; cycle. BUG-110''s headless implementer found the workaround empirically: set status via `aida edit --status done` (bypasses BUG-269 — gate is on `queue done` only), then /aida-pr passes, then `queue done` after PR opens. Drain currently in progress is shipping despite friction — not an emergency. Recommend fix (A) /aida-pr Step 3 accepts In Progress when AIDA_AUTO_COMPLETE is set, OR (C) document the workaround in /aida-pickup as the intentional headless path. (B) relaxing BUG-269''s gate reopens the failure mode BUG-269 just closed. Bumped medium → high for morning pickup.'
   created_at: 2026-05-21T05:01:04.537181300Z
   modified_at: 2026-05-21T05:01:04.537181300Z
+- id: 019e496c-627a-71f0-b18a-81e537ad06d4
+  author: joe
+  content: |-
+    Implemented via PR (commit ebcb085c):
+
+    - Added an explicit exception block in `/aida-pr` Step 3 of the master skill template (`aida-core/templates/skills/aida-pr.md`): under corroborated `aida orchestrator status = orchestrated`, `In Progress` is treated as a green-light state for covered specs. The BUG-269 gate on `aida queue done` still fires post-PR, so the no-committed-but-unshipped invariant is preserved.
+    - Followed the BUG-233 / BUG-237 corroboration pattern — never the bare `$AIDA_AUTO_COMPLETE` env var. `Rejected` and `not found` stay red errors; `Approved` (never-picked-up) stays a warning.
+
+    Test status: 6/6 BUG-269 precheck unit tests green; release build clean.
+    Self-test: this very PR exercises the new code path — TASK-422 was In Progress when `/aida-pr` ran in the orchestrator phase-1 implementer.
+  created_at: 2026-05-21T07:25:00.410409524Z
+  modified_at: 2026-05-21T07:25:00.410409524Z
