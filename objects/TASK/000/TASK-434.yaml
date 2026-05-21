@@ -1,0 +1,12 @@
+id: 019e4b7e-53a5-77f0-a6ab-e4193f51cadb
+spec_id: TASK-434
+agreed_id: TASK-434
+title: Add a `[orchestrator] retry_backoff_factor` knob so a project that wants
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T17:03:50.693627540Z
+modified_at: 2026-05-21T17:03:50.693627540Z
+req_type: Task
