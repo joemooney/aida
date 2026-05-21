@@ -87,6 +87,7 @@ mod tests {
         assert!(md.contains("## Discipline for AIDA-using sessions"));
         assert!(md.contains("docs/aida-discipline/README.md"));
         assert!(md.contains("docs/aida-discipline/advisor-role.md"));
+        assert!(md.contains("docs/aida-discipline/machinery-glossary.md"));
         // The change is additive — the AIDA conventions import still lands.
         assert!(md.contains(CLAUDE_AIDA_IMPORT));
         assert!(md.contains("## Project overview"));
@@ -177,9 +178,10 @@ them.
 
     /// The "Discipline for AIDA-using sessions" section appended to a
     /// scaffolded CLAUDE.md. Points at the `docs/aida-discipline/` pack that
-    /// `aida init` scaffolds alongside it — five short bullets so the model
+    /// `aida init` scaffolds alongside it — short bullets so the model
     /// sees the discipline pointers without this file duplicating them.
     /// trace:STORY-255 | ai:claude
+    /// trace:TASK-338 | ai:claude — added the machinery-glossary bullet
     fn discipline_section() -> &'static str {
         r#"
 
@@ -194,6 +196,10 @@ live in `docs/aida-discipline/` (scaffolded by `aida init`).
 - **Lifecycle words** — committed / pushed / merged / completed / released
   are distinct states; don't collapse them under "ship". See
   `docs/aida-discipline/lifecycle-vocabulary.md`.
+- **Machinery vocabulary** — orchestrator / phase / drain / lease / role /
+  scope / session / worktree / sentinel / batch / autonomy mode each have
+  one precise definition. See
+  `docs/aida-discipline/machinery-glossary.md`.
 - **Workflow patterns** — `/goal` prompts use real flags only; "next steps"
   UI splits into parallel-choice tables vs sequential-step lists. See
   `docs/aida-discipline/workflow-patterns.md`.
