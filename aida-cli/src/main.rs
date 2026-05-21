@@ -46210,7 +46210,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
         }
         // trace:EPIC-1-001 | ai:claude
-        QueueCommand::Done { id, user, yes } => {
+        QueueCommand::Done {
+            id,
+            user,
+            yes,
+            force,
+        } => {
             let user_id = get_user(user);
             let store = storage.load()?;
 
@@ -46230,6 +46235,48 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 .as_deref()
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
+
+            // BUG-269: refuse `queue done` when the branch carries
+            // committed-but-unshipped work with no open PR. Without this
+            // gate, a `--zen` or interactive session that forgot to run
+            // `/aida-pr` leaves the spec Done locally and unmergeable —
+            // the orchestrator (or a watching human) has no way to advance
+            // it. The BUG-232 hint nudges; this *enforces*.
+            //
+            // Skip when `--force` (escape hatch for the rare case where
+            // the spec shipped via a different already-merged branch) and
+            // when the BUG-232 hint detector itself can't decide (gh
+            // missing / unauthenticated / network failure) — proceeding
+            // is the safe default when we can't prove "no PR." Likewise
+            // skip when commits_ahead resolution fails (None) so a missing
+            // origin/main never blocks a legitimate done.
+            // trace:BUG-269 | ai:claude
+            if !*force {
+                if let Ok(project_root) = find_project_root() {
+                    if let Some(branch) = current_branch_at(&project_root) {
+                        let commits_ahead = branch_commits_ahead_main(&project_root, &branch);
+                        if commits_ahead.unwrap_or(0) > 0 {
+                            let pr_state = match detect_open_pr_for_branch(&project_root, &branch) {
+                                PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
+                                PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
+                                PrLookup::GhMissing
+                                | PrLookup::GhFailed(_)
+                                | PrLookup::GhUnreachable(_) => workflow_hints::PrState::Unknown,
+                            };
+                            if let Some(lines) = workflow_hints::queue_done_precheck_error(
+                                display_id,
+                                commits_ahead,
+                                pr_state,
+                            ) {
+                                for line in &lines {
+                                    eprintln!("{}", line);
+                                }
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                }
+            }
 
             if !yes {
                 eprintln!(

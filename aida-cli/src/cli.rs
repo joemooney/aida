@@ -2459,6 +2459,11 @@ pub enum QueueCommand {
         /// Skip confirmation
         #[clap(long, short = 'y')]
         yes: bool,
+        // BUG-269: bypass the commits-without-PR pre-check. Use when the
+        // spec was implemented on a different branch that's already merged,
+        // so the local branch has no PR by design.
+        #[clap(long)]
+        force: bool,
     },
     /// Pick up a queued item (or scope-cluster of queued items) and launch
     /// claude in a fresh session worktree, with the role + skill routed

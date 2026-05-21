@@ -373,6 +373,18 @@ PR is committed-but-unmergeable. When the branch has commits ahead of main
 and no open PR, `queue done` now emits a workflow hint pointing at
 `/aida-pr` — don't end the session until the PR is open. trace:BUG-232
 
+**BUG-269**: `aida queue done` now *refuses* (exit 1) when the branch has
+commits ahead of `origin/main` and `gh` confirms no open PR — the hint is
+hardened into a gate so a session can't end with the spec marked Done
+locally and the work unshipped. Open the PR first (Step 5c invokes
+`/aida-pr` for exactly this reason), then re-run `aida queue done`. The
+escape hatch is `aida queue done <spec> --force`, intended for the rare
+case where the spec was implemented on a different branch already merged
+(so the local branch has no PR by design). When `gh` is missing /
+unauthenticated / unreachable, the gate falls through (it never asserts
+"no PR" on guesswork); when the branch has no commits ahead (a no-op or
+docs-only pickup), the gate also falls through. trace:BUG-269
+
 ### Step 5b: File conversational flags as draft TASKs (headless drain) — trace:STORY-285
 
 Under a headless `--no-human` drain there is no human reading the
