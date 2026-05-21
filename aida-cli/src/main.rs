@@ -4739,14 +4739,6 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
     Ok(())
 }
 
-fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-    }
-}
-
 /// String form of [`is_terminal_status`] — used by `aida list` / `aida
 /// history` to hide the archive by default (TASK-64). Case-insensitive;
 /// tolerates display vs storage casing. Companion to the enum version
@@ -5075,8 +5067,7 @@ fn handle_init_distributed_worktree(
     // node-acquire / db-sync work without a manual `git push -u`. Skipped
     // silently when there's no origin (single-machine projects) or when
     // the push fails (offline, auth, etc.) — failure isn't fatal here.
-    // trace:BUG-23 | ai:claude
-    let mut origin_pushed = false;
+    // trace:BUG-23 trace:TASK-421 | ai:claude
     if git_ops::has_remote(&cwd, "origin") {
         let push_result = std::process::Command::new("git")
             .arg("-C")
@@ -5085,7 +5076,6 @@ fn handle_init_distributed_worktree(
             .output();
         match push_result {
             Ok(out) if out.status.success() => {
-                origin_pushed = true;
                 println!(
                     "  {} pushed orphan branch to origin/{}",
                     "Done".green(),
