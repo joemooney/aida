@@ -86,12 +86,12 @@ description: |-
   2026-05-17 user observation when about to queue PR-65 (web /ultraplan STORY-278 output) for headless review. The session.rs overlap between PR-65 and the just-merged PR-66 (TASK-303) means a rebase is required before review, but the recipe is 6 manual git commands. User asked: *"have we any plans to make that an aida command?"* — STORY-281 already proposed the CLI surface; this TASK splits it out so it ships independently of the orchestrator integration.
 
   Decision rationale: ship the CLI first, use it manually for a stretch, gather evidence about which scenarios need the orchestrator-level enforcement, then complete STORY-281 with empirical defaults.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:25:55.842080480Z
-modified_at: 2026-05-17T18:51:08.109084780Z
+modified_at: 2026-05-21T05:06:55.535476600Z
 req_type: Task
 tags:
 - aida-pr
