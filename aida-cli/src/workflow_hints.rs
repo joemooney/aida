@@ -229,6 +229,51 @@ fn queue_drained_hint_lines(
     vec![header, body]
 }
 
+/// BUG-269: pure decision for the `aida queue done` pre-check. Returns
+/// `Some(error_lines)` when the call must be refused (committed-but-
+/// unshipped work with no open PR), `None` to proceed.
+///
+/// The check fires only when **both** conditions hold: the branch has
+/// commits ahead of `origin/main` AND `gh` has *confirmed* no open PR
+/// (`PrState::Absent`). A `PrState::Unknown` (gh missing / unauthenticated
+/// / network failure) proceeds — we never assert "no PR" on guesswork, so
+/// the precheck cannot block legitimate `queue done` calls when the
+/// detector itself is broken.
+///
+/// `display_id` is the short id (e.g. `BUG-249`) used verbatim in the
+/// suggested follow-up commands; that's what the user typed and what they
+/// want to re-type.
+/// trace:BUG-269 | ai:claude
+pub fn queue_done_precheck_error(
+    display_id: &str,
+    branch_commits_ahead: Option<u32>,
+    pr: PrState,
+) -> Option<Vec<String>> {
+    let commits = branch_commits_ahead.unwrap_or(0);
+    if commits == 0 {
+        return None;
+    }
+    if !matches!(pr, PrState::Absent) {
+        return None;
+    }
+    let summary = format!(
+        "✗ {} has {} local commit{} but no open PR.",
+        display_id,
+        commits,
+        if commits == 1 { "" } else { "s" }
+    );
+    let action = format!(
+        "Run `/aida-pr` first, then re-run `aida queue done {}`.",
+        display_id
+    );
+    let bypass = format!(
+        "(If the spec was implemented on a different branch already merged, \
+         pass `--force` to bypass: `aida queue done {} --force`.)",
+        display_id
+    );
+    Some(vec![summary, action, bypass])
+}
+
 /// Hint after `queue done` (or any other op that just emptied the queue
 /// for the active role+scope). Caller is responsible for verifying the
 /// queue is actually empty before calling — we trust the caller.
@@ -543,5 +588,56 @@ mod tests {
         assert!(!lines[0].contains("commit on this branch"));
         assert!(lines[1].contains("Open a PR with `/aida-pr`"));
         assert!(!lines[1].contains("⚠"));
+    }
+
+    // BUG-269: simulates the BUG-249 scenario — branch has commits ahead
+    // of main and `gh` confirmed no open PR. The pre-check refuses with an
+    // actionable error naming the spec, the next command, and the bypass.
+    #[test]
+    fn precheck_refuses_when_commits_ahead_and_no_pr() {
+        let result = queue_done_precheck_error("BUG-249", Some(1), PrState::Absent);
+        let lines = result.expect("expected refusal");
+        assert!(lines[0].contains("✗ BUG-249 has 1 local commit but no open PR."));
+        assert!(lines[1].contains("Run `/aida-pr` first"));
+        assert!(lines[1].contains("aida queue done BUG-249"));
+        assert!(lines[2].contains("--force"));
+        assert!(lines[2].contains("aida queue done BUG-249 --force"));
+    }
+
+    // Plural "commits" when more than one is ahead.
+    #[test]
+    fn precheck_pluralizes_commits() {
+        let lines = queue_done_precheck_error("STORY-42", Some(3), PrState::Absent).unwrap();
+        assert!(lines[0].contains("3 local commits but no open PR"));
+    }
+
+    // BUG-269 happy path: an open PR already references the spec.
+    #[test]
+    fn precheck_proceeds_when_pr_open() {
+        let result = queue_done_precheck_error("BUG-249", Some(1), PrState::Open(42));
+        assert!(result.is_none());
+    }
+
+    // No commits ahead → spec was a no-op or already shipped via another
+    // branch — proceed silently (existing behavior).
+    #[test]
+    fn precheck_proceeds_when_no_commits_ahead() {
+        let result = queue_done_precheck_error("BUG-249", Some(0), PrState::Absent);
+        assert!(result.is_none());
+    }
+
+    // `gh` unreachable / missing / unauthenticated → cannot assert no-PR
+    // on guesswork. Proceed rather than risk blocking a legitimate done.
+    #[test]
+    fn precheck_proceeds_when_pr_state_unknown() {
+        let result = queue_done_precheck_error("BUG-249", Some(2), PrState::Unknown);
+        assert!(result.is_none());
+    }
+
+    // Commits-ahead unknown (helper returned None) → proceed silently.
+    #[test]
+    fn precheck_proceeds_when_commits_unknown() {
+        let result = queue_done_precheck_error("BUG-249", None, PrState::Absent);
+        assert!(result.is_none());
     }
 }
