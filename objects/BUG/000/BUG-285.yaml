@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:22:09.162880518Z
-modified_at: 2026-05-21T15:05:25.423581743Z
+modified_at: 2026-05-21T15:12:16.476007880Z
 req_type: Bug
 tags:
 - bug-269-regression
@@ -77,3 +77,18 @@ comments:
     Fix landing: (a) regression test that asserts the gate fires *with* `--yes`, (b) add `--skip-pr-check` with an explicit logged bypass message (also have `--force` log when it bypasses, eliminating the silent bypass), (c) strengthen the refusal text so it parses as terminal even when an LLM reads it through `2>&1 | tail`. The model-side guardrails (skill-template language to forbid composing a closing message when queue-done refused) belong in a followup. trace:BUG-285 | ai:claude
   created_at: 2026-05-21T15:05:25.423581743Z
   modified_at: 2026-05-21T15:05:25.423581743Z
+- id: 019e4b18-2e5c-76b2-94f0-aba7bff45344
+  author: joe
+  content: |-
+    Implemented via commit 836f3238 (PR pending):
+
+    - Added `--skip-pr-check` flag (intent-named bypass alongside legacy `--force`); both bypasses now emit a `warning:` line naming the flag + spec, eliminating the silent `--force` bypass.
+    - Strengthened the gate's refusal message to lead with `error:` + explicit `(exit 1)` + `DO NOT exit this session` + `orchestrator will fail phase 1` so an LLM reading the message through `2>&1 | tail` parses it as terminal regardless of the masked exit code.
+    - Extracted the bypass decision into a pure helper `queue_done_should_bypass_pr_check(yes, force, skip_pr_check)`; the function's signature pins the `--yes does NOT bypass` invariant structurally — any regression that wires `--yes` into the bypass path fails `bypass_with_yes_only`.
+    - Added 5 unit tests: the `--yes`-alone invariant (BUG-285 acceptance), `--force` and `--skip-pr-check` each bypassing, both together, and a message-shape test pinning the load-bearing tokens for LLM consumers.
+
+    Test status: 920/920 aida-cli tests green; fmt clean.
+
+    Note: tonight's TASK-413 / TASK-416 headless-log inspection showed BUG-285's four hypothesized causes were all wrong — the BUG-269 gate was firing correctly. The real root cause was layered: (a) the implementer's `aida queue done <SPEC> [--yes] 2>&1 | tail -N` pipe masked the non-zero exit, and (b) the model treated the soft refusal text as a hint rather than a hard error. This commit addresses (b) substrate-side; the model-behavior guardrail (forbid composing a closing summary when queue-done exited non-zero) is a follow-up for the implementer skill template.
+  created_at: 2026-05-21T15:12:16.476007880Z
+  modified_at: 2026-05-21T15:12:16.476007880Z
