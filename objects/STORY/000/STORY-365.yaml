@@ -1,0 +1,19 @@
+id: 019e4854-cc44-7462-9932-3cf23d12a20c
+spec_id: STORY-365
+agreed_id: STORY-365
+title: Bidirectional substrate propagation — propagation:candidate-for-parent tag + promote/decline verbs (SPIKE-10 Track B)
+description: 'Per SPIKE-10 strategic doc, Gap 4 implementation: frontmatter tag `propagation: candidate-for-parent` on child memories. `aida advisor candidates --child <name>` lister; `aida advisor promote --candidate <id> --tag <target>` and `aida advisor decline --candidate <id> --reason <text>` actions. Governance: parent decides; child cannot write to parent pack directly. Audit-trail in `~/.aida/advisor-candidates.toml`. Lower priority — paired with sibling mentor story; file design now, implement when second project exists.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T02:19:37.412677248Z
+modified_at: 2026-05-21T02:19:37.412677248Z
+req_type: Story
+tags:
+- advisor
+- bidirectional
+- from-spike
+- governance
+- substrate-propagation
+- track-b
