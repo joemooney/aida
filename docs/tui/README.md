@@ -151,6 +151,32 @@ max_tabs   = 4          # soft cap on concurrently hosted sessions
 Missing file / section / keys fall back to the defaults — a config error
 never blocks launching the TUI.
 
+## Terminal-state safety
+
+The TUI puts the terminal into raw mode + the alternate screen, then
+hides the cursor. Three exit paths restore the terminal back to a sane
+state — cooked mode, main screen, cursor visible:
+
+- **Normal exit** (`prefix q`, `prefix d`, last session ending in a
+  `--no-recover` launch) — `TermGuard::drop` runs the restore sequence
+  on the way out of `aida_tui::run`.
+- **Panic** (a bug in the supervisor or a hosted child's drop chain) —
+  a panic hook chains in front of the default one so restore runs
+  *before* the backtrace prints (otherwise the trace scrolls past in
+  raw mode with no newlines).
+- **SIGTERM / SIGINT** — `kill <pid>` from another terminal, or `Ctrl-C`
+  at a parent shell that propagated through. A signal handler installed
+  at launch restores the terminal before the process dies. Windows
+  equivalents (`CTRL_C_EVENT`, `CTRL_BREAK_EVENT`) are covered by the
+  same handler. The three paths share a single atomic restore-gate, so
+  a Drop / panic / signal race ends in exactly one restore.
+
+**SIGKILL is the one case left.** Signal 9 is uncatchable by design —
+no handler runs, no Drop runs. If you `kill -9 <pid>` an `aida tui`
+process (or the kernel OOM-killer does it for you), the parent shell is
+left with cursor hidden and raw mode on. Recovery: `reset`, or
+`stty sane && tput cnorm`. trace:BUG-110
+
 ## Implementation
 
 The `aida-tui` workspace crate (`aida tui` dispatches into it before

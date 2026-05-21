@@ -26,3 +26,6 @@ uuid = { workspace = true }
 dirs = { workspace = true }
 # Local wall-clock timestamps for the overlay's activity log (STORY-133).
 chrono = { workspace = true }
+# Signal handler that restores the terminal before exit on SIGTERM/SIGINT
+# (Unix) and CTRL_C_EVENT/CTRL_BREAK_EVENT (Windows). BUG-110.
+ctrlc = { workspace = true }
