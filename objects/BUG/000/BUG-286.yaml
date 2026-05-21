@@ -1,0 +1,96 @@
+id: 019e4afa-8bd4-7cb3-839a-644ccf32c0bd
+spec_id: BUG-286
+agreed_id: BUG-286
+title: 'Orchestrator phases 3-6: retry transient gh/git network errors before classifying as failure'
+description: |-
+  ## Symptom
+
+  2026-05-21 ~02:45, manual \`gh pr merge 157 --squash --delete-branch\`:
+
+  \`\`\`
+  error connecting to api.github.com
+  check your internet connection or https://githubstatus.com
+  \`\`\`
+
+  Immediate retry succeeded. **The network blip was sub-second.** Under headless orchestrator phases 3-6, the same blip would have:
+  - Phase 3 (reviewer): \`gh pr comment\` fails → reviewer's verdict posting fails → reviewer-session reports failure → orchestrator stalls.
+  - Phase 4 (merge): \`gh pr merge\` fails → orchestrator stalls.
+  - Phase 5 (pull): \`git push\` or fetch fails → orchestrator stalls.
+
+  A stalled spec mid-drain costs ~5 minutes of morning recovery on a network blip that resolves in seconds.
+
+  ## Existing coverage
+
+  - **BUG-257** — phase-1 implementer session: transient gh-API errors during \`--watch-ci\` or pre-flight reads are classified inconclusive (resumable). ✓ Shipped.
+  - **BUG-266** — phase-1 implementer session: transient Anthropic 529 errors are classified inconclusive. ✓ Shipped.
+
+  **Gap:** the orchestrator's OWN gh/git invocations during phases 3-6 (not inside a Claude session — invoked directly by the orchestrator Rust code) don't have retry logic. A transient network blip during the orchestrator's \`gh pr merge\` is treated the same as a permanent failure.
+
+  ## Approach
+
+  Add a thin retry-with-backoff wrapper around the orchestrator's \`gh\` and \`git\` subprocess invocations during phases 3-6. Distinguish transient from permanent errors:
+
+  **Transient (retry):**
+  - \`error connecting to\`
+  - \`Could not resolve host\`
+  - \`Connection reset by peer\`
+  - \`Connection timed out\`
+  - HTTP 5xx responses
+  - \`SSL\` / \`TLS handshake\` failures
+
+  **Permanent (fail immediately, don't retry):**
+  - \`gh auth status\` failures (not signed in)
+  - HTTP 401 / 403 (auth)
+  - HTTP 404 (PR / repo doesn't exist)
+  - HTTP 422 (validation — e.g., \"PR already merged\")
+  - Malformed JSON parse errors
+  - Argument errors
+
+  Retry policy: **3 attempts with exponential backoff** (1s, 4s, 16s — total worst-case ~21s before giving up). Log each retry: \`gh pr merge: transient error (attempt 1/3) — retrying in 1s\`.
+
+  ## Acceptance
+
+  - New helper \`run_gh_with_retry()\` / \`run_git_with_retry()\` in \`aida-cli/src/auto_complete.rs\` (or a new \`network_retry.rs\` module).
+  - All orchestrator-side \`gh\` invocations in phases 3-6 go through it: phase 3 (\`gh pr comment\`, \`gh pr view\`), phase 4 (\`gh pr merge\`, \`gh pr ready\`), phase 5 (\`gh\` if any).
+  - All orchestrator-side \`git\` invocations that touch the network go through a parallel \`run_git_with_retry()\`.
+  - Transient-error patterns are a configurable allow-list (string-pattern matching), defaulted from the list above. Project-specific overrides via \`.aida/config.toml [orchestrator] transient_error_patterns = [...]\`.
+  - Retry events surface in the orchestrator's stdout (so the user inspecting a drain log sees \`(retry 1/3 — transient gh error)\`) AND in the drain-state file (so post-hoc analysis can correlate retries with API health).
+  - Unit tests: synthetic subprocess that fails N times then succeeds; assert retry count and final outcome.
+  - Integration test: spawn a fake gh that returns a transient-error pattern; assert orchestrator retries and proceeds.
+
+  ## Out of scope
+
+  - Retry logic for the headless Claude sessions' own gh invocations (those happen inside skill code; covered by BUG-257 in spirit, but the skill template would need its own retry — separate concern).
+  - Retry across phases (if phase 4 fails permanently, don't auto-resume from phase 1 — that's TASK-396 territory).
+  - Adaptive retry (longer backoff during widespread outages). Fixed 3-attempt policy is sufficient; the \"is the API broken\" question is for the orchestrator's final-classification logic.
+
+  ## Composes with
+
+  - **BUG-257** — gh-CLI transient errors during phase 1 (CI watch). This BUG is the parallel for phases 3-6.
+  - **BUG-266** — Anthropic 529 during phase 1. Same family; different leg.
+  - **BUG-285** — queue-done gate hole. Orthogonal; both are reliability fixes for the autonomy keystone.
+  - **STORY-384** — \`aida queue recover\` wizard. After this BUG ships, the wizard sees fewer stalled-mid-merge cases, simplifying its decision tree.
+
+  ## Origin
+
+  User report 2026-05-21 ~02:45: *\"gh pr merge 157 ... error connecting to api.github.com ... [retry succeeded immediately] ... so retry logic will be needed for this type of intermittent failure\"*
+
+  The user was doing manual recovery for TASK-416 when the network blip hit; recovery succeeded on retry. Under a headless overnight drain the same blip would have stalled phase 4 silently. The orchestrator's per-phase retry layer is load-bearing for unattended operation.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T14:39:54.324945961Z
+modified_at: 2026-05-21T14:39:54.324945961Z
+req_type: Bug
+tags:
+- from-user-friction
+- gh-cli
+- network
+- orchestrator
+- phase-3
+- phase-4
+- phase-5
+- resilience
+- retry
+- transient-error
