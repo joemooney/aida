@@ -6745,6 +6745,47 @@ fn is_terminal_status(status: &RequirementStatus) -> bool {
     )
 }
 
+/// BUG-249: validate that a `queue move` target is actually movable —
+/// distinguishing "not in the queue" from "in the queue but terminal".
+/// Pure function over `entries`; the handler builds the args from its
+/// already-resolved `req`/`entries`/`force` state.
+///
+/// Returns:
+///   - `Err` "is not in the queue" when the target isn't present at all.
+///   - `Err` "has terminal status (…) — pass --force …" when present but
+///     the spec is Completed/Rejected and `--force` wasn't given.
+///   - `Ok(())` otherwise.
+///
+/// Note: `queue_list(&user_id, /* include_completed */ true)` is the
+/// entries we want — terminal entries do linger in the queue file (they
+/// just aren't shown in the default `queue list` view), so the
+/// in-queue-but-terminal state is real and distinct from the missing-
+/// entry state.
+// trace:BUG-249 | ai:claude
+fn classify_queue_move_target(
+    target_id: uuid::Uuid,
+    target_display: &str,
+    target_status: &RequirementStatus,
+    entries: &[aida_core::QueueEntry],
+    force: bool,
+) -> Result<()> {
+    if !entries.iter().any(|e| e.requirement_id == target_id) {
+        anyhow::bail!(
+            "{} is not in the queue (run `aida queue add {}` first)",
+            target_display,
+            target_display
+        );
+    }
+    if is_terminal_status(target_status) && !force {
+        anyhow::bail!(
+            "{} has terminal status ({:?}) — pass --force to move it anyway, or supersede with a new spec",
+            target_display,
+            target_status,
+        );
+    }
+    Ok(())
+}
+
 /// Parse requirement ID - accepts either UUID or SPEC-ID. Used by the legacy
 /// SQLite path; the git-canonical dispatch resolves IDs directly via
 /// `get_requirement_by_spec_id` and uses `not_found::requirement_not_found`
@@ -20752,6 +20793,132 @@ mod statusline_tests {
             "aida", "queue", "move", "TASK-1", "--to", "2", "--before", "TASK-2",
         ])
         .is_err());
+    }
+
+    /// BUG-249: `aida queue move` exposes `--force` for the bypass path
+    /// (move a terminal-status entry that lingers in the queue file).
+    /// Default is `force: false`; the long flag flips it.
+    /// trace:BUG-249 | ai:claude
+    #[test]
+    fn queue_move_force_flag_parses() {
+        let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Queue(QueueCommand::Move { force: false, .. })
+        ));
+        let cli =
+            Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--top", "--force"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Queue(QueueCommand::Move { force: true, .. })
+        ));
+    }
+
+    /// BUG-249: pre-fix, `aida queue move <id>` printed `✓ Moved` even
+    /// when `<id>` wasn't in the queue at all — queue_reorder's update
+    /// loop simply didn't match anything and the write completed with
+    /// no entries changed. The classifier distinguishes that case from
+    /// "in queue but terminal status" and demands `--force` for the
+    /// latter.
+    /// trace:BUG-249 | ai:claude
+    #[test]
+    fn queue_move_target_not_in_queue_errors() {
+        let target = uuid::Uuid::now_v7();
+        let err = classify_queue_move_target(
+            target,
+            "TASK-999",
+            &RequirementStatus::Approved,
+            &[],
+            false,
+        )
+        .expect_err("move on absent spec must error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("not in the queue"),
+            "error must name the absent state: {msg}"
+        );
+        // The display id should appear so the user sees what was looked up.
+        assert!(msg.contains("TASK-999"), "error must echo the id: {msg}");
+        // Should NOT recommend --force — that's the wrong tool for this case.
+        assert!(
+            !msg.contains("--force"),
+            "absent-spec error must not suggest --force: {msg}"
+        );
+    }
+
+    /// BUG-249: a Completed (terminal) entry still appears in the
+    /// queue YAML file but is hidden from the default `queue list`
+    /// view. `move` on it errors with a `--force` hint instead of
+    /// silently succeeding.
+    /// trace:BUG-249 | ai:claude
+    #[test]
+    fn queue_move_target_terminal_errors_with_force_hint() {
+        let target = uuid::Uuid::now_v7();
+        let entry = aida_core::QueueEntry {
+            user_id: "tester".into(),
+            requirement_id: target,
+            position: 1000,
+            added_by: "tester".into(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: None,
+            for_scope: None,
+            for_session: None,
+        };
+        let err = classify_queue_move_target(
+            target,
+            "TASK-998",
+            &RequirementStatus::Completed,
+            &[entry.clone()],
+            false,
+        )
+        .expect_err("move on Completed spec must error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("--force"),
+            "terminal-status error must hint --force: {msg}"
+        );
+        assert!(
+            msg.contains("terminal") || msg.contains("Completed"),
+            "terminal-status error must name the state: {msg}"
+        );
+        // With --force the same target passes through.
+        classify_queue_move_target(
+            target,
+            "TASK-998",
+            &RequirementStatus::Completed,
+            &[entry],
+            true,
+        )
+        .expect("--force must bypass the terminal-status guard");
+    }
+
+    /// BUG-249: sanity check the happy path — an in-queue non-terminal
+    /// entry passes the classifier so the handler proceeds to the
+    /// path-specific reorder logic.
+    /// trace:BUG-249 | ai:claude
+    #[test]
+    fn queue_move_target_ok_for_in_queue_non_terminal() {
+        let target = uuid::Uuid::now_v7();
+        let entry = aida_core::QueueEntry {
+            user_id: "tester".into(),
+            requirement_id: target,
+            position: 1000,
+            added_by: "tester".into(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: None,
+            for_scope: None,
+            for_session: None,
+        };
+        classify_queue_move_target(
+            target,
+            "TASK-997",
+            &RequirementStatus::Planned,
+            &[entry],
+            false,
+        )
+        .expect("in-queue non-terminal target should pass the guard");
     }
 
     /// STORY-60: age formatter for the prune candidate list. Resolution
@@ -45408,6 +45575,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             to,
             before,
             after,
+            force,
         } => {
             // BUG-89: route through the canonical helper so move resolves
             // user_id the same way add/list do (previously this path
@@ -45423,6 +45591,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             let mut entries = storage.queue_list(&user_id, true)?;
+            // BUG-249: the relative paths (--top/--bottom/--before/--after)
+            // never checked the target side — queue_reorder silently
+            // no-ops when the target isn't in the queue file, so the
+            // command printed `✓ Moved` for a spec that wasn't in the
+            // queue at all. Surface the two error states explicitly
+            // before any path-specific logic runs.
+            // trace:BUG-249 | ai:claude
+            let move_display_id = req
+                .agreed_id
+                .as_deref()
+                .or(req.spec_id.as_deref())
+                .unwrap_or(id);
+            classify_queue_move_target(req.id, move_display_id, &req.status, &entries, *force)?;
             // STORY-72: queues created before the queue_add sentinel-fix
             // can have every entry at `position: i64::MAX`, which makes
             // any --before/--after/--top math unable to produce a
