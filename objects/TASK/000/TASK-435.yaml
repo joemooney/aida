@@ -1,0 +1,24 @@
+id: 019e4b93-180b-7601-8a31-6a57053cbb2a
+spec_id: TASK-435
+agreed_id: TASK-435
+title: 'Recovery doc: recipe 1''s --delete-branch still surfaces cosmetic ''branch in use by worktree'' error'
+description: |-
+  docs/autonomous-drain.md:416-473 (TASK-406) frames both worktree-aware merge recipes as 'side-stepping' the cosmetic 'cannot delete branch X used by worktree at...' error. Recipe 2 (no --delete-branch, manual aida session end) does side-step it. Recipe 1 — gh pr merge <N> --squash --delete-branch followed by aida session end — does NOT: the spec's worktree is still live when gh's --delete-branch step runs git branch -d, and git branch -d refuses regardless of cwd when the branch has a worktree.
+
+  Outcome is unaffected (remote merge succeeds, aida session end cleans the worktree, aida pull auto-bumps the spec); only the framing is imprecise. Two clean fixes:
+
+  1. Reorder recipe 1 to 'aida session end first, then gh pr merge --delete-branch' so the worktree is gone before --delete-branch runs.
+  2. OR add a one-line note under recipe 1 that the cosmetic error may still print and is expected/harmless.
+
+  Raised in review of PR-160: https://github.com/joemooney/aida/pull/160#issuecomment-4510827316
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T17:26:31.691485590Z
+modified_at: 2026-05-21T17:26:31.691485590Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-160
+- severity:cosmetic
