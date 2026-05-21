@@ -901,6 +901,47 @@ pub enum PrCommand {
         #[clap(long, value_name = "BRANCH")]
         branch: Option<String>,
     },
+
+    /// Rebase a PR onto its base in a temporary worktree, then
+    /// force-push-with-lease the rebased branch. Collapses the standard
+    /// 6-command "rebase a PR before review" recipe into one call.
+    ///
+    /// Default mode aborts cleanly on conflicts (cleans up the temp
+    /// worktree, prints the manual recipe, exits non-zero). `--check`
+    /// reports stale-base + overlap + conflict-prediction without
+    /// modifying anything. `--interactive` drops into the temp worktree
+    /// on conflict so you can resolve + continue, then AIDA finishes the
+    /// push. Cross-fork PRs are refused (force-push to a fork is the
+    /// contributor's job).
+    ///
+    /// Force-push always uses `--force-with-lease`. The smoke check
+    /// (default `cargo build --release` for Rust projects) is
+    /// configurable via `.aida/config.toml` `[pr-rebase] smoke_check`.
+    // trace:TASK-308 | ai:claude
+    Rebase {
+        /// PR number to rebase.
+        #[clap(value_name = "N")]
+        n: u64,
+
+        /// Report-only: don't modify anything. Prints stale-base,
+        /// overlapping files, and a best-effort conflict prediction.
+        #[clap(long)]
+        check: bool,
+
+        /// On conflict, leave the temp worktree in place and prompt you
+        /// to resolve + `git rebase --continue`, then finish the push.
+        #[clap(long, conflicts_with = "check")]
+        interactive: bool,
+
+        /// Skip the post-rebase build smoke check.
+        #[clap(long)]
+        no_smoke: bool,
+
+        /// Rebase onto this explicit base ref instead of the PR's
+        /// declared base. Useful for PRs against non-main branches.
+        #[clap(long, value_name = "REF")]
+        base: Option<String>,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.
