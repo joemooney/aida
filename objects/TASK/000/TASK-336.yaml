@@ -21,15 +21,19 @@ description: |-
   ## Origin
 
   BUG-233 plan \`## Followups\` bullet ("fold the run-UUID into STORY-301's drain-state file") — not auto-filed (BUG-233 marked Completed directly; followup parse skipped). Filed by hand.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:41:46.264019075Z
-modified_at: 2026-05-21T04:44:22.604704965Z
+modified_at: 2026-05-21T04:59:22.969028600Z
 req_type: Task
 tags:
 - corroboration
 - drain-status
 - from-self-test:BUG-233
 - run-uuid
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-21T04:59:22.969028600Z
+  implemented_by: joe
