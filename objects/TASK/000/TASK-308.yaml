@@ -91,7 +91,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:25:55.842080480Z
-modified_at: 2026-05-21T05:06:55.535476600Z
+modified_at: 2026-05-21T05:20:17.450004380Z
 req_type: Task
 tags:
 - aida-pr
@@ -108,3 +108,8 @@ comments:
   content: Carved out of STORY-281 (orchestrator pre-flight rebase hook). This TASK ships the CLI; STORY-281 integrates it into the orchestrator's phase-2/3 boundary.
   created_at: 2026-05-17T15:26:04.383825576Z
   modified_at: 2026-05-17T15:26:04.383825576Z
+- id: 019e48fa-342a-7c81-add9-e59d3f317caf
+  author: joe
+  content: Commit 283c972b references this requirement
+  created_at: 2026-05-21T05:20:17.450004380Z
+  modified_at: 2026-05-21T05:20:17.450004380Z
