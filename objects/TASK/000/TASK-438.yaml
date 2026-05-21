@@ -1,0 +1,22 @@
+id: 019e4bc9-76b4-7523-9b56-48ca581fe6e8
+spec_id: TASK-438
+agreed_id: TASK-438
+title: 'MCP tool_claim_task: TOCTOU race lets two concurrent claims on the same spec both succeed'
+description: |
+  `aida-cli/src/mcp.rs:999-1047` (`tool_claim_task`) reads `.aida/sessions/*.toml` to look for an existing lease over the spec, then writes a new lease via `write_atomic` if none was found. The check and the write are not atomic — two MCP clients calling `claim_task` on the same spec concurrently can both pass the existence check and both end up with leases.
+
+  Compare with `aida session start` (file-direct path) which serializes via a directory-level guard (worktree creation enforces uniqueness). The MCP path's "lightweight claim" intentionally skips worktree creation, but it still needs a serialization point so the "claim" semantic holds.
+
+  Fix: take a `fcntl::flock` on the leases directory (or on a sentinel file under it) for the duration of the check + write. Or use a `rename`-based create — write to a `claim_lock.<spec>.tmp` file, then `rename` to `claim_lock.<spec>` and reject if rename target exists (`O_EXCL` semantics via rename-no-replace where supported).
+
+  Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T18:25:54.868058122Z
+modified_at: 2026-05-21T18:25:54.868058122Z
+req_type: Task
+tags:
+- from-review:PR-162
+- severity:minor
