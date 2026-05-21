@@ -56,6 +56,40 @@ acceptance bullet — edit the acceptance list, or file a follow-up that
 supersedes the original. Comments are background context; the acceptance
 list is the contract.
 
+## Dated historical artifacts stay frozen
+
+When refactoring across the codebase, dated historical artifacts stay
+frozen at the date in their filename. Glyph swaps, vocabulary updates,
+renames, and palette unifications should update *living* guidance and
+code to current truth — and **leave dated records alone**. SPIKE outputs
+(`docs/spikes/YYYY-MM-DD-*.md`), session logs (`PROMPT_HISTORY.md`
+entries), dated competitive-analysis snapshots, spec comments, and git
+commit messages are records of *what we knew at time T*. Rewriting them
+erases the path taken and makes the past look like the present.
+
+The discriminator when classifying a file mid-refactor:
+
+| Artifact kind | Retroactive edit? |
+|---|---|
+| Living guidance (CLAUDE.md, skill templates, `docs/aida-discipline/`, README) | **YES** |
+| Code (source, configs, templates that compile/scaffold) | **YES** |
+| Plan files in `docs/plans/` | YES if active/load-bearing; NO once historical |
+| Dated SPIKE outputs (`docs/spikes/YYYY-MM-DD-*.md`) | **NO** |
+| Dated session logs (`PROMPT_HISTORY.md` entries) | **NO** |
+| Dated competitive-analysis snapshots | **NO** |
+| Spec descriptions / acceptance bullets | YES if work hasn't started; else file a follow-up |
+| Spec comments | **NO** |
+| Git commit messages | **NO** |
+
+Worked example: BUG-116 (2026-05-17) propagated the `▶ ⏵ 🚪` → `▶ ⇒ ⏸`
+glyph swap across skill templates. The implementer correctly left
+`docs/spikes/2026-05-16-claude-headless.md` untouched, noting it as a
+*"dated historical observation record, not living guidance."* That
+phrasing is the rule.
+
+A lint check is unnecessary; the filename-date convention plus this
+discipline is sufficient.
+
 ## Trust the reviewer over intuition
 
 The reviewer role inspects the actual diff — file paths, symbols,
