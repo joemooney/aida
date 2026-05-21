@@ -17,12 +17,13 @@ input — is learned the hard way, one papercut at a time. This pack ships
 that pattern up front so a new project starts with the discipline already
 in hand.
 
-## The four guides
+## The five guides
 
 | Guide | What it covers |
 |-------|----------------|
 | [`advisor-role.md`](advisor-role.md) | The advisor seat — its responsibilities, what it does *not* do, and the three autonomy modes |
 | [`lifecycle-vocabulary.md`](lifecycle-vocabulary.md) | Precise words for each lifecycle state — committed vs pushed vs merged vs completed vs released |
+| [`machinery-glossary.md`](machinery-glossary.md) | One-paragraph definitions of AIDA's orchestration / session / autonomy machinery — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode |
 | [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, and parallel-choice vs sequential-step UI |
 | [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
 

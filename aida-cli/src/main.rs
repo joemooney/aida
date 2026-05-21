@@ -55766,16 +55766,18 @@ mod story_255_discipline_pack_tests {
     use super::*;
 
     #[test]
-    fn discipline_pack_scaffolds_four_docs_plus_readme() {
+    fn discipline_pack_scaffolds_five_docs_plus_readme() {
+        // trace:TASK-338 | ai:claude — machinery-glossary.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 5, "expected README + 4 discipline docs");
+        assert_eq!(written, 6, "expected README + 5 discipline docs");
 
         let dir = root.path().join("docs/aida-discipline");
         for f in [
             "README.md",
             "advisor-role.md",
             "lifecycle-vocabulary.md",
+            "machinery-glossary.md",
             "workflow-patterns.md",
             "session-discipline.md",
         ] {
@@ -55790,7 +55792,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            5
+            6
         );
     }
 
