@@ -1,0 +1,45 @@
+id: 019e47f9-b4c4-7362-bd86-b896d2db5a3b
+spec_id: TASK-421
+agreed_id: TASK-421
+title: Clean up 3 build warnings in aida-cli main.rs (origin_pushed unused, capitalize dead)
+description: |-
+  ## Symptom
+
+  \`cargo build --release\` produces 3 warnings, surfaced during TASK-404's phase 6 build verify on 2026-05-20:
+
+  \`\`\`
+  warning: variable \`origin_pushed\` is assigned to, but never used
+      --> aida-cli/src/main.rs:5079:9
+  warning: value assigned to \`origin_pushed\` is never read
+      --> aida-cli/src/main.rs:5088:17
+  warning: function \`capitalize\` is never used
+      --> aida-cli/src/main.rs:4742:4
+  \`\`\`
+
+  The \`origin_pushed\` variable is set to \`true\` at one site but never read elsewhere — either dead-code that should be removed, or a branch that was supposed to consume it (silent logic bug). The \`capitalize\` function is dead.
+
+  ## Acceptance
+
+  - \`git blame\` the three lines to determine whether \`origin_pushed\` was meant to control behavior (real bug: a branch is silently a no-op) or is just leftover (cleanup: delete the assignments).
+  - If logic bug: route \`origin_pushed\` to wherever the caller expected (file as separate BUG if substantive).
+  - If leftover: delete the variable + the dead assignment.
+  - Delete \`capitalize\` if truly unused, OR locate the intended call site if removed during a refactor.
+  - \`cargo build --release\` produces zero warnings after the cleanup.
+  - Add \`#![deny(warnings)]\` consideration in workspace Cargo.toml as a follow-up if appropriate (separate TASK).
+
+  ## Related
+
+  - Surfaced during the 2026-05-20 autonomous 8-spec drain (TASK-404 phase 6 build output).
+  - May have been introduced by one of the drain's earlier merges (BUG-266, TASK-401, TASK-358) — git blame will tell.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T00:40:07.620668478Z
+modified_at: 2026-05-21T00:40:07.620668478Z
+req_type: Task
+tags:
+- cleanup
+- from-drain-output
+- maintenance
+- warnings
