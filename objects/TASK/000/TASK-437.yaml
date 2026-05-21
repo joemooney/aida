@@ -1,0 +1,22 @@
+id: 019e4bc9-588e-77e3-9610-876944bda3c1
+spec_id: TASK-437
+agreed_id: TASK-437
+title: 'MCP tool_file_finding: pr-as-string produces non-canonical from-review tag'
+description: |
+  `aida-cli/src/mcp.rs:885` (`tool_file_finding`) accepts `pr` as either a string or a u64. When the JSON-RPC client passes `pr: "7"` (string), the `v.as_str()` branch wins and `origin` becomes `"7"`, producing the tag `from-review:7` instead of the canonical `from-review:PR-7`. The `inputSchema` declares `pr: integer`, but the JSON-RPC layer in this server does not enforce input schemas.
+
+  `aida findings list --pr 7` then won't see the finding (it filters on the canonical `PR-7` form). Strictly-conformant clients are fine; loose clients (any agent that infers MCP schema from descriptions, or hand-rolled JSON) silently miscoerce.
+
+  Fix options: (a) treat string `pr` as an integer parse → fall back to `PR-<n>` formatting; (b) reject string `pr` with an explicit error; (c) accept string only when it already starts with `PR-`. Pick (b) — strictest, matches the input schema.
+
+  Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T18:25:47.150852667Z
+modified_at: 2026-05-21T18:25:47.150852667Z
+req_type: Task
+tags:
+- from-review:PR-162
+- severity:minor
