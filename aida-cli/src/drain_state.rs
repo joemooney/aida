@@ -119,6 +119,39 @@ pub(crate) struct DrainState {
     /// true.
     #[serde(default, skip_serializing_if = "is_false")]
     pub(crate) zen: bool,
+    /// BUG-286: orchestrator-side gh/git retry attempts during phases 3-6,
+    /// one entry per retried attempt. Lets post-hoc analysis correlate
+    /// drain stalls with transient-API health. Omitted when empty so a
+    /// blip-free drain leaves the file untouched.
+    /// trace:BUG-286 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) retries: Vec<DrainRetry>,
+}
+
+/// BUG-286: one orchestrator-side retry event recorded against the drain.
+/// Mirrors the [`crate::network_retry::RetryEvent`] shape with the spec /
+/// phase context the orchestrator carries.
+/// trace:BUG-286 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct DrainRetry {
+    /// Subprocess label, e.g. `gh pr merge 157 --squash --delete-branch`.
+    pub(crate) label: String,
+    /// Spec the orchestrator was driving when the blip hit.
+    pub(crate) spec: String,
+    /// Phase identifier (e.g. `4 (merge)`), absent when the retry happened
+    /// outside a phase context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) phase: Option<String>,
+    /// 1-indexed attempt number that *failed* and triggered this retry.
+    pub(crate) attempt: u32,
+    /// Configured max attempts (so a reader can tell "1/3" from "1/5").
+    pub(crate) max: u32,
+    /// Backoff before the next attempt, in milliseconds.
+    pub(crate) backoff_ms: u64,
+    /// First non-empty stderr line, trimmed to 180 chars.
+    pub(crate) stderr_snippet: String,
+    /// RFC-3339 timestamp the retry was recorded.
+    pub(crate) at: String,
 }
 
 /// Default skip-helper for `#[serde(skip_serializing_if)]` on bool fields.
@@ -145,6 +178,7 @@ impl DrainState {
             on_drain_complete: predict_single(spec),
             run_uuid: run_uuid.to_string(),
             zen,
+            retries: Vec::new(),
         }
     }
 
@@ -165,6 +199,7 @@ impl DrainState {
             on_drain_complete: predict_batch(batch_name),
             run_uuid: String::new(),
             zen: false,
+            retries: Vec::new(),
         }
     }
 
@@ -184,6 +219,7 @@ impl DrainState {
             on_drain_complete: predict_next_n(n),
             run_uuid: String::new(),
             zen: false,
+            retries: Vec::new(),
         }
     }
 
@@ -318,6 +354,49 @@ pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase
         member.state = format!("in-phase-{phase_index}");
     }
     let _ = state.write(project_root);
+}
+
+/// BUG-286: append a retry event to the live drain-state file. Best-effort —
+/// a missing drain-state file silently no-ops so non-orchestrator paths
+/// (`aida pull`, `aida push`, manual `gh pr view`) that piggy-back on
+/// `network_retry` outside a drain do not need to know whether one exists.
+/// trace:BUG-286 | ai:claude
+pub(crate) fn append_retry(project_root: &Path, retry: DrainRetry) {
+    let Some(mut state) = DrainState::read(project_root) else {
+        return;
+    };
+    state.retries.push(retry);
+    let _ = state.write(project_root);
+}
+
+/// BUG-286: [`crate::network_retry::RetrySink`] that records each retry into
+/// the live drain-state file. The orchestrator pairs this with
+/// [`crate::network_retry::StderrSink`] via [`crate::network_retry::DualSink`]
+/// so retries surface both to the user inspecting the live drain *and* to
+/// post-hoc analysis reading `.aida/drain-state.json`.
+/// trace:BUG-286 | ai:claude
+pub(crate) struct DrainStateSink<'a> {
+    pub(crate) project_root: &'a Path,
+    pub(crate) spec: String,
+    pub(crate) phase: Option<String>,
+}
+
+impl crate::network_retry::RetrySink for DrainStateSink<'_> {
+    fn on_retry(&mut self, ev: &crate::network_retry::RetryEvent) {
+        append_retry(
+            self.project_root,
+            DrainRetry {
+                label: ev.label.clone(),
+                spec: self.spec.clone(),
+                phase: self.phase.clone(),
+                attempt: ev.attempt,
+                max: ev.max,
+                backoff_ms: ev.backoff_ms,
+                stderr_snippet: ev.stderr_snippet.clone(),
+                at: chrono::Utc::now().to_rfc3339(),
+            },
+        );
+    }
 }
 
 /// Record a member's terminal outcome — `completed` (its full lifecycle
@@ -517,6 +596,7 @@ mod tests {
             on_drain_complete: predict_single("STORY-301"),
             run_uuid: String::new(),
             zen: false,
+            retries: Vec::new(),
         }
     }
 
