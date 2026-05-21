@@ -1,0 +1,81 @@
+id: 019e48cd-7bb4-78e0-bf81-bbb810340201
+spec_id: BUG-273
+agreed_id: BUG-273
+title: Phase 2 'gh run watch' pollutes tee-captured drain logs with hundreds of redrawn blocks
+description: |-
+  ## Symptom
+
+  When a drain runs with output teed (the common pattern: \`for spec in ...; do aida queue work \"\$spec\" --auto-complete --no-human=both; done 2>&1 | tee -a ~/drain-YYYYMMDD.log\`), phase 2's CI-watch output appears in the log file as **dozens to hundreds of redrawn status blocks** stacked vertically. Real example from the 2026-05-20 morning scrollback for BUG-266:
+
+  \`\`\`
+  JOBS
+  * Build (ubuntu-latest) (ID 77003257502)
+  Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+  * bug-266 CI joemooney/aida#126 · 26175161899
+  Triggered via pull_request about 1 minute ago
+
+  JOBS
+  * Build (ubuntu-latest) (ID 77003257502)
+  Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+  * bug-266 CI joemooney/aida#126 · 26175161899
+  Triggered via pull_request about 1 minute ago
+
+  ... (repeated 50-100x)
+  \`\`\`
+
+  The same block re-prints each refresh cycle (~3 seconds) for the full CI duration (~3-5 minutes). For an 8-spec drain that's 8 × ~60-100 redraws = 500-800 polluting blocks per night.
+
+  ## Root cause
+
+  \`aida-cli/src/main.rs\`:14623+ streams \`gh run watch\` to the user's terminal during phase 2 (TASK-233's \`--watch-ci\` mechanism). \`gh run watch\` is designed for interactive terminals where ANSI escape codes redraw the screen in-place. When stdout is piped to \`tee\`, the escapes either don't fire or get stripped — but the underlying refresh writes still happen, producing the stacked blocks.
+
+  ## Impact
+
+  - **Scrollback pollution.** The drain log is the primary debugging artifact for headless drains; hundreds of identical-looking blocks make it hard to find real events.
+  - **Demo material pollution.** Captured drain logs are demo artifacts (TASK-403). The repetition makes the log unusable as-is for narrative writeups; manual cleanup is required.
+  - **Diff noise for any tool that reads the log.** \`aida headless tail\` and any future log analyzer must filter this noise.
+
+  ## Acceptance
+
+  - Detect when stdout is not a TTY (\`isatty(stdout)\` check) OR when \`--no-human\` mode is active. In either case, switch from \`gh run watch\` to a quieter polling mode.
+  - Quieter mode options to consider:
+    - \`gh pr checks <N>\` periodically (one line per poll, or only on status change)
+    - \`gh run view <run-id> --json status\` once per few seconds, parsed; emit only on status transition
+    - One single-line status update per minute or per state change
+  - When the user invokes \`--watch-ci\` explicitly and stdout IS a TTY, preserve the existing streaming behavior (interactive use case).
+  - Headless drain logs after the fix: at most ~5-10 status lines per spec's phase 2 (one per check transition), not hundreds of blocks.
+  - Add a regression test using a captured stub output: assert the captured stream has no more than N status lines for a typical CI run.
+
+  ## Out of scope
+
+  - Replacing \`gh\` with a direct GitHub Actions API client. (Heavier change, separate decision.)
+  - Removing the watch behavior entirely from interactive mode. (Users with a TTY want it.)
+
+  ## Composes with
+
+  - **TASK-307** (just shipped) — teed stream-json events to terminal during \`--no-human\`. This BUG is the parallel concern for the gh-watch stream. Together they make tee-captured drain logs usable.
+  - **TASK-398** (\`aida headless tail\`, just shipped) — clean tailer would also benefit; less noise to filter.
+  - **TASK-395** — tee-able headless drain output (the broader teeing concern; this BUG is one specific noise source within it).
+  - **TASK-403** — demo asciinema + writeup; will use these logs as raw material once they're clean.
+
+  ## Related
+
+  - TASK-233 — the spec that added \`--watch-ci\` streaming via \`gh run watch\`; this BUG asks for the headless-mode complement.
+  - Surfaced 2026-05-20 by the user inspecting \`~/aida-keystone-morning-scrollback-2026-05-20.md\` for TASK-403 writeup material.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T04:31:26.644175360Z
+modified_at: 2026-05-21T04:31:26.644175360Z
+req_type: Bug
+tags:
+- ci-watch
+- from-user-friction
+- gh-cli
+- observability
+- orchestrator
+- phase-2
+- scrollback-pollution
