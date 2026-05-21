@@ -45,6 +45,10 @@ ratatui = "0.30"
 crossterm = "0.29"
 portable-pty = "0.9"
 vt100 = "0.16"
+# SIGTERM/SIGINT + Windows CTRL_C/CTRL_BREAK so the TUI restores the
+# terminal before dying to a `kill <pid>`. Default features only catch
+# SIGINT/CTRL_C; `termination` adds SIGTERM + CTRL_BREAK. (BUG-110)
+ctrlc = { version = "3.4", features = ["termination"] }
 
 # gRPC/Protocol Buffers dependencies
 tonic = "0.12"

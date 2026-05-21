@@ -58,6 +58,12 @@ pub fn run(opts: TuiOptions) -> Result<()> {
 
     let config = TuiConfig::load(&cwd);
     term::install_panic_hook();
+    // SIGTERM / SIGINT (Unix) and CTRL_C_EVENT / CTRL_BREAK_EVENT
+    // (Windows) restore the terminal before the process dies. Without
+    // this, `kill <pid>` from another terminal leaves the shell with
+    // cursor hidden + raw mode on; recovery would require `reset`.
+    // SIGKILL stays uncatchable. trace:BUG-110 | ai:claude
+    term::install_signal_handler()?;
 
     let (exit, resume_hints) = {
         let _guard = term::TermGuard::enter()?;
