@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:41:49.016364112Z
-modified_at: 2026-05-21T04:42:24.311109605Z
+modified_at: 2026-05-21T04:42:33.870027556Z
 req_type: Bug
 tags:
 - auto-bump
@@ -47,6 +47,14 @@ relationships:
 - rel_type: Parent
   target_id: 019e48d7-93dc-7c61-9ffb-81b756254179
   created_at: 2026-05-21T04:42:32.070456919Z
+comments:
+- id: 019e48d7-abf2-7272-8f2c-b41ae0346063
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-20-bug-238-edit-followups.md
+    filed 1 task(s): TASK-430
+  created_at: 2026-05-21T04:42:34.354373034Z
+  modified_at: 2026-05-21T04:42:34.354373034Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T04:42:24.311109605Z
