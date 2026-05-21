@@ -94,6 +94,10 @@ tags:
 - resilience
 - retry
 - transient-error
+relationships:
+- rel_type: Parent
+  target_id: 019e4b7e-24a0-7ab1-b28c-4758ddaee827
+  created_at: 2026-05-21T17:03:42.630452995Z
 comments:
 - id: 019e4b07-d07d-7f63-b720-d8ff6c08b9d0
   author: joe
