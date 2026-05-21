@@ -1,0 +1,22 @@
+id: 019e4bc9-b645-7e43-8f81-1fa977599ee3
+spec_id: TASK-439
+agreed_id: TASK-439
+title: 'MCP resolve_punt/escalate_punt: use write_atomic, not std::fs::write, for punt-response files'
+description: |
+  `aida-cli/src/mcp.rs:749` (`tool_resolve_punt`) and `:790` (`tool_escalate_punt`) both write `.aida/punts/<spec>.response.json` with a plain `std::fs::write(&path, body)`. A crash between `open` and `write_all` completing leaves a truncated file the orchestrator's phase-3 → phase-4 handshake reader can mis-parse.
+
+  The architecture doc (`docs/architecture/mcp-coordination-surface.md:99-104`) claims "Lease and directive writes go through `write_atomic`" — punt-response writes are silently outside that guarantee. `write_atomic` (`mcp.rs:1374`) already exists in this file; the fix is dropping it in place of the two `std::fs::write` calls.
+
+  Severity is minor because (a) punt responses are written by the advisor tier (not under contention) and (b) JSON parsers reject truncated JSON cleanly. But the failure mode — orchestrator reads "valid JSON missing a field" because of a fortuitous truncation — would be hard to diagnose.
+
+  Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T18:26:11.141458341Z
+modified_at: 2026-05-21T18:26:11.141458341Z
+req_type: Task
+tags:
+- from-review:PR-162
+- severity:minor
