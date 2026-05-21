@@ -918,3 +918,9 @@
   note: auto-queued by `aida pr` (019e4b0d); covers 1 spec
   added_at: 2026-05-21T15:12:55.734906748Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e4afa-8bd4-7cb3-839a-644ccf32c0bd
+  position: 202000
+  added_by: joe
+  added_at: 2026-05-21T16:46:47.535846655Z
+  for_role: implementer
