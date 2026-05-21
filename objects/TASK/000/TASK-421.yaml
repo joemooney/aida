@@ -36,10 +36,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T00:40:07.620668478Z
-modified_at: 2026-05-21T02:00:17.809178543Z
+modified_at: 2026-05-21T02:05:29.498983915Z
 req_type: Task
 tags:
 - cleanup
 - from-drain-output
 - maintenance
 - warnings
+comments:
+- id: 019e4847-dc1a-7432-97e7-a90bcf1300cb
+  author: joe
+  content: Commit 002410be references this requirement
+  created_at: 2026-05-21T02:05:29.498983915Z
+  modified_at: 2026-05-21T02:05:29.498983915Z
