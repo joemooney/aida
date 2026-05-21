@@ -2993,6 +2993,44 @@ pub enum ZenCommand {
     },
 }
 
+/// Live-advisor registration (STORY-360). The `--no-human=both` orchestrator
+/// reads `~/.aida/advisor.toml` to decide whether to **fork** the live advisor
+/// session (full in-flight context) instead of **cold-booting** a fresh
+/// headless advisor (substrate-only). Register once per advisor session;
+/// `unregister` clears the file.
+// trace:STORY-360 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum AdvisorCommand {
+    /// Record the current Claude session as the live advisor — writes
+    /// `~/.aida/advisor.toml`. With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID`
+    /// from the environment (Claude Code sets it on every session). Pass
+    /// `--uuid <id>` to register a specific session id.
+    Register {
+        /// Claude session UUID. Defaults to `$CLAUDE_CODE_SESSION_ID`.
+        #[clap(long, value_name = "UUID")]
+        uuid: Option<String>,
+
+        /// Override the cwd-derived project slug. Rare — the default is
+        /// derived from the current directory the same way Claude Code
+        /// encodes it under `~/.claude/projects/<slug>/`.
+        #[clap(long, value_name = "SLUG")]
+        project_slug: Option<String>,
+    },
+
+    /// Clear the registration. Idempotent — succeeds even when nothing is
+    /// registered.
+    Unregister,
+
+    /// Show what's registered and whether it looks alive. Also surfaces an
+    /// estimated $/fork at the current source JSONL size.
+    Status {
+        /// Emit `{registered, uuid, alive, ...}` as JSON instead of the
+        /// human summary.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 /// Worker-directive introspection (TASK-294). The `aida-worker` shell function
 /// reads pending directives from `.aida/worker.cmd` (a FIFO — one directive
 /// per line); this subcommand lists them so a user can see "what will the
@@ -3400,6 +3438,13 @@ pub enum Command {
     // trace:STORY-278 trace:STORY-285 | ai:claude
     #[clap(subcommand)]
     Findings(FindingsCommand),
+
+    /// Manage the live-advisor registration the `--no-human=both` orchestrator
+    /// reads to decide whether to fork the live advisor (full in-flight
+    /// context) or cold-boot a fresh headless advisor.
+    // trace:STORY-360 | ai:claude
+    #[clap(subcommand)]
+    Advisor(AdvisorCommand),
 
     /// Punt a spec to Needs Attention — pause it with a structured reason
     /// instead of guessing past a design-fork. The safety net an autonomous
