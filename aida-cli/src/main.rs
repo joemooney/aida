@@ -31806,8 +31806,12 @@ aida-worker() {
     while true; do
         head=""
         if [ -f "$cmd_file" ]; then
-            # Read the first non-blank, non-comment line.
-            head=$(awk 'NF && $1 !~ /^#/ {print; exit}' "$cmd_file" 2>/dev/null || true)
+            # Read the first non-blank, non-comment line, normalised by
+            # stripping leading/trailing whitespace so an indented directive
+            # like `\tdrain batch:x` matches the trimmed form that
+            # `parse_directives_from_str` produces and that
+            # `_aida_worker_pop_head` compares against. trace:TASK-364 | ai:claude
+            head=$(awk 'NF && $1 !~ /^#/ {sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit}' "$cmd_file" 2>/dev/null || true)
         fi
         if [ -z "$head" ]; then
             verb="drain"
@@ -31892,13 +31896,22 @@ _aida_worker_pop_head() {
     local target="$2"
     local tmp
     tmp=$(mktemp "${file}.XXXXXX") || return 0
+    # Trim both sides of `target` and of each candidate line so an indented
+    # directive matches its own trimmed form — head extraction also trims,
+    # but trimming `target` here keeps the pop defensive against any caller
+    # passing a raw line. trace:TASK-364 | ai:claude
     awk -v target="$target" '
-        BEGIN { popped = 0 }
+        BEGIN {
+            sub(/^[[:space:]]+/, "", target)
+            sub(/[[:space:]]+$/, "", target)
+            popped = 0
+        }
         {
             if (!popped) {
                 line = $0
                 t = line
-                sub(/^[ \t]+/, "", t)
+                sub(/^[[:space:]]+/, "", t)
+                sub(/[[:space:]]+$/, "", t)
                 if (length(t) == 0 || t ~ /^#/) {
                     print line
                     next
