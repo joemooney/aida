@@ -1,0 +1,26 @@
+id: 019e48c7-5afd-76d1-bb23-d4bb791d30fa
+spec_id: STORY-369
+agreed_id: STORY-369
+title: 'Review PR-144: fix(tui): restore terminal on SIGTERM/SIGINT before exit (BUG-110)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e48bc`) for branch `bug-110`.
+
+  - PR: <https://github.com/joemooney/aida/pull/144>
+  - Branch: `bug-110` → `main`
+
+  ## Covers
+
+  - BUG-110
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 144` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T04:24:45.053167768Z
+modified_at: 2026-05-21T04:24:45.053167768Z
+req_type: Story
