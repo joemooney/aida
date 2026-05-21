@@ -1,0 +1,85 @@
+id: 019e4851-4e9c-72b1-a15a-895251867a1d
+spec_id: STORY-361
+agreed_id: STORY-361
+title: Extend AIDA MCP server with coordination tools (SPIKE-9 outcome)
+description: |-
+  ## Background
+
+  SPIKE-9 (\`docs/spikes/2026-05-20-spike-9-mcp-as-bus.md\`) verdict: hybrid. Filesystem stays canonical for orchestrator ↔ skill coordination. AIDA's MCP server extends with coordination tools that map to the same file substrate, enabling cross-agent participation (Codex, Cursor, any MCP-speaking agent) without re-platforming the orchestrator.
+
+  This story implements that extension.
+
+  ## Approach
+
+  Add ~12-15 new tools to \`aida-cli/src/mcp.rs\`, each wrapping existing file-conventions:
+
+  \`\`\`
+  # Punt channel (STORY-306 file format)
+  list_punts({status})         → [punt_id, ...]
+  read_punt(punt_id)           → {reason, category, context, status}
+  resolve_punt({...})          → ok
+  escalate_punt({...})         → ok
+  post_punt({...})             → punt_id
+
+  # Findings channel (STORY-285 file format)
+  list_findings({status})      → [finding_id, ...]
+  file_finding({...})          → finding_id
+  triage_finding({...})        → ok
+
+  # Task claim channel (.aida/sessions/*.toml)
+  claim_task({spec_id, role})  → lease_id | already_claimed
+  release_task({lease_id})     → ok
+  list_active_leases()         → [{lease, scope, role, mtime}]
+
+  # Directive channel (composes with TASK-294)
+  post_directive({...})        → directive_id
+  list_directives({recipient}) → [directive_id, ...]
+  ack_directive(directive_id)  → ok
+  \`\`\`
+
+  Each tool implementation calls the same internal Rust functions the CLI uses — schema drift surfaces at compile time.
+
+  ## Acceptance
+
+  - 12-15 new MCP tools registered in \`aida-cli/src/mcp.rs\`, each with input + output JSON schemas and a description naming the underlying file path(s).
+  - No orchestrator changes — orchestrator continues to read/write \`.aida/\` files directly.
+  - Each tool acquires the same file locks the file-direct path uses; concurrent-write contention test verifies no corruption.
+  - Crash-mid-write recovery test verifies file state is consistent after partial writes (or rolled back).
+  - Tools self-document via \`tools/list\`.
+  - \`aida mcp register-agent\` CLI command writes the agent's MCP config (server URL) into a config file. For local single-machine use, prints a localhost URL. Cross-machine auth deferred to a follow-up SPIKE.
+  - Update \`docs/architecture/\` with the \"filesystem-canonical, MCP-transport\" pattern explanation.
+  - README mention: \"MCP coordination surface — any MCP-speaking agent can participate in AIDA drains.\"
+
+  ## Out of scope
+
+  - Re-platforming the orchestrator to be an MCP client. (Explicitly rejected — orchestrator owns the substrate.)
+  - Streaming subscriptions / server-sent updates. (Polling works; add later if needed.)
+  - Cross-machine MCP authentication. (Follow-up SPIKE.)
+  - Migrating existing Claude Code skills off file-handshakes. (Skills stay file-direct; MCP is for non-Claude-Code agents.)
+
+  ## Composes with
+
+  - **SPIKE-11 / STORY-360** (fork-from-live advisor) — orthogonal; this story doesn't depend on it.
+  - **TASK-294** (directive channel) — \`post_directive\` / \`list_directives\` tools land here.
+  - **TASK-337** (docs/positioning/vs-claude-code-subagents.md) — positioning piece that calls out the cross-agent coordination capability this story enables.
+  - **STORY-285 / STORY-306 / STORY-263** — the file-handshake mechanisms whose semantics these MCP tools mirror.
+
+  ## Related
+
+  - SPIKE-9 — investigation this story implements
+  - Claude Code Agent Teams — Claude-Code-locked equivalent this supersedes for cross-agent use
+  - Memory \`feedback_competitive_analysis_is_living_doc\` — landing this story is a competitive-positioning event worth documenting
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T02:15:48.636240817Z
+modified_at: 2026-05-21T02:15:48.636240817Z
+req_type: Story
+tags:
+- agent-agnostic
+- architecture
+- coordination
+- cross-agent
+- from-spike
+- mcp
