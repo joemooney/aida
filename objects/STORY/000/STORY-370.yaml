@@ -1,0 +1,26 @@
+id: 019e48ea-4622-74e2-8af0-5eec5420facc
+spec_id: STORY-370
+agreed_id: STORY-370
+title: 'Review PR-145: [AI:claude] refactor(orchestrator): fold run-UUID into drain-state file (TASK-336)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e48d8`) for branch `task-336`.
+
+  - PR: <https://github.com/joemooney/aida/pull/145>
+  - Branch: `task-336` → `main`
+
+  ## Covers
+
+  - TASK-336
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 145` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T05:02:53.474485944Z
+modified_at: 2026-05-21T05:02:53.474485944Z
+req_type: Story
