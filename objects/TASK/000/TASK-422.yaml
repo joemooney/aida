@@ -30,9 +30,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T01:49:24.951947371Z
-modified_at: 2026-05-21T05:01:03.429468518Z
+modified_at: 2026-05-21T05:01:04.537181300Z
 req_type: Task
 tags:
 - from-implementer:BUG-269
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 019e48e8-9c99-7773-b96f-6b545a0c51d4
+  author: joe
+  content: 'Investigated 2026-05-20 evening. Confirmed real: /aida-pr Step 3 requires status Done|Completed; BUG-269''s gate requires PR open before queue-done; cycle. BUG-110''s headless implementer found the workaround empirically: set status via `aida edit --status done` (bypasses BUG-269 — gate is on `queue done` only), then /aida-pr passes, then `queue done` after PR opens. Drain currently in progress is shipping despite friction — not an emergency. Recommend fix (A) /aida-pr Step 3 accepts In Progress when AIDA_AUTO_COMPLETE is set, OR (C) document the workaround in /aida-pickup as the intentional headless path. (B) relaxing BUG-269''s gate reopens the failure mode BUG-269 just closed. Bumped medium → high for morning pickup.'
+  created_at: 2026-05-21T05:01:04.537181300Z
+  modified_at: 2026-05-21T05:01:04.537181300Z
