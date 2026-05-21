@@ -1,0 +1,26 @@
+id: 019e4b8f-df94-7ec0-b3d4-ac0f7c37b5a5
+spec_id: STORY-388
+agreed_id: STORY-388
+title: 'Review PR-160: [AI:claude] docs(drain): worktree-aware merge sequence for recovery flow (TASK-406)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4b87`) for branch `task-406`.
+
+  - PR: <https://github.com/joemooney/aida/pull/160>
+  - Branch: `task-406` → `main`
+
+  ## Covers
+
+  - TASK-406
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 160` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T17:23:00.628679448Z
+modified_at: 2026-05-21T17:23:00.628679448Z
+req_type: Story
