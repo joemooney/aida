@@ -413,6 +413,64 @@ that will not auto-merge a PR writes its verdict file with
 first-class non-failure outcome (exit 0, no merge, the PR left for a human) —
 distinct from a non-Approved verdict and from a crashed phase.
 
+## Recovery: merging a drained spec's PR by hand (TASK-406)
+
+When a drain bails before phase 4 (CI hung, the orchestrator was interrupted,
+the reviewer escalated, you stopped to inspect something), you finish the work
+by hand. The natural sequence `gh pr merge <N> --squash --delete-branch` trips
+on a confusing-but-cosmetic error when the spec's worktree is still around:
+
+```
+failed to run git: fatal: 'main' is already used by worktree at '/home/joe/ai/aida'
+```
+
+or (when run from inside the spec's worktree):
+
+```
+failed to run git: cannot delete branch 'task-XXX' used by worktree at '/home/joe/ai/aida-task-XXX'
+```
+
+`gh --delete-branch` ends with a local `git branch -d`. Run from inside a
+worktree where the main branch is checked out elsewhere — or where the
+to-be-deleted branch's own worktree is still live — that final step fails.
+**The remote merge and remote-branch delete both succeeded**; only the local
+branch cleanup did. Easy to misread as a real failure (and recurring enough
+that it bumped TASK-406 to High after five hits in 24h).
+
+Two worktree-aware sequences side-step it. Pick by where your shell is:
+
+**From the main worktree (recommended):**
+
+```bash
+cd /home/joe/ai/aida
+gh pr merge <N> --squash --delete-branch
+aida pull
+aida session end <lease-id>      # removes the spec's worktree + lease
+```
+
+**From inside the spec's worktree:**
+
+```bash
+# cwd is /home/joe/ai/aida-task-NNN
+gh pr merge <N> --squash         # NO --delete-branch
+cd /home/joe/ai/aida
+aida pull
+aida session end <lease-id>      # cwd-back via the shell wrapper; the
+                                 # branch lingers harmlessly until next prune
+```
+
+`aida session end` never tries to delete the local branch itself — it removes
+the worktree and prints `branch <name> retained — merge or git branch -D
+<name> when ready`. That makes both sequences robust whether gh's local
+branch-delete step succeeded or failed: the lease + worktree get cleaned, a
+lingering local branch is harmless, and `aida pull` auto-bumps the spec's
+status from Done → Completed when it sees the merge SHA on main.
+
+> An `aida pr merge <N>` wrapper that detects cwd vs worktree and picks the
+> right flag set is a tracked-but-deferred follow-up — TASK-406 acceptance
+> calls it out as optional. Until then, the two recipes above plus muscle
+> memory cover the ground.
+
 ## Limits of this cut
 
 - There is no liveness watchdog yet: a genuinely stuck headless run is not

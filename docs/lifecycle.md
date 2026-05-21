@@ -117,6 +117,9 @@ status.
 
 - Command: `gh pr merge N --squash --delete-branch`, followed by `aida pull`
   to promote the status. The `--auto-complete` orchestrator does both for you.
+  When merging by hand from inside a worktree, `--delete-branch` can trip on a
+  cosmetic "branch in use by worktree" error — see the worktree-aware recovery
+  recipes in `docs/autonomous-drain.md`. trace:TASK-406
 
 ### Released
 
