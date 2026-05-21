@@ -52,7 +52,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T20:25:17.257067895Z
-modified_at: 2026-05-21T06:00:52.801556937Z
+modified_at: 2026-05-21T06:04:21.826822511Z
 req_type: Task
 tags:
 - convention
@@ -60,6 +60,11 @@ tags:
 - historical-artifacts
 - propagation
 - scaffolding-pack
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e4922-7d01-7810-b3bd-dd9527c9b765
+  created_at: 2026-05-21T06:04:21.826808704Z
+  created_by: joe
 comments:
 - id: 019e491e-cc55-7b81-81d5-191cf4bf425e
   author: joe
