@@ -1,0 +1,61 @@
+id: 019e4811-fc2b-7062-9225-30933ada5fa6
+spec_id: BUG-269
+agreed_id: BUG-269
+title: 'aida queue done: refuse when commits exist without an open PR — programmatic complement to TASK-401'
+description: |-
+  ## Symptom
+
+  2026-05-20 BUG-249 drain. Headless implementer did the work correctly: fixed the bug, added 4 unit tests, ran the full suite (854 green), committed at \`007b2ea5\`, formatting clean. Then ran \`aida queue done BUG-249\` to mark the spec complete and exited — **without ever pushing or opening a PR.** Same failure mode as TASK-389 yesterday. The orchestrator detected it as phase-1 failed.
+
+  ## Why TASK-401 didn't catch it
+
+  TASK-401 (merged earlier the same day as PR #127) added Step 5c \"Pre-exit checklist\" to the \`/aida-pickup\` skill template — text that says \"commit + push + PR + exit is the single atomic shipping unit; no partial states under any mode.\" The implementer's transcript shows it reasoned right past Step 5c: its model of \"done\" was \`aida queue done\` running, not \`gh pr create\` returning a URL.
+
+  **Skill-template enforcement is *advisory*.** A sufficiently confident language model can interpret \"queue done\" as terminal regardless of what the template says about pre-exit gates. The model isn't deliberately disobeying — it's interpreting one instruction (\"mark done when work is complete\") in a way that overrides another (\"don't exit without a PR\"). Paper gates don't enforce.
+
+  ## What programmatic enforcement looks like
+
+  The simplest and most contained fix: **\`aida queue done <spec>\` refuses when commits exist on the spec's branch ahead of \`origin/main\` AND no open PR references the spec.** The implementer literally cannot complete its model of \"done\" without satisfying the push+PR predicate, because \`queue done\` is the gate.
+
+  ## Acceptance
+
+  - \`aida queue done <spec>\` adds a pre-check that runs before status promotion:
+    1. Resolve the current branch HEAD.
+    2. Count commits ahead of \`origin/main\` on that branch.
+    3. Check for an open PR referencing the spec (via \`gh pr list --head <branch>\` or commit-message scan).
+  - If \`commits_ahead > 0\` AND no open PR → refuse with an actionable error:
+    \`\`\`
+    ✗ BUG-249 has 1 local commit but no open PR. Run \`/aida-pr\` first, then re-run \`aida queue done BUG-249\`.
+    \`\`\`
+  - If \`commits_ahead == 0\` (no work to ship) → proceed (work was a no-op; existing behavior).
+  - If an open PR already references the spec → proceed (current happy path).
+  - \`--force\` flag bypasses the check for the rare legitimate case (e.g. spec was implemented via a different branch already merged).
+  - Add a unit test simulating the BUG-249 scenario: branch with commits, no PR, \`aida queue done\` returns non-zero with the hint.
+  - Add a unit test for the happy path with an open PR.
+  - Update the \`/aida-pickup\` skill template (Step 5) to mention that \`aida queue done\` will refuse without a PR — so the implementer's mental model aligns with the programmatic check.
+  - Update \`/aida-punt\` to NOT require an open PR (punting is a different exit path).
+
+  ## Why this matters beyond the specific failure
+
+  This is the second time in two days the same pattern bit us (TASK-389 + BUG-249), despite filing a fix in between. **The pattern is general: skill-template instructions cannot enforce invariants. Only programmatic gates can.** Filing this BUG also captures the meta-principle for future enforcement work: when a behavior must be guaranteed under \`--no-human=both\`, ship it as a programmatic gate, not a skill-template instruction.
+
+  ## Related
+
+  - TASK-401 (merged) — added the skill-template Step 5c that this BUG demonstrates is insufficient.
+  - TASK-389 — original failure case that produced TASK-401.
+  - BUG-249 — second failure case (today), produced this BUG.
+  - Memory \`feedback_self_test_via_dogfood_merge\` — the pattern by which we learned this (running the fix through the system surfaces remaining gaps).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T01:06:38.763040178Z
+modified_at: 2026-05-21T01:06:38.763040178Z
+req_type: Bug
+tags:
+- enforcement
+- from-self-test
+- headless
+- orchestrator
+- queue-done
+- task-401-followup
