@@ -47,12 +47,12 @@ description: |-
   ## Origin
 
   2026-05-17 BUG-116 implementer recap: glyph propagation across skill templates correctly left \`docs/spikes/2026-05-16-claude-headless.md\` untouched as a \"dated historical observation record, not living guidance.\" That phrase is the convention worth codifying. Discipline-only TASK (no code); propagates via Channels A + B per \`feedback_propagate_generic_discipline_via_scaffolding.md\`.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T20:25:17.257067895Z
-modified_at: 2026-05-17T20:25:17.257067895Z
+modified_at: 2026-05-21T05:58:22.955360216Z
 req_type: Task
 tags:
 - convention
