@@ -15,12 +15,12 @@ description: |-
   - *"blocks another open PR"* (instead of *"blocks PR-219"*)
 
   Non-blocking cosmetic — raised in review of PR-133, did not gate the merge. Surface for advisor triage.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T18:41:38.271073741Z
-modified_at: 2026-05-20T18:41:38.271073741Z
+modified_at: 2026-05-21T04:48:41.564458071Z
 req_type: Task
 tags:
 - cli-ux
