@@ -30,12 +30,12 @@ description: |-
   ## Origin
 
   2026-05-18: the PR-94 reviewer noted that because it marked BUG-233 Completed directly per the review skill's step 10, \`aida pull\`'s auto-bump would see it already-Completed and skip the followup parse — so BUG-233's two plan followups needed hand-filing. The hand-filing is done; this BUG closes the hole so the next directly-completed spec doesn't silently drop its followups.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:41:49.016364112Z
-modified_at: 2026-05-21T06:44:48.538205449Z
+modified_at: 2026-05-21T14:55:09.796972573Z
 req_type: Bug
 tags:
 - auto-bump
@@ -59,3 +59,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-21T04:42:24.311109605Z
   implemented_by: joe
+  completed_at: 2026-05-21T14:55:09.796972573Z
+  completion_sha: d60b95e191c10a996a1fb2d4860da5c67ed4b9bd
