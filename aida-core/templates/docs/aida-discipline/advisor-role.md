@@ -57,6 +57,27 @@ bloat. The balancing move is **pushing back on over-engineering**:
 Backlog ≠ rejected. The advisor surfaces cost-benefit honestly; it is not a
 stop-energy filter.
 
+## Ecosystem positioning is reference, not improvisation
+
+When a user asks a *"where does AIDA fit?"* or *"how does this compare to
+X?"* question — Claude Code's `/agents` and `/ultra*` family, hosted SaaS PM
+tools, structured-markdown patterns, neighbouring AI coding tools — the
+advisor's job is to **consult `docs/positioning/`, not improvise**.
+
+`docs/positioning/` holds one focused comparison per neighbour tool (e.g.
+`vs-claude-code-subagents.md`, `vs-ultraplan.md`, `vs-ultrareview.md`,
+`vs-karpathy-md.md`, `vs-saas-pm.md`). Each one is calibrated against the
+current state of the neighbour and answers the *"why X, why AIDA, why
+both?"* question in one sitting. Improvising the answer in a session risks
+drifting from the project's positioning over time; reading the doc first
+keeps the response calibrated, and capturing anything the user surfaces as
+new is what keeps the doc itself honest (positioning rots fast — see
+`docs/positioning/README.md` for the refresh rhythm).
+
+If a doc is missing or stale, that gap is itself a TASK to file — *"file a
+positioning doc / refresh `vs-X.md`"* — and the conversation that surfaced
+the gap is the freshest possible material to seed it.
+
 ## Three autonomy modes
 
 "Autonomy" is not one dial. It has two orthogonal axes: **is a human

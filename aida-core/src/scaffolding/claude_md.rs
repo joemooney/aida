@@ -200,6 +200,10 @@ live in `docs/aida-discipline/` (scaffolded by `aida init`).
 - **Session habits** — verify before filing, pause for design input, trust
   the reviewer, check for in-flight work before rejecting. See
   `docs/aida-discipline/session-discipline.md`.
+- **Ecosystem positioning** — for "where does AIDA fit / vs X?" questions
+  (Claude Code `/agents` & `/ultra*` family, hosted SaaS PM, markdown-only
+  patterns, neighbouring AI coding tools), consult `docs/positioning/`
+  rather than improvising; capture gaps as new positioning docs.
 - **Start here** — `docs/aida-discipline/README.md` indexes the pack and
   explains the companion starter memory pack (`aida init --with-memories`).
 "#
