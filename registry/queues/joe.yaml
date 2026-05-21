@@ -123,12 +123,6 @@
   added_at: 2026-05-16T22:42:52.869720492Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e367c-1d88-70a3-8998-e9a0a5fef7cd
-  position: 36000
-  added_by: joe
-  added_at: 2026-05-17T15:09:27.202524390Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e368b-3f02-7ea0-9776-129d74768a36
   position: 37000
   added_by: joe
