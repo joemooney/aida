@@ -311,6 +311,7 @@ Two Claude sessions get spawned (phase 1 + phase 3), each in its own worktree; t
 
 - **CLI (`aida`)** — daily-driver command-line interface
 - **MCP server** — Claude Code (and any MCP client) queries requirements natively
+- **MCP coordination surface** — any MCP-speaking agent (Codex, Cursor, …) can participate in AIDA drains via the coordination tools (punts, findings, leases, directives). See [`docs/architecture/mcp-coordination-surface.md`](docs/architecture/mcp-coordination-surface.md).
 - **Claude Code skills** — `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-search`, `/aida-plan`, and more
 - **Trace comments + commit hooks** — code-to-requirement linkage enforced at commit time
 - **React web dashboard** — kanban, sprint planning, my-queue inbox, AI chat (start with `aida-server` + `cd aida-web-react && npm run dev`)
