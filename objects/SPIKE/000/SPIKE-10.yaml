@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T07:30:34.073658760Z
-modified_at: 2026-05-21T02:19:44.149652969Z
+modified_at: 2026-05-21T02:19:45.368444155Z
 req_type: Spike
 tags:
 - advisor-mentoring
@@ -80,3 +80,14 @@ tags:
 - strategic-thinking
 - substrate-propagation
 - subsystem-scoping
+comments:
+- id: 019e4854-eb58-7540-9e0c-8753bfd63517
+  author: joe
+  content: |-
+    Strategic doc landed at docs/multi-advisor-coordination.md. Verdict: two-track approach. Track A (focus/scoping) → STORY-362
+    SPIKE-10 + STORY-363
+    SPIKE-10, approved/medium. Track B (ongoing relationship) → STORY-364
+    SPIKE-10 + STORY-365
+    SPIKE-10, approved/low (file now, implement when second project exists). Follow-up: SPIKE-12 (pack-scale hygiene threshold).
+  created_at: 2026-05-21T02:19:45.368444155Z
+  modified_at: 2026-05-21T02:19:45.368444155Z
