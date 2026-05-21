@@ -74,7 +74,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:37:28.746765756Z
-modified_at: 2026-05-21T14:37:28.746765756Z
+modified_at: 2026-05-21T14:40:33.828579945Z
 req_type: Story
 tags:
 - automation
@@ -83,3 +83,9 @@ tags:
 - phase-1-failure
 - recovery
 - wizard
+comments:
+- id: 019e4afb-2624-7d22-8847-3a8fe52ec7eb
+  author: joe
+  content: 'Acceptance refinement (2026-05-21, user note): the wizard''s CI-wait step must use `gh pr checks <N> --watch` (or AIDA''s `--wait-ci` equivalent) between PR-create and merge — blocking on CI is not optional. Merging on uncolored CI risks shipping with an actually-red build that hasn''t reported yet. User context: manual recovery of TASK-416 required them to remember the `--wait-ci` step; the wizard should make it impossible to skip. Also: wrap the merge call with BUG-286''s transient-retry layer so network blips don''t abort an otherwise-clean recovery.'
+  created_at: 2026-05-21T14:40:33.828579945Z
+  modified_at: 2026-05-21T14:40:33.828579945Z
