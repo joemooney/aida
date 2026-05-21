@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:09:26.094137392Z
-modified_at: 2026-05-21T04:14:03.632759784Z
+modified_at: 2026-05-21T04:23:18.896192862Z
 req_type: Bug
 tags:
 - batch:tui-v2
@@ -42,3 +42,20 @@ tags:
 - termguard
 - terminal-state
 - tui
+comments:
+- id: 019e48c6-0a70-7790-94d4-935b016e10b6
+  author: joe
+  content: |-
+    Implemented on branch `bug-110` (commit 2435b126):
+
+    - aida-tui/src/term.rs: install_signal_handler() registers a ctrlc handler (SIGTERM + SIGINT on Unix; CTRL_C_EVENT + CTRL_BREAK_EVENT on Windows) that calls restore_terminal() then exit(130)
+    - A static AtomicBool TERMINAL_NEEDS_RESTORE gates restore_terminal() so TermGuard::drop, the panic hook, and the signal handler share one restore path — the first caller wins, the others no-op
+    - aida-tui/src/lib.rs wires install_signal_handler() in at TUI launch, after install_panic_hook() and before TermGuard::enter()
+    - docs/tui/README.md: new "Terminal-state safety" section documents the three exit paths + SIGKILL as the only uncatchable case (recovery: `reset`)
+    - Unit test restore_gate_is_single_writer covers all three flag transitions (unarmed→noop, armed→restore→clear, second-restorer→noop)
+
+    Test status: 52/52 aida-tui lib tests green; cargo fmt --all --check clean; cargo build --workspace clean.
+
+    Two implementer findings filed for advisor triage: TASK-427 (collapsed exit code 130 for both SIGINT and SIGTERM — ctrlc loses the originating signum), TASK-428 (acceptance #4 covered by unit tests + manual smoke-test recipe rather than end-to-end PTY automation).
+  created_at: 2026-05-21T04:23:18.896192862Z
+  modified_at: 2026-05-21T04:23:18.896192862Z
