@@ -15,12 +15,12 @@ description: |
   2. Add a `State:` preamble to the orchestrator template too (probably the better fix — completes TASK-359's rubric in the case-study template as well).
 
   Raised in review of PR-130: https://github.com/joemooney/aida/pull/130
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T17:27:44.970022344Z
-modified_at: 2026-05-20T17:27:44.970022344Z
+modified_at: 2026-05-21T04:48:46.777286364Z
 req_type: Task
 tags:
 - docs
