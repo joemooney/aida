@@ -117,7 +117,7 @@ pub enum TraceCommand {
         link_id: String,
     },
 
-    /// Scan source files for trace comments (// trace:REQ-ID format)
+    /// Scan source files for AIDA trace annotations
     Scan {
         /// Path to scan (file or directory, defaults to current directory)
         path: Option<String>,
@@ -1664,18 +1664,18 @@ pub enum DoctorCommand {
         yes: bool,
     },
 
-    /// Walk source files under the project root for `trace:<SPEC-ID>`
-    /// comments and verify each spec_id resolves to an existing
-    /// requirement. Catches dead trace comments left behind after a req
-    /// got deleted, or simple typos. Default is read-only; pass
-    /// `--strip-dangling` to remove trace markers pointing at unknown
-    /// spec_ids (whole comment line deleted if the trace was its only
-    /// content; otherwise just the trace fragment is excised).
+    /// Walk source files under the project root for AIDA trace annotations
+    /// and verify each spec_id resolves to an existing requirement.
+    /// Catches dead trace comments left behind after a req got deleted, or
+    /// simple typos. Default is read-only; pass `--strip-dangling` to
+    /// remove markers pointing at unknown spec_ids (whole comment line
+    /// deleted if the trace was its only content; otherwise just the
+    /// trace fragment is excised).
     // trace:EPIC-19 | ai:claude
     ValidateTraceComments {
-        /// Rewrite source files to remove `trace:<DANGLING>` annotations.
-        /// Lossy — comments around the trace are preserved, but the
-        /// trace pointer itself is gone.
+        /// Rewrite source files to remove dangling AIDA trace annotations.
+        /// Lossy — comments around the marker are preserved, but the
+        /// pointer itself is gone.
         // trace:EPIC-19 | ai:claude
         #[clap(long)]
         strip_dangling: bool,
@@ -3005,10 +3005,11 @@ pub enum WorkerCommand {
     },
 }
 
-/// Headless-log introspection (TASK-398). A `--no-human` drain writes one
-/// JSONL file per child session under `.aida/headless-logs/`; this subcommand
-/// wraps the right block-type filtering so the user gets a clean text stream
-/// instead of the pages of `null` a naive `jq` filter produces. trace:TASK-398
+// Headless-log introspection. A `--no-human` drain writes one JSONL file per
+// child session under `.aida/headless-logs/`; this subcommand wraps the right
+// block-type filtering so the user gets a clean text stream instead of the
+// pages of `null` a naive `jq` filter produces.
+// trace:TASK-398 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum HeadlessCommand {
     /// Stream a headless-drain JSONL log as clean text — one block of
@@ -4421,7 +4422,7 @@ pub enum PlanCommand {
 
     /// Derive a `## Reusable helpers` section for a spec from the trace
     /// graph: walk sibling specs (same parent), same-feature specs, and
-    /// tag-sharing specs, harvest their `// trace:` comments, and report
+    /// tag-sharing specs, harvest their AIDA trace annotations, and report
     /// the files + helpers they already touch so the implementer reuses
     /// rather than re-invents.
     // trace:TASK-94 | ai:claude
@@ -4651,11 +4652,11 @@ mod tests {
     use super::*;
     use clap::CommandFactory;
 
-    /// True when `s` contains a real AIDA trace marker — `trace:` followed by
-    /// an uppercase SPEC-ID prefix, a dash, and a digit (e.g. `trace:STORY-62`,
-    /// `trace:TASK-1-021`). Legit help-text mentions of the trace machinery use
-    /// placeholders (`trace:REQ-ID`, `trace:<SPEC-ID>`) with no digit after the
-    /// dash, so this discriminates leaked breadcrumbs from prose. trace:BUG-227
+    // True when `s` contains a real AIDA trace marker — the literal `trace:`
+    // token followed by an uppercase SPEC-ID prefix, a dash, and a digit (e.g.
+    // STORY-62, TASK-1-021). Legit help-text mentions of the trace machinery
+    // use placeholders (REQ-ID, <SPEC-ID>) with no digit after the dash, so
+    // this discriminates leaked breadcrumbs from prose.
     fn has_trace_marker(s: &str) -> bool {
         let mut search_from = 0;
         while let Some(pos) = s[search_from..].find("trace:") {
@@ -4676,8 +4677,8 @@ mod tests {
         false
     }
 
-    /// Walk the clap command tree, recording every help/about string that
-    /// carries a leaked SPEC-ID trace marker. trace:BUG-227
+    // Walk the clap command tree, recording every help/about string that
+    // carries a leaked SPEC-ID trace marker.
     fn collect_leaks(cmd: &clap::Command, path: &str, leaks: &mut Vec<String>) {
         let here = if path.is_empty() {
             cmd.get_name().to_string()
@@ -4730,9 +4731,9 @@ mod tests {
         assert!(!has_trace_marker("no marker here at all"));
     }
 
-    /// Regression test for BUG-227: SPEC-IDs are developer breadcrumbs and must
-    /// never reach `--help`. A `///` doc comment on a clap field/variant doubles
-    /// as help text, so any `trace:` marker on one leaks — keep it a plain `//`.
+    // Regression test for BUG-227: SPEC-IDs are developer breadcrumbs and must
+    // never reach `--help`. A `///` doc comment on a clap field/variant doubles
+    // as help text, so any trace marker on one leaks — keep it a plain `//`.
     #[test]
     fn help_text_carries_no_trace_markers() {
         let mut leaks = Vec::new();
@@ -4742,6 +4743,37 @@ mod tests {
             "SPEC-ID trace markers leaked into `--help` output — demote the \
              offending `///` doc comment to a plain `//` comment:\n  {}",
             leaks.join("\n  ")
+        );
+    }
+
+    // Source-side hygiene check: no `///` doc comment in this file may contain
+    // the literal `trace:` token. Catches potential leaks before clap builds
+    // the tree (covers hidden subcommands, enum-level docs, even commented-out
+    // `///` blocks that the runtime walker can't see). Pairs with
+    // `help_text_carries_no_trace_markers` — runtime + source, belt + braces.
+    #[test]
+    fn source_doc_comments_carry_no_trace_token() {
+        let src = include_str!("cli.rs");
+        let offenders: Vec<(usize, &str)> = src
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| {
+                let trimmed = line.trim_start();
+                trimmed.starts_with("///") && trimmed.contains("trace:")
+            })
+            .map(|(i, line)| (i + 1, line))
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "`///` doc comments in cli.rs must not contain the `trace:` token \
+             (placeholders or real markers — both leak into `--help` output \
+             when on a clap field). Demote to a plain `//` line above the \
+             item, or reword the prose to drop the literal token:\n{}",
+            offenders
+                .iter()
+                .map(|(n, l)| format!("  {n}: {l}"))
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     }
 }
