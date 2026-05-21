@@ -2395,6 +2395,14 @@ pub enum QueueCommand {
         // trace:TASK-318 | ai:claude
         #[clap(long)]
         after: Option<String>,
+        /// Allow moving an entry whose spec has terminal status
+        /// (Completed/Rejected). The default refuses with an error so
+        /// `queue move` doesn't silently no-op on a stale entry the
+        /// queue list view hides. Has no effect when the entry isn't in
+        /// the queue at all — that case still errors.
+        // trace:BUG-249 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
     /// Clear queue entries
     Clear {
