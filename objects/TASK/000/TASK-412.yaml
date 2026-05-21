@@ -21,13 +21,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T17:18:50.226672965Z
-modified_at: 2026-05-21T07:41:20.336297531Z
+modified_at: 2026-05-21T07:42:20.724435923Z
 req_type: Task
 tags:
 - from-implementer:TASK-390
 - kind:design-choice
 - severity:minor
 - template-shape
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e497c-30c9-7f80-8406-bd9eca7831a1
+  created_at: 2026-05-21T07:42:20.724424044Z
+  created_by: joe
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T07:41:20.336297531Z
