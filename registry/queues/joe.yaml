@@ -464,12 +464,6 @@
   added_at: 2026-05-19T01:47:03.983171574Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e3df2-4124-7273-993d-69973bdc0e92
-  position: 114000
-  added_by: joe
-  added_at: 2026-05-19T01:55:50.529942290Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e3dff-db88-7b11-b5cc-a013eca56288
   position: 115000
   added_by: joe
