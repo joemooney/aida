@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:35:44.137066478Z
-modified_at: 2026-05-21T02:45:26.334939625Z
+modified_at: 2026-05-21T03:03:04.373016960Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -17,3 +17,9 @@ tags:
 - first-users
 - low-friction
 - qol
+comments:
+- id: 019e487c-93b5-77b0-9649-1066dbd7e339
+  author: joe
+  content: Commit 8a6fc25d references this requirement
+  created_at: 2026-05-21T03:03:04.373016960Z
+  modified_at: 2026-05-21T03:03:04.373016960Z
