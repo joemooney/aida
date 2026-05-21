@@ -3853,6 +3853,41 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     maybe_hint_after_queue_drain(&storage, &user_id);
                 }
 
+                // BUG-238: file plan `## Followups` when `aida edit` directly
+                // transitions a spec into Done/Completed. `aida queue done`
+                // and the STORY-86 auto-bump already trigger the parse; the
+                // direct-edit path (used by `/aida-review` step 10) was the
+                // hole — followups were silently lost. Idempotent via the
+                // [aida:followups] marker, so whichever path runs first wins.
+                // Interactive only when stdin is a TTY; non-TTY (skill /
+                // script context) files all bullets so the silent-loss case
+                // that motivated this fix actually surfaces them.
+                // trace:BUG-238 | ai:claude
+                if matches!(
+                    new_status_for_manifest.as_deref(),
+                    Some("Done") | Some("Completed")
+                ) {
+                    if let (Ok(project_root), Some(spec_id)) =
+                        (find_project_root(), req.spec_id.as_deref())
+                    {
+                        let storage = Storage::new(store_path.to_path_buf());
+                        let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
+                        if let Err(e) = extract_plan_followups(
+                            &storage,
+                            &project_root,
+                            spec_id,
+                            spec_id,
+                            interactive,
+                        ) {
+                            eprintln!(
+                                "{} followup extraction skipped: {}",
+                                "Warning:".yellow().bold(),
+                                e
+                            );
+                        }
+                    }
+                }
+
                 // TASK-358: triage out of NeedsAttention — clean up any
                 // orchestrator-escalated worktree for this spec. The lease's
                 // `escalated_to_human` marker (stamped by the
