@@ -1,0 +1,39 @@
+id: 019e48d8-5a50-7113-af15-7adf8f207420
+spec_id: TASK-431
+agreed_id: TASK-431
+title: parse_plan_followups should filter sentinel bullets (None, N/A, Nothing)
+description: |-
+  The `## Followups` parser at `aida-cli/src/main.rs::parse_plan_followups` currently filters empty bullets, bullets containing `<`, and bullets starting with `file as`. It does NOT recognize common sentinel bullets indicating "no followups" — `- None`, `- N/A`, `- Nothing`, `- (none)`. These get filed as real child TASKs.
+
+  ## Origin
+
+  2026-05-20: while shipping BUG-238 itself, the plan file `docs/plans/2026-05-20-bug-238-edit-followups.md` used "- None — the fix is self-contained. …" under `## Followups`. The new `aida queue done` followup parse picked it up and filed it as TASK-430. The TASK was rejected by hand.
+
+  ## Fix
+
+  Extend the filter in `parse_plan_followups` to drop sentinel bullets. Suggested patterns (case-insensitive match on the first word):
+  - `None` / `(none)`
+  - `N/A` / `NA`
+  - `Nothing` / `Nothing here`
+
+  Keep it conservative — only first-word sentinels, so a real bullet like "None of these handlers do X" is not eaten.
+
+  ## Test
+
+  Extend `plan_followups_parse_edges` in `aida-cli/src/main.rs` with the sentinel cases.
+
+  ## Composes with
+
+  - TASK-96 (the parser)
+  - BUG-238 (the wiring fix that surfaced this)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T04:43:18.992090557Z
+modified_at: 2026-05-21T04:43:18.992090557Z
+req_type: Task
+tags:
+- followups
+- parser
+- task-96
