@@ -104,14 +104,14 @@ if [ "$refresh" = "1" ]; then
     exit $?
 fi
 
-# Inspect the most recent cross-platform run on main. When there are no
-# runs, `gh` emits `[]`; `.[0]` yields null which `@tsv` renders as a row
-# of empty/null fields (not an empty string). The `[ -z "$line" ]` check
-# below only catches the truly-empty case (`gh` errored, `|| true`
-# swallowed it), treated as "no prior run". trace:TASK-283 | ai:claude
+# Inspect the most recent cross-platform run on main. Iterating with `.[]`
+# (rather than indexing `.[0]`) emits zero rows when `gh` returns `[]`, so
+# `$line` is genuinely empty in the no-prior-run case. Using `.[0]` here
+# produced a tab-separated `null` row that defeated the `[ -z "$line" ]`
+# check below. trace:TASK-389 | ai:claude
 line=$(gh run list --workflow="$WORKFLOW" --branch main --limit 1 \
         --json status,conclusion,createdAt,databaseId,url \
-        -q '.[0] | [.status, .conclusion, .createdAt, (.databaseId|tostring), .url] | @tsv' \
+        -q '.[] | [.status, .conclusion, .createdAt, (.databaseId|tostring), .url] | @tsv' \
         2>/dev/null || true)
 
 if [ -z "$line" ]; then
