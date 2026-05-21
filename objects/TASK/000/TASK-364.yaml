@@ -12,15 +12,19 @@ description: |-
   Edge case — most users won't indent directives, but a heredoc'd overnight plan could include leading-indent for readability.
 
   Raised in review of PR-112: https://github.com/joemooney/aida/pull/112
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T02:50:11.509264623Z
-modified_at: 2026-05-21T02:17:09.883765704Z
+modified_at: 2026-05-21T02:19:50.915578549Z
 req_type: Task
 tags:
 - aida-worker
 - bash
 - from-review:PR-112
 - severity:minor
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-21T02:19:50.915578549Z
+  implemented_by: joe
