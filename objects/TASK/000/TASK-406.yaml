@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:51:47.676266249Z
-modified_at: 2026-05-21T01:38:04.738805946Z
+modified_at: 2026-05-21T01:38:05.873590382Z
 req_type: Task
 tags:
 - cli-ux
@@ -80,3 +80,8 @@ comments:
   content: 'Bumped low → medium 2026-05-20: third occurrence in one day (TASK-358 merge, BUG-249 merge, both manual-recovery close-outs). Recurring friction in the recovery path; deserves prioritization.'
   created_at: 2026-05-21T01:20:40.247049423Z
   modified_at: 2026-05-21T01:20:40.247049423Z
+- id: 019e482e-c7b1-76d0-ab90-16848db22159
+  author: joe
+  content: 'Bumped medium → high 2026-05-20: fourth occurrence in one day (TASK-358, BUG-249, TASK-284 merges all hit this; PR-124 still pending will be the fifth). Friction is recurring on every single recovery-flow merge — no longer ''low'' or ''medium'' priority.'
+  created_at: 2026-05-21T01:38:05.873590382Z
+  modified_at: 2026-05-21T01:38:05.873590382Z
