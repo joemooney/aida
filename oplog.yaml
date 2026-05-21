@@ -8393,5 +8393,13 @@ operations:
   timestamp: 2026-05-21T01:20:39.005651933Z
   kind: !SetPriority
     priority: Medium
-clock: 888
+- id: 019e4823-49e2-7493-b69a-ae835e645d0d
+  target_id: 019e4620-464b-7133-a298-bc9686a78a5e
+  author: aida
+  node_id: '1'
+  lamport: 889
+  timestamp: 2026-05-21T01:25:32.770284722Z
+  kind: !SetStatus
+    status: Rejected
+clock: 889
 node_id: '1'
