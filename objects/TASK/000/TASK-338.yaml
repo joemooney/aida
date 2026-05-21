@@ -58,12 +58,12 @@ description: |-
   ## Origin
 
   2026-05-18: user asked "are we calling the instance of aida that calls the claude sessions / aida pull / build the 'orchestrator'?" — a vocab-confirmation question. The term IS used consistently (error messages, BUG specs, \`aida orchestrator status\`, \`orchestrator.rs\`) but never canonically *defined*. Across this session, term-precision recurred as a need (phase, drain, lease, stale-lease, false phase-failure). A glossary makes the machinery vocabulary one-definition-each so specs and agent handoffs stay coherent.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T01:55:47.108981725Z
-modified_at: 2026-05-21T06:23:25.260469836Z
+modified_at: 2026-05-21T06:31:26.845090958Z
 req_type: Task
 tags:
 - documentation
@@ -72,3 +72,7 @@ tags:
 - orchestrator
 - reference
 - vocabulary
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-21T06:31:26.845090958Z
+  implemented_by: joe
