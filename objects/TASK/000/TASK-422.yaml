@@ -1,0 +1,38 @@
+id: 019e4839-2457-7cb3-8a51-b81db16cf9c4
+spec_id: TASK-422
+agreed_id: TASK-422
+title: queue-done gate creates chicken-and-egg with /aida-pr status check
+description: |-
+  While shipping BUG-269, the new `aida queue done` gate exposed an ordering issue with the existing `/aida-pr` skill:
+
+  - BUG-269's gate: `aida queue done` refuses unless an open PR exists for the branch.
+  - `/aida-pr` Step 3: refuses to open a PR when any covered REQ-ID is `In Progress` (only `Done` / `Completed` pass).
+
+  After BUG-269, the documented `/aida-pickup` Step 5 → Step 5c ordering (queue done → /aida-pr) is inverted: PR must come first. But /aida-pr's status check still requires Done, so the implementer can never reach a `Done` state through the normal flow:
+
+  1. Implement + commit → spec stays In Progress.
+  2. `aida queue done` refuses (no PR open).
+  3. `/aida-pr` refuses (spec is In Progress).
+
+  Three resolutions worth considering:
+  - **Update `/aida-pr` Step 3** to accept `In Progress` when no PR exists yet for the branch (i.e. "this is the PR that ships it"). Probably the cleanest — preserves the queue done → /aida-pr split's intent while honoring the new gate ordering.
+  - **Update `/aida-pickup` Step 5/5c order** so /aida-pr runs first and queue done runs after, with a `aida edit --status done` somewhere in between. More documentation churn.
+  - **Document the bootstrap escape**: `aida edit <spec> --status done` (sidesteps the gate, since edit isn't gated) is what I used to ship BUG-269 itself. Could be canonicalized in the skill.
+
+  For BUG-269 itself I shipped via path (3): `aida edit BUG-269 --status done` → `/aida-pr` → `aida queue done` (gate now passes — PR is open). Worked, but the manual edit step is a workflow regression unless one of these is adopted.
+
+  Severity: minor — the system still works, but the documented pickup workflow is now broken at the literal step level. The spec's `--force` escape is for "different already-merged branch," not for this in-flow ordering issue.
+
+  Raised by the implementer while working BUG-269.
+  Branch: bug-269  ·  Commit: 247d9aac  ·  PR: #136
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T01:49:24.951947371Z
+modified_at: 2026-05-21T01:49:24.951947371Z
+req_type: Task
+tags:
+- from-implementer:BUG-269
+- kind:followup-suggestion
+- severity:minor
