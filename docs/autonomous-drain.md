@@ -160,11 +160,15 @@ that thinks it is standalone runs menus that break the chain; a standalone
 session that thinks it is orchestrated stalls waiting for an orchestrator
 that does not exist (BUG-233's two misfires).
 
-**How corroboration works.** For the lifetime of each run the orchestrator
-holds a marker file `.aida/orchestrator-runs/<run-uuid>` (under the *main*
-worktree root) recording its own PID. A child trusts orchestrator-mode only
-when `AIDA_AUTO_COMPLETE=1` **and** `AIDA_AUTO_COMPLETE_TOKEN` names a marker
-whose PID is alive. The marker is RAII-cleaned when the run ends.
+**How corroboration works.** For the lifetime of each spec's orchestration
+the orchestrator records its run-UUID + PID into the live drain-state file
+`.aida/drain-state.json` (under the *main* worktree root). A child trusts
+orchestrator-mode only when `AIDA_AUTO_COMPLETE=1` **and**
+`AIDA_AUTO_COMPLETE_TOKEN` matches the file's recorded `run_uuid` and its
+`orchestrator_pid` is alive. The drain-state file is removed on clean exit;
+between batch members the run-UUID is cleared so a sibling member's token can
+no longer corroborate. (Folded together by TASK-336 — before that, a sidecar
+`.aida/orchestrator-runs/<run-uuid>` marker file owned the corroboration.)
 
 **How to check it.** `aida orchestrator status` prints `orchestrated` (the
 corroborated verdict) or `interactive`; `--json` adds `corroborated` +

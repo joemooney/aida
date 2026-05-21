@@ -1,4 +1,4 @@
-//! Orchestrator-run corroboration (BUG-233).
+//! Orchestrator-run corroboration (BUG-233, TASK-336).
 //!
 //! # The problem
 //!
@@ -16,17 +16,23 @@
 //!
 //! # The corroboration token
 //!
-//! The orchestrator mints a per-run UUID and, for the lifetime of the run,
-//! holds a [`RunMarkerGuard`] — a marker file `.aida/orchestrator-runs/<uuid>`
-//! recording the orchestrator's own PID. It passes `AIDA_AUTO_COMPLETE_TOKEN=
-//! <uuid>` to every phase child alongside `AIDA_AUTO_COMPLETE=1`.
+//! For the lifetime of each spec's orchestration the orchestrator mints a
+//! per-run UUID and records it as [`crate::drain_state::DrainState::run_uuid`]
+//! on the live drain-state file ([`crate::drain_state`]). It passes
+//! `AIDA_AUTO_COMPLETE_TOKEN=<uuid>` to every phase child alongside
+//! `AIDA_AUTO_COMPLETE=1`. TASK-336 folded the run-UUID into the drain-state
+//! file — before that this module owned a sidecar marker file
+//! `.aida/orchestrator-runs/<uuid>`, which has been removed since the drain-
+//! state file already records every other field corroboration needs (PID,
+//! current spec, `--zen` flag, started-at).
 //!
 //! A child trusts orchestrator-mode ([`OrchestratorContext::Orchestrated`])
 //! **only** when all three hold:
 //!
 //! 1. `AIDA_AUTO_COMPLETE` is set, AND
 //! 2. `AIDA_AUTO_COMPLETE_TOKEN` is set, AND
-//! 3. the token names a marker file whose recorded PID is still alive.
+//! 3. the token matches [`crate::drain_state::DrainState::run_uuid`] on the
+//!    live drain-state file whose recorded PID is still alive.
 //!
 //! A bare `AIDA_AUTO_COMPLETE=1` with no valid live token is
 //! [`OrchestratorContext::Uncorroborated`]: treated exactly as interactive,
@@ -39,21 +45,23 @@
 //! which re-runs [`detect`] live. A second *propagated* env var
 //! (`AIDA_ORCHESTRATED=1`) would just reintroduce the same unverifiable-bare-
 //! flag bug one layer down. The command cannot go stale: it re-checks the
-//! marker + PID every call.
+//! drain-state file + PID every call.
 //!
-//! trace:BUG-233 | ai:claude
+//! trace:BUG-233 trace:TASK-336 | ai:claude
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::drain_state;
 use crate::process_probe;
 
 /// The orchestrator → child signal that a phase subprocess belongs to an
 /// `--auto-complete` run. On its own it is **not** trusted — see [`TOKEN_ENV`].
 pub(crate) const AUTO_COMPLETE_ENV: &str = "AIDA_AUTO_COMPLETE";
 
-/// The corroboration token: a per-run UUID naming a marker file under
-/// `.aida/orchestrator-runs/`. Set by the orchestrator alongside
-/// [`AUTO_COMPLETE_ENV`] on every phase child.
+/// The corroboration token: a per-run UUID matching
+/// [`crate::drain_state::DrainState::run_uuid`] on the live drain-state file.
+/// Set by the orchestrator alongside [`AUTO_COMPLETE_ENV`] on every phase
+/// child. trace:TASK-336
 pub(crate) const TOKEN_ENV: &str = "AIDA_AUTO_COMPLETE_TOKEN";
 
 /// The 1-based phase index (`1`..=`6`) the current process is running, set by
@@ -69,130 +77,29 @@ pub(crate) const PHASE_ENV: &str = "AIDA_AUTO_COMPLETE_PHASE";
 /// interactive run. trace:TASK-306 | ai:claude
 pub(crate) const NO_HUMAN_MODE_ENV: &str = "AIDA_NO_HUMAN_MODE";
 
-/// Subdirectory of `.aida/` holding one marker file per *live* orchestrator
-/// run. Gitignored by the deny-by-default `.aida/*` rule — pure runtime state.
-const RUNS_SUBDIR: &str = "orchestrator-runs";
-
-/// Directory holding the per-run marker files for `project_root`.
-pub(crate) fn runs_dir(project_root: &Path) -> PathBuf {
-    project_root.join(".aida").join(RUNS_SUBDIR)
-}
-
-/// Path of the marker file for `token` under `project_root`.
-pub(crate) fn marker_path(project_root: &Path, token: &str) -> PathBuf {
-    runs_dir(project_root).join(token)
-}
-
-/// A token is only ever a bare UUID. Rejecting anything else before it is
-/// joined into [`marker_path`] keeps a crafted `AIDA_AUTO_COMPLETE_TOKEN` from
-/// escaping `.aida/orchestrator-runs/` (path traversal). trace:BUG-233
+/// A token is only ever a bare UUID. Rejecting anything else keeps a crafted
+/// `AIDA_AUTO_COMPLETE_TOKEN` from ever being treated as live, regardless of
+/// what happens to land in the drain-state file. trace:BUG-233
 fn is_valid_token(token: &str) -> bool {
     uuid::Uuid::parse_str(token).is_ok()
 }
 
-/// The contents of an orchestrator-run marker file. Only [`RunMarker::pid`] is
-/// load-bearing for orchestrator corroboration; `spec` and `started_at` are
-/// diagnostic (and the natural fold-in point when STORY-301's drain-state file
-/// lands). `zen` records whether the run was started with `--zen` — a phase
-/// child corroborates its inherited `AIDA_ZEN` against it (BUG-237).
+/// The diagnostic view of the live orchestrator run owning the current
+/// process — derived from [`crate::drain_state::DrainState`] (TASK-336). Only
+/// [`RunMarker::pid`] and the corroborated [`RunMarker::zen`] are load-bearing
+/// — `spec` and `started_at` are diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RunMarker {
     /// PID of the orchestrator process that owns this run.
     pub(crate) pid: u32,
     /// The spec the run is draining (diagnostic).
     pub(crate) spec: String,
-    /// RFC-3339 timestamp the run started (diagnostic).
+    /// RFC-3339 timestamp the drain started (diagnostic).
     pub(crate) started_at: String,
-    /// BUG-237: whether the orchestrator run was started with `--zen`. A
-    /// phase child trusts an inherited `AIDA_ZEN=1` only when this is true.
+    /// BUG-237: whether the current spec's orchestration was started with
+    /// `--zen`. A phase child trusts an inherited `AIDA_ZEN=1` only when this
+    /// is true.
     pub(crate) zen: bool,
-}
-
-impl RunMarker {
-    /// Render as the `key=value` line format written to disk.
-    fn serialize(&self) -> String {
-        format!(
-            "pid={}\nspec={}\nstarted_at={}\nzen={}\n",
-            self.pid, self.spec, self.started_at, self.zen
-        )
-    }
-
-    /// Parse a marker file body. Returns `None` when the file is unreadable or
-    /// has no parseable `pid=` line — a torn write fails safe (no live run).
-    /// A missing `zen=` line defaults to `false` (back-compat with pre-BUG-237
-    /// markers, and the safe direction — an un-flagged run is not zen).
-    fn parse(body: &str) -> Option<Self> {
-        let mut pid: Option<u32> = None;
-        let mut spec = String::new();
-        let mut started_at = String::new();
-        let mut zen = false;
-        for line in body.lines() {
-            let Some((key, value)) = line.split_once('=') else {
-                continue;
-            };
-            match key.trim() {
-                "pid" => pid = value.trim().parse::<u32>().ok(),
-                "spec" => spec = value.trim().to_string(),
-                "started_at" => started_at = value.trim().to_string(),
-                "zen" => zen = value.trim() == "true",
-                _ => {}
-            }
-        }
-        pid.map(|pid| Self {
-            pid,
-            spec,
-            started_at,
-            zen,
-        })
-    }
-
-    /// Read + parse the marker file at `path`, or `None` on any failure.
-    fn read(path: &Path) -> Option<Self> {
-        Self::parse(&std::fs::read_to_string(path).ok()?)
-    }
-}
-
-/// RAII handle for an orchestrator-run marker file. The marker exists for as
-/// long as the guard is held; [`Drop`] removes it, so a finished — or panicked
-/// — run leaves no stale marker for a later child to corroborate against.
-///
-/// The [`token`](Self::token) is what the orchestrator passes to its children
-/// as `AIDA_AUTO_COMPLETE_TOKEN`.
-pub(crate) struct RunMarkerGuard {
-    path: PathBuf,
-    token: String,
-}
-
-impl RunMarkerGuard {
-    /// Mint a fresh run UUID, write its marker file under `project_root`, and
-    /// return the guard. The marker records *this* process's PID — so a child
-    /// corroborating the token confirms a live orchestrator. `zen` records
-    /// whether the run was started with `--zen` (BUG-237).
-    pub(crate) fn register(project_root: &Path, spec: &str, zen: bool) -> std::io::Result<Self> {
-        let token = uuid::Uuid::now_v7().to_string();
-        let dir = runs_dir(project_root);
-        std::fs::create_dir_all(&dir)?;
-        let path = dir.join(&token);
-        let marker = RunMarker {
-            pid: std::process::id(),
-            spec: spec.to_string(),
-            started_at: chrono::Utc::now().to_rfc3339(),
-            zen,
-        };
-        std::fs::write(&path, marker.serialize())?;
-        Ok(Self { path, token })
-    }
-
-    /// The run token — passed to phase children as `AIDA_AUTO_COMPLETE_TOKEN`.
-    pub(crate) fn token(&self) -> &str {
-        &self.token
-    }
-}
-
-impl Drop for RunMarkerGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
 }
 
 /// Why a session carrying `AIDA_AUTO_COMPLETE` is *not* trusted as a genuine
@@ -293,21 +200,26 @@ pub(crate) fn classify(
 }
 
 /// Is `token` owned by a live orchestrator run? True iff it is a valid UUID
-/// naming a marker file under `project_root` whose recorded PID is alive.
+/// that matches [`crate::drain_state::DrainState::run_uuid`] on the drain-
+/// state file under `project_root` whose recorded `orchestrator_pid` is
+/// alive. trace:TASK-336 | ai:claude
 pub(crate) fn run_is_live(project_root: &Path, token: &str) -> bool {
     if !is_valid_token(token) {
         return false;
     }
-    match RunMarker::read(&marker_path(project_root, token)) {
-        Some(marker) => process_probe::pid_is_alive(marker.pid),
-        None => false,
+    let Some(state) = drain_state::DrainState::read(project_root) else {
+        return false;
+    };
+    if state.run_uuid.is_empty() || state.run_uuid != token {
+        return false;
     }
+    process_probe::pid_is_alive(state.orchestrator_pid)
 }
 
 /// The corroborated verdict for the current process, reading `AIDA_AUTO_COMPLETE`
-/// + `AIDA_AUTO_COMPLETE_TOKEN` from the environment and checking the marker
-/// file under `project_root` (resolve it with `find_main_worktree_root` so a
-/// child running in a sibling worktree reads the orchestrator's `.aida/`).
+/// + `AIDA_AUTO_COMPLETE_TOKEN` from the environment and checking the drain-
+/// state file under `project_root` (resolve it with `find_main_worktree_root`
+/// so a child running in a sibling worktree reads the orchestrator's `.aida/`).
 pub(crate) fn detect(project_root: &Path) -> OrchestratorContext {
     classify(
         std::env::var(AUTO_COMPLETE_ENV).ok().as_deref(),
@@ -316,11 +228,12 @@ pub(crate) fn detect(project_root: &Path) -> OrchestratorContext {
     )
 }
 
-/// The marker file of the *live, corroborated* orchestrator run that owns the
-/// current process, or `None`. `Some` exactly when [`detect`] would return
+/// The diagnostic view of the *live, corroborated* orchestrator run that owns
+/// the current process, or `None`. `Some` exactly when [`detect`] would return
 /// [`OrchestratorContext::Orchestrated`] — so a caller that needs a field off
-/// the marker (zen-mode corroboration, BUG-237) gets it without re-deriving
-/// the corroboration. trace:BUG-237 | ai:claude
+/// the run (zen-mode corroboration, BUG-237) gets it without re-deriving the
+/// corroboration. Derived from [`crate::drain_state::DrainState`] (TASK-336).
+/// trace:BUG-237 trace:TASK-336 | ai:claude
 pub(crate) fn live_run_marker(project_root: &Path) -> Option<RunMarker> {
     let auto_complete = std::env::var(AUTO_COMPLETE_ENV).ok()?;
     if auto_complete.is_empty() {
@@ -330,8 +243,19 @@ pub(crate) fn live_run_marker(project_root: &Path) -> Option<RunMarker> {
     if token.is_empty() || !is_valid_token(&token) {
         return None;
     }
-    let marker = RunMarker::read(&marker_path(project_root, &token))?;
-    process_probe::pid_is_alive(marker.pid).then_some(marker)
+    let state = drain_state::DrainState::read(project_root)?;
+    if state.run_uuid.is_empty() || state.run_uuid != token {
+        return None;
+    }
+    if !process_probe::pid_is_alive(state.orchestrator_pid) {
+        return None;
+    }
+    Some(RunMarker {
+        pid: state.orchestrator_pid,
+        spec: state.current.unwrap_or_default(),
+        started_at: state.started_at,
+        zen: state.zen,
+    })
 }
 
 #[cfg(test)]
@@ -422,111 +346,80 @@ mod tests {
         assert_eq!(OrchestratorContext::Interactive.informational_note(), None);
     }
 
-    // --- RunMarker ----------------------------------------------------------
+    // --- run_is_live (TASK-336: keyed off drain-state.json) -----------------
 
-    #[test]
-    fn run_marker_round_trips() {
-        let marker = RunMarker {
-            pid: 4242,
-            spec: "BUG-233".to_string(),
-            started_at: "2026-05-18T12:00:00+00:00".to_string(),
-            zen: false,
-        };
-        assert_eq!(RunMarker::parse(&marker.serialize()), Some(marker));
+    /// Helper: write a single-spec drain-state file with `token` as its
+    /// run-UUID, owned by `pid`. Returns the token unchanged for convenience.
+    fn write_state_with_run(dir: &Path, pid: u32, token: &str, zen: bool) -> String {
+        let mut state = drain_state::DrainState::new_single("BUG-233", token, zen);
+        state.orchestrator_pid = pid;
+        state.write(dir).unwrap();
+        token.to_string()
     }
 
     #[test]
-    fn run_marker_zen_field_round_trips() {
-        // BUG-237: the `zen` flag survives serialize → parse both ways.
-        for zen in [true, false] {
-            let marker = RunMarker {
-                pid: 7,
-                spec: "BUG-237".to_string(),
-                started_at: "now".to_string(),
-                zen,
-            };
-            assert_eq!(
-                RunMarker::parse(&marker.serialize()).map(|m| m.zen),
-                Some(zen)
-            );
-        }
-        // A pre-BUG-237 marker with no `zen=` line defaults to false.
-        assert_eq!(
-            RunMarker::parse("pid=7\nspec=BUG-237\nstarted_at=now\n").map(|m| m.zen),
-            Some(false)
-        );
-    }
-
-    #[test]
-    fn run_marker_parse_rejects_body_without_pid() {
-        assert_eq!(RunMarker::parse("spec=BUG-233\nstarted_at=now\n"), None);
-        assert_eq!(RunMarker::parse(""), None);
-        // A torn write that mangled the pid value fails safe.
-        assert_eq!(RunMarker::parse("pid=not-a-number\n"), None);
-    }
-
-    // --- RunMarkerGuard -----------------------------------------------------
-
-    #[test]
-    fn run_marker_guard_writes_then_drop_removes() {
+    fn run_is_live_true_when_token_matches_live_drain() {
         let dir = tempfile::tempdir().unwrap();
-        let path;
-        {
-            let guard = RunMarkerGuard::register(dir.path(), "BUG-233", true).unwrap();
-            path = marker_path(dir.path(), guard.token());
-            assert!(path.exists(), "marker should exist while guard is held");
-            // The token is a UUID and the marker records this process.
-            assert!(is_valid_token(guard.token()));
-            let marker = RunMarker::read(&path).unwrap();
-            assert_eq!(marker.pid, std::process::id());
-            assert_eq!(marker.spec, "BUG-233");
-            assert!(marker.zen, "register(.., zen=true) records the zen flag");
-        }
-        assert!(!path.exists(), "Drop should remove the marker");
-    }
-
-    // --- run_is_live --------------------------------------------------------
-
-    #[test]
-    fn run_is_live_true_for_live_marker() {
-        let dir = tempfile::tempdir().unwrap();
-        let guard = RunMarkerGuard::register(dir.path(), "BUG-233", false).unwrap();
-        // The marker records this process's PID, which is alive.
-        assert!(run_is_live(dir.path(), guard.token()));
-    }
-
-    #[test]
-    fn run_is_live_false_for_missing_marker() {
-        let dir = tempfile::tempdir().unwrap();
-        let absent = uuid::Uuid::now_v7().to_string();
-        assert!(!run_is_live(dir.path(), &absent));
-    }
-
-    #[test]
-    fn run_is_live_false_for_dead_pid() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(runs_dir(dir.path())).unwrap();
         let token = uuid::Uuid::now_v7().to_string();
-        std::fs::write(
-            marker_path(dir.path(), &token),
-            RunMarker {
-                pid: u32::MAX - 1, // no real process owns this
-                spec: "BUG-233".to_string(),
-                started_at: "now".to_string(),
-                zen: false,
-            }
-            .serialize(),
-        )
-        .unwrap();
+        write_state_with_run(dir.path(), std::process::id(), &token, false);
+        assert!(run_is_live(dir.path(), &token));
+    }
+
+    #[test]
+    fn run_is_live_false_when_no_drain_state_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        assert!(!run_is_live(dir.path(), &token));
+    }
+
+    #[test]
+    fn run_is_live_false_when_token_does_not_match_drain_uuid() {
+        // A token that didn't originate from THIS drain — a stale child
+        // carrying the previous batch member's UUID, for instance — must not
+        // corroborate.
+        let dir = tempfile::tempdir().unwrap();
+        let actual = uuid::Uuid::now_v7().to_string();
+        write_state_with_run(dir.path(), std::process::id(), &actual, false);
+        let stale = uuid::Uuid::now_v7().to_string();
+        assert_ne!(actual, stale);
+        assert!(!run_is_live(dir.path(), &stale));
+    }
+
+    // AC4 (TASK-336): a stale drain-state file (dead orchestrator PID) → the
+    // UUID does not corroborate.
+    #[test]
+    fn run_is_live_false_when_orchestrator_pid_is_dead() {
+        let dir = tempfile::tempdir().unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        write_state_with_run(dir.path(), u32::MAX - 1, &token, false);
+        assert!(!run_is_live(dir.path(), &token));
+    }
+
+    #[test]
+    fn run_is_live_false_when_drain_state_has_empty_run_uuid() {
+        // A drain-state file between batch members (run_uuid cleared) — any
+        // would-be child token fails to corroborate until set_run fires.
+        let dir = tempfile::tempdir().unwrap();
+        let mut state =
+            drain_state::DrainState::new_batch("autonomy-modes", &["STORY-1".to_string()]);
+        state.orchestrator_pid = std::process::id();
+        state.write(dir.path()).unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
         assert!(!run_is_live(dir.path(), &token));
     }
 
     #[test]
     fn run_is_live_false_for_non_uuid_token() {
         let dir = tempfile::tempdir().unwrap();
-        // A path-traversal attempt is rejected before the join — even if a file
-        // happened to exist at the escaped location.
+        // Even with a live drain, a non-UUID token is rejected up front so a
+        // crafted `AIDA_AUTO_COMPLETE_TOKEN` cannot piggyback on it.
+        write_state_with_run(dir.path(), std::process::id(), "not-a-uuid", false);
         assert!(!run_is_live(dir.path(), "../../etc/passwd"));
         assert!(!run_is_live(dir.path(), "not-a-uuid"));
     }
+
+    // live_run_marker is exercised via integration: it reads `AIDA_AUTO_COMPLETE`
+    // + `AIDA_AUTO_COMPLETE_TOKEN` from the process environment, then delegates
+    // to the same drain-state-keyed checks `run_is_live` covers above. Avoiding
+    // env mutation here keeps the test suite parallel-safe.
 }

@@ -106,12 +106,33 @@ pub(crate) struct DrainState {
     /// Plain-language prediction of the post-drain state — which queue items
     /// will and won't be auto-picked-up once the drain ends.
     pub(crate) on_drain_complete: String,
+    /// TASK-336: the orchestrator's per-run UUID for the *current* spec's
+    /// orchestration. A phase child carrying `AIDA_AUTO_COMPLETE_TOKEN=<uuid>`
+    /// trusts orchestrator-mode only when this value matches the env-passed
+    /// token and [`Self::orchestrator_pid`] is alive. Empty between batch
+    /// members and before the first member starts.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) run_uuid: String,
+    /// TASK-336 / BUG-237: whether the current spec's orchestration was
+    /// started under `--zen`. A phase child trusts an inherited
+    /// `AIDA_ZEN=1` only when [`Self::run_uuid`] corroborates *and* this is
+    /// true.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) zen: bool,
+}
+
+/// Default skip-helper for `#[serde(skip_serializing_if)]` on bool fields.
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl DrainState {
     /// Initial state for a single-spec drain (`aida queue work <SPEC>
-    /// --auto-complete`).
-    pub(crate) fn new_single(spec: &str) -> Self {
+    /// --auto-complete`). The `run_uuid` + `zen` fields are baked in at
+    /// creation time so phase children spawned by this run can corroborate
+    /// `AIDA_AUTO_COMPLETE_TOKEN` against the drain-state file from the
+    /// first phase onward. trace:TASK-336 | ai:claude
+    pub(crate) fn new_single(spec: &str, run_uuid: &str, zen: bool) -> Self {
         Self {
             command: launch_command(),
             mode: "single".to_string(),
@@ -122,11 +143,15 @@ impl DrainState {
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_single(spec),
+            run_uuid: run_uuid.to_string(),
+            zen,
         }
     }
 
     /// Initial state for a batch drain (`aida queue work --batch NAME
     /// --auto-complete`). `members` is the resolved pickup-order member list.
+    /// `run_uuid` / `zen` are empty / `false` until [`set_run`] fills them in
+    /// at each member's orchestration start.
     pub(crate) fn new_batch(batch_name: &str, members: &[String]) -> Self {
         Self {
             command: launch_command(),
@@ -138,11 +163,14 @@ impl DrainState {
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_batch(batch_name),
+            run_uuid: String::new(),
+            zen: false,
         }
     }
 
     /// Initial state for a `nextN` drain (`aida queue work nextN
     /// --auto-complete`). `members` is the resolved queue-head member list.
+    /// `run_uuid` / `zen` are filled in per-member by [`set_run`].
     pub(crate) fn new_next_n(n: usize, members: &[String]) -> Self {
         Self {
             command: launch_command(),
@@ -154,6 +182,8 @@ impl DrainState {
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_next_n(n),
+            run_uuid: String::new(),
+            zen: false,
         }
     }
 
@@ -239,13 +269,38 @@ fn predict_next_n(n: usize) -> String {
     )
 }
 
-/// Set the spec the drain is currently running. Read-modify-write: a missing
-/// or unparseable file is a no-op (the drain is still observable-best-effort).
-pub(crate) fn set_current(project_root: &Path, spec: &str) {
+/// TASK-336: record the orchestrator run that is starting for `spec` — its
+/// per-run UUID (the BUG-233 corroboration token) and its `--zen` flag (the
+/// BUG-237 zen-provenance anchor). A phase child carrying
+/// `AIDA_AUTO_COMPLETE_TOKEN=<uuid>` corroborates against [`DrainState::
+/// run_uuid`] read back from the file; the [`DrainState::zen`] flag plays the
+/// same role [`crate::orchestrator::RunMarker::zen`] used to play for
+/// `AIDA_ZEN`. Best-effort — a missing file is a no-op (the drain still runs,
+/// just unobservable). trace:TASK-336 | ai:claude
+pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
     state.current = Some(spec.to_string());
+    state.run_uuid = run_uuid.to_string();
+    state.zen = zen;
+    let _ = state.write(project_root);
+}
+
+/// TASK-336: clear the run-scoped fields a child uses to corroborate — the
+/// per-run UUID and the `--zen` flag — when the current spec's orchestration
+/// returns. Between batch members the drain-state file lives on, but a
+/// would-be child carrying a now-stale token must no longer corroborate
+/// against it (it was minted by a sibling member that has finished).
+/// `current_phase` is also cleared so a stale phase string does not outlive
+/// the run that set it. Best-effort. trace:TASK-336 | ai:claude
+pub(crate) fn clear_run(project_root: &Path) {
+    let Some(mut state) = DrainState::read(project_root) else {
+        return;
+    };
+    state.run_uuid.clear();
+    state.zen = false;
+    state.current_phase = None;
     let _ = state.write(project_root);
 }
 
@@ -460,6 +515,8 @@ mod tests {
             orchestrator_pid: std::process::id(),
             started_at: "2026-05-18T23:28:00+00:00".to_string(),
             on_drain_complete: predict_single("STORY-301"),
+            run_uuid: String::new(),
+            zen: false,
         }
     }
 
@@ -579,14 +636,89 @@ mod tests {
         assert_eq!(read.current_phase, None);
     }
 
-    // set_current / set_phase on a project with no file are silent no-ops.
+    // set_phase / set_member_outcome / set_run / clear_run on a project with
+    // no file are silent no-ops.
     #[test]
     fn updates_are_noops_without_a_file() {
         let dir = tempfile::tempdir().unwrap();
-        set_current(dir.path(), "STORY-1");
         set_phase(dir.path(), "STORY-1", 1, "implementer");
         set_member_outcome(dir.path(), "STORY-1", true, None);
+        // TASK-336: same no-op semantics for set_run / clear_run.
+        set_run(dir.path(), "STORY-1", "tok", true);
+        clear_run(dir.path());
         assert_eq!(probe(dir.path()), DrainStatus::None);
+    }
+
+    // TASK-336: AC1+AC2 — new_single bakes run_uuid + zen into the initial file.
+    #[test]
+    fn new_single_includes_run_uuid_and_zen() {
+        let s = DrainState::new_single("STORY-301", "abc-uuid", true);
+        assert_eq!(s.run_uuid, "abc-uuid");
+        assert!(s.zen);
+        // new_batch / new_next_n start empty — members not yet running.
+        let b = DrainState::new_batch("autonomy-modes", &["STORY-301".to_string()]);
+        assert!(b.run_uuid.is_empty());
+        assert!(!b.zen);
+    }
+
+    // TASK-336: AC3 — set_run records the current spec's run-UUID + zen flag.
+    #[test]
+    fn set_run_records_current_run_uuid_and_zen() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        set_run(dir.path(), "STORY-285", "live-token", true);
+        let read = DrainState::read(dir.path()).unwrap();
+        assert_eq!(read.current.as_deref(), Some("STORY-285"));
+        assert_eq!(read.run_uuid, "live-token");
+        assert!(read.zen);
+    }
+
+    // TASK-336: clear_run wipes the run-scoped fields so a stale child token
+    // can no longer corroborate against the file (between batch members).
+    #[test]
+    fn clear_run_wipes_run_uuid_and_zen() {
+        let dir = tempfile::tempdir().unwrap();
+        batch_state().write(dir.path()).unwrap();
+        set_run(dir.path(), "STORY-285", "live-token", true);
+        set_phase(dir.path(), "STORY-285", 3, "reviewer");
+        clear_run(dir.path());
+        let read = DrainState::read(dir.path()).unwrap();
+        assert!(read.run_uuid.is_empty());
+        assert!(!read.zen);
+        assert_eq!(read.current_phase, None);
+    }
+
+    // TASK-336: a pre-TASK-336 drain-state file (no run_uuid / zen fields)
+    // parses cleanly with the fields defaulted to empty / false — keeps
+    // recovery working across a binary upgrade in the middle of a drain.
+    #[test]
+    fn pre_task_336_file_parses_with_default_run_fields() {
+        let body = r#"{
+          "command": "aida queue work STORY-301 --auto-complete",
+          "mode": "single",
+          "members": [{"spec": "STORY-301", "state": "queued"}],
+          "current": "STORY-301",
+          "orchestrator_pid": 1,
+          "started_at": "2026-05-18T23:28:00+00:00",
+          "on_drain_complete": "single-spec drain"
+        }"#;
+        let state: DrainState = serde_json::from_str(body).unwrap();
+        assert!(state.run_uuid.is_empty());
+        assert!(!state.zen);
+    }
+
+    // TASK-336: AC4 — a stale drain-state file (dead PID) classifies as
+    // Stale, so any corroboration keyed off `probe` falls to "not live".
+    #[test]
+    fn stale_pid_makes_run_uuid_not_corroborate() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = single_state();
+        state.run_uuid = "any-token".to_string();
+        state.orchestrator_pid = u32::MAX - 1; // not a real pid
+        state.write(dir.path()).unwrap();
+        // probe() returns Stale; the orchestrator-side corroboration uses the
+        // same pid_is_alive check, so this drives `run_is_live` → false.
+        assert!(matches!(probe(dir.path()), DrainStatus::Stale(_)));
     }
 
     #[test]
