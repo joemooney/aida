@@ -14,6 +14,7 @@ mod headless_tail;
 mod headless_tee;
 mod history;
 mod mcp;
+mod network_retry;
 mod not_found;
 mod orchestrator;
 mod pr_rebase;
@@ -16149,21 +16150,28 @@ fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> 
 /// any `gh` failure (binary missing, auth, network): the caller treats
 /// "cannot confirm" as "the failure stands", never as a silent success.
 /// trace:BUG-241 | ai:claude
-fn pr_is_merged(project_root: &std::path::Path, pr: u32) -> Option<bool> {
+/// BUG-286: same intent as the pre-BUG-286 `pr_is_merged` but with a
+/// caller-supplied retry sink, so the orchestrator can surface a sub-second
+/// transient blip to the drain-state file rather than treating it as
+/// "cannot confirm." Non-orchestrator callers (none today) can pass
+/// [`network_retry::NoopSink`] to keep the original silent best-effort
+/// semantics. trace:BUG-286 | ai:claude
+fn pr_is_merged_with_sink(
+    project_root: &std::path::Path,
+    pr: u32,
+    sink: &mut dyn network_retry::RetrySink,
+) -> Option<bool> {
     let gh = resolve_gh_binary()?;
-    let out = std::process::Command::new(&gh)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "view",
-            &pr.to_string(),
-            "--json",
-            "state",
-            "-q",
-            ".state",
-        ])
-        .output()
-        .ok()?;
+    let pr_str = pr.to_string();
+    let cfg = network_retry::RetryConfig::load(project_root);
+    let label = format!("gh pr view {pr} --json state");
+    let out = network_retry::run_with_retry(&label, &cfg, sink, || {
+        let mut c = std::process::Command::new(&gh);
+        c.current_dir(project_root)
+            .args(["pr", "view", &pr_str, "--json", "state", "-q", ".state"]);
+        c
+    })
+    .ok()?;
     if !out.status.success() {
         return None;
     }
@@ -16191,25 +16199,34 @@ fn pr_is_merged(project_root: &std::path::Path, pr: u32) -> Option<bool> {
 /// observed BUG-245 case is one commit / one trailer; a PR carrying multiple
 /// genuinely-different specs is an open-ended case the operator must triage.
 /// trace:BUG-245 | ai:claude
-fn pr_credited_spec_id(
+/// BUG-286: same intent as the pre-BUG-286 `pr_credited_spec_id` but with a
+/// caller-supplied retry sink. The orchestrator passes a [`crate::network_retry::DualSink`]
+/// (stderr + drain-state); a hypothetical silent caller can pass
+/// [`network_retry::NoopSink`]. trace:BUG-286 | ai:claude
+fn pr_credited_spec_id_with_sink(
     project_root: &std::path::Path,
     pr: u32,
     dispatched: &str,
+    sink: &mut dyn network_retry::RetrySink,
 ) -> Option<String> {
     let gh = resolve_gh_binary()?;
-    let out = std::process::Command::new(&gh)
-        .current_dir(project_root)
-        .args([
+    let pr_str = pr.to_string();
+    let cfg = network_retry::RetryConfig::load(project_root);
+    let label = format!("gh pr view {pr} --json commits");
+    let out = network_retry::run_with_retry(&label, &cfg, sink, || {
+        let mut c = std::process::Command::new(&gh);
+        c.current_dir(project_root).args([
             "pr",
             "view",
-            &pr.to_string(),
+            &pr_str,
             "--json",
             "commits",
             "-q",
             ".commits[].messageHeadline",
-        ])
-        .output()
-        .ok()?;
+        ]);
+        c
+    })
+    .ok()?;
     if !out.status.success() {
         return None;
     }
@@ -52482,16 +52499,41 @@ impl RealPhaseDriver {
 
     /// Ground-truth check for the BUG-241 reconcile: find a *merged* PR for
     /// this spec. Prefers the PR number an earlier phase already discovered
-    /// (checked directly with [`pr_is_merged`]); otherwise looks one up by
-    /// branch. `None` when no merged PR exists, or `gh` can't answer — both
-    /// resolve to "cannot confirm a merge", which leaves the failure standing.
-    /// trace:BUG-241 | ai:claude
+    /// (checked directly with [`pr_is_merged_with_sink`]); otherwise looks one
+    /// up by branch. `None` when no merged PR exists, or `gh` can't answer —
+    /// both resolve to "cannot confirm a merge", which leaves the failure
+    /// standing. As of BUG-286, the direct PR-number check retries transient
+    /// network errors before classifying as "cannot confirm."
+    /// trace:BUG-241, BUG-286 | ai:claude
     fn detect_merged_pr(&self) -> Option<u32> {
+        // BUG-286: route the orchestrator's reconcile-time `gh pr view`
+        // through the retry helper with stderr + drain-state sinks. A
+        // transient blip in this read used to leave the failure standing
+        // (returning `None` is "cannot confirm", which leaves reconcile_failure
+        // at GenuineFailure). Retry first, surface the retry to both channels.
+        // trace:BUG-286 | ai:claude
+        let mut stderr_sink = network_retry::StderrSink;
+        let mut state_sink = drain_state::DrainStateSink {
+            project_root: &self.project_root,
+            spec: self.spec.clone(),
+            phase: Some(format!(
+                "{} (reconcile)",
+                auto_complete::Phase::Reviewer.index()
+            )),
+        };
+        let mut sink = network_retry::DualSink {
+            a: &mut stderr_sink,
+            b: &mut state_sink,
+        };
         if let Some(pr) = self.pr_number {
             // We already know the PR — `gh pr view` is the direct check.
-            return (pr_is_merged(&self.project_root, pr) == Some(true)).then_some(pr);
+            return (pr_is_merged_with_sink(&self.project_root, pr, &mut sink) == Some(true))
+                .then_some(pr);
         }
         // Phase 1 never resolved a PR — try a branch-keyed merged-PR lookup.
+        // `detect_merged_pr_for_branch` already classifies network errors
+        // into `PrLookup::GhUnreachable` and the orchestrator already absorbs
+        // them as "cannot confirm" — so the branch leg stays as-is.
         match self
             .branch
             .as_deref()
@@ -53023,23 +53065,54 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "`gh` is not on PATH — cannot merge the PR",
             )
         })?;
-        let status = std::process::Command::new(gh)
-            .current_dir(&self.project_root)
-            .args([
+        let pr_str = pr.to_string();
+        // BUG-286: wrap the orchestrator-side `gh pr merge` through the retry
+        // helper so a sub-second network blip (the 2026-05-21 BUG-286 symptom)
+        // is absorbed instead of stalling the drain mid-phase-4. Retry events
+        // surface to stderr (so a user watching the drain sees them live) and
+        // to `.aida/drain-state.json` (so post-hoc analysis can correlate).
+        // trace:BUG-286 | ai:claude
+        let cfg = network_retry::RetryConfig::load(&self.project_root);
+        let mut stderr_sink = network_retry::StderrSink;
+        let mut state_sink = drain_state::DrainStateSink {
+            project_root: &self.project_root,
+            spec: self.spec.clone(),
+            phase: Some(format!(
+                "{} ({})",
+                auto_complete::Phase::Merge.index(),
+                auto_complete::Phase::Merge.slug()
+            )),
+        };
+        let mut sink = network_retry::DualSink {
+            a: &mut stderr_sink,
+            b: &mut state_sink,
+        };
+        let label = format!("gh pr merge {pr} --squash --delete-branch");
+        let out = network_retry::run_with_retry(&label, &cfg, &mut sink, || {
+            let mut c = std::process::Command::new(&gh);
+            c.current_dir(&self.project_root).args([
                 "pr",
                 "merge",
-                &pr.to_string(),
+                &pr_str,
                 "--squash",
                 "--delete-branch",
-            ])
-            .status()
-            .map_err(|e| {
-                auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::Spawn,
-                    format!("could not run `gh pr merge`: {e}"),
-                )
-            })?;
-        if !status.success() {
+            ]);
+            c
+        })
+        .map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not run `gh pr merge`: {e}"),
+            )
+        })?;
+        // Echo the captured streams so the user sees gh's confirmation
+        // (`✓ Squashed and merged pull request #N`) — `run_with_retry` uses
+        // `.output()` to inspect stderr, which swallows the live tty stream
+        // the old `.status()` path passed through.
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(&out.stdout);
+        let _ = std::io::stderr().write_all(&out.stderr);
+        if !out.status.success() {
             return Err(auto_complete::PhaseFailure::new(format!(
                 "`gh pr merge {pr}` failed"
             )));
@@ -53156,7 +53229,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     /// credited). trace:BUG-245 | ai:claude
     fn shipped_spec_id(&mut self) -> Option<String> {
         let pr = self.pr_number?;
-        pr_credited_spec_id(&self.project_root, pr, &self.spec)
+        // BUG-286: same retry treatment as `detect_merged_pr` — a transient
+        // blip during the dispatched≠credited check left the orchestrator
+        // unable to detect a mismatch. The retry keeps the BUG-245 detection
+        // robust against the BUG-286 blip class. trace:BUG-286 | ai:claude
+        let mut stderr_sink = network_retry::StderrSink;
+        let mut state_sink = drain_state::DrainStateSink {
+            project_root: &self.project_root,
+            spec: self.spec.clone(),
+            phase: Some("1 (shipped-spec-check)".to_string()),
+        };
+        let mut sink = network_retry::DualSink {
+            a: &mut stderr_sink,
+            b: &mut state_sink,
+        };
+        pr_credited_spec_id_with_sink(&self.project_root, pr, &self.spec, &mut sink)
     }
 
     /// STORY-306 advisor tier — spawn a headless advisor to judge the design-
