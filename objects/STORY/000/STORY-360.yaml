@@ -1,0 +1,55 @@
+id: 019e484c-43a1-7f63-a02a-a5ddb375bcd3
+spec_id: STORY-360
+agreed_id: STORY-360
+title: Implement fork-from-live advisor with cold-boot fallback (SPIKE-11 outcome)
+description: |-
+  ## Background
+
+  SPIKE-11 (\`docs/spikes/2026-05-20-spike-11-session-forking.md\`) verdict: viable. The fork-from-live mechanic works mechanically (6.7s latency), cost is acceptable for typical punt frequency (~\$4 first fork, ~\$0.03 within cache TTL), source isolation is byte-clean, and the JSONL is project-slug-agnostic so forks can land in any worktree.
+
+  ## Approach
+
+  Augment \`aida-cli/src/auto_complete.rs::run_advisor\` with a fork path that fires when a live advisor session is registered. Falls back to today's cold-boot path when no live session is registered or when the registered session is dead.
+
+  ## Acceptance
+
+  - **\`aida advisor register\` CLI subcommand** writes the current Claude session's UUID + project slug to \`~/.aida/advisor.toml\`. \`aida advisor unregister\` clears it. \`aida advisor status\` shows current registration and an estimated per-fork cost (based on current source JSONL size).
+  - **\`discover_live_advisor_session()\` function** reads \`~/.aida/advisor.toml\` first, falls back to \`AIDA_ADVISOR_SESSION_UUID\` env var, and (config-gated, off by default) to a latest-session-by-mtime heuristic.
+  - **\`run_advisor()\` augmentation**: if a live advisor session is discovered AND the source JSONL exists AND it's alive (process check / mtime within freshness window), \`cp\` to a new UUID under the spec's worktree project slug and \`claude --resume <fork> -p \"<punt-prompt>\"\`. Otherwise cold-boot.
+  - **Config keys** in \`.aida/config.toml\`:
+    - \`[advisor] fork_mode = \"auto\" | \"always\" | \"never\"\` (default \"auto\")
+    - \`[advisor] allow_mtime_fallback = false\` (default off)
+    - \`[advisor] keep_fork_jsonls = true\` (default keep for audit)
+    - \`[advisor] max_source_size_mb = 10\` (cost ceiling; disable fork above this)
+  - **Tests**: covering registered+alive → fork; registered+dead → cold-boot; not registered → cold-boot; fork JSONL written to spec's worktree project slug, not source's.
+  - **Docs**: \`docs/autonomous-drain.md\` gains a section on the fork path + when to register the advisor. \`README.md\` mentions the fork-from-live capability in the autonomy keystone section.
+
+  ## Composes with
+
+  - **STORY-347** (calibration ledger) — once fork-from-live ships, calibration can run cold-boot + fork in parallel for the same punt and record both verdicts. STORY-347 acceptance is unlocked.
+  - **STORY-306** (headless advisor escalation tier) — fork-from-live supersedes cold-boot when registered; everything downstream (resolve / escalate / resume implementer) is unchanged.
+
+  ## Out of scope
+
+  - The toolset-of-fork question (does the fork inherit the source's tools? should it?) — flagged as a follow-up SPIKE in the SPIKE-11 writeup.
+  - Multi-advisor coordination (SPIKE-10 territory).
+  - Persistent-advisor-entity / MCP-bus architecture (separate direction).
+
+  ## Related
+
+  - SPIKE-11 — research output this story implements.
+  - STORY-347 — measurement loop that unlocks once this ships.
+  - Memory \`feedback_headless_advisor_is_cold_boot\` — updated 2026-05-20 to mark fork-from-live as validated viable.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T02:10:18.145352052Z
+modified_at: 2026-05-21T02:10:18.145352052Z
+req_type: Story
+tags:
+- advisor
+- architecture
+- autonomy
+- fork-from-live
+- from-spike
