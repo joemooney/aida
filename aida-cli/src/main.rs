@@ -46802,6 +46802,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             user,
             yes,
             force,
+            skip_pr_check,
         } => {
             let user_id = get_user(user);
             let store = storage.load()?;
@@ -46830,15 +46831,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // the orchestrator (or a watching human) has no way to advance
             // it. The BUG-232 hint nudges; this *enforces*.
             //
-            // Skip when `--force` (escape hatch for the rare case where
-            // the spec shipped via a different already-merged branch) and
-            // when the BUG-232 hint detector itself can't decide (gh
-            // missing / unauthenticated / network failure) — proceeding
-            // is the safe default when we can't prove "no PR." Likewise
-            // skip when commits_ahead resolution fails (None) so a missing
-            // origin/main never blocks a legitimate done.
-            // trace:BUG-269 | ai:claude
-            if !*force {
+            // Skip when `--force` or `--skip-pr-check` (BUG-285: explicit
+            // opt-in for the rare case where the spec shipped via a
+            // different already-merged branch) and when the BUG-232 hint
+            // detector itself can't decide (gh missing / unauthenticated /
+            // network failure) — proceeding is the safe default when we
+            // can't prove "no PR." Likewise skip when commits_ahead
+            // resolution fails (None) so a missing origin/main never blocks
+            // a legitimate done. `--yes` does NOT bypass — it's the
+            // confirmation-skip for the prompt below, not a gate override.
+            // trace:BUG-269 BUG-285 | ai:claude
+            let bypass_pr_check =
+                workflow_hints::queue_done_should_bypass_pr_check(*yes, *force, *skip_pr_check);
+            if !bypass_pr_check {
                 if let Ok(project_root) = find_project_root() {
                     if let Some(branch) = current_branch_at(&project_root) {
                         let commits_ahead = branch_commits_ahead_main(&project_root, &branch);
@@ -46863,6 +46868,26 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         }
                     }
                 }
+            } else {
+                // BUG-285: an opt-in bypass should NEVER be silent — the
+                // headless drain's tee + the user's terminal both need a
+                // record that the gate was deliberately skipped, otherwise
+                // a routine bypass looks identical to the happy path. Use
+                // a `warning:` prefix (matches the rest of the CLI) so the
+                // line stands out in scrollback and parses as a soft error
+                // for any tooling watching stderr.
+                // trace:BUG-285 | ai:claude
+                let flag = if *skip_pr_check {
+                    "--skip-pr-check"
+                } else {
+                    "--force"
+                };
+                eprintln!(
+                    "{} bypassing PR check for {} via {} — proceeding without an open PR.",
+                    "warning:".yellow().bold(),
+                    display_id,
+                    flag
+                );
             }
 
             if !yes {

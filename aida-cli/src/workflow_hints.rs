@@ -229,9 +229,28 @@ fn queue_drained_hint_lines(
     vec![header, body]
 }
 
-/// BUG-269: pure decision for the `aida queue done` pre-check. Returns
-/// `Some(error_lines)` when the call must be refused (committed-but-
-/// unshipped work with no open PR), `None` to proceed.
+/// BUG-285: pure decision for whether `aida queue done`'s PR check should
+/// be bypassed. Takes ALL three flags `aida queue done` accepts —
+/// `--yes`, `--force`, `--skip-pr-check` — so the invariant *"--yes does
+/// NOT bypass the gate"* is encoded in the test matrix below. A regression
+/// that wired `--yes` into the bypass path would flip
+/// `bypass_with_yes_only` red.
+///
+/// `--yes` is the confirmation-skip for the interactive prompt that
+/// follows the gate, not a gate override. The two flags that genuinely
+/// bypass are `--force` (legacy, general escape hatch) and
+/// `--skip-pr-check` (BUG-285, intent-named). Both bypass identically;
+/// `--skip-pr-check` is the recommended name when the bypass is
+/// specifically about the PR-check gate.
+/// trace:BUG-285 | ai:claude
+pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: bool) -> bool {
+    let _ = yes;
+    force || skip_pr_check
+}
+
+/// BUG-269 / BUG-285: pure decision for the `aida queue done` pre-check.
+/// Returns `Some(error_lines)` when the call must be refused (committed-
+/// but-unshipped work with no open PR), `None` to proceed.
 ///
 /// The check fires only when **both** conditions hold: the branch has
 /// commits ahead of `origin/main` AND `gh` has *confirmed* no open PR
@@ -240,10 +259,20 @@ fn queue_drained_hint_lines(
 /// the precheck cannot block legitimate `queue done` calls when the
 /// detector itself is broken.
 ///
+/// BUG-285: the refusal language is deliberately load-bearing for an LLM
+/// implementer reading the message through `2>&1 | tail -N` (which masks
+/// the non-zero exit). The first line carries the `error:` prefix and an
+/// explicit `(exit 1)` so the tool result parses as a hard failure even
+/// without the exit code; the second line carries an explicit "DO NOT
+/// exit this session" instruction; the third line names the bypass flag.
+/// Tonight's TASK-413 / TASK-416 drains showed an implementer reading a
+/// softer refusal and composing a finish-state summary anyway — this
+/// language is the substrate-side guardrail against that.
+///
 /// `display_id` is the short id (e.g. `BUG-249`) used verbatim in the
 /// suggested follow-up commands; that's what the user typed and what they
 /// want to re-type.
-/// trace:BUG-269 | ai:claude
+/// trace:BUG-269 BUG-285 | ai:claude
 pub fn queue_done_precheck_error(
     display_id: &str,
     branch_commits_ahead: Option<u32>,
@@ -257,18 +286,19 @@ pub fn queue_done_precheck_error(
         return None;
     }
     let summary = format!(
-        "✗ {} has {} local commit{} but no open PR.",
+        "error: aida queue done refused (exit 1) — {} has {} local commit{} but no open PR.",
         display_id,
         commits,
         if commits == 1 { "" } else { "s" }
     );
     let action = format!(
-        "Run `/aida-pr` first, then re-run `aida queue done {}`.",
+        "Open the PR first: run `/aida-pr`, then re-run `aida queue done {}`. \
+         DO NOT exit this session without opening the PR — the orchestrator will fail phase 1 otherwise.",
         display_id
     );
     let bypass = format!(
-        "(If the spec was implemented on a different branch already merged, \
-         pass `--force` to bypass: `aida queue done {} --force`.)",
+        "(Rare bypass when the spec was implemented on a different branch already merged: \
+         `aida queue done {} --skip-pr-check`.)",
         display_id
     );
     Some(vec![summary, action, bypass])
@@ -597,11 +627,40 @@ mod tests {
     fn precheck_refuses_when_commits_ahead_and_no_pr() {
         let result = queue_done_precheck_error("BUG-249", Some(1), PrState::Absent);
         let lines = result.expect("expected refusal");
-        assert!(lines[0].contains("✗ BUG-249 has 1 local commit but no open PR."));
-        assert!(lines[1].contains("Run `/aida-pr` first"));
+        assert!(lines[0].contains("BUG-249 has 1 local commit but no open PR"));
+        assert!(lines[1].contains("/aida-pr"));
         assert!(lines[1].contains("aida queue done BUG-249"));
-        assert!(lines[2].contains("--force"));
-        assert!(lines[2].contains("aida queue done BUG-249 --force"));
+        assert!(lines[2].contains("--skip-pr-check"));
+        assert!(lines[2].contains("aida queue done BUG-249 --skip-pr-check"));
+    }
+
+    // BUG-285: the refusal text must parse as a hard error even when an
+    // LLM reads the message through `2>&1 | tail -N` (which masks the
+    // non-zero exit). Pin the load-bearing tokens so a softer rewording
+    // can't silently regress the substrate guardrail.
+    #[test]
+    fn precheck_message_is_loud_for_llm_consumers() {
+        let lines = queue_done_precheck_error("BUG-249", Some(1), PrState::Absent).unwrap();
+        assert!(
+            lines[0].starts_with("error:"),
+            "first line must start with `error:` so the tool result parses as a failure even when the exit code is masked by a pipe: {:?}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("(exit 1)"),
+            "first line must explicitly state `(exit 1)` so the model can't read past it: {:?}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("DO NOT exit"),
+            "second line must explicitly forbid exiting the session — guards against the TASK-413 / TASK-416 finish-state-summary failure mode: {:?}",
+            lines[1]
+        );
+        assert!(
+            lines[1].contains("orchestrator will fail phase 1"),
+            "second line must name the orchestrator-side consequence: {:?}",
+            lines[1]
+        );
     }
 
     // Plural "commits" when more than one is ahead.
@@ -639,5 +698,44 @@ mod tests {
     fn precheck_proceeds_when_commits_unknown() {
         let result = queue_done_precheck_error("BUG-249", None, PrState::Absent);
         assert!(result.is_none());
+    }
+
+    // BUG-285 acceptance: `--yes` does NOT bypass the gate. The whole
+    // matrix is exhausted here so a regression on any cell fails loudly.
+    // `(yes=true, force=false, skip_pr_check=false)` is the exact
+    // condition tonight's TASK-413 drain hit; it MUST run the gate.
+    #[test]
+    fn bypass_with_yes_only() {
+        // Default — no bypass flags — runs the gate.
+        assert!(!queue_done_should_bypass_pr_check(false, false, false));
+        // The BUG-285 case: --yes alone does NOT bypass. This is the
+        // load-bearing assertion — the spec was filed because the model
+        // hypothesized --yes was bypassing; the gate must fire regardless.
+        assert!(
+            !queue_done_should_bypass_pr_check(true, false, false),
+            "--yes alone must NOT bypass the PR check (BUG-285)"
+        );
+    }
+
+    #[test]
+    fn bypass_with_force() {
+        assert!(queue_done_should_bypass_pr_check(false, true, false));
+        // --yes + --force: still bypasses (the --force is what's doing it).
+        assert!(queue_done_should_bypass_pr_check(true, true, false));
+    }
+
+    #[test]
+    fn bypass_with_skip_pr_check() {
+        assert!(queue_done_should_bypass_pr_check(false, false, true));
+        // --yes + --skip-pr-check: still bypasses (the skip flag is doing it).
+        assert!(queue_done_should_bypass_pr_check(true, false, true));
+    }
+
+    #[test]
+    fn bypass_with_both_force_and_skip_pr_check() {
+        // Both flags are equivalent for this gate; passing both is a no-op
+        // duplicate, never a contradiction. Verify they compose cleanly.
+        assert!(queue_done_should_bypass_pr_check(false, true, true));
+        assert!(queue_done_should_bypass_pr_check(true, true, true));
     }
 }

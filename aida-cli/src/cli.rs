@@ -2502,9 +2502,16 @@ pub enum QueueCommand {
         yes: bool,
         // BUG-269: bypass the commits-without-PR pre-check. Use when the
         // spec was implemented on a different branch that's already merged,
-        // so the local branch has no PR by design.
+        // so the local branch has no PR by design. Logs the bypass.
         #[clap(long)]
         force: bool,
+        // BUG-285: bypass the commits-without-PR pre-check (same effect as
+        // `--force` for this gate). Named for intent — `--force` is a
+        // general escape hatch, `--skip-pr-check` is specifically the
+        // BUG-269 / BUG-285 gate. Logs the bypass.
+        // trace:BUG-285 | ai:claude
+        #[clap(long)]
+        skip_pr_check: bool,
     },
     /// Pick up a queued item (or scope-cluster of queued items) and launch
     /// claude in a fresh session worktree, with the role + skill routed
