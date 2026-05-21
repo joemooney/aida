@@ -1,0 +1,42 @@
+id: 019e482c-1a08-7690-b50d-9c7ebcdffccb
+spec_id: BUG-270
+agreed_id: BUG-270
+title: 'aida db reconcile-status: recognize ''SPEC-ID:'' prefix format on merge commits'
+description: |-
+  ## Symptom
+
+  \`aida db reconcile-status\` failed to auto-bump STORY-306 from Done → Completed despite PR #118 having merged 18+ hours earlier. The merge commit (\`bfb93b6a\`) starts with \`STORY-306:\` rather than the standard \`[AI:claude] type(scope): description (STORY-306)\` format. The reconcile scanner appears to look for parenthesized \`(SPEC-ID)\` at the end of the commit subject — non-standard prefixed format is invisible.
+
+  ## Repro
+
+  \`\`\`
+  git log -1 --format=%s bfb93b6a
+  # → STORY-306: advisor escalation tier for --no-human — punts route to a headless advisor before reaching a human (#118)
+  \`\`\`
+
+  Spec reference is in the commit message, just not in the canonical position. \`aida db reconcile-status --spec STORY-306\` returned \"no eligible flips\" — the targeted scan also missed it.
+
+  ## Acceptance
+
+  - Reconcile-status scanner recognizes both formats: \`(SPEC-ID)\` at end-of-subject AND \`SPEC-ID:\` at start-of-subject.
+  - Optional: also recognize \`SPEC-ID\` anywhere in the subject (looser match), with a config flag to disable.
+  - Add a unit test with a fixture commit subject in each recognized format.
+  - Document the recognized formats in \`aida db reconcile-status --help\`.
+
+  ## Related
+
+  - The non-standard format itself is a separate convention issue — many PRs use the canonical format, this one didn't. Convention enforcement is out of scope for this BUG; the scanner just needs to handle the variety it sees in real commits.
+  - Surfaced 2026-05-20 during post-drain cleanup, blocked an auto-bump that the user expected to fire.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T01:35:10.344061045Z
+modified_at: 2026-05-21T01:35:10.344061045Z
+req_type: Bug
+tags:
+- commit-format
+- from-self-test
+- papercut
+- reconcile-status
+- scanner
