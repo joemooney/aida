@@ -36,7 +36,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T00:40:07.620668478Z
-modified_at: 2026-05-21T02:05:59.935613586Z
+modified_at: 2026-05-21T02:06:39.843400749Z
 req_type: Task
 tags:
 - cleanup
@@ -54,3 +54,15 @@ comments:
   content: Commit 002410be references this requirement
   created_at: 2026-05-21T02:05:29.498983915Z
   modified_at: 2026-05-21T02:05:29.498983915Z
+- id: 019e4848-eee3-7b80-ab01-fda15099895c
+  author: joe
+  content: |-
+    Implemented via commit 002410be (PR link added on merge):
+
+    - Removed unused `origin_pushed` variable + dead assignment in `init`'s orphan auto-push block — leftover from a never-implemented "if pushed, also X" branch (introduced 2026-05-09 in b47719b9); the println! inside the success arm already gives user feedback, downstream node-acquire re-derives `has_origin` independently.
+    - Removed dead `fn capitalize` (introduced 2026-03-15 in ad394e04 with the initial git backend CLI integration) — zero callers anywhere in the workspace.
+
+    Test status: `cargo build --release` and `cargo build` warning-free; `cargo fmt --all -- --check` clean.
+    Follow-up: TASK-424 (child) — workspace-level lint config to prevent warning regression.
+  created_at: 2026-05-21T02:06:39.843400749Z
+  modified_at: 2026-05-21T02:06:39.843400749Z
