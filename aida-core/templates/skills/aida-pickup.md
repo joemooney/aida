@@ -560,16 +560,19 @@ orchestrator status` tells you (BUG-232):
 - **`orchestrated`** — the *orchestrator mode* template applies; auto-take
   its `⇒` row (submit the PR) and the orchestrator drives phases 2-6.
 - **plain `--zen`** (`aida zen status` = `zen`, `aida orchestrator status`
-  = `interactive`) — auto-take the row that runs **`/aida-pr`**, whatever
-  glyph it carries: `▶ Open PR for what shipped` in the *queue empty*
-  template, `⇒ Wrap up what's shipped as a PR` in the *queue has more
-  items* template. Do **NOT** auto-take `▶ Grab next item` — looping the
-  queue unattended is `--auto-complete` / `--no-human` territory, not
-  plain `--zen`. Opening the PR is the mechanical step that must never be
-  skipped (BUG-232: plain `--zen` used to end here with the spec
-  committed-but-unshipped and no PR open). `/aida-pr` then surfaces the
-  one genuine fork left — grab next vs stop — as its own
-  `kind:design-fork` prompt.
+  = `interactive`) — auto-take the **primary `▶` row** of whichever
+  template renders, with one carve-out: in the *simple mode, queue has
+  more items* template do **NOT** auto-take `▶ Grab next item` — looping
+  the queue unattended is `--auto-complete` / `--no-human` territory, not
+  plain `--zen`; auto-take its `⇒ Wrap up what's shipped as a PR` row
+  (`/aida-pr`) instead. For every other template the `▶` row IS the
+  auto-take — including *simple mode, queue empty*, where `▶ Stop here`
+  is the natural finish (Step 5c already opened the PR; nothing is
+  queued). `/aida-pr`, when invoked, then surfaces the one genuine fork
+  left — grab next vs stop — as its own `kind:design-fork` prompt. The
+  *opening the PR is the mechanical step that must never be skipped*
+  guarantee (BUG-232) is now Step 5c's job, not Step 6's: Step 5c
+  hard-gates a committed-but-unshipped exit before this menu even renders.
 - **default** (no zen) — render the table and let the user pick.
 
 Still render the table first in every case — it stays the scrollback
@@ -889,7 +892,15 @@ item.">
 | ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-shipped spec surfaced something worth a human's eyes before chaining more work (an unexpected size, a deviation, a coverage gap), park the grab-next-vs-pause call with the advisor instead of letting it ride. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; the queued items stay routed to <role> for later |
 
-*Simple mode, queue empty:*
+*Simple mode, queue empty:* — trace:TASK-412
+
+Per Step 5c, by the time this template renders the branch is either
+already shipped (`commits_ahead > 0` AND `pushed == yes` AND
+`pr_open >= 1`) or genuinely empty (`commits_ahead == 0` — a docs-only or
+rebase-revert pickup). The *committed-but-unshipped* state must not reach
+Step 6 — Step 5c hard-gates it. So the natural primary action is
+**releasing the lease cleanly**, not opening a PR that already exists or
+doesn't apply.
 
 Print the State preamble first (substitute concrete values; omit rows
 genuinely absent):
@@ -898,7 +909,7 @@ genuinely absent):
 State:
   Spec:    <SPEC-ID>  <title>            (Status: Done)
   Branch:  <branch>   <N> commits ahead of main   pushed
-  PR:      #<N> open: <url>   |  no PR yet
+  PR:      #<N> open: <url>   |  no PR (no work shipped)
   Drain:   phase 1/6 interactive   orchestrator off
   Tests:   <last cargo test summary or "not run">
   Fmt:     <cargo fmt --check summary or "not run">
@@ -918,10 +929,16 @@ up.">
 
 | Path | What happens | Why |
 |------|--------------|-----|
-| ▶ Open PR for what shipped ← recommended | `/aida-pr` (no-op if Step 5c already opened it) | Nothing is left queued, so the only outstanding obligation is the PR — close the atomic shipping unit before stepping away. Same session reuses the role + lease + worktree; the rare no-op when Step 5c already fired falls straight through. Reversible: PR can be closed or amended later. |
-| ⇒ Switch hats and queue more | `eval "$(aida role enter dialog)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; dialog is the producer seat that refills the queue |
+| ▶ Stop here ← recommended | Ctrl+D, then `aida session end <session-id>` from the parent shell | The atomic shipping unit is already closed (Step 5c opened the PR, or no commits to ship) and the queue is empty — releasing the lease is the natural finish. The PR, if any, continues through CI / review independently. Reversible: re-enter the worktree with `aida queue work <SPEC-ID>` or pick up new work later. |
+| ⇒ Switch hats and queue more | `eval "$(aida role enter dialog)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; dialog is the producer seat that refills the queue — stay if you want to refill before stepping away |
 | ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-shipped spec surfaced something the dialog seat should triage before the queue refills (a follow-up shape, a strategic concern, a memory worth capturing), park it with the advisor instead of dropping the lease cold. |
-| ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; nothing is queued, so it's a clean stopping point |
+
+**Rare bypass** (`commits_ahead > 0 AND pr_open == 0`): the implementer
+should never see this here because Step 5c hard-gates it. If it does (a
+Step-5c bug, a hand-resumed session that re-entered after a stale state),
+recovery is to invoke `/aida-pr` once — opening the PR closes the atomic
+shipping unit — *then* re-render this template, which is now in its
+standard `pr_open >= 1` shape with `▶ Stop here` as the primary.
 
 Print exactly one block — don't dump all six templates. In default mode,
 don't auto-loop without confirmation: the user may want to break, review,
