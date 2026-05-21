@@ -74,7 +74,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:15:48.636240817Z
-modified_at: 2026-05-21T17:54:43.651368839Z
+modified_at: 2026-05-21T18:15:11.589685193Z
 req_type: Story
 tags:
 - agent-agnostic
@@ -83,3 +83,9 @@ tags:
 - cross-agent
 - from-spike
 - mcp
+comments:
+- id: 019e4bbf-a5e5-7941-a48c-2c4b2d27317a
+  author: joe
+  content: Commit d8bc8b55 references this requirement
+  created_at: 2026-05-21T18:15:11.589685193Z
+  modified_at: 2026-05-21T18:15:11.589685193Z
