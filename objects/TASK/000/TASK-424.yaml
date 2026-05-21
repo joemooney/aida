@@ -1,0 +1,31 @@
+id: 019e4848-2ecd-74b3-8e38-cb1806e06458
+spec_id: TASK-424
+agreed_id: TASK-424
+title: Consider workspace-level lint config to prevent warning regression (follow-up to TASK-421)
+description: |
+  TASK-421's acceptance criteria invited a follow-up: "Add `#![deny(warnings)]` consideration in workspace Cargo.toml as a follow-up if appropriate (separate TASK)." Filing it here so the advisor can triage whether to act.
+
+  ## Trade-offs
+
+  - **Pro**: Locks in TASK-421's zero-warnings state — any future regression breaks CI immediately instead of accumulating until the next drain notices.
+  - **Con**: A blanket `#![deny(warnings)]` is brittle across toolchain bumps — a new compiler warning or clippy lint in a future stable channel can break the build with no source change. Many Rust projects deliberately avoid it for this reason.
+
+  ## Suggested middle ground
+
+  Use Cargo's modern `[workspace.lints]` table (1.74+) for selective denies — e.g. deny `unused_variables`, `unused_assignments`, `dead_code` (the three lints that fired here) while leaving newer/forward-looking lints as warn. Crates opt in with `[lints] workspace = true`. This gives the regression protection without the brittleness.
+
+  Raised by the implementer while working TASK-421.
+  Branch: task-421  ·  Commit: 002410bec156b426b3c818cd3a10783afbe5c556  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T02:05:50.669239132Z
+modified_at: 2026-05-21T02:05:50.669239132Z
+req_type: Task
+tags:
+- from-implementer:TASK-421
+- kind:followup-suggestion
+- lints
+- severity:minor
+- warnings
