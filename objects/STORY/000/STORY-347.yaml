@@ -52,10 +52,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T14:13:46.906023859Z
-modified_at: 2026-05-20T14:13:46.906023859Z
+modified_at: 2026-05-21T02:11:51.176661210Z
 req_type: Story
 tags:
 - advisor
 - architecture
 - autonomy
 - learning-mode
+comments:
+- id: 019e484d-af08-7ce3-b3f4-c4b6ad1e24b2
+  author: joe
+  content: Commit afd241b6 references this requirement
+  created_at: 2026-05-21T02:11:51.176661210Z
+  modified_at: 2026-05-21T02:11:51.176661210Z
