@@ -92,10 +92,13 @@ pub(crate) struct DrainRow {
 
 /// The Plan row — repo-relative path of the matching `docs/plans/` file
 /// (`None` → prints "none").
+// Internally-tagged shape matches PrRow so `--json` consumers see one
+// uniform `{"state":"..."}` envelope across all enum rows. trace:TASK-416
 #[derive(Debug, Clone, Serialize)]
+#[serde(tag = "state", rename_all = "kebab-case")]
 pub(crate) enum PlanRow {
     None,
-    File(String),
+    File { path: String },
 }
 
 /// The complete preamble — everything the finish-state templates render
@@ -181,7 +184,7 @@ impl StateSnapshot {
     fn plan_line(&self) -> String {
         match &self.plan {
             PlanRow::None => "none".to_string(),
-            PlanRow::File(p) => p.clone(),
+            PlanRow::File { path } => path.clone(),
         }
     }
 }
@@ -215,7 +218,9 @@ mod tests {
             },
             tests: "not run".to_string(),
             fmt: "not run".to_string(),
-            plan: PlanRow::File("docs/plans/2026-05-20-task-391.md".to_string()),
+            plan: PlanRow::File {
+                path: "docs/plans/2026-05-20-task-391.md".to_string(),
+            },
         }
     }
 
@@ -320,6 +325,31 @@ State:
         assert!(json.contains("\"state\": \"open\""), "{json}");
         assert!(json.contains("\"number\": 131"), "{json}");
         assert!(json.contains("\"orchestrator\": true"), "{json}");
+        // PlanRow mirrors PrRow's internally-tagged shape — both variants
+        // render as `{"state":"..."}`, never as a bare string or
+        // externally-tagged `{"File":"..."}`. trace:TASK-416
+        assert!(json.contains("\"plan\""), "{json}");
+        assert!(json.contains("\"state\": \"file\""), "{json}");
+        assert!(
+            json.contains("\"path\": \"docs/plans/2026-05-20-task-391.md\""),
+            "{json}"
+        );
+    }
+
+    #[test]
+    fn render_json_plan_none_uses_tagged_object() {
+        // The PlanRow::None variant must serialize as `{"state":"none"}`
+        // — never the bare string `"None"` (the pre-fix shape that prompted
+        // TASK-416, where consumers had to branch string-vs-object just for
+        // `plan`).
+        let mut snap = baseline();
+        snap.plan = PlanRow::None;
+        let json = snap.render_json();
+        assert!(
+            json.contains("\"plan\": {\n    \"state\": \"none\"\n  }"),
+            "{json}"
+        );
+        assert!(!json.contains("\"plan\": \"None\""), "{json}");
     }
 
     #[test]

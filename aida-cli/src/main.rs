@@ -49887,7 +49887,7 @@ fn gather_state_snapshot(
     let drain = describe_drain_row(&main_root);
 
     let plan = locate_plan_for_active_session(&project_root)
-        .map(PlanRow::File)
+        .map(|path| PlanRow::File { path })
         .unwrap_or(PlanRow::None);
 
     Ok(StateSnapshot {
