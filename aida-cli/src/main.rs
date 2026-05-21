@@ -407,16 +407,19 @@ fn run() -> Result<()> {
         return handle_pr_command(pr_cmd);
     }
 
-    // BUG-233: orchestrator-context introspection. Dispatched before storage
-    // init — it reads only env vars + the `.aida/orchestrator-runs/` marker
-    // dir, no requirement store. trace:BUG-233 | ai:claude
+    // BUG-233 / TASK-336: orchestrator-context introspection. Dispatched
+    // before storage init — it reads only env vars + the `.aida/drain-
+    // state.json` file's `run_uuid` + PID, no requirement store. (Before
+    // TASK-336 it read a sidecar `.aida/orchestrator-runs/<uuid>` marker
+    // file; that has been folded into the drain-state file.)
+    // trace:BUG-233 trace:TASK-336 | ai:claude
     if let Command::Orchestrator(orch_cmd) = &cli.command {
         return handle_orchestrator_command(orch_cmd);
     }
 
     // BUG-237: zen-context introspection. Like `orchestrator status`, reads
-    // only env vars + the marker dir + session leases — no requirement store.
-    // trace:BUG-237 | ai:claude
+    // only env vars + the drain-state file + session leases — no requirement
+    // store. trace:BUG-237 trace:TASK-336 | ai:claude
     if let Command::Zen(zen_cmd) = &cli.command {
         return handle_zen_command(zen_cmd);
     }
@@ -46459,12 +46462,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     std::env::set_var(zen::ZEN_ENV, "1");
                     // BUG-237: mint this invocation's zen-intent token. It is
                     // the provenance anchor for `AIDA_ZEN` — the session lease
-                    // records it (standalone path) and `RunMarkerGuard::
-                    // register` reads its presence (orchestrator path). A
-                    // leaked `AIDA_ZEN=1` carries no token, so `aida zen
-                    // status` corroborates it away rather than auto-resolving
-                    // a confirmation prompt the user never authorized.
-                    // trace:BUG-237 | ai:claude
+                    // records it (standalone path), and (under
+                    // `--auto-complete`) `run_auto_complete` reads its
+                    // presence and records the `zen` flag on the drain-state
+                    // file as the orchestrator-path corroboration anchor
+                    // (TASK-336). A leaked `AIDA_ZEN=1` carries no token, so
+                    // `aida zen status` corroborates it away rather than
+                    // auto-resolving a confirmation prompt the user never
+                    // authorized. trace:BUG-237 trace:TASK-336 | ai:claude
                     std::env::set_var(zen::ZEN_TOKEN_ENV, uuid::Uuid::now_v7().to_string());
                 }
                 AutonomyMode::NoHuman => {
@@ -49833,48 +49838,36 @@ fn run_auto_complete(
         }
     }
 
-    // BUG-233: register this orchestrator run's corroboration marker. The
-    // RAII guard writes `.aida/orchestrator-runs/<uuid>` (recording our PID)
-    // and removes it on drop — so a child carrying `AIDA_AUTO_COMPLETE_TOKEN=
-    // <uuid>` can verify a *live* orchestrator owns it. A write failure is
-    // non-fatal: the run proceeds with an empty token, and children correctly
-    // fall back to treating themselves as interactive (fail-safe).
-    // trace:BUG-233 | ai:claude
+    // BUG-233 / TASK-336: mint this orchestrator run's corroboration UUID and
+    // persist it into the drain-state file. A phase child carrying
+    // `AIDA_AUTO_COMPLETE_TOKEN=<uuid>` corroborates orchestrator-mode against
+    // `DrainState::run_uuid` + a `pid_is_alive` check on the recorded
+    // orchestrator PID. Before TASK-336 this lived in a sidecar
+    // `.aida/orchestrator-runs/<uuid>` marker file; that file has been removed
+    // since the drain-state file already records every other field the check
+    // needs. trace:BUG-233 trace:TASK-336 | ai:claude
     //
     // BUG-237: record whether this run is `--zen`. `AIDA_ZEN_TOKEN` is present
     // iff the `--zen` dispatch arm ran — the `Default` / `--no-human` arms
     // scrub it — so a leaked `AIDA_ZEN=1` on a plain `--auto-complete` run
     // does not get recorded as a zen run. trace:BUG-237 | ai:claude
     let run_zen = std::env::var(zen::ZEN_TOKEN_ENV).is_ok();
-    let run_marker = match orchestrator::RunMarkerGuard::register(&project_root, spec, run_zen) {
-        Ok(guard) => Some(guard),
-        Err(e) => {
-            if !json {
-                eprintln!(
-                    "  {} could not register the orchestrator-run marker ({e}) — phase \
-                     children will treat themselves as interactive",
-                    "⚠".yellow()
-                );
-            }
-            None
-        }
-    };
-    let run_token = run_marker
-        .as_ref()
-        .map(|g| g.token().to_string())
-        .unwrap_or_default();
+    let run_token = uuid::Uuid::now_v7().to_string();
 
     // STORY-301: surface the drain so a user inside the spawned Claude session
     // can see what command launched it, how far it has got, and what happens
-    // when they exit. A single-spec drain owns the file — it writes it now and
-    // clears it on return; a batch / nextN member only announces that it is
-    // the current spec (the batch orchestrator created the file). Best-effort:
-    // a write failure leaves the drain running, just unobservable.
-    // trace:STORY-301 | ai:claude
+    // when they exit. A single-spec drain owns the file — it writes it now
+    // with the run-UUID + zen flag baked in, and clears it on return; a batch
+    // / nextN member updates the existing file's run-fields via `set_run` (the
+    // batch orchestrator created the file before this member started).
+    // Best-effort: a write failure leaves the drain running, just unobservable
+    // — and crucially, phase children correctly fall back to treating
+    // themselves as interactive when the corroboration check finds no live
+    // drain-state. trace:STORY-301 trace:TASK-336 | ai:claude
     if owns_drain_state {
-        let _ = drain_state::DrainState::new_single(spec).write(&project_root);
+        let _ = drain_state::DrainState::new_single(spec, &run_token, run_zen).write(&project_root);
     } else {
-        drain_state::set_current(&project_root, spec);
+        drain_state::set_run(&project_root, spec, &run_token, run_zen);
     }
 
     let mut driver = RealPhaseDriver::new(
@@ -49888,10 +49881,14 @@ fn run_auto_complete(
     let started_at = chrono::Utc::now();
     let result = auto_complete::orchestrate(&mut driver, spec, variant, json, escalate_mode);
     let completed_at = chrono::Utc::now();
-    // The marker is no longer needed once `orchestrate` has returned — every
-    // phase child has been spawned and reaped. Drop it explicitly so the
-    // marker file is gone before `record_auto_complete_run` runs.
-    drop(run_marker);
+    // TASK-336: the run-UUID is no longer needed once `orchestrate` has
+    // returned — every phase child has been spawned and reaped. Clear it on
+    // the drain-state file so a would-be straggler child carrying this token
+    // no longer corroborates against the file (especially between batch
+    // members, where the file lives on until the batch ends). For a single-
+    // spec drain the file is removed entirely just below; this clear is
+    // belt-and-braces in case the removal races a final child probe.
+    drain_state::clear_run(&project_root);
 
     // TASK-266: log the run to `~/.aida/auto-complete.jsonl` and, on a phase
     // failure, auto-draft a Draft BUG so the friction surfaces back to the
