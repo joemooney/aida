@@ -1,0 +1,26 @@
+id: 019e4bc4-05ea-73b3-94e8-bcbdbaa7ab3f
+spec_id: STORY-390
+agreed_id: STORY-390
+title: 'Review PR-162: STORY-361: extend MCP server with 14 coordination tools (SPIKE-9 outcome)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4bac`) for branch `story-361`.
+
+  - PR: <https://github.com/joemooney/aida/pull/162>
+  - Branch: `story-361` → `main`
+
+  ## Covers
+
+  - STORY-361
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 162` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T18:19:58.314683294Z
+modified_at: 2026-05-21T18:19:58.314683294Z
+req_type: Story
