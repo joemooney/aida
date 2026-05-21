@@ -418,4 +418,144 @@ mod tests {
             "aida-pickup.md should render the ⏸ pause/stop row"
         );
     }
+
+    /// BUG-280 regression guard — the `/aida-review` skill template must carry
+    /// the headless-mode contract that prevents the PR-150 failure mode
+    /// (reviewer posted a PASS comment then called AskUserQuestion and bailed
+    /// before writing the verdict file). The contract has four invariants:
+    /// (1) a top-level *Headless mode contract* section, (2) AskUserQuestion
+    /// named as forbidden under headless, (3) the verdict-file write
+    /// positioned before the PR comment post in document order, (4) step 8's
+    /// merge confirm gated to skip under headless. The fourth is the load-
+    /// bearing one — it is the prompt that crashed PR-150. trace:BUG-280 |
+    /// ai:claude
+    #[test]
+    fn aida_review_carries_bug_280_headless_contract() {
+        let review = EMBEDDED_TEMPLATES
+            .get("skills/aida-review.md")
+            .expect("aida-review.md embedded");
+
+        // (1) Top-level Headless mode contract section is present.
+        assert!(
+            review.contains("## Headless mode contract"),
+            "aida-review.md missing the top-level `## Headless mode contract` section"
+        );
+
+        // (2) AskUserQuestion is named as forbidden under headless. The
+        // section's "AskUserQuestion is forbidden" phrasing is the load-
+        // bearing bit — drift past it lets the skill template re-acquire
+        // the BUG-280 failure mode.
+        assert!(
+            review.contains("AskUserQuestion is forbidden"),
+            "aida-review.md must state `AskUserQuestion is forbidden` in the headless contract"
+        );
+
+        // (3) Verdict file write precedes the PR comment post in document
+        // order. Step 6a (verdict file) MUST appear before step 7 (PR
+        // comment) — reversing the order is the exact BUG-280 failure
+        // mode (PASS comment posted, no verdict file on disk).
+        let step_6a = review.find("### 6a. Write the verdict file");
+        let step_7 = review.find("### 7. Post a consolidated review comment");
+        let (Some(s6a), Some(s7)) = (step_6a, step_7) else {
+            panic!(
+                "aida-review.md must define both `### 6a. Write the verdict file` \
+                 and `### 7. Post a consolidated review comment` headings — got \
+                 6a={:?} 7={:?}",
+                step_6a, step_7
+            );
+        };
+        assert!(
+            s6a < s7,
+            "verdict file write (step 6a) must appear BEFORE the PR comment \
+             post (step 7) — reversing is BUG-280's exact failure mode"
+        );
+
+        // (4) Step 8 (merge confirm) is gated to skip under headless. The
+        // gate is the prompt that crashed PR-150 — without it, the model
+        // calls AskUserQuestion and dies.
+        let step_8_idx = review
+            .find("### 8. Confirm with the user before merge")
+            .expect("aida-review.md must define `### 8. Confirm with the user before merge`");
+        // Find the next section after step 8 to bound the search to step 8's body.
+        let step_8_end = review[step_8_idx..]
+            .find("\n### ")
+            .map(|n| step_8_idx + n)
+            .unwrap_or(review.len());
+        let step_8_body = &review[step_8_idx..step_8_end];
+        assert!(
+            step_8_body.contains("AIDA_HEADLESS=1"),
+            "step 8 must gate on AIDA_HEADLESS=1 to skip the merge confirm — \
+             otherwise the headless reviewer calls AskUserQuestion (BUG-280)"
+        );
+        assert!(
+            step_8_body.contains("SKIP") || step_8_body.contains("skip"),
+            "step 8's headless gate must SKIP the merge confirm (not just \
+             warn) — only skipping prevents AskUserQuestion from firing"
+        );
+    }
+
+    /// BUG-280 regression guard — the example verdict-file JSON that the
+    /// `/aida-review` skill embeds must be valid JSON with the schema the
+    /// orchestrator's `read_verdict_file` accepts (the `verdict` field is
+    /// the only load-bearing one; everything else is metadata). A drift in
+    /// the example that produces invalid JSON or omits `verdict` would
+    /// silently let a real reviewer copy a broken template. trace:BUG-280
+    /// | ai:claude
+    #[test]
+    fn aida_review_embeds_a_parseable_verdict_file_example() {
+        let review = EMBEDDED_TEMPLATES
+            .get("skills/aida-review.md")
+            .expect("aida-review.md embedded");
+
+        // Locate the first verdict-file write under step 6a (which lives
+        // before the PR-comment section — assertion (3) above pins the
+        // order). The first cat-EOF block in step 6a is the canonical
+        // example; later blocks demonstrate variants like the merge
+        // escalation handshake.
+        let step_6a_idx = review
+            .find("### 6a. Write the verdict file")
+            .expect("step 6a heading present (asserted elsewhere)");
+        let after_6a = &review[step_6a_idx..];
+
+        // Extract every single-line `{"verdict": ...}` JSON literal in
+        // the section and parse them all. Single-line is the right filter:
+        // the canonical heredoc examples are all on one line, and a
+        // multi-line `{...}` in the template is necessarily prose (e.g. a
+        // pseudo-JSON comment illustrating the `findings_filed` re-write
+        // shape — that block intentionally embeds shell `#` comments, so
+        // it is not literal JSON).
+        let mut examples = Vec::new();
+        let mut rest = after_6a;
+        while let Some(open) = rest.find("{\"verdict\":") {
+            let body = &rest[open..];
+            // A single-line literal closes with `}` before the next `\n`.
+            let newline = body.find('\n').unwrap_or(body.len());
+            let line = &body[..newline];
+            if let Some(close) = line.find('}') {
+                examples.push(&line[..=close]);
+            }
+            rest = &body[newline.min(body.len())..];
+        }
+        assert!(
+            !examples.is_empty(),
+            "aida-review.md step 6a must embed at least one \
+             `{{\"verdict\": ...}}` example for the skill to copy"
+        );
+        for (i, json) in examples.iter().enumerate() {
+            let parsed: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| {
+                panic!(
+                    "aida-review.md verdict example #{i} is not valid JSON: \
+                     {e}\n  example: {json}"
+                )
+            });
+            let verdict = parsed.get("verdict").and_then(|v| v.as_str());
+            assert!(
+                matches!(verdict, Some("Approved" | "RequestChanges" | "Rejected")),
+                "aida-review.md verdict example #{i} must carry a \
+                 `verdict` field of Approved/RequestChanges/Rejected — \
+                 got {:?}",
+                verdict
+            );
+        }
+    }
 }

@@ -51781,6 +51781,185 @@ fn read_verdict_file(
         })
 }
 
+/// When phase 3 ends with [`auto_complete::FailureKind::NoVerdict`] under a
+/// headless `--no-human` drain, scan the reviewer's headless log for the
+/// BUG-280 signature: an `AskUserQuestion` event. The harness denies
+/// AskUserQuestion under `--no-human=both`, the reviewer Claude bails ~10s
+/// later, and the verdict file never lands — so an AskUserQuestion event
+/// alongside a missing verdict file is a near-certain diagnosis.
+///
+/// Returns the original failure when no recent log can be located, when the
+/// log cannot be read, or when no AskUserQuestion event is found. On a hit,
+/// returns a NoVerdict failure whose `reason` names AskUserQuestion as the
+/// likely cause and points at the offending log file. trace:BUG-280 | ai:claude
+fn enrich_no_verdict_with_headless_diagnostic(
+    failure: auto_complete::PhaseFailure,
+    project_root: &std::path::Path,
+    started_at: std::time::SystemTime,
+) -> auto_complete::PhaseFailure {
+    if failure.kind != auto_complete::FailureKind::NoVerdict {
+        return failure;
+    }
+    let logs_dir = project_root.join(".aida").join("headless-logs");
+    let Ok(entries) = std::fs::read_dir(&logs_dir) else {
+        return failure;
+    };
+    for entry in entries.flatten() {
+        let Ok(meta) = entry.metadata() else { continue };
+        let Ok(modified) = meta.modified() else {
+            continue;
+        };
+        if modified < started_at {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        // The harness emits AskUserQuestion as a tool_use with name field —
+        // the substring catches both the structured `"name":"AskUserQuestion"`
+        // form and any narrative mention in assistant text.
+        if body.contains("AskUserQuestion") {
+            return auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoVerdict,
+                format!(
+                    "{} — the reviewer's headless log ({}) contains an \
+                     AskUserQuestion call, which is forbidden under \
+                     `--no-human` and likely caused the session to bail \
+                     before writing the verdict file (BUG-280). The \
+                     `/aida-review` skill must auto-resolve every \
+                     confirmation under AIDA_HEADLESS=1 instead of \
+                     calling AskUserQuestion.",
+                    failure.reason,
+                    entry.path().display(),
+                ),
+            );
+        }
+    }
+    failure
+}
+
+#[cfg(test)]
+mod enrich_headless_diagnostic_tests {
+    use super::enrich_no_verdict_with_headless_diagnostic;
+    use crate::auto_complete::{FailureKind, PhaseFailure};
+    use std::fs;
+    use std::time::{Duration, SystemTime};
+
+    /// A NoVerdict failure with no headless log at all stays unchanged.
+    #[test]
+    fn no_log_means_unchanged_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let failure = PhaseFailure::of(FailureKind::NoVerdict, "the reviewer …");
+        let out = enrich_no_verdict_with_headless_diagnostic(
+            failure.clone(),
+            dir.path(),
+            SystemTime::now() - Duration::from_secs(60),
+        );
+        assert_eq!(out.reason, failure.reason);
+        assert_eq!(out.kind, failure.kind);
+    }
+
+    /// A log without an AskUserQuestion mention leaves the failure unchanged.
+    #[test]
+    fn log_without_askuserquestion_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let logs = dir.path().join(".aida").join("headless-logs");
+        fs::create_dir_all(&logs).unwrap();
+        fs::write(
+            logs.join("pr-5-abc.jsonl"),
+            r#"{"type":"assistant","content":[{"name":"Bash"}]}
+"#,
+        )
+        .unwrap();
+        let failure = PhaseFailure::of(FailureKind::NoVerdict, "the reviewer …");
+        let out = enrich_no_verdict_with_headless_diagnostic(
+            failure.clone(),
+            dir.path(),
+            SystemTime::now() - Duration::from_secs(60),
+        );
+        assert_eq!(out.reason, failure.reason);
+    }
+
+    /// A log written after `started_at` that contains AskUserQuestion
+    /// triggers the diagnostic enrichment.
+    #[test]
+    fn askuserquestion_in_recent_log_enriches_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let logs = dir.path().join(".aida").join("headless-logs");
+        fs::create_dir_all(&logs).unwrap();
+        let log_path = logs.join("pr-150-abc.jsonl");
+        fs::write(
+            &log_path,
+            r#"{"type":"assistant","content":[{"type":"tool_use","name":"AskUserQuestion"}]}
+"#,
+        )
+        .unwrap();
+        let failure = PhaseFailure::of(
+            FailureKind::NoVerdict,
+            "the reviewer session produced no verdict file — the review did not complete",
+        );
+        let out = enrich_no_verdict_with_headless_diagnostic(
+            failure,
+            dir.path(),
+            SystemTime::now() - Duration::from_secs(60),
+        );
+        assert_eq!(out.kind, FailureKind::NoVerdict);
+        assert!(out.reason.contains("AskUserQuestion"), "{}", out.reason);
+        assert!(out.reason.contains("BUG-280"), "{}", out.reason);
+        assert!(
+            out.reason
+                .contains(log_path.file_name().unwrap().to_str().unwrap()),
+            "diagnostic names the offending log: {}",
+            out.reason
+        );
+    }
+
+    /// A log written BEFORE `started_at` is skipped — the diagnostic is
+    /// scoped to logs from this reviewer subprocess only.
+    #[test]
+    fn old_log_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let logs = dir.path().join(".aida").join("headless-logs");
+        fs::create_dir_all(&logs).unwrap();
+        let log_path = logs.join("pr-149-old.jsonl");
+        fs::write(
+            &log_path,
+            r#"{"type":"assistant","content":[{"type":"tool_use","name":"AskUserQuestion"}]}
+"#,
+        )
+        .unwrap();
+        // started_at is in the future relative to the log's mtime
+        let started_at = SystemTime::now() + Duration::from_secs(60);
+        let failure = PhaseFailure::of(FailureKind::NoVerdict, "the reviewer …");
+        let out =
+            enrich_no_verdict_with_headless_diagnostic(failure.clone(), dir.path(), started_at);
+        assert_eq!(out.reason, failure.reason);
+    }
+
+    /// Non-NoVerdict failures pass through unchanged — the diagnostic is
+    /// only relevant when the verdict file is genuinely missing.
+    #[test]
+    fn non_noverdict_failure_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let logs = dir.path().join(".aida").join("headless-logs");
+        fs::create_dir_all(&logs).unwrap();
+        fs::write(
+            logs.join("pr-1.jsonl"),
+            r#"{"name":"AskUserQuestion"}
+"#,
+        )
+        .unwrap();
+        let failure = PhaseFailure::of(FailureKind::CiRed, "ci red");
+        let out = enrich_no_verdict_with_headless_diagnostic(
+            failure.clone(),
+            dir.path(),
+            SystemTime::now() - Duration::from_secs(60),
+        );
+        assert_eq!(out.kind, FailureKind::CiRed);
+        assert_eq!(out.reason, failure.reason);
+    }
+}
+
 #[cfg(test)]
 mod read_verdict_file_tests {
     use super::read_verdict_file;
@@ -52662,6 +52841,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let verdict_path = verdict_dir.join(format!("PR-{pr}.json"));
         let _ = std::fs::remove_file(&verdict_path); // clear any stale verdict
 
+        // BUG-280: capture the wall-clock start of the reviewer subprocess so
+        // a NoVerdict failure can scan the corresponding headless log for the
+        // AskUserQuestion-in-headless symptom. trace:BUG-280 | ai:claude
+        let reviewer_started_at = std::time::SystemTime::now();
+
         let session_uuid = uuid::Uuid::now_v7().to_string();
         let scope = format!("PR-{pr}");
         let mut cmd = std::process::Command::new(self.aida_exe());
@@ -52734,7 +52918,24 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
         }
 
-        let outcome = read_verdict_file(&verdict_path)?;
+        let outcome = match read_verdict_file(&verdict_path) {
+            Ok(o) => o,
+            Err(failure) if self.no_human.is_some() => {
+                // BUG-280: under a headless `--no-human` drain, a NoVerdict
+                // failure is most often the AskUserQuestion-in-headless
+                // symptom (reviewer skill called a confirmation prompt
+                // forbidden by the harness, bailed before writing the
+                // verdict file). Enrich the error message so the recovery
+                // hint names the likely cause instead of the generic
+                // "no verdict file." trace:BUG-280 | ai:claude
+                return Err(enrich_no_verdict_with_headless_diagnostic(
+                    failure,
+                    &self.project_root,
+                    reviewer_started_at,
+                ));
+            }
+            Err(e) => return Err(e),
+        };
 
         // End the reviewer session (best-effort — the verdict is already in
         // hand, so a stuck reviewer worktree must not block the merge).
