@@ -1,0 +1,26 @@
+id: 019e4912-7045-7671-8dbf-59839f76233b
+spec_id: STORY-372
+agreed_id: STORY-372
+title: 'Review PR-147: [AI:claude] fix(cli): demote trace: markers from /// doc comments in cli.rs (TASK-328)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4905`) for branch `task-328`.
+
+  - PR: <https://github.com/joemooney/aida/pull/147>
+  - Branch: `task-328` → `main`
+
+  ## Covers
+
+  - TASK-328
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 147` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T05:46:45.701829049Z
+modified_at: 2026-05-21T05:46:45.701829049Z
+req_type: Story
