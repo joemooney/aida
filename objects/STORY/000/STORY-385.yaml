@@ -100,7 +100,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:49:19.704186488Z
-modified_at: 2026-05-21T14:49:19.704186488Z
+modified_at: 2026-05-21T14:49:46.548237796Z
 req_type: Story
 tags:
 - attention
@@ -109,3 +109,28 @@ tags:
 - discoverability
 - from-user-question
 - status
+comments:
+- id: 019e4b03-9534-79d3-8e11-3cb925dc6f8a
+  author: joe
+  content: |-
+    Acceptance addition (2026-05-21, user note): `aida findings list` output must surface in `aida status` too.
+
+    Two surface levels:
+
+    1. **Default `aida status` (no flag)** — always shows a one-line findings tally, e.g. `⊕ Findings: 3 awaiting triage` (or omit the line entirely when 0). Small data, high signal — a non-zero findings backlog means *"queue depth is misleading; you have unrouted work."*
+
+    2. **`aida status --cleanup`** — promotes findings to a full numbered category in 'Needs attention':
+
+    ```
+    ⚠ Findings awaiting triage (3):
+        PR-150  template-shape  cosmetic  TASK-431 — Verdict file column needs lease prefix
+        BUG-285 followup        minor     TASK-432 — Pre-check should also fire on `--force`
+        TASK-413 design-choice  minor     TASK-433 — Status preamble could include retry count
+        → `aida findings list` for full view; `aida findings promote <ID>` or `aida findings dismiss <ID> --reason ...`
+    ```
+
+    3. **`--json` emission** includes findings count + structured per-finding details in the same machine-readable shape.
+
+    User context for the addition: the findings backlog has been triaged 2-3 times today and re-grew each time (16 promotes/dismisses tonight). It's a recurring attention-state that today's `aida status` is silent on — the user has to remember to run `aida findings list` explicitly. Compose with STORY-385's other 'needs attention' categories.
+  created_at: 2026-05-21T14:49:46.548237796Z
+  modified_at: 2026-05-21T14:49:46.548237796Z
