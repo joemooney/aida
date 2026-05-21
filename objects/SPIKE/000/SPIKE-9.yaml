@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T05:40:33.591087796Z
-modified_at: 2026-05-21T02:15:46.334663399Z
+modified_at: 2026-05-21T02:15:47.647522682Z
 req_type: Spike
 tags:
 - agent-agnostic
@@ -66,3 +66,8 @@ comments:
   content: 'Design input 2026-05-19 (user question): MCP-as-bus needs a SEPARATE, STANDING server process — distinct from today''s MCP. Today `aida mcp-serve` runs as a per-session stdio SUBPROCESS that Claude Code spawns (ephemeral, one-per-session, stdio). A shared bus across multiple sessions/agents/machines needs a long-lived, network-addressable server that many clients connect to. User asked: ''could that be a thread within the orchestrator process?'' — NO, and the reason is LIFETIME: the orchestrator is ephemeral (one --auto-complete drain, then exits). A bus thread in it would (a) die when the drain ends, (b) not exist when no drain runs, (c) fork into N buses if N drains run. The bus must OUTLIVE any drain. The ''thread'' idea is fine — just the wrong host: attach the bus to a STANDING process. AIDA already has one — **aida-server** (REST+gRPC, port 8080). The bus is naturally a component/thread of aida-server (or a sibling standing daemon); the orchestrator becomes a CLIENT of the bus, not its host. SPIKE-9 must evaluate the deployment model: standing daemon, lives in aida-server vs sibling, how it''s started/supervised, what happens when it''s not running.'
   created_at: 2026-05-19T05:54:58.506104141Z
   modified_at: 2026-05-19T05:54:58.506104141Z
+- id: 019e4851-4abf-73b1-86f4-d50a152e9a3a
+  author: joe
+  content: 'Verdict: HYBRID. Keep file-handshakes as canonical (filesystem is source of truth); extend MCP server as a transport surface over the same files. Orchestrator stays file-direct; cross-agent (Codex/Cursor) participation works via MCP tools that map to existing .aida/ file conventions. Full writeup + smallest-valuable-slice (~12-15 MCP coordination tools) in docs/spikes/2026-05-20-spike-9-mcp-as-bus.md.'
+  created_at: 2026-05-21T02:15:47.647522682Z
+  modified_at: 2026-05-21T02:15:47.647522682Z
