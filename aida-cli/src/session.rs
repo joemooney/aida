@@ -722,10 +722,17 @@ pub fn spawn_claude_session(
 /// stdout redirected to `log_path` — but keeps the parent alive so the
 /// standalone reviewer summary can read the verdict file + JSONL log.
 /// trace:BUG-226 | ai:claude
+///
+/// TASK-307: starts a background tee thread on `log_path` so the headless
+/// session's high-signal events surface to the orchestrator's terminal
+/// alongside the launch banner. The tee's filter and on/off are driven by
+/// `tee_opts`; even when disabled, failure events (`is_error`,
+/// `permission_denials`) still stream. trace:TASK-307 | ai:claude
 pub fn spawn_claude_headless(
     prompt: &str,
     session_id: &str,
     log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
 ) -> Result<std::process::ExitStatus> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -734,12 +741,15 @@ pub fn spawn_claude_headless(
     }
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
-    Command::new("claude")
+    let tee = crate::headless_tee::start_tee(log_path, tee_opts);
+    let status = Command::new("claude")
         .args(claude_headless_args(prompt, session_id))
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
-        .context("failed to spawn claude")
+        .context("failed to spawn claude")?;
+    tee.stop();
+    Ok(status)
 }
 
 /// BUG-226: spawn `claude --resume <id>` and wait — the spawn counterpart
@@ -797,7 +807,22 @@ pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
 /// they are running unattended — the `/aida-review` skill keys its
 /// finding-filing step on it, since there is no human to triage the
 /// reviewer's findings. trace:STORY-278 | ai:claude
-pub fn exec_claude_headless(prompt: &str, session_id: &str, log_path: &Path) -> Result<()> {
+///
+/// TASK-307: the headless `claude -p` reviewer/implementer is now hosted by
+/// the parent (spawn + wait + exit) instead of `exec`-replacing it, so a
+/// background tee thread can tail `log_path` and surface high-signal events
+/// to the operator's terminal during the run. The semantics the caller sees
+/// are unchanged — the function never returns on success; the process exits
+/// with the child's exit code. The pre-TASK-307 `exec()` behaviour is gone
+/// because the parent must stay alive to host the tee — including for the
+/// `--no-tee-headless` path, where the tee still runs so failure events
+/// (`is_error`, `permission_denials`) can never hide. trace:TASK-307 | ai:claude
+pub fn exec_claude_headless(
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+) -> Result<()> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
@@ -805,21 +830,15 @@ pub fn exec_claude_headless(prompt: &str, session_id: &str, log_path: &Path) -> 
     }
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
-    let mut cmd = Command::new("claude");
-    cmd.args(claude_headless_args(prompt, session_id))
+    let tee = crate::headless_tee::start_tee(log_path, tee_opts);
+    let status = Command::new("claude")
+        .args(claude_headless_args(prompt, session_id))
         .env("AIDA_HEADLESS", "1")
-        .stdout(Stdio::from(log));
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = cmd.exec();
-        anyhow::bail!("failed to exec claude: {}", err);
-    }
-    #[cfg(not(unix))]
-    {
-        let status = cmd.status().context("failed to spawn claude")?;
-        std::process::exit(status.code().unwrap_or(1));
-    }
+        .stdout(Stdio::from(log))
+        .status()
+        .context("failed to spawn claude")?;
+    tee.stop();
+    std::process::exit(status.code().unwrap_or(1));
 }
 
 /// STORY-306: build the argv (after the `claude` program name) for a headless
@@ -863,6 +882,7 @@ pub fn spawn_claude_headless_resume(
     session_id: &str,
     log_path: &Path,
     cwd: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
 ) -> Result<std::process::ExitStatus> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -871,13 +891,16 @@ pub fn spawn_claude_headless_resume(
     }
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
-    Command::new("claude")
+    let tee = crate::headless_tee::start_tee(log_path, tee_opts);
+    let status = Command::new("claude")
         .current_dir(cwd)
         .args(claude_headless_resume_args(prompt, session_id))
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
-        .context("failed to spawn claude")
+        .context("failed to spawn claude")?;
+    tee.stop();
+    Ok(status)
 }
 
 /// One line of `~/.aida/session-launches.log` matching the current cwd,
