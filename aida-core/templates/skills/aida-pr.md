@@ -106,11 +106,27 @@ Collect a status table:
   state for fresh batches; will auto-bump to Completed once the PR
   merges and `aida pull` runs)
 - `In Progress` / `Approved` — yellow warning, this batch isn't actually done
+  *(exception — orchestrated headless drain: see below)*
 - `Rejected` — red error, this commit shouldn't be in the batch
 - not found — red error, commit references a deleted/typo'd ID
 
 <!-- kind:confirmation -->
 If any non-`Done` / non-`Completed` items exist, STOP and report them to the user with the matching commit SHAs. Ask: "ship anyway?" — `--force` (or explicit user confirmation) bypasses; default is to refuse. Option 1 is the safe default (refuse), so under `$AIDA_ZEN` this auto-resolves to STOP-and-report — `--zen` never ships a half-done batch unasked.
+
+**Exception — orchestrated headless drain (TASK-422).** When
+`aida orchestrator status` is `orchestrated`, BUG-269's `aida queue done`
+gate refuses to flip the spec to Done until an open PR exists — so `In
+Progress` is the *expected* state for every covered spec at this point,
+and `/aida-pr` IS the command that ships it. Under the corroborated
+`orchestrated` mode (never the bare `$AIDA_AUTO_COMPLETE` env var,
+following the BUG-233 / BUG-237 pattern used in step 12), treat `In
+Progress` as a green-light state for the covered specs and proceed. The
+BUG-269 gate still fires on `queue done` after the PR opens (phase 3+
+post-merge), which preserves the no-committed-but-unshipped invariant
+that BUG-269 enforced. `Rejected` and `not found` stay red errors;
+`Approved` stays a warning (an `Approved` spec hasn't been picked up
+yet — distinct from `In Progress`, where work is actively underway).
+trace:TASK-422
 
 ### 4. Pre-flight: cargo fmt --check (Rust only) — trace:TASK-61
 
