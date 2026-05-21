@@ -11,6 +11,7 @@ mod exit_signal;
 mod findings;
 mod global_queue;
 mod headless_tail;
+mod headless_tee;
 mod history;
 mod mcp;
 mod not_found;
@@ -46425,9 +46426,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             escalate_defaults,
             zen,
             quiet,
+            no_tee_headless,
             user,
         } => {
             let user_id = get_user(user);
+            // TASK-307: propagate the headless-tee flag the same way
+            // `--zen` propagates via `AIDA_ZEN` — set the env var once at
+            // the top and every downstream child (the direct headless
+            // launch, the orchestrator's spawned `aida queue work` phase
+            // children) reads it from `TeeOptions::from_env_and_flag`. The
+            // env var is the canonical signal; the flag is sugar for setting
+            // it. A user-set `AIDA_TEE_HEADLESS=0` in the shell is honored
+            // (we never scrub a value we didn't set). trace:TASK-307
+            if *no_tee_headless {
+                std::env::set_var("AIDA_TEE_HEADLESS", "0");
+            }
             // STORY-287: resolve the three-mode autonomy ladder up front,
             // before either the `--auto-complete` orchestrator or the plain
             // `handle_queue_work` path runs. `--zen` works purely through
@@ -48901,7 +48914,14 @@ fn handle_queue_work(
                     "ℹ".cyan(),
                     log_path.display().to_string().dimmed()
                 );
-                return session::exec_claude_headless(&prompt, &id, &log_path);
+                // TASK-307: tee high-signal events so the operator can
+                // follow the headless run without opening a second terminal
+                // to tail the JSONL. Disable with `--no-tee-headless` or
+                // `AIDA_TEE_HEADLESS=0`; failure events stream regardless.
+                // trace:TASK-307 | ai:claude
+                let tee_opts =
+                    headless_tee::TeeOptions::from_env_and_flag(false).with_label(&lease.branch);
+                return session::exec_claude_headless(&prompt, &id, &log_path, &tee_opts);
             }
             eprintln!(
                 "{} {}",
@@ -48985,7 +49005,13 @@ fn run_standalone_reviewer(
                     "ℹ".cyan(),
                     log_path.display().to_string().dimmed()
                 );
-                let status = session::spawn_claude_headless(prompt, &id, &log_path)?;
+                // TASK-307: tee high-signal events for the standalone
+                // reviewer too. Label = "reviewer" so a future concurrent
+                // batch can disambiguate `│ [headless:reviewer]` lines.
+                // trace:TASK-307 | ai:claude
+                let tee_opts =
+                    headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
+                let status = session::spawn_claude_headless(prompt, &id, &log_path, &tee_opts)?;
                 (status, Some(log_path))
             } else {
                 let name = session::derive_session_name(scope, branch, role);
@@ -52401,6 +52427,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "◆".cyan()
             );
         }
+        // TASK-307: tee the headless advisor too — design-fork judgements
+        // benefit just as much from live visibility as the reviewer phase.
+        // Label = "advisor" so the operator can tell advisor lines apart
+        // from the reviewer / resume lines in a busy drain. trace:TASK-307
+        let tee_opts =
+            crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("advisor");
+        let tee_handle = crate::headless_tee::start_tee(&log_path, &tee_opts);
         let status = std::process::Command::new("claude")
             .current_dir(&self.project_root)
             .args(session::claude_headless_args("/aida-advise", &advisor_uuid))
@@ -52417,6 +52450,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     format!("advisor tier: could not launch the advisor session: {e}"),
                 )
             })?;
+        tee_handle.stop();
         if !status.success() {
             return Err(PhaseFailure::new(format!(
                 "the headless advisor session exited {} — see {}",
@@ -52583,14 +52617,24 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "◆".cyan()
             );
         }
-        let status =
-            session::spawn_claude_headless_resume(&prompt, &session_id, &log_path, &worktree)
-                .map_err(|e| {
-                    PhaseFailure::of(
-                        FailureKind::Spawn,
-                        format!("advisor tier: could not resume the implementer session: {e}"),
-                    )
-                })?;
+        // TASK-307: tee the advisor-resume leg too. Label = "resume" so an
+        // operator watching a drain can tell the resumed implementer apart
+        // from the surrounding `[headless]` chatter. trace:TASK-307
+        let tee_opts =
+            crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("resume");
+        let status = session::spawn_claude_headless_resume(
+            &prompt,
+            &session_id,
+            &log_path,
+            &worktree,
+            &tee_opts,
+        )
+        .map_err(|e| {
+            PhaseFailure::of(
+                FailureKind::Spawn,
+                format!("advisor tier: could not resume the implementer session: {e}"),
+            )
+        })?;
         if !status.success() {
             // BUG-266: same Anthropic-API outage classification on the
             // advisor-resume leg — `spawn_claude_headless_resume` is the
