@@ -229,6 +229,25 @@ fn queue_drained_hint_lines(
     vec![header, body]
 }
 
+/// BUG-285: pure decision for whether `aida queue done`'s PR check should
+/// be bypassed. Takes ALL three flags `aida queue done` accepts —
+/// `--yes`, `--force`, `--skip-pr-check` — so the invariant *"--yes does
+/// NOT bypass the gate"* is encoded in the test matrix below. A regression
+/// that wired `--yes` into the bypass path would flip
+/// `bypass_with_yes_only` red.
+///
+/// `--yes` is the confirmation-skip for the interactive prompt that
+/// follows the gate, not a gate override. The two flags that genuinely
+/// bypass are `--force` (legacy, general escape hatch) and
+/// `--skip-pr-check` (BUG-285, intent-named). Both bypass identically;
+/// `--skip-pr-check` is the recommended name when the bypass is
+/// specifically about the PR-check gate.
+/// trace:BUG-285 | ai:claude
+pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: bool) -> bool {
+    let _ = yes;
+    force || skip_pr_check
+}
+
 /// BUG-269 / BUG-285: pure decision for the `aida queue done` pre-check.
 /// Returns `Some(error_lines)` when the call must be refused (committed-
 /// but-unshipped work with no open PR), `None` to proceed.
@@ -254,25 +273,6 @@ fn queue_drained_hint_lines(
 /// suggested follow-up commands; that's what the user typed and what they
 /// want to re-type.
 /// trace:BUG-269 BUG-285 | ai:claude
-/// BUG-285: pure decision for whether `aida queue done`'s PR check should
-/// be bypassed. Takes ALL three flags `aida queue done` accepts —
-/// `--yes`, `--force`, `--skip-pr-check` — so the invariant *"--yes does
-/// NOT bypass the gate"* is encoded in the test matrix below. A regression
-/// that wired `--yes` into the bypass path would flip
-/// `bypass_with_yes_only` red.
-///
-/// `--yes` is the confirmation-skip for the interactive prompt that
-/// follows the gate, not a gate override. The two flags that genuinely
-/// bypass are `--force` (legacy, general escape hatch) and
-/// `--skip-pr-check` (BUG-285, intent-named). Both bypass identically;
-/// `--skip-pr-check` is the recommended name when the bypass is
-/// specifically about the PR-check gate.
-/// trace:BUG-285 | ai:claude
-pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: bool) -> bool {
-    let _ = yes;
-    force || skip_pr_check
-}
-
 pub fn queue_done_precheck_error(
     display_id: &str,
     branch_commits_ahead: Option<u32>,
