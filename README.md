@@ -342,10 +342,11 @@ You've tried AIDA — so *what is it actually for, next to the tools you already
 
 - [**AIDA vs `/ultraplan`**](docs/positioning/vs-ultraplan.md) — AIDA layers requirement structure on top of Claude's planning; `/ultraplan` is the planning primitive AIDA composes with.
 - [**AIDA vs `/ultrareview`**](docs/positioning/vs-ultrareview.md) — AIDA's `/aida-review` is workflow-integrated, single-perspective; `/ultrareview` is parallel cloud multi-agent. Complementary, not competing.
+- [**AIDA vs Claude Code subagents (`/agents`)**](docs/positioning/vs-claude-code-subagents.md) — Subagents are a within-conversation primitive; AIDA's roles are a cross-conversation workflow layer. Different layers — AIDA roles compose subagents inside them. <!-- trace:TASK-337 | ai:claude -->
 - [**AIDA vs Karpathy-style markdown**](docs/positioning/vs-karpathy-md.md) — Structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
 - [**AIDA vs SaaS PM tools**](docs/positioning/vs-saas-pm.md) — Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.
 
-For the broader problem statement behind all four, see [Why AIDA?](docs/WHY-AIDA.md).
+For the broader problem statement behind all five, see [Why AIDA?](docs/WHY-AIDA.md).
 
 ## Architecture (one paragraph)
 
