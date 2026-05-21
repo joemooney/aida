@@ -2716,6 +2716,16 @@ pub enum QueueCommand {
         // trace:BUG-226 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         quiet: bool,
+        /// Suppress the high-signal headless tee under `--no-human`. By
+        /// default the parent prints `│ [headless] ...` lines for the
+        /// headless Claude's `system.init`, `assistant.text`, `tool_use`,
+        /// and `result` events so the operator can follow progress without
+        /// a second terminal. With this flag (or `AIDA_TEE_HEADLESS=0`),
+        /// the chatter is silenced but failures (`is_error`,
+        /// `permission_denials`) still stream — they must NEVER hide.
+        // trace:TASK-307 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        no_tee_headless: bool,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
