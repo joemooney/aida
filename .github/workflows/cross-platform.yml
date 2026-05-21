@@ -30,7 +30,7 @@ jobs:
         os: [windows-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -55,11 +55,16 @@ jobs:
           }
 
       # protoc is required by tonic-build (aida-server's gRPC build script).
-      # See BUG-66.
-      - name: Install protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # See BUG-66. Installed via OS package managers instead of
+      # arduino/setup-protoc — that action still runs on Node.js 20
+      # (deprecated) and has no Node 24 release. trace:TASK-290 | ai:claude
+      - name: Install protoc (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - name: Install protoc (Windows)
+        if: runner.os == 'Windows'
+        run: choco install protoc -y
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
