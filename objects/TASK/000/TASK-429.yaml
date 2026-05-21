@@ -1,0 +1,38 @@
+id: 019e48cd-8b95-7301-8059-68af25765cda
+spec_id: TASK-429
+agreed_id: TASK-429
+title: 'TUI: arm TERMINAL_NEEDS_RESTORE gate BEFORE enable_raw_mode to close micro-race window'
+description: |-
+  **Where:** `aida-tui/src/term.rs:48-52` in `TermGuard::enter`.
+
+  **What:** `enable_raw_mode()` runs before `TERMINAL_NEEDS_RESTORE.store(true, SeqCst)`. A SIGTERM/SIGINT that lands in the microsecond-wide window between those two lines finds the gate `false`. The handler's `restore_terminal()` then swaps `false → false`, returns immediately, and `std::process::exit(130)` runs with raw mode still on — exactly the symptom BUG-110 set out to fix, in the most unlucky case.
+
+  **Why it matters:** the window is tiny in practice (a handful of instructions between `enable_raw_mode` and the atomic store), so the failure mode is extremely rare under normal use. But the contract BUG-110 commits to is *"a signal during a running TUI always restores the terminal"*, and this is the one path where that contract has a hole.
+
+  **Fix:** flip the two lines so the gate is armed first:
+
+  ```rust
+  TERMINAL_NEEDS_RESTORE.store(true, Ordering::SeqCst);
+  terminal::enable_raw_mode().context("failed to enter terminal raw mode")?;
+  ```
+
+  The inverse race (signal lands AFTER the gate is armed but BEFORE `enable_raw_mode` succeeds) is benign: `restore_terminal` runs `disable_raw_mode` (no-op — raw mode wasn't on), `LeaveAlternateScreen` (no-op — never entered), `cursor::Show` (no-op — never hidden). Then `exit(130)` from the handler. Terminal is sane.
+
+  The comment at `term.rs:49-51` already says *"arm the cross-thread restore gate before anything else so a signal that races with the guard's construction still finds it set"* — the swap makes the code match the comment.
+
+  **Severity:** minor — closes a real but vanishingly rare race; one-line code change, no API impact, no test churn needed (the existing `restore_gate_is_single_writer` already covers the gate semantics, and the race is unreachable from a no-TTY test).
+
+  Raised in review of PR-144: https://github.com/joemooney/aida/pull/144
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T04:31:30.709524485Z
+modified_at: 2026-05-21T04:31:30.709524485Z
+req_type: Task
+tags:
+- batch:tui-v2
+- from-review:PR-144
+- severity:minor
+- signal-handling
+- tui
