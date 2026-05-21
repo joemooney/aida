@@ -53,9 +53,53 @@ aida zen status
   Branch off this word, **not** the bare `$AIDA_ZEN` env var. trace:BUG-237
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
-overrides `--zen` — it has its own finding-filing path (step 7b). An
-un-annotated prompt defaults to `design-fork` (pause-safe). Author
-guidance: `docs/aida-discipline/skill-prompt-kinds.md`. trace:STORY-287
+overrides `--zen` — see the *Headless mode contract* below for the full
+ordering invariant and the AskUserQuestion ban. An un-annotated prompt
+defaults to `design-fork` (pause-safe). Author guidance:
+`docs/aida-discipline/skill-prompt-kinds.md`. trace:STORY-287
+
+## Headless mode contract (`AIDA_HEADLESS=1`) — trace:BUG-280
+
+When `AIDA_HEADLESS=1` is set, four invariants override the default
+workflow. The reviewer is running unattended (`claude -p`) with no human
+to catch a misstep mid-flight; the contract makes the load-bearing
+ordering explicit so the model cannot drift past it.
+
+1. **The verdict file is the first irreversible step.** Step 6a writes
+   `.aida/review-verdicts/PR-N.json` BEFORE any other irreversible action
+   — before the PR comment, before any merge attempt, before exit. The
+   file is the orchestrator's phase-3 → phase-4 handshake artifact; the
+   PR comment is its human-facing projection. Posting the comment first
+   and then crashing is the BUG-280 failure mode: the orchestrator sees
+   no verdict file and stops at phase 3 while a public PASS comment
+   already sits on the PR.
+
+2. **AskUserQuestion is forbidden.** Every `kind:confirmation` prompt
+   auto-resolves to the verdict-file's default value with no AskUserQuestion
+   call. Calling AskUserQuestion under `--no-human=both` is permission-denied
+   at the harness layer and crashes the session ~10s in — so the prohibition
+   is both a contract and a survival rule. `kind:design-fork` prompts that
+   would survive in `--zen` mode are also auto-resolved to the verdict-file
+   default under headless (specifically: a design-fork during review routes
+   through the verdict — write `RequestChanges` and exit — not an
+   AskUserQuestion).
+
+3. **The PR comment posts AFTER the verdict file.** Step 7 fires only
+   after step 6a has written the verdict file. If the comment post fails
+   (network blip, gh auth flake), the verdict file is already on disk and
+   the orchestrator can still advance — the comment is a nice-to-have, not
+   a load-bearing artifact.
+
+4. **The reviewer never merges under headless.** Steps 8–11 (merge
+   confirm, `gh pr merge`, mark Completed, hand-off) are skipped entirely.
+   When `aida orchestrator status` = `orchestrated`, phase 4 reads the
+   verdict file and performs the merge. When standalone-headless (no
+   orchestrator), the verdict file is written and the reviewer exits;
+   a human merges later. Either way, the reviewer's job under headless
+   ends at "verdict file on disk + comment posted + sentinel touched."
+
+The interactive workflow still walks steps 1–11 in order; this contract
+only takes effect when `AIDA_HEADLESS=1`.
 
 ## Workflow
 
@@ -256,39 +300,18 @@ Block merge until the latest run is `conclusion: success`. If CI is red:
 - <!-- kind:design-fork --> Walk the failure log: is it caused by this PR (block) or by an unrelated infra/flake (proceed with explicit user confirmation)? Accepting a red CI is risk acceptance — a `kind:design-fork`, surfaced even under `$AIDA_ZEN`.
 - If caused by this PR, surface to the user and pause — likely a fix-forward (step 5) is the right move.
 
-### 7. Post a consolidated review comment
+### 6a. Write the verdict file — first irreversible step — trace:BUG-280
 
-Summarize `.aida/review-prompt-pr-<N>.md` (with its inline verdicts from step 3) into one comment on the PR. The review-prompt file is the source of truth; the comment is its public projection. Informational rows (already-Completed specs) get a one-liner; PASS/PARTIAL/FAIL rows get the verdict + evidence pulled from the file.
+The verdict file is the load-bearing orchestrator handshake artifact.
+Write it **before** posting the PR comment (step 7), before any merge
+attempt, before exit. The PR comment in step 7 is the human-facing
+surface; the verdict file is the machine-readable handshake. Reversing
+the order is the BUG-280 failure mode — a posted PASS comment with no
+verdict file leaves the orchestrator stuck at phase 3 while the public
+surface looks shipped.
 
-```markdown
-## Review: PR-<N>
-
-| Spec | Verdict | Evidence |
-|------|---------|----------|
-| BUG-71 | ✅ PASS | `.gitignore:94`, 4 unit tests green |
-| TASK-61 | ✅ PASS | `aida-pr.md:57-77`, manual repro of refuse-on-drift |
-| BUG-72 | ✅ PASS | `main.rs:11212-11258`, `auto_queue_outcome_constructors_...` green |
-| TASK-63 | ⚠️ PARTIAL | acceptance covered, but `parse_session_env` doesn't unquote `'` inside a value when adjacent to `\\` |
-| STORY-91 | ✅ PASS | this skill |
-
-**CI**: all green (https://github.com/.../actions/runs/...)
-**Recommendation**: merge after the TASK-63 quoting tweak.
-```
-
-Post via:
-
-```bash
-gh pr comment <N> --body "$(cat <<'EOF'
-<body>
-EOF
-)"
-```
-
-### 7a. Write the verdict file — uniform artifact + orchestrator handshake
-
-Every PR-scoped reviewer launch leaves a **verdict file** at
-`.aida/review-verdicts/PR-N.json`. `aida queue work` sets the env var
-`AIDA_REVIEW_VERDICT_FILE` to its absolute path:
+`aida queue work` sets the env var `AIDA_REVIEW_VERDICT_FILE` to the
+file's absolute path:
 
 - the `--auto-complete` **orchestrator** points it at the phase-3 → phase-4
   handshake file — the orchestrator reads the verdict to decide whether to
@@ -300,8 +323,8 @@ Every PR-scoped reviewer launch leaves a **verdict file** at
   trace of pass/fail, cost, or where the artifacts landed).
 
 **Whenever `AIDA_REVIEW_VERDICT_FILE` is set, write the verdict file** —
-regardless of orchestrator vs standalone context. The uniform artifact is
-the point. trace:BUG-226 | ai:claude
+regardless of orchestrator vs standalone context, regardless of headless
+vs interactive. The uniform artifact is the point. trace:BUG-226 | ai:claude
 
 ```bash
 echo "${AIDA_REVIEW_VERDICT_FILE:-}"   # set → a verdict file is expected here
@@ -309,8 +332,8 @@ aida orchestrator status               # `orchestrated` → also STOP before mer
 ```
 
 - **`AIDA_REVIEW_VERDICT_FILE` empty / unset** → no verdict file expected
-  (an `aida` predating BUG-226, or a non-`queue work` entry point). Skip to
-  step 8.
+  (an `aida` predating BUG-226, or a non-`queue work` entry point). Skip
+  to step 7.
 - **`AIDA_REVIEW_VERDICT_FILE` set** → write the verdict file (below).
 
 **Derive the verdict** from the per-spec verdicts recorded in step 3:
@@ -327,12 +350,14 @@ unverifiable stale value misfired both ways before BUG-233; only
 - `aida orchestrator status` = `orchestrated` → `"mode": "orchestrator-phase-3"`
 - anything else → `"mode": "standalone"`
 
-Write the file (create its parent dir first):
+Write the file (create its parent dir first). `comment_url` is intentionally
+omitted at this stage — step 7a backfills it once the PR comment has been
+posted in step 7:
 
 ```bash
 mkdir -p "$(dirname "$AIDA_REVIEW_VERDICT_FILE")"
 cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
-{"verdict": "Approved", "summary": "<one-line rationale>", "mode": "standalone", "comment_url": "<consolidated review comment URL from step 7>"}
+{"verdict": "Approved", "summary": "<one-line rationale>", "mode": "standalone"}
 EOF
 ```
 
@@ -340,8 +365,9 @@ EOF
 - `summary` — a one-line rationale.
 - `mode` — `standalone` or `orchestrator-phase-3` (corroborated above); lets
   a consumer tell a one-off review from an orchestrator handshake artifact.
-- `comment_url` — URL of the consolidated comment posted in step 7. Omit the
-  field when no comment was posted (e.g. `--merge-only`).
+- `comment_url` — filled in by step 7a after step 7 posts the comment.
+  Omit here; the orchestrator's `read_verdict_file` does not require it
+  (only `verdict` is load-bearing).
 - `merge` — **escalation handshake.** Normally omit this field. Set it to
   `escalated-to-human` only when, under a headless `--no-human` drain, the
   *merge* decision turns on something you should not decide unattended —
@@ -372,8 +398,65 @@ exit code 3 and prints the recovery hint. A standalone run's `aida queue
 work` reads the same file to print its end-of-command summary (`verdict` +
 `comment_url` + the artifact paths); `--quiet` suppresses that summary.
 
-Under a headless drain (`AIDA_HEADLESS=1`), step 7b re-writes this file
-afterwards to add a `findings_filed` array — see 7b. trace:STORY-278 | ai:claude
+### 7. Post a consolidated review comment
+
+Summarize `.aida/review-prompt-pr-<N>.md` (with its inline verdicts from step 3) into one comment on the PR. The review-prompt file is the source of truth; the comment is its public projection. Informational rows (already-Completed specs) get a one-liner; PASS/PARTIAL/FAIL rows get the verdict + evidence pulled from the file.
+
+**Step 6a must have run first when `AIDA_REVIEW_VERDICT_FILE` is set.** The
+verdict file is the load-bearing artifact; the comment posted here is its
+human projection. trace:BUG-280
+
+```markdown
+## Review: PR-<N>
+
+| Spec | Verdict | Evidence |
+|------|---------|----------|
+| BUG-71 | ✅ PASS | `.gitignore:94`, 4 unit tests green |
+| TASK-61 | ✅ PASS | `aida-pr.md:57-77`, manual repro of refuse-on-drift |
+| BUG-72 | ✅ PASS | `main.rs:11212-11258`, `auto_queue_outcome_constructors_...` green |
+| TASK-63 | ⚠️ PARTIAL | acceptance covered, but `parse_session_env` doesn't unquote `'` inside a value when adjacent to `\\` |
+| STORY-91 | ✅ PASS | this skill |
+
+**CI**: all green (https://github.com/.../actions/runs/...)
+**Recommendation**: merge after the TASK-63 quoting tweak.
+```
+
+Post via — `gh pr comment` prints the comment URL on stdout; capture it
+into `COMMENT_URL` so step 7a can backfill `comment_url` into the verdict
+file:
+
+```bash
+COMMENT_URL=$(gh pr comment <N> --body "$(cat <<'EOF'
+<body>
+EOF
+)") || COMMENT_URL=""
+```
+
+`COMMENT_URL` is best-effort — if `gh pr comment` fails (network, gh auth),
+leave it empty and step 7a skips the backfill. The verdict file written
+in step 6a still satisfies the orchestrator handshake without
+`comment_url`. trace:BUG-280
+
+### 7a. Backfill the verdict file with `comment_url`; STOP if orchestrated/headless — trace:BUG-280
+
+Step 6a wrote the verdict file before the PR comment posted, so the file's
+`comment_url` field is empty. Now that step 7 has posted the comment, capture
+the URL and re-write the verdict file to include it. The re-write is safe —
+the orchestrator only reads the file after the session exits.
+
+```bash
+if [ -n "${AIDA_REVIEW_VERDICT_FILE:-}" ] && [ -f "$AIDA_REVIEW_VERDICT_FILE" ]; then
+  # COMMENT_URL holds the URL captured from `gh pr comment` in step 7.
+  # Re-emit the JSON keeping every field 6a wrote (verdict, summary, mode,
+  # optional merge), adding "comment_url". Skip the rewrite if no URL was
+  # captured (e.g. --merge-only, or the comment post failed).
+  :
+fi
+```
+
+If step 7 did not post a comment (e.g. `--merge-only`), or `gh pr comment`
+failed, leave the field absent — the orchestrator does not require it (only
+`verdict` is load-bearing).
 
 **Orchestrator mode (`aida orchestrator status` = `orchestrated`) — STOP
 after the verdict.** Do NOT merge, do NOT mark specs Completed, do NOT do
@@ -382,17 +465,26 @@ mode — continue to step 8** (confirm + merge + hand-off) as usual: the
 verdict file is just an artifact there, the reviewer still owns the merge
 decision. trace:BUG-226 | ai:claude
 
+**Under `AIDA_HEADLESS=1` (standalone or orchestrator) — also STOP.** The
+reviewer never merges under headless: AskUserQuestion is forbidden (see the
+*Headless mode contract* near the top of this skill), so the merge confirm
+in step 8 cannot run, and silently auto-merging is not the contract. The
+verdict file is on disk; step 7b files any findings; then the session
+exits. A standalone-headless reviewer's verdict sits at
+`.aida/review-verdicts/PR-N.json` for a human to act on; an
+orchestrator-headless reviewer's verdict is read by phase 4. trace:BUG-280
+
   **End the session with a loud, explicit exit instruction.** The
   orchestrator cannot advance until this reviewer Claude exits — but nothing
   about writing a verdict file tells the user that. Don't end on a vague
   "Session is done."; the user should never have to *infer* that they should
   now press Ctrl+D. After writing the verdict file, make the final block of
   your message a distinct, visually-loud hand-off that names the exact key
-  to press and what happens after. Pick the block by the verdict you wrote,
-  and substitute the real PR number + covered spec IDs — a concrete
+  to press and what happens after. Pick the block by the mode + verdict, and
+  substitute the real PR number + covered spec IDs — a concrete
   "PR-57 / BUG-219, STORY-261" is the point; placeholders defeat it.
 
-  *Verdict `Approved`:*
+  *Orchestrator mode (`aida orchestrator status` = `orchestrated`), verdict `Approved`:*
 
   ```
   ✓ Verdict written: Approved
@@ -404,7 +496,7 @@ decision. trace:BUG-226 | ai:claude
     - Phase 6/6  Build verify      (cargo build --release)
   ```
 
-  *Verdict `RequestChanges` or `Rejected`:*
+  *Orchestrator mode, verdict `RequestChanges` or `Rejected`:*
 
   ```
   ⚠ Verdict written: <RequestChanges|Rejected>
@@ -415,14 +507,26 @@ decision. trace:BUG-226 | ai:claude
     merge. The implementer iterates from there.
   ```
 
-  This loud exit block fires **only** in orchestrator mode
-  (`aida orchestrator status` = `orchestrated`). A standalone reviewer —
-  even one launched headless with `--no-human` — sets
-  `AIDA_REVIEW_VERDICT_FILE` too, so that env var alone is no longer the
-  signal (BUG-226); corroborate with `aida orchestrator status`. In manual
-  review the reviewer owns the merge, so step 11's hand-off table stays the
-  end-of-session surface — don't render the Ctrl+D block there.
-  trace:TASK-291 trace:BUG-226 | ai:claude
+  *Standalone headless mode (`AIDA_HEADLESS=1`, `aida orchestrator status` ≠ `orchestrated`) — trace:BUG-280:*
+
+  ```
+  ✓ Verdict written: <Approved|RequestChanges|Rejected> → .aida/review-verdicts/PR-<N>.json
+  ✓ Reviewer session is done — under --no-human the reviewer does not merge.
+
+  ▶ The session will exit (sentinel touched). A human merges later by reading
+    the verdict file, or re-runs `aida queue work PR-<N> --role reviewer`
+    interactively to drive the merge.
+  ```
+
+  This loud exit block fires in orchestrator mode (`aida orchestrator status` =
+  `orchestrated`) **and** in standalone headless mode (`AIDA_HEADLESS=1`,
+  orchestrator not corroborated) — both cases skip the interactive
+  step 8/11 entirely. In interactive standalone review the reviewer owns the
+  merge, so step 11's hand-off table stays the end-of-session surface — don't
+  render the Ctrl+D block there. A standalone reviewer always sets
+  `AIDA_REVIEW_VERDICT_FILE` (BUG-226), so corroborate the orchestrator branch
+  with `aida orchestrator status` rather than the env var alone.
+  trace:TASK-291 trace:BUG-226 trace:BUG-280 | ai:claude
 
   **Under `$AIDA_ZEN` or a headless drain — touch the exit sentinel (TASK-329).**
   A skill cannot synthesize the Ctrl+D the block above names. The
@@ -533,7 +637,15 @@ in one command (TASK-404).
 
 ### 8. Confirm with the user before merge
 
-**Synthesize the overall verdict** from the per-spec verdicts recorded in step 3 — same routing as the 7a verdict file: every covered spec ✅ PASS → *positive*; any ⚠️ PARTIAL or ❌ FAIL → *negative*; no per-spec verdicts reached (e.g. `--merge-only`) → *abstention*.
+**Headless gate (`AIDA_HEADLESS=1`) — SKIP this step entirely.** The
+reviewer never merges under headless (see the *Headless mode contract* near
+the top of this skill). Step 7a's STOP block has already fired; the session
+exits via the sentinel touch. Step 8's merge confirmation prompt is a
+`kind:confirmation` that would call AskUserQuestion, which is forbidden
+under `--no-human=both` and crashes the session — BUG-280's exact failure
+mode. trace:BUG-280
+
+**Synthesize the overall verdict** from the per-spec verdicts recorded in step 3 — same routing as the 6a verdict file: every covered spec ✅ PASS → *positive*; any ⚠️ PARTIAL or ❌ FAIL → *negative*; no per-spec verdicts reached (e.g. `--merge-only`) → *abstention*.
 
 **If the verdict is positive, record the formal approval before asking about the merge** — see "Approve path" below. Recording it here, *before* the merge question, means `gh reviewDecision` flips to `APPROVED` even when the user defers the merge: TASK-250's State 3 ("reviewed + approved, awaiting merge") reads exactly that signal, so an approved-but-unmerged PR displays correctly instead of falling back to "start review". trace:TASK-278 | ai:claude
 
