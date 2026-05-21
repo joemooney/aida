@@ -1,0 +1,111 @@
+id: 019e4b03-2c58-7e40-9e5c-cdeb45a902aa
+spec_id: STORY-385
+agreed_id: STORY-385
+title: 'aida status --cleanup: surface cleanup-actionable state (stale leases, sticky In-Progress, missed auto-bumps, open PRs, orphan dirs)'
+description: |-
+  ## Problem
+
+  Today's \`aida status\` is **orientation**: session/lease for cwd, branch state, current PR/CI, queue head, project mode, requirement totals. Good for *\"where am I, what's queued.\"*
+
+  What it doesn't surface: **attention state.** The things a user has to do manual archaeology to discover:
+
+  - Specs ◐ In Progress without an active lease (sticky-state-after-failed-drain — TASK-281, TASK-346, TASK-413, TASK-416 right now)
+  - Specs ◉ Done where the auto-bump scanner missed the commit format (TASK-422 currently, BUG-270 territory)
+  - Open PRs awaiting review/merge that aren't in any drain (BUG-238 / PR-151 right now)
+  - Dormant leases (no live process, recoverable)
+  - Stale reviewer leases on already-merged PRs (we had 9 of these earlier tonight before cleanup)
+  - Branches with commits ahead of \`origin/main\` but no open PR (TASK-281's task-281 branch had \`8a6fc25d\` for a full day)
+  - Worktrees with uncommitted work (TASK-346 had real WIP for 24h until I committed it)
+  - Orphan Claude Code project dirs (we hit 57 of these earlier today before pruning)
+
+  These cost the user manual \`git branch -a / gh pr list / aida session leases --all / aida queue list\` archaeology to find. A single \`aida status --cleanup\` (or surface in default \`aida status\` when non-empty) consolidates discovery + names the recovery verb per case.
+
+  ## Approach
+
+  Add a **\"Needs attention\"** section to \`aida status\`, optionally filterable to just that section via \`aida status --cleanup\`. Each item:
+  - Short description of the state
+  - Quantified scope (count, age)
+  - Named recovery command (or composes with STORY-384's \`aida queue recover\` wizard for spec-level recovery)
+  - Distinction between \"auto-safe to clean\" (orphan dirs, stale-on-merged-PR leases) and \"needs user judgment\" (uncommitted WIP, In-Progress specs with branch commits, missed auto-bumps that may need format investigation)
+
+  ## Acceptance
+
+  - \`aida status --cleanup\` prints ONLY the \"Needs attention\" section + a summary.
+  - Default \`aida status\` (no flag): when the cleanup section is non-empty, emits one summary line at the bottom (\`⚠ 5 items need cleanup attention — \`aida status --cleanup\` for details\`). When empty, nothing extra.
+  - The section enumerates the categories above, each with:
+    - Count
+    - First N items (max 3 per category to keep output bounded; \`--verbose\` shows all)
+    - Recovery verb (referencing STORY-384's \`aida queue recover\`, \`aida session prune --orphans\`, \`gh pr merge\`, \`aida db reconcile-status\`, \`aida session end\`)
+  - \`aida status --cleanup --json\` emits structured output for scripting / TUI consumption.
+  - Categories ordered by **stakes** (loss-risky first: uncommitted WIP, dormant-lease-with-branch-commits) then **freshness** (recent first within each category).
+  - A "Healthy" footer when no items exist in a category — explicit confirmation that there's nothing to clean.
+
+  ## Sketch
+
+  \`\`\`
+  $ aida status --cleanup
+
+  ─── Needs attention ───
+
+  ⚠ Uncommitted work at risk (1):
+      TASK-346 — 30 LOC + plan + test in worktree /home/joe/ai/aida-task-346 (1d, no commits)
+      → \`aida queue recover TASK-346\`  (STORY-384)
+
+  ⚠ Specs ◐ In Progress without active lease (3):
+      TASK-281 — branch task-281 has 1 commit pushed, no PR (1d)
+      TASK-413 — branch task-413 has 1 commit local-only (3h)
+      TASK-416 — already shipped at PR #157, auto-bump pending (3m)
+      → \`aida queue recover <spec>\`  or  \`aida pull\` for TASK-416
+
+  ⚠ Specs ◉ Done missed by auto-bump (1):
+      TASK-422 — merged at #153 (1d), commit format may not match scanner (BUG-270)
+      → \`aida db reconcile-status\` or \`aida edit TASK-422 --status completed\`
+
+  ⚠ Open PRs awaiting review/merge (1):
+      PR-151 (BUG-238) — CI green, verdict PASS in comments
+      → \`gh pr checks 151 --watch && gh pr merge 151 --squash --delete-branch && aida pull\`
+
+  ⚠ Orphan Claude Code project dirs (1):
+      /home/joe/.claude/projects/-home-joe-ai-aida-task-337
+      → \`aida session prune --orphans\`
+
+  ─── Healthy ───
+    No live drains in flight.
+    No stale reviewer leases on merged PRs.
+    No branches with commits ahead of main missing a PR (beyond the In-Progress ones above).
+    Findings backlog: 0 awaiting triage.
+  \`\`\`
+
+  ## Composes with
+
+  - **STORY-384** — \`aida queue recover\` is the recovery verb \`aida status --cleanup\` points at for per-spec recovery. Status surfaces; wizard acts.
+  - **BUG-270** — reconcile-status format coverage; the \"missed auto-bump\" category surfaces what BUG-270's fix should reduce to zero.
+  - **BUG-285** — queue-done gate hole; once fixed, the \"In Progress without lease, branch commits but no PR\" category shrinks toward zero.
+  - **TASK-402** — resume-after-failure UX cluster; status surfaces the resumable cases the cluster makes easier to act on.
+  - Memory \`feedback_capture_over_concentration\` — file the observation. Memory \`feedback_check_orchestrator_before_manual_steps\` — status's clear surfacing of \"no live drain\" eliminates the manual check.
+
+  ## Out of scope
+
+  - Auto-cleaning anything as a side-effect of running \`aida status\`. Strictly read-only surfacing.
+  - Cross-project status (this project only).
+  - TUI integration (separate; the TUI can read \`aida status --cleanup --json\` once it ships).
+
+  ## Origin
+
+  User question 2026-05-21 ~03:00 after a long recovery session: *"should any of those states be reported in \`aida status\`? Should we have an \`aida status --cleanup\`?"*
+
+  The recovery-session experience surfaced eight distinct categories of cleanup-actionable state in one night. Surfacing them in \`aida status\` would have saved the user (and the advisor) repeated manual archaeology.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-21T14:49:19.704186488Z
+modified_at: 2026-05-21T14:49:19.704186488Z
+req_type: Story
+tags:
+- attention
+- cleanup
+- cli-ux
+- discoverability
+- from-user-question
+- status
