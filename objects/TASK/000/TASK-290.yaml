@@ -48,12 +48,12 @@ description: |-
   ## Origin
 
   User observed 2026-05-16 in CI annotations after PR-55's merge: *\"unsure what to do about those annotations?\"* — the warnings appeared on every recent CI run; filing as maintenance to address before the Sep 2026 deadline.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:11:52.108506671Z
-modified_at: 2026-05-21T02:37:15.767813094Z
+modified_at: 2026-05-21T02:41:35.590188706Z
 req_type: Task
 tags:
 - actions-checkout
@@ -77,3 +77,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-21T02:33:59.122470073Z
   implemented_by: joe
+  completed_at: 2026-05-21T02:41:35.590188706Z
+  completion_sha: 791deceddf674658fff41c407b282816347ba460
