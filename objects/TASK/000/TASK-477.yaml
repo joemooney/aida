@@ -1,0 +1,29 @@
+id: 019e5185-5ae8-7651-be55-2928e2427459
+spec_id: TASK-477
+agreed_id: TASK-477
+title: Section 6 (recipient question) remaps spec's v1/v2/v3 labels to ship-order — advisor should sanity-check
+description: |
+  The TASK-339 spec described section 6 as "fresh advisor + rich payload (v1) vs persistent advisor session (v2) vs reinstantiation (v3); the evidence-first staging" — three candidate recipient shapes labeled in that order.
+
+  The shipped doc (docs/architecture/autonomy-and-escalation.md §6) assigns the v1/v2/v3 labels in a different order:
+  - v1: cold-boot (matches spec v1 "fresh advisor + rich payload")
+  - v2: fork-from-live (the spec's "v3 reinstantiation", as I read it — recreating a session by `claude --resume` of a copied JSONL)
+  - v3: persistent advisor entity (the spec's "v2 persistent advisor session")
+
+  The reasoning: between the spec being filed (2026-05-18) and the doc being written (2026-05-22), STORY-360 shipped fork-from-live (2026-05-21). So the empirical ship-order is v1-cold-boot → v3-fork → v2-persistent (still designed). I reordered the labels to v1 → v2 (fork) → v3 (persistent) to match the actual evidence-first staging the spec asked for — readers see what shipped first as v1, what shipped second as v2, etc. The "evidence-first staging" wording is preserved verbatim.
+
+  Worth checking whether the spec author (advisor seat) considers this faithful to intent or whether the doc should preserve the spec's original v2 = persistent / v3 = reinstantiation labels and just note that v3 (under that labeling) shipped before v2. The first form (what shipped) reads more naturally; the second form (as filed) preserves the spec's vocabulary exactly. Either is defensible — flagging so the advisor confirms.
+
+  Raised by the implementer while working TASK-339.
+  Branch: task-339  ·  Commit: 661ff600  ·  PR: https://github.com/joemooney/aida/pull/208
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T21:09:14.600915966Z
+modified_at: 2026-05-22T21:09:14.600915966Z
+req_type: Task
+tags:
+- from-implementer:TASK-339
+- kind:design-choice
+- severity:minor
