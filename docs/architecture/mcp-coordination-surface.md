@@ -83,8 +83,8 @@ is a transport.
 | `list_findings` | spec graph (tagged drafts) | Wraps `aida findings list` |
 | `file_finding` | spec graph | Draft TASK with `from-*` tags |
 | `triage_finding` | spec graph | Promote / dismiss |
-| `claim_task` | `.aida/sessions/<id>.toml` | Lightweight lease (mcp_claim=true) |
-| `release_task` | `.aida/sessions/<id>.toml` | Delete an MCP lease |
+| `claim_task` | `.aida/sessions/mcp-claim.<spec>.toml` | Lightweight lease (mcp_claim=true); spec-keyed filename gives `O_EXCL` single-winner semantics |
+| `release_task` | `.aida/sessions/mcp-claim.<spec>.toml` | Delete an MCP lease (looked up by embedded lease_id) |
 | `list_active_leases` | `.aida/sessions/*.toml` | Read every lease (real + MCP) |
 | `post_directive` | `.aida/worker.cmd` | Append a worker directive |
 | `list_directives` | `.aida/worker.cmd` | Wraps `aida worker directives` |
