@@ -1,0 +1,45 @@
+id: 019e4e94-15fe-7523-a270-8980587e70e5
+spec_id: BUG-320
+agreed_id: BUG-320
+title: 'auto-complete failure: phase 1 (implementer) on BUG-310'
+description: |
+  Auto-drafted by `aida queue work BUG-310 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  GH API unreachable (error connecting to api.github.com
+  check your internet connection or https://githubstatus.com), and `git ls-remote` confirms branch `bug-310` is not on origin — no PR can exist. Resume the session and push: `aida queue work BUG-310 --resume`
+
+  Failure kind: `no-pr`
+
+  ## Recovery hint shown to the user
+
+  The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work BUG-310 --resume 019e4e89085c`
+
+  ## Phase durations
+
+    - phase 1 (implementer): 733859 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"BUG-310","started_at":"2026-05-22T07:14:07.774149490+00:00","completed_at":"2026-05-22T07:26:22.180103053+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"no-pr","failure_message":"GH API unreachable (error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com), and `git ls-remote` confirms branch `bug-310` is not on origin — no PR can exist. Resume the session and push: `aida queue work BUG-310 --resume`","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":733859}],"total_ms":734405,"binary_sha":"269ac33c"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T07:26:28.350737841Z
+modified_at: 2026-05-22T07:26:28.350737841Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-1
+- implementer
