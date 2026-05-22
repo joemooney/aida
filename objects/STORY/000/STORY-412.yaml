@@ -1,0 +1,26 @@
+id: 019e5153-cac2-7c23-b549-6bc48dc98d18
+spec_id: STORY-412
+agreed_id: STORY-412
+title: 'Review PR-202: feat(orchestrator): reviewer pre-flight stale-base refusal (STORY-281)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e513f`) for branch `story-281`.
+
+  - PR: <https://github.com/joemooney/aida/pull/202>
+  - Branch: `story-281` → `main`
+
+  ## Covers
+
+  - STORY-281
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 202` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:15:06.434266237Z
+modified_at: 2026-05-22T20:15:06.434266237Z
+req_type: Story
