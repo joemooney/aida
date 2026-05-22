@@ -58,7 +58,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:45:36.822858761Z
-modified_at: 2026-05-22T18:45:36.822858761Z
+modified_at: 2026-05-22T18:59:33.992682834Z
 req_type: Bug
 tags:
 - convention
@@ -66,3 +66,20 @@ tags:
 - id-prefix
 - mcp
 - multi-agent
+comments:
+- id: 019e510e-a1e8-73e3-8309-2977a3848c9d
+  author: |-
+    Implementation sketch for BUG-332 (auto-normalize MCP add_requirement IDs):
+
+    1. WHERE: the problematic path is `aida-cli/src/mcp.rs::tool_add_requirement`. It currently parses `type` with `parse_requirement_type(...).unwrap_or(RequirementType::Functional)`, then pushes directly into `store.requirements` and calls `store.assign_spec_ids()`. The canonical prefix mapping already exists in `aida-core/src/models.rs::RequirementsStore::get_type_prefix` (fallbacks: Task -> TASK, Bug -> BUG, Story -> STORY, etc.) and the CLI add paths already use `store.add_requirement_with_id(req, None, type_prefix.as_deref())`.
+
+    2. PROPOSED CHANGE: for MCP `add_requirement`, make `type` required and valid. Parse it once into `RequirementType`, set `req.req_type`, derive `let type_prefix = store.get_type_prefix(&req.req_type)`, then add via `store.add_requirement_with_id(req, None, type_prefix.as_deref())`. Do not accept any caller-provided ID or prefix; the assigned SPEC-ID prefix comes only from the parsed requirement type. This preserves the current text-envelope response but changes the assigned ID from the accidental generic path to the canonical type prefix path.
+
+    3. BACKWARD COMPAT: no migration or rename. Existing irregular `SPEC-N` IDs remain as-is for audit trail. The change only affects new MCP `add_requirement` calls. I would not touch `file_finding` or CLI add behavior in this PR; this is scoped to the generic MCP add surface that produced SPEC-398/SPEC-399/etc.
+
+    4. ERROR PATH: if `type` is missing, return a helpful MCP tool error such as `Missing required parameter: type. Valid types: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc`. If present but invalid, return `Invalid requirement type '<value>'. Valid types: ...`. This is intentionally stricter than today’s Functional default because silent fallback is the source of the convention drift.
+
+    5. TESTS: add/extend MCP unit tests in `aida-cli/src/mcp.rs`: `type:"task"` returns `Requirement added: TASK-...`; `type:"bug"` returns `BUG-...`; missing `type` returns the taxonomy error; invalid `type` returns the taxonomy error. Also update the `add_requirement` tool descriptor so `type` is required and its outputSchema description says the ID is auto-assigned with the canonical prefix for the supplied type.
+  content: mcp
+  created_at: 2026-05-22T18:59:33.992673343Z
+  modified_at: 2026-05-22T18:59:33.992673343Z
