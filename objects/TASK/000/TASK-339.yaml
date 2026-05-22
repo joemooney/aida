@@ -49,12 +49,12 @@ description: |-
   ## Origin
 
   2026-05-18 user: *"we need to capture this topic in our documentation — it is part of the fundamental architecture that others will want to understand."* Said while working through the punt/escalation design (STORY-306) and the inter-agent-communication challenge. The advisor-escalation model is being designed in conversation + specs; this doc is where it becomes canonically understandable.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T02:11:50.315618425Z
-modified_at: 2026-05-19T02:11:50.315618425Z
+modified_at: 2026-05-22T21:01:31.401536005Z
 req_type: Task
 tags:
 - architecture
