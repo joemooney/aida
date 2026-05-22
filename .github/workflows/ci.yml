@@ -67,6 +67,15 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+      # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
+      # Default invocation runs descriptor + CLI->MCP read direction only
+      # (post-TASK-440 outputSchema closure). The MCP-write -> CLI-read stages
+      # are gated behind `--require-mcp-write-roundtrip` while BUG-310 is in
+      # flight; once BUG-310 ships, add that flag to flip the gate.
+      # trace:TASK-451 | ai:claude
+      - name: Run MCP stdio compatibility tests
+        run: bash tests/test_mcp_stdio.sh
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
