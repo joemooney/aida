@@ -1,0 +1,59 @@
+id: 019e5111-3751-7a62-aaba-08f3dc5a9926
+spec_id: TASK-465
+agreed_id: TASK-465
+title: Refactor scaffolding-pack tests away from hardcoded counts toward structural assertions
+description: |-
+  ## Problem
+
+  The story_255_discipline_pack_tests::discipline_pack_scaffolds_*_plus_readme test (and likely similar ones for the memory pack + skill templates) asserts a hardcoded count of files (\"expected README + 6 discipline docs\"). Every time we add a new doc to the master template, the test breaks even though the addition is correct.
+
+  This bit PR-193 (added skill-prompt-kinds.md → test expected 6, actual 7 → CI failed). The fix was mechanical (bump the count, add the new file to expected list), but the pattern recurs whenever the scaffolding-pack grows.
+
+  ## Approach
+
+  Refactor the assertion shape from hardcoded count to structural check:
+
+  \`\`\`rust
+  // Before (brittle):
+  assert_eq!(written, 7, \"expected README + 6 discipline docs\");
+  for f in [\"README.md\", \"advisor-role.md\", ...] {
+      assert!(dir.join(f).is_file());
+  }
+
+  // After (structural):
+  let expected_files = list_embedded_discipline_pack_files();  // single source of truth
+  assert_eq!(written, expected_files.len());
+  for f in &expected_files {
+      assert!(dir.join(f).is_file());
+  }
+  \`\`\`
+
+  The single source of truth is whatever build.rs uses to embed the discipline pack — the test should read from the same source.
+
+  ## Acceptance
+
+  - Test asserts that EVERY embedded discipline-pack file lands on disk, not that a specific count of files lands.
+  - Adding a new doc to the master template (in aida-core/templates/docs/aida-discipline/) requires NO test update — the test discovers via the embedded set.
+  - Same refactor applied to memory pack tests (scaffold_memory_pack_into) and any other count-based scaffolding tests.
+  - Test still catches regressions: if the embedded set has N files but only N-1 land on disk, the test fails with a specific 'missing: <file>' message.
+
+  ## Composes with
+
+  - The general principle that tests on growable sets should derive expectations from the source-of-truth, not hardcode. Applies to: discipline pack, memory pack, skill templates, command templates, hook templates.
+
+  ## Origin
+
+  PR-193 (substrate sync) added skill-prompt-kinds.md; the discipline pack test failed on the hardcoded count of 6. Trivial to fix; recurring with every scaffolding-pack addition. Pattern strength = annoying but bounded.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T19:02:23.313938730Z
+modified_at: 2026-05-22T19:02:23.313938730Z
+req_type: Task
+tags:
+- from-self-test
+- maintenance
+- papercut
+- scaffolding
+- tests
