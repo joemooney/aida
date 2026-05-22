@@ -1,0 +1,38 @@
+id: 019e5164-5c88-7123-982a-94c480edb079
+spec_id: TASK-473
+agreed_id: TASK-473
+title: 'Punt-resolve UX: add verdict for ''reroute to operator'' (advisor says spec is user-only, not implementer-pickup)'
+description: |-
+  When the headless advisor resolves a punt with the verdict 'this spec is operator-only, not implementer-pickup' (as happened on TASK-403 today), the existing punt-resolve workflow has no clean verb:
+
+  - `aida edit <ID> --status in-progress` — wrong: implementer shouldn't pick it up
+  - `aida edit <ID> --status rejected` — wrong: spec is still valid, just not implementer-suited
+  - Leave at NeedsAttention indefinitely — current behavior; punt stays 'awaiting triage'
+
+  Need a third path. Options:
+
+  A. **`aida edit <ID> --status approved`** + a tag/flag marking 'operator-pickup-only' so auto-queue routing skips it
+  B. **`aida punt resolve --reroute-to-operator`** verb that clears the punt + flips status to a new `operator-only` state
+  C. **`aida findings dismiss <punt-id> --reason 'rerouted to operator'`** with semantics that clear the punt while preserving the spec
+
+  PREFERRED: A — composable with existing surface; just needs a tag convention + a route check.
+
+  Acceptance:
+  - [ ] When advisor's punt verdict is 'operator-owned', a clean verb/path exists to mark it
+  - [ ] Auto-queue routing respects the marking (no implementer auto-pickup)
+  - [ ] The 'awaiting triage' punt state clears
+
+  Origin: TASK-403 today — advisor correctly identified TASK-403 as user-only writing work, but the punt-resolve UX has no clean verb for this verdict shape.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:33:12.328765529Z
+modified_at: 2026-05-22T20:33:12.328765529Z
+req_type: Task
+tags:
+- advisor
+- findings
+- from-self-test
+- punt
+- ux-gap
