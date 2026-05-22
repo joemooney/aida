@@ -8212,13 +8212,6 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 .iter()
                 .filter(|b| b.node_id == node_id)
                 .collect();
-            if my_blocks.is_empty() {
-                println!(
-                    "No blocks for node {}. Run `aida db block claim` to allocate one.",
-                    node_id
-                );
-                return Ok(());
-            }
             // trace:TASK-444 | ai:claude — surface the effective auto-claim
             // knobs (`[block_allocation.<type>] auto_claim_threshold /
             // auto_claim_size`) on each per-type line so users see what
@@ -8229,6 +8222,18 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
             let alloc_cfg = read_block_allocation_config(&project_dir);
+            if my_blocks.is_empty() {
+                // trace:TASK-449 | ai:claude — empty-blocks is the case where
+                // a user benefits most from knowing what their first claim
+                // will look like (and whether `[block_allocation]` is wired
+                // up at all). Print the global summary as a continuation.
+                println!(
+                    "No blocks for node {}. Run `aida db block claim` to allocate one.",
+                    node_id
+                );
+                println!("  {}", global_auto_claim_summary(&alloc_cfg).dimmed());
+                return Ok(());
+            }
             println!("Blocks for node {}:", node_id);
             println!("{}", "─".repeat(50));
 
@@ -9488,6 +9493,29 @@ fn auto_claim_summary(cfg: &aida_core::BlockAllocationConfig, type_prefix: &str)
     )
 }
 
+/// Type-agnostic counterpart to `auto_claim_summary`, used by the
+/// "no blocks for node N" branch of `aida db block status` (TASK-449).
+/// At that point no concrete type prefix is in scope, so the summary
+/// reflects the effective defaults: any `[block_allocation.*]` override
+/// wins over the built-in `DEFAULT_THRESHOLD` / `DEFAULT_SIZE`, and the
+/// `(configured)` tag fires whenever the user has any per-type section
+/// in `.aida/config.toml` (signal that `[block_allocation]` is wired up).
+///
+/// trace:TASK-449 | ai:claude
+fn global_auto_claim_summary(cfg: &aida_core::BlockAllocationConfig) -> String {
+    if !cfg.auto_claim {
+        return "auto-claim: off (global opt-out)".to_string();
+    }
+    let configured = !cfg.per_type.is_empty();
+    let suffix = if configured { " (configured)" } else { "" };
+    format!(
+        "auto-claim: threshold {}, size {}{}",
+        cfg.threshold_for("*"),
+        cfg.size_for("*"),
+        suffix,
+    )
+}
+
 /// Outcome of a successful auto-claim — used by `add_requirement_cli` to
 /// print the one-line info notice ("Auto-claimed BUG-517..616 (threshold
 /// crossed: 18 remaining → 118)"). `previous_remaining` is the aggregate
@@ -9756,6 +9784,65 @@ mod block_allocation_reader_tests {
         assert_eq!(
             auto_claim_summary(&cfg, "BUG"),
             "auto-claim: threshold 20, size 100"
+        );
+    }
+
+    // trace:TASK-449 | ai:claude — empty-blocks branch of `aida db block
+    // status` calls `global_auto_claim_summary` (no type prefix in scope
+    // yet); these cases cover what the user sees before their first claim.
+    #[test]
+    fn global_auto_claim_summary_shows_built_in_defaults_when_no_config() {
+        let cfg = aida_core::BlockAllocationConfig::default();
+        assert_eq!(
+            global_auto_claim_summary(&cfg),
+            "auto-claim: threshold 20, size 100"
+        );
+    }
+
+    #[test]
+    fn global_auto_claim_summary_reports_global_opt_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[block_allocation]\nauto_claim = false\n");
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            global_auto_claim_summary(&cfg),
+            "auto-claim: off (global opt-out)"
+        );
+    }
+
+    #[test]
+    fn global_auto_claim_summary_picks_up_star_override() {
+        // `*` isn't a bare TOML key, so users write `[block_allocation."*"]`
+        // to override the catch-all defaults. The parser stores it under
+        // the literal `*` per_type slot, which `cfg.threshold_for("*")` /
+        // `cfg.size_for("*")` resolve.
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation.\"*\"]\nauto_claim_threshold = 30\nauto_claim_size = 250\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            global_auto_claim_summary(&cfg),
+            "auto-claim: threshold 30, size 250 (configured)"
+        );
+    }
+
+    #[test]
+    fn global_auto_claim_summary_tags_configured_for_any_per_type_section() {
+        // User has configured BUG specifically but not `*`. The global
+        // line still shows defaults but tags (configured) to signal that
+        // `[block_allocation]` is wired up — per-type details surface
+        // when that type's row appears in the populated branch.
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation.bug]\nauto_claim_threshold = 50\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            global_auto_claim_summary(&cfg),
+            "auto-claim: threshold 20, size 100 (configured)"
         );
     }
 
