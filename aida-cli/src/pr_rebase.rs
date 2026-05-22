@@ -718,6 +718,28 @@ enforcement = "warn"
     }
 
     #[test]
+    fn classify_stale_base_with_multiple_overlapping_files() {
+        let out = classify_stale_base(
+            4,
+            &s(&["a.rs", "b.rs", "c.rs"]),
+            &s(&["a.rs", "b.rs", "d.rs"]),
+            ConflictPrediction::Clean,
+        );
+        match out {
+            StaleBaseOutcome::StaleOverlap {
+                behind,
+                overlap_files,
+                prediction,
+            } => {
+                assert_eq!(behind, 4);
+                assert_eq!(overlap_files, vec!["a.rs".to_string(), "b.rs".to_string()]);
+                assert_eq!(prediction, ConflictPrediction::Clean);
+            }
+            other => panic!("expected StaleOverlap, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn classify_stale_base_overlap_carries_conflict_prediction() {
         let out = classify_stale_base(
             1,

@@ -18877,8 +18877,16 @@ fn pr_rebase_handler(
 /// (parse rules are pinned by `pr_rebase::parse_pr_info` tests).
 /// trace:TASK-308 | ai:claude
 fn fetch_pr_info_via_gh(project_root: &std::path::Path, n: u64) -> Result<serde_json::Value> {
+    fetch_pr_info_via_gh_bin(project_root, n, std::ffi::OsStr::new("gh"))
+}
+
+fn fetch_pr_info_via_gh_bin(
+    project_root: &std::path::Path,
+    n: u64,
+    gh_bin: &std::ffi::OsStr,
+) -> Result<serde_json::Value> {
     let n_str = n.to_string();
-    let out = std::process::Command::new("gh")
+    let out = std::process::Command::new(gh_bin)
         .current_dir(project_root)
         .args([
             "pr",
@@ -19687,11 +19695,19 @@ fn preflight_stale_base_check(
     project_root: &std::path::Path,
     n: u64,
 ) -> Result<pr_rebase::StaleBaseOutcome> {
+    preflight_stale_base_check_with_gh(project_root, n, std::ffi::OsStr::new("gh"))
+}
+
+fn preflight_stale_base_check_with_gh(
+    project_root: &std::path::Path,
+    n: u64,
+    gh_bin: &std::ffi::OsStr,
+) -> Result<pr_rebase::StaleBaseOutcome> {
     use pr_rebase::{
         classify_stale_base, parse_merge_tree_conflicts, parse_pr_info, ConflictPrediction,
     };
 
-    let info = fetch_pr_info_via_gh(project_root, n)
+    let info = fetch_pr_info_via_gh_bin(project_root, n, gh_bin)
         .and_then(|j| parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
         .context("could not resolve PR metadata — is `gh` installed and authenticated?")?;
 
@@ -19710,6 +19726,8 @@ fn preflight_stale_base_check(
         .arg("-C")
         .arg(project_root)
         .args(["fetch", "origin", pr_refspec.as_str()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .status();
     if !matches!(pr_fetch, Ok(s) if s.success()) {
         anyhow::bail!(
@@ -19798,6 +19816,103 @@ fn files_in_range(repo: &std::path::Path, range: &str) -> Vec<String> {
             out
         })
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod task_471_stale_base_preflight_tests {
+    use super::*;
+
+    fn git(repo: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .current_dir(repo)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("git {:?} failed to spawn: {e}", args));
+        assert!(
+            out.status.success(),
+            "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
+            args,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    #[cfg(unix)]
+    fn fake_gh(dir: &std::path::Path, head_oid: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = dir.join("gh");
+        std::fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\n\
+                 if [ \"$1\" = pr ] && [ \"$2\" = view ]; then\n\
+                   printf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"feature\",\"headRefOid\":\"{}\",\"isCrossRepository\":false,\"headRepository\":{{\"nameWithOwner\":\"local/aida\"}},\"isDraft\":false}}'\n\
+                   exit 0\n\
+                 fi\n\
+                 echo unexpected gh args: \"$@\" >&2\n\
+                 exit 1\n",
+                head_oid
+            ),
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&path, perms).unwrap();
+        path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preflight_detects_real_stale_overlap_before_reviewer_launch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let origin = tmp.path().join("origin.git");
+        let repo = tmp.path().join("repo");
+
+        git(tmp.path(), &["init", "--bare", origin.to_str().unwrap()]);
+        git(tmp.path(), &["init", "-b", "main", repo.to_str().unwrap()]);
+        git(&repo, &["config", "user.email", "aida@example.test"]);
+        git(&repo, &["config", "user.name", "AIDA Test"]);
+
+        std::fs::write(repo.join("a.txt"), "base\n").unwrap();
+        git(&repo, &["add", "a.txt"]);
+        git(&repo, &["commit", "-m", "base"]);
+        git(
+            &repo,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+        git(&repo, &["push", "-u", "origin", "main"]);
+
+        git(&repo, &["checkout", "-b", "feature"]);
+        std::fs::write(repo.join("a.txt"), "feature\n").unwrap();
+        git(&repo, &["commit", "-am", "feature edits a.txt"]);
+        let feature_sha = git(&repo, &["rev-parse", "HEAD"]);
+        git(&repo, &["push", "origin", "HEAD:refs/pull/1/head"]);
+
+        git(&repo, &["checkout", "main"]);
+        std::fs::write(repo.join("a.txt"), "main moved\n").unwrap();
+        git(&repo, &["commit", "-am", "main edits a.txt"]);
+        git(&repo, &["push", "origin", "main"]);
+
+        let gh = fake_gh(tmp.path(), &feature_sha);
+        let outcome = preflight_stale_base_check_with_gh(&repo, 1, gh.as_os_str()).unwrap();
+        match outcome {
+            pr_rebase::StaleBaseOutcome::StaleOverlap {
+                behind,
+                overlap_files,
+                ..
+            } => {
+                assert_eq!(behind, 1);
+                assert_eq!(overlap_files, vec!["a.txt".to_string()]);
+                let msg = pr_rebase::stale_base_block_message(1, behind, &overlap_files);
+                assert!(msg.contains("refusing to launch reviewer"), "{msg}");
+                assert!(msg.contains("aida pr rebase 1"), "{msg}");
+                assert!(msg.contains("--allow-stale-base"), "{msg}");
+            }
+            other => panic!("expected stale overlap, got {other:?}"),
+        }
+    }
 }
 
 /// Implementation of `aida pr auto-queue-review` — files (or skips, if
