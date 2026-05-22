@@ -1,0 +1,28 @@
+id: 019e515c-ed6e-7ad1-b451-3d1c62028342
+spec_id: TASK-471
+agreed_id: TASK-471
+title: 'E2E integration test: full --auto-complete --no-human cycle hits stale-base block'
+description: |-
+  STORY-281 acceptance item 8 (the only unchecked box on PR-202 ship): a full --auto-complete --no-human cycle that hits a real stale-base block and surfaces actionable next steps. Explicitly deferred by the implementer in the PR description (https://github.com/joemooney/aida/pull/202#issue) and acknowledged in PR-202's review comment as a followup.
+
+  What this needs:
+  - A scripted scenario that opens a PR, merges a second PR touching the same file, then runs aida queue work --auto-complete --no-human on the first PR
+  - Assertions: orchestrator phase 3 emits the StaleOverlap block message; exit code is informative non-zero from PhaseFailure; the .aida/headless-logs/ trace contains the recover-with hint
+  - Also: --allow-stale-base downgrades to warning + proceeds
+
+  Heavy because it needs real branches + real PRs (or a careful mock of fetch_pr_info_via_gh + the git plumbing).
+
+  Raised in review of PR-202: https://github.com/joemooney/aida/pull/202#issuecomment-4522481404
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:25:05.134497601Z
+modified_at: 2026-05-22T20:25:05.134497601Z
+req_type: Task
+tags:
+- e2e
+- from-review:PR-202
+- integration-test
+- severity:major
+- story-281
