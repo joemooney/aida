@@ -1,0 +1,28 @@
+id: 019e4e21-302b-7e32-835b-a9245d986d03
+spec_id: TASK-448
+agreed_id: TASK-448
+title: 'auto_claim_summary: drop unused ''lower'' local; eq_ignore_ascii_case handles case both sides'
+description: |
+  In `aida-cli/src/main.rs:9475`, `auto_claim_summary` computes
+  `let lower = type_prefix.to_ascii_lowercase();` and uses it only as
+  the rhs of `eq_ignore_ascii_case(&lower)`. Since
+  `str::eq_ignore_ascii_case` already handles case on both sides, the
+  lowercase normalization is unused work and can be dropped — pass
+  `type_prefix` (or its &str) directly to `eq_ignore_ascii_case`.
+
+  Pure cleanup; no behavior change. Useful next time someone touches
+  the helper, since the local invites the "why is this here?" question.
+
+  Raised in review of PR-171:
+  https://github.com/joemooney/aida/pull/171#issuecomment-4515233922
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T05:20:58.411194184Z
+modified_at: 2026-05-22T05:20:58.411194184Z
+req_type: Task
+tags:
+- from-review:PR-171
+- severity:cosmetic
+- task-444-followup
