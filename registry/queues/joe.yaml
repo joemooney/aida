@@ -1129,3 +1129,10 @@
   note: Promoted from finding SPEC-403 via `aida findings promote`
   added_at: 2026-05-22T20:31:38.189162262Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e5179-6626-7192-a777-2b26b7dc5fb4
+  position: 245000
+  added_by: joe
+  note: auto-queued by `session end` (019e516f); covers 1 spec
+  added_at: 2026-05-22T20:56:17.221549833Z
+  for_role: reviewer
