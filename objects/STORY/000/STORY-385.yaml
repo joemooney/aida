@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:49:19.704186488Z
-modified_at: 2026-05-22T17:59:22.138712502Z
+modified_at: 2026-05-22T19:04:50.227285927Z
 req_type: Story
 tags:
 - attention
@@ -261,3 +261,20 @@ comments:
   content: 'Priority bumped medium → high 2026-05-22. Empirical recurrence: the ''untracked-file blocks aida pull after worktree-isolated PR merges'' pattern has hit 7 times in the last 24 hours. Each occurrence costs 1-2 minutes of manual recovery (mv to .bak, pull, diff, rm). STORY-385''s working-tree section would either (a) warn the user BEFORE the pull attempts that untracked files match incoming HEAD entries (so they can pre-emptively rm), or (b) integrate the move-pull-diff-cleanup dance into a single `aida status --resolve` command. Either form closes the friction class. Pattern strength = high; structural fix is overdue.'
   created_at: 2026-05-22T17:59:22.138712502Z
   modified_at: 2026-05-22T17:59:22.138712502Z
+- id: 019e5113-7533-7ca2-b401-6303d62f6e21
+  author: joe
+  content: |-
+    Empirical multi-agent collision 2026-05-22: master (PR-193) and Antigravity (PR-194) independently fixed the same failing discipline-pack test in parallel without knowing about each other's work. Both fixes were semantically correct; both diffs touched the same lines; both PRs in flight simultaneously. Collision surfaced at master review time when comparing the two PRs' file lists.
+
+    What would have prevented this:
+
+    - 'Recent advisor activity' section in aida status (this story's main thrust) would have shown 'master is editing aida-cli/src/main.rs in spike-N' or 'Antigravity is editing aida-cli/src/main.rs in story-407-followups'.
+    - A simple 'who's touching what file right now' query would have let either agent see they should coordinate first.
+    - Cost of the collision: ~10 min of rebase work + this comment + one PR (193) shipping before the other (194) can rebase.
+    - The bigger cost: master had to manually compare PR diffs to discover the collision. With more agents + more concurrent work, this scales linearly with N agents — but the discovery cost scales O(N^2) since master has to cross-check pairs.
+
+    STORY-385's working-tree-state section + advisor-activity log would have surfaced 'aida-cli/src/main.rs is being modified in 2 branches' at status time, before either PR opened.
+
+    Strong empirical motivation for this story's high priority. The N=2 case (Codex + Antigravity + master) is the smallest meaningful multi-agent dogfood; collisions WILL recur. The substrate needs the surface.
+  created_at: 2026-05-22T19:04:50.227285927Z
+  modified_at: 2026-05-22T19:04:50.227285927Z
