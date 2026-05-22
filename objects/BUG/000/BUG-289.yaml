@@ -1,0 +1,57 @@
+id: 019e4d3a-7ca7-74a1-94dc-c1197719059a
+spec_id: BUG-289
+agreed_id: BUG-289
+title: aida pr rebase <N> trips when a worktree (typically pr-N reviewer) already holds the conflicting ref
+description: |-
+  ## Symptom
+
+  \`aida pr rebase 161\` (TASK-308's wrapper) failed during STORY-360's merge-conflict recovery:
+
+  \`\`\`
+  fatal: refusing to fetch into branch 'refs/heads/pr-161' checked out at '/home/joe/ai/aida-pr-161'
+  Error: could not fetch PR-161's head ref (\`refs/pull/161/head\`) — is the PR number correct and the remote reachable?
+  \`\`\`
+
+  The PR number was correct and the remote was reachable; the actual cause was that an earlier orchestrator phase had created a reviewer worktree at \`/home/joe/ai/aida-pr-161\` checked out on the \`pr-161\` local branch. \`aida pr rebase\` tries to fetch the PR's head ref into a local branch of the same name; git refuses because that branch is checked out in a worktree.
+
+  The current error message is honest (it surfaces git's complaint verbatim) but unhelpful — it reads as low-level git output, not as a recovery hint. The user can't tell from the message that ending a lease will fix it.
+
+  ## Acceptance
+
+  - \`aida pr rebase <N>\` detects when a worktree exists at the path the fetch would land on (or holds the conflicting local branch) and presents a clear, actionable error:
+    \`\`\`
+    ✗ aida pr rebase: a worktree at /home/joe/ai/aida-pr-161 holds the pr-161 branch.
+      End it first:  aida session end <lease-id>   (look it up with: aida session leases --all)
+      Then re-run:   aida pr rebase 161
+    \`\`\`
+  - Optional auto-resolve mode \`aida pr rebase <N> --force\` (or \`--end-conflicting-leases\`) that ends the conflicting lease automatically and retries. Off by default — user judgment matters for lease termination.
+  - The error path should NOT mention "is the PR number correct" when the actual issue is the worktree conflict — that's misleading diagnostic noise. Branch on the underlying git error message to surface the right hint.
+  - Composes with STORY-384 (\`aida queue recover\`) — the wizard's \"PR exists, drive remaining phases\" branch should call \`aida pr rebase\` and handle this same error path uniformly.
+
+  ## Out of scope
+
+  - Replacing the worktree-rebase model entirely. The current shape (reviewer worktree at \`aida-pr-N\`) is intentional; this BUG just makes its rebase-time conflict legible.
+
+  ## Related
+
+  - TASK-308 — \`aida pr rebase\` wrapper this BUG refines.
+  - TASK-406 — sibling worktree-friction class (gh-merge --delete-branch tripping on active worktree). Same family.
+  - STORY-384 — queue recover wizard; would consume this fix.
+
+  ## Origin
+
+  2026-05-21 ~04:00, during STORY-360 (PR-161) merge-conflict recovery. User: *"aida pr rebase 161 ... fatal: refusing to fetch into branch 'refs/heads/pr-161' checked out at '/home/joe/ai/aida-pr-161'"*
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T01:08:59.175805586Z
+modified_at: 2026-05-22T01:08:59.175805586Z
+req_type: Bug
+tags:
+- aida-pr-rebase
+- cli-ux
+- error-message
+- from-user-friction
+- task-308-followup
+- worktree
