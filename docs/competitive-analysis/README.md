@@ -1,35 +1,56 @@
-# AIDA competitive analysis
+# AIDA Competitive Analysis & Market Positioning
 
-The AI/dev-tooling landscape moves fast. This directory is the **living record** of where AIDA sits in it — kept current, time-stamped, and honest about staleness.
+**Last updated**: 2026-05-22  
+**Refresh Cadence**: Quarterly (scheduled) / Signal-Triggered (see [signals-to-watch.md](signals-to-watch.md))
 
-Two kinds of document live here:
+The AI dev-tooling and agent coordination landscape moves with extreme velocity. This directory serves as the **living, time-stamped record** of where AIDA sits in this ecosystem—documenting our defensible niche, assessing competitors, and tracking landscape developments.
 
-- **Dated landscape snapshots** — `YYYY-MM-DD-<slug>.md`. A point-in-time scan of the whole field. The foundational one is [2026-03-17-landscape-scan.md](2026-03-17-landscape-scan.md).
-- **Per-topic living files** — `<topic>.md`. A single neighbour or ecosystem that moves fast enough to warrant its own continuously-updated page, with dated entries appended inside it.
+---
 
-## Sibling: `docs/positioning/`
+## Directory Structure & Scope
 
-[`docs/positioning/`](../positioning/) answers *"should I use AIDA or X?"* — sharp, paired `vs-X.md` comparisons. This directory is the wider-angle, time-stamped view: the whole landscape, the ecosystem AIDA runs inside, and where it is heading. Positioning is the argument; competitive-analysis is the evidence and the watch-list.
+We organize our market intelligence into three functional layers:
 
-## The living-doc rule
+1.  **Strategic Positioning**: Defining AIDA's vertical value proposition in relation to horizontal platforms.
+2.  **Point-in-Time snapshots**: Dated landscape scans capturing the exact state of competitor tools at a specific historical moment.
+3.  **Category Summaries**: Multi-project, deep-dive architectural analyses focusing on specific coordinate paradigms.
 
-Competitive intelligence rots — a snapshot is only trustworthy at its date stamp.
-
-- Every file carries a **`Last updated`** line.
-- New observations are **appended as dated entries** — never silently overwrite an old claim; the diff between dates is itself signal.
-- When a neighbour tool ships something material, or an AIDA release shifts a comparison, update the relevant file and bump its date.
-- Anyone who notices drift fixes it — open the file, edit, commit with a `docs(competitive):` scope.
-
-This is **best-effort calibration**, not auditable market research. Pricing, feature parity, and roadmap claims about other tools should be re-verified against the vendor's own docs before any high-stakes decision.
+---
 
 ## Index
 
-| File | Scope |
-|---|---|
-| [2026-03-17-landscape-scan.md](2026-03-17-landscape-scan.md) | Foundational broad scan — PM tools adding AI, AI code editors, requirements tools, git-native trackers, the MCP ecosystem; feature matrix; AIDA's honest strengths and weaknesses. |
-| [claude-code-plugin-ecosystem.md](claude-code-plugin-ecosystem.md) | Claude Code's own plugin & marketplace ecosystem — the substrate AIDA runs on, and an unexploited discoverability channel for AIDA itself. |
+| File / Directory | Type | Scope & Context |
+|---|---|---|
+| **[positioning.md](positioning.md)** | Strategic Statement | **AIDA's Defensible Niche**: Synthesizes AIDA's 8 core architectural pillars and details our horizontal-vertical symbiosis with Anthropic's platform. |
+| **[2026-05-16-market-snapshot.md](2026-05-16-market-snapshot.md)** | Market Snapshot | **May 2026 Competitor Profiles**: Technical breakdown of 10 target systems (Claude Flow, Gastown, Claude Squad, Vibe-Kanban, Wit, Skillfold, wshobson, barkain). |
+| **[tui-prior-art.md](tui-prior-art.md)** | Architectural Spike | **Terminal User Interfaces**: An empirical UX study of six agent TUIs (CMux, Vibe Tree, Conductor, etc.) informing AIDA's child-hosting PTY design. |
+| **[skillfold-spike.md](skillfold-spike.md)** | Architectural Spike | **Skillfold Compatibility**: A deep-dive gap analysis evaluating the compilation of AIDA's skill templates to declarative skillfold YAML. |
+| **[category-summaries/](category-summaries/)** | Directory | **Ecosystem Lens Breakdowns**: Category-level summaries analyzing architectural shifts. |
+| ├─ **[coordination-protocols.md](category-summaries/coordination-protocols.md)** | Category Summary | **Agent Concurrency**: Compares declarative compilers (Skillfold), lock daemons (Wit), and AIDA's git-native advisory leases. |
+| ├─ **[swarm-orchestrators.md](category-summaries/swarm-orchestrators.md)** | Category Summary | **Agent swarms**: Analyzes WASM swarms (Claude Flow) and economic swarms (Swarm-Protocol) against AIDA's requirements graph. |
+| ├─ **[parallel-session-managers.md](category-summaries/parallel-session-managers.md)** | Category Summary | **Workspace Isolation**: Surveys Git worktree multiplexers and database backends, cross-referencing our TUI prior-art study. |
+| └─ **[agent-libraries.md](category-summaries/agent-libraries.md)** | Category Summary | **Ecosystem Extensibility**: Surveys agent command marketplaces and delegation prompt wrappers against AIDA's unified runtime. |
+| **[signals-to-watch.md](signals-to-watch.md)** | Watch List | **Refresh Triggers**: Outlines the specific market events (e.g. Anthropic Teams release, star milestones) that trigger a directory scan. |
+| **[2026-03-17-landscape-scan.md](2026-03-17-landscape-scan.md)** | Market Snapshot | **Historical Baseline**: Our foundational broad landscape scan, mapping early features and competitors. |
+| **[claude-code-plugin-ecosystem.md](claude-code-plugin-ecosystem.md)** | Market Snapshot | **Claude Code Marketplace**: An early scan analyzing the unexploited discoverability channel of the plugin registry. |
 
-## See also
+---
 
-- [docs/positioning/](../positioning/) — the focused "vs X" comparisons.
-- [OVERVIEW.md](../../OVERVIEW.md) — AIDA's vision and defensible niche.
+## Sibling: `docs/positioning/`
+
+While this directory is a wide-angle, time-stamped view of the wider landscape, our sibling directory **[docs/positioning/](../positioning/)** answers the immediate question: *"Should I use AIDA or X?"* in the form of sharp, paired comparisons (e.g., `vs-ultraplan.md`, `vs-claude-code-subagents.md`). Positioning is the argument; competitive-analysis is the evidence.
+
+---
+
+## The Living-Doc Discipline & Contribution Guide
+
+To prevent competitive intelligence from rotting, we enforce strict documentation hygiene:
+
+1.  **Durable Time-Stamps**: Every file carries a prominent `Last updated` line.
+2.  **Appends Over Overwrites**: Do not silently delete or overwrite old competitor descriptions. If a competitor ships a major update, append a new dated entry (e.g., *Update: 2026-05-22*). The diff between dates represents crucial trajectory signal.
+3.  **Human-Readable Text**: Keep markdown files clean and optimized for human reading. Avoid referencing internal specification IDs or database tags in the body text (keep them strictly in the metadata or conclusion blocks if necessary).
+4.  **How to Contribute**: If you detect context drift or discover a new competitor:
+    *   Open a branch (`docs/competitive-analysis-update`).
+    *   Modify the relevant category summary or append a dated entry.
+    *   Commit using the standard scope: `docs(competitive): update positioning vs X`.
+    *   Run `aida pr ship` to verify and merge.

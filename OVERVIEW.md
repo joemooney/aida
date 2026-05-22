@@ -32,7 +32,7 @@ This is the **Trojan-horse positioning**: ship the visible product as humble. Le
 
 > *The TUI is what people will think AIDA is. The platform is what AIDA actually is.*
 
-This framing intentionally shapes documentation, marketing, and prioritization: when adding features, the test isn't "is this visible in the TUI?" — it's "does this make the TUI's quiet depth stronger when someone digs in?"
+This framing intentionally shapes documentation, marketing, and prioritization: when adding features, the test isn't "is this visible in the TUI?" — it's "does this make the TUI's quiet depth stronger when someone digs in?" See our standalone [Strategic Positioning Statement](docs/competitive-analysis/positioning.md) for the 8 core pillars of this defensible niche.
 
 For the implementation track + child STORYs see EPIC-26 in the requirements DB (`aida show EPIC-26`). For the TUI itself — hosting model, keybindings, status overlay, autonomous drains, crash recovery — see [`docs/tui/README.md`](docs/tui/README.md). Launch it with `aida tui` (shipped default-on as of STORY-137).
 
