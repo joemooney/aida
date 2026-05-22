@@ -57,7 +57,7 @@ description: |-
   ## Origin
 
   User observation 2026-05-22 after STORY-398's docs PR merged but spec stayed at Approved: *the auto-bump scanner only promotes Done → Completed.* Five occurrences today across the autonomy keystone + MCP work; the friction is recurring + bounded + worth closing.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
