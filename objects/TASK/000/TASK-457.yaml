@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:11.174903400Z
-modified_at: 2026-05-22T16:40:11.174903400Z
+modified_at: 2026-05-22T18:45:40.495966442Z
 req_type: Task
 tags:
 - agent-integration
@@ -39,3 +39,17 @@ tags:
 - init
 - onboarding
 - scaffold
+comments:
+- id: 019e5101-ea0f-7892-a3a8-33aa30c68e22
+  author: joe
+  content: |-
+    Naming-resolution question 2026-05-22: this task targets `.antigravity/` directory; Antigravity CLI 1.107.0 in actual use creates `.antigravitycli/` (which is a symlink to ~/.gemini/config/projects/<uuid>.json per-machine state, now gitignored).
+
+    Two questions to resolve before implementation:
+
+    1. Does Antigravity expect a project-tracked `.antigravity/` directory with integration files (analogous to `.codex/`)? Or does it look elsewhere entirely (~/.gemini, command-line, etc.)?
+    2. If yes to #1, is the dir name `.antigravity/` or `.antigravitycli/` or something else? Confirm by inspecting Antigravity's behavior on a fresh project.
+
+    Until resolved, the scaffolding shape is unknown. Tag as needing-research before implementation can proceed. Compose with STORY-407's setup doc (docs/agents/antigravity-mcp-setup.md) which now has empirical evidence of Antigravity's directory expectations.
+  created_at: 2026-05-22T18:45:40.495966442Z
+  modified_at: 2026-05-22T18:45:40.495966442Z
