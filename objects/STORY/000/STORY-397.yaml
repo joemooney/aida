@@ -1,0 +1,26 @@
+id: 019e4e1c-c2d9-7420-9c73-3ab35da93058
+spec_id: STORY-397
+agreed_id: STORY-397
+title: 'Review PR-171: feat(block): show effective auto-claim threshold/size in db block status (TASK-444)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4e13`) for branch `task-444`.
+
+  - PR: <https://github.com/joemooney/aida/pull/171>
+  - Branch: `task-444` → `main`
+
+  ## Covers
+
+  - TASK-444
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 171` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T05:16:08.281895674Z
+modified_at: 2026-05-22T05:16:08.281895674Z
+req_type: Story
