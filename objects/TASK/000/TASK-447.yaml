@@ -3,12 +3,12 @@ spec_id: TASK-447
 agreed_id: TASK-447
 title: aida queue done --skip-pr-check flag has blank --help description
 description: "The sibling `--skip-pr-check` flag on `aida queue done` (BUG-285, immediately below the `--force` flag fixed by TASK-423 at `aida-cli/src/cli.rs:2510-2515`) has the same blank-description-column problem TASK-423 fixed for `--force`. Verified post-fix:\n\n```\n      --force          Bypass the commits-without-PR pre-check. Use only when the spec was implemented on a different branch that is already merged, so the local branch has no PR by design. Logs the bypass\n      --skip-pr-check  \n```\n\n`--skip-pr-check` is declared with regular `//` comments (lines 2510-2514) referencing BUG-269 / BUG-285. Per `docs/user-facing-text-conventions.md` the fix mirrors TASK-423's: promote the user-facing copy to `///` (SPEC-ID stripped) and leave `// trace:BUG-285 | ai:claude` on a plain line. Roughly 2 lines of churn.\n\nSpotted incidentally while fixing TASK-423; not in scope for that spec so filing as a follow-up.\n\nRaised by the implementer while working TASK-423.\nBranch: task-423  ·  Commit: d7caf4ca  (PR link added on merge)"
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T04:37:15.075418240Z
-modified_at: 2026-05-22T19:31:56.590867793Z
+modified_at: 2026-05-22T20:14:46.464694492Z
 req_type: Task
 tags:
 - clap-help
@@ -20,3 +20,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-22T19:31:56.590867793Z
   implemented_by: joe
+  completed_at: 2026-05-22T20:14:46.464694492Z
+  completion_sha: 1cef6ec67ee6a2c94bf33a58578830f89a86e74c
