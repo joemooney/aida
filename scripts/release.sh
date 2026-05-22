@@ -108,6 +108,46 @@ if [ "$new" = "$current" ]; then
     exit 1
 fi
 
+# Verify the ecosystem review has been performed recently for major/minor releases.
+IFS='.' read -r current_maj current_min current_pat <<<"$current"
+IFS='.' read -r new_maj new_min new_pat <<<"$new"
+is_major_or_minor=0
+if [ "$bump" = "major" ] || [ "$bump" = "minor" ]; then
+    is_major_or_minor=1
+elif [ "$new_maj" != "$current_maj" ] || [ "$new_min" != "$current_min" ]; then
+    is_major_or_minor=1
+fi
+
+if [ "$is_major_or_minor" = "1" ]; then
+    echo
+    echo "─── Ecosystem Watch Verification ───"
+    if [ -f "docs/competitive-analysis/ecosystem-watch.md" ]; then
+        last_updated=$(grep -m1 -E "Last updated|Last Updated" docs/competitive-analysis/ecosystem-watch.md | sed -E 's/.*: *//' | tr -d '[:space:]')
+        echo "  Ecosystem Watch last updated: $last_updated"
+    else
+        echo "  warning: docs/competitive-analysis/ecosystem-watch.md not found!"
+        last_updated=""
+    fi
+    
+    echo "  Reminder: Major and minor releases require an ecosystem scan and refresh."
+    if [ "$auto_yes" = "1" ]; then
+        echo "  auto-confirm: --yes (or AIDA_RELEASE_YES=1) — bypassing ecosystem check."
+    elif [ ! -t 0 ]; then
+        echo "  warning: release script invoked without a TTY. Bypassing ecosystem check."
+    else
+        read -r -p "  Has the ecosystem review been completed/updated? [y/N]: " eco_answer
+        case "${eco_answer,,}" in
+            y|yes)
+                echo "  ok — ecosystem watch acknowledged."
+                ;;
+            *)
+                echo "error: Ecosystem review must be completed before a major/minor release." >&2
+                exit 1
+                ;;
+        esac
+    fi
+fi
+
 echo "bumping workspace from v$current -> v$new"
 
 # Bump workspace.package.version (full form).

@@ -36,6 +36,35 @@ We organize our market intelligence into three functional layers:
 
 ---
 
+## The Ecosystem Review Discipline
+
+To ensure AIDA maintains its architectural edge, we follow a rigorous, continuous scanning discipline. This prevents our strategic competitive analysis from rotting and directly guides our product roadmap.
+
+### 1. Cadence
+- **Scheduled Scans**: Quarterly comprehensive reviews to completely re-evaluate the developer-agent landscape.
+- **Signal-Triggered Scans**: Immediate evaluations triggered when critical events specified in [signals-to-watch.md](signals-to-watch.md) occur (e.g., a competitor reaching 10k stars, major provider releases).
+- **Release Verification Hook**: Every minor or major version bump (via `scripts/release.sh`) prompts/verifies that an ecosystem scan has been conducted or acknowledged.
+
+### 2. Who Scans (The Ecosystem Watch Captain)
+The active scan is led by the **Ecosystem Watch Captain** (a role mapped to the 7th responsibility of the AIDA **Advisor**). The Captain is responsible for executing the scan checklist, documenting findings in [ecosystem-watch.md](ecosystem-watch.md), and updating the individual positioning papers.
+
+### 3. Tools & Sources
+- **Release Feeds**: Anthropic Claude Code changelogs, OpenAI/Goose releases, and major terminal-agent GitHub release/tag feeds.
+- **Star & Traffic Trackers**: GitHub trending, npm/pip download telemetry, and developer community forums (Hacker News, Reddit, Twitter/X) to detect early-stage momentum.
+- **Standardization repos**: The Model Context Protocol (MCP) spec repository, `byronxlg/skillfold` changes, and collaborative workspace protocols.
+
+### 4. Assessment Matrix
+Every evaluated tool, feature, or platform update must be classified into one of four action quadrants:
+- **Compete**: The feature directly challenges AIDA's vertical value. We must document the positioning gap and pivot our engineering roadmap if necessary.
+- **Complement**: The capability is adjacent to AIDA's core (e.g., a better local PTY or specialized shell subagent). We partner, wrap, or pair with it rather than rebuilding it.
+- **Integrate**: The tool represents an emerging standard (e.g. MCP-as-bus or Skillfold schemas) that AIDA should adopt natively to compose with other systems.
+- **Ignore**: The capability is out-of-scope, low-momentum, or closed-ecosystem. We track but do not act.
+
+### 5. The Feedback Loop
+Scanning is not just documentation; it is a direct pipeline to product engineering. Any identified gap or strategic pivot is immediately filed into AIDA's active requirements database as a `TASK` or `BUG` (using `/aida-req` or `aida queue add`). Every item logged in [ecosystem-watch.md](ecosystem-watch.md) should ideally resolve to a requirement card, creating a paper trail from market intelligence to shipped code.
+
+---
+
 ## Sibling: `docs/positioning/`
 
 While this directory is a wide-angle, time-stamped view of the wider landscape, our sibling directory **[docs/positioning/](../positioning/)** answers the immediate question: *"Should I use AIDA or X?"* in the form of sharp, paired comparisons (e.g., `vs-ultraplan.md`, `vs-claude-code-subagents.md`). Positioning is the argument; competitive-analysis is the evidence.
