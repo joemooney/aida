@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T06:41:37.114943469Z
-modified_at: 2026-05-22T16:13:39.044368203Z
+modified_at: 2026-05-22T21:20:12.257579551Z
 req_type: Bug
 tags:
 - aida-review
@@ -97,6 +97,14 @@ comments:
     trace:BUG-327
   created_at: 2026-05-22T16:13:39.044368203Z
   modified_at: 2026-05-22T16:13:39.044368203Z
+- id: 019e518f-63e1-71d1-bf95-946d5db891be
+  author: joe
+  content: |-
+    Recurrence observed 2026-05-22 14:15 during TASK-339 autonomous drain (PR-208 reviewer phase). Skill template's AskUserQuestion ban (lines 61-85, trace:BUG-280) was honored in template prose but ignored by the headless reviewer model. PR-208 was merged manually after master confirmed the verdict was unambiguous PASS.
+
+    Filed BUG-NEW (see findings) as the structural follow-up: BUG-280's fix was skill-template description (paper enforcement); the systemic fix is a programmatic gate (permission-denial intercept under AIDA_HEADLESS=1, recommended Path A) per the BUG-269 ceiling pattern. Not reopening BUG-280 itself — its scope was the skill template doc; the new bug captures the programmatic-gate work.
+  created_at: 2026-05-22T21:20:12.257579551Z
+  modified_at: 2026-05-22T21:20:12.257579551Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T07:06:52.972574713Z
