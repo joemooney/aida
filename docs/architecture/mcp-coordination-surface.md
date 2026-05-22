@@ -97,11 +97,11 @@ is a transport.
   If the file format changes, the tool changes at the same point in the type
   system — they cannot diverge.
 - **Crash safety is the filesystem's**. `append_to_ledger` uses
-  `O_APPEND` so concurrent writers on POSIX never lose a record. Lease and
-  directive writes go through `write_atomic` (write to `.tmp-<uuid>`, then
-  `rename`) so a crash mid-write leaves the previous file intact. The
-  `concurrent_*` and `*_recovery` tests in `aida-cli/src/mcp.rs` cover both
-  contention and torn-write cases.
+  `O_APPEND` so concurrent writers on POSIX never lose a record. Lease,
+  directive, and punt-response writes go through `write_atomic` (write to
+  `.tmp-<uuid>`, then `rename`) so a crash mid-write leaves the previous
+  file intact. The `concurrent_*` and `*_recovery` tests in
+  `aida-cli/src/mcp.rs` cover both contention and torn-write cases.
 - **No new lock primitives**. The MCP tools acquire the same file-level
   semantics the file-direct path already uses. There is no global MCP lock,
   no in-memory queue, no daemon-internal state that could diverge from the

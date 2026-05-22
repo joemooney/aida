@@ -775,11 +775,9 @@ impl<'a> McpServer<'a> {
         };
 
         let path = punt_response_path(&self.project_root, spec);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
         let body = serde_json::to_string_pretty(&response).map_err(|e| e.to_string())?;
-        std::fs::write(&path, body).map_err(|e| e.to_string())?;
+        // trace:TASK-439 | ai:claude
+        write_atomic(&path, body.as_bytes()).map_err(|e| e.to_string())?;
 
         Ok(format!(
             "Resolution written to {} — the orchestrator will resume the implementer with this answer.",
@@ -815,11 +813,9 @@ impl<'a> McpServer<'a> {
         };
 
         let path = punt_response_path(&self.project_root, spec);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
         let body = serde_json::to_string_pretty(&response).map_err(|e| e.to_string())?;
-        std::fs::write(&path, body).map_err(|e| e.to_string())?;
+        // trace:TASK-439 | ai:claude
+        write_atomic(&path, body.as_bytes()).map_err(|e| e.to_string())?;
 
         Ok(format!(
             "Escalation written to {} — the orchestrator will park the spec for human triage.",
