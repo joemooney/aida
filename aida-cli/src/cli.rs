@@ -2547,11 +2547,11 @@ pub enum QueueCommand {
         // trace:BUG-269 TASK-423 | ai:claude
         #[clap(long)]
         force: bool,
-        // BUG-285: bypass the commits-without-PR pre-check (same effect as
-        // `--force` for this gate). Named for intent — `--force` is a
-        // general escape hatch, `--skip-pr-check` is specifically the
-        // BUG-269 / BUG-285 gate. Logs the bypass.
-        // trace:BUG-285 | ai:claude
+        /// Bypass the commits-without-PR pre-check (same effect as `--force`
+        /// for this gate). Named for intent — `--force` is a general escape
+        /// hatch, `--skip-pr-check` is specifically the pre-check gate. Logs
+        /// the bypass.
+        // trace:BUG-285 TASK-447 | ai:claude
         #[clap(long)]
         skip_pr_check: bool,
     },
