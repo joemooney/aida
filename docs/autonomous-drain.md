@@ -413,6 +413,76 @@ that will not auto-merge a PR writes its verdict file with
 first-class non-failure outcome (exit 0, no merge, the PR left for a human) —
 distinct from a non-Approved verdict and from a crashed phase.
 
+### Fork-from-live: full in-flight context for the headless advisor (STORY-360)
+
+By default the headless advisor cold-boots: a fresh `claude -p /aida-advise`
+loads only the persistent substrate (memories, discipline docs, the spec
+graph). It has no access to the in-flight context that lives in your running
+advisor session — the thread of conversation, the half-formed mental model,
+the design choices you have been talking through that have not yet hardened
+into a recorded principle.
+
+STORY-360 adds an opt-in **fork-from-live** path. When a live advisor is
+registered, the orchestrator copies that session's JSONL transcript to a new
+UUID under the spec's worktree project slug and `claude --resume`s the copy
+with the punt prompt. The forked advisor boots with the full transcript — the
+same context the live session had at fork time — minus exactly one in-flight
+turn at worst (the JSONL is append-only, so a fork is never more than the
+current turn behind).
+
+**Register once per session:**
+
+```bash
+# In your live advisor session — Claude Code sets CLAUDE_CODE_SESSION_ID
+aida advisor register
+```
+
+That writes `~/.aida/advisor.toml`. `aida advisor status` shows what is
+registered plus an estimated $/fork at the current transcript size.
+`aida advisor unregister` reverts to cold-boot.
+
+**The trade-off is cost vs context.** Fork pays a cache-creation tax on the
+first fork (~$4 for a 1.3 MB / 225K-token transcript on Opus 4.7), then
+~$0.03 for each additional fork within the 5-minute cache TTL. Cold-boot
+runs at ~$0.50-$1.00 per advise. So fork-from-live is 4-8× more expensive
+per invocation in exchange for full in-flight context. SPIKE-11 has the
+full empirical writeup at `docs/spikes/2026-05-20-spike-11-session-forking.md`.
+
+**Discovery cascade** (highest-confidence first):
+
+1. `~/.aida/advisor.toml` — what `aida advisor register` wrote.
+2. `AIDA_ADVISOR_SESSION_UUID` env var.
+3. Latest-session-by-mtime under the spec's project slug — **only when
+   `[advisor] allow_mtime_fallback = true`**. Off by default because every
+   Claude session on the project updates mtime, so the heuristic mis-fires.
+
+If discovery returns nothing — or the registered session looks dead (JSONL
+mtime older than the freshness window AND no live `claude` PID), or the
+transcript exceeds `max_source_size_mb` — the orchestrator falls through to
+the cold-boot path. The fork is opt-in and graceful: drains that ignore it
+behave exactly as they did before STORY-360.
+
+**Config keys (`.aida/config.toml`)**:
+
+```toml
+[advisor]
+fork_mode = "auto"            # auto (default) | always | never
+allow_mtime_fallback = false  # opt-in heuristic; rare false positives
+keep_fork_jsonls = true       # default: keep for audit trail
+max_source_size_mb = 10       # soft cost ceiling
+```
+
+`fork_mode = "never"` short-circuits the entire fork path — useful for
+parity testing against cold-boot. `keep_fork_jsonls = false` deletes the
+fork JSONL after the advisor exits (the source transcript is untouched
+either way; the fork is project-slug-isolated).
+
+The fork JSONL lands under `~/.claude/projects/<spec-worktree-slug>/<fork-uuid>.jsonl`
+— **not** the source's slug. Two consequences: the source transcript is
+byte-clean (the fork writes only to its own UUID), and a debugger can read
+every advisor decision back via `aida headless tail` from inside the spec's
+worktree.
+
 ## Recovery: merging a drained spec's PR by hand (TASK-406)
 
 When a drain bails before phase 4 (CI hung, the orchestrator was interrupted,

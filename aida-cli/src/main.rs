@@ -1,3 +1,4 @@
+mod advisor;
 mod auto_complete;
 mod auto_complete_telemetry;
 mod changelog;
@@ -77,10 +78,11 @@ use aida_core::{
 };
 
 use crate::cli::{
-    BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
-    DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand, GitHubCommand,
-    GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand, OrchestratorCommand,
-    PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
+    AdvisorCommand, BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand,
+    DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
+    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand,
+    OrchestratorCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand,
+    ReportCommand,
     ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
     ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand, TraceCommand,
     TypeCommand, WorkerCommand, ZenCommand,
@@ -424,6 +426,14 @@ fn run() -> Result<()> {
     // store. trace:BUG-237 trace:TASK-336 | ai:claude
     if let Command::Zen(zen_cmd) = &cli.command {
         return handle_zen_command(zen_cmd);
+    }
+
+    // STORY-360: live-advisor registration. `aida advisor` writes to
+    // `~/.aida/advisor.toml` (per-user, not per-project) and is intended to
+    // be runnable from anywhere — including outside any AIDA project. Reads
+    // no requirement store. trace:STORY-360 | ai:claude
+    if let Command::Advisor(advisor_cmd) = &cli.command {
+        return handle_advisor_command(advisor_cmd);
     }
 
     // STORY-301: drain-state introspection. Dispatched before storage init —
@@ -967,6 +977,13 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+        Command::Advisor(_) => {
+            // Unreachable — `aida advisor` dispatches before storage resolution
+            // (it reads only `~/.aida/advisor.toml`). The arm exists only to
+            // satisfy match exhaustiveness on the legacy-storage branch.
+            // trace:STORY-360 | ai:claude
+            unreachable!("Command::Advisor dispatched before storage init");
+        }
         Command::Punt { .. } => {
             // `aida punt` writes the NeedsAttention status + structured punt
             // metadata; the deprecated SQLite backend does not persist it.
@@ -1294,6 +1311,209 @@ fn handle_findings_command(
         }
     }
     Ok(())
+}
+
+/// `aida advisor` — manage the live-advisor registration the
+/// `--no-human=both` orchestrator reads (STORY-360). Three actions:
+///   - `register` writes the current session's UUID + project slug to
+///     `~/.aida/advisor.toml`. Auto-detects from `CLAUDE_CODE_SESSION_ID`.
+///   - `unregister` clears the file.
+///   - `status` prints what's registered and an estimated $/fork.
+/// trace:STORY-360 | ai:claude
+fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
+    match cmd {
+        AdvisorCommand::Register { uuid, project_slug } => {
+            handle_advisor_register(uuid.as_deref(), project_slug.as_deref())
+        }
+        AdvisorCommand::Unregister => {
+            advisor::clear_registration()?;
+            println!("Advisor registration cleared.");
+            Ok(())
+        }
+        AdvisorCommand::Status { json } => handle_advisor_status(*json),
+    }
+}
+
+fn handle_advisor_register(uuid: Option<&str>, project_slug: Option<&str>) -> Result<()> {
+    let uuid = uuid
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("CLAUDE_CODE_SESSION_ID").ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "no session UUID — pass `--uuid <id>` or run from a Claude session that \
+                 exports CLAUDE_CODE_SESSION_ID"
+            )
+        })?;
+
+    let cwd = std::env::current_dir().context("cannot read current directory")?;
+    let project_slug = project_slug
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| process_probe::encode_cwd_for_projects(&cwd));
+
+    // Best-effort: record the ancestor `claude` PID so the liveness check has
+    // something more authoritative than JSONL mtime.
+    let claude_pid = process_probe::probe_live_claude_sessions()
+        .into_iter()
+        .find_map(|s| {
+            // Match either by recent-jsonl uuid or by cwd containment so we
+            // don't pick a stranger's claude.
+            if s.jsonl
+                .as_ref()
+                .and_then(|p| p.file_stem())
+                .map(|f| f.to_string_lossy() == uuid)
+                .unwrap_or(false)
+            {
+                Some(s.pid)
+            } else {
+                None
+            }
+        });
+
+    let reg = advisor::AdvisorRegistration {
+        uuid: uuid.clone(),
+        project_slug: project_slug.clone(),
+        project_root: cwd.to_string_lossy().to_string(),
+        registered_at: chrono::Utc::now().to_rfc3339(),
+        claude_pid,
+    };
+    advisor::write_registration(&reg)?;
+
+    println!("Registered live advisor session.");
+    println!("  uuid:          {}", uuid);
+    println!("  project slug:  {}", project_slug);
+    println!("  project root:  {}", cwd.display());
+    if let Some(pid) = claude_pid {
+        println!("  claude pid:    {}", pid);
+    } else {
+        println!("  claude pid:    (none detected — liveness will use JSONL mtime)");
+    }
+    println!("\nThe `--no-human=both` orchestrator will now fork this session for advisor punts.");
+    println!("Run `aida advisor unregister` to revert to cold-boot.");
+    Ok(())
+}
+
+fn handle_advisor_status(json: bool) -> Result<()> {
+    let reg = advisor::read_registration();
+    let cfg_root = find_project_root().ok();
+    let cfg = match cfg_root.as_deref() {
+        Some(root) => advisor::AdvisorConfig::load(root),
+        None => advisor::AdvisorConfig::default(),
+    };
+
+    if json {
+        let value = match &reg {
+            Some(r) => {
+                let advisor = locate_for_status(r);
+                let (alive, size_bytes, est_cost) = match &advisor {
+                    Some(a) => (
+                        advisor::is_alive(a, r.claude_pid),
+                        Some(a.jsonl_size_bytes),
+                        Some(advisor::estimated_fork_cost_usd(a.jsonl_size_bytes)),
+                    ),
+                    None => (false, None, None),
+                };
+                serde_json::json!({
+                    "registered": true,
+                    "uuid": r.uuid,
+                    "project_slug": r.project_slug,
+                    "project_root": r.project_root,
+                    "registered_at": r.registered_at,
+                    "claude_pid": r.claude_pid,
+                    "alive": alive,
+                    "jsonl_size_bytes": size_bytes,
+                    "estimated_fork_cost_usd": est_cost,
+                    "fork_mode": match cfg.fork_mode {
+                        advisor::ForkMode::Auto => "auto",
+                        advisor::ForkMode::Always => "always",
+                        advisor::ForkMode::Never => "never",
+                    },
+                })
+            }
+            None => serde_json::json!({
+                "registered": false,
+                "fork_mode": match cfg.fork_mode {
+                    advisor::ForkMode::Auto => "auto",
+                    advisor::ForkMode::Always => "always",
+                    advisor::ForkMode::Never => "never",
+                },
+            }),
+        };
+        println!("{}", serde_json::to_string_pretty(&value)?);
+        return Ok(());
+    }
+
+    match reg {
+        Some(r) => {
+            println!("Advisor registration");
+            println!("  uuid:          {}", r.uuid);
+            println!("  project slug:  {}", r.project_slug);
+            println!("  project root:  {}", r.project_root);
+            println!("  registered at: {}", r.registered_at);
+            if let Some(pid) = r.claude_pid {
+                println!("  claude pid:    {}", pid);
+            }
+            let advisor = locate_for_status(&r);
+            match advisor {
+                Some(a) => {
+                    let alive = advisor::is_alive(&a, r.claude_pid);
+                    let mb = a.jsonl_size_bytes as f64 / (1024.0 * 1024.0);
+                    let cost = advisor::estimated_fork_cost_usd(a.jsonl_size_bytes);
+                    println!(
+                        "  source jsonl:  {} ({:.2} MB)",
+                        a.source_jsonl.display(),
+                        mb
+                    );
+                    println!(
+                        "  alive:         {}",
+                        if alive {
+                            "yes"
+                        } else {
+                            "no (cold-boot fallback)"
+                        }
+                    );
+                    println!(
+                        "  per-fork cost: ~${:.2} (first fork; subsequent within cache TTL ~$0.03)",
+                        cost
+                    );
+                }
+                None => {
+                    println!("  source jsonl:  (missing — JSONL not found on disk)");
+                    println!("  alive:         no (cold-boot fallback)");
+                }
+            }
+        }
+        None => {
+            println!("No live advisor registered.");
+            println!("The orchestrator will cold-boot the headless advisor for every punt.");
+            println!("Run `aida advisor register` from inside your live advisor session to enable forking.");
+        }
+    }
+    println!(
+        "  fork_mode:     {} (set in .aida/config.toml [advisor])",
+        match cfg.fork_mode {
+            advisor::ForkMode::Auto => "auto",
+            advisor::ForkMode::Always => "always",
+            advisor::ForkMode::Never => "never",
+        }
+    );
+    Ok(())
+}
+
+fn locate_for_status(reg: &advisor::AdvisorRegistration) -> Option<advisor::LiveAdvisor> {
+    let home = dirs::home_dir()?;
+    let jsonl = home
+        .join(".claude")
+        .join("projects")
+        .join(&reg.project_slug)
+        .join(format!("{}.jsonl", reg.uuid));
+    let meta = std::fs::metadata(&jsonl).ok()?;
+    Some(advisor::LiveAdvisor {
+        uuid: reg.uuid.clone(),
+        project_slug: reg.project_slug.clone(),
+        source_jsonl: jsonl,
+        jsonl_size_bytes: meta.len(),
+        discovery: advisor::Discovery::Registration,
+    })
 }
 
 /// `aida punt` — pause a spec in `NeedsAttention` with a structured reason
@@ -53399,8 +53619,33 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })?;
 
-        // Spawn the headless advisor — `claude -p /aida-advise`, advisor role.
-        let advisor_uuid = uuid::Uuid::now_v7().to_string();
+        // STORY-360: decide between fork-from-live and cold-boot. The fork
+        // path copies the live advisor's JSONL transcript into the spec's
+        // worktree project slug under a fresh UUID and `claude --resume`s it,
+        // so the headless advisor boots with the full in-flight context.
+        // Cold-boot is the default fallback whenever no live advisor is
+        // registered, the registered session looks dead, the source JSONL
+        // exceeds `max_source_size_mb`, or `fork_mode = "never"`.
+        // trace:STORY-360 | ai:claude
+        let advisor_cfg = advisor::AdvisorConfig::load(&self.project_root);
+        let fork_plan = advisor::plan_fork(&self.project_root, &advisor_cfg);
+        let (advisor_uuid, forked_from) = match fork_plan.as_ref() {
+            Some(plan) => match advisor::execute_fork(plan) {
+                Ok(_) => (plan.fork_uuid.clone(), Some(plan.live.clone())),
+                Err(e) => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} advisor fork failed ({e}); falling back to cold-boot.",
+                            "◆".yellow()
+                        );
+                    }
+                    (uuid::Uuid::now_v7().to_string(), None)
+                }
+            },
+            None => (uuid::Uuid::now_v7().to_string(), None),
+        };
+        let is_fork = forked_from.is_some();
+
         let log_path = self
             .project_root
             .join(".aida")
@@ -53420,21 +53665,42 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })?;
         if !self.json {
-            eprintln!(
-                "  {} spawning a headless advisor for the design-fork…",
-                "◆".cyan()
-            );
+            if let Some(live) = forked_from.as_ref() {
+                let mb = live.jsonl_size_bytes as f64 / (1024.0 * 1024.0);
+                eprintln!(
+                    "  {} forking live advisor session {} ({:.2} MB transcript, via {}) for the design-fork…",
+                    "◆".cyan(),
+                    &live.uuid[..live.uuid.len().min(8)],
+                    mb,
+                    live.discovery.label(),
+                );
+            } else {
+                eprintln!(
+                    "  {} spawning a headless advisor (cold-boot) for the design-fork…",
+                    "◆".cyan()
+                );
+            }
         }
         // TASK-307: tee the headless advisor too — design-fork judgements
         // benefit just as much from live visibility as the reviewer phase.
-        // Label = "advisor" so the operator can tell advisor lines apart
-        // from the reviewer / resume lines in a busy drain. trace:TASK-307
+        // Label = "advisor" (cold-boot) or "advisor-fork" (resumed) so the
+        // operator can tell advisor lines apart from the reviewer / resume
+        // lines in a busy drain. trace:TASK-307 trace:STORY-360 | ai:claude
+        let tee_label = if is_fork { "advisor-fork" } else { "advisor" };
         let tee_opts =
-            crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("advisor");
+            crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label(tee_label);
         let tee_handle = crate::headless_tee::start_tee(&log_path, &tee_opts);
+        // Fork resumes the copied JSONL via `--resume`; cold-boot mints a
+        // fresh `--session-id`. SPIKE-7's mandatory flag set is identical
+        // across both.
+        let claude_args = if is_fork {
+            session::claude_headless_resume_args("/aida-advise", &advisor_uuid)
+        } else {
+            session::claude_headless_args("/aida-advise", &advisor_uuid)
+        };
         let status = std::process::Command::new("claude")
             .current_dir(&self.project_root)
-            .args(session::claude_headless_args("/aida-advise", &advisor_uuid))
+            .args(claude_args)
             .env("AIDA_HEADLESS", "1")
             .env(punt::REQUEST_FILE_ENV, &request_path)
             .env(punt::RESPONSE_FILE_ENV, &response_path)
@@ -53449,6 +53715,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             })?;
         tee_handle.stop();
+
+        // Clean up the fork JSONL if the config asks us to. Default is to
+        // keep it for audit (a fork transcript is a record of what the
+        // advisor saw at decision time). Errors are non-fatal — the fork
+        // JSONL is just data under `~/.claude/projects/`.
+        if is_fork && !advisor_cfg.keep_fork_jsonls {
+            if let Some(plan) = fork_plan.as_ref() {
+                let _ = std::fs::remove_file(&plan.fork_jsonl);
+            }
+        }
         if !status.success() {
             return Err(PhaseFailure::new(format!(
                 "the headless advisor session exited {} — see {}",
