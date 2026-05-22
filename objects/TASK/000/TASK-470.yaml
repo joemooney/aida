@@ -1,0 +1,31 @@
+id: 019e515c-ddbf-7111-8053-6c7939dc6f0c
+spec_id: TASK-470
+agreed_id: TASK-470
+title: Handle file-rename edge case in stale-base overlap detection
+description: |-
+  PR-202 deep-pass found a rename edge case in classify_stale_base (aida-cli/src/pr_rebase.rs).
+
+  Scenario: file is renamed on base since fork (a.rs → b.rs). PR-202 edits a.rs (the old path). Then:
+  - pr_files contains 'a.rs'
+  - base_files contains 'b.rs' (and possibly 'a.rs' as the delete record, depending on how files_in_range derives them)
+  - String-match overlap may be empty → classifies as StaleNoOverlap (warn, proceed)
+  - But git merge-tree could still see a rename-induced conflict that the classifier missed
+
+  Options:
+  1. Pass git's rename-detected diff (-M) through files_in_range so renames thread through to the overlap set as both old AND new paths
+  2. Always emit StaleOverlap when the merge-tree probe reports Conflicting, even with empty string-match overlap
+  3. Document as a known gap (low-frequency in practice)
+
+  Raised in review of PR-202: https://github.com/joemooney/aida/pull/202#issuecomment-4522481404
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:25:01.119064647Z
+modified_at: 2026-05-22T20:25:01.119064647Z
+req_type: Task
+tags:
+- from-review:PR-202
+- rename-detection
+- severity:minor
+- story-281
