@@ -76,6 +76,12 @@ jobs:
       - name: Run MCP stdio compatibility tests
         run: bash tests/test_mcp_stdio.sh
 
+      # Doc-vs-MCP consistency gate — every tool + argument documented in
+      # docs/agents/cross-agent-onboarding.md must appear in `tools/list`.
+      # trace:TASK-452 | ai:claude
+      - name: Run MCP doc-consistency test
+        run: bash tests/test_mcp_doc_consistency.sh
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
