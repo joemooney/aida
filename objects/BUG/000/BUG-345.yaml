@@ -43,7 +43,7 @@ description: |-
   - BUG-344 (CI-startup-window — sibling polling/state-detection bug)
   - feedback_substrate_as_bouncer_not_rules (the wrapper IS substrate enforcement; making it robust to environmental hazards strengthens the bouncer)
   - Multi-agent worktree-isolation discipline (when violated, this hazard surfaces — the bug is downstream of feedback_sibling_agents_stop_and_flag)
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
