@@ -1,5 +1,6 @@
 // trace:FR-0152 | ai:claude
 // trace:STORY-361 | ai:claude
+// trace:TASK-440 | ai:claude
 //! MCP (Model Context Protocol) server for AIDA.
 //!
 //! Implements JSON-RPC 2.0 over stdio. Exposes two surfaces:
@@ -24,6 +25,23 @@
 //! reads/writes those files directly — these tools are the surface any
 //! MCP-speaking agent (Codex, Cursor, …) can use to participate in the
 //! same drains. See `docs/architecture/mcp-coordination-surface.md`.
+//!
+//! # Output schemas (TASK-440 — Path A: descriptor-only)
+//!
+//! Every tool descriptor in `tool_descriptors()` carries an `outputSchema`
+//! that documents the **MCP text-envelope** shape its responses take today
+//! plus a per-tool `description` summarizing what the text payload conveys.
+//! Schema-driven clients (Codex, Cursor, …) get useful discoverability
+//! instead of opaque-shape responses.
+//!
+//! **Runtime behavior is unchanged.** Every tool still returns the
+//! `{ content: [{ type: "text", text: "..." }] }` envelope it returned
+//! before. This is the **Path A** scope: declare the schema, do not yet
+//! emit `structuredContent` matching it. Reshaping tool responses to emit
+//! structured payloads alongside (or instead of) the text envelope is
+//! tracked separately as **STORY-399** — the Path B follow-up. That story
+//! owns the backward-compatibility call for clients that consume today's
+//! text envelopes.
 
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -1410,6 +1428,43 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 // Tool descriptors (kept at module scope for register-agent + tests)
 // ============================================================================
 
+// trace:TASK-440 | ai:claude
+/// Build the `outputSchema` for a tool that returns the MCP text envelope.
+///
+/// Path A — the schema describes the wire shape every tool returns today
+/// (`{ content: [{ type: "text", text: "..." }], isError?: bool }`) and
+/// uses `payload_description` to tell schema-driven clients what the `text`
+/// string conveys for *this* tool. Per-tool structured payloads (Path B,
+/// STORY-399) will replace this with concrete `structuredContent` schemas.
+fn text_envelope_output_schema(payload_description: &str) -> Value {
+    json!({
+        "type": "object",
+        "description": format!(
+            "MCP text envelope. The `text` field contains: {}",
+            payload_description
+        ),
+        "properties": {
+            "content": {
+                "type": "array",
+                "description": "Always a single text item under Path A.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": { "type": "string", "const": "text" },
+                        "text": { "type": "string" }
+                    },
+                    "required": ["type", "text"]
+                }
+            },
+            "isError": {
+                "type": "boolean",
+                "description": "Present and true when the tool returned an error; absent on success."
+            }
+        },
+        "required": ["content"]
+    })
+}
+
 /// Every tool the MCP server exposes, in `tools/list` JSON shape. Static so
 /// `aida mcp register-agent --print-tools` can render it without spinning up
 /// the JSON-RPC loop.
@@ -1427,7 +1482,10 @@ pub fn tool_descriptors() -> Value {
                     "feature": { "type": "string", "description": "Filter by feature category" },
                     "limit": { "type": "integer", "description": "Maximum number of results (default: 50)" }
                 }
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a `Found N requirements:` header followed by one line per match in `- [SPEC-ID] <title> (Status: <status>, Priority: <priority>, Type: <type>)` form, or `No requirements found matching the criteria.` when the filter excludes everything."
+            )
         },
         {
             "name": "show_requirement",
@@ -1438,7 +1496,10 @@ pub fn tool_descriptors() -> Value {
                     "id": { "type": "string", "description": "The SPEC-ID of the requirement (e.g., FR-0042)" }
                 },
                 "required": ["id"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a Markdown rendering of the requirement: H1 `# <SPEC-ID> — <title>`, bold-key/value lines for Status / Priority / Type / Feature / Owner / Tags, a `## Description` body, and optional `## Comments` and `## Relationships` sections."
+            )
         },
         {
             "name": "add_requirement",
@@ -1454,7 +1515,10 @@ pub fn tool_descriptors() -> Value {
                     "tags": { "type": "array", "items": { "type": "string" }, "description": "Tags to attach to the requirement" }
                 },
                 "required": ["title", "description"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Requirement added: <SPEC-ID> — <title>`, where SPEC-ID is the freshly-assigned identifier for the new requirement."
+            )
         },
         {
             "name": "update_requirement",
@@ -1467,7 +1531,10 @@ pub fn tool_descriptors() -> Value {
                     "description": { "type": "string", "description": "New description" }
                 },
                 "required": ["id"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Updated <SPEC-ID>: <comma-separated change list>` summarizing what was modified, or `No changes applied to <SPEC-ID>` when nothing in the args translated to a change."
+            )
         },
         {
             "name": "search_requirements",
@@ -1478,7 +1545,10 @@ pub fn tool_descriptors() -> Value {
                     "query": { "type": "string", "description": "Search query (case-insensitive)" }
                 },
                 "required": ["query"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Found N results for '<query>':` followed by `- [SPEC-ID] <title> (<status>)` lines, or `No requirements found matching '<query>'` when nothing matches."
+            )
         },
         {
             "name": "add_comment",
@@ -1490,12 +1560,18 @@ pub fn tool_descriptors() -> Value {
                     "text": { "type": "string", "description": "Comment text" }
                 },
                 "required": ["id", "text"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Comment added to <SPEC-ID>`."
+            )
         },
         {
             "name": "list_features",
             "description": "List all feature categories in the project",
-            "inputSchema": { "type": "object", "properties": {} }
+            "inputSchema": { "type": "object", "properties": {} },
+            "outputSchema": text_envelope_output_schema(
+                "either `Features (N):` followed by `- <name> (prefix: <prefix>)` lines, or `No features defined in this project.` when empty."
+            )
         },
 
         // ---- Punt channel (.aida/punts.jsonl + .aida/punts/) ----
@@ -1507,7 +1583,10 @@ pub fn tool_descriptors() -> Value {
                 "properties": {
                     "status": { "type": "string", "description": "Filter on resolution_path; 'awaiting' = still 'punted'" }
                 }
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Found N punt(s):` followed by per-record blocks of `- <SPEC-ID> [<category>] <detail>\\n  resolution: <resolution_path>  (<RFC3339 timestamp>)`, or `No punts found.` when the filter yields nothing."
+            )
         },
         {
             "name": "read_punt",
@@ -1518,7 +1597,10 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": { "type": "string", "description": "Display ID of the punted spec" }
                 },
                 "required": ["spec_id"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "the pretty-printed JSON of a PuntRecord (`timestamp`, `spec`, `category`, `detail`, optional `lean` / `raised_by`, `resolution_path`, plus optional resolver-side fields such as `classification`, `escalation_reason`, `answer`, `answered_by`)."
+            )
         },
         {
             "name": "post_punt",
@@ -1533,7 +1615,10 @@ pub fn tool_descriptors() -> Value {
                     "raised_by": { "type": "string", "description": "Role/agent that raised the punt (defaults to 'mcp')" }
                 },
                 "required": ["spec_id", "detail"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Punt recorded for <SPEC-ID> [<category>].` followed by a hint to run `aida edit <SPEC-ID> --status needs-attention` from a session lease to park the spec."
+            )
         },
         {
             "name": "resolve_punt",
@@ -1547,7 +1632,10 @@ pub fn tool_descriptors() -> Value {
                     "classification": { "type": "string", "description": "A/B/C calibration class (recorded-principle / recorded-preference / synthesized)" }
                 },
                 "required": ["spec_id", "answer", "reasoning"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Resolution written to <absolute path to .aida/punts/<spec>.response.json>` and an explanatory follow-on that the orchestrator will resume the implementer with this answer."
+            )
         },
         {
             "name": "escalate_punt",
@@ -1561,7 +1649,10 @@ pub fn tool_descriptors() -> Value {
                     "classification": { "type": "string" }
                 },
                 "required": ["spec_id", "reasoning"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Escalation written to <absolute path to .aida/punts/<spec>.response.json>` and an explanatory follow-on that the orchestrator will park the spec for human triage."
+            )
         },
 
         // ---- Findings channel (draft requirements with from-* tags) ----
@@ -1575,7 +1666,10 @@ pub fn tool_descriptors() -> Value {
                     "source": { "type": "string", "description": "review | implementer" },
                     "kind": { "type": "string", "description": "deviation | design-choice | bug-spotted | followup-suggestion (implementer findings only)" }
                 }
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Found N finding(s):` followed by `## From <source>` sections, `### <origin>` groups, and `- <SPEC-ID> <title> (<severity>)[ [<kind>]]` rows, or `No findings match the filter.` when empty."
+            )
         },
         {
             "name": "file_finding",
@@ -1592,7 +1686,10 @@ pub fn tool_descriptors() -> Value {
                     "severity": { "type": "string", "description": "cosmetic | minor | major (default: minor)" }
                 },
                 "required": ["title", "description"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Finding filed: <SPEC-ID> — <title>`, where SPEC-ID is the freshly-assigned identifier for the new draft TASK."
+            )
         },
         {
             "name": "triage_finding",
@@ -1605,7 +1702,10 @@ pub fn tool_descriptors() -> Value {
                     "reason": { "type": "string", "description": "One-line rationale (recorded as a comment)" }
                 },
                 "required": ["id", "action"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Finding <SPEC-ID> promoted` or `Finding <SPEC-ID> dismissed`."
+            )
         },
 
         // ---- Task-claim channel (.aida/sessions/*.toml) ----
@@ -1619,7 +1719,10 @@ pub fn tool_descriptors() -> Value {
                     "role": { "type": "string", "description": "Role taking the claim (default: implementer)" }
                 },
                 "required": ["spec_id"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `claimed: lease_id=<12-char id>` on a fresh claim, or `already_claimed by <owner> (lease <id> since <RFC3339 timestamp>)` when an existing lease already covers the spec."
+            )
         },
         {
             "name": "release_task",
@@ -1630,12 +1733,18 @@ pub fn tool_descriptors() -> Value {
                     "lease_id": { "type": "string" }
                 },
                 "required": ["lease_id"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `released: lease_id=<id>` on success. On failure (lease not found, or a non-mcp lease), the envelope sets `isError: true` and carries a human-readable error message instead."
+            )
         },
         {
             "name": "list_active_leases",
             "description": "List every active lease in .aida/sessions/ — both real `aida session start` leases and MCP claim_task leases.",
-            "inputSchema": { "type": "object", "properties": {} }
+            "inputSchema": { "type": "object", "properties": {} },
+            "outputSchema": text_envelope_output_schema(
+                "either `Found N active lease(s):` followed by `- <id> scope=<SPEC-ID> role=<role> owner=<owner> kind=<mcp|session> started_at=<RFC3339 timestamp>` rows, or `No active leases.` when none exist."
+            )
         },
 
         // ---- Worker-directive channel (.aida/worker.cmd) ----
@@ -1649,12 +1758,18 @@ pub fn tool_descriptors() -> Value {
                     "args": { "type": "array", "items": { "type": "string" }, "description": "Args forwarded to `aida queue work` for drain directives" }
                 },
                 "required": ["verb"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `directive posted: <verb> [args...]` echoing the line that was appended to .aida/worker.cmd."
+            )
         },
         {
             "name": "list_directives",
             "description": "List pending directives in .aida/worker.cmd (the same view as `aida worker directives`).",
-            "inputSchema": { "type": "object", "properties": {} }
+            "inputSchema": { "type": "object", "properties": {} },
+            "outputSchema": text_envelope_output_schema(
+                "the same human-rendered directive list as `aida worker directives` — one line per pending directive (verb plus any forwarded args), or an empty/empty-state rendering when .aida/worker.cmd has no pending directives."
+            )
         },
         {
             "name": "ack_directive",
@@ -1665,7 +1780,10 @@ pub fn tool_descriptors() -> Value {
                     "index": { "type": "integer", "description": "0-based index of the directive to ack" }
                 },
                 "required": ["index"]
-            }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `acked: <verb [args...]>` echoing the directive line that was removed from .aida/worker.cmd."
+            )
         }
     ])
 }
@@ -1785,6 +1903,79 @@ mod tests {
             "ack_directive",
         ] {
             assert!(names.contains(&required), "missing tool: {}", required);
+        }
+    }
+
+    // trace:TASK-440 | ai:claude
+    /// Every tool descriptor must carry a non-null `outputSchema` that passes
+    /// basic JSON-Schema structural validation: an object with `type` =
+    /// "object", a `properties` map, and a non-empty `description` so
+    /// schema-driven MCP clients (Codex, Cursor, …) can render the response
+    /// shape instead of treating it as opaque text.
+    #[test]
+    fn every_tool_descriptor_has_a_valid_output_schema() {
+        let desc = tool_descriptors();
+        let arr = desc.as_array().expect("tool_descriptors must be an array");
+        assert!(
+            arr.len() >= 21,
+            "expected ≥21 tool descriptors (7 spec-graph + 14 coordination), got {}",
+            arr.len()
+        );
+
+        for tool in arr {
+            let name = tool
+                .get("name")
+                .and_then(|n| n.as_str())
+                .expect("each tool descriptor must have a name");
+
+            let output_schema = tool
+                .get("outputSchema")
+                .unwrap_or_else(|| panic!("tool '{}' is missing outputSchema", name));
+            assert!(
+                !output_schema.is_null(),
+                "tool '{}' has a null outputSchema",
+                name
+            );
+
+            // Basic JSON-Schema structural validation.
+            let obj = output_schema
+                .as_object()
+                .unwrap_or_else(|| panic!("tool '{}' outputSchema is not a JSON object", name));
+
+            let schema_type = obj
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| panic!("tool '{}' outputSchema is missing `type`", name));
+            assert_eq!(
+                schema_type, "object",
+                "tool '{}' outputSchema `type` must be \"object\" (Path A — text envelope), got {:?}",
+                name, schema_type
+            );
+
+            let description = obj
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| panic!("tool '{}' outputSchema is missing `description`", name));
+            assert!(
+                !description.trim().is_empty(),
+                "tool '{}' outputSchema description must be non-empty",
+                name
+            );
+
+            let properties = obj
+                .get("properties")
+                .and_then(|v| v.as_object())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "tool '{}' outputSchema is missing a `properties` object",
+                        name
+                    )
+                });
+            assert!(
+                properties.contains_key("content"),
+                "tool '{}' outputSchema must declare a `content` property (Path A — text envelope wraps every response)",
+                name
+            );
         }
     }
 
