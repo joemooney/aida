@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T06:41:37.114943469Z
-modified_at: 2026-05-21T07:16:30.337416715Z
+modified_at: 2026-05-22T16:13:39.044368203Z
 req_type: Bug
 tags:
 - aida-review
@@ -81,6 +81,22 @@ comments:
   content: Commit 9d36e0c8 references this requirement
   created_at: 2026-05-21T07:07:31.915550328Z
   modified_at: 2026-05-21T07:07:31.915550328Z
+- id: 019e5076-bb64-75c1-b44f-56d49e3213b1
+  author: joe
+  content: |-
+    Paper-enforcement superseded by BUG-327's programmatic gate (2026-05-22).
+
+    The skill-template instructions added here (\"don't call AskUserQuestion under --no-human=both\") proved insufficient: 2026-05-22 overnight drain (BUG-312 phase 3 on PR-175) caught a reviewer reasoning past the template and bailing without a verdict file — the same shape this BUG was supposed to close.
+
+    BUG-327 added the structural gate: both headless argv builders (\`claude_headless_args\` + \`claude_headless_resume_args\` in aida-cli/src/session.rs) now inject \`--disallowed-tools AskUserQuestion\`. The tool is unavailable to the spawned claude — attempting to call it now fails immediately rather than blocking the session. Verified empirically: the \`tools\` array in the headless init event no longer lists AskUserQuestion.
+
+    Skill-template instructions here are kept as useful documentation but are no longer the enforcement mechanism. The acceptance criterion \"never calls AskUserQuestion under --no-human=both\" is now structurally guaranteed by the argv, not the prompt.
+
+    This is the third instance of the paper-enforcement → programmatic-gate pattern: TASK-401 → BUG-285 (implementer queue-done), BUG-280 → BUG-327 (reviewer AskUserQuestion). Memory \`feedback_self_test_via_dogfood_merge\` predicted exactly this — the dogfood merge surfaces the next gap the previous fix's depth didn't cover.
+
+    trace:BUG-327
+  created_at: 2026-05-22T16:13:39.044368203Z
+  modified_at: 2026-05-22T16:13:39.044368203Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T07:06:52.972574713Z
