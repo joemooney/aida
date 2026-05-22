@@ -942,6 +942,47 @@ pub enum PrCommand {
         #[clap(long, value_name = "REF")]
         base: Option<String>,
     },
+
+    /// Ship a PR: create-if-needed → watch CI → squash-merge → pull →
+    /// worktree-aware cleanup. The direct-publish counterpart to
+    /// `aida queue work PR-N --auto-complete` (which drives the full
+    /// reviewer pipeline) — use this for human-pre-approved work where
+    /// no orchestrator review phase is needed (docs PRs, master-signed
+    /// architecture work, recovery merges).
+    ///
+    /// With no `<N>`, the command targets the current branch's open PR
+    /// — creating one via `gh pr create` (deriving title/body from the
+    /// latest commit) if none exists. `aida pull` runs from the main
+    /// worktree even when invoked from a sibling worktree, and the
+    /// merge step detects branches checked out in sibling worktrees
+    /// before deciding whether `--delete-branch` is safe — both
+    /// papercuts surfaced by the 2026-05-22 stopgap-shell experience.
+    ///
+    /// Composes with BUG-286's transient-retry layer for the `gh`
+    /// calls (sub-second network blips no longer abort the flow).
+    // trace:TASK-458 | ai:claude
+    Ship {
+        /// PR number to ship. When omitted, the command resolves the
+        /// PR open on the current branch (or creates one if none
+        /// exists).
+        #[clap(value_name = "N")]
+        n: Option<u64>,
+
+        /// Skip the post-merge `aida pull`. Useful when shipping
+        /// from inside a composition that pulls separately.
+        #[clap(long)]
+        no_pull: bool,
+
+        /// Skip the `aida session end` worktree-cleanup step. Useful
+        /// when you want to inspect the post-merge state before the
+        /// worktree disappears.
+        #[clap(long)]
+        no_cleanup: bool,
+
+        /// Print the resolved sequence without executing any of it.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.

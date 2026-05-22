@@ -1,0 +1,468 @@
+//! `aida pr ship [<N>]` — collapse the recurring "push, create-if-needed,
+//! watch CI, squash-merge, pull, worktree-cleanup" recipe into one command
+//! (TASK-458). Sibling verb to `aida pr rebase` (TASK-308).
+//!
+//! This is the **direct-publish** path — human-pre-approved work that
+//! doesn't need the orchestrator's review phase. `aida queue work PR-N
+//! --auto-complete` (TASK-405) is the full-pipeline analogue; this
+//! command is intentionally smaller-scope.
+//!
+//! The module owns the **pure pieces** so they're unit-testable without
+//! `git`/`gh`: PR-number extraction from `gh pr create` URLs,
+//! commit-message → title/body derivation, dry-run plan formatting,
+//! activity-log JSONL formatting. The CLI handler that wires git/gh
+//! side-effects lives in `main.rs` next to `pr_rebase_handler` (mirrors
+//! `punt.rs` / `pr_rebase.rs`).
+//!
+//! trace:TASK-458 | ai:claude
+
+/// Flags / mode the handler resolves from the parsed clap subcommand.
+/// Kept as a value type so dry-run plan formatting can be exercised in
+/// unit tests without invoking the full handler.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrShipOptions {
+    /// `<N>` if the user passed one; otherwise we resolve the PR open
+    /// for the current branch (or create one).
+    pub pr_number: Option<u64>,
+    /// `--no-pull` — skip the post-merge `aida pull` step (used by
+    /// compositions that pull separately).
+    pub no_pull: bool,
+    /// `--no-cleanup` — skip the `aida session end` worktree-cleanup
+    /// step (useful when you want to inspect post-merge before
+    /// cleanup).
+    pub no_cleanup: bool,
+    /// `--dry-run` — print the resolved sequence and exit zero.
+    pub dry_run: bool,
+}
+
+/// One ordered step in the `aida pr ship` sequence. The variants drive
+/// both the dry-run plan output and the per-step status lines printed
+/// at run time. Mirrors the structure of the JSONL activity-log entries
+/// so a future `aida status` surface can render the same data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShipStep {
+    /// Resolve or create the PR. `create_if_needed = true` when no PR
+    /// number was supplied and the current branch has no open PR.
+    ResolvePr { create_if_needed: bool },
+    /// `gh pr checks <N> --watch`.
+    WatchCi,
+    /// `gh pr merge <N> --squash [--delete-branch]`.
+    Merge { delete_branch: bool },
+    /// `aida pull` from the main worktree (skipped when `--no-pull`).
+    Pull,
+    /// `aida session end <lease>` for the worktree the PR was authored
+    /// in (skipped when `--no-cleanup` or no lease is found).
+    EndLease,
+}
+
+/// Extract the PR number from `gh pr create`'s success output. `gh`
+/// prints the new PR's URL on the final non-empty stdout line, of the
+/// form `https://github.com/<owner>/<repo>/pull/<N>`. We accept any
+/// trailing slash or query string so the parser doesn't break on `gh`
+/// version drift.
+///
+/// Returns `None` when no `/pull/<N>` segment is present.
+pub fn parse_pr_number_from_create_output(stdout: &str) -> Option<u64> {
+    for line in stdout.lines().rev() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(idx) = trimmed.find("/pull/") {
+            let rest = &trimmed[idx + "/pull/".len()..];
+            let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if !digits.is_empty() {
+                if let Ok(n) = digits.parse::<u64>() {
+                    return Some(n);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Derive a PR title from a commit message: the first non-empty line,
+/// trimmed. Matches the `gh pr create --title "$(git log -1 --format=%s)"`
+/// pattern from the user's manual recipe.
+pub fn derive_pr_title_from_commit(commit_message: &str) -> String {
+    commit_message
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Derive a PR body from a commit message: everything after the first
+/// line (and its trailing blank line), with leading/trailing whitespace
+/// trimmed. Empty when the commit has no body. Matches `git log -1
+/// --format=%b`.
+pub fn derive_pr_body_from_commit(commit_message: &str) -> String {
+    let mut iter = commit_message.lines();
+    // Skip the subject line.
+    iter.next();
+    // Drop blank line(s) right after the subject, but keep blanks
+    // between body paragraphs.
+    let mut body: Vec<&str> = iter.collect();
+    while body.first().map(|l| l.trim().is_empty()).unwrap_or(false) {
+        body.remove(0);
+    }
+    while body.last().map(|l| l.trim().is_empty()).unwrap_or(false) {
+        body.pop();
+    }
+    body.join("\n")
+}
+
+/// Format the dry-run plan: one line per resolved step, in execution
+/// order, prefixed by an arrow. Pure so the contract-visible output is
+/// pinned by tests — drift here is what makes the CLI feel inconsistent
+/// (mirrors `pr_rebase::manual_recipe`).
+pub fn format_dry_run_plan(opts: &PrShipOptions, steps: &[ShipStep]) -> String {
+    let mut out = String::from("aida pr ship — dry-run plan:\n");
+    for (idx, step) in steps.iter().enumerate() {
+        let n = idx + 1;
+        let desc = match step {
+            ShipStep::ResolvePr {
+                create_if_needed: true,
+            } => "resolve PR for current branch (create one if none exists)".to_string(),
+            ShipStep::ResolvePr {
+                create_if_needed: false,
+            } => match opts.pr_number {
+                Some(n) => format!("use PR-{n} (explicit)"),
+                None => "resolve PR for current branch".to_string(),
+            },
+            ShipStep::WatchCi => "gh pr checks <N> --watch".to_string(),
+            ShipStep::Merge {
+                delete_branch: true,
+            } => "gh pr merge <N> --squash --delete-branch".to_string(),
+            ShipStep::Merge {
+                delete_branch: false,
+            } => "gh pr merge <N> --squash  (skip --delete-branch: branch in sibling worktree)"
+                .to_string(),
+            ShipStep::Pull => "aida pull (from main worktree)".to_string(),
+            ShipStep::EndLease => "aida session end <lease>".to_string(),
+        };
+        out.push_str(&format!("  {n}. {desc}\n"));
+    }
+    if opts.no_pull {
+        out.push_str("  · --no-pull: aida pull step skipped\n");
+    }
+    if opts.no_cleanup {
+        out.push_str("  · --no-cleanup: aida session end step skipped\n");
+    }
+    out
+}
+
+/// Outcome of one ship step, used for both the per-step status line on
+/// stderr and the JSONL activity-log entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StepOutcome {
+    Ok,
+    Skipped(String),
+    Failed(String),
+}
+
+/// Build a single JSONL activity-log entry (STORY-405 composes here).
+/// `now_iso` is injected so tests can pin the timestamp; production
+/// callers pass `chrono::Utc::now().to_rfc3339()`.
+pub fn format_activity_event(
+    now_iso: &str,
+    pr_number: Option<u64>,
+    step: &ShipStep,
+    outcome: &StepOutcome,
+) -> String {
+    let kind = match step {
+        ShipStep::ResolvePr { .. } => "pr-resolve",
+        ShipStep::WatchCi => "pr-watch-ci",
+        ShipStep::Merge { .. } => "pr-merge",
+        ShipStep::Pull => "pr-pull",
+        ShipStep::EndLease => "pr-cleanup",
+    };
+    let (status, detail) = match outcome {
+        StepOutcome::Ok => ("ok", String::new()),
+        StepOutcome::Skipped(reason) => ("skipped", reason.clone()),
+        StepOutcome::Failed(reason) => ("failed", reason.clone()),
+    };
+    let mut obj = serde_json::Map::new();
+    obj.insert(
+        "ts".to_string(),
+        serde_json::Value::String(now_iso.to_string()),
+    );
+    obj.insert(
+        "command".to_string(),
+        serde_json::Value::String("aida pr ship".to_string()),
+    );
+    obj.insert(
+        "step".to_string(),
+        serde_json::Value::String(kind.to_string()),
+    );
+    obj.insert(
+        "status".to_string(),
+        serde_json::Value::String(status.to_string()),
+    );
+    if let Some(n) = pr_number {
+        obj.insert("pr".to_string(), serde_json::Value::Number(n.into()));
+    }
+    if !detail.is_empty() {
+        obj.insert("detail".to_string(), serde_json::Value::String(detail));
+    }
+    serde_json::Value::Object(obj).to_string()
+}
+
+/// Recovery hint printed when a step fails. Keeps the failure message
+/// actionable rather than leaving the user to guess the next move.
+/// Pulled out so the hint text is contract-pinned by tests (mirrors
+/// `pr_rebase::manual_recipe`).
+pub fn recovery_hint(step: &ShipStep, pr_number: Option<u64>) -> String {
+    let n = pr_number
+        .map(|n| n.to_string())
+        .unwrap_or_else(|| "<N>".to_string());
+    match step {
+        ShipStep::ResolvePr { create_if_needed } => {
+            if *create_if_needed {
+                "Inspect the branch with `gh pr list --head <branch>` or run `gh pr create` \
+                 manually to debug the create failure."
+                    .to_string()
+            } else {
+                "Verify the PR number with `gh pr view <N>` and that it targets this repo."
+                    .to_string()
+            }
+        }
+        ShipStep::WatchCi => format!(
+            "CI failed or was cancelled. Inspect with `gh pr checks {n}` or \
+             `gh run list --branch <branch>`, fix, push, and re-run `aida pr ship`."
+        ),
+        ShipStep::Merge { .. } => format!(
+            "Merge step failed (may be transient — the retry wrapper already \
+             tried). Re-run `gh pr merge {n} --squash --delete-branch` once \
+             the cause is resolved."
+        ),
+        ShipStep::Pull => "`aida pull` failed. Run it from the main worktree directly to \
+             see the underlying git/store error; the merge already landed, \
+             so the auto-bump can be replayed via `aida db reconcile-status`."
+            .to_string(),
+        ShipStep::EndLease => "`aida session end` failed. End the lease manually with \
+             `aida session leases` + `aida session end <id>` after \
+             investigating."
+            .to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_pr_number_from_create_output_canonical() {
+        let out = "https://github.com/joemooney/aida/pull/458\n";
+        assert_eq!(parse_pr_number_from_create_output(out), Some(458));
+    }
+
+    #[test]
+    fn parse_pr_number_from_create_output_with_preamble() {
+        // `gh pr create` sometimes prints "Creating pull request..." lines first.
+        let out = "Creating pull request for task-458 into main in joemooney/aida\n\
+                   \n\
+                   https://github.com/joemooney/aida/pull/458\n";
+        assert_eq!(parse_pr_number_from_create_output(out), Some(458));
+    }
+
+    #[test]
+    fn parse_pr_number_from_create_output_trailing_whitespace() {
+        let out = "https://github.com/joemooney/aida/pull/123   \n";
+        assert_eq!(parse_pr_number_from_create_output(out), Some(123));
+    }
+
+    #[test]
+    fn parse_pr_number_from_create_output_query_string() {
+        // Defensive: gh occasionally appends a query string in some flows.
+        let out = "https://github.com/joemooney/aida/pull/77?foo=bar\n";
+        assert_eq!(parse_pr_number_from_create_output(out), Some(77));
+    }
+
+    #[test]
+    fn parse_pr_number_from_create_output_missing() {
+        let out = "no url here\n";
+        assert_eq!(parse_pr_number_from_create_output(out), None);
+    }
+
+    #[test]
+    fn parse_pr_number_from_create_output_empty() {
+        assert_eq!(parse_pr_number_from_create_output(""), None);
+    }
+
+    #[test]
+    fn derive_pr_title_takes_first_nonempty_line() {
+        let msg = "feat(pr): add aida pr ship (TASK-458)\n\nLong body here.\n";
+        assert_eq!(
+            derive_pr_title_from_commit(msg),
+            "feat(pr): add aida pr ship (TASK-458)"
+        );
+    }
+
+    #[test]
+    fn derive_pr_title_skips_leading_blank_lines() {
+        let msg = "\n\n  subject only after blanks  \nbody\n";
+        assert_eq!(
+            derive_pr_title_from_commit(msg),
+            "subject only after blanks"
+        );
+    }
+
+    #[test]
+    fn derive_pr_body_drops_subject_and_separator() {
+        let msg = "subject\n\nfirst body line\nsecond body line\n";
+        assert_eq!(
+            derive_pr_body_from_commit(msg),
+            "first body line\nsecond body line"
+        );
+    }
+
+    #[test]
+    fn derive_pr_body_empty_when_no_body() {
+        assert_eq!(derive_pr_body_from_commit("subject only\n"), "");
+    }
+
+    #[test]
+    fn derive_pr_body_preserves_internal_blank_lines() {
+        let msg = "subj\n\npara1\n\npara2\n";
+        assert_eq!(derive_pr_body_from_commit(msg), "para1\n\npara2");
+    }
+
+    #[test]
+    fn dry_run_plan_full_sequence() {
+        let opts = PrShipOptions {
+            pr_number: None,
+            no_pull: false,
+            no_cleanup: false,
+            dry_run: true,
+        };
+        let steps = vec![
+            ShipStep::ResolvePr {
+                create_if_needed: true,
+            },
+            ShipStep::WatchCi,
+            ShipStep::Merge {
+                delete_branch: true,
+            },
+            ShipStep::Pull,
+            ShipStep::EndLease,
+        ];
+        let plan = format_dry_run_plan(&opts, &steps);
+        assert!(plan.contains("1. resolve PR"), "{plan}");
+        assert!(plan.contains("2. gh pr checks"), "{plan}");
+        assert!(plan.contains("3. gh pr merge"), "{plan}");
+        assert!(plan.contains("4. aida pull"), "{plan}");
+        assert!(plan.contains("5. aida session end"), "{plan}");
+    }
+
+    #[test]
+    fn dry_run_plan_explicit_pr_number() {
+        let opts = PrShipOptions {
+            pr_number: Some(182),
+            no_pull: false,
+            no_cleanup: false,
+            dry_run: true,
+        };
+        let steps = vec![ShipStep::ResolvePr {
+            create_if_needed: false,
+        }];
+        let plan = format_dry_run_plan(&opts, &steps);
+        assert!(plan.contains("PR-182"), "{plan}");
+        assert!(plan.contains("explicit"), "{plan}");
+    }
+
+    #[test]
+    fn dry_run_plan_notes_skipped_flags() {
+        let opts = PrShipOptions {
+            pr_number: None,
+            no_pull: true,
+            no_cleanup: true,
+            dry_run: true,
+        };
+        let plan = format_dry_run_plan(&opts, &[]);
+        assert!(plan.contains("--no-pull"), "{plan}");
+        assert!(plan.contains("--no-cleanup"), "{plan}");
+    }
+
+    #[test]
+    fn dry_run_plan_worktree_aware_merge() {
+        let opts = PrShipOptions {
+            pr_number: Some(1),
+            no_pull: false,
+            no_cleanup: false,
+            dry_run: true,
+        };
+        let steps = vec![ShipStep::Merge {
+            delete_branch: false,
+        }];
+        let plan = format_dry_run_plan(&opts, &steps);
+        assert!(plan.contains("skip --delete-branch"), "{plan}");
+        assert!(plan.contains("sibling worktree"), "{plan}");
+    }
+
+    #[test]
+    fn activity_event_includes_step_status_and_pr() {
+        let ev = format_activity_event(
+            "2026-05-22T18:30:00Z",
+            Some(458),
+            &ShipStep::Merge {
+                delete_branch: true,
+            },
+            &StepOutcome::Ok,
+        );
+        // Must be valid JSON.
+        let v: serde_json::Value = serde_json::from_str(&ev).unwrap();
+        assert_eq!(v["command"], "aida pr ship");
+        assert_eq!(v["step"], "pr-merge");
+        assert_eq!(v["status"], "ok");
+        assert_eq!(v["pr"], 458);
+        assert_eq!(v["ts"], "2026-05-22T18:30:00Z");
+        assert!(v.get("detail").is_none(), "ok should not emit detail");
+    }
+
+    #[test]
+    fn activity_event_failed_carries_detail() {
+        let ev = format_activity_event(
+            "2026-05-22T18:30:00Z",
+            Some(7),
+            &ShipStep::WatchCi,
+            &StepOutcome::Failed("CI red on build job".into()),
+        );
+        let v: serde_json::Value = serde_json::from_str(&ev).unwrap();
+        assert_eq!(v["status"], "failed");
+        assert_eq!(v["detail"], "CI red on build job");
+    }
+
+    #[test]
+    fn activity_event_skipped_carries_reason() {
+        let ev = format_activity_event(
+            "2026-05-22T18:30:00Z",
+            None,
+            &ShipStep::Pull,
+            &StepOutcome::Skipped("--no-pull".into()),
+        );
+        let v: serde_json::Value = serde_json::from_str(&ev).unwrap();
+        assert_eq!(v["status"], "skipped");
+        assert_eq!(v["detail"], "--no-pull");
+        assert!(v.get("pr").is_none());
+    }
+
+    #[test]
+    fn recovery_hint_names_step_pr_and_action() {
+        let h = recovery_hint(
+            &ShipStep::Merge {
+                delete_branch: true,
+            },
+            Some(458),
+        );
+        assert!(h.contains("458"), "{h}");
+        assert!(h.contains("gh pr merge"), "{h}");
+    }
+
+    #[test]
+    fn recovery_hint_pull_mentions_reconcile() {
+        let h = recovery_hint(&ShipStep::Pull, Some(1));
+        assert!(h.contains("aida db reconcile-status"), "{h}");
+    }
+}
