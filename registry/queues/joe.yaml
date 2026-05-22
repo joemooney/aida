@@ -994,3 +994,9 @@
   note: Promoted from finding TASK-435 via `aida findings promote`
   added_at: 2026-05-22T01:06:38.459166077Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e45bc-451a-7260-8b42-e3cb2b2f390c
+  position: 213000
+  added_by: joe
+  added_at: 2026-05-22T01:24:47.338043696Z
+  for_role: implementer
