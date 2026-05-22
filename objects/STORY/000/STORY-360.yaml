@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:10:18.145352052Z
-modified_at: 2026-05-22T01:20:17.797677363Z
+modified_at: 2026-05-22T01:20:39.109680755Z
 req_type: Story
 tags:
 - advisor
@@ -78,3 +78,10 @@ comments:
   content: Commit aa6f962f references this requirement
   created_at: 2026-05-22T01:19:07.098635155Z
   modified_at: 2026-05-22T01:19:07.098635155Z
+- id: 019e4d45-2cb4-7172-9958-adf27a320f48
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-21-story-360-fork-from-live-advisor.md
+    filed 3 task(s): TASK-441, TASK-442, TASK-443
+  created_at: 2026-05-22T01:20:39.604629779Z
+  modified_at: 2026-05-22T01:20:39.604629779Z
