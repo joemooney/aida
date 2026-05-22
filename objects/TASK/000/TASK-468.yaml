@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:15:44.956487525Z
-modified_at: 2026-05-22T20:15:44.956487525Z
+modified_at: 2026-05-22T20:15:52.108379649Z
 req_type: Task
 tags:
 - from-followup
@@ -29,3 +29,8 @@ tags:
 - reviewer-phase
 - stale-base
 - test
+relationships:
+- rel_type: Child
+  target_id: 019e3682-d0e8-70d0-994b-5f16af39fcf5
+  created_at: 2026-05-22T20:15:52.108371397Z
+  created_by: joe
