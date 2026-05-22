@@ -193,7 +193,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:45:16.445271126Z
-modified_at: 2026-05-22T19:40:20.467226727Z
+modified_at: 2026-05-22T19:40:32.435294272Z
 req_type: Story
 tags:
 - alpha-gating
@@ -246,3 +246,28 @@ comments:
   content: 'TASK-282 consistency hook (criterion 7): the launcher''s bottom status strip (''direct-key hints + role + ambient state'') must apply the same scope/session/worktree redundancy rules the CLI statusline now uses. TASK-282 added two pure helpers in aida-cli/src/main.rs — sess_anchor_annotation() (hide [sess:] when the session anchor is redundant with @<scope>; show it on a child-spec @ or a batch suffix) and wt_divergence_segment() (show wt:<name> only when the worktree dir name diverges from the scope slug). When this status strip is built, reuse those rules — promote the helpers to aida-core if the strip needs them cross-crate. TASK-282 ships criteria 1-6 (CLI statusline); criterion 7 is forward-deferred to here because no TUI status strip renders these segments yet.'
   created_at: 2026-05-17T18:05:08.542125772Z
   modified_at: 2026-05-17T18:05:08.542125772Z
+- id: 019e5134-2533-7080-bc85-3f14c105edb2
+  author: joe
+  content: |-
+    ### TUI Prior-Art Study Summary (TASK-288)
+
+    Completed a comprehensive competitive analysis of 6 agent orchestrators:
+    1. **Claude Squad**: Tmux-backed TUI multiplexer with profile configurations.
+    2. **Crystal/Nimbalyst**: Electron/SQLite desktop app with a multi-instance terminal panel system.
+    3. **Vibe Kanban**: Visual board linking cards to worktree workspaces with inline diff comments.
+    4. **Vibe Tree**: Multi-platform desktop/PWA using adapter patterns and QR-code pairing.
+    5. **CMux**: Lightweight bash/zsh shell script worktree manager with bootstrapping setup hooks.
+    6. **Conductor**: Context-Driven Development plugin with git-versioned tracks, specs, and logical reverts.
+
+    ### Key Recommendations for STORY-244
+    *   **tmux Backgrounding**: Decouple terminal PTY execution from the UI shell using backgrounded tmux sessions to guarantee process survivability.
+    *   **Inline Diff Comments**: Implement an inline diff commenting interface to translate user feedback directly into the agent's active prompt context.
+    *   **Workspace Setup Hooks**: Support native project bootstrapping hooks (e.g. `.aida/setup`) to automatically configure environment variables and secrets on worktree creation.
+    *   **Git-Versioned Plans**: Keep specs and plans in human-readable, version-controlled markdown files to ensure a single, auditable source of truth.
+
+    ### AIDA Differentiation
+    Unlike the prior art which wraps isolated agent processes, AIDA models the entire codebase lifecycle as a program-addressable Directed Acyclic Graph (DAG) of specifications and tasks. Driven by substrate-level identity stability (the `.aida-store`), AIDA's agents perform autonomous peer-to-peer delegation and status synchronization directly through the coordination substrate.
+
+    *The full research document is available at: [tui-prior-art.md](file:///home/joe/ai/aida-task-288/docs/competitive-analysis/tui-prior-art.md)*
+  created_at: 2026-05-22T19:40:32.435294272Z
+  modified_at: 2026-05-22T19:40:32.435294272Z
