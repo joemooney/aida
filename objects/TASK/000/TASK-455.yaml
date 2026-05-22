@@ -10,7 +10,7 @@ description: |-
   Suggested fix: wrap the readline in a per-request deadline (e.g. `selectors.DefaultSelector` polling stdout with a 30s timeout, or move to non-blocking reads with a small loop). On deadline expiry, raise Failure with the partial stderr tail and terminate the child.
 
   Raised in review of PR-173: https://github.com/joemooney/aida/pull/173#issuecomment-4516542408
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
