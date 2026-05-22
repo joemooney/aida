@@ -25949,17 +25949,27 @@ mod auto_bump_done_tests {
         (tmp, project_root, store_path)
     }
 
-    /// Insert a Story spec at status=Done with the given spec_id into
+    /// Insert a Story spec at the given status with the given spec_id into
     /// the store and persist it. Returns the spec_id we used.
-    fn seed_done_spec(store_path: &std::path::Path, spec_id: &str) -> String {
+    fn seed_spec_at(store_path: &std::path::Path, spec_id: &str, status: &str) -> String {
         let storage = Storage::new(store_path.to_path_buf());
         let mut store = storage.load().unwrap_or_default();
         let mut req = aida_core::Requirement::new(format!("test-{}", spec_id), String::new());
         req.spec_id = Some(spec_id.to_string());
-        req.set_status_from_str("Done");
+        req.set_status_from_str(status);
         store.requirements.push(req);
         storage.save(&store).unwrap();
         spec_id.to_string()
+    }
+
+    /// Insert a Story spec at status=Done with the given spec_id into
+    /// the store and persist it. Returns the spec_id we used.
+    fn seed_done_spec(store_path: &std::path::Path, spec_id: &str) -> String {
+        seed_spec_at(store_path, spec_id, "Done")
+    }
+
+    fn has_flip(flips: &[AutoBumpFlip], spec_id: &str) -> bool {
+        flips.iter().any(|f| f.spec_id == spec_id)
     }
 
     /// STORY-86: the helper picks up a `(SPEC-ID)` from a commit subject
@@ -25991,8 +26001,8 @@ mod auto_bump_done_tests {
                 .unwrap();
 
         assert_eq!(flips.len(), 1, "exactly one spec should flip");
-        assert_eq!(flips[0].0, spec_id);
-        assert_eq!(flips[0].1, merge_sha);
+        assert_eq!(flips[0].spec_id, spec_id);
+        assert_eq!(flips[0].sha, merge_sha);
 
         let after = storage.load().unwrap();
         let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
@@ -26008,6 +26018,71 @@ mod auto_bump_done_tests {
             "completion_sha should match landing commit"
         );
         assert!(info.completed_at.is_some(), "completed_at should be set");
+    }
+
+    /// BUG-328: direct spec refs at Approved/Planned/InProgress now
+    /// graduate to Completed when their commit lands on main. Draft
+    /// preserves the approval signal; terminal statuses stay untouched.
+    /// trace:BUG-328 | ai:codex
+    #[test]
+    fn auto_bump_eligibility_matrix_for_direct_subject_refs() {
+        let cases = [
+            ("STORY-9011", "Approved", true),
+            ("STORY-9012", "Planned", true),
+            ("STORY-9013", "In Progress", true),
+            ("STORY-9014", "Done", true),
+            ("STORY-9015", "Draft", false),
+            ("STORY-9016", "Completed", false),
+            ("STORY-9017", "Rejected", false),
+        ];
+        for (spec_id, status, should_flip) in cases {
+            let (_tmp, project_root, store_path) = init_test_project();
+            seed_spec_at(&store_path, spec_id, status);
+
+            let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+            std::fs::write(project_root.join("file.txt"), format!("land {spec_id}\n")).unwrap();
+            run_git(&project_root, &["add", "file.txt"]);
+            run_git(
+                &project_root,
+                &["commit", "-m", &format!("feat: land ({})", spec_id)],
+            );
+
+            let storage = Storage::new(store_path.clone());
+            let flips =
+                auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                    .unwrap();
+            assert_eq!(
+                has_flip(&flips, spec_id),
+                should_flip,
+                "{status} eligibility mismatch; flips={flips:?}"
+            );
+
+            let after = storage.load().unwrap();
+            let req = after.get_requirement_by_spec_id(spec_id).unwrap();
+            if should_flip {
+                assert!(
+                    matches!(req.status, RequirementStatus::Completed),
+                    "{} should be Completed, was {:?}",
+                    status,
+                    req.status
+                );
+                assert!(
+                    req.implementation_info
+                        .as_ref()
+                        .and_then(|i| i.completed_at)
+                        .is_some(),
+                    "{} should stamp completed_at",
+                    status
+                );
+            } else {
+                assert_eq!(
+                    req.status.to_string(),
+                    status,
+                    "{} should not auto-bump",
+                    status
+                );
+            }
+        }
     }
 
     /// STORY-86: when current branch ≠ default branch, the helper is a
@@ -26171,7 +26246,7 @@ mod auto_bump_done_tests {
                 .unwrap();
 
         assert!(
-            flips.iter().any(|(id, _)| id == &review_id),
+            has_flip(&flips, &review_id),
             "review story should flip via PR-number match, got: {:?}",
             flips
         );
@@ -26321,7 +26396,7 @@ mod auto_bump_done_tests {
                 .unwrap();
 
         assert!(
-            flips.iter().any(|(id, _)| id == &review_id),
+            has_flip(&flips, &review_id),
             "review story should flip via the covers chain, got: {:?}",
             flips
         );
@@ -26428,7 +26503,7 @@ mod auto_bump_done_tests {
         // All three covered specs flip — none were in the commit subject.
         for spec in &covered {
             assert!(
-                flips.iter().any(|(id, _)| id == spec),
+                has_flip(&flips, spec),
                 "covered spec {} should flip via PR linkage, got: {:?}",
                 spec,
                 flips
@@ -26454,7 +26529,7 @@ mod auto_bump_done_tests {
         }
         // The review story itself also flips (BUG-102 path) — unchanged.
         assert!(
-            flips.iter().any(|(id, _)| id == &review_id),
+            has_flip(&flips, &review_id),
             "review story should still flip via the BUG-102 path"
         );
     }
@@ -26789,7 +26864,7 @@ mod auto_bump_done_tests {
             auto_bump_done_to_completed(&project_root, &store_path, None, &storage).unwrap();
 
         assert!(
-            flips.iter().any(|(id, _)| id == &spec_id),
+            has_flip(&flips, &spec_id),
             "BUG-94: HEAD~50 fallback should catch the merge, got: {:?}",
             flips
         );
@@ -26869,6 +26944,62 @@ mod auto_bump_done_tests {
         let info = req.implementation_info.as_ref().expect("info populated");
         assert!(info.completed_at.is_some());
         assert!(info.completion_sha.is_some());
+    }
+
+    /// BUG-328: `aida db reconcile-status` uses the same expanded direct
+    /// candidate rules as pull-time auto-bump.
+    /// trace:BUG-328 | ai:codex
+    #[test]
+    fn reconcile_status_eligibility_matrix_for_direct_subject_refs() {
+        let cases = [
+            ("STORY-9611", "Approved", true),
+            ("STORY-9612", "Planned", true),
+            ("STORY-9613", "In Progress", true),
+            ("STORY-9614", "Done", true),
+            ("STORY-9615", "Draft", false),
+            ("STORY-9616", "Completed", false),
+            ("STORY-9617", "Rejected", false),
+        ];
+        for (spec_id, status, should_flip) in cases {
+            let (_tmp, project_root, store_path) = init_test_project();
+            seed_spec_at(&store_path, spec_id, status);
+
+            std::fs::write(project_root.join("file.txt"), format!("land {spec_id}\n")).unwrap();
+            run_git(&project_root, &["add", "file.txt"]);
+            run_git(
+                &project_root,
+                &["commit", "-m", &format!("feat: reconcile ({})", spec_id)],
+            );
+
+            handle_db_reconcile_status(&store_path, None, Some(spec_id), false).unwrap();
+
+            let storage = Storage::new(store_path.clone());
+            let after = storage.load().unwrap();
+            let req = after.get_requirement_by_spec_id(spec_id).unwrap();
+            if should_flip {
+                assert!(
+                    matches!(req.status, RequirementStatus::Completed),
+                    "{} should be Completed, was {:?}",
+                    status,
+                    req.status
+                );
+                assert!(
+                    req.implementation_info
+                        .as_ref()
+                        .and_then(|i| i.completion_sha.as_deref())
+                        .is_some(),
+                    "{} should stamp completion_sha",
+                    status
+                );
+            } else {
+                assert_eq!(
+                    req.status.to_string(),
+                    status,
+                    "{} should not reconcile-bump",
+                    status
+                );
+            }
+        }
     }
 
     /// TASK-226: --dry-run reports the planned flips without writing.
@@ -36083,6 +36214,37 @@ fn auto_bump_enabled() -> bool {
     }
 }
 
+/// BUG-328: a commit on the default branch is authoritative evidence that
+/// approved/planned/in-flight/done work shipped. Draft preserves the approval
+/// signal; terminal statuses stay terminal.
+/// trace:BUG-328 | ai:codex
+fn auto_bump_eligible_status(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Approved
+            | RequirementStatus::Planned
+            | RequirementStatus::InProgress
+            | RequirementStatus::Done
+    )
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct AutoBumpFlip {
+    spec_id: String,
+    sha: String,
+    prior_status: RequirementStatus,
+}
+
+impl AutoBumpFlip {
+    fn new(spec_id: String, sha: String, prior_status: RequirementStatus) -> Self {
+        Self {
+            spec_id,
+            sha,
+            prior_status,
+        }
+    }
+}
+
 /// BUG-219 / TASK-246: collect review stories stranded short of
 /// `Completed` because their PR merged before the review lifecycle ever
 /// finished. `/aida-pr` auto-queues a `Review PR-N` story at `Approved`
@@ -36105,7 +36267,7 @@ fn auto_bump_enabled() -> bool {
 fn collect_stale_review_story_flips(
     store: &aida_core::RequirementsStore,
     pr_to_sha: &std::collections::BTreeMap<u64, String>,
-    flips: &[(String, String)],
+    flips: &[AutoBumpFlip],
 ) -> Vec<(String, String, u64, RequirementStatus)> {
     let mut out: Vec<(String, String, u64, RequirementStatus)> = Vec::new();
     for (pr_n, sha) in pr_to_sha {
@@ -36125,7 +36287,7 @@ fn collect_stale_review_story_flips(
         let Some(spec_id) = review_story.spec_id.as_deref() else {
             continue;
         };
-        if flips.iter().any(|(id, _)| id == spec_id) {
+        if flips.iter().any(|f| f.spec_id == spec_id) {
             continue;
         }
         if out.iter().any(|(id, ..)| id == spec_id) {
@@ -36191,9 +36353,9 @@ fn stale_review_audit_comment(prior: &RequirementStatus, pr_n: u64) -> String {
 /// in that case. trace:BUG-113 | ai:claude
 fn collect_covers_completed_review_flips(
     store: &aida_core::RequirementsStore,
-    flips: &[(String, String)],
-) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = Vec::new();
+    flips: &[AutoBumpFlip],
+) -> Vec<AutoBumpFlip> {
+    let mut out: Vec<AutoBumpFlip> = Vec::new();
     for review in &store.requirements {
         if !matches!(review.status, RequirementStatus::Done) {
             continue;
@@ -36207,15 +36369,15 @@ fn collect_covers_completed_review_flips(
         let Some(spec_id) = review.spec_id.as_deref() else {
             continue;
         };
-        if flips.iter().any(|(id, _)| id == spec_id) {
+        if flips.iter().any(|f| f.spec_id == spec_id) {
             continue;
         }
-        if out.iter().any(|(id, _)| id == spec_id) {
+        if out.iter().any(|f| f.spec_id == spec_id) {
             continue;
         }
         // First covered spec that has merged (Completed in the store, or
         // being completed in this pass) graduates the review story.
-        let mut flip: Option<(String, String)> = None;
+        let mut flip: Option<AutoBumpFlip> = None;
         for rel in &review.relationships {
             if !matches!(
                 &rel.rel_type,
@@ -36229,8 +36391,8 @@ fn collect_covers_completed_review_flips(
             let pending_sha = covered.spec_id.as_deref().and_then(|cid| {
                 flips
                     .iter()
-                    .find(|(id, _)| id == cid)
-                    .map(|(_, sha)| sha.clone())
+                    .find(|f| f.spec_id == cid)
+                    .map(|f| f.sha.clone())
             });
             if !matches!(covered.status, RequirementStatus::Completed) && pending_sha.is_none() {
                 continue;
@@ -36241,7 +36403,11 @@ fn collect_covers_completed_review_flips(
                 .and_then(|i| i.completion_sha.clone())
                 .or(pending_sha)
                 .unwrap_or_default();
-            flip = Some((spec_id.to_string(), sha));
+            flip = Some(AutoBumpFlip::new(
+                spec_id.to_string(),
+                sha,
+                review.status.clone(),
+            ));
             break;
         }
         if let Some(f) = flip {
@@ -36251,9 +36417,10 @@ fn collect_covers_completed_review_flips(
     out
 }
 
-/// STORY-86: scan the **code repo's** default branch for newly-landed
-/// commits whose subject references a spec, and flip any spec currently
-/// at `Done` to `Completed`. Stamps `implementation_info.completed_at`
+/// STORY-86 / BUG-328: scan the **code repo's** default branch for newly-landed
+/// commits whose subject references a spec, and flip any eligible spec
+/// (Approved, Planned, InProgress, Done) to `Completed`. Stamps
+/// `implementation_info.completed_at`
 /// and `implementation_info.completion_sha` so post-merge `aida show`
 /// shows when (and from which commit) the spec actually shipped.
 ///
@@ -36264,7 +36431,7 @@ fn collect_covers_completed_review_flips(
 /// - `pre_sha`: HEAD of the code repo BEFORE the pull. `None` means
 ///   "no snapshot was taken" — fall back to scanning HEAD~50..HEAD so
 ///   first-pull / shallow-clone cases still pick something up. The
-///   `status == Done` guard below prevents us from over-flipping.
+///   eligibility guard below prevents us from over-flipping.
 /// - `storage`: the orphan-store backend, used for the atomic write.
 ///
 /// Semantics:
@@ -36272,11 +36439,11 @@ fn collect_covers_completed_review_flips(
 ///   (`origin/HEAD` if set, else `main` or `master`). On a feature
 ///   branch a `pull` shouldn't graduate work — that happens at PR
 ///   merge time, when the merge commit lands on default.
-/// - Idempotent: only flips specs currently at `Done`. Anything else
-///   (Completed, Rejected, InProgress, …) is left untouched.
+/// - Idempotent: only flips specs at an approved-to-ship status. Draft
+///   preserves the approval signal; Completed/Rejected stay terminal.
 /// - Honors `AIDA_AUTO_BUMP=false` via the caller.
-/// - Returns a `Vec<(spec_id, commit_sha)>` of flips for the caller
-///   to summarize. Empty vec = nothing to print.
+/// - Returns a `Vec<AutoBumpFlip>` of flips for the caller to summarize.
+///   Empty vec = nothing to print.
 ///
 /// trace:STORY-86 | ai:claude
 fn auto_bump_done_to_completed(
@@ -36284,7 +36451,7 @@ fn auto_bump_done_to_completed(
     store_path: &std::path::Path,
     pre_sha: Option<&str>,
     storage: &Storage,
-) -> Result<Vec<(String, String)>> {
+) -> Result<Vec<AutoBumpFlip>> {
     use aida_core::git_ops;
     use std::process::Command as ProcessCommand;
 
@@ -36325,7 +36492,7 @@ fn auto_bump_done_to_completed(
     // fewer than 50 commits — `aida db sync --pull` would then silently
     // skip the bump on any small/young project. Use `--max-count=50 HEAD`
     // instead, which degrades gracefully when history is shorter. The
-    // `status == Done` guard inside step 4 keeps over-broad windows from
+    // eligibility guard inside step 4 keeps over-broad windows from
     // double-firing.
     let mut log_args: Vec<String> = vec!["log".to_string(), "--pretty=format:%H%x09%s".to_string()];
     match pre_sha {
@@ -36377,17 +36544,21 @@ fn auto_bump_done_to_completed(
         return Ok(Vec::new());
     }
 
-    // ── Step 4: figure out which candidates are actually at Done ──
+    // ── Step 4: figure out which candidates are eligible to ship ──
     let store = storage.load()?;
-    let mut flips: Vec<(String, String)> = Vec::new();
+    let mut flips: Vec<AutoBumpFlip> = Vec::new();
     for (spec_id, sha) in &candidates {
         let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
             continue;
         };
-        if !matches!(req.status, RequirementStatus::Done) {
+        if !auto_bump_eligible_status(&req.status) {
             continue;
         }
-        flips.push((spec_id.clone(), sha.clone()));
+        flips.push(AutoBumpFlip::new(
+            spec_id.clone(),
+            sha.clone(),
+            req.status.clone(),
+        ));
     }
     // BUG-102: also scan the store for Done-status review stories whose
     // title encodes a PR number that just merged. Composes the two
@@ -36407,10 +36578,14 @@ fn auto_bump_done_to_completed(
             let Some(spec_id) = req.spec_id.as_deref() else {
                 continue;
             };
-            if flips.iter().any(|(id, _)| id == spec_id) {
+            if flips.iter().any(|f| f.spec_id == spec_id) {
                 continue;
             }
-            flips.push((spec_id.to_string(), sha.clone()));
+            flips.push(AutoBumpFlip::new(
+                spec_id.to_string(),
+                sha.clone(),
+                req.status.clone(),
+            ));
         }
     }
     // BUG-106: a cluster-mode PR squash-merges with the PR TITLE as the
@@ -36442,16 +36617,20 @@ fn auto_bump_done_to_completed(
                 else {
                     continue;
                 };
-                if !matches!(covered.status, RequirementStatus::Done) {
+                if !auto_bump_eligible_status(&covered.status) {
                     continue;
                 }
                 let Some(spec_id) = covered.spec_id.as_deref() else {
                     continue;
                 };
-                if flips.iter().any(|(id, _)| id == spec_id) {
+                if flips.iter().any(|f| f.spec_id == spec_id) {
                     continue;
                 }
-                flips.push((spec_id.to_string(), sha.clone()));
+                flips.push(AutoBumpFlip::new(
+                    spec_id.to_string(),
+                    sha.clone(),
+                    covered.status.clone(),
+                ));
             }
         }
     }
@@ -36463,8 +36642,8 @@ fn auto_bump_done_to_completed(
     // chain graduates it without depending on `pr_to_sha`. Runs after the
     // candidate + BUG-102 + BUG-106 blocks so a covered spec flipped in
     // this same pass is already visible in `flips`. trace:BUG-113 | ai:claude
-    for (sid, sha) in collect_covers_completed_review_flips(&store, &flips) {
-        flips.push((sid, sha));
+    for flip in collect_covers_completed_review_flips(&store, &flips) {
+        flips.push(flip);
     }
 
     // TASK-246 / BUG-219: a review story whose PR merged before the
@@ -36489,15 +36668,15 @@ fn auto_bump_done_to_completed(
     let flips_for_write = flips.clone();
     let stale_for_write = stale_review_flips.clone();
     storage.update_atomically(|s| {
-        for (spec_id, sha) in &flips_for_write {
+        for flip in &flips_for_write {
             if let Some(r) = s
                 .requirements
                 .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+                .find(|r| r.spec_id.as_deref() == Some(flip.spec_id.as_str()))
             {
                 // Re-check inside the atomic window — concurrent edits
-                // may have moved it off Done.
-                if !matches!(r.status, RequirementStatus::Done) {
+                // may have moved it off an eligible status.
+                if !auto_bump_eligible_status(&r.status) {
                     continue;
                 }
                 r.set_status_from_str("Completed");
@@ -36509,8 +36688,8 @@ fn auto_bump_done_to_completed(
                 // BUG-113: a covers-chain flip can carry an empty sha when
                 // the covered spec was completed manually (no merge sha) —
                 // don't stamp `Some("")`.
-                if info.completion_sha.is_none() && !sha.is_empty() {
-                    info.completion_sha = Some(sha.clone());
+                if info.completion_sha.is_none() && !flip.sha.is_empty() {
+                    info.completion_sha = Some(flip.sha.clone());
                 }
             }
         }
@@ -36553,11 +36732,11 @@ fn auto_bump_done_to_completed(
     // the inside-the-atomic-window re-check. Cheapest correct answer:
     // re-load and intersect. In the common case the lists are equal.
     let after = storage.load().unwrap_or_else(|_| store.clone());
-    let confirmed: Vec<(String, String)> = flips
+    let confirmed: Vec<AutoBumpFlip> = flips
         .into_iter()
-        .filter(|(spec_id, _)| {
+        .filter(|flip| {
             after
-                .get_requirement_by_spec_id(spec_id)
+                .get_requirement_by_spec_id(&flip.spec_id)
                 .map(|r| matches!(r.status, RequirementStatus::Completed))
                 .unwrap_or(false)
         })
@@ -36600,8 +36779,8 @@ fn auto_bump_done_to_completed(
     }
 
     // ── Step 6: activity log ──
-    for (spec_id, _) in &confirmed {
-        record_role_activity(spec_id, "auto-completed");
+    for flip in &confirmed {
+        record_role_activity(&flip.spec_id, "auto-completed");
     }
 
     // ── Step 7: plan followups ── TASK-96: file followup TASKs for each
@@ -36609,8 +36788,8 @@ fn auto_bump_done_to_completed(
     // idempotent via the followups marker, so specs already handled at
     // `aida queue done` time are skipped. Best-effort.
     // trace:TASK-96 | ai:claude
-    for (spec_id, _) in &confirmed {
-        let _ = extract_plan_followups(storage, project_root, spec_id, spec_id, false);
+    for flip in &confirmed {
+        let _ = extract_plan_followups(storage, project_root, &flip.spec_id, &flip.spec_id, false);
     }
 
     // Suppress unused-variable warning when the helper is called on a
@@ -36729,7 +36908,7 @@ fn handle_db_reconcile_status(
 
     // Build the planned-flip list. For --spec, we narrow to that one
     // candidate (matched against either spec_id or review-story title).
-    let mut flips: Vec<(String, String)> = Vec::new();
+    let mut flips: Vec<AutoBumpFlip> = Vec::new();
     for (spec_id, sha) in &candidates {
         if let Some(target) = spec {
             if !spec_id.eq_ignore_ascii_case(target) {
@@ -36739,10 +36918,14 @@ fn handle_db_reconcile_status(
         let Some(req) = store.get_requirement_by_spec_id(spec_id) else {
             continue;
         };
-        if !matches!(req.status, RequirementStatus::Done) {
+        if !auto_bump_eligible_status(&req.status) {
             continue;
         }
-        flips.push((spec_id.clone(), sha.clone()));
+        flips.push(AutoBumpFlip::new(
+            spec_id.clone(),
+            sha.clone(),
+            req.status.clone(),
+        ));
     }
     if !pr_to_sha.is_empty() {
         for req in &store.requirements {
@@ -36763,10 +36946,14 @@ fn handle_db_reconcile_status(
                     continue;
                 }
             }
-            if flips.iter().any(|(id, _)| id == sid) {
+            if flips.iter().any(|f| f.spec_id == sid) {
                 continue;
             }
-            flips.push((sid.to_string(), sha.clone()));
+            flips.push(AutoBumpFlip::new(
+                sid.to_string(),
+                sha.clone(),
+                req.status.clone(),
+            ));
         }
     }
 
@@ -36791,7 +36978,7 @@ fn handle_db_reconcile_status(
     // trace:BUG-113 | ai:claude
     let mut covers_completed_flips = collect_covers_completed_review_flips(&store, &flips);
     if let Some(target) = spec {
-        covers_completed_flips.retain(|(sid, _)| sid.eq_ignore_ascii_case(target));
+        covers_completed_flips.retain(|f| f.spec_id.eq_ignore_ascii_case(target));
     }
     for flip in covers_completed_flips {
         flips.push(flip);
@@ -36801,13 +36988,15 @@ fn handle_db_reconcile_status(
         match spec {
             Some(s) => println!(
                 "No eligible flips for {}. Either it's not at a status the \
-                 replay can graduate (Done, or an Approved/In-Progress review \
-                 story), or no commit in the scan range references it.",
+                 replay can graduate (Approved, Planned, In Progress, Done, \
+                 or an Approved/In-Progress review story), or no commit in \
+                 the scan range references it.",
                 s
             ),
             None => println!(
-                "No eligible flips. All Done specs in the store either have no \
-                 referencing commit in the scan range, or are already Completed."
+                "No eligible flips. All eligible specs in the store either have \
+                 no referencing commit in the scan range, or are already \
+                 Completed/Rejected/Draft."
             ),
         }
         return Ok(());
@@ -36816,14 +37005,22 @@ fn handle_db_reconcile_status(
     if dry_run {
         if !flips.is_empty() {
             println!(
-                "{} would flip {} Done spec{} → Completed:",
+                "{} would flip {} spec{} → Completed:",
                 "dry-run:".dimmed(),
                 flips.len(),
                 if flips.len() == 1 { "" } else { "s" }
             );
-            for (sid, sha) in &flips {
-                let short = if sha.len() >= 7 { &sha[..7] } else { sha };
-                println!("  {} ({})", sid.bold(), short.dimmed());
+            for flip in &flips {
+                let short = if flip.sha.len() >= 7 {
+                    &flip.sha[..7]
+                } else {
+                    &flip.sha
+                };
+                println!(
+                    "  {} {}",
+                    flip.spec_id.bold(),
+                    format!("(was {}, commit {})", flip.prior_status, short).dimmed()
+                );
             }
         }
         if !stale_review_flips.is_empty() {
@@ -36855,13 +37052,13 @@ fn handle_db_reconcile_status(
     let flips_for_write = flips.clone();
     let stale_for_write = stale_review_flips.clone();
     storage.update_atomically(|s| {
-        for (spec_id, sha) in &flips_for_write {
+        for flip in &flips_for_write {
             if let Some(r) = s
                 .requirements
                 .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+                .find(|r| r.spec_id.as_deref() == Some(flip.spec_id.as_str()))
             {
-                if !matches!(r.status, RequirementStatus::Done) {
+                if !auto_bump_eligible_status(&r.status) {
                     continue;
                 }
                 r.set_status_from_str("Completed");
@@ -36873,8 +37070,8 @@ fn handle_db_reconcile_status(
                 // BUG-113: a covers-chain flip can carry an empty sha when
                 // the covered spec was completed manually (no merge sha) —
                 // don't stamp `Some("")`.
-                if info.completion_sha.is_none() && !sha.is_empty() {
-                    info.completion_sha = Some(sha.clone());
+                if info.completion_sha.is_none() && !flip.sha.is_empty() {
+                    info.completion_sha = Some(flip.sha.clone());
                 }
             }
         }
@@ -36912,11 +37109,11 @@ fn handle_db_reconcile_status(
     })?;
 
     let after = storage.load().unwrap_or_else(|_| store.clone());
-    let confirmed: Vec<(String, String)> = flips
+    let confirmed: Vec<AutoBumpFlip> = flips
         .into_iter()
-        .filter(|(sid, _)| {
+        .filter(|flip| {
             after
-                .get_requirement_by_spec_id(sid)
+                .get_requirement_by_spec_id(&flip.spec_id)
                 .map(|r| matches!(r.status, RequirementStatus::Completed))
                 .unwrap_or(false)
         })
@@ -36931,8 +37128,8 @@ fn handle_db_reconcile_status(
         })
         .collect();
 
-    for (spec_id, _) in &confirmed {
-        record_role_activity(spec_id, "reconcile-status");
+    for flip in &confirmed {
+        record_role_activity(&flip.spec_id, "reconcile-status");
     }
     for (spec_id, _, _, _) in &confirmed_stale {
         record_role_activity(spec_id, "reconcile-status");
@@ -36959,26 +37156,51 @@ fn handle_db_reconcile_status(
     Ok(())
 }
 
-/// STORY-86: print the auto-bump summary line after a successful pull.
-/// Stays out of the way when nothing flipped. trace:STORY-86 | ai:claude
-fn print_auto_bump_summary(flips: &[(String, String)]) {
+/// STORY-86 / BUG-328: print the auto-bump summary line after a successful
+/// pull/reconcile. Stays out of the way when nothing flipped.
+/// trace:STORY-86 BUG-328 | ai:claude,codex
+fn print_auto_bump_summary(flips: &[AutoBumpFlip]) {
     if flips.is_empty() {
         return;
     }
     let n = flips.len();
+    if n == 1 {
+        let flip = &flips[0];
+        let short = if flip.sha.len() >= 7 {
+            &flip.sha[..7]
+        } else {
+            &flip.sha
+        };
+        println!(
+            "  {} 1 spec → {}: {} {}",
+            "auto-bumped".cyan(),
+            "Completed".green().bold(),
+            flip.spec_id.bold(),
+            format!("(was {}, commit {})", flip.prior_status, short).dimmed()
+        );
+        return;
+    }
     let plural = if n == 1 { "" } else { "s" };
     println!(
-        "  {} {} {} → {}",
+        "  {} {} spec{} → {}",
         "auto-bumped".cyan(),
         n,
-        format!("Done spec{}", plural).bold(),
+        plural,
         "Completed".green().bold()
     );
     // Show the first 5 spec IDs so the user can see what landed.
     const PREVIEW: usize = 5;
-    for (spec_id, sha) in flips.iter().take(PREVIEW) {
-        let short = if sha.len() >= 7 { &sha[..7] } else { sha };
-        println!("    {} ({})", spec_id.bold(), short.dimmed());
+    for flip in flips.iter().take(PREVIEW) {
+        let short = if flip.sha.len() >= 7 {
+            &flip.sha[..7]
+        } else {
+            &flip.sha
+        };
+        println!(
+            "    {} {}",
+            flip.spec_id.bold(),
+            format!("(was {}, commit {})", flip.prior_status, short).dimmed()
+        );
     }
     if n > PREVIEW {
         println!("    {} {} more", "…".dimmed(), n - PREVIEW);
