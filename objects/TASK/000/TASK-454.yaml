@@ -1,0 +1,22 @@
+id: 019e4ea5-4f0f-7a30-90fe-6d8d3cd17cab
+spec_id: TASK-454
+agreed_id: TASK-454
+title: 'MCP stdio test: assert spec-ID parse picks expected ID (not first regex match)'
+description: |-
+  tests/test_mcp_stdio.py:228 and :304 use `re.search(r'\\b([A-Z]+(?:-[A-Z0-9]+)?-\\d+(?:-\\d+)?)\\b', stdout)` to extract the newly-created spec ID from `aida add` / `aida show` stdout. The regex grabs the FIRST match. Today's output starts with the new ID (`Created TASK-NNN: ...`), so the assumption holds, but the test does not assert it — any future change to `aida add`'s output that introduces an earlier all-caps identifier (banner, hint line referencing META-001, etc.) would silently parse the wrong ID and the downstream show/comment/update assertions would fail in confusing ways.
+
+  Suggested fix: either tighten the regex to anchor on the line prefix `aida add` actually emits (e.g. `^(?:Created|Added)\\s+([A-Z]+-\\d+)`), or assert that the parsed ID is the only valid candidate in the stdout (e.g. `assert len(set(matches)) == 1`).
+
+  Raised in review of PR-173: https://github.com/joemooney/aida/pull/173#issuecomment-4516542408
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T07:45:17.071208198Z
+modified_at: 2026-05-22T07:45:17.071208198Z
+req_type: Task
+tags:
+- from-review:PR-173
+- mcp
+- severity:minor
+- test
