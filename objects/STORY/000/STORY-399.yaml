@@ -1,0 +1,45 @@
+id: 019e4e59-3620-7eb3-bc27-f4c8fa4f31a7
+spec_id: STORY-399
+agreed_id: STORY-399
+title: 'MCP tools: emit structuredContent matching declared outputSchema (Path B follow-up to TASK-440)'
+description: |-
+  ## Background
+
+  TASK-440 (Path A) ships descriptor-level `outputSchema` metadata on the 21 MCP tools but preserves the text-envelope tool-response behavior unchanged. This story is the Path B follow-up: reshape the tool implementations to also return `structuredContent` matching the declared `outputSchema`.
+
+  Per MCP spec, when a server declares `outputSchema`, the tool response SHOULD include `structuredContent` matching that schema. Path A's descriptor-only approach is technically out-of-line with the spec but pragmatically safe for current consumers (Claude Code consumes the text envelope). This story closes that gap when needed.
+
+  ## Acceptance
+
+  - For each of the 21 MCP tools, the response includes a `structuredContent` field whose shape matches the tool's declared `outputSchema` (shipped in TASK-440).
+  - Existing text-envelope behavior is preserved: clients that consume the text envelope today must continue to work unchanged. Either:
+    - (a) BOTH text envelope AND structuredContent are emitted in the same response (additive — safest backward-compat), OR
+    - (b) Behavior is gated by a client capability negotiation (more correct per MCP spec but more complex)
+  - Pick (a) for v1 unless evidence shows it's incompatible with some MCP client; document the decision.
+  - Tests cover both legacy text-consumers and schema-consumers seeing the same logical result.
+  - Backward-compat tested against Claude Code (the only current consumer) — no regression.
+  - Triggered/validated by Codex (or another schema-consuming MCP client) successfully invoking the tools and consuming the structuredContent — see STORY-398.
+
+  ## Why this is its own story
+
+  - 21 tool-response-shape changes is materially larger than TASK-440's "cosmetic" descriptor work
+  - Backward-compatibility decision is non-trivial and warrants its own review
+  - Triggered only when a non-text-consuming MCP client (Codex, etc.) is actually attached — i.e., STORY-398's outcome will tell us whether this is urgent or can wait
+
+  ## Origin
+
+  Filed 2026-05-22 as the explicit Path B follow-up that the advisor's TASK-440 verdict prescribed. Composes with STORY-398 (Codex empirical roundtrip) — STORY-398's verdict tells us whether Path B is needed now or later.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T06:22:09.952652268Z
+modified_at: 2026-05-22T06:22:09.952652268Z
+req_type: Story
+tags:
+- agent-agnostic
+- backward-compatibility
+- codex
+- mcp
+- structured-content
+- task-440-followup
