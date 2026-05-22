@@ -2660,6 +2660,18 @@ pub enum QueueCommand {
         // trace:TASK-229 | ai:claude
         #[clap(long, value_name = "NAME", conflicts_with_all = ["id", "type_filter"])]
         batch: Option<String>,
+        /// Ordered multi-batch auto-complete drain. Comma-separated names are
+        /// drained left-to-right, exhausting one `batch:NAME` before the next.
+        /// Equivalent comma-separated values are also accepted by `--batch`
+        /// when paired with `--auto-complete`.
+        // trace:TASK-310 | ai:codex
+        #[clap(
+            long,
+            value_name = "A,B,C",
+            requires = "auto_complete",
+            conflicts_with_all = ["id", "batch", "type_filter", "dry_run"]
+        )]
+        batches: Option<String>,
         /// With `--batch`: print the matching queue entries in pickup
         /// order and exit without starting a session. Useful for
         /// auditing the batch before draining.
