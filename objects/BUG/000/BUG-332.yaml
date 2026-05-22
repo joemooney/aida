@@ -1,0 +1,68 @@
+id: 019e5101-dbb6-76b0-97b6-dd8b7c939e05
+spec_id: BUG-332
+agreed_id: BUG-332
+title: 'MCP add_requirement: reject (or auto-normalize) non-canonical SPEC-N IDs; enforce type-prefix taxonomy'
+description: |-
+  ## Problem
+
+  Multiple sibling agents (Codex + Antigravity) have filed specs via MCP \`add_requirement\` using \`SPEC-N\` as the ID prefix instead of the canonical type prefix (\`TASK-N\`, \`BUG-N\`, \`STORY-N\`, etc.). The MCP server accepts these without warning, producing irregular IDs in the spec graph.
+
+  Concrete instances 2026-05-22:
+
+  - Codex filed **SPEC-398** (should have been TASK-N) — alias table cleanup
+  - Antigravity filed **SPEC-399** (should have been TASK-N) — Phase 1 completion finding
+  - Antigravity filed **SPEC-402** (should have been TASK-N) — Phase 2 test fixture
+  - Antigravity filed **SPEC-403** (should have been TASK-N or FINDING-N) — Phase 2 finding
+  - Antigravity filed **SPEC-404** (should have been TASK-N) — Phase 2 verdict
+
+  All five are kept for audit trail (don't rename), but the recurring convention violation suggests the MCP surface should enforce or auto-normalize.
+
+  ## Why this matters
+
+  - Spec ID conventions are a project-wide invariant (per CLAUDE.md type taxonomy). Inconsistent IDs make graph queries + filtering noisier.
+  - New agents joining via the cross-agent-onboarding doc default to canonical conventions; the MCP surface should help, not let them fail silently.
+  - The convention is documented in the cross-agent brief but not enforced in the substrate.
+
+  ## Approach
+
+  Two options, pick one:
+
+  ### A. Reject non-canonical prefixes (strict)
+
+  \`add_requirement\` returns an error if the \`type\` argument is provided but the auto-assigned ID wouldn't get the canonical prefix. This means: the dispenser, when assigning the ID, looks up the type from input and assigns \`TASK-N\` / \`BUG-N\` / etc accordingly. If it can't determine the type, error out with a helpful message naming the type taxonomy.
+
+  ### B. Auto-normalize (lenient)
+
+  The agent's input \`type\` is authoritative; the dispenser always assigns the canonical prefix based on the type. Agents can't accidentally use SPEC-N because they don't pick the prefix at all.
+
+  **Recommendation: B (auto-normalize).** Lower friction for agents that misunderstand the convention; equivalent end result; preserves capacity for the dispenser to change prefix conventions in the future without breaking external agents.
+
+  ## Acceptance
+
+  - Per option B: MCP \`add_requirement\` always assigns IDs with the canonical prefix derived from the \`type\` argument. The agent cannot pick the prefix.
+  - If \`type\` is missing or invalid, return a helpful error naming the valid taxonomy.
+  - Existing irregular IDs (SPEC-398 through SPEC-404 + any earlier) are NOT renamed — they keep their audit-trail identity.
+  - Document the auto-normalization behavior in the MCP tool's outputSchema description.
+  - Regression test: synthetic agent passes \`type: task\` + no ID; assert returned ID matches \`TASK-\\d+\` pattern.
+
+  ## Composes with
+
+  - **STORY-82 / EPIC-27** — MCP modernization (consistency across the 21 tools).
+  - **`docs/agents/cross-agent-onboarding.md`** — the convention is documented; this BUG enforces it at the substrate layer.
+
+  ## Origin
+
+  Multi-agent dogfood 2026-05-22: five instances of SPEC-N ID irregularity across two sibling agents in one session. Pattern strength = recurring; cheap structural fix.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T18:45:36.822858761Z
+modified_at: 2026-05-22T18:45:36.822858761Z
+req_type: Bug
+tags:
+- convention
+- from-self-test
+- id-prefix
+- mcp
+- multi-agent
