@@ -1,0 +1,23 @@
+id: 019e517c-6199-7823-ab95-8207b278cc19
+spec_id: TASK-476
+agreed_id: TASK-476
+title: 'docs/multi-node.md: replace line-ref to current_user_id with symbol-ref'
+description: |-
+  `docs/multi-node.md:32` cites `aida-cli/src/main.rs:47443`, but the actual definition of `fn current_user_id` is at line 47449 (6-line drift, likely from churn between drafting and PR open).
+
+  CLAUDE.md actively prefers symbol-refs over line-refs for exactly this drift reason — the symbol name is already given inline (`current_user_id`), so the line number adds no value and just rots.
+
+  Fix: drop the `:47443` suffix and leave the symbol-ref alone, OR refresh the line number. Symbol-ref-only is the more durable form.
+
+  Raised in review of PR-207: https://github.com/joemooney/aida/pull/207#issuecomment-4522658109
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:59:26.489156710Z
+modified_at: 2026-05-22T20:59:26.489156710Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-207
+- severity:cosmetic
