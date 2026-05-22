@@ -3,12 +3,12 @@ spec_id: TASK-444
 agreed_id: TASK-444
 title: Surface `[block_allocation]` knobs in `aida db block status` output so users see their effective threshold/size at a glance
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T03:00:13.416588455Z
-modified_at: 2026-05-22T05:16:12.515546272Z
+modified_at: 2026-05-22T05:21:48.061987340Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -22,3 +22,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-22T05:12:43.627849764Z
   implemented_by: joe
+  completed_at: 2026-05-22T05:21:48.061987340Z
+  completion_sha: 26ce88bd61e63a11b42f74c38750d819c4a9bd8e
