@@ -73,12 +73,12 @@ description: |-
   User question 2026-05-22 during the Codex MCP docs PR: *"this is a recurring command pattern. I have to manually cut-n-paste replacing the \`<new-PR#>\`. It feels like there is an aida command there if we end up doing this frequently?"*
 
   The pattern has hit dozens of times in active development. Recurring + bounded + composes with existing verbs → worth a thin wrapper.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:53:16.340454234Z
-modified_at: 2026-05-22T18:19:44.079890716Z
+modified_at: 2026-05-22T19:27:14.683320086Z
 req_type: Task
 tags:
 - cli-ux
@@ -110,3 +110,7 @@ comments:
   content: Commit b3a7bbbe references this requirement
   created_at: 2026-05-22T18:19:30.814130689Z
   modified_at: 2026-05-22T18:19:30.814130689Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-22T19:27:14.683320086Z
+  completion_sha: 87473b48b693a157edb26e8adff5ff49f82a3ce7
