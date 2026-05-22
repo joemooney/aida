@@ -2500,9 +2500,10 @@ pub enum QueueCommand {
         /// Skip confirmation
         #[clap(long, short = 'y')]
         yes: bool,
-        // BUG-269: bypass the commits-without-PR pre-check. Use when the
-        // spec was implemented on a different branch that's already merged,
-        // so the local branch has no PR by design. Logs the bypass.
+        /// Bypass the commits-without-PR pre-check. Use only when the spec
+        /// was implemented on a different branch that is already merged,
+        /// so the local branch has no PR by design. Logs the bypass.
+        // trace:BUG-269 TASK-423 | ai:claude
         #[clap(long)]
         force: bool,
         // BUG-285: bypass the commits-without-PR pre-check (same effect as
