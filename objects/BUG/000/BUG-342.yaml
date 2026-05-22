@@ -1,0 +1,67 @@
+id: 019e518f-5530-7781-a885-2b79f44ccf83
+spec_id: BUG-342
+agreed_id: BUG-342
+title: 'BUG-280 recurrence: skill-template AskUserQuestion ban is paper enforcement; need programmatic gate'
+description: |-
+  Empirical recurrence 2026-05-22 14:15: master's autonomous drain of TASK-339 failed at phase 3 (reviewer). The headless reviewer:
+
+  1. Generated a clean unambiguous PASS verdict
+  2. Posted it as a PR comment on PR-208 (`<!-- kind:confirmation -->` marker present)
+  3. Then called AskUserQuestion ("Merge PR-208?")
+  4. Session bailed before writing the verdict file
+  5. Orchestrator phase 3 reported failure
+  6. PR-208 had to be manually merged
+
+  ## The skill template's existing ban
+
+  `aida-core/templates/skills/aida-review.md:61-85` (lines 61-85) explicitly states:
+
+  > ## Headless mode contract (`AIDA_HEADLESS=1`) — trace:BUG-280
+  > 2. AskUserQuestion is forbidden. Every `kind:confirmation` prompt
+  >    auto-resolves to the verdict-file's default value with no AskUserQuestion
+  >    call. Calling AskUserQuestion under `--no-human=both` is permission-denied
+
+  The reviewer ignored this. Reasoned past it. Same as the BUG-249 / BUG-269 ninth-spec failure documented in `docs/writeups/2026-05-20-autonomy-keystone-day.md`: **skill-template instructions cannot enforce invariants under --no-human=both. They can only describe them.**
+
+  ## The structural fix (per BUG-269's meta-principle)
+
+  When a behavior must be GUARANTEED under `--no-human=both`, ship a **programmatic gate**, not a skill-template instruction.
+
+  Three implementation paths (ranked by ops cost):
+
+  A. **Permission-denial intercept**: when AIDA_HEADLESS=1, configure the spawned `claude -p` subprocess to refuse AskUserQuestion calls at the permission layer. The model's tool call returns a permission-denied error instead of waiting for human input. The model's next reasoning step has to find a non-interactive path (write the verdict file, exit).
+
+  B. **JSONL log post-processing**: orchestrator scans the reviewer's headless log; if AskUserQuestion was called AND no verdict file was written, auto-resolve to the default verdict (PASS if the comment's verdict line says PASS; else fail). This converts the verdict to readable inference instead of bailing.
+
+  C. **Skill-template programmatic check**: add a Step in `/aida-review` that polls a sentinel file / env var BEFORE the confirmation step, hard-blocking the confirmation by structured branch (not instruction). This is closer to paper enforcement and likely fails the same way — NOT recommended.
+
+  RECOMMEND: A. Permission-denial is the cleanest programmatic gate; matches AIDA's existing 'force --permission-mode bypassPermissions' pattern but inverts it for AskUserQuestion specifically. Spec-tier: probably needs sketch-first because it touches the headless subprocess spawn surface (orchestrator behavior).
+
+  ## Acceptance
+
+  - [ ] Under `AIDA_HEADLESS=1`, AskUserQuestion calls do NOT pause the session waiting for human input
+  - [ ] Reviewer's auto-merge confirmation under headless auto-resolves to the verdict file's default (PASS verdict → write verdict + exit cleanly)
+  - [ ] No skill-template wording change required (existing ban is fine prose; just non-enforcing)
+  - [ ] Regression test: simulated headless review session that includes an AskUserQuestion call → verdict file is still written → phase 3 succeeds
+  - [ ] Compose with: `feedback_self_test_via_dogfood_merge`, BUG-269 pattern
+
+  ## Recurse-fix opportunity
+
+  Per `feedback_self_test_via_dogfood_merge`, this fix should ship via the orchestrator the fix patches. The headless reviewer's next merge cycle is the validation. BUT: per `feedback_reliability_fixes_use_keyboard_not_drain`, reliability fixes for the autonomy keystone itself ship best at the keyboard with --zen + advisor watching, since the broken keystone could catch the fix mid-flight. Master's call.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T21:20:08.496657542Z
+modified_at: 2026-05-22T21:20:08.496657542Z
+req_type: Bug
+tags:
+- aida-review
+- askuserquestion
+- bug-269-pattern
+- bug-280-recurrence
+- from-self-test
+- headless
+- phase-3
+- programmatic-gate
+- reviewer
