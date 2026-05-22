@@ -100,7 +100,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:49:19.704186488Z
-modified_at: 2026-05-21T14:49:46.548237796Z
+modified_at: 2026-05-22T17:45:19.396035135Z
 req_type: Story
 tags:
 - attention
@@ -134,3 +134,67 @@ comments:
     User context for the addition: the findings backlog has been triaged 2-3 times today and re-grew each time (16 promotes/dismisses tonight). It's a recurring attention-state that today's `aida status` is silent on — the user has to remember to run `aida findings list` explicitly. Compose with STORY-385's other 'needs attention' categories.
   created_at: 2026-05-21T14:49:46.548237796Z
   modified_at: 2026-05-21T14:49:46.548237796Z
+- id: 019e50ca-a924-7d62-b118-3d875bf555f1
+  author: joe
+  content: |-
+    Acceptance refinement 2026-05-22 from user question — `aida status` should surface ALL worktrees + their state + obsolescence signals + outstanding/in-progress PRs.
+
+    ## Worktree section
+
+    For each entry in `git worktree list`, display:
+
+    - Path
+    - Branch checked out
+    - Spec it's tied to (derived from: matching active session lease, branch name pattern, or git log of recent commits)
+    - Lease state (active live / dormant / none)
+    - Working tree state (clean / dirty with N modified files)
+    - Commits ahead of origin/main (N)
+    - Whether a PR is open for the branch (link + state)
+    - **Obsolescence verdict** (see below)
+
+    ## Obsolescence detection logic
+
+    A worktree is **TIED TO ONGOING WORK** if any of:
+    - Its lease is active with a live PID
+    - Working tree has uncommitted modifications
+    - Branch has commits ahead of origin/main AND no merged PR for those commits
+    - An orchestrator drain (`aida drain status`) is currently in that worktree
+
+    A worktree is **LIKELY OBSOLETE** if all of:
+    - Lease is dormant (no live process matching recorded PID) OR no lease at all
+    - Working tree is clean (no uncommitted modifications)
+    - Branch's commits have all been merged to origin/main (or branch has no commits ahead) OR the branch is gone
+
+    Show the verdict with a clear marker (`✓ in flight`, `⚠ obsolete — `aida session end <lease>` (or `git worktree remove <path>` if no lease)`).
+
+    ## PR section
+
+    Two sub-views:
+
+    **Open PRs** (`gh pr list --state open`):
+    - PR number + title
+    - Branch + worktree (if any)
+    - CI status (pending / pass / fail)
+    - Mergeability (mergeable / conflicting)
+    - Linked spec (derived from PR title or branch)
+    - Recommended next step per PR state (e.g., "watch CI then merge", "rebase needed", "reviewer verdict pending")
+
+    **Recently merged PRs** (last N — default 5):
+    - Just the merge ledger for quick orientation
+
+    ## Why surface both worktrees AND PRs together
+
+    A worktree, a lease, and an open PR are three lenses on the same logical 'unit of work in flight.' The user shouldn't have to mental-merge across `git worktree list`, `aida session leases`, and `gh pr list` to know what's pending. `aida status` becomes the single pane.
+
+    ## Composes with
+
+    - STORY-307 (worktree-as-substrate-too is what makes this readable) - already shipped via TASK-358's auto-cleanup mechanism
+    - BUG-307 (dormant lease auto-clean) - reduces the 'likely obsolete' count proactively
+    - TASK-458 (`aida pr ship`) - the activity-log entries this story surfaces are written by TASK-458's wrapper
+    - STORY-405 (advisor-activity log) - additional 'who's doing what right now' surface; together with this story it gives full pipeline visibility
+
+    ## Empirical motivation 2026-05-22
+
+    User has been navigating `git worktree list`, `aida session leases --all`, and `gh pr list` separately across many recovery + multi-agent isolation flows. The mental merge is real friction; surfacing once in `aida status` would have saved minutes per recovery.
+  created_at: 2026-05-22T17:45:19.396035135Z
+  modified_at: 2026-05-22T17:45:19.396035135Z
