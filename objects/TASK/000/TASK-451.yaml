@@ -26,12 +26,12 @@ description: |-
   - TASK-440 — once outputSchema descriptors land, the test should advance from "fails on missing outputSchema" to "store/tool roundtrip checks."
   - STORY-398 — these tests are the empirical-roundtrip's automation hook.
   - BUG-310 — likely surfaced by these tests (MCP/CLI consistency).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:43:46.101249412Z
-modified_at: 2026-05-22T08:15:26.798132538Z
+modified_at: 2026-05-22T15:56:27.515956841Z
 req_type: Task
 tags:
 - empirical
@@ -66,3 +66,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-22T07:37:39.899692687Z
   implemented_by: joe
+  completed_at: 2026-05-22T15:56:27.515956841Z
+  completion_sha: 8b6028a46828a701bde010fc6921f5440cfd2714
