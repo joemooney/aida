@@ -44,7 +44,7 @@ description: |-
 
   - SPEC-410 (Codex's filing — branch-commit-drops-ID case)
   - TASK-472 (cross-agent-onboarding clarification — explicitly document the `(SPEC-ID)` trailer convention for non-Claude-Code agents)
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
