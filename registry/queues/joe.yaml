@@ -1094,9 +1094,3 @@
   note: Promoted from finding TASK-454 via `aida findings promote`
   added_at: 2026-05-22T15:46:43.930651103Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 019e505c-e6cb-7e92-862f-403299f56ccd
-  position: 235000
-  added_by: joe
-  added_at: 2026-05-22T16:07:27.560307158Z
-  for_role: implementer
