@@ -1,0 +1,101 @@
+id: 019e508e-3731-7f61-9fc7-a79b3c6bd1d4
+spec_id: STORY-407
+agreed_id: STORY-407
+title: Empirical integration — connect Antigravity CLI 1.0.1 to AIDA's MCP coordination surface (N=2 agent validation)
+description: |-
+  ## Strategic context
+
+  STORY-398 is integrating Codex with AIDA's MCP server as N=1 evidence of the agent-agnostic substrate claim. **Antigravity CLI (Google's coding agent, currently 1.0.1) is the second test agent** — installed 2026-05-22. User note: it appears less reliable than Claude Code or Codex.
+
+  That's strategically useful, not a problem:
+
+  - **N=2 validates the agent-agnostic positioning more rigorously than N=1.** If docs/agents/codex-mcp-setup.md (STORY-398's deliverable) doesn't generalize to Antigravity, the docs need work — that's empirical signal about what "supported agent" actually means.
+  - **Lower-reliability agent stress-tests AIDA's substrate** against vendor-different assumptions, partial-tool-support, weaker schema discipline, etc. The places AIDA bends to accommodate an unreliable agent become the places the substrate is robust.
+  - **Tiered-support model** can emerge from real data, not speculation: which agents are "verified" / "experimental" / "unsupported" needs N>=2 to be meaningful.
+
+  ## Approach
+
+  Mirror STORY-398's structure but tightened for reliability-aware exploration. Start Antigravity on the safest operations + expand as it proves out. Use STORY-398's eventual setup-doc template as a starting point; if it doesn't apply cleanly to Antigravity, the gap IS the substrate's adoption-surface gap.
+
+  ## Acceptance
+
+  ### Phase 1 — connect + read-only operations (safest)
+
+  - Connect Antigravity CLI 1.0.1 to \`aida mcp-serve\`. Document the steps in \`docs/agents/antigravity-mcp-setup.md\` (mirror docs/agents/codex-mcp-setup.md's format when it lands).
+  - Verify Antigravity can list AIDA's 21 tools via tools/list. Compare to the canonical tool list.
+  - Run read-only roundtrip: \`list_requirements\`, \`show_requirement\`, \`list_punts\`, \`list_findings\`, \`list_active_leases\`, \`list_directives\`, \`list_features\`. Each output should match what \`aida list\` / \`aida show\` produces from CLI.
+  - Document any tool-discovery or schema-handling differences from Codex.
+
+  ### Phase 2 — bounded write operations (small acceptance + verifiable)
+
+  - \`file_finding\` from Antigravity — verify via \`aida findings list\`. Confirm tag canonicalization is correct (the TASK-437 fix should hold across agents).
+  - \`add_comment\` on an existing spec — verify via \`aida show <id>\`.
+  - \`add_requirement\` for a clearly-bounded spec (e.g., a test fixture or doc TODO). Verify visibility via \`aida list\`.
+
+  ### Phase 3 — coordination roundtrip (if Phase 1+2 are clean)
+
+  - \`post_punt\` + \`resolve_punt\` roundtrip — same shape as Codex's STORY-398 test.
+  - \`claim_task\` + \`release_task\` (single-agent, not concurrent — TASK-438 still in flight).
+  - \`post_directive\` if applicable.
+
+  ### Reliability characterization
+
+  Throughout phases 1-3, document:
+
+  - Tools that fail / produce unexpected output / get retried
+  - Schema-discovery issues (does Antigravity use outputSchema effectively?)
+  - Error-handling differences (does Antigravity handle text errors gracefully, or does it need STORY-401's structured shape sooner?)
+  - Resource consumption patterns (how heavy is each call?)
+  - Failure modes specific to Antigravity (timeout patterns, hallucination patterns, tool-misuse patterns)
+
+  This documentation feeds into:
+
+  ### Phase 4 — "Supported agent" tier model
+
+  File a follow-up STORY (not in this story's scope) defining:
+  - **Verified** — full coordination tool set works reliably; safe for unsupervised drains; tested against this story's roundtrip
+  - **Experimental** — read operations work; bounded writes work with manual verification; not yet drain-safe
+  - **Unsupported** — known to malfunction; documented to inform user choice
+
+  Antigravity 1.0.1's tier classification IS the output of this story.
+
+  ### Documentation deliverables
+
+  - \`docs/agents/antigravity-mcp-setup.md\` — practical setup
+  - \`docs/agents/antigravity-mcp-verdict.md\` — verdict + tier classification + evidence
+  - Update \`docs/agents/cross-agent-onboarding.md\` to mention Antigravity alongside Codex / Cursor / etc.
+  - Scaffolded \`.antigravity/\` directory in \`aida init\` (per the \`.codex/\` pattern) — file as separate TASK if non-trivial
+
+  ## Out of scope
+
+  - Making Antigravity as reliable as Claude Code or Codex. Out of our control; we adapt AIDA's substrate to be MORE robust to agent variation, not the reverse.
+  - Cross-agent task handoff (Antigravity → Codex → Claude Code workflows). That's SPIKE-10 territory.
+  - Building Antigravity-specific tools. Generic MCP surface should suffice; Antigravity-specific accommodation goes in the setup doc.
+
+  ## Composes with
+
+  - **STORY-398** — Codex empirical roundtrip. This story's setup doc should follow STORY-398's template; the verdict's reliability characterization adds the second data point that makes "supported agent" tier-model coherent.
+  - **TASK-438** (TOCTOU race) — concurrent claim_task; defer concurrent Antigravity + Claude Code claims until TASK-438 ships.
+  - **STORY-401** (structured error shapes) — Antigravity's reliability profile likely surfaces error-handling differences that motivate STORY-401 sooner.
+  - Memory \`feedback_one_master_advisor_until_subsystems\` — Antigravity is a sibling agent; same governance applies (architecture changes → master sign-off; bounded acceptance work autonomous).
+
+  ## Origin
+
+  User direction 2026-05-22: *"I have installed Antigravity CLI 1.0.1 - it appears to be less reliable than claude code or codex cli. But we should enlist its help so that it can perform some simple tasks and be a supported agent for projects using aida"*
+
+  The lower-reliability framing is a feature: gives controlled exploration scope, and motivates the supported-agent tier model that's been implicit but never formalized.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T16:39:18.065512796Z
+modified_at: 2026-05-22T16:39:18.065512796Z
+req_type: Story
+tags:
+- agent-agnostic
+- antigravity
+- from-user-direction
+- mcp
+- multi-agent-dogfood
+- verification
+- wedge
