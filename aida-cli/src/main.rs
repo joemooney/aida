@@ -3801,7 +3801,13 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          .aida/*\n\
          \n\
          # Tracked exceptions: project-level config that lives in the repo.\n\
-         !.aida/config.toml\n";
+         !.aida/config.toml\n\
+         \n\
+         # Per-project skill extensions are tracked project assets, not\n\
+         # runtime state — they live under .claude/ which is tracked by\n\
+         # default. Do not add ignore rules for .claude/skills/local/ or\n\
+         # any <skill>.local.md file; the whole team should pick them up on\n\
+         # `git pull`. See docs/extending-skills.md. trace:STORY-305 | ai:claude\n";
 
     if !gitignore_path.exists() {
         std::fs::write(&gitignore_path, format!("{}{}", store_entry, runtime_entry))?;
