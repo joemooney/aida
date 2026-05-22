@@ -1,0 +1,71 @@
+id: 019e50a0-3033-73e3-a964-3fcfc2b22b9d
+spec_id: BUG-328
+agreed_id: BUG-328
+title: 'aida pull auto-bump: also promote Approved-with-merged-PR specs to Completed (not just Done specs)'
+description: |-
+  ## Pattern
+
+  The auto-bump scanner currently only promotes Done → Completed when a commit referencing the spec lands on main. **It does NOT promote Approved → Completed**, even when:
+
+  - A commit referencing the spec is merged
+  - The PR is closed (merged or otherwise)
+  - The acceptance criteria are clearly met by the merged work
+
+  This produces a recurring manual-flip-required pattern any time an implementer skips the \`aida queue done <SPEC>\` step before exiting — which happens whenever:
+
+  - A drain stalls mid-flow and the implementer never reaches queue-done
+  - A docs PR is authored without going through the queue-work orchestrator (e.g., Codex writing docs and committing via PR directly — STORY-398 today)
+  - A human authors a fix in a sibling worktree without `aida queue done` (e.g., my manual fmt-fix earlier; the BUG-307/310/311 recovery)
+
+  Today's session alone hit this 5+ times:
+
+  - TASK-422 (chicken-and-egg fix; PR merged, stayed In-Progress until manual flip)
+  - BUG-307, BUG-310, BUG-311 (3-way recovery cascade; all PR-merged, all stayed In-Progress until manual flip)
+  - STORY-398 (Codex's docs PR; merged, stayed Approved until manual flip)
+
+  ## Proposed fix
+
+  The auto-bump scanner expands its promotion rules:
+
+  | Current status | Commit lands on main | New status |
+  |---|---|---|
+  | Done | yes | Completed (current behavior) |
+  | **In-Progress** | **yes** | **Completed** (new — implementer started work, work shipped) |
+  | **Approved** | **yes** | **Completed** (new — work shipped without queue-work orchestration) |
+
+  The signal "commit referencing the spec landed on main" is strong enough to promote regardless of the pre-merge status. The pre-merge status (Draft/Approved/Done/In-Progress/etc.) was a workflow signal; once the work has merged, the spec's actual lifecycle position is "Completed."
+
+  ## Acceptance
+
+  - \`aida pull\`'s auto-bump (and \`aida db reconcile-status\`) treats any non-terminal status (Draft, Approved, Planned, In-Progress, Done) as eligible for promotion to Completed when a referencing commit is found on main.
+  - Terminal statuses (Completed, Rejected) are NOT re-promoted.
+  - The promotion logs which transition fired: \`auto-bumped 1 spec → Completed: STORY-398 (was Approved, commit 3f7ab28f)\`.
+  - Regression tests cover each starting-status case.
+  - \`aida db reconcile-status\` gains the same expanded rules.
+
+  ## Why this is worth fixing now
+
+  The friction is recurring + costs ~1 minute per occurrence in manual recovery. It's also a SUBSTRATE GAP that affects how confidently the user can trust the post-pull status view. Today's 5 occurrences mean ~5 minutes lost + 5 separate user moments of "wait, why is this still Approved?" — a real adoption-readiness friction.
+
+  ## Composes with
+
+  - **BUG-270** — the format-recognition gap in the scanner (recognizing 'SPEC-ID:' prefix). Same general theme: auto-bump scanner is conservative; should be more aggressive.
+  - **BUG-238** (shipped) — \`aida edit --status completed\` now triggers auto-followups parse; this BUG ensures the auto-bump path also gets that side-effect.
+  - **STORY-385** (\`aida status --cleanup\`) — would surface "specs with merged PRs not yet at Completed" until this BUG ships.
+  - **BUG-285** — the queue-done gate now blocks status flips without an open PR; this BUG complements it on the auto-bump side.
+
+  ## Origin
+
+  User observation 2026-05-22 after STORY-398's docs PR merged but spec stayed at Approved: *the auto-bump scanner only promotes Done → Completed.* Five occurrences today across the autonomy keystone + MCP work; the friction is recurring + bounded + worth closing.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T16:58:55.923304698Z
+modified_at: 2026-05-22T16:58:55.923304698Z
+req_type: Bug
+tags:
+- auto-bump
+- from-self-test
+- reconcile-status
+- recurring-pattern
