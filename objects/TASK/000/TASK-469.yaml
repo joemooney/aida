@@ -6,7 +6,7 @@ description: |-
   PR-202 deep-pass found that classify_stale_base in aida-cli/src/pr_rebase.rs has no unit test exercising multi-file overlap. Single-file overlap is covered by classify_stale_base_with_overlap, but the .filter().cloned() collection of N>1 matching files only reached by inspection. Add a test with pr_files = [a.rs, b.rs, c.rs] and base_files = [a.rs, b.rs, d.rs] expecting overlap_files = [a.rs, b.rs] (order preserved per base_files iteration).
 
   Raised in review of PR-202: https://github.com/joemooney/aida/pull/202#issuecomment-4522481404
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
