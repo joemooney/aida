@@ -259,6 +259,41 @@ pub fn merge_args(pr_number: u64, delete_branch: bool, subject: Option<&str>) ->
     args
 }
 
+/// True when `gh pr checks <N>` output indicates at least one CI check
+/// exists. The startup path treats "no checks yet" separately from
+/// "checks ran and failed" so `aida pr ship` does not bail during the
+/// small GitHub Actions registration window after a push.
+// trace:BUG-344 | ai:codex
+pub fn gh_pr_checks_output_has_registered_checks(stdout: &str, stderr: &str) -> bool {
+    let combined = format!("{stdout}\n{stderr}");
+    let trimmed = combined.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.contains("no checks reported")
+        || lower.contains("no checks found")
+        || lower.contains("no check runs")
+        || lower.contains("no checks have been reported")
+    {
+        return false;
+    }
+    true
+}
+
+/// True when a failing `gh pr checks <N>` invocation is the expected
+/// "checks not registered yet" state rather than a real gh/auth/network
+/// failure.
+// trace:BUG-344 | ai:codex
+pub fn gh_pr_checks_output_is_unregistered(stdout: &str, stderr: &str) -> bool {
+    let combined = format!("{stdout}\n{stderr}");
+    let lower = combined.to_ascii_lowercase();
+    lower.contains("no checks reported")
+        || lower.contains("no checks found")
+        || lower.contains("no check runs")
+        || lower.contains("no checks have been reported")
+}
+
 /// Format the dry-run plan: one line per resolved step, in execution
 /// order, prefixed by an arrow. Pure so the contract-visible output is
 /// pinned by tests — drift here is what makes the CLI feel inconsistent
@@ -592,6 +627,31 @@ mod tests {
             args,
             vec!["pr", "merge", "197", "--squash", "--delete-branch"]
         );
+    }
+
+    #[test]
+    fn gh_checks_empty_output_means_not_registered_yet() {
+        assert!(!gh_pr_checks_output_has_registered_checks("", ""));
+    }
+
+    #[test]
+    fn gh_checks_no_checks_message_means_not_registered_yet() {
+        let stderr = "no checks reported on the 'bug-344' branch";
+        assert!(!gh_pr_checks_output_has_registered_checks("", stderr));
+        assert!(gh_pr_checks_output_is_unregistered("", stderr));
+    }
+
+    #[test]
+    fn gh_checks_pending_line_means_registered() {
+        let stdout = "build\tpending\t0\thttps://github.com/joemooney/aida/actions/runs/1\n";
+        assert!(gh_pr_checks_output_has_registered_checks(stdout, ""));
+        assert!(!gh_pr_checks_output_is_unregistered(stdout, ""));
+    }
+
+    #[test]
+    fn gh_checks_failed_line_still_means_registered() {
+        let stdout = "test\tfail\t1\thttps://github.com/joemooney/aida/actions/runs/2\n";
+        assert!(gh_pr_checks_output_has_registered_checks(stdout, ""));
     }
 
     #[test]
