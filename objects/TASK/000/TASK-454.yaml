@@ -8,7 +8,7 @@ description: |-
   Suggested fix: either tighten the regex to anchor on the line prefix `aida add` actually emits (e.g. `^(?:Created|Added)\\s+([A-Z]+-\\d+)`), or assert that the parsed ID is the only valid candidate in the stdout (e.g. `assert len(set(matches)) == 1`).
 
   Raised in review of PR-173: https://github.com/joemooney/aida/pull/173#issuecomment-4516542408
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
