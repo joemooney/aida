@@ -3,12 +3,12 @@ spec_id: BUG-333
 agreed_id: BUG-333
 title: 'MCP post_directive: clarify args parameter is JSON array of strings (not bare string)'
 description: 'Per Antigravity Phase 3 verification 2026-05-22: `post_directive` accepts an `args` parameter that expects a JSON array of strings (e.g., `["arg1"]`). Antigravity discovered that passing a singular string parses to an empty list, silently. The tool''s inputSchema description should explicitly indicate the array-of-strings expectation, with a usage example. Acceptance: inputSchema describes the type as `array<string>` with an example; reject non-array inputs with a clear error rather than parsing to empty. Composes with BUG-332 (MCP convention enforcement) and STORY-401 (stable error shapes).'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:52:53.031684248Z
-modified_at: 2026-05-22T18:52:53.031684248Z
+modified_at: 2026-05-22T21:31:47.701953025Z
 req_type: Bug
 tags:
 - docs
