@@ -316,8 +316,8 @@ fn print_log_list(entries: &[LogEntry], color: bool) -> Result<()> {
     }
     let mut stdout = std::io::stdout().lock();
     let header = format!(
-        "{:<8} {:<14} {:<26} {:>10}  {}",
-        "KIND", "SPEC", "MTIME (local)", "SIZE", "FILE"
+        "{:<8} {:<14} {:<12} {:<26} {:>10}  {}",
+        "KIND", "SPEC", "LEASE", "MTIME (local)", "SIZE", "FILE"
     );
     if color {
         writeln!(stdout, "{}", header.bold())?;
@@ -328,11 +328,18 @@ fn print_log_list(entries: &[LogEntry], color: bool) -> Result<()> {
         let mtime: DateTime<chrono::Local> = entry.mtime.into();
         let size = format_size(entry.size);
         let spec = entry.spec.as_deref().unwrap_or("-");
+        let lease = entry.lease.as_deref().unwrap_or("-");
+        let lease_truncated = if lease.len() > 12 {
+            &lease[..12]
+        } else {
+            lease
+        };
         writeln!(
             stdout,
-            "{:<8} {:<14} {:<26} {:>10}  {}",
+            "{:<8} {:<14} {:<12} {:<26} {:>10}  {}",
             entry.kind,
             spec,
+            lease_truncated,
             mtime.format("%Y-%m-%d %H:%M:%S"),
             size,
             entry.filename
