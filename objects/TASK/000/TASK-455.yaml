@@ -1,0 +1,25 @@
+id: 019e4ea5-671b-7ea1-9f53-2e43ea14e377
+spec_id: TASK-455
+agreed_id: TASK-455
+title: 'MCP stdio test: add readline deadline to McpClient.request so a hung mcp-serve fails fast'
+description: |-
+  tests/test_mcp_stdio.py McpClient.request calls `self.proc.stdout.readline()` with no timeout. If `aida mcp-serve` hangs after consuming the JSON-RPC request (no response written), the test blocks indefinitely until the GitHub Actions job-level timeout (~6h default) reaps it. `McpClient.close()`'s terminate-then-kill only fires on the normal exit path.
+
+  For local debugging this means a regression that hangs the server produces no useful output for minutes-to-hours; in CI it burns runner minutes before timing out.
+
+  Suggested fix: wrap the readline in a per-request deadline (e.g. `selectors.DefaultSelector` polling stdout with a 30s timeout, or move to non-blocking reads with a small loop). On deadline expiry, raise Failure with the partial stderr tail and terminate the child.
+
+  Raised in review of PR-173: https://github.com/joemooney/aida/pull/173#issuecomment-4516542408
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T07:45:23.227867644Z
+modified_at: 2026-05-22T07:45:23.227867644Z
+req_type: Task
+tags:
+- from-review:PR-173
+- mcp
+- robustness
+- severity:minor
+- test
