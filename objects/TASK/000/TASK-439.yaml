@@ -10,12 +10,12 @@ description: |
   Severity is minor because (a) punt responses are written by the advisor tier (not under contention) and (b) JSON parsers reject truncated JSON cleanly. But the failure mode — orchestrator reads "valid JSON missing a field" because of a fortuitous truncation — would be hard to diagnose.
 
   Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:11.141458341Z
-modified_at: 2026-05-22T06:09:20.236702763Z
+modified_at: 2026-05-22T06:23:42.250001779Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -45,3 +45,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-22T03:59:39.765054528Z
   implemented_by: joe
+  completed_at: 2026-05-22T06:23:42.250001779Z
+  completion_sha: 8afc72015f721d8731a346bd71eb3006aa6b3603
