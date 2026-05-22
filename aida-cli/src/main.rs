@@ -19112,6 +19112,13 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         pr_number,
         if delete_branch { ", delete-branch" } else { "" }
     );
+    let explicit_squash_subject = derive_pr_ship_squash_subject(&project_root, pr_number, &branch)?;
+    if let Some(subject) = &explicit_squash_subject {
+        eprintln!(
+            "  step 3: preserving spec ID in squash subject: {}",
+            subject
+        );
+    }
 
     let retry_cfg = crate::network_retry::RetryConfig::load(&main_worktree);
     let mut stderr_sink = crate::network_retry::StderrSink;
@@ -19121,15 +19128,10 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         &mut stderr_sink,
         || {
             let mut cmd = std::process::Command::new("gh");
-            cmd.current_dir(&project_root).args([
-                "pr",
-                "merge",
-                &pr_number.to_string(),
-                "--squash",
-            ]);
-            if delete_branch {
-                cmd.arg("--delete-branch");
-            }
+            let args =
+                pr_ship::merge_args(pr_number, delete_branch, explicit_squash_subject.as_deref());
+            cmd.current_dir(&project_root)
+                .args(args.iter().map(String::as_str));
             cmd
         },
     )
@@ -19375,6 +19377,86 @@ fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64
             "`gh pr create` succeeded but no PR number found in its output: {}",
             stdout.trim()
         )
+    })
+}
+
+/// Return an explicit `gh pr merge --subject` value only when the default
+/// squash subject would drop spec IDs that are recoverable from PR metadata.
+// trace:SPEC-410 | ai:codex
+fn derive_pr_ship_squash_subject(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    branch: &str,
+) -> Result<Option<String>> {
+    let commit_msg_out = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["log", "-1", "--format=%B"])
+        .output()
+        .context("could not invoke `git log` to derive squash subject")?;
+    if !commit_msg_out.status.success() {
+        anyhow::bail!(
+            "`git log -1 --format=%B` failed: {}",
+            String::from_utf8_lossy(&commit_msg_out.stderr).trim()
+        );
+    }
+    let commit_msg = String::from_utf8_lossy(&commit_msg_out.stdout).to_string();
+    let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
+    if current_subject.is_empty() {
+        return Ok(None);
+    }
+
+    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
+    let ids = pr_ship::derive_squash_subject_spec_ids(&pr.title, branch, &pr.body);
+    if ids.is_empty() {
+        return Ok(None);
+    }
+    let normalized = pr_ship::squash_subject_with_spec_ids(&current_subject, &ids);
+    if normalized == current_subject {
+        Ok(None)
+    } else {
+        Ok(Some(normalized))
+    }
+}
+
+struct PrShipMetadata {
+    title: String,
+    body: String,
+}
+
+fn fetch_pr_ship_metadata_via_gh(project_root: &std::path::Path, n: u64) -> Result<PrShipMetadata> {
+    let n_str = n.to_string();
+    let out = std::process::Command::new("gh")
+        .current_dir(project_root)
+        .args(["pr", "view", &n_str, "--json", "title,body"])
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+            } else {
+                anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
+            }
+        })?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "`gh pr view {}` exited {} — {}",
+            n,
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .with_context(|| format!("`gh pr view {}` returned non-JSON output", n))?;
+    Ok(PrShipMetadata {
+        title: json
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        body: json
+            .get("body")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
     })
 }
 

@@ -74,6 +74,8 @@ That's the server. Configure your MCP client to connect to it. For a Codex clien
 
 A `.mcp.json` is scaffolded at project init for Claude Code MCP integration. Other MCP clients typically need their own config; the connection target is the same `aida mcp-serve` process. Auth is local-socket today; cross-machine + auth is a deferred SPIKE.
 
+`aida mcp-serve` is a long-running process and does not hot-reload the CLI binary. Restart the MCP server after pulling or building AIDA changes if you need newly shipped tool behavior.
+
 ## Conventions you should follow
 
 When you participate in an AIDA project — whether as implementer, reviewer, advisor, or other role — these conventions matter:
