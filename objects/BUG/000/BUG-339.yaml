@@ -44,12 +44,12 @@ description: |-
 
   - SPEC-410 (Codex's filing — branch-commit-drops-ID case)
   - TASK-472 (cross-agent-onboarding clarification — explicitly document the `(SPEC-ID)` trailer convention for non-Claude-Code agents)
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:40:52.835212864Z
-modified_at: 2026-05-22T20:42:41.537236708Z
+modified_at: 2026-05-22T20:51:15.463741895Z
 req_type: Bug
 tags:
 - antigravity-pr-203
@@ -80,3 +80,7 @@ comments:
     Test gap PR-204 should have caught: a regression test using Antigravity's PR-203 subject shape should have asserted the auto-bump-compatible result. It didn't — that's a hint the asymmetry wasn't seen during PR-204's implementation.
   created_at: 2026-05-22T20:42:41.537236708Z
   modified_at: 2026-05-22T20:42:41.537236708Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-22T20:51:15.463741895Z
+  completion_sha: a6b547bf92d421188d695f1c2030a62dfcafd877
