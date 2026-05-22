@@ -1,0 +1,28 @@
+id: 019e514a-b9ba-7a01-bd34-5b6d6d45f1b5
+spec_id: TASK-467
+agreed_id: TASK-467
+title: global_auto_claim_summary should honour per-type auto_claim re-enable in opt-out case
+description: |-
+  Filed from PR-198 reviewer's Probe 4 finding (non-blocking, post-merge follow-up):
+
+  `global_auto_claim_summary` returns `"auto-claim: off (global opt-out)"` whenever `cfg.auto_claim == false`, even when a per-type re-enable exists (e.g. `[block_allocation] auto_claim = false` + `[block_allocation.bug] auto_claim = true`).
+
+  The populated-blocks branch already honours the per-type re-enable via `auto_claim_summary(cfg, "BUG")` — see existing test `auto_claim_summary_per_type_re_enable_wins_over_global_off` on main. The empty-blocks summary is type-agnostic so it can't render the full nuance, but `(configured)` is also suppressed in the opt-out case — hiding the signal that `[block_allocation]` is wired up at all.
+
+  ## Acceptance
+
+  - [ ] When global auto_claim is off but a per-type re-enable exists, the empty-blocks summary surfaces that something is configured (e.g. `auto-claim: off (configured per-type)` or similar).
+  - [ ] Test case mirroring `auto_claim_summary_per_type_re_enable_wins_over_global_off` but for the empty-blocks branch.
+  - [ ] No regression in the existing global-opt-out-no-re-enable case.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:05:12.250035615Z
+modified_at: 2026-05-22T20:05:12.250035615Z
+req_type: Task
+tags:
+- block-allocation
+- from-review:PR-198
+- severity:minor
+- task-449-followup
