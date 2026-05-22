@@ -113,6 +113,86 @@ pub fn derive_pr_body_from_commit(commit_message: &str) -> String {
     body.join("\n")
 }
 
+/// Extract AIDA requirement IDs from PR metadata text. This is intentionally
+/// broader than commit-subject extraction because PR titles/bodies and branch
+/// names are recovery surfaces for malformed local commit subjects.
+// trace:SPEC-410 | ai:codex
+pub fn extract_spec_ids_from_text(text: &str) -> Vec<String> {
+    let re = regex::Regex::new(r"(?i)\b([a-z][a-z0-9]*(?:-[a-z0-9]+)*-\d+(?:-\d+)*)\b")
+        .expect("valid spec id regex");
+    let mut out = Vec::new();
+    for cap in re.captures_iter(text) {
+        let id = cap[1].to_ascii_uppercase();
+        let prefix = id.split('-').next().unwrap_or("");
+        // PR/MR/GH/GL refs are forge IDs, not AIDA requirements.
+        if matches!(prefix, "PR" | "MR" | "GH" | "GL") {
+            continue;
+        }
+        if !out.iter().any(|seen| seen == &id) {
+            out.push(id);
+        }
+    }
+    out
+}
+
+/// Derive the best spec-id set to preserve in a squash subject. Priority:
+/// PR title, then branch name, then PR body.
+// trace:SPEC-410 | ai:codex
+pub fn derive_squash_subject_spec_ids(pr_title: &str, branch: &str, pr_body: &str) -> Vec<String> {
+    for source in [pr_title, branch, pr_body] {
+        let ids = extract_spec_ids_from_text(source);
+        if !ids.is_empty() {
+            return ids;
+        }
+    }
+    Vec::new()
+}
+
+/// Ensure the squash subject carries every derived spec ID exactly once.
+/// Existing well-formed subjects are left untouched.
+// trace:SPEC-410 | ai:codex
+pub fn squash_subject_with_spec_ids(subject: &str, ids: &[String]) -> String {
+    let subject = subject.trim();
+    if ids.is_empty() || subject.is_empty() {
+        return subject.to_string();
+    }
+    let existing = extract_spec_ids_from_text(subject);
+    let missing: Vec<&String> = ids
+        .iter()
+        .filter(|id| !existing.iter().any(|seen| seen == *id))
+        .collect();
+    if missing.is_empty() {
+        return subject.to_string();
+    }
+    let joined = missing
+        .into_iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("{subject} ({joined})")
+}
+
+/// Build the `gh pr merge` argv. Kept pure so SPEC-410 can pin the
+/// contract that the wrapper passes `--subject` when it repairs a squash
+/// subject.
+// trace:SPEC-410 | ai:codex
+pub fn merge_args(pr_number: u64, delete_branch: bool, subject: Option<&str>) -> Vec<String> {
+    let mut args = vec![
+        "pr".to_string(),
+        "merge".to_string(),
+        pr_number.to_string(),
+        "--squash".to_string(),
+    ];
+    if delete_branch {
+        args.push("--delete-branch".to_string());
+    }
+    if let Some(subject) = subject {
+        args.push("--subject".to_string());
+        args.push(subject.to_string());
+    }
+    args
+}
+
 /// Format the dry-run plan: one line per resolved step, in execution
 /// order, prefixed by an arrow. Pure so the contract-visible output is
 /// pinned by tests — drift here is what makes the CLI feel inconsistent
@@ -327,6 +407,93 @@ mod tests {
     fn derive_pr_body_preserves_internal_blank_lines() {
         let msg = "subj\n\npara1\n\npara2\n";
         assert_eq!(derive_pr_body_from_commit(msg), "para1\n\npara2");
+    }
+
+    #[test]
+    fn extracts_spec_ids_from_pr_title() {
+        let title = "feat(store): add cadence (STORY-284)";
+        assert_eq!(
+            extract_spec_ids_from_text(title),
+            vec!["STORY-284".to_string()]
+        );
+    }
+
+    #[test]
+    fn derives_spec_id_from_branch_when_title_has_none() {
+        assert_eq!(
+            derive_squash_subject_spec_ids("feat(store): add cadence", "task-310", ""),
+            vec!["TASK-310".to_string()]
+        );
+    }
+
+    #[test]
+    fn derive_spec_ids_returns_none_when_metadata_has_none() {
+        assert!(derive_squash_subject_spec_ids(
+            "feat(store): add cadence",
+            "feature/store-cadence",
+            "no requirement id here",
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn extracts_multiple_spec_ids_in_order() {
+        let title = "fix(queue): preserve credits (SPEC-1, SPEC-2)";
+        assert_eq!(
+            extract_spec_ids_from_text(title),
+            vec!["SPEC-1".to_string(), "SPEC-2".to_string()]
+        );
+    }
+
+    #[test]
+    fn squash_subject_appends_missing_spec_id() {
+        assert_eq!(
+            squash_subject_with_spec_ids(
+                "[AI:codex] feat(store): add cadence",
+                &["STORY-284".to_string()]
+            ),
+            "[AI:codex] feat(store): add cadence (STORY-284)"
+        );
+    }
+
+    #[test]
+    fn squash_subject_does_not_duplicate_existing_spec_id() {
+        assert_eq!(
+            squash_subject_with_spec_ids(
+                "[AI:antigravity] fix(mcp): normalize ids (BUG-332)",
+                &["BUG-332".to_string()]
+            ),
+            "[AI:antigravity] fix(mcp): normalize ids (BUG-332)"
+        );
+    }
+
+    #[test]
+    fn merge_args_include_repaired_subject() {
+        let args = merge_args(
+            201,
+            false,
+            Some("[AI:codex] feat(store): add cadence (STORY-284)"),
+        );
+        assert_eq!(
+            args,
+            vec![
+                "pr",
+                "merge",
+                "201",
+                "--squash",
+                "--subject",
+                "[AI:codex] feat(store): add cadence (STORY-284)"
+            ]
+        );
+    }
+
+    #[test]
+    fn merge_args_without_repair_keep_existing_shape() {
+        let args = merge_args(197, true, None);
+        assert_eq!(
+            args,
+            vec!["pr", "merge", "197", "--squash", "--delete-branch"]
+        );
     }
 
     #[test]
