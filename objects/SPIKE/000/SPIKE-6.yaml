@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:47:40.188887884Z
-modified_at: 2026-05-22T19:59:04.512486236Z
+modified_at: 2026-05-22T19:59:29.620780924Z
 req_type: Spike
 tags:
 - competitive-analysis
@@ -59,6 +59,19 @@ tags:
 - post-alpha
 - skillfold
 - spike
+comments:
+- id: 019e5145-7f54-77b3-a6dd-2bc1e8a9296c
+  author: joe
+  content: |-
+    SPIKE-6 compatibility spike completed. Shipped comprehensive competitive analysis at docs/competitive-analysis/skillfold-spike.md.
+
+    Key findings:
+    1. skillfold offers strong declarative compilation to 12 targets (Cursor, Copilot, Codex, Gemini, Goose, etc.) and integrates with Claude Code plugins.
+    2. Alignment gaps exist in AIDA's custom interactive slash commands (like /aida-status) and AIDA's active local requirements graph (.aida-store), which skillfold cannot represent.
+    3. Recommendation: Adopt Option C (Bilingual Scaffold Pack) post-alpha. This allows AIDA to consume a `skillfold.yaml` to configure its roles, while using skillfold to compile AIDA's requirements-driven skills into Cursor .mdc rules and Gemini rules. AIDA positions itself as the local requirements database backbone for cross-platform agent teams.
+    4. Non-Claude-Code experience: YAML acts as a machine-readable execution protocol for agents (like Antigravity and Codex), replacing manual prose parsing with deterministic inputs/outputs.
+  created_at: 2026-05-22T19:59:29.620780924Z
+  modified_at: 2026-05-22T19:59:29.620780924Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T19:59:04.512486236Z
