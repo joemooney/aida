@@ -7,7 +7,6 @@
 # tests/test_mcp_doc_consistency.sh.
 #
 # trace:SPEC-398 | ai:codex
-# trace:TASK-454 | ai:codex
 # trace:BUG-310 | ai:codex
 set -euo pipefail
 

@@ -11,7 +11,6 @@ Coverage:
 - Every tool advertises inputSchema and outputSchema.
 - Path-A tool results use the MCP text content envelope.
 - Optional future Path-B strict mode requires structuredContent.
-- Spec-ID parsing is anchored to known success lines, not first regex match.
 - CLI-created specs are visible through MCP.
 - MCP-created specs are visible through local CLI.
 - Core spec graph tools round-trip.
@@ -170,6 +169,7 @@ def strip_ansi(text: str) -> str:
 
 
 def parse_spec_id(text: str, source: str) -> str:
+    # TASK-454: anchor on success-line shapes instead of the first loose ID.
     patterns = [
         rf"^Added:\s+({SPEC_ID_RE})\s+-\s+.+$",
         rf"^ID:\s+({SPEC_ID_RE})\s*$",
