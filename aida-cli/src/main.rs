@@ -19080,6 +19080,7 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
     // would swallow the streaming output, which is the whole point of
     // `--watch`. CI failures are real (not transient), so no retry.
     eprintln!("  step 2: watching CI for PR-{}", pr_number);
+    wait_for_pr_checks_to_register(&project_root, pr_number)?;
     let watch_status = std::process::Command::new("gh")
         .current_dir(&project_root)
         .args(["pr", "checks", &pr_number.to_string(), "--watch"])
@@ -19181,39 +19182,65 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
             "  step 4: running `aida pull` from main worktree ({})",
             main_worktree.display()
         );
-        // Spawn `aida pull` as a subcommand. We resolve the current
-        // binary via `current_exe()` so an unactivated dev build still
-        // calls itself, not whatever `aida` happens to be on PATH.
-        let aida_bin =
-            std::env::current_exe().context("could not resolve current `aida` binary path")?;
-        let pull_status = std::process::Command::new(&aida_bin)
-            .current_dir(&main_worktree)
-            .arg("pull")
-            .status()
-            .context("could not invoke `aida pull`")?;
-        if !pull_status.success() {
-            log_ship_activity(
-                &main_worktree,
-                Some(pr_number),
-                &ShipStep::Pull,
-                &StepOutcome::Failed(format!("exit {}", pull_status)),
-            );
-            let hint = recovery_hint(&ShipStep::Pull, Some(pr_number));
-            eprintln!(
-                "{} `aida pull` failed — the merge already landed, so this \
-                 is a sync issue, not a merge issue.",
-                "⚠".yellow().bold()
-            );
-            eprintln!("  {}", hint);
-            // Don't bail — the merge landed; pull failure is recoverable.
+        let pull_status = match prepare_main_worktree_for_pr_ship_pull(&main_worktree) {
+            Ok(()) => {
+                // Spawn `aida pull` as a subcommand. We resolve the current
+                // binary via `current_exe()` so an unactivated dev build still
+                // calls itself, not whatever `aida` happens to be on PATH.
+                let aida_bin = std::env::current_exe()
+                    .context("could not resolve current `aida` binary path")?;
+                Some(
+                    std::process::Command::new(&aida_bin)
+                        .current_dir(&main_worktree)
+                        .arg("pull")
+                        .status()
+                        .context("could not invoke `aida pull`")?,
+                )
+            }
+            Err(e) => {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Pull,
+                    &StepOutcome::Failed(e.to_string()),
+                );
+                let hint = recovery_hint(&ShipStep::Pull, Some(pr_number));
+                eprintln!(
+                    "{} could not prepare main worktree for `aida pull` — the merge already landed, so this is a sync issue, not a merge issue.",
+                    "⚠".yellow().bold()
+                );
+                eprintln!("  {}", e);
+                eprintln!("  {}", hint);
+                None
+            }
+        };
+        if let Some(pull_status) = pull_status {
+            if !pull_status.success() {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Pull,
+                    &StepOutcome::Failed(format!("exit {}", pull_status)),
+                );
+                let hint = recovery_hint(&ShipStep::Pull, Some(pr_number));
+                eprintln!(
+                    "{} `aida pull` failed — the merge already landed, so this \
+                     is a sync issue, not a merge issue.",
+                    "⚠".yellow().bold()
+                );
+                eprintln!("  {}", hint);
+                // Don't bail — the merge landed; pull failure is recoverable.
+            } else {
+                eprintln!("  {} pulled main", "✓".green());
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Pull,
+                    &StepOutcome::Ok,
+                );
+            }
         } else {
-            eprintln!("  {} pulled main", "✓".green());
-            log_ship_activity(
-                &main_worktree,
-                Some(pr_number),
-                &ShipStep::Pull,
-                &StepOutcome::Ok,
-            );
+            // Preparation failure was already logged and printed above.
         }
     }
 
@@ -19472,6 +19499,108 @@ fn fetch_pr_ship_metadata_via_gh(project_root: &std::path::Path, n: u64) -> Resu
             .unwrap_or("")
             .to_string(),
     })
+}
+
+fn wait_for_pr_checks_to_register(project_root: &std::path::Path, pr_number: u64) -> Result<()> {
+    wait_for_pr_checks_to_register_with_gh(
+        project_root,
+        pr_number,
+        std::ffi::OsStr::new("gh"),
+        std::time::Duration::from_secs(60),
+        std::time::Duration::from_secs(10),
+    )
+}
+
+// trace:BUG-344 | ai:codex
+fn wait_for_pr_checks_to_register_with_gh(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    gh_bin: &std::ffi::OsStr,
+    timeout: std::time::Duration,
+    interval: std::time::Duration,
+) -> Result<()> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        let pr = pr_number.to_string();
+        let out = std::process::Command::new(gh_bin)
+            .current_dir(project_root)
+            .args(["pr", "checks", &pr])
+            .output()
+            .with_context(|| format!("could not invoke `gh pr checks {pr_number}`"))?;
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if pr_ship::gh_pr_checks_output_has_registered_checks(&stdout, &stderr) {
+            return Ok(());
+        }
+        if !out.status.success()
+            && !pr_ship::gh_pr_checks_output_is_unregistered(&stdout, &stderr)
+            && (!stdout.trim().is_empty() || !stderr.trim().is_empty())
+        {
+            anyhow::bail!(
+                "`gh pr checks {}` failed before CI registration could be inspected: {}",
+                pr_number,
+                stderr.trim()
+            );
+        }
+        if std::time::Instant::now() >= deadline {
+            anyhow::bail!(
+                "No CI workflows registered within {}s for PR-{} — verify .github/workflows is configured and GitHub Actions is enabled",
+                timeout.as_secs(),
+                pr_number
+            );
+        }
+        std::thread::sleep(interval);
+    }
+}
+
+// trace:BUG-345 | ai:codex
+fn prepare_main_worktree_for_pr_ship_pull(main_worktree: &std::path::Path) -> Result<()> {
+    let branch = current_git_branch(main_worktree)?;
+    if branch == "main" {
+        return Ok(());
+    }
+    if branch.is_empty() {
+        anyhow::bail!(
+            "main worktree {} is detached; run `git -C {} checkout main && aida pull` to complete auto-bump",
+            main_worktree.display(),
+            main_worktree.display()
+        );
+    }
+
+    let status = std::process::Command::new("git")
+        .current_dir(main_worktree)
+        .args(["status", "--porcelain"])
+        .output()
+        .context("could not invoke `git status --porcelain` in main worktree")?;
+    if !status.status.success() {
+        anyhow::bail!(
+            "`git status --porcelain` failed in main worktree: {}",
+            String::from_utf8_lossy(&status.stderr).trim()
+        );
+    }
+    if !String::from_utf8_lossy(&status.stdout).trim().is_empty() {
+        anyhow::bail!(
+            "main worktree on branch `{}` has uncommitted changes; run `git -C {} status`, then `git -C {} checkout main && aida pull` to complete auto-bump",
+            branch,
+            main_worktree.display(),
+            main_worktree.display()
+        );
+    }
+
+    let checkout = std::process::Command::new("git")
+        .current_dir(main_worktree)
+        .args(["checkout", "main", "--quiet"])
+        .output()
+        .context("could not invoke `git checkout main` in main worktree")?;
+    if !checkout.status.success() {
+        anyhow::bail!(
+            "main worktree on stale branch `{}` could not switch to `main`: {}; run `git -C {} checkout main && aida pull` to complete auto-bump",
+            branch,
+            String::from_utf8_lossy(&checkout.stderr).trim(),
+            main_worktree.display()
+        );
+    }
+    Ok(())
 }
 
 /// True when `branch` is checked out in a worktree other than the main
@@ -19912,6 +20041,125 @@ mod task_471_stale_base_preflight_tests {
             }
             other => panic!("expected stale overlap, got {other:?}"),
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod pr_ship_environment_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
+
+    fn git(repo: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .current_dir(repo)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("git {:?} failed to spawn: {e}", args));
+        assert!(
+            out.status.success(),
+            "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
+            args,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn init_repo(path: &std::path::Path) {
+        git(path, &["init", "-b", "main", "--quiet"]);
+        git(path, &["config", "user.email", "aida@example.test"]);
+        git(path, &["config", "user.name", "AIDA Test"]);
+        git(path, &["commit", "--allow-empty", "-m", "base", "--quiet"]);
+    }
+
+    fn make_executable(path: &std::path::Path, body: &str) {
+        std::fs::write(path, body).unwrap();
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    #[test]
+    fn waits_for_ci_checks_to_register_before_watch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let counter = tmp.path().join("count");
+        let gh = tmp.path().join("gh");
+        make_executable(
+            &gh,
+            &format!(
+                "#!/bin/sh\n\
+                 count_file='{}'\n\
+                 count=$(cat \"$count_file\" 2>/dev/null || echo 0)\n\
+                 count=$((count + 1))\n\
+                 printf '%s' \"$count\" > \"$count_file\"\n\
+                 if [ \"$count\" -lt 3 ]; then\n\
+                   echo \"no checks reported on the branch\" >&2\n\
+                   exit 1\n\
+                 fi\n\
+                 echo \"build\tpending\t0\thttps://github.example/run/1\"\n\
+                 exit 0\n",
+                counter.display()
+            ),
+        );
+
+        wait_for_pr_checks_to_register_with_gh(
+            tmp.path(),
+            344,
+            gh.as_os_str(),
+            Duration::from_secs(2),
+            Duration::from_millis(1),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(counter).unwrap(), "3");
+    }
+
+    #[test]
+    fn ci_startup_timeout_has_configuration_message() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gh = tmp.path().join("gh");
+        make_executable(
+            &gh,
+            "#!/bin/sh\n\
+             echo \"no checks reported on the branch\" >&2\n\
+             exit 1\n",
+        );
+
+        let err = wait_for_pr_checks_to_register_with_gh(
+            tmp.path(),
+            344,
+            gh.as_os_str(),
+            Duration::from_millis(5),
+            Duration::from_millis(1),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("No CI workflows registered"), "{err}");
+        assert!(err.contains(".github/workflows"), "{err}");
+    }
+
+    #[test]
+    fn post_merge_pull_preparation_switches_clean_main_worktree_to_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        git(tmp.path(), &["checkout", "-b", "stale-feature", "--quiet"]);
+
+        prepare_main_worktree_for_pr_ship_pull(tmp.path()).unwrap();
+        assert_eq!(current_git_branch(tmp.path()).unwrap(), "main");
+    }
+
+    #[test]
+    fn post_merge_pull_preparation_refuses_dirty_feature_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        git(tmp.path(), &["checkout", "-b", "stale-feature", "--quiet"]);
+        std::fs::write(tmp.path().join("dirty.txt"), "uncommitted\n").unwrap();
+
+        let err = prepare_main_worktree_for_pr_ship_pull(tmp.path())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("uncommitted changes"), "{err}");
+        assert_eq!(current_git_branch(tmp.path()).unwrap(), "stale-feature");
     }
 }
 
