@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:16:43.368789467Z
-modified_at: 2026-05-22T20:15:26.161135971Z
+modified_at: 2026-05-22T20:15:53.192364817Z
 req_type: Story
 tags:
 - auto-complete
@@ -98,6 +98,10 @@ relationships:
 - rel_type: !Custom implemented-by
   target_id: 019e5153-cac2-7c23-b549-6bc48dc98d18
   created_at: 2026-05-22T20:15:11.580027484Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 019e5154-613c-7242-9bc5-fa25ba325686
+  created_at: 2026-05-22T20:15:53.192355379Z
   created_by: joe
 comments:
 - id: 019e368b-578c-7330-a879-41c4ab5039ea
