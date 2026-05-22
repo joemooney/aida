@@ -1,0 +1,27 @@
+id: 019e4eb2-37d9-7310-8a90-dde509bbe4c2
+spec_id: STORY-403
+agreed_id: STORY-403
+title: 'Review PR-174: [AI:claude] test(mcp): add doc-vs-MCP consistency gate (TASK-452)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4ea6`) for branch `task-452`.
+
+  - PR: <https://github.com/joemooney/aida/pull/174>
+  - Branch: `task-452` → `main`
+
+  ## Covers
+
+  - TASK-452
+  - TASK-451
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 174` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T07:59:23.097687289Z
+modified_at: 2026-05-22T07:59:23.097687289Z
+req_type: Story
