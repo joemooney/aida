@@ -35,9 +35,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T22:59:56.065588456Z
-modified_at: 2026-05-22T22:59:56.065588456Z
+modified_at: 2026-05-22T23:00:39.058674923Z
 req_type: Task
 tags:
 - from-implementer:STORY-305
 - kind:design-choice
 - severity:minor
+comments:
+- id: 019e51eb-5a12-72d3-8b7d-68950800c5b8
+  author: joe
+  content: Commit f6e8db9f references this requirement
+  created_at: 2026-05-22T23:00:39.058674923Z
+  modified_at: 2026-05-22T23:00:39.058674923Z
