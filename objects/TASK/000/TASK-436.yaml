@@ -8,12 +8,12 @@ description: |
   Fix: validate the verb against the known set up front and return an error from the tool when it doesn't match. Mirror the `PuntCategory::from_str` pattern `tool_post_punt` already uses (`mcp.rs:715`).
 
   Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:25:39.769407423Z
-modified_at: 2026-05-22T04:11:49.642475418Z
+modified_at: 2026-05-22T04:15:01.749309221Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -27,3 +27,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-22T04:08:00.418613301Z
   implemented_by: joe
+  completed_at: 2026-05-22T04:15:01.749309221Z
+  completion_sha: 895465d6cb5629d7917c5cdc65698d91c5524cf8
