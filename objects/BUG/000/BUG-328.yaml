@@ -62,10 +62,74 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:58:55.923304698Z
-modified_at: 2026-05-22T16:58:55.923304698Z
+modified_at: 2026-05-22T18:35:58.046232552Z
 req_type: Bug
 tags:
 - auto-bump
 - from-self-test
 - reconcile-status
 - recurring-pattern
+comments:
+- id: 019e50f9-06de-7882-af4a-139838391bb1
+  author: |-
+    Architecture sketch before implementation (per governance):
+
+    1. WHERE
+    - `aida-cli/src/main.rs`.
+    - Pull/db-sync path: `auto_bump_done_to_completed(project_root, store_path, pre_sha, storage)` around the direct `candidates` scan and the atomic write re-checks.
+    - Manual replay path: `handle_db_reconcile_status(store_path, since, spec, dry_run)` has a duplicate direct-candidate scan/write path.
+    - Summary output: `print_auto_bump_summary(flips)` currently assumes every flip is `Done spec` and only carries `(spec_id, sha)`.
+    - Existing special cases: `collect_stale_review_story_flips` already promotes review stories at `Approved | InProgress` via PR-number matching; BUG-328 should generalize the direct commit/spec candidate path rather than disturb that review-story logic.
+
+    2. PROPOSED CHANGE
+    Smallest shape:
+    ```rust
+    fn auto_bump_eligible_status(status: &RequirementStatus) -> bool {
+        matches!(status, RequirementStatus::Approved | RequirementStatus::Planned | RequirementStatus::InProgress | RequirementStatus::Done)
+    }
+    ```
+    Then replace the direct candidate guards:
+    ```rust
+    // before
+    if !matches!(req.status, RequirementStatus::Done) { continue; }
+    flips.push((spec_id.clone(), sha.clone()));
+
+    // after
+    if !auto_bump_eligible_status(&req.status) { continue; }
+    flips.push((spec_id.clone(), sha.clone(), req.status.clone()));
+    ```
+    Do the same for the atomic-window re-check. Either introduce a small `AutoBumpFlip { spec_id, sha, prior_status }` struct or expand the tuple; I prefer a struct to avoid tuple confusion because summary now needs `prior_status`.
+
+    `print_auto_bump_summary` should change from `auto-bumped N Done specs -> Completed` to a per-spec transition preview, e.g. `auto-bumped 1 spec -> Completed` then `STORY-398 (was Approved, commit 3f7ab28f)`. Same helper can serve `aida pull`, `aida db sync --pull`, and `aida db reconcile-status`.
+
+    3. EDGE CASES
+    - `Done + referencing commit`: preserved; still flips to `Completed` and stamps `completed_at`/`completion_sha`.
+    - `Approved/Planned/InProgress + referencing commit`: new behavior; flip to `Completed`, stamp same metadata.
+    - `Completed + referencing commit`: skip, idempotent.
+    - `Rejected + referencing commit`: skip, terminal and explicitly excluded.
+    - `Done with no referencing commit`: skip, current behavior preserved.
+    - Non-default branch: current default-branch guard remains; no promotion from feature branches.
+    - Existing review-story paths: leave intact; after generalization some review stories may be caught earlier by direct spec-id commit references, but PR-number/covers-chain fallbacks still matter when the review story ID is not in the commit subject.
+    - Draft: BUG-328 acceptance says any non-terminal including Draft is eligible, but the pasted brief calls Draft an open decision. My recommendation is **exclude Draft in v1** unless master explicitly wants it: a Draft spec with a commit reference may be exploratory/unapproved work, and auto-completing it weakens the approval signal. If master wants literal acceptance, include Draft by adding it to `auto_bump_eligible_status` and tests.
+
+    4. TEST CASES
+    Add/adjust tests in the existing `auto_bump_done_to_completed` integration-test module:
+    - `auto_bump_promotes_approved_spec_with_subject_ref`.
+    - `auto_bump_promotes_planned_spec_with_subject_ref`.
+    - `auto_bump_promotes_in_progress_spec_with_subject_ref`.
+    - Keep/extend existing `auto_bump_picks_up_subject_refs_on_default_branch` for Done.
+    - `auto_bump_does_not_promote_rejected_spec_with_subject_ref`.
+    - `auto_bump_does_not_repromote_completed_spec_with_subject_ref`.
+    - Draft test depends on master decision: either `Draft -> Completed` or `Draft stays Draft`.
+    - Mirror at least Approved/InProgress/Done/Rejected in `handle_db_reconcile_status` tests because the replay path duplicates candidate selection and atomic write logic.
+    - Add/adjust summary test if there is an existing stdout-capture helper; otherwise keep summary validation to pure formatting helper extraction if practical.
+
+    5. OPEN QUESTIONS FOR MASTER
+    - Should Draft be eligible? BUG-328 acceptance says yes; my recommendation is no for v1 unless the principle is truly “commit on main beats all pre-terminal workflow states.”
+    - Should this refactor introduce a shared helper for both pull-time and reconcile candidate selection now, or keep the smaller duplicated change? I recommend a tiny shared eligibility helper plus minimal duplication, not a broader scanner refactor.
+    - Should promotion add an audit comment when prior status was not Done? Existing direct Done auto-bump does not comment; review-story stale flips do comment because they encode skipped review semantics. I recommend no new comments for direct candidates, relying on `completed_at`, `completion_sha`, and improved summary output.
+
+    Awaiting approve/revise/decline before implementation. trace:BUG-328 | ai:codex
+  content: mcp
+  created_at: 2026-05-22T18:35:58.046224260Z
+  modified_at: 2026-05-22T18:35:58.046224260Z
