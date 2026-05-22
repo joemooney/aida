@@ -9129,5 +9129,13 @@ operations:
   timestamp: 2026-05-22T05:55:37.164172410Z
   kind: !SetPriority
     priority: Low
-clock: 980
+- id: 019e4e40-f33e-7e80-8d5d-095b43ae971d
+  target_id: 019e492f-3a0f-7f81-9374-064e60d9adba
+  author: aida
+  node_id: '1'
+  lamport: 981
+  timestamp: 2026-05-22T05:55:39.966951843Z
+  kind: !SetPriority
+    priority: Low
+clock: 981
 node_id: '1'
