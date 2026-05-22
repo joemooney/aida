@@ -1,0 +1,67 @@
+id: 019e4e45-d632-70b0-8ecf-013f824d7c73
+spec_id: STORY-398
+agreed_id: STORY-398
+title: Empirical verification — connect Codex to AIDA's MCP coordination surface (the agent-agnostic moat made operational)
+description: |-
+  ## Strategic context
+
+  CLAUDE.md positions AIDA's MCP server as *\"the highest-leverage surface for the agent-context vision.\"* SPIKE-9's verdict was *\"hybrid: filesystem canonical, MCP as transport for cross-agent reach.\"* STORY-361 just shipped 14 coordination tools (punt channel, findings channel, task-claim, directive channel) on top of the original 7 requirement-graph tools — 21 MCP tools total.
+
+  **But no non-Claude-Code agent has actually used them yet.** The architecture is ready; empirical validation is missing. Until we plug in Codex (or Cursor, or any MCP-speaking agent) and run a coordination roundtrip, the agent-agnostic positioning is claim-not-evidence.
+
+  User direction 2026-05-22: *\"I want to prioritize support for MCP so that other agents can be tested out with aida.\"* This is the next wedge.
+
+  ## Approach
+
+  Empirical: connect Codex to AIDA's MCP server, run a real coordination roundtrip, document every rough edge, file the gaps as sub-tasks. Treat this story as the **discovery pass** — its output is documented verdict + filed follow-ups, not a perfectly-polished UX.
+
+  ## Acceptance
+
+  - **Connect Codex** to AIDA's running MCP server on this machine. Document the steps in \`docs/agents/codex-mcp-setup.md\`: server URL config, auth (if any), MCP client setup in Codex, tool-discovery verification.
+  - **Roundtrip test — punt channel**: from Codex, invoke \`post_punt\` with a structured reason against a test spec. Verify via \`aida findings list\` (CLI from a separate terminal) that the punt landed correctly. Then invoke \`resolve_punt\` from Codex with a verdict. Verify via \`aida show <spec>\` that the punt was resolved.
+  - **Roundtrip test — findings channel**: from Codex, invoke \`file_finding\` against a fictional PR. Verify via \`aida findings list\`. Triage via \`triage_finding\` from Codex. Verify the finding's audit trail.
+  - **Roundtrip test — task claim**: from Codex, invoke \`claim_task\` on a queued spec. Verify a lease appears in \`aida session leases\`. Release via \`release_task\`. Verify the lease cleared.
+  - **Roundtrip test — directive channel**: from Codex, invoke \`post_directive\`. Verify \`aida worker directives\` (or equivalent) lists it.
+  - **Verdict document** at \`docs/agents/codex-mcp-roundtrip-verdict.md\`: viable / viable-with-conditions / not-viable, with evidence — what worked, what surprised, what's missing.
+  - **File rough edges as sub-tasks** — every observed gap (missing tool, schema confusion, error-message awkwardness, doc opacity) becomes a TASK with concrete repro and recommended fix. Pre-emptively: schema discovery (TASK-440 Path A unblocks this; verify), tool-error format (does Codex render AIDA's MCP errors usefully?), session-state visibility (can Codex see who else is connected?).
+  - **Smallest-valuable-slice** output: a working \`docs/agents/codex-mcp-setup.md\` that another developer can follow to repeat the experiment, plus the verdict doc, plus 0-N filed sub-tasks. Do NOT try to fix every rough edge inside this story; surface them.
+
+  ## What this UNLOCKS strategically
+
+  - The agent-agnostic positioning becomes evidence-backed (vs claim).
+  - A demo story stronger than TASK-403's autonomy-keystone-day: *\"AIDA's substrate is queryable + writable from Codex, Cursor, Claude Code, and any MCP-speaking agent on the horizon.\"*
+  - Adoption-vector widening: not just Claude Code users; any agent's user can adopt AIDA's spec graph + coordination.
+  - Validates SPIKE-9's hybrid verdict empirically (filesystem canonical, MCP as transport).
+
+  ## Composes with
+
+  - **TASK-440 (Path A)** — outputSchema descriptors. Front-load this; Codex likely uses schemas for tool discovery. If a Codex-driven roundtrip surfaces schema gaps, the Path B follow-up filing becomes evidence-driven.
+  - **STORY-361** — the 21 coordination tools this story exercises end-to-end.
+  - **TASK-337** (\`docs/positioning/vs-claude-code-subagents.md\`, shipped) — positions AIDA's MCP layer vs Claude Code Agent Teams; this story is the practical demonstration.
+  - **SPIKE-9** — the architecture validated; this story validates the architecture's adoption surface.
+
+  ## Out of scope
+
+  - Polishing every rough edge surfaced. File and move on; this is a discovery story.
+  - Cursor / Continue / other MCP agents. Codex first; the others compose with the docs this story produces.
+  - Cross-machine MCP (auth, network discovery). Local-machine roundtrip first; cross-machine is a follow-up SPIKE.
+  - Making AIDA's CLI itself an MCP client (rejected by SPIKE-9).
+
+  ## Origin
+
+  User direction 2026-05-22: *\"I want to prioritize support for MCP so that other agents can be tested out with aida.\"* This is the agent-agnostic-substrate wedge made the top priority after the autonomy-keystone arc closed.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T06:01:00.210674229Z
+modified_at: 2026-05-22T06:01:00.210674229Z
+req_type: Story
+tags:
+- agent-agnostic
+- codex
+- from-user-direction
+- mcp
+- strategic
+- verification
+- wedge
