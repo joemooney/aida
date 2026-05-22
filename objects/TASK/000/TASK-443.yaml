@@ -1,0 +1,12 @@
+id: 019e4d45-128f-79f0-8e79-bb15b6b88b53
+spec_id: TASK-443
+agreed_id: TASK-443
+title: '**`aida session prune --forks`** — the SPIKE-11 writeup mentions this as a cleanup helper for accumulated fork JSONLs. Defer until the JSONLs actually pile up (`keep_fork_jsonls = false` covers the immediate case)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T01:20:32.911886168Z
+modified_at: 2026-05-22T01:20:32.911886168Z
+req_type: Task
