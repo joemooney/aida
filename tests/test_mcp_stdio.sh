@@ -1,15 +1,12 @@
 #!/bin/bash
 # Black-box MCP stdio compatibility suite.
 #
-# Builds the AIDA CLI, initializes a temporary project, starts `aida mcp-serve`,
-# and drives JSON-RPC requests like Codex or another MCP client would.
+# Builds the AIDA CLI, initializes a temporary project, starts
+# `aida mcp-serve`, and drives JSON-RPC requests like Codex or another local
+# MCP client would. Doc-vs-descriptor contract drift is covered separately by
+# tests/test_mcp_doc_consistency.sh.
 #
-# Default run validates the descriptor + CLI-to-MCP read direction (post-TASK-440
-# outputSchema landing). The MCP-write -> CLI-read and coordination stages live
-# behind `--require-mcp-write-roundtrip` while BUG-310 is in flight; pass it
-# through to the Python suite for the full check.
-#
-# trace:TASK-451 | ai:codex
+# trace:SPEC-398 | ai:codex
 # trace:BUG-310 | ai:codex
 set -euo pipefail
 
@@ -23,4 +20,4 @@ TARGET_DIR=$(cargo metadata --no-deps --format-version 1 \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')
 AIDA_BIN="$TARGET_DIR/debug/aida"
 
-python3 "$SCRIPT_DIR/test_mcp_stdio.py" --aida "$AIDA_BIN" "$@"
+PYTHONDONTWRITEBYTECODE=1 python3 "$SCRIPT_DIR/test_mcp_stdio.py" --aida "$AIDA_BIN" "$@"
