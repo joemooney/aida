@@ -20,6 +20,7 @@ mod network_retry;
 mod not_found;
 mod orchestrator;
 mod pr_rebase;
+mod pr_ship;
 mod process_probe;
 mod prompts;
 mod punt;
@@ -18123,6 +18124,12 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             no_smoke,
             base,
         } => pr_rebase_handler(*n, *check, *interactive, *no_smoke, base.as_deref()),
+        PrCommand::Ship {
+            n,
+            no_pull,
+            no_cleanup,
+            dry_run,
+        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run),
     }
 }
 
@@ -18503,6 +18510,547 @@ fn fetch_pr_info_via_gh(project_root: &std::path::Path, n: u64) -> Result<serde_
     let json: serde_json::Value = serde_json::from_slice(&out.stdout)
         .with_context(|| format!("`gh pr view {}` returned non-JSON output", n))?;
     Ok(json)
+}
+
+/// `aida pr ship [<N>]` — collapse the "create-if-needed + watch CI +
+/// squash-merge + pull + worktree-aware cleanup" recipe into one call.
+/// The direct-publish counterpart to `aida queue work PR-N
+/// --auto-complete` — used for human-pre-approved work where no
+/// orchestrator review phase is needed.
+///
+/// All gh subprocess calls go through the BUG-286 retry wrapper so a
+/// sub-second network blip during `gh pr merge` doesn't abort the
+/// flow. The post-merge `aida pull` and `aida session end` are spawned
+/// as `aida` subcommands (resolved via `current_exe()`) so the wrapper
+/// inherits the existing pull / session-end implementations (the BUG-108
+/// cwd warning, the auto-bump scan, the live-claude refusal) without
+/// double-implementing them.
+///
+/// trace:TASK-458 | ai:claude
+fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: bool) -> Result<()> {
+    use pr_ship::{
+        format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
+        recovery_hint, PrShipOptions, ShipStep, StepOutcome,
+    };
+
+    let opts = PrShipOptions {
+        pr_number: n,
+        no_pull,
+        no_cleanup,
+        dry_run,
+    };
+
+    // Project root for gh/git invocations is wherever the user is —
+    // typical pattern: invoked from inside the spec worktree. The
+    // main worktree (where `.aida-store` lives and `aida pull` must
+    // run) may be a different path; we resolve it explicitly.
+    let project_root = find_project_root()?;
+    let main_worktree = main_worktree_root_from(&project_root);
+
+    let branch = current_git_branch(&project_root)?;
+    if branch.is_empty() {
+        anyhow::bail!("could not detect current branch (detached HEAD?)");
+    }
+
+    // ---- Step 1: resolve or create the PR. ----
+    eprintln!(
+        "{} aida pr ship — target branch: {}",
+        "→".cyan().bold(),
+        branch
+    );
+
+    let pr_number = match opts.pr_number {
+        Some(explicit) => {
+            eprintln!("  step 1: using explicit PR-{}", explicit);
+            log_ship_activity(
+                &main_worktree,
+                Some(explicit),
+                &ShipStep::ResolvePr {
+                    create_if_needed: false,
+                },
+                &StepOutcome::Ok,
+            );
+            explicit
+        }
+        None => {
+            // Look up an open PR for the current branch.
+            let lookup = std::process::Command::new("gh")
+                .current_dir(&project_root)
+                .args([
+                    "pr",
+                    "list",
+                    "--head",
+                    branch.as_str(),
+                    "--state",
+                    "open",
+                    "--json",
+                    "number",
+                    "--jq",
+                    ".[0].number",
+                ])
+                .output()
+                .context("could not invoke `gh pr list` — is `gh` installed and on PATH?")?;
+            let existing: Option<u64> = if lookup.status.success() {
+                let s = String::from_utf8_lossy(&lookup.stdout).trim().to_string();
+                if s.is_empty() {
+                    None
+                } else {
+                    s.parse().ok()
+                }
+            } else {
+                None
+            };
+
+            if let Some(existing) = existing {
+                eprintln!("  step 1: found open PR-{} for branch {}", existing, branch);
+                log_ship_activity(
+                    &main_worktree,
+                    Some(existing),
+                    &ShipStep::ResolvePr {
+                        create_if_needed: false,
+                    },
+                    &StepOutcome::Ok,
+                );
+                existing
+            } else if dry_run {
+                eprintln!(
+                    "  step 1: would create new PR for branch {} (dry-run)",
+                    branch
+                );
+                // Use a placeholder so the rest of the dry-run plan
+                // still has a coherent N to print.
+                0
+            } else {
+                let new_n = pr_ship_create_pr(&project_root, &branch)?;
+                eprintln!("  {} created PR-{}", "✓".green(), new_n);
+                log_ship_activity(
+                    &main_worktree,
+                    Some(new_n),
+                    &ShipStep::ResolvePr {
+                        create_if_needed: true,
+                    },
+                    &StepOutcome::Ok,
+                );
+                let _ = parse_pr_number_from_create_output; // import keep
+                new_n
+            }
+        }
+    };
+
+    // ---- Detect: is the branch checked out in a sibling worktree? ----
+    // If so, `gh pr merge --delete-branch` will fail the local-cleanup
+    // step with "branch X is already used by worktree at Y". We skip
+    // `--delete-branch` in that case and let `aida session end` handle
+    // the local cleanup (which knows how to remove the worktree first).
+    let branch_in_sibling = branch_in_sibling_worktree(&main_worktree, &branch, &project_root);
+
+    let steps = vec![
+        ShipStep::ResolvePr {
+            create_if_needed: opts.pr_number.is_none(),
+        },
+        ShipStep::WatchCi,
+        ShipStep::Merge {
+            delete_branch: !branch_in_sibling,
+        },
+        ShipStep::Pull,
+        ShipStep::EndLease,
+    ];
+
+    // ---- Dry-run: print the resolved plan and exit. ----
+    if dry_run {
+        let plan = format_dry_run_plan(&opts, &steps);
+        print!("{}", plan);
+        eprintln!(
+            "  → PR target: {}",
+            if pr_number == 0 {
+                "<would-create>".to_string()
+            } else {
+                format!("PR-{}", pr_number)
+            }
+        );
+        return Ok(());
+    }
+
+    // ---- Step 2: watch CI. Stream directly to the terminal so the
+    // user sees live progress — capture-output via the retry wrapper
+    // would swallow the streaming output, which is the whole point of
+    // `--watch`. CI failures are real (not transient), so no retry.
+    eprintln!("  step 2: watching CI for PR-{}", pr_number);
+    let watch_status = std::process::Command::new("gh")
+        .current_dir(&project_root)
+        .args(["pr", "checks", &pr_number.to_string(), "--watch"])
+        .status()
+        .context("could not invoke `gh pr checks --watch`")?;
+    if !watch_status.success() {
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::WatchCi,
+            &StepOutcome::Failed(format!("exit {}", watch_status)),
+        );
+        let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number));
+        eprintln!("{} CI failed for PR-{}", "✗".red().bold(), pr_number);
+        eprintln!("  {}", hint);
+        anyhow::bail!("CI did not pass for PR-{pr_number}");
+    }
+    eprintln!("  {} CI green for PR-{}", "✓".green(), pr_number);
+    log_ship_activity(
+        &main_worktree,
+        Some(pr_number),
+        &ShipStep::WatchCi,
+        &StepOutcome::Ok,
+    );
+
+    // ---- Step 3: merge. Use retry-wrapper so a transient gh
+    // network blip doesn't abort. ----
+    let delete_branch = !branch_in_sibling;
+    if branch_in_sibling {
+        eprintln!(
+            "  step 3: branch {} is checked out in a sibling worktree — \
+             skipping `--delete-branch`; `aida session end` will clean it up",
+            branch
+        );
+    }
+    eprintln!(
+        "  step 3: merging PR-{} (squash{})",
+        pr_number,
+        if delete_branch { ", delete-branch" } else { "" }
+    );
+
+    let retry_cfg = crate::network_retry::RetryConfig::load(&main_worktree);
+    let mut stderr_sink = crate::network_retry::StderrSink;
+    let merge_out = crate::network_retry::run_with_retry(
+        &format!("gh pr merge {pr_number}"),
+        &retry_cfg,
+        &mut stderr_sink,
+        || {
+            let mut cmd = std::process::Command::new("gh");
+            cmd.current_dir(&project_root).args([
+                "pr",
+                "merge",
+                &pr_number.to_string(),
+                "--squash",
+            ]);
+            if delete_branch {
+                cmd.arg("--delete-branch");
+            }
+            cmd
+        },
+    )
+    .context("could not invoke `gh pr merge`")?;
+    if !merge_out.status.success() {
+        let stderr_text = String::from_utf8_lossy(&merge_out.stderr)
+            .trim()
+            .to_string();
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::Merge { delete_branch },
+            &StepOutcome::Failed(stderr_text.clone()),
+        );
+        let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
+        eprintln!("{} merge failed: {}", "✗".red().bold(), stderr_text);
+        eprintln!("  {}", hint);
+        anyhow::bail!("`gh pr merge` exited {}", merge_out.status);
+    }
+    eprintln!("  {} merged PR-{}", "✓".green(), pr_number);
+    log_ship_activity(
+        &main_worktree,
+        Some(pr_number),
+        &ShipStep::Merge { delete_branch },
+        &StepOutcome::Ok,
+    );
+
+    // ---- Step 4: aida pull (from the main worktree). ----
+    if no_pull {
+        eprintln!("  step 4: skipping `aida pull` (--no-pull)");
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::Pull,
+            &StepOutcome::Skipped("--no-pull".into()),
+        );
+    } else {
+        eprintln!(
+            "  step 4: running `aida pull` from main worktree ({})",
+            main_worktree.display()
+        );
+        // Spawn `aida pull` as a subcommand. We resolve the current
+        // binary via `current_exe()` so an unactivated dev build still
+        // calls itself, not whatever `aida` happens to be on PATH.
+        let aida_bin =
+            std::env::current_exe().context("could not resolve current `aida` binary path")?;
+        let pull_status = std::process::Command::new(&aida_bin)
+            .current_dir(&main_worktree)
+            .arg("pull")
+            .status()
+            .context("could not invoke `aida pull`")?;
+        if !pull_status.success() {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &ShipStep::Pull,
+                &StepOutcome::Failed(format!("exit {}", pull_status)),
+            );
+            let hint = recovery_hint(&ShipStep::Pull, Some(pr_number));
+            eprintln!(
+                "{} `aida pull` failed — the merge already landed, so this \
+                 is a sync issue, not a merge issue.",
+                "⚠".yellow().bold()
+            );
+            eprintln!("  {}", hint);
+            // Don't bail — the merge landed; pull failure is recoverable.
+        } else {
+            eprintln!("  {} pulled main", "✓".green());
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &ShipStep::Pull,
+                &StepOutcome::Ok,
+            );
+        }
+    }
+
+    // ---- Step 5: end the lease (worktree cleanup). ----
+    if no_cleanup {
+        eprintln!("  step 5: skipping `aida session end` (--no-cleanup)");
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::EndLease,
+            &StepOutcome::Skipped("--no-cleanup".into()),
+        );
+    } else {
+        let lease_for_branch = list_leases(&main_worktree)
+            .into_iter()
+            .find(|l| l.branch == branch);
+        match lease_for_branch {
+            Some(lease) => {
+                // If our cwd is inside the worktree we're about to
+                // remove, `aida session end` will refuse (BUG-61 live-
+                // claude check). Detect and skip with a clear next-step.
+                let cwd = std::env::current_dir().ok();
+                let inside_target = cwd
+                    .as_deref()
+                    .map(|c| c.starts_with(&lease.worktree_path))
+                    .unwrap_or(false);
+                if inside_target {
+                    eprintln!(
+                        "  step 5: lease {} owns this shell's worktree — \
+                         exit this shell, then run `aida session end {}`",
+                        lease.id, lease.id
+                    );
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(pr_number),
+                        &ShipStep::EndLease,
+                        &StepOutcome::Skipped(format!(
+                            "shell inside lease {} — user must run `aida session end {}` after exiting",
+                            lease.id, lease.id
+                        )),
+                    );
+                } else {
+                    eprintln!(
+                        "  step 5: ending lease {} (worktree {})",
+                        lease.id,
+                        lease.worktree_path.display()
+                    );
+                    let aida_bin = std::env::current_exe()
+                        .context("could not resolve current `aida` binary path")?;
+                    let end_status = std::process::Command::new(&aida_bin)
+                        .current_dir(&main_worktree)
+                        .args(["session", "end", &lease.id, "--yes", "--skip-ci"])
+                        .status()
+                        .context("could not invoke `aida session end`")?;
+                    if !end_status.success() {
+                        log_ship_activity(
+                            &main_worktree,
+                            Some(pr_number),
+                            &ShipStep::EndLease,
+                            &StepOutcome::Failed(format!("exit {}", end_status)),
+                        );
+                        let hint = recovery_hint(&ShipStep::EndLease, Some(pr_number));
+                        eprintln!("{} session end failed", "⚠".yellow().bold());
+                        eprintln!("  {}", hint);
+                    } else {
+                        eprintln!("  {} ended lease {}", "✓".green(), lease.id);
+                        log_ship_activity(
+                            &main_worktree,
+                            Some(pr_number),
+                            &ShipStep::EndLease,
+                            &StepOutcome::Ok,
+                        );
+                    }
+                }
+            }
+            None => {
+                eprintln!(
+                    "  step 5: no AIDA lease for branch {} — nothing to clean up",
+                    branch
+                );
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::EndLease,
+                    &StepOutcome::Skipped(format!("no lease for branch {}", branch)),
+                );
+            }
+        }
+    }
+
+    eprintln!(
+        "{} aida pr ship — PR-{} shipped",
+        "✓".green().bold(),
+        pr_number
+    );
+    // Keep the activity-event formatter referenced so the warning-as-
+    // unused-import doesn't fire if a future refactor narrows usage.
+    let _ = format_activity_event;
+    Ok(())
+}
+
+/// `gh pr create` with title/body derived from the latest commit on
+/// `branch`. Returns the new PR's number, parsed from the URL `gh`
+/// prints on success. Branch must already be pushed; we push it first.
+fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64> {
+    use pr_ship::{
+        derive_pr_body_from_commit, derive_pr_title_from_commit, parse_pr_number_from_create_output,
+    };
+
+    // Push first so `gh pr create` doesn't error with "no commits between".
+    eprintln!("  pushing {} to origin", branch);
+    let push_status = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["push", "-u", "origin", branch])
+        .status()
+        .context("could not invoke `git push`")?;
+    if !push_status.success() {
+        anyhow::bail!("`git push -u origin {branch}` failed — investigate before retrying");
+    }
+
+    let commit_msg_out = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["log", "-1", "--format=%B"])
+        .output()
+        .context("could not invoke `git log` to derive PR title/body")?;
+    if !commit_msg_out.status.success() {
+        anyhow::bail!(
+            "`git log -1 --format=%B` failed: {}",
+            String::from_utf8_lossy(&commit_msg_out.stderr).trim()
+        );
+    }
+    let commit_msg = String::from_utf8_lossy(&commit_msg_out.stdout).to_string();
+    let title = derive_pr_title_from_commit(&commit_msg);
+    let body = derive_pr_body_from_commit(&commit_msg);
+    if title.is_empty() {
+        anyhow::bail!("could not derive a non-empty PR title from the latest commit");
+    }
+
+    let mut args: Vec<String> = vec![
+        "pr".into(),
+        "create".into(),
+        "--title".into(),
+        title.clone(),
+        "--base".into(),
+        "main".into(),
+    ];
+    if body.is_empty() {
+        args.push("--body".into());
+        args.push("".into());
+    } else {
+        args.push("--body".into());
+        args.push(body);
+    }
+
+    let out = std::process::Command::new("gh")
+        .current_dir(project_root)
+        .args(args.iter().map(String::as_str))
+        .output()
+        .context("could not invoke `gh pr create`")?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "`gh pr create` failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    parse_pr_number_from_create_output(&stdout).ok_or_else(|| {
+        anyhow::anyhow!(
+            "`gh pr create` succeeded but no PR number found in its output: {}",
+            stdout.trim()
+        )
+    })
+}
+
+/// True when `branch` is checked out in a worktree other than the main
+/// worktree at `main_worktree`. Used by `aida pr ship` to decide
+/// whether `gh pr merge --delete-branch` will fail its local cleanup
+/// step (the friction class from TASK-406).
+fn branch_in_sibling_worktree(
+    main_worktree: &std::path::Path,
+    branch: &str,
+    project_root: &std::path::Path,
+) -> bool {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output();
+    let Ok(out) = out else {
+        return false;
+    };
+    if !out.status.success() {
+        return false;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // Porcelain output: blank-line-separated records. Each record has
+    // a `worktree <path>` line and (when on a named branch) a
+    // `branch refs/heads/<name>` line.
+    let mut current_path: Option<std::path::PathBuf> = None;
+    for line in stdout.lines() {
+        if let Some(rest) = line.strip_prefix("worktree ") {
+            current_path = Some(std::path::PathBuf::from(rest));
+        } else if let Some(rest) = line.strip_prefix("branch ") {
+            let name = rest.strip_prefix("refs/heads/").unwrap_or(rest);
+            if name == branch {
+                if let Some(p) = &current_path {
+                    if p != main_worktree {
+                        return true;
+                    }
+                }
+            }
+        } else if line.is_empty() {
+            current_path = None;
+        }
+    }
+    false
+}
+
+/// Append a JSONL activity-log entry to `<main_worktree>/.aida/advisor-activity.jsonl`.
+/// Best-effort: silently swallows IO errors — losing a log line must
+/// never abort the ship flow. Composes with STORY-405's planned
+/// `aida status` activity surface.
+fn log_ship_activity(
+    main_worktree: &std::path::Path,
+    pr_number: Option<u64>,
+    step: &pr_ship::ShipStep,
+    outcome: &pr_ship::StepOutcome,
+) {
+    let now = chrono::Utc::now().to_rfc3339();
+    let line = pr_ship::format_activity_event(&now, pr_number, step, outcome);
+    let aida_dir = main_worktree.join(".aida");
+    if std::fs::create_dir_all(&aida_dir).is_err() {
+        return;
+    }
+    let log_path = aida_dir.join("advisor-activity.jsonl");
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        let _ = writeln!(f, "{}", line);
+    }
 }
 
 /// `aida pr rebase <N> --check` — print the stale-base / overlap /
