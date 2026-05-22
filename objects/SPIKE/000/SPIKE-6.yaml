@@ -45,12 +45,12 @@ description: |-
   ## Origin
 
   Identified in the 2026-05-16 competitive-analysis dialog as the longer-term strategic exposure: \"AIDA's Claude-Code-only `.claude/skills/` becomes a limitation. The discipline AIDA ships via scaffolding wouldn't reach Cursor/Codex users without a skillfold-style compilation layer.\"
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:47:40.188887884Z
-modified_at: 2026-05-16T22:47:40.188887884Z
+modified_at: 2026-05-22T19:59:04.512486236Z
 req_type: Spike
 tags:
 - competitive-analysis
@@ -59,3 +59,7 @@ tags:
 - post-alpha
 - skillfold
 - spike
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-22T19:59:04.512486236Z
+  completion_sha: f95e8df262aac09db134fec3020b0631aeab4575
