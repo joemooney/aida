@@ -1,0 +1,28 @@
+id: 019e5173-ed67-7860-8cc7-59aed1d1c7ba
+spec_id: TASK-475
+agreed_id: TASK-475
+title: 'aida queue list: warn when local orphan store is behind origin/aida-store'
+description: |-
+  When a multi-node user runs 'aida queue list' on a node whose local 'aida-store' branch is behind 'origin/aida-store', the listing is silently stale. '--sync' covers the opt-in case but defaults preserve the surprise.
+
+  Cheap nudge: at the top of 'aida queue list' (default, non-quiet path), if '~/.aida/cache/last-fetch.toml' carries a recent fetch (e.g. within the last hour) AND local 'aida-store' is N commits behind 'origin/aida-store', print one yellow line:
+
+    Note: orphan store is N commits behind origin/aida-store. Run 'aida pull' or 'aida queue list --sync' to refresh.
+
+  Skip when offline (no fetch ref), when N=0, or when '--quiet'/'--json' is in play. Mirrors the existing statusline behind-count surface.
+
+  Origin: BUG-220 acceptance bullet (B) — 'possibly improve aida queue list to flag stale-cache state'. The doc landed in PR; this is the optional in-tool nudge.
+
+  Why low priority: '--sync' already exists and 'auto_push = "session-end"' is the durable fix; this is a papercut for users who haven't configured it.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:50:12.455310995Z
+modified_at: 2026-05-22T20:50:12.455310995Z
+req_type: Task
+tags:
+- from-spec:BUG-220
+- multi-node
+- papercut
+- queue-ux
