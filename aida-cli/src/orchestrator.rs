@@ -423,3 +423,356 @@ mod tests {
     // to the same drain-state-keyed checks `run_is_live` covers above. Avoiding
     // env mutation here keeps the test suite parallel-safe.
 }
+
+// ----------------------------------------------------------------------------
+// BUG-307: orchestrator auto-release of dormant leases.
+//
+// The drain reliability arc (BUG-285, BUG-286, BUG-266) closed the failure
+// modes that produced phase stalls, leaving *stale-lease state from previous
+// stalls* as the dominant friction class — every recovered failure leaves a
+// lease behind, and the NEXT drain on the same spec or PR trips on it. When
+// the lease's process is gone and the worktree has no uncommitted work, the
+// refusal generates manual friction without protecting anything. This module
+// classifies a lease-conflict candidate against three independent liveness
+// signals and decides whether the orchestrator can safely auto-release it.
+//
+// The classifier is intentionally pure (takes pre-collected signals, returns
+// an enum) so the decision matrix is unit-testable without disk or process
+// shenanigans. The wrapper in `main.rs` (`auto_release_decision_for_lease`)
+// gathers the signals and calls it.
+//
+// trace:BUG-307 | ai:claude
+// ----------------------------------------------------------------------------
+
+/// `[orchestrator]` section in `.aida/config.toml`. Defaults mirror the BUG-307
+/// acceptance criteria — feature on, 10-minute fresh-lease threshold — so a
+/// project that has never written the section gets the auto-release behaviour
+/// for free. Missing file / section / keys all fall through to defaults; a
+/// config error never blocks the orchestrator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OrchestratorConfig {
+    /// Master switch. `false` reverts to the pre-BUG-307 behaviour: refuse on
+    /// any same-scope lease conflict without `--steal`.
+    pub auto_release_dormant_leases: bool,
+    /// Lease-file mtime threshold (minutes). A lease whose mtime is younger
+    /// than this is treated as "fresh" and never auto-released even if its
+    /// PID is dead — protects the brief window between session_start writing
+    /// the lease and the shell wiring up.
+    pub stale_lease_threshold_minutes: u64,
+}
+
+impl Default for OrchestratorConfig {
+    fn default() -> Self {
+        Self {
+            auto_release_dormant_leases: true,
+            stale_lease_threshold_minutes: 10,
+        }
+    }
+}
+
+impl OrchestratorConfig {
+    /// Load `[orchestrator]` from `<project_root>/.aida/config.toml`. Missing
+    /// file / section / keys all fall through to defaults.
+    pub(crate) fn load(project_root: &Path) -> Self {
+        let Ok(content) = std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+        else {
+            return Self::default();
+        };
+        Self::from_toml_str(&content)
+    }
+
+    /// Build from a raw TOML string — used by the tests so they don't have
+    /// to touch the filesystem.
+    pub(crate) fn from_toml_str(content: &str) -> Self {
+        let mut cfg = Self::default();
+        for (key, val) in scan_orchestrator_section(content) {
+            match key.as_str() {
+                "auto_release_dormant_leases" => {
+                    if let Some(b) = parse_orch_bool(&val) {
+                        cfg.auto_release_dormant_leases = b;
+                    }
+                }
+                "stale_lease_threshold_minutes" => {
+                    if let Ok(n) = val.parse::<u64>() {
+                        cfg.stale_lease_threshold_minutes = n;
+                    }
+                }
+                _ => {}
+            }
+        }
+        cfg
+    }
+}
+
+fn parse_orch_bool(v: &str) -> Option<bool> {
+    match v.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Some(true),
+        "false" | "0" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+/// Hand-rolled `[orchestrator]` scanner — mirrors the one in `advisor.rs` so we
+/// don't pull a serde TOML dependency for two scalars.
+fn scan_orchestrator_section(content: &str) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    let mut in_section = false;
+    for raw in content.lines() {
+        let line = strip_inline_comment(raw).trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(stripped) = line.strip_prefix('[') {
+            in_section = stripped.trim_end_matches(']').trim() == "orchestrator";
+            continue;
+        }
+        if in_section {
+            if let Some((k, v)) = line.split_once('=') {
+                let v = v.trim().trim_matches('"').trim_matches('\'').trim();
+                pairs.push((k.trim().to_string(), v.to_string()));
+            }
+        }
+    }
+    pairs
+}
+
+fn strip_inline_comment(s: &str) -> &str {
+    let (mut dq, mut sq) = (false, false);
+    for (i, c) in s.char_indices() {
+        match c {
+            '"' if !sq => dq = !dq,
+            '\'' if !dq => sq = !sq,
+            '#' if !dq && !sq => return &s[..i],
+            _ => {}
+        }
+    }
+    s
+}
+
+/// The verdict for a single same-scope lease conflict against the BUG-307
+/// auto-release gate. The orchestrator's pre-flight loop branches on this:
+/// `SafelyDormant` → force-cleanup and continue; `DormantDirty` → refuse with
+/// a recover-flavored error; `Live` → fall through to the existing `--steal`
+/// path (which itself refuses without `--steal`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AutoReleaseDecision {
+    /// PID alive, mtime fresh, or a live claude is running inside the
+    /// worktree — leave it alone, current refusal applies.
+    Live,
+    /// Lease's process is gone, mtime is past the staleness threshold, and
+    /// the worktree is either missing or holds no uncommitted changes — safe
+    /// to release without `--steal`.
+    SafelyDormant {
+        /// True iff `creator_pid` is no longer in the process table (or the
+        /// lease never recorded a creator_pid — pre-STORY-73 leases).
+        process_dead: bool,
+        /// Age of the lease file in seconds; surfaced in the release log so
+        /// the operator sees *how* stale the lease was.
+        mtime_age_secs: i64,
+        /// True iff the worktree directory no longer exists. Distinguishes
+        /// "lease + worktree both leaked" from "lease still references a
+        /// clean worktree we're about to remove."
+        worktree_missing: bool,
+    },
+    /// Lease is dormant but its worktree has uncommitted changes — refuse
+    /// with a loss-risk-aware message instead of silently discarding work.
+    DormantDirty {
+        /// Number of uncommitted entries reported by `git status --porcelain`.
+        dirty_entries: usize,
+    },
+}
+
+/// BUG-307: pure classifier for the auto-release gate. Given pre-collected
+/// liveness signals + the configured threshold, decide whether a same-scope
+/// lease conflict is safe to release without `--steal`.
+///
+/// The "lease is live" predicate is intentionally generous: ANY of (a) the
+/// creator-shell PID is alive, (b) the lease file's mtime is younger than the
+/// threshold, (c) a live `claude` process is running inside the worktree
+/// suffices. The auto-release path only fires when *all three* fail — the
+/// safety case is the one the bug filed against (`◐ dormant`, no live claude,
+/// lease minted hours ago).
+///
+/// trace:BUG-307 | ai:claude
+pub(crate) fn classify_for_auto_release(
+    pid_alive: bool,
+    lease_mtime_age_secs: i64,
+    live_claude_in_worktree: bool,
+    worktree_exists: bool,
+    worktree_dirty_count: usize,
+    threshold_minutes: u64,
+) -> AutoReleaseDecision {
+    // Negative age (clock skew, lease written in the future) is treated as
+    // fresh — the operator can't tell whether the lease was just written or
+    // arrived from a misconfigured clock, so we fail safe by refusing to
+    // auto-release.
+    let threshold_secs = (threshold_minutes as i64).saturating_mul(60);
+    let mtime_fresh = lease_mtime_age_secs < threshold_secs;
+    if pid_alive || mtime_fresh || live_claude_in_worktree {
+        return AutoReleaseDecision::Live;
+    }
+    if worktree_exists && worktree_dirty_count > 0 {
+        return AutoReleaseDecision::DormantDirty {
+            dirty_entries: worktree_dirty_count,
+        };
+    }
+    AutoReleaseDecision::SafelyDormant {
+        process_dead: !pid_alive,
+        mtime_age_secs: lease_mtime_age_secs,
+        worktree_missing: !worktree_exists,
+    }
+}
+
+#[cfg(test)]
+mod auto_release_tests {
+    use super::*;
+
+    // --- config loader ------------------------------------------------------
+
+    #[test]
+    fn config_defaults_when_no_section() {
+        let cfg = OrchestratorConfig::from_toml_str("");
+        assert_eq!(cfg, OrchestratorConfig::default());
+        assert!(cfg.auto_release_dormant_leases);
+        assert_eq!(cfg.stale_lease_threshold_minutes, 10);
+    }
+
+    #[test]
+    fn config_reads_explicit_section() {
+        let cfg = OrchestratorConfig::from_toml_str(
+            "[orchestrator]\n\
+             auto_release_dormant_leases = false\n\
+             stale_lease_threshold_minutes = 30\n",
+        );
+        assert!(!cfg.auto_release_dormant_leases);
+        assert_eq!(cfg.stale_lease_threshold_minutes, 30);
+    }
+
+    #[test]
+    fn config_ignores_other_sections() {
+        let cfg = OrchestratorConfig::from_toml_str(
+            "[advisor]\n\
+             auto_release_dormant_leases = false\n\
+             [other]\n\
+             stale_lease_threshold_minutes = 99\n",
+        );
+        // Neither key was inside [orchestrator] — defaults stand.
+        assert_eq!(cfg, OrchestratorConfig::default());
+    }
+
+    #[test]
+    fn config_tolerates_inline_comments_and_quotes() {
+        let cfg = OrchestratorConfig::from_toml_str(
+            "[orchestrator]\n\
+             auto_release_dormant_leases = \"true\"  # explicit\n\
+             stale_lease_threshold_minutes = 5\n",
+        );
+        assert!(cfg.auto_release_dormant_leases);
+        assert_eq!(cfg.stale_lease_threshold_minutes, 5);
+    }
+
+    #[test]
+    fn config_unparseable_values_fall_back_to_default() {
+        let cfg = OrchestratorConfig::from_toml_str(
+            "[orchestrator]\n\
+             auto_release_dormant_leases = maybe\n\
+             stale_lease_threshold_minutes = forever\n",
+        );
+        assert_eq!(cfg, OrchestratorConfig::default());
+    }
+
+    // --- classifier (pure decision matrix) ---------------------------------
+
+    /// The canonical "auto-release me" case from the BUG-307 report: process
+    /// dead, mtime old, no live claude, worktree clean → safe to release.
+    #[test]
+    fn classify_dormant_clean_is_safely_dormant() {
+        let d = classify_for_auto_release(
+            /* pid_alive */ false, /* mtime_age_secs */ 7200, // 2h ago
+            /* live_claude */ false, /* worktree_exists */ true, /* dirty */ 0,
+            /* threshold_minutes */ 10,
+        );
+        assert!(matches!(
+            d,
+            AutoReleaseDecision::SafelyDormant {
+                process_dead: true,
+                mtime_age_secs: 7200,
+                worktree_missing: false,
+            }
+        ));
+    }
+
+    /// PID still in the process table → still live, regardless of worktree
+    /// state. The user might be coming back to the shell.
+    #[test]
+    fn classify_pid_alive_is_live_even_if_clean() {
+        let d = classify_for_auto_release(true, 99_999, false, true, 0, 10);
+        assert_eq!(d, AutoReleaseDecision::Live);
+    }
+
+    /// Mtime within the threshold protects a freshly-minted lease whose shell
+    /// hasn't wired up yet (PID briefly absent from the table during exec).
+    #[test]
+    fn classify_mtime_fresh_is_live_even_if_pid_dead() {
+        // 5 minutes old, 10-minute threshold → still fresh.
+        let d = classify_for_auto_release(false, 300, false, true, 0, 10);
+        assert_eq!(d, AutoReleaseDecision::Live);
+    }
+
+    /// Mtime exactly at the threshold → no longer fresh. The check is `<`.
+    #[test]
+    fn classify_mtime_at_threshold_is_not_fresh() {
+        let d = classify_for_auto_release(false, 600, false, true, 0, 10);
+        assert!(matches!(d, AutoReleaseDecision::SafelyDormant { .. }));
+    }
+
+    /// A live `claude` process inside the worktree pins the lease as live
+    /// even when our PID + mtime checks both say "gone" (e.g. the lease's
+    /// creator shell exited but its claude is still running).
+    #[test]
+    fn classify_live_claude_pins_as_live() {
+        let d = classify_for_auto_release(false, 7200, true, true, 0, 10);
+        assert_eq!(d, AutoReleaseDecision::Live);
+    }
+
+    /// Dirty worktree is the load-risk gate: refuse with the specific
+    /// recover-hint message rather than silently nuking the work.
+    #[test]
+    fn classify_dormant_dirty_refuses() {
+        let d = classify_for_auto_release(false, 7200, false, true, 3, 10);
+        assert_eq!(d, AutoReleaseDecision::DormantDirty { dirty_entries: 3 });
+    }
+
+    /// Worktree gone → release the leftover lease record. This is the
+    /// "session worktree was rm-rf'd out from under us" recovery case.
+    #[test]
+    fn classify_no_worktree_is_safely_dormant() {
+        let d = classify_for_auto_release(false, 7200, false, false, 0, 10);
+        assert_eq!(
+            d,
+            AutoReleaseDecision::SafelyDormant {
+                process_dead: true,
+                mtime_age_secs: 7200,
+                worktree_missing: true,
+            }
+        );
+    }
+
+    /// A negative mtime age (clock skew, lease written in the future) is
+    /// treated as fresh — fail safe by refusing to auto-release.
+    #[test]
+    fn classify_negative_mtime_age_is_treated_as_fresh() {
+        let d = classify_for_auto_release(false, -42, false, true, 0, 10);
+        assert_eq!(d, AutoReleaseDecision::Live);
+    }
+
+    /// A `0`-minute threshold disables the mtime-fresh check entirely —
+    /// mtime alone never pins the lease, only PID and live-claude do. Useful
+    /// for tests + operators who don't trust the mtime signal at all.
+    #[test]
+    fn classify_zero_threshold_means_mtime_never_pins() {
+        // 0s old → still not fresh because the threshold is 0.
+        let d = classify_for_auto_release(false, 0, false, true, 0, 0);
+        assert!(matches!(d, AutoReleaseDecision::SafelyDormant { .. }));
+    }
+}
