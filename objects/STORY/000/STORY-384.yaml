@@ -74,7 +74,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:37:28.746765756Z
-modified_at: 2026-05-21T14:40:33.828579945Z
+modified_at: 2026-05-22T01:17:33.159852070Z
 req_type: Story
 tags:
 - automation
@@ -89,3 +89,14 @@ comments:
   content: 'Acceptance refinement (2026-05-21, user note): the wizard''s CI-wait step must use `gh pr checks <N> --watch` (or AIDA''s `--wait-ci` equivalent) between PR-create and merge — blocking on CI is not optional. Merging on uncolored CI risks shipping with an actually-red build that hasn''t reported yet. User context: manual recovery of TASK-416 required them to remember the `--wait-ci` step; the wizard should make it impossible to skip. Also: wrap the merge call with BUG-286''s transient-retry layer so network blips don''t abort an otherwise-clean recovery.'
   created_at: 2026-05-21T14:40:33.828579945Z
   modified_at: 2026-05-21T14:40:33.828579945Z
+- id: 019e4d42-5467-7152-a6d1-d75791053f5d
+  author: joe
+  content: |-
+    Acceptance addition (2026-05-21 ~04:30 during STORY-360 rebase recovery): the wizard's PR-state branch must handle 'rebase-needed' as a distinct recovery path:
+
+    State: PR exists, mergeable=CONFLICTING.
+    Action: spawn rebase worktree → fetch origin/main → rebase → on conflict-block: surface the conflicting file count + first 3 file paths, ask 'auto-resolve additive (imports + non-overlapping)' / 'pause for manual resolution' / 'abort' / 'spawn implementer for resolution' → on resolution: build verify → force-push → wait CI → merge → pull → cleanup.
+
+    Captures today's empirical: rebase conflicts are often trivially additive (imports, append-only function lists, parallel struct fields). The wizard should detect and offer auto-merge for those cases — pause for the substantive ones.
+  created_at: 2026-05-22T01:17:33.159852070Z
+  modified_at: 2026-05-22T01:17:33.159852070Z
