@@ -10,13 +10,17 @@ description: |
   Fix: take a `fcntl::flock` on the leases directory (or on a sentinel file under it) for the duration of the check + write. Or use a `rename`-based create — write to a `claim_lock.<spec>.tmp` file, then `rename` to `claim_lock.<spec>` and reject if rename target exists (`O_EXCL` semantics via rename-no-replace where supported).
 
   Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:25:54.868058122Z
-modified_at: 2026-05-22T16:35:15.252397678Z
+modified_at: 2026-05-22T16:45:30.389269829Z
 req_type: Task
 tags:
 - from-review:PR-162
 - severity:minor
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-22T16:45:30.389269829Z
+  implemented_by: joe
