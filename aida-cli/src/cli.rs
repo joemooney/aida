@@ -2777,6 +2777,22 @@ pub enum QueueCommand {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
+        /// Calibration mode override — turn the cold-boot vs fork-from-live
+        /// advisor calibration ledger ON for *this* drain regardless of
+        /// `[advisor] calibration_mode`. With it on, every punt produces
+        /// both a cold-boot verdict (which drives the drain) and a
+        /// fork-from-live verdict (shadow only) when a live advisor is
+        /// registered. Recorded to `.aida/punts/<punt-id>/calibration.yaml`.
+        /// Only meaningful with `--no-human=both`.
+        // trace:STORY-347 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, conflicts_with = "no_calibrate")]
+        calibrate: bool,
+        /// Calibration mode override — turn calibration OFF for *this*
+        /// drain regardless of `[advisor] calibration_mode`. Pair with
+        /// `--calibrate` to flip the toggle per-drain.
+        // trace:STORY-347 | ai:claude
+        #[clap(long)]
+        no_calibrate: bool,
     },
     /// Show what an active session has shipped so far alongside what
     /// remains. Bucketed view (Shipped / In flight / Working now /
@@ -2948,6 +2964,69 @@ pub enum FindingsCommand {
         // trace:TASK-404 | ai:claude
         #[clap(long, value_name = "TEXT")]
         reason: Option<String>,
+    },
+
+    /// Calibration review surface — list cold-boot vs fork-from-live
+    /// advisor verdicts side-by-side. Default view shows disagreements
+    /// (the rows that name a substrate gap); `--all` widens to agreements
+    /// too, and `--stats` swaps the table for the rolling metric.
+    /// Annotate one row with the `annotate` sub-action.
+    // trace:STORY-347 | ai:claude
+    Calibration {
+        #[clap(subcommand)]
+        action: Option<CalibrationAction>,
+
+        /// Restrict to records within the window. Form: `<N>{d,h,w,m}` —
+        /// e.g. `7d`, `12h`, `2w`, `30m`.
+        #[clap(long, value_name = "WINDOW")]
+        since: Option<String>,
+
+        /// Show only records where the two advisors agreed.
+        #[clap(long, conflicts_with_all = ["disagreement", "all"])]
+        agreement: bool,
+
+        /// Show only records where the two advisors disagreed. The default
+        /// (no flag) is equivalent — disagreements are the triage signal.
+        #[clap(long, conflicts_with_all = ["agreement", "all"])]
+        disagreement: bool,
+
+        /// Show every record (agreements + disagreements + no-fork rows).
+        #[clap(long, conflicts_with_all = ["agreement", "disagreement"])]
+        all: bool,
+
+        /// Print the rolling-metric summary (agreement rate over the last N
+        /// records, 4-week trend, annotation-category histogram) instead
+        /// of the per-record table.
+        #[clap(long)]
+        stats: bool,
+
+        /// Number of records the `--stats` agreement rate considers.
+        /// Default 50.
+        #[clap(long, value_name = "N", default_value_t = 50)]
+        last: usize,
+
+        /// Emit a machine-readable JSON view instead of the human table.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
+// `aida findings calibration <ACTION>` — sub-action of the calibration
+// review surface. The base verb (`aida findings calibration` with no
+// action) lists records; the `annotate` action attaches a one-line note
+// to a specific punt-id. trace:STORY-347 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum CalibrationAction {
+    /// Annotate a calibration record. The note is a one-line triage hint;
+    /// the prefix categories `gap → wrote memory <name>`, `inherently
+    /// in-flight, accept`, and `cold-boot was actually correct` feed the
+    /// `--stats` histogram, but any text is accepted.
+    Annotate {
+        /// The punt-id (the `<SPEC>-<unix-seconds>` directory name under
+        /// `.aida/punts/`).
+        punt_id: String,
+        /// The annotation text. Trimmed; stored verbatim.
+        note: String,
     },
 }
 
