@@ -1,0 +1,42 @@
+id: 019e5166-872c-72d2-9c51-11499e6aefe6
+spec_id: TASK-474
+agreed_id: TASK-474
+title: aida add scope-detection heuristic misroutes hints when cwd has no lease
+description: |-
+  Empirical pattern observed 2026-05-22 during findings triage: `aida add` invoked from the main worktree (`/home/joe/ai/aida`) where master has no active lease attributed both newly-filed TASKs (TASK-472, TASK-473) to 'scope SPEC-410' (Codex's lease scope in a different worktree).
+
+  The routing hint shown after filing:
+    "Hint: this session owns scope SPEC-410. If TASK-472 should be a child of it, link it now: ..."
+
+  This is misleading — master's session does NOT own SPEC-410; Codex's session in /home/joe/ai/aida-spec-410 does (or did). The scope-detection heuristic seems to fall back to the most-recently-touched spec in cwd activity, or to a global active-scope marker, rather than checking 'does an active lease cover cwd?' (which would return false and skip the hint).
+
+  Related — same pattern seen earlier today on lease creation:
+  - TASK-310's lease recorded worktree as `/home/joe/ai/aida` despite Codex working in `/home/joe/ai/aida-task-310`
+  - STORY-284's lease recorded worktree as `/home/joe/ai/aida` despite Codex working in `/home/joe/ai/aida-story-284`
+
+  Common root: when an aida command runs from a directory whose lease-resolution path doesn't find a lease covering that cwd, fallback heuristics pick a session-state global rather than reporting 'no scope.'
+
+  ## Acceptance
+
+  - [ ] `aida add` only emits the 'this session owns scope X' hint when there IS an active lease covering cwd; otherwise no hint (or 'no scope to attach')
+  - [ ] Lease-creation paths (`aida session add` from MCP and CLI) record the actual worktree where the work happens, not the cwd of the command invocation
+  - [ ] Empirically verify: file a TASK from `/tmp` or any non-AIDA cwd — should NOT emit a scope hint
+  - [ ] Empirically verify: `aida session add` from a sibling-worktree-with-lease records that sibling, not the parent worktree
+
+  ## Composes with
+
+  - BUG-89 family — multi-cwd / multi-worktree state attribution patterns
+  - Today's multi-agent dogfood — three different agents hit lease metadata oddities, all stemming from the same fallback heuristic
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:35:34.316691752Z
+modified_at: 2026-05-22T20:35:34.316691752Z
+req_type: Task
+tags:
+- cli-ux
+- from-self-test
+- papercut
+- routing-hints
+- scope-detection
