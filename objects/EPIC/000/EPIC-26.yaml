@@ -90,12 +90,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user articulated the vision after 24+ hours of CLI workflow friction: 'I'm thinking about the dashboard TUI, I want a TUI sitting right on top of claude code sessions, so I easily drop out of the session to see status, maybe review or request review, or resume the same session with a pickup, basically the TUI becomes a natural layer or shell surrounding claude code.' The framing is novel because it inverts the typical 'claude is the shell' relationship: AIDA's TUI BECOMES the shell, claude lives inside. This EPIC captures the product direction; child STORYs will sub-decompose as the work is picked up.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T03:37:04.274286254Z
-modified_at: 2026-05-22T19:59:34.698884989Z
+modified_at: 2026-05-22T21:31:28.318144659Z
 req_type: Epic
 tags:
 - claude-code
@@ -260,3 +260,7 @@ comments:
   content: "SPIKE-6 compatibility spike completed. Shipped comprehensive competitive analysis at docs/competitive-analysis/skillfold-spike.md.\n\nCross-platform discipline-reach is highly strategic for the TUI Trojan-horse arc (EPIC-26). As AIDA pivots its terminal interface to a PTY-hosted session model (STORY-244), adopting a Bilingual Scaffold Pack (Option C) allows AIDA to consume standard `skillfold.yaml` flows. \n\nKey strategic recommendations:\n1. Retain AIDA's custom Claude Code slash commands and git hooks for high-fidelity native speed.\n2. Ingest `skillfold.yaml` to map composed agents directly to AIDA roles.\n3. Export AIDA's requirements-driven skills (`aida-req`, `aida-plan`, `aida-implement`) into Cursor rules (`.cursor/rules/*.mdc`) and Copilot instructions.\n4. Position AIDA as the local requirements database (.aida-store) backbone for cross-platform agent teams, making AIDA a prerequisite for any developer running a skillfold-based pipeline."
   created_at: 2026-05-22T19:59:34.698884989Z
   modified_at: 2026-05-22T19:59:34.698884989Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-22T21:31:28.318144659Z
+  completion_sha: eda81f9fbb0fc21ad9ff79a4878c5446095e7f9c
