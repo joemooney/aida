@@ -75,12 +75,12 @@ description: |-
   ## Origin
 
   2026-05-18: Claude Code surfaced a \`/agents\` tip; user asked "are we reinventing the wheel?" After the layer-distinction analysis, user articulated the broader need: *"this project needs to be aware of new capabilities added/extended in Claude Code and elsewhere. /goal is an example — it recently landed, may be useful for zen/no-human mode. Periodic review of known competitors/complements is something we must perform. We need to be able to answer: what is new in the ecosystem."* This STORY makes that ad-hoc awareness a recurring, owned discipline.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T15:18:05.742873896Z
-modified_at: 2026-05-19T05:40:39.216373469Z
+modified_at: 2026-05-22T23:28:07.686073481Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -100,3 +100,7 @@ comments:
   content: 'Ecosystem-watch seed entry (2026-05-18): **Agent Teams** — Claude Code experimental feature (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), multiple Claude Code sessions coordinating via a shared task list (kanban model) + direct teammate messaging. ASSESSMENT: **complement + architecture-validation**. It is the SAME shared-task-list coordination model AIDA''s queue/roles/store already implements — Claude Code''s team independently converged on AIDA''s architecture, which validates it. But Agent Teams is Claude-Code-LOCKED; AIDA''s model is agent-agnostic by substrate (git+YAML+MCP — Codex etc. can participate). ACTION: filed SPIKE-9 (SPIKE: MCP-as-bus for inter-agent comms) — the no-regret takeaway. STRATEGIC NOTE for the review to track: this strengthens the ''AIDA as agent-agnostic multi-agent coordination platform'' direction — captured, NOT a roadmap pivot; revisit-trigger = real users + stable autonomy layer + a validating Codex user. Add to ecosystem-watch.md alongside /goal, /agents, /remote-control.'
   created_at: 2026-05-19T05:40:39.216373469Z
   modified_at: 2026-05-19T05:40:39.216373469Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-22T23:28:07.686073481Z
+  completion_sha: 06b1bbcceb35ebf86994dd34441fb7f252aed392
