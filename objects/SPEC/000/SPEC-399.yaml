@@ -2,13 +2,19 @@ id: 019e5092-7a34-7f91-92b0-cd6ae1c19f54
 spec_id: SPEC-399
 title: Antigravity Phase 1 Verification and Setup Complete
 description: Antigravity CLI (1.107.0 / 1.0.1) has successfully configured its MCP server integration, validated all read-only tools matching CLI output, and completed writing the docs/agents/antigravity-mcp-setup.md guide.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:43:57.364760096Z
-modified_at: 2026-05-22T16:43:57.364760096Z
+modified_at: 2026-05-22T20:31:42.902215117Z
 req_type: Task
 tags:
 - from-implementer:STORY-407
 - severity:minor
+comments:
+- id: 019e5162-ff36-7e90-840d-f55f0150a060
+  author: joe
+  content: 'Dismissed by joe 2026-05-22: Not a triageable finding — Phase 1 status report. file_finding is for bugs/tasks the project should act on, not session checkpoints. See onboarding doc clarification follow-up.'
+  created_at: 2026-05-22T20:31:42.902215117Z
+  modified_at: 2026-05-22T20:31:42.902215117Z
