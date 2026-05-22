@@ -1,0 +1,55 @@
+id: 019e5064-72aa-7e83-899a-275ac4431658
+spec_id: STORY-405
+agreed_id: STORY-405
+title: 'aida status: surface live advisor / external state-affecting activity (raw shell recoveries, manual merges, lease cleanups)'
+description: |-
+  ## Problem
+
+  \`aida status\` shows AIDA-tracked state: orchestrator drains (STORY-301), leases (\`aida session leases\`), queue, project totals. But when the live advisor (a Claude Code session) does state-affecting work via raw shell — manual PR merges, lease cleanup batches, hand-pushed recoveries — none of it appears in any AIDA surface. The activity affects the same state (specs flip to Completed, leases get ended, PRs merge), but the *fact that work is in progress right now* is invisible.
+
+  User question 2026-05-22: *\"Will aida status show status of what you are doing in the background at the moment?\"* — answer today is no. Worth closing the gap.
+
+  ## Approach
+
+  When the live advisor (or any \`aida\`-invocation-from-a-session) runs state-affecting commands, append a lightweight breadcrumb to a runtime file (e.g. \`.aida/advisor-activity.jsonl\`) capturing:
+
+  - timestamp
+  - caller identity (session UUID, role)
+  - action category (\`pr-merge\`, \`lease-end\`, \`spec-status-flip\`, \`worktree-cleanup\`, etc.)
+  - target (PR#, lease ID, spec ID)
+  - outcome (success / failure / in-progress)
+
+  \`aida status\` then surfaces a \"Recent advisor activity\" section showing the last N events (default 5), grouped by category. Optional \`aida status --activity\` filters to just that surface.
+
+  ## Acceptance
+
+  - New JSONL file \`.aida/advisor-activity.jsonl\` (gitignored).
+  - \`aida\` CLI invocations that flip spec status, end leases, or directly affect PR state append a single line on success or failure.
+  - \`aida status\` default output gains a \"Recent advisor activity\" footer (last 5 events, last 30 min) when non-empty.
+  - \`aida status --activity\` shows the full activity log (paged).
+  - \`aida status --activity --since <duration>\` time-filters.
+  - Privacy: log only the action shape + identifiers; no spec content, no PR body, no file paths beyond the standard \`.aida/\` runtime paths.
+  - Compose with STORY-385 (\`aida status --cleanup\`) — both surfaces share the \"things the user should know about\" framing.
+
+  ## Why low priority
+
+  The visibility gap is real but not blocking. Most workflows have a human at the keyboard who knows what they kicked off. The wedge case is multi-developer / cross-machine / cross-agent where one party affected state another party isn't aware of. Until that case is common, the manual \`tail /tmp/.../tasks/*.output\` + \`gh pr list\` workaround suffices.
+
+  Compose into adoption-readiness work (alpha-readiness tag candidate) when the second user lands.
+
+  ## Origin
+
+  User question 2026-05-22 while a 3-PR recovery cascade ran in background via Bash tool. The cascade affected state (BUG-307, BUG-310, BUG-311 merges + lease cleanups) but \`aida status\` was silent on it.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T15:53:40.778620533Z
+modified_at: 2026-05-22T15:53:40.778620533Z
+req_type: Story
+tags:
+- advisor-activity
+- aida-status
+- from-user-question
+- observability
+- visibility-gap
