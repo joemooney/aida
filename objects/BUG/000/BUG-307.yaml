@@ -1,0 +1,56 @@
+id: 019e4e4f-93a3-7c92-a6cc-9cd387495f7a
+spec_id: BUG-307
+agreed_id: BUG-307
+title: 'Orchestrator: auto-detect + auto-clean dormant leases (process dead) before refusing on lease conflict'
+description: |-
+  ## Symptom
+
+  Twice tonight (2026-05-22) a drain hit a lease conflict and refused, requiring manual \`aida session end <lease>\` or \`--steal\`:
+
+  1. **TASK-440 phase 1** — \`scope TASK-440 is owned by lease 019e4de5 (implementer, worktree: /home/joe/ai/aida-task-440)\`. The lease was from the original punted attempt; the punt resolved hours ago; the lease's process was long dead; the worktree was clean (no commits ahead of main).
+  2. **TASK-439 phase 3** — \`scope PR-166 is owned by lease 019e4dda (reviewer, worktree: /home/joe/ai/aida-pr-166)\`. Same shape: stale reviewer lease from a prior attempt; process dead; no work in the worktree.
+
+  Both leases were **demonstrably dead** (no live process matching the recorded PID; status \`◐ dormant\` per \`aida session leases --all\`). The orchestrator's refusal generates manual friction without protecting anything.
+
+  ## Acceptance
+
+  - When the orchestrator hits a lease conflict, it checks **liveness** of the recorded lease before refusing:
+    - Is the lease's launched PID still alive? (\`kill -0 <pid>\` equivalent)
+    - Has the lease's mtime been updated in the last N minutes? (configurable; default 10m)
+    - Does the worktree contain uncommitted changes? (loss-risk gate)
+  - **If lease is dead AND worktree is clean** → auto-release the lease and proceed transparently (no \`--steal\` needed). Log it: \`ⓘ released stale lease 019e4de5 (process dead 2h ago, worktree clean)\`.
+  - **If lease is dead AND worktree has uncommitted changes** → refuse with a specific error: \`✗ lease 019e4de5 is dormant but its worktree has uncommitted changes; pass --steal --force-discard to discard, or run aida queue recover <spec> to preserve.\` (STORY-384's wizard handles the recover path.)
+  - **If lease appears live (PID exists, mtime fresh)** → refuse with current behavior — that's the safety case the existing gate is for.
+  - \`--steal\` retains its current semantics for users who want explicit control.
+  - Add a config knob: \`[orchestrator] auto_release_dormant_leases = true\` (default), \`stale_lease_threshold_minutes = 10\`.
+
+  ## Why this matters now
+
+  The drain reliability arc (BUG-285 gate hole, BUG-286 retry layer, BUG-266 inconclusive classification) closes the failure modes that produced phase-X stalls. But **stale-lease state from PREVIOUS stalls** is the new dominant friction class — every recovered failure leaves a lease behind, and the NEXT drain on the same spec or PR trips on it. The recovery sequence is mechanical (\`aida session end\`) but interrupts the drain's flow.
+
+  Auto-cleaning dormant leases removes the last sticky-state class blocking unsupervised drains.
+
+  ## Composes with
+
+  - **TASK-358** (shipped) — cleaned up worktrees from \`--escalate-blocks\` punts. This BUG is the same idea generalized to ALL dormant leases.
+  - **STORY-384** (recovery wizard) — when the lease has uncommitted work, the wizard handles it; this BUG only acts on the safe cases.
+  - **BUG-289** — \`aida pr rebase\` worktree friction; same family (stale worktrees from prior attempts).
+  - Memory \`feedback_check_orchestrator_before_manual_steps\` — when this lands, the orchestrator's pre-flight is self-cleaning.
+
+  ## Origin
+
+  User report 2026-05-22 — two lease conflicts during MCP-polish drain (TASK-440 phase 1, TASK-439 phase 3). Both leases were dormant; both forced manual intervention. The pattern is recurring + cheap to fix; high priority because it directly blocks unsupervised drain reliability.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T06:11:38.531432934Z
+modified_at: 2026-05-22T06:11:38.531432934Z
+req_type: Bug
+tags:
+- drain-friction
+- from-self-test
+- from-user-friction
+- leases
+- orchestrator
+- staleness
