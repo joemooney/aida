@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:14:19.560864882Z
-modified_at: 2026-05-22T07:15:02.492305632Z
+modified_at: 2026-05-22T15:48:11.247679827Z
 req_type: Bug
 tags:
 - cli
@@ -22,3 +22,8 @@ comments:
   content: 'Reinforced 2026-05-22 by sibling agent (Codex): ''MCP-created specs were visible to MCP but not local CLI, and MCP IDs appeared inconsistent. That is more critical than outputSchema. Codex needs MCP and CLI to agree on the same project/store.'' Confirms this BUG is the load-bearing prereq for STORY-398 — without it the empirical roundtrip is broken at the most basic ''agent files spec, human sees it'' loop.'
   created_at: 2026-05-22T06:43:45.083265074Z
   modified_at: 2026-05-22T06:43:45.083265074Z
+- id: 019e505f-6b6f-7340-9bda-e7bd7b7f20fc
+  author: joe
+  content: Commit 269ac33c references this requirement
+  created_at: 2026-05-22T15:48:11.247679827Z
+  modified_at: 2026-05-22T15:48:11.247679827Z
