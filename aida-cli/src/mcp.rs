@@ -1101,6 +1101,16 @@ impl<'a> McpServer<'a> {
             .get("verb")
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: verb (drain|pause|exit)")?;
+        // trace:TASK-436 | ai:claude
+        // Validate the verb up front. The worker defensively maps unknown
+        // verbs to `pause`, but the caller deserves a clear error rather than
+        // a silently-misclassified "directive posted" success.
+        if !matches!(verb, "drain" | "pause" | "exit") {
+            return Err(format!(
+                "invalid directive verb `{}` (expected drain|pause|exit)",
+                verb
+            ));
+        }
         let args_list = args
             .get("args")
             .and_then(|v| v.as_array())
@@ -1855,6 +1865,26 @@ mod tests {
         let listed_after = srv.tool_list_directives().unwrap();
         assert!(!listed_after.contains("drain --zen"), "{}", listed_after);
         assert!(listed_after.contains("pause"), "{}", listed_after);
+    }
+
+    // trace:TASK-436 | ai:claude
+    #[test]
+    fn post_directive_rejects_unknown_verb() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+
+        let err = srv
+            .tool_post_directive(&json!({"verb": "drian"}))
+            .expect_err("typo should be rejected");
+        assert!(err.contains("invalid directive verb"), "{}", err);
+        assert!(err.contains("drian"), "{}", err);
+
+        // The bad verb must NOT have been appended to .aida/worker.cmd.
+        let path = crate::worker::worker_cmd_path(dir.path());
+        if path.exists() {
+            let body = std::fs::read_to_string(&path).unwrap();
+            assert!(!body.contains("drian"), "{}", body);
+        }
     }
 
     #[test]
