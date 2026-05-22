@@ -200,7 +200,11 @@ impl FileDispenser {
     }
 
     fn load_state(&self) -> Result<DispenserState> {
-        let content = std::fs::read_to_string(&self.path)?;
+        // Reader can race a concurrent `aida add` writer mid-`write_atomic`;
+        // on Windows that surfaces as a transient PermissionDenied/NotFound
+        // from `CreateFile`. Retry through `read_atomic` so the dispenser
+        // never spuriously fails to allocate. trace:TASK-346 | ai:claude
+        let content = crate::read_atomic(&self.path)?;
         let state: DispenserState = toml::from_str(&content)?;
         Ok(state)
     }
