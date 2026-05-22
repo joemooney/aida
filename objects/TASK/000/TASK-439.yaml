@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:11.141458341Z
-modified_at: 2026-05-22T06:06:25.714412631Z
+modified_at: 2026-05-22T06:08:38.284171513Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -25,6 +25,17 @@ relationships:
   target_id: 019e4dd9-e9f9-7a80-8663-0844a4ae671c
   created_at: 2026-05-22T04:03:11.791074248Z
   created_by: joe
+comments:
+- id: 019e4e4c-d38c-74f2-8112-b251283a1e63
+  author: joe
+  content: |-
+    Advisor resolved the punted design-fork (STORY-306).
+
+    Decision: Do not re-implement. The fix is already shipped on branch task-439 as commit d3953d99 (`fix(mcp): use write_atomic for punt-response files`), PR-166 is OPEN and MERGEABLE, and reviewer lease 019e4dda is actively reviewing it. Make zero code changes in this worktree (/home/joe/ai/aida-task-439, branch task-439-2). Write a finish-state checkpoint via `aida state-snapshot --spec TASK-439` noting: state=already-implemented-on-PR-166, deciding-factor=redundant-drain-on-Done-spec-with-open-PR, recommendation=advisor-resolved-cancel, downstream=PR-166 merge auto-bumps Done→Completed per STORY-86. Then exit phase 1 cleanly with no commits — the orchestrator will see an empty implement phase and unwind the drain; the human can finalize cleanup with `aida session end 019e4e47 --force` if the orchestrator doesn't tear down the worktree on its own.
+
+    Reasoning: Recorded principle: STORY-86 lifecycle (CLAUDE.md, `docs/lifecycle.md`) — a Done spec transitions to Completed automatically when the referencing commit lands on main via `aida pull` auto-bump; the implementer does not re-do work that is already on a branch under review. Verified facts: `gh pr view 166` shows state=OPEN, mergeable=MERGEABLE, title carries `(TASK-439)`; `aida session leases` shows reviewer lease 019e4dda on PR-166 alongside this implementer lease 019e4e47 on task-439-2 (a second branch). Re-implementing here would create a competing branch racing an open PR — destructive and explicitly counter to the lifecycle. The memory `feedback_check_in_flight_before_rejecting.md` records the inverse: in-flight work is load-bearing, the advisor checks leases before pivoting. Both apply here.
+  created_at: 2026-05-22T06:08:38.284171513Z
+  modified_at: 2026-05-22T06:08:38.284171513Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T03:59:39.765054528Z
