@@ -100,7 +100,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:49:19.704186488Z
-modified_at: 2026-05-22T17:45:19.396035135Z
+modified_at: 2026-05-22T17:51:05.619854825Z
 req_type: Story
 tags:
 - attention
@@ -198,3 +198,61 @@ comments:
     User has been navigating `git worktree list`, `aida session leases --all`, and `gh pr list` separately across many recovery + multi-agent isolation flows. The mental merge is real friction; surfacing once in `aida status` would have saved minutes per recovery.
   created_at: 2026-05-22T17:45:19.396035135Z
   modified_at: 2026-05-22T17:45:19.396035135Z
+- id: 019e50cf-f193-7b01-abc1-62431772105e
+  author: joe
+  content: |-
+    Acceptance refinement 2026-05-22 — `aida status` should also surface noteworthy git working-tree state (`git status` analogue, with categorization).
+
+    ## Working-tree state section
+
+    Three categories shown when non-empty:
+
+    ### Modified tracked files (M)
+
+    - File path + brief age signal (when last modified)
+    - Heuristic detection: if the working-tree content matches HEAD exactly (no real diff), surface as `(content matches HEAD — safe `git checkout -- <file>` to clear from status)`. This catches the case we hit 2026-05-22 where a worktree-isolation flow left identical-content modifications in main.
+    - Otherwise: `(N additions / M deletions)` — quick scope signal.
+
+    ### Untracked — recent (< 1h)
+
+    - New since last `aida status` invocation (heuristic: file mtime fresher than last invocation timestamp tracked in `.aida/last-status.toml`)
+    - Likely active work — surface but don't flag as stale.
+
+    ### Untracked — stale (≥ 1d AND still untracked since first observation)
+
+    - The accumulated drift class: `.bak` files, `__pycache__/`, abandoned scratch, etc.
+    - Heuristic patterns to auto-flag as 'likely OBE / safe to remove':
+      - `*.bak`, `*.tmp`, `*.swp`, `*.swo`, `.DS_Store` — standard editor/OS detritus
+      - `__pycache__/`, `*.pyc` — Python runtime cache
+      - `*.orig` (merge conflict leftovers)
+      - Files with empty content (often abandoned)
+    - Heuristic patterns to surface but NOT auto-flag (might be intentional):
+      - `docs/plans/*.md` — could be plan files awaiting commit
+      - `docs/writeups/*.md` — could be drafts in progress
+      - `scripts/*.py`, `scripts/*.sh` — user-authored utilities
+    - Show count + first 3 paths per heuristic class; recommend the appropriate action (`rm` for auto-flagged, `aida plans organize` or similar for ambiguous).
+
+    ### Staged files (in index)
+
+    - About-to-commit state; informational. Could just be 'staged (N files); use `git diff --cached` to review'.
+
+    ## Persistence: `.aida/last-status.toml` and `.aida/untracked-history.toml`
+
+    - `last-status.toml` records the timestamp of the most recent `aida status` invocation per cwd. Used to compute 'untracked — recent vs stale.'
+    - `untracked-history.toml` (optional, configurable) records first-observation timestamp for each untracked path. Used to compute 'still untracked since first observation' for the stale category.
+    - Both files gitignored (per-clone state).
+
+    ## Why this completes the lens
+
+    `aida status` after this story covers: session/branch/queue (today) + leases + PRs + worktrees + working-tree state + advisor activity (STORY-405) + findings + cleanup-actionable items. **Single pane of glass for 'what's in flight and what needs my attention.'** The user stops running `aida session leases`, `gh pr list`, `git worktree list`, `git status`, `aida findings list` separately — they're all just sections of one command.
+
+    ## Composes with
+
+    - The earlier acceptance refinements for findings + worktrees + PRs.
+    - The `aida pr ship` (TASK-458) and `aida queue recover` (STORY-384) wrappers — each writes activity log entries that this section can correlate against the working-tree state.
+
+    ## Empirical motivation
+
+    2026-05-22 after the 3-PR isolation sequence (SPEC-398 + STORY-407 Phase 1 + TASK-419): main worktree's `git status` showed 2 modified tracked files (`.gitignore`, `aida-cli/src/headless_tail.rs`) whose content matched HEAD exactly (post-merge), plus 8+ untracked files in two clear classes (recent vs stale-accumulated). The user had to mentally categorize each + decide per-file. `aida status` with this section would have presented: 'two tracked-modified-but-match-HEAD: safe to `git checkout --`; one stale-likely-OBE .bak file: safe to rm; 7 stale plans/writeup/script: review for commit-vs-keep-vs-remove decision.' Saves the manual sweep.
+  created_at: 2026-05-22T17:51:05.619854825Z
+  modified_at: 2026-05-22T17:51:05.619854825Z
