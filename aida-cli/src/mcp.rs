@@ -1207,16 +1207,20 @@ impl<'a> McpServer<'a> {
                 verb
             ));
         }
-        let args_list = args
-            .get("args")
-            .and_then(|v| v.as_array())
-            .map(|a| {
-                a.iter()
+        let args_list = if let Some(v) = args.get("args") {
+            if let Some(arr) = v.as_array() {
+                arr.iter()
                     .filter_map(|x| x.as_str())
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+            } else {
+                return Err(
+                    "Parameter `args` must be an array of strings (e.g. [\"arg\"])".to_string(),
+                );
+            }
+        } else {
+            Vec::new()
+        };
 
         let mut line = verb.to_string();
         if !args_list.is_empty() {

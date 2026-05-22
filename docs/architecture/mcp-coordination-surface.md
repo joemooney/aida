@@ -115,6 +115,27 @@ is a transport.
   shape requires a shell. The lightweight claim is enough to coordinate "I'm
   working on this; others stay out."
 
+## Directive channels: local worker vs global orchestrator
+
+AIDA has two distinct directive/command concepts that share terminology but serve different scopes, scopes of execution, and files.
+
+### 1. Local Worker Directives (MCP Coordination)
+- **Scope**: Coordination of the immediate worker thread/process execution.
+- **Underlying File**: `.aida/worker.cmd`
+- **MCP Tools**: `post_directive`, `list_directives`, `ack_directive`
+- **CLI Commands**: `aida worker directives` (reads and lists the same `.aida/worker.cmd` file)
+- **Verbs**: `drain`, `pause`, `exit`
+- **When to Use**: Use these when you need to coordinate or pause the specific agent/worker process itself. For example, posting `pause` tells the active worker process to pause its execution loop.
+
+### 2. Global Orchestrator-Queue Directives (Task Runner)
+- **Scope**: Centralized queue task execution instructions.
+- **Underlying Database/State**: Central orchestrator database/queue state (not `.aida/worker.cmd`).
+- **Verbs**: `drain TASK-N` (command to instruct the orchestrator to execute/drain a specific task from the backlog).
+- **When to Use**: These are orchestrator-level directives for queuing and running strategic tasks across different worktrees and agents. They do not target the local worker's loop directly.
+
+> [!NOTE]
+> Sibling agents executing under the AIDA orchestrator should use `post_directive` strictly for **Local Worker thread flow coordination** (such as pausing or exiting the immediate worker). Do not confuse it with global queue/drain execution instructions.
+
 ## Registering a non-Claude-Code agent
 
 ```bash
