@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:36:19.261874714Z
-modified_at: 2026-05-22T16:46:21.118104297Z
+modified_at: 2026-05-22T16:47:32.604288137Z
 req_type: Task
 tags:
 - codex
@@ -21,3 +21,8 @@ comments:
   content: mcp
   created_at: 2026-05-22T16:46:21.118094228Z
   modified_at: 2026-05-22T16:46:21.118094228Z
+- id: 019e5095-c2fc-7662-a21b-615883466df4
+  author: 'Implemented bounded cleanup: removed the duplicated stale `AGENT_REQUIRED_FIELDS` alias table from `tests/test_mcp_stdio.py` and documented that doc-vs-descriptor contract drift is owned by `tests/test_mcp_doc_consistency.py`. `tests/test_mcp_stdio.sh` now points at the canonical doc consistency gate. Verification: `python3 -m py_compile tests/test_mcp_stdio.py tests/test_mcp_doc_consistency.py` passed; `tests/test_mcp_stdio.sh` passed; `tests/test_mcp_doc_consistency.sh` passed; `tests/test_mcp_stdio.sh --require-structured-content` still fails at the expected STORY-399 boundary. trace:SPEC-398 | ai:codex'
+  content: mcp
+  created_at: 2026-05-22T16:47:32.604279374Z
+  modified_at: 2026-05-22T16:47:32.604279374Z
