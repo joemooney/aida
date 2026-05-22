@@ -1,0 +1,52 @@
+id: 019e5218-cc29-7171-a4f9-1932b71f8c45
+spec_id: STORY-418
+agreed_id: STORY-418
+title: 'Antigravity: own and propagate Antigravity MCP setup scaffolding into new AIDA projects'
+description: |-
+  Sub-track of STORY-416 — Antigravity owns its own integration scaffolding. Same principle as the Codex sub-track: the agent that shipped 6 PRs today (TASK-288, SPIKE-6, STORY-260, SPEC-403, PR-194 recovery, STORY-318) ships the scaffolding that makes future Antigravity users first-class AIDA participants.
+
+  ## Scope
+
+  1. **Audit + refresh docs/agents/antigravity-mcp-setup.md** — verify it matches today's state. Include the workflow patterns Antigravity demonstrated: the sibling-worktree-with-symlink (BUG-331 workaround), aida pr ship usage, trailing-parens convention adoption (post-SPEC-403 reminder).
+
+  2. **Scaffolding pipeline integration** — make `aida init` propagate `docs/agents/antigravity-mcp-setup.md` to new projects via templates/. Same mechanism as the Codex sub-track.
+
+  3. **Antigravity brain-directory considerations** — Antigravity uses `~/.gemini/antigravity-cli/brain/<session>/walkthrough.md` + task.md + implementation_plan.md as per-session artifacts. Document the AIDA-meets-Antigravity-brain expectation: which artifacts belong where, what AIDA expects to find in commit history vs in brain-dir, whether brain artifacts should be referenced from AIDA specs.
+
+  4. **Discipline lessons captured** — today's empirical evidence: the FOUR discipline gaps Antigravity hit on STORY-318 (worktree isolation, atomic-shipping, commit prefix, eventually-recovered trailer convention). Codify into setup doc so future Antigravity sessions inherit the lessons. Per the bouncer principle: prefer programmatic gates where possible; templates for what gates can't enforce.
+
+  5. **Multi-spec trailer convention** — STORY-407 followups (BUG-333, TASK-464) required manual flips because the PR title trailer carried only (STORY-407). Codify: when an Antigravity PR ships multiple specs, the trailer should list all spec IDs: `(BUG-333 TASK-464)`.
+
+  ## Acceptance
+
+  - [ ] `docs/agents/antigravity-mcp-setup.md` audited + refreshed against today's empirical state (worktree symlink for BUG-331, multi-spec trailer convention, the four discipline gaps + their recoveries)
+  - [ ] `aida init` propagates the doc to new projects
+  - [ ] Brain-directory integration documented — when brain artifacts complement AIDA, when they don't
+  - [ ] Discipline lessons codified — sibling worktree mandatory, atomic-shipping is the finish line, prefix convention, trailing-parens trailer for ALL spec IDs being shipped
+  - [ ] Self-dogfood: this story executed with the sibling-worktree + atomic-shipping + correct prefix + trailing-parens trailer (the lessons it codifies)
+
+  ## Composes with
+
+  - STORY-416 (parent — cross-agent scaffolding audit)
+  - Sibling story for Codex's scaffolding (parallel work, same shape)
+  - feedback_sibling_agents_stop_and_flag (the worktree-isolation discipline Antigravity hit)
+  - feedback_substrate_as_bouncer_not_rules (the universal gates Antigravity benefits from)
+  - BUG-331 (sibling worktree symlink workaround — Antigravity's empirical territory)
+
+  ## Why Antigravity specifically
+
+  The fourth-occurrence ceiling-pattern empirical evidence makes Antigravity's setup-doc-authoring particularly valuable — they're the canonical voice on 'what does it feel like to be a non-Claude agent learning AIDA's substrate.' Their healthy acknowledgment of feedback today shows they integrate substrate lessons well; this story is the natural application of that capacity to durable substrate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:50:17.385740996Z
+modified_at: 2026-05-22T23:50:17.385740996Z
+req_type: Story
+tags:
+- antigravity
+- cross-agent
+- from-self-test
+- parent:STORY-416
+- scaffolding
+- self-dogfood
