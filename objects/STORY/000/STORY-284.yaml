@@ -96,7 +96,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:02:09.064260047Z
-modified_at: 2026-05-17T16:02:09.064260047Z
+modified_at: 2026-05-22T20:18:49.305532636Z
 req_type: Story
 tags:
 - alpha-readiness
@@ -106,3 +106,9 @@ tags:
 - push-cadence
 - store-sync
 - team-mode
+comments:
+- id: 019e5157-3159-7682-970a-0a960574d20e
+  author: 'Implemented by PR-201 (merged at 8080b40d). Local verification: `cargo test -p aida-cli story_284_store_sync_tests --quiet`, `cargo test -p aida-cli --quiet`, and `cargo run -p aida-cli --quiet -- config show store.sync`. Note: auto-bump missed this because the squash commit subject omitted STORY-284 despite the PR title including it; filed follow-up bug from Codex.'
+  content: mcp
+  created_at: 2026-05-22T20:18:49.305523848Z
+  modified_at: 2026-05-22T20:18:49.305523848Z
