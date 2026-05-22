@@ -775,6 +775,16 @@ pub fn spawn_claude_resume(
 ///     leaves `Bash` gated and `default` auto-denies silently (spike Q2).
 ///   - `--output-format stream-json --verbose` — newline-delimited JSON
 ///     events, so a watchdog (TASK-298) can tail liveness (spike Q6).
+///   - `--disallowed-tools AskUserQuestion` — structural programmatic gate:
+///     under headless mode there is no human to answer the prompt, so the
+///     tool must be unavailable rather than advisory. BUG-280 added skill-
+///     template instructions saying "don't call AskUserQuestion under
+///     `--no-human`"; BUG-327 found a reviewer reasoning past those
+///     instructions and bailing without a verdict file. The flag is
+///     variadic on the claude side, so we wedge it between `--verbose`
+///     and `--session-id` so the next `--` token terminates its value
+///     list and the prompt positional at the tail stays the prompt.
+///     trace:BUG-327 | ai:claude
 ///   - `--session-id <uuid>` — persistence stays ON, so a killed run stays
 ///     resumable (spike Q9).
 ///
@@ -789,6 +799,8 @@ pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
+        "--disallowed-tools".to_string(),
+        "AskUserQuestion".to_string(),
         "--session-id".to_string(),
         session_id.to_string(),
         // Prompt last — a positional, mirroring `exec_claude`.
@@ -856,6 +868,12 @@ pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
+        // BUG-327: structural disable mirrors `claude_headless_args`.
+        // Variadic flag on claude's side; the next `--resume` terminates
+        // the value list so the trailing prompt positional is unharmed.
+        // trace:BUG-327 | ai:claude
+        "--disallowed-tools".to_string(),
+        "AskUserQuestion".to_string(),
         "--resume".to_string(),
         session_id.to_string(),
         // Prompt last — a positional, mirroring `claude_headless_args`.
@@ -2135,5 +2153,54 @@ mod tests {
         assert!(!args.iter().any(|a| a == "--bare"), "{args:?}");
         // The resume prompt survives into the argv.
         assert!(args.contains(&"proceed with OAuth".to_string()), "{args:?}");
+    }
+
+    /// BUG-327: both headless argv builders must structurally disable
+    /// `AskUserQuestion` so a headless reviewer / implementer / advisor
+    /// cannot reason past the skill-template instruction added in BUG-280
+    /// and bail without writing the verdict file. The flag is variadic on
+    /// the claude side (`--disallowed-tools <tools...>`), so the *placement*
+    /// matters: the next argv element after the value must start with `--`
+    /// to terminate the value list — otherwise the prompt positional at
+    /// the tail would be consumed as a second "disallowed tool". This test
+    /// pins both the presence and the safe placement.
+    /// trace:BUG-327 | ai:claude
+    #[test]
+    fn headless_argv_disables_askuserquestion_structurally() {
+        for (label, args) in [
+            ("fresh", claude_headless_args("/aida-review --pr 7", "sid")),
+            ("resume", claude_headless_resume_args("proceed", "sid")),
+        ] {
+            let pos = args
+                .iter()
+                .position(|a| a == "--disallowed-tools")
+                .unwrap_or_else(|| panic!("[{label}] --disallowed-tools missing: {args:?}"));
+            assert_eq!(
+                args.get(pos + 1).map(String::as_str),
+                Some("AskUserQuestion"),
+                "[{label}] AskUserQuestion must immediately follow --disallowed-tools: {args:?}",
+            );
+            // The variadic-terminator: the token after "AskUserQuestion"
+            // must start with "--" or "-", otherwise the prompt at the
+            // tail gets gobbled into the disallowed-tool list.
+            let terminator = args
+                .get(pos + 2)
+                .unwrap_or_else(|| panic!("[{label}] value list runs off the end: {args:?}"));
+            assert!(
+                terminator.starts_with('-'),
+                "[{label}] next argv element must be a flag (variadic terminator), \
+                 got {terminator:?}: {args:?}",
+            );
+            // Prompt positional still lands at the tail.
+            assert_eq!(
+                args.last().map(String::as_str),
+                if label == "fresh" {
+                    Some("/aida-review --pr 7")
+                } else {
+                    Some("proceed")
+                },
+                "[{label}] prompt must remain the trailing positional: {args:?}",
+            );
+        }
     }
 }
