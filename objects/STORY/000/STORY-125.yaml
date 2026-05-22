@@ -106,12 +106,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user articulated the vision: 'the ultra* commands that anthropic provides should be in our bag of tricks. Really, whatever we think is an excellent complement to aida should be at least optionally bolted on to aida so that they more naturally fit together. I am thinking that there may be a project configuration that you enable/disable that specifies when to avail/recommend the use of these capabilities.' This STORY lifts the informal pattern (already implicit in vs-ultraplan.md + TASK-113/114) into a framework so adding the Nth integration is mechanical.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:35:41.965231513Z
-modified_at: 2026-05-15T06:44:19.584090786Z
+modified_at: 2026-05-22T21:31:28.318144659Z
 req_type: Story
 tags:
 - composition
@@ -283,3 +283,7 @@ comments:
     The four primitives aren't all worth filing immediate AIDA integrations — /goal is the highest-leverage. The others are noted for completeness.
   created_at: 2026-05-15T06:44:19.584090786Z
   modified_at: 2026-05-15T06:44:19.584090786Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-22T21:31:28.318144659Z
+  completion_sha: eda81f9fbb0fc21ad9ff79a4878c5446095e7f9c
