@@ -1,0 +1,51 @@
+id: 019e5218-bbf4-7c51-bfd5-29192cb72ee4
+spec_id: STORY-417
+agreed_id: STORY-417
+title: 'Codex: own and propagate Codex MCP setup scaffolding into new AIDA projects'
+description: |-
+  Sub-track of STORY-416 — Codex owns its own integration scaffolding. The agent that just shipped 7 PRs in one day (BUG-332, TASK-310, STORY-284, SPEC-410, BUG-339, PR-209 trio-closer, TASK-470) ships the scaffolding that makes future Codex users first-class AIDA participants.
+
+  ## Scope
+
+  1. **Audit + refresh docs/agents/codex-mcp-setup.md** — verify the current content matches today's state (BUG-332's add_requirement type-required behavior, SPEC-410 + BUG-339 trailing-parens convention, BUG-344 + BUG-345 aida pr ship environmental hazards). Today's session validated several conventions empirically; the doc should reflect.
+
+  2. **Scaffolding pipeline integration** — make `aida init` propagate `docs/agents/codex-mcp-setup.md` (and the general cross-agent-onboarding.md) to new projects. Currently these docs live only in THIS repo. Implementation: copy via `aida-core/templates/` like other scaffolded docs.
+
+  3. **AGENTS.md authoring** — Codex's CLAUDE.md equivalent. The CLAUDE.md reference to it is stale (TASK-484 surfaced this). Codex is the natural author. Mirror CLAUDE.md's structure: orientation, conventions, commands, agent-specific guidance. Include the discipline lessons surfaced today (sketch-first, atomic-shipping ceiling pattern, multi-spec trailer convention).
+
+  4. **Codex-specific lessons codified** — capture in the AGENTS.md (or a dedicated section in the discipline pack): what Codex does well (sketch-first, multi-spec trailer compliance, hot-context follow-ups); what to watch (the one-time PR-201 trailer miss). Empirically grounded — Codex's own 7 PRs are the source material.
+
+  5. **Optional**: `.codex/` config directory scaffolding if Codex's CLI expects one. Codex implementer knows best.
+
+  ## Acceptance
+
+  - [ ] `docs/agents/codex-mcp-setup.md` audited + refreshed against today's empirical state
+  - [ ] `aida init` propagates the doc to new projects (via templates/)
+  - [ ] `AGENTS.md` exists (in this repo + in template) — closes TASK-484
+  - [ ] New AIDA project booted with Codex as primary agent has setup docs + conventions accessible without consulting THIS repo
+  - [ ] Implementation discipline this story itself dogfoods: sibling worktree, trailing-parens trailer, atomic-shipping, aida pr ship
+
+  ## Composes with
+
+  - STORY-416 (parent — cross-agent scaffolding audit)
+  - TASK-484 (AGENTS.md drift fix — subsumed by this story)
+  - feedback_substrate_as_bouncer_not_rules (universal gates principle this propagates)
+  - feedback_verify_pr_contents_before_directing_rebase + sketch-first protocol (lessons Codex helped surface)
+
+  ## Why Codex specifically
+
+  The strongest validation of agent-agnostic positioning is each agent shipping its own integration. Codex authoring AGENTS.md + propagating their setup doc IS the empirical evidence that the substrate works for them — not master's claim about Codex.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:50:13.236747050Z
+modified_at: 2026-05-22T23:50:13.236747050Z
+req_type: Story
+tags:
+- codex
+- cross-agent
+- from-self-test
+- parent:STORY-416
+- scaffolding
+- self-dogfood
