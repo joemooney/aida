@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:11.141458341Z
-modified_at: 2026-05-22T06:09:17.406116346Z
+modified_at: 2026-05-22T06:09:20.236702763Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -36,6 +36,11 @@ comments:
     Reasoning: Recorded principle: STORY-86 lifecycle (CLAUDE.md, `docs/lifecycle.md`) — a Done spec transitions to Completed automatically when the referencing commit lands on main via `aida pull` auto-bump; the implementer does not re-do work that is already on a branch under review. Verified facts: `gh pr view 166` shows state=OPEN, mergeable=MERGEABLE, title carries `(TASK-439)`; `aida session leases` shows reviewer lease 019e4dda on PR-166 alongside this implementer lease 019e4e47 on task-439-2 (a second branch). Re-implementing here would create a competing branch racing an open PR — destructive and explicitly counter to the lifecycle. The memory `feedback_check_in_flight_before_rejecting.md` records the inverse: in-flight work is load-bearing, the advisor checks leases before pivoting. Both apply here.
   created_at: 2026-05-22T06:08:38.284171513Z
   modified_at: 2026-05-22T06:08:38.284171513Z
+- id: 019e4e4d-776c-7522-8beb-3f4f20ebb8d7
+  author: joe
+  content: 'Advisor-resolved punt (session 019e4e47, branch task-439-2): redundant drain — the write_atomic fix is already shipped as commit d3953d99 on branch task-439 / PR-166 (OPEN, reviewer lease 019e4dda). Per advisor decision: zero code changes, no PR opened from this worktree, spec restored to Done. Natural transition: PR-166 merge → STORY-86 auto-bump Done→Completed. Worth a follow-up: ''aida queue work <SPEC> --auto-complete'' should refuse a re-drain on a Done spec with an open PR.'
+  created_at: 2026-05-22T06:09:20.236702763Z
+  modified_at: 2026-05-22T06:09:20.236702763Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T03:59:39.765054528Z
