@@ -40,12 +40,12 @@ description: |-
   - SPIKE-11 — research output this story implements.
   - STORY-347 — measurement loop that unlocks once this ships.
   - Memory \`feedback_headless_advisor_is_cold_boot\` — updated 2026-05-20 to mark fork-from-live as validated viable.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:10:18.145352052Z
-modified_at: 2026-05-22T01:19:07.098635155Z
+modified_at: 2026-05-22T01:20:17.797677363Z
 req_type: Story
 tags:
 - advisor
