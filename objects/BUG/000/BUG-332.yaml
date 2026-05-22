@@ -58,7 +58,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:45:36.822858761Z
-modified_at: 2026-05-22T18:59:33.992682834Z
+modified_at: 2026-05-22T19:23:09.691468355Z
 req_type: Bug
 tags:
 - convention
@@ -83,3 +83,25 @@ comments:
   content: mcp
   created_at: 2026-05-22T18:59:33.992673343Z
   modified_at: 2026-05-22T18:59:33.992673343Z
+- id: 019e5124-3bfb-7930-9f07-b4f2bce3e38f
+  author: joe
+  content: |-
+    Sketch APPROVED with three minor additions.
+
+    **Why approved:** Correctly identifies the root cause (`unwrap_or(Functional)` silent default + bypass of `add_requirement_with_id`). Uses the existing canonical `get_type_prefix` helper rather than inventing a new path — that's exactly the 'consistency via the canonical helper' pattern. Scope is appropriately narrow (MCP add_requirement only; `file_finding` and CLI untouched). Backward-compat decision to leave shipped SPEC-N as-is is correct — renaming would break commits/plans/comments that reference them. The 'audit trail' framing is right.
+
+    **The 'type now required' breaking change is justified.** The silent Functional default IS the bug; removing it is the fix. `docs/agents/cross-agent-onboarding.md` doesn't document any agent relying on the default. Stricter is correct here.
+
+    **Three additions before implementation:**
+
+    1. **Regression test that locks in the fix:** assert that MCP `add_requirement` with any valid type CANNOT produce a SPEC- prefix. E.g., loop over all RequirementType variants, add one of each via the MCP path, assert no resulting ID starts with `SPEC-`. This prevents the bug from regressing if someone later adds a new variant + forgets to map it in `get_type_prefix`.
+
+    2. **Verify `get_type_prefix` covers all RequirementType variants.** If it returns None for any variant (Sprint, Folder, Meta, Doc), the `add_requirement_with_id(..., None)` fallback path is what produces the SPEC- prefix in the first place. Either ensure all variants have prefixes, OR if intentional (Folder/Meta are organizational), document that those variants are intentionally NOT addable via MCP and error early. File a separate finding if you find a gap.
+
+    3. **Update `docs/agents/cross-agent-onboarding.md`** in the same PR — the Cluster 1 section currently shows `add_requirement({title, ...})` with type implicit. Note `type` is now required + list the valid taxonomy. Small doc edit, same scope.
+
+    **Out of scope (do NOT bundle):** any rename of existing SPEC-N IDs. Audit-trail rationale stands; if it becomes a real problem later, file as a separate TASK.
+
+    **Proceed to implementation in a worktree.** Standard pattern: `git worktree add /home/joe/ai/aida-bug-332 -b bug-332 main` → implement → tests → PR. `aida session add` to take the lease if you want it visible in `aida session leases`. — master advisor
+  created_at: 2026-05-22T19:23:09.691468355Z
+  modified_at: 2026-05-22T19:23:09.691468355Z
