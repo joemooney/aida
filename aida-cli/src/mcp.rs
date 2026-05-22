@@ -65,6 +65,9 @@ use crate::punt::{
     PuntResolution, PuntResponse,
 };
 
+const VALID_MCP_REQUIREMENT_TYPES: &str =
+    "functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc";
+
 // ============================================================================
 // JSON-RPC 2.0 types
 // ============================================================================
@@ -510,11 +513,18 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: description")?;
 
-        let req_type = args
-            .get("type")
-            .and_then(|v| v.as_str())
-            .and_then(parse_requirement_type)
-            .unwrap_or(RequirementType::Functional);
+        let type_arg = args.get("type").and_then(|v| v.as_str()).ok_or_else(|| {
+            format!(
+                "Missing required parameter: type. Valid types: {}",
+                VALID_MCP_REQUIREMENT_TYPES
+            )
+        })?;
+        let req_type = parse_requirement_type(type_arg).ok_or_else(|| {
+            format!(
+                "Invalid requirement type '{}'. Valid types: {}",
+                type_arg, VALID_MCP_REQUIREMENT_TYPES
+            )
+        })?;
         let status = args
             .get("status")
             .and_then(|v| v.as_str())
@@ -548,8 +558,13 @@ impl<'a> McpServer<'a> {
             }
         }
 
-        store.requirements.push(req);
-        store.assign_spec_ids();
+        let type_prefix = store.get_type_prefix(&req.req_type).ok_or_else(|| {
+            format!(
+                "No configured ID prefix for requirement type '{}'",
+                req.req_type
+            )
+        })?;
+        store.add_requirement_with_id(req, None, Some(type_prefix.as_str()));
 
         let new_spec_id = store
             .requirements
@@ -1380,6 +1395,9 @@ fn parse_requirement_type(s: &str) -> Option<RequirementType> {
         "task" => Some(RequirementType::Task),
         "spike" => Some(RequirementType::Spike),
         "sprint" => Some(RequirementType::Sprint),
+        "folder" => Some(RequirementType::Folder),
+        "meta" => Some(RequirementType::Meta),
+        "doc" => Some(RequirementType::Doc),
         _ => None,
     }
 }
@@ -1570,15 +1588,15 @@ pub fn tool_descriptors() -> Value {
                 "properties": {
                     "title": { "type": "string", "description": "Title of the requirement" },
                     "description": { "type": "string", "description": "Detailed description" },
-                    "type": { "type": "string", "description": "Requirement type: functional, non-functional, system, user, bug, epic, story, task" },
+                    "type": { "type": "string", "description": "Required requirement type. Valid types: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc. The assigned SPEC-ID prefix is auto-normalized from this type." },
                     "status": { "type": "string", "description": "Status: draft, approved, planned, in-progress, done, completed, rejected" },
                     "priority": { "type": "string", "description": "Priority: high, medium, low" },
                     "tags": { "type": "array", "items": { "type": "string" }, "description": "Tags to attach to the requirement" }
                 },
-                "required": ["title", "description"]
+                "required": ["title", "description", "type"]
             },
             "outputSchema": text_envelope_output_schema(
-                "a confirmation line `Requirement added: <SPEC-ID> — <title>`, where SPEC-ID is the freshly-assigned identifier for the new requirement."
+                "a confirmation line `Requirement added: <SPEC-ID> — <title>`, where SPEC-ID is the freshly-assigned identifier for the new requirement. The prefix is auto-normalized from the required `type` argument, for example `task` produces `TASK-N` and never generic `SPEC-N`."
             )
         },
         {
@@ -1937,6 +1955,13 @@ mod tests {
         McpServer::new(storage, dir.to_path_buf())
     }
 
+    fn added_spec_id(response: &str) -> &str {
+        response
+            .strip_prefix("Requirement added: ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .unwrap_or_else(|| panic!("unexpected add_requirement response: {response}"))
+    }
+
     #[test]
     fn tool_descriptors_lists_at_least_14_coordination_tools() {
         let desc = tool_descriptors();
@@ -2036,6 +2061,119 @@ mod tests {
                 properties.contains_key("content"),
                 "tool '{}' outputSchema must declare a `content` property (Path A — text envelope wraps every response)",
                 name
+            );
+        }
+    }
+
+    // trace:BUG-332 | ai:codex
+    #[test]
+    fn add_requirement_descriptor_requires_type_and_documents_normalized_prefix() {
+        let desc = tool_descriptors();
+        let arr = desc.as_array().expect("tool_descriptors must be an array");
+        let tool = arr
+            .iter()
+            .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some("add_requirement"))
+            .expect("add_requirement descriptor must exist");
+
+        let required = tool
+            .pointer("/inputSchema/required")
+            .and_then(|v| v.as_array())
+            .expect("add_requirement inputSchema must declare required args");
+        assert!(
+            required.iter().any(|v| v.as_str() == Some("type")),
+            "add_requirement must require `type`"
+        );
+
+        let type_description = tool
+            .pointer("/inputSchema/properties/type/description")
+            .and_then(|v| v.as_str())
+            .expect("type property must have a description");
+        for expected in ["task", "bug", "folder", "meta", "doc"] {
+            assert!(
+                type_description.contains(expected),
+                "type description should name valid taxonomy member {expected}"
+            );
+        }
+
+        let output_description = tool
+            .pointer("/outputSchema/description")
+            .and_then(|v| v.as_str())
+            .expect("outputSchema must have a description");
+        assert!(
+            output_description.contains("auto-normalized"),
+            "outputSchema should document auto-normalized ID prefixes"
+        );
+    }
+
+    // trace:BUG-332 | ai:codex
+    #[test]
+    fn mcp_add_requirement_rejects_missing_or_invalid_type() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let missing = serde_json::json!({
+            "title": "Missing type",
+            "description": "Type is required",
+        });
+        let err = server
+            .tool_add_requirement(&missing)
+            .expect_err("missing type should fail");
+        assert!(err.contains("Missing required parameter: type"));
+        assert!(err.contains("task"));
+        assert!(err.contains("doc"));
+
+        let invalid = serde_json::json!({
+            "title": "Invalid type",
+            "description": "Type must be from the taxonomy",
+            "type": "spec",
+        });
+        let err = server
+            .tool_add_requirement(&invalid)
+            .expect_err("invalid type should fail");
+        assert!(err.contains("Invalid requirement type 'spec'"));
+        assert!(err.contains("functional"));
+        assert!(err.contains("meta"));
+    }
+
+    // trace:BUG-332 | ai:codex
+    #[test]
+    fn mcp_add_requirement_normalizes_every_valid_type_prefix() {
+        let valid_types = [
+            ("functional", "FR-"),
+            ("non-functional", "NFR-"),
+            ("system", "SR-"),
+            ("user", "UR-"),
+            ("bug", "BUG-"),
+            ("epic", "EPIC-"),
+            ("story", "STORY-"),
+            ("task", "TASK-"),
+            ("spike", "SPIKE-"),
+            ("sprint", "SPRINT-"),
+            ("folder", "FOLDER-"),
+            ("meta", "META-"),
+            ("doc", "DOC-"),
+        ];
+
+        for (type_name, expected_prefix) in valid_types {
+            let dir = tempdir().unwrap();
+            let server = mk_server(dir.path());
+            let args = serde_json::json!({
+                "title": format!("Canonical {type_name}"),
+                "description": "MCP add_requirement must use type-derived prefixes",
+                "type": type_name,
+            });
+
+            let response = server
+                .tool_add_requirement(&args)
+                .unwrap_or_else(|err| panic!("add_requirement failed for {type_name}: {err}"));
+            let spec_id = added_spec_id(&response);
+            assert!(
+                spec_id.starts_with(expected_prefix),
+                "{type_name} should produce {expected_prefix}*, got {spec_id}"
+            );
+            assert!(
+                !spec_id.starts_with("SPEC-"),
+                "{type_name} must not produce generic SPEC-* IDs"
             );
         }
     }

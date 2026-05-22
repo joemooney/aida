@@ -58090,11 +58090,11 @@ mod story_255_discipline_pack_tests {
     use super::*;
 
     #[test]
-    fn discipline_pack_scaffolds_five_docs_plus_readme() {
+    fn discipline_pack_scaffolds_six_docs_plus_readme() {
         // trace:TASK-338 | ai:claude — machinery-glossary.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 6, "expected README + 5 discipline docs");
+        assert_eq!(written, 7, "expected README + 6 discipline docs");
 
         let dir = root.path().join("docs/aida-discipline");
         for f in [
@@ -58104,6 +58104,7 @@ mod story_255_discipline_pack_tests {
             "machinery-glossary.md",
             "workflow-patterns.md",
             "session-discipline.md",
+            "skill-prompt-kinds.md",
         ] {
             assert!(dir.join(f).is_file(), "missing discipline doc: {f}");
         }
@@ -58116,7 +58117,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            6
+            7
         );
     }
 
