@@ -1,0 +1,97 @@
+id: 019e5107-ae6c-7282-9066-bb730c21452b
+spec_id: STORY-410
+agreed_id: STORY-410
+title: 'Existing-project substrate-drift discovery: surface when an existing project''s scaffolding-pack is behind master'
+description: |-
+  ## Problem
+
+  \`aida init --with-memories --refresh\` (STORY-255) lets an existing project overlay newer scaffolding-pack files onto its existing memory dir — preserving user edits via body-checksum, replacing only unchanged pack files. **But the user has to KNOW their pack is stale to run it.**
+
+  There's currently no discoverability surface for substrate drift:
+
+  - A project initialized 6 months ago doesn't know its memory pack is 22+ memories behind today's master
+  - A project that ran \`aida init --with-memories --refresh\` 2 weeks ago doesn't know 3 new memories landed since
+  - The CLI provides no \`aida memories check\` or similar that compares the local pack to the binary's embedded master
+
+  The user's question 2026-05-22: *"what about projects that use aida — are we checking to see what work we have added (memories etc.) are or should be reflected in the scaffolding of new and existing projects using aida?"* The answer for new projects was "yes after PR-193 merges." The answer for existing projects is "no there's no mechanism beyond user-remembering-to-run-refresh."
+
+  ## Approach
+
+  Add a substrate-drift discovery surface to AIDA:
+
+  ### Phase 1 — `aida memories check`
+
+  A new CLI command that compares the local memory pack to the binary's embedded master and reports drift:
+
+  \`\`\`
+  $ aida memories check
+  Memory pack: ~/.claude/projects/<slug>/memory/
+  Master pack (in this aida binary): aida v0.8.0
+
+    Master has 42 scaffolding-pack memories; local has 35.
+
+    Missing from local (8):
+      feedback_advocate_not_be_passive (master added 2026-05-22)
+      feedback_capture_over_concentration (master added 2026-05-20)
+      ... (6 more — see aida memories check --verbose)
+
+    Modified in local (preserved by --refresh, won't be overwritten):
+      feedback_dialog_role_responsibilities (you edited 2026-05-15)
+
+    Up to date (27).
+
+  To pull missing memories: aida init --with-memories --refresh
+  \`\`\`
+
+  ### Phase 2 — \`aida status\` integration
+
+  The aida status surface (STORY-385) gains a one-line summary when the pack is significantly behind:
+
+  \`\`\`
+  ... existing sections ...
+  Memory pack: 8 memories behind master — \`aida memories check\` for details
+  \`\`\`
+
+  ### Phase 3 — Optional: automatic check on aida invocations
+
+  A periodic (e.g., once per week per project) automatic check at \`aida\` invocation that prints a one-line notice if the pack is stale. Configurable (\`[memories] auto_check = false\` to disable). Not the default; default is opt-in via \`aida memories check\`.
+
+  ## Acceptance
+
+  - \`aida memories check\` exists, reports drift between local pack and binary's master
+  - Missing-from-local items are clearly listed (with date the master version was added)
+  - Modified-in-local items are flagged (won't be overwritten by --refresh per the body-checksum mechanism)
+  - Up-to-date count surfaces, so the user sees the proportion of stale vs current
+  - The recommendation (\`aida init --with-memories --refresh\`) is exact + paste-ready
+  - \`--verbose\` mode shows all items; default mode summarizes (max 5 per category)
+  - Integrates with STORY-385's \`aida status --cleanup\` as a one-line summary
+
+  ## Composes with
+
+  - **STORY-255** — the --refresh mechanism that this story makes discoverable
+  - **STORY-385** — \`aida status --cleanup\` surface; this is one more section
+  - **PR-193** — the immediate sync that makes the drift problem concrete
+  - Memory \`feedback_memory_pack_hygiene\` — the audit cycle this story operationalizes
+
+  ## Out of scope
+
+  - Auto-applying refresh without user consent (always opt-in; surface, don't act)
+  - Drift detection for skill templates or discipline docs (different mechanism per CLAUDE.md template architecture)
+  - Cross-project substrate propagation (sibling-advisor SPIKE-10 territory)
+
+  ## Origin
+
+  User question 2026-05-22 during a substrate audit that found 22 scaffolding-pack memories missing from master templates. The new-project gap was closed via PR-193. The existing-project gap (no discoverability of drift) needs this story.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T18:51:58.444865860Z
+modified_at: 2026-05-22T18:51:58.444865860Z
+req_type: Story
+tags:
+- discoverability
+- existing-projects
+- from-user-question
+- multi-project
+- scaffolding-pack
