@@ -1128,3 +1128,10 @@
   note: Promoted from finding TASK-469 via `aida findings promote`
   added_at: 2026-05-22T20:31:36.378539769Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e50e6-1f14-77a2-880a-0df6042d7d23
+  position: 244000
+  added_by: joe
+  note: Promoted from finding SPEC-403 via `aida findings promote`
+  added_at: 2026-05-22T20:31:38.189162262Z
+  for_role: implementer
