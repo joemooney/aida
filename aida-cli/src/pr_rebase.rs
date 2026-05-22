@@ -292,14 +292,20 @@ pub fn classify_stale_base(
         .filter(|f| pr_set.contains(*f))
         .cloned()
         .collect();
-    if overlap.is_empty() {
-        StaleBaseOutcome::StaleNoOverlap { behind }
-    } else {
+    if !overlap.is_empty() {
         StaleBaseOutcome::StaleOverlap {
             behind,
             overlap_files: overlap,
             prediction,
         }
+    } else if let ConflictPrediction::Conflicting { files } = &prediction {
+        StaleBaseOutcome::StaleOverlap {
+            behind,
+            overlap_files: files.clone(),
+            prediction,
+        }
+    } else {
+        StaleBaseOutcome::StaleNoOverlap { behind }
     }
 }
 
@@ -755,6 +761,35 @@ enforcement = "warn"
                     prediction,
                     ConflictPrediction::Conflicting {
                         files: vec!["src/a.rs".to_string()],
+                    }
+                );
+            }
+            other => panic!("expected StaleOverlap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn classify_stale_base_blocks_on_predicted_conflict_without_path_overlap() {
+        let out = classify_stale_base(
+            1,
+            &s(&["a.rs"]),
+            &s(&["b.rs"]),
+            ConflictPrediction::Conflicting {
+                files: vec!["a.rs".to_string(), "b.rs".to_string()],
+            },
+        );
+        match out {
+            StaleBaseOutcome::StaleOverlap {
+                behind,
+                overlap_files,
+                prediction,
+            } => {
+                assert_eq!(behind, 1);
+                assert_eq!(overlap_files, vec!["a.rs".to_string(), "b.rs".to_string()]);
+                assert_eq!(
+                    prediction,
+                    ConflictPrediction::Conflicting {
+                        files: vec!["a.rs".to_string(), "b.rs".to_string()],
                     }
                 );
             }
