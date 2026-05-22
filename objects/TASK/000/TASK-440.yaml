@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:18.077004527Z
-modified_at: 2026-05-22T06:01:04.289649328Z
+modified_at: 2026-05-22T06:01:05.409078085Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -35,6 +35,11 @@ comments:
     When you resolve this, record the answer (a memory, an acceptance-criteria edit, or a discipline doc) so a future advisor can resolve the same kind of fork as a recorded principle.
   created_at: 2026-05-22T04:22:55.144759710Z
   modified_at: 2026-05-22T04:22:55.144759710Z
+- id: 019e4e45-ea81-7892-8a13-94848b051fec
+  author: joe
+  content: 'Bumped to high 2026-05-22: TASK-440 (Path A — outputSchema descriptors) is now load-bearing prereq for the just-filed Codex-MCP empirical verification story. Codex likely uses schemas for tool discovery; without outputSchema descriptors, Codex may surface AIDA''s 21 tools as opaque-shape and limit the depth of the roundtrip test.'
+  created_at: 2026-05-22T06:01:05.409078085Z
+  modified_at: 2026-05-22T06:01:05.409078085Z
 attention_reason:
   category: ambiguous-spec
   detail: 'The spec body ends with ''Defer until the first MCP client surfaces a need for the structured shape — the text envelope is sufficient for current Claude Code use,'' yet the spec sits Approved and was queued for implementer pickup. Beyond the defer-vs-do contradiction there is a real implementation fork: (A) declare outputSchema descriptors only across the 21 tools — minimal, matches the title and bullet-1 of the description, but technically out of line with the MCP spec which expects servers to also emit structuredContent matching the declared schema; (B) declare outputSchema AND switch each tool to also return structuredContent — correct per MCP spec, but a materially larger change than the ''severity:cosmetic'' tag from the original PR-162 review implies, and bullet-2 of the description lists this as a separate concern. The cost of A is misleading consumers if a third-party MCP client ever connects; the cost of B is shipping ~21 reshaped tool responses on a ''cosmetic'' ticket. Cannot resolve from the spec or codebase.'
