@@ -13,13 +13,19 @@ description: |
   Defer until the first MCP client surfaces a need for the structured shape — the text envelope is sufficient for current Claude Code use.
 
   Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:18.077004527Z
-modified_at: 2026-05-22T04:19:01.613099777Z
+modified_at: 2026-05-22T04:19:32.434074245Z
 req_type: Task
 tags:
 - from-review:PR-162
 - severity:cosmetic
+attention_reason:
+  category: ambiguous-spec
+  detail: 'The spec body ends with ''Defer until the first MCP client surfaces a need for the structured shape — the text envelope is sufficient for current Claude Code use,'' yet the spec sits Approved and was queued for implementer pickup. Beyond the defer-vs-do contradiction there is a real implementation fork: (A) declare outputSchema descriptors only across the 21 tools — minimal, matches the title and bullet-1 of the description, but technically out of line with the MCP spec which expects servers to also emit structuredContent matching the declared schema; (B) declare outputSchema AND switch each tool to also return structuredContent — correct per MCP spec, but a materially larger change than the ''severity:cosmetic'' tag from the original PR-162 review implies, and bullet-2 of the description lists this as a separate concern. The cost of A is misleading consumers if a third-party MCP client ever connects; the cost of B is shipping ~21 reshaped tool responses on a ''cosmetic'' ticket. Cannot resolve from the spec or codebase.'
+  lean: 'Path A: declare outputSchema descriptors only for the 21 tools (matches the title + bullet-1+3 scope; bullet-2 ''switch implementations to structured returns'' becomes a follow-up TASK). Internal MCP surface is consumed only by Claude Code today, so the declarative-only divergence is low-risk and cheap to upgrade later.'
+  raised_by: implementer
+  raised_at: 2026-05-22T04:19:32.434074245Z
