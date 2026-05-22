@@ -47,12 +47,12 @@ description: |-
   ## Origin
 
   User report 2026-05-22 ~04:00 — third dormant-lease conflict tonight; \`--steal\` flag didn't take effect despite being passed. Pasted output unambiguously shows the flag in the command and the same canned error in response.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:14:59.924942729Z
-modified_at: 2026-05-22T15:48:13.236232668Z
+modified_at: 2026-05-22T15:57:14.110168354Z
 req_type: Bug
 tags:
 - bug-307-companion
