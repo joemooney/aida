@@ -89,6 +89,54 @@ use crate::cli::{
     TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StoreAutoPushMode {
+    Manual,
+    SessionEnd,
+    PerWrite,
+    Periodic,
+}
+
+impl StoreAutoPushMode {
+    fn parse(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "manual" => Some(Self::Manual),
+            "session-end" | "session_end" | "sessionend" => Some(Self::SessionEnd),
+            "per-write" | "per_write" | "perwrite" => Some(Self::PerWrite),
+            "periodic" => Some(Self::Periodic),
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Manual => "manual",
+            Self::SessionEnd => "session-end",
+            Self::PerWrite => "per-write",
+            Self::Periodic => "periodic",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StoreSyncConfig {
+    auto_push: StoreAutoPushMode,
+    periodic_threshold: Option<u64>,
+    periodic_interval: Option<String>,
+    source: String,
+}
+
+impl Default for StoreSyncConfig {
+    fn default() -> Self {
+        Self {
+            auto_push: StoreAutoPushMode::Manual,
+            periodic_threshold: None,
+            periodic_interval: None,
+            source: "default".to_string(),
+        }
+    }
+}
+
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
 /// Format recommendation: "ai:claude:username" for AI-assisted work
 fn get_default_author() -> String {
@@ -2924,6 +2972,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+    if let Some(project_root) = store_path.parent() {
+        warn_if_periodic_auto_push(project_root);
+    }
 
     match command {
         Command::Cache(cache_cmd) => {
@@ -5151,6 +5202,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let storage = Storage::new(store_path);
             handle_config_hints(enabled.as_deref(), &storage)?;
         }
+        Command::Config(config_cmd) => {
+            let storage = Storage::new(store_path);
+            handle_config_command(config_cmd, &storage)?;
+        }
         Command::Scaffold(scaffold_cmd) => {
             // Scaffold apply / status / preview / extract — same pattern.
             // Storage façade now handles directory paths via GitBackend.load().
@@ -5220,7 +5275,46 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
     }
 
+    if command_triggers_per_write_auto_push(command) {
+        maybe_auto_push_store(store_path, StoreAutoPushMode::PerWrite, "per-write");
+    }
+
     Ok(())
+}
+
+fn command_triggers_per_write_auto_push(command: &Command) -> bool {
+    match command {
+        Command::Add { .. }
+        | Command::Edit { .. }
+        | Command::Del { .. }
+        | Command::Rel(_)
+        | Command::RelDef(_)
+        | Command::Comment(_)
+        | Command::Type(_)
+        | Command::Import { .. }
+        | Command::Doc(_)
+        | Command::Docs(_)
+        | Command::Punt { .. }
+        | Command::Rework { .. } => true,
+        Command::Queue(cmd) => matches!(
+            cmd,
+            QueueCommand::Add { .. }
+                | QueueCommand::Remove { .. }
+                | QueueCommand::Move { .. }
+                | QueueCommand::Clear { .. }
+                | QueueCommand::Done { .. }
+                | QueueCommand::Rework { .. }
+        ),
+        Command::Findings(cmd) => !matches!(cmd, FindingsCommand::List { .. }),
+        Command::Config(cmd) => matches!(
+            cmd,
+            ConfigCommand::Format { .. }
+                | ConfigCommand::Numbering { .. }
+                | ConfigCommand::Digits { .. }
+                | ConfigCommand::Migrate { .. }
+        ),
+        _ => false,
+    }
 }
 
 /// String form of [`is_terminal_status`] — used by `aida list` / `aida
@@ -5304,6 +5398,169 @@ fn suspicious_title_signal(title: &str) -> Option<String> {
         );
     }
     None
+}
+
+fn config_path_for_project(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida").join("config.toml")
+}
+
+fn line_for_key(body: &str, section: &str, key: &str) -> Option<usize> {
+    let mut in_section = false;
+    for (idx, line) in body.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_section = trimmed.trim_matches(&['[', ']'][..]) == section;
+            continue;
+        }
+        if in_section && trimmed.starts_with(key) {
+            return Some(idx + 1);
+        }
+    }
+    None
+}
+
+fn read_store_sync_config(project_root: &std::path::Path) -> Result<StoreSyncConfig> {
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return Ok(StoreSyncConfig::default());
+    };
+    let value: toml::Value =
+        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?;
+    let Some(sync) = value.get("store").and_then(|s| s.get("sync")) else {
+        return Ok(StoreSyncConfig {
+            source: path.display().to_string(),
+            ..StoreSyncConfig::default()
+        });
+    };
+    let raw = sync
+        .get("auto_push")
+        .and_then(|v| v.as_str())
+        .unwrap_or("manual");
+    let Some(auto_push) = StoreAutoPushMode::parse(raw) else {
+        let line = line_for_key(&body, "store.sync", "auto_push")
+            .map(|n| format!(":{n}"))
+            .unwrap_or_default();
+        anyhow::bail!(
+            "{}{}: invalid [store.sync] auto_push value `{}` (expected: manual, session-end, per-write, periodic)",
+            path.display(),
+            line,
+            raw
+        );
+    };
+    Ok(StoreSyncConfig {
+        auto_push,
+        periodic_threshold: sync
+            .get("periodic_threshold")
+            .and_then(|v| v.as_integer())
+            .and_then(|n| u64::try_from(n).ok()),
+        periodic_interval: sync
+            .get("periodic_interval")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        source: path.display().to_string(),
+    })
+}
+
+fn warn_if_periodic_auto_push(project_root: &std::path::Path) {
+    if let Ok(cfg) = read_store_sync_config(project_root) {
+        if cfg.auto_push == StoreAutoPushMode::Periodic {
+            eprintln!(
+                "{} [store.sync] auto_push = \"periodic\" requires aida-worker (EPIC-30); falling back to manual until shipped",
+                "Warning:".yellow().bold()
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod story_284_store_sync_tests {
+    use super::*;
+
+    fn write_config(root: &std::path::Path, body: &str) {
+        let config_dir = root.join(".aida");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("config.toml"), body).unwrap();
+    }
+
+    #[test]
+    fn missing_config_defaults_to_manual() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = read_store_sync_config(tmp.path()).unwrap();
+        assert_eq!(cfg.auto_push, StoreAutoPushMode::Manual);
+    }
+
+    #[test]
+    fn parses_supported_auto_push_modes() {
+        let cases = [
+            ("manual", StoreAutoPushMode::Manual),
+            ("session-end", StoreAutoPushMode::SessionEnd),
+            ("per-write", StoreAutoPushMode::PerWrite),
+            ("periodic", StoreAutoPushMode::Periodic),
+        ];
+        for (raw, expected) in cases {
+            let tmp = tempfile::tempdir().unwrap();
+            write_config(
+                tmp.path(),
+                &format!(
+                    "[store.sync]\nauto_push = \"{raw}\"\nperiodic_threshold = 5\nperiodic_interval = \"30s\"\n"
+                ),
+            );
+            let cfg = read_store_sync_config(tmp.path()).unwrap();
+            assert_eq!(cfg.auto_push, expected);
+            assert_eq!(cfg.periodic_threshold, Some(5));
+            assert_eq!(cfg.periodic_interval.as_deref(), Some("30s"));
+        }
+    }
+
+    #[test]
+    fn invalid_auto_push_reports_file_line_and_valid_values() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[deployment]\nmode = \"distributed\"\n\n[store.sync]\nauto_push = \"always\"\n",
+        );
+        let err = read_store_sync_config(tmp.path()).unwrap_err().to_string();
+        assert!(err.contains("config.toml:5"), "{err}");
+        assert!(
+            err.contains("manual, session-end, per-write, periodic"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn auto_push_failure_is_non_fatal_for_per_write_and_session_end() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        for args in [
+            &["init", "-b", "aida-store"][..],
+            &["config", "user.email", "aida@example.test"],
+            &["config", "user.name", "AIDA Test"],
+            &[
+                "remote",
+                "add",
+                "origin",
+                "/definitely/missing/aida-store.git",
+            ],
+        ] {
+            let status = std::process::Command::new("git")
+                .current_dir(&store)
+                .args(args)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+
+        std::fs::write(store.join("metadata.yaml"), "name: test\n").unwrap();
+        write_config(tmp.path(), "[store.sync]\nauto_push = \"per-write\"\n");
+        maybe_auto_push_store(&store, StoreAutoPushMode::PerWrite, "test-per-write");
+
+        write_config(tmp.path(), "[store.sync]\nauto_push = \"session-end\"\n");
+        std::fs::write(store.join("metadata.yaml"), "name: test2\n").unwrap();
+        maybe_auto_push_store(&store, StoreAutoPushMode::SessionEnd, "test-session-end");
+    }
 }
 
 /// Ensure git/claude hook files are executable. Called from scaffolder
@@ -5679,6 +5936,12 @@ fn handle_init_distributed_worktree(
          store_type = \"worktree\"\n\
          branch = \"{}\"\n\
          \n\
+         [store.sync]\n\
+         # Auto-push store commits after local writes. Values: manual,\n\
+         # session-end, per-write, periodic. `periodic` is reserved until\n\
+         # aida-worker (EPIC-30) ships.\n\
+         auto_push = \"manual\"\n\
+         \n\
          # trace:EPIC-1-052 Phase 2 | ai:claude\n\
          # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
          #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
@@ -5816,6 +6079,12 @@ fn handle_init_post_clone(
          store_path = \"{}\"\n\
          store_type = \"worktree\"\n\
          branch = \"{}\"\n\
+         \n\
+         [store.sync]\n\
+         # Auto-push store commits after local writes. Values: manual,\n\
+         # session-end, per-write, periodic. `periodic` is reserved until\n\
+         # aida-worker (EPIC-30) ships.\n\
+         auto_push = \"manual\"\n\
          \n\
          # trace:EPIC-1-052 Phase 2 | ai:claude\n\
          # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
@@ -6171,6 +6440,12 @@ fn handle_init_distributed_sibling(
          [deployment]\n\
          mode = \"distributed\"\n\
          store_path = \"aida-store\"\n\
+         \n\
+         [store.sync]\n\
+         # Auto-push store commits after local writes. Values: manual,\n\
+         # session-end, per-write, periodic. `periodic` is reserved until\n\
+         # aida-worker (EPIC-30) ships.\n\
+         auto_push = \"manual\"\n\
          \n\
          # trace:EPIC-1-052 Phase 2 | ai:claude\n\
          # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
@@ -7583,7 +7858,37 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
     let mut store = storage.load()?;
 
     match cmd {
-        ConfigCommand::Show => {
+        ConfigCommand::Show { section } => {
+            if let Some(section) = section {
+                match section.as_str() {
+                    "store.sync" => {
+                        let project_root = store_sync_config_project_root(storage);
+                        let cfg = read_store_sync_config(&project_root)?;
+                        println!("{}", "Store Sync Configuration:".blue().bold());
+                        println!("{}: {}", "auto_push".cyan(), cfg.auto_push.as_str());
+                        println!(
+                            "{}: {}",
+                            "periodic_threshold".cyan(),
+                            cfg.periodic_threshold
+                                .map(|n| n.to_string())
+                                .unwrap_or_else(|| "<unset>".to_string())
+                        );
+                        println!(
+                            "{}: {}",
+                            "periodic_interval".cyan(),
+                            cfg.periodic_interval.as_deref().unwrap_or("<unset>")
+                        );
+                        println!("{}: {}", "source".cyan(), cfg.source);
+                        if cfg.auto_push == StoreAutoPushMode::Periodic {
+                            warn_if_periodic_auto_push(&project_root);
+                        }
+                        return Ok(());
+                    }
+                    other => {
+                        anyhow::bail!("unknown config section `{}` (supported: store.sync)", other)
+                    }
+                }
+            }
             println!("{}", "ID Configuration:".blue().bold());
             println!();
 
@@ -16573,6 +16878,10 @@ fn session_end(
                 &outcome.covered_specs,
             );
         }
+    }
+
+    if let Some(store_path) = detect_distributed_store_from(&project_root) {
+        maybe_auto_push_store(&store_path, StoreAutoPushMode::SessionEnd, "session-end");
     }
 
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
@@ -35847,6 +36156,103 @@ fn emit_dry_run(verb: &str, legs: &[DryRunLeg], json: bool) {
             );
         }
     }
+}
+
+fn run_git_with_timeout(
+    cwd: &std::path::Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Result<std::process::ExitStatus> {
+    let mut child = std::process::Command::new("git")
+        .current_dir(cwd)
+        .args(args)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .with_context(|| format!("spawn git {}", args.join(" ")))?;
+    let start = std::time::Instant::now();
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status);
+        }
+        if start.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            anyhow::bail!(
+                "git {} timed out after {}s",
+                args.join(" "),
+                timeout.as_secs()
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+fn auto_push_store_best_effort(store_path: &std::path::Path, reason: &str) {
+    use aida_core::git_ops;
+
+    if !git_ops::is_git_repo(store_path) || !git_ops::has_remote(store_path, "origin") {
+        return;
+    }
+    let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+    if git_ops::has_changes(store_path).unwrap_or(false) {
+        if let Err(e) = git_ops::add_all(store_path, ".")
+            .and_then(|_| git_ops::commit(store_path, "chore: sync pending changes"))
+        {
+            eprintln!(
+                "  {} stored locally; push deferred ({reason}: could not commit pending store changes: {e})",
+                "Warning:".yellow().bold()
+            );
+            return;
+        }
+    }
+    match run_git_with_timeout(
+        store_path,
+        &["push", "origin", &branch],
+        std::time::Duration::from_secs(5),
+    ) {
+        Ok(status) if status.success() => {
+            eprintln!("  {} auto-pushed aida-store ({reason})", "✓".green());
+        }
+        Ok(_) => {
+            eprintln!(
+                "  {} stored locally; push deferred ({reason}: origin rejected or unreachable)",
+                "Warning:".yellow().bold()
+            );
+        }
+        Err(e) => {
+            eprintln!(
+                "  {} stored locally; push deferred ({reason}: {e})",
+                "Warning:".yellow().bold()
+            );
+        }
+    }
+}
+
+fn maybe_auto_push_store(store_path: &std::path::Path, mode: StoreAutoPushMode, reason: &str) {
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    match read_store_sync_config(&project_root) {
+        Ok(cfg) if cfg.auto_push == mode => auto_push_store_best_effort(store_path, reason),
+        Ok(cfg) if cfg.auto_push == StoreAutoPushMode::Periodic => {
+            warn_if_periodic_auto_push(&project_root);
+        }
+        Ok(_) => {}
+        Err(e) => eprintln!(
+            "  {} store auto-push config ignored: {e}",
+            "Warning:".yellow().bold()
+        ),
+    }
+}
+
+fn store_sync_config_project_root(storage: &Storage) -> std::path::PathBuf {
+    storage
+        .path()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
 }
 
 /// TASK-108: `aida push --dry-run` — report what each in-scope leg would

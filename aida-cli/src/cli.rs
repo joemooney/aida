@@ -1798,7 +1798,11 @@ pub enum FeatureCommand {
 #[derive(Subcommand, Debug)]
 pub enum ConfigCommand {
     /// Show current ID configuration
-    Show,
+    Show {
+        /// Optional section to show, e.g. `store.sync`.
+        // trace:STORY-284 | ai:codex
+        section: Option<String>,
+    },
 
     /// Set the ID format (single-level or two-level)
     Format {
