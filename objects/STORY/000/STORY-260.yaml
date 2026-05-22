@@ -54,12 +54,12 @@ description: |-
   User asked 2026-05-16 after the dialog session produced a comparative market analysis: *\"I also want an on-going market analysis... AIDA's defensible niche may need to go in a readme. All of this may need to go in some document that we maintain.\"*
 
   The analysis itself was substantive enough to warrant durable capture; the maintenance discipline is what keeps it alive over time.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:47:35.568291884Z
-modified_at: 2026-05-17T02:14:34.451409652Z
+modified_at: 2026-05-22T20:39:15.505516681Z
 req_type: Story
 tags:
 - alpha-readiness
