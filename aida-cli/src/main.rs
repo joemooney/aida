@@ -38124,6 +38124,99 @@ mod queue_work_tests {
         assert!(quiet_of(&on), "--quiet should set quiet=true");
         assert!(!quiet_of(&off), "quiet defaults to false");
     }
+
+    // BUG-311: the orchestrator's phase-1 `aida queue work` subprocess must
+    // carry `--steal` when the outer drain was invoked with it. Without
+    // threading, the inner subprocess's dormant-lease guard sees `steal=false`
+    // and bails with the canned "pass --steal" message — exactly the
+    // symptom this BUG reported. These tests pin the argv contract so a
+    // refactor cannot silently drop the flag again. trace:BUG-311 | ai:claude
+
+    #[test]
+    fn implementer_phase_args_threads_steal() {
+        let args = build_implementer_phase_args(
+            "BUG-311",
+            "0192f1c8-aaaa-7000-8000-000000000001",
+            true,
+            false,
+            None,
+        );
+        assert!(
+            args.iter().any(|a| a == "--steal"),
+            "--steal must be threaded to phase 1 when the outer drain set it; got {:?}",
+            args
+        );
+        assert_eq!(args[0], "queue");
+        assert_eq!(args[1], "work");
+        assert_eq!(args[2], "BUG-311");
+        assert_eq!(args[3], "--session-id");
+        assert_eq!(args[4], "0192f1c8-aaaa-7000-8000-000000000001");
+    }
+
+    #[test]
+    fn implementer_phase_args_omits_steal_by_default() {
+        let args = build_implementer_phase_args("BUG-311", "uuid", false, false, None);
+        assert!(
+            args.iter().all(|a| a != "--steal"),
+            "--steal must not appear when the outer drain did not pass it; got {:?}",
+            args
+        );
+    }
+
+    #[test]
+    fn implementer_phase_args_threads_no_human_and_permission() {
+        let args =
+            build_implementer_phase_args("TASK-1", "uuid", true, true, Some("bypassPermissions"));
+        assert!(args.iter().any(|a| a == "--steal"));
+        assert!(args.iter().any(|a| a == "--no-human"));
+        let i = args
+            .iter()
+            .position(|a| a == "--permission-mode")
+            .expect("--permission-mode threaded");
+        assert_eq!(
+            args.get(i + 1).map(String::as_str),
+            Some("bypassPermissions")
+        );
+    }
+
+    /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
+    /// inner subprocess's error must name the lease + actual reason — not
+    /// the canned "pass --steal" message. anyhow's `{:#}` collapses the
+    /// chain inline; the `--steal`-prefixed map_err in `handle_queue_work`
+    /// guarantees the lease id + reason are in the primary line.
+    /// trace:BUG-311 | ai:claude
+    #[test]
+    fn steal_session_end_failure_surfaces_actual_reason_not_canned_message() {
+        let lease_id = "019e4dec-abcd-7000-8000-000000000000";
+        let short = &lease_id[..8];
+        let underlying =
+            anyhow::anyhow!("worktree has uncommitted changes — pass --force to discard");
+        let wrapped: anyhow::Error = anyhow::anyhow!(
+            "--steal could not end lease {}: {:#} \
+             (resolve manually with `aida session end {} --force` to discard, \
+             or commit/stash the worktree's changes first, then re-run)",
+            short,
+            underlying,
+            short,
+        );
+
+        let primary = format!("{}", wrapped);
+        assert!(
+            primary.contains(&format!("--steal could not end lease {}", short)),
+            "primary line must name the lease the steal targeted; got: {}",
+            primary
+        );
+        assert!(
+            primary.contains("worktree has uncommitted changes"),
+            "primary line must include the actual session_end reason inline; got: {}",
+            primary
+        );
+        assert!(
+            !primary.contains("pass --steal to end that session first"),
+            "BUG-311: must NOT emit the canned `pass --steal` message when --steal IS already in play; got: {}",
+            primary
+        );
+    }
 }
 
 #[cfg(test)]
@@ -48198,6 +48291,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         *max,
                         no_human_mode,
                         escalate_mode,
+                        *steal,
                     );
                 }
                 // TASK-293: `nextN --auto-complete` drains N specs from the
@@ -48220,6 +48314,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             permission_mode.as_deref(),
                             no_human_mode,
                             escalate_mode,
+                            *steal,
                         );
                     }
                 }
@@ -48250,6 +48345,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     permission_mode.as_deref(),
                     no_human_mode,
                     escalate_mode,
+                    *steal,
                 );
             }
             // TASK-293: a multi-spec `nextN` has no coherent single
@@ -50309,6 +50405,7 @@ fn handle_queue_work(
                 )
                 .cyan()
             );
+            let short_id = &conflict.id[..conflict.id.len().min(8)];
             session_end(
                 Some(&conflict.id),
                 /* yes */ true,
@@ -50322,13 +50419,20 @@ fn handle_queue_work(
                 /* skip_ci */
                 true,
             )
-            .with_context(|| {
-                format!(
-                    "--steal could not end lease {} cleanly. \
-                     Resolve manually (`aida session end {} --force` to discard, \
-                     or commit/stash the worktree's changes first) then re-run.",
-                    &conflict.id[..conflict.id.len().min(8)],
-                    &conflict.id[..conflict.id.len().min(8)]
+            // BUG-311: collapse the internal session_end error into the
+            // primary message so it surfaces specifically as "--steal could
+            // not end lease X: <actual reason>" — not the canned "pass
+            // --steal" loop and not a context line that buries the cause
+            // under a "Caused by:" chain. Anyhow's `{:#}` chains the cause
+            // inline on one line for the same effect. trace:BUG-311
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "--steal could not end lease {}: {:#} \
+                     (resolve manually with `aida session end {} --force` to discard, \
+                     or commit/stash the worktree's changes first, then re-run)",
+                    short_id,
+                    e,
+                    short_id,
                 )
             })?;
             remaining -= 1;
@@ -51448,6 +51552,9 @@ fn handle_auto_complete(
     permission_mode: Option<&str>,
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
+    // BUG-311: thread the outer `--steal` through so phase 1's
+    // `aida queue work` subprocess can clear a dormant lease on this scope.
+    steal: bool,
 ) -> ! {
     let result = run_auto_complete(
         storage,
@@ -51460,6 +51567,7 @@ fn handle_auto_complete(
         escalate_mode,
         // STORY-301: a bare single-spec drain owns its drain-state file.
         true,
+        steal,
     );
     std::process::exit(result.exit_code);
 }
@@ -51487,6 +51595,12 @@ fn run_auto_complete(
     // batch / nextN member — the batch orchestrator owns the file; this run
     // only announces it is the current spec.
     owns_drain_state: bool,
+    // BUG-311: pass-through of the outer `--steal` flag — appended to the
+    // phase-1 `aida queue work` subprocess so it can clear a dormant lease
+    // on this scope. Without this thread-through the outer flag silently
+    // dropped on the floor and the canned "pass --steal" message recurred.
+    // trace:BUG-311 | ai:claude
+    steal: bool,
 ) -> auto_complete::OrchestrationResult {
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
@@ -51571,6 +51685,7 @@ fn run_auto_complete(
         json,
         no_human,
         run_token,
+        steal,
     );
     let started_at = chrono::Utc::now();
     let result = auto_complete::orchestrate(&mut driver, spec, variant, json, escalate_mode);
@@ -51713,6 +51828,10 @@ struct RealBatchDriver<'a> {
     no_human: Option<auto_complete::NoHumanMode>,
     /// STORY-306: advisor-escalation mode, propagated to every member.
     escalate_mode: auto_complete::EscalateMode,
+    /// BUG-311: outer `--steal` flag, propagated to every member's phase-1
+    /// subprocess so a dormant lease on the member's scope is cleared rather
+    /// than blocking the drain with the canned "pass --steal" message.
+    steal: bool,
 }
 
 impl auto_complete::BatchDriver for RealBatchDriver<'_> {
@@ -51750,6 +51869,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             // STORY-301: a batch / nextN member does not own the drain-state
             // file — the batch orchestrator created it.
             false,
+            self.steal,
         )
     }
 }
@@ -51771,6 +51891,8 @@ fn handle_auto_complete_batch(
     max: Option<usize>,
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
+    // BUG-311: outer `--steal`, threaded to every batch member's phase 1.
+    steal: bool,
 ) -> ! {
     if !json {
         eprintln!();
@@ -51812,6 +51934,7 @@ fn handle_auto_complete_batch(
         permission_mode: permission_mode.map(|s| s.to_string()),
         no_human,
         escalate_mode,
+        steal,
     };
     let result = auto_complete::drain_batch(&mut driver, max);
     // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
@@ -52203,6 +52326,8 @@ struct RealNextNDriver<'a> {
     no_human: Option<auto_complete::NoHumanMode>,
     /// STORY-306: advisor-escalation mode, propagated to every member.
     escalate_mode: auto_complete::EscalateMode,
+    /// BUG-311: outer `--steal`, propagated to every member's phase 1.
+    steal: bool,
 }
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
@@ -52223,6 +52348,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             // STORY-301: a batch / nextN member does not own the drain-state
             // file — the batch orchestrator created it.
             false,
+            self.steal,
         )
     }
 }
@@ -52243,6 +52369,8 @@ fn handle_auto_complete_next_n(
     permission_mode: Option<&str>,
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
+    // BUG-311: outer `--steal`, threaded to every drained member's phase 1.
+    steal: bool,
 ) -> ! {
     if !json {
         eprintln!();
@@ -52289,6 +52417,7 @@ fn handle_auto_complete_next_n(
         permission_mode: permission_mode.map(|s| s.to_string()),
         no_human,
         escalate_mode,
+        steal,
     };
     let result = auto_complete::drain_batch(&mut driver, Some(n));
     // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
@@ -53556,6 +53685,47 @@ mod resolve_aida_exe_tests {
 /// The real [`auto_complete::PhaseDriver`]. Holds the project root + the
 /// state discovered as phases run (branch, lease id, PR number).
 /// trace:STORY-246 | ai:claude
+/// BUG-311: build the argv for the orchestrator's phase-1 `aida queue work`
+/// subprocess. Pure helper so the steal-threading + headless flag rules are
+/// pinnable by unit test without spawning a process. The orchestrator always
+/// sets `--session-id` (so it can locate the phase's lease via
+/// `claude_session_id`), and conditionally appends `--steal`, `--no-human`,
+/// and `--permission-mode <m>`. Order matches the existing inline code.
+/// trace:BUG-311 | ai:claude
+fn build_implementer_phase_args(
+    spec: &str,
+    session_uuid: &str,
+    steal: bool,
+    headless_implementer: bool,
+    permission_mode: Option<&str>,
+) -> Vec<String> {
+    let mut args: Vec<String> = vec![
+        "queue".into(),
+        "work".into(),
+        spec.into(),
+        "--session-id".into(),
+        session_uuid.into(),
+    ];
+    // BUG-311: the user's outer `--steal` is threaded so phase 1's
+    // `handle_queue_work` can clear a dormant lease on this scope instead of
+    // bailing with the canned "pass --steal" message — which was the BUG-311
+    // symptom (the flag was passed but the inner subprocess never saw it).
+    if steal {
+        args.push("--steal".into());
+    }
+    // STORY-276: under `--no-human=both` the implementer phase runs headless;
+    // `ReviewerOnly` (and a plain `--auto-complete`) leave phase 1 interactive.
+    // trace:STORY-276 | ai:claude
+    if headless_implementer {
+        args.push("--no-human".into());
+    }
+    if let Some(pm) = permission_mode {
+        args.push("--permission-mode".into());
+        args.push(pm.into());
+    }
+    args
+}
+
 struct RealPhaseDriver {
     project_root: std::path::PathBuf,
     spec: String,
@@ -53596,6 +53766,13 @@ struct RealPhaseDriver {
     /// so the resume must `current_dir(<this worktree>)`. `None` until
     /// `run_implementer` locates the lease.
     implementer_worktree: Option<std::path::PathBuf>,
+    /// BUG-311: thread the user's `aida queue work --auto-complete --steal`
+    /// flag through to the phase-1 implementer subprocess. Without this the
+    /// outer `--steal` is dropped on the floor — phase 1's `handle_queue_work`
+    /// sees the dormant lease, bails with the canned "pass --steal" message,
+    /// and the orchestrator reports a generic phase-1 failure even though
+    /// the user *did* pass --steal. trace:BUG-311 | ai:claude
+    steal: bool,
 }
 
 impl RealPhaseDriver {
@@ -53606,6 +53783,7 @@ impl RealPhaseDriver {
         json: bool,
         no_human: Option<auto_complete::NoHumanMode>,
         run_token: String,
+        steal: bool,
     ) -> Self {
         Self {
             project_root,
@@ -53622,6 +53800,7 @@ impl RealPhaseDriver {
             run_token,
             implementer_session: None,
             implementer_worktree: None,
+            steal,
         }
     }
 
@@ -53882,9 +54061,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // exactly this session. trace:STORY-306 | ai:claude
         self.implementer_session = Some(session_uuid.clone());
 
+        let headless_impl = self
+            .no_human
+            .map(|m| m.wants_headless_implementer())
+            .unwrap_or(false);
+        let args = build_implementer_phase_args(
+            &self.spec,
+            &session_uuid,
+            self.steal,
+            headless_impl,
+            self.permission_mode.as_deref(),
+        );
         let mut cmd = std::process::Command::new(self.aida_exe());
         cmd.current_dir(&self.project_root)
-            .args(["queue", "work", &self.spec, "--session-id", &session_uuid])
+            .args(&args)
             .env(orchestrator::AUTO_COMPLETE_ENV, "1")
             // BUG-233: the corroboration token, so the child can verify this
             // orchestrator run is live rather than guessing from the bare var.
@@ -53899,21 +54089,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         );
         if let Some(mode) = self.no_human {
             cmd.env(orchestrator::NO_HUMAN_MODE_ENV, mode.slug());
-        }
-        // STORY-276: under `--no-human=both` the implementer phase runs
-        // headless too — append `--no-human` so `handle_queue_work` launches
-        // `claude -p` instead of an interactive session. `ReviewerOnly` (and
-        // a plain `--auto-complete`) leave phase 1 interactive: no flag.
-        // trace:STORY-276 | ai:claude
-        if self
-            .no_human
-            .map(|m| m.wants_headless_implementer())
-            .unwrap_or(false)
-        {
-            cmd.arg("--no-human");
-        }
-        if let Some(pm) = &self.permission_mode {
-            cmd.args(["--permission-mode", pm]);
         }
 
         // STORY-276: provision the punt-signal handshake. An implementer that
