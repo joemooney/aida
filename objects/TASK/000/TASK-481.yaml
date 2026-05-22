@@ -1,0 +1,61 @@
+id: 019e51eb-1a6a-79b0-b935-5b247af1a9ef
+spec_id: TASK-481
+agreed_id: TASK-481
+title: 'Pre-commit hook (scaffolded): refuse commits touching gitignored paths without --allow-intermediate'
+description: |-
+  Substrate-as-bouncer hook scaffolded into new AIDA projects by 'aida init'. Closes the gap before the reviewer phase by refusing the commit itself.
+
+  ## The pain (same as the /aida-review enhancement)
+
+  Agents edit intermediate build products instead of source code. The fix isn't reproducible. Rules don't stop it. Cross-validated externally 2026-05-22.
+
+  The pre-commit hook is the EARLIEST substrate-level gate — refuses the commit at git-commit time, before the change even gets pushed, reviewed, or merged.
+
+  ## Acceptance
+
+  - [ ] aida init scaffolds .git/hooks/pre-commit (or .githooks/pre-commit + git config core.hooksPath) that:
+    - Identifies staged files that match .gitignore patterns (use 'git check-ignore' to determine)
+    - If any staged file IS gitignored → refuse with message: 'Refusing commit: <file> is gitignored. Editing intermediate build products produces non-reproducible fixes. Modify the source (or pass --allow-intermediate to override). See: docs/aida-discipline/substrate-as-bouncer.md'
+    - --allow-intermediate flag (or AIDA_ALLOW_INTERMEDIATE=1 env var) overrides for legitimate cases (e.g., regenerating fixture data deliberately)
+  - [ ] Hook is OFF for the .aida-store worktree (the orphan branch deliberately stores in gitignored-looking paths; needs a special-case bypass)
+  - [ ] When the hook refuses, error message names the AIDA principle + points to the discipline doc
+  - [ ] Skill templates referencing this hook should describe it but NOT depend on its existence for correctness — the gate enforces; the doc describes
+  - [ ] Regression test in 'aida init' tests: scaffolded hook exists, is executable, refuses test gitignored-file commit, allows source-file commit
+  - [ ] Discipline pack: add docs/aida-discipline/substrate-as-bouncer.md explaining the principle + the hook + the reviewer-phase gate (composes with TASK above)
+
+  ## Why scaffolded (not opt-in)
+
+  Every AIDA project benefits. The pain is universal to coding-agent work (cross-validated). Making it default-on means a new AIDA user inherits the gate without configuring anything.
+
+  The --allow-intermediate override is the escape valve for the rare legitimate case.
+
+  ## Composes with
+
+  - feedback_substrate_as_bouncer_not_rules (the principle)
+  - /aida-review intermediate-diff refusal (sibling gate at the reviewer layer)
+  - aida init scaffolding pipeline
+  - STORY-255 (starter discipline pack)
+  - External cross-validation 2026-05-22
+
+  ## Note on enforcement layering
+
+  This hook + /aida-review's intermediate-diff check are DEFENSE IN DEPTH:
+  - Hook stops the bad commit at the keyboard
+  - Reviewer stops it at the PR review (if the hook was bypassed or absent)
+  - Auto-bump scanner stops the merge from auto-promoting (if both above were bypassed)
+  Three layers. Substrate-as-bouncer at every gate. The agent cannot reach 'shipped' state with a non-reproducible fix without explicit human override at every step.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:00:22.762717704Z
+modified_at: 2026-05-22T23:00:22.762717704Z
+req_type: Task
+tags:
+- discipline-pack
+- external-validation
+- from-self-test
+- git-hooks
+- pre-commit-hook
+- scaffolding
+- substrate-as-bouncer
