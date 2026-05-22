@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T14:13:46.906023859Z
-modified_at: 2026-05-22T01:26:10.714376400Z
+modified_at: 2026-05-22T01:46:18.948140484Z
 req_type: Story
 tags:
 - advisor
@@ -65,3 +65,8 @@ comments:
   content: Commit afd241b6 references this requirement
   created_at: 2026-05-21T02:11:51.176661210Z
   modified_at: 2026-05-21T02:11:51.176661210Z
+- id: 019e4d5c-a9c4-7152-b745-82e4f4b147b1
+  author: joe
+  content: Commit e42de602 references this requirement
+  created_at: 2026-05-22T01:46:18.948140484Z
+  modified_at: 2026-05-22T01:46:18.948140484Z
