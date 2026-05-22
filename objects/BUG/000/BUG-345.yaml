@@ -1,0 +1,58 @@
+id: 019e520e-b678-77f1-b4be-29f941077faf
+spec_id: BUG-345
+agreed_id: BUG-345
+title: 'aida pr ship: post-merge ''aida pull'' fails when master''s main worktree is on a feature branch'
+description: |-
+  Empirical instance 2026-05-22 ~23:30 (Codex shipping TASK-470 via aida pr ship PR-211):
+
+  `aida pr ship` ran successfully through merge, then ran `aida pull` to fast-forward main and trigger auto-bump. The pull failed because:
+
+  - Master's main worktree (/home/joe/ai/aida) was checked out to `story-318-ecosystem-review` (Antigravity had left it there during STORY-318 recovery)
+  - The origin ref for that branch had been deleted (PR-212's --delete-branch on merge)
+  - `aida pull` from a branch whose origin ref is gone cannot fast-forward
+
+  Codex manually flipped TASK-470 to Completed after confirming the merge — papering over the failure.
+
+  ## The environmental assumption
+
+  `aida pr ship` assumes master's main worktree at the project root is on `main` (or at least on a tracked branch). When another agent has left it on a feature branch (a known multi-agent failure mode — Antigravity did exactly this for STORY-318), the assumption breaks.
+
+  ## Acceptance
+
+  - [ ] Before the post-merge `aida pull`, check master's main worktree branch:
+    - If on `main` → pull normally
+    - If on a feature branch with valid origin ref → pull on that branch but ALSO advance main (e.g., `git -C <project> fetch origin main:main` while on feature branch)
+    - If on a feature branch whose origin ref is GONE → `git checkout main` first OR exit cleanly with: 'main worktree is on stale branch <X>; run `git checkout main` then `aida pull` to complete'
+  - [ ] Auto-bump should still fire on the shipped spec — either by running pull on the right branch, OR by directly invoking the scanner on the merge commit, OR by manually flipping when other paths blocked
+  - [ ] Regression test: simulate master worktree on a deleted-origin-ref branch; aida pr ship should not silently fail or skip auto-bump
+
+  ## Why this is the FIFTH aida pr ship child today
+
+  Today's session has surfaced:
+  1. SPEC-410 (Codex) — branch commit drops spec ID
+  2. BUG-339 (Antigravity case) — PR title puts spec ID mid-text instead of trailing parens
+  3. BUG-344 (filed earlier today) — CI-startup-window misclassified as failure
+  4. (master 'recovery' path) — main worktree on feature branch state hazard
+  5. THIS — post-merge pull fails when master is on a stale-ref feature branch
+
+  The wrapper is being thoroughly stress-tested by today's velocity. Each child bug surfaces a different environmental assumption baked into the wrapper.
+
+  ## Composes with
+
+  - TASK-458 (original aida pr ship)
+  - BUG-344 (CI-startup-window — sibling polling/state-detection bug)
+  - feedback_substrate_as_bouncer_not_rules (the wrapper IS substrate enforcement; making it robust to environmental hazards strengthens the bouncer)
+  - Multi-agent worktree-isolation discipline (when violated, this hazard surfaces — the bug is downstream of feedback_sibling_agents_stop_and_flag)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:39:16.472243845Z
+modified_at: 2026-05-22T23:39:16.472243845Z
+req_type: Bug
+tags:
+- environmental-assumption
+- from-self-test
+- post-merge-pull
+- pr-ship
+- task-458-followup
