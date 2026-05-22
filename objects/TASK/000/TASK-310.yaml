@@ -41,7 +41,7 @@ description: |-
   ## Origin
 
   2026-05-17 dialog session: user wanted to queue \`batch:display-polish\` followed by \`batch:workflow-hint-polish\`. No way to chain them; user has to run two commands back-to-back, supervising the gap. With \`--batches\` flag, one kickoff drains both — useful for overnight cycles, especially once STORY-276 lands and the drain is fully unattended.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
