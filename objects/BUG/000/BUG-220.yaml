@@ -65,7 +65,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:33:05.413783730Z
-modified_at: 2026-05-22T20:46:19.768818208Z
+modified_at: 2026-05-22T20:50:04.955669507Z
 req_type: Bug
 tags:
 - bug-89-family
@@ -85,3 +85,18 @@ comments:
     RE-TEST PLAN to determine if BUG-220 is real: the imac's store has now been pushed (origin/aida-store current). On the work machine, run `aida pull` then `aida queue list` with `USER=joe` (verify via `echo $USER $AIDA_USER`). If the queue now POPULATES → BUG-220 was misdiagnosed; it is really STORY-284 (lazy push) and should be re-scoped or closed as dup-of-STORY-284. If the queue is STILL empty with a verified `joe` identity and a current store → genuine multi-node-identity bug, BUG-220 stands and that diagnostic output is the evidence it needs. Per feedback_verify_before_filing.md: rule out the unpushed-store confounder before treating BUG-220 as a deep identity bug.
   created_at: 2026-05-19T03:49:24.631014393Z
   modified_at: 2026-05-19T03:49:24.631014393Z
+- id: 019e5173-d01b-7252-8bdc-f09d24bbdfbd
+  author: joe
+  content: |-
+    Resolution 2026-05-22 (BUG-220 PR): root cause is Hypothesis B (sync gap) per the 2026-05-18 confounder comment — confirmed by reading the code. Findings:
+
+    (A) plausible if shells differ on joe; documented as the AIDA_USER override pattern.
+    (B) the actual cause: orphan-store auto_push defaults to 'manual', so a writer that doesn't run 'aida db sync --push' leaves commits stranded locally. Documented + recommended 'auto_push = "session-end"' as the durable fix.
+    (C) false: queue routing has no node-id (aida-core/src/db/git_backend.rs:579 — queue YAML keyed on user_id only).
+    (D) N/A for queue: queue_list reads orphan-store YAML directly via the inner git backend; the SQLite cache is only used for 'aida list'/'aida search', and ensure_cache_fresh() (aida-core/src/db/cached_git_backend.rs:85) already auto-rebuilds silently on stale.
+
+    Deliverable: docs/multi-node.md ships the diagnostic checklist, the two failure modes, the auto_push settings, and a one-machine two-clone reproduction recipe.
+
+    Follow-up filed: aida queue list freshness nudge (warn when local orphan store is behind origin/aida-store using ~/.aida/cache/last-fetch.toml). Low priority — '--sync' already covers the opt-in case.
+  created_at: 2026-05-22T20:50:04.955669507Z
+  modified_at: 2026-05-22T20:50:04.955669507Z
