@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T07:45:17.071208198Z
-modified_at: 2026-05-22T18:17:56.782908331Z
+modified_at: 2026-05-22T18:22:40.270633585Z
 req_type: Task
 tags:
 - from-review:PR-173
@@ -26,3 +26,8 @@ comments:
   content: mcp
   created_at: 2026-05-22T18:17:56.782895541Z
   modified_at: 2026-05-22T18:17:56.782895541Z
+- id: 019e50ec-da8e-7cd3-9192-7004fc53abce
+  author: 'Follow-up pushed to PR #188 to reduce cross-PR conflict risk with TASK-455: removed wrapper/header trace churn and left a local parser comment near the actual TASK-454 logic. Latest commit: a0863db52c56b8e1d11a5cb26fc545d94dccec2d. Re-ran `python3 -m py_compile tests/test_mcp_stdio.py` and `tests/test_mcp_stdio.sh` successfully before push. trace:TASK-454 | ai:codex'
+  content: mcp
+  created_at: 2026-05-22T18:22:40.270624693Z
+  modified_at: 2026-05-22T18:22:40.270624693Z
