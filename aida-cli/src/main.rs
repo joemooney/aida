@@ -1,6 +1,7 @@
 mod advisor;
 mod auto_complete;
 mod auto_complete_telemetry;
+mod calibration;
 mod changelog;
 mod cli;
 #[cfg(feature = "remote")]
@@ -1307,6 +1308,188 @@ fn handle_findings_command(
             req.modified_at = now;
             backend.update_requirement(&req)?;
             println!("Promoted finding {id} — status → Approved, queued for {role}.");
+        }
+
+        FindingsCommand::Calibration {
+            action,
+            since,
+            agreement,
+            disagreement,
+            all,
+            stats,
+            last,
+            json,
+        } => {
+            // The project root is `store_path.parent()` — `aida findings` is
+            // already passing the same parent through to the advisor footer.
+            let project_root = store_path
+                .parent()
+                .ok_or_else(|| anyhow::anyhow!("cannot resolve project root from store path"))?;
+            match action {
+                Some(cli::CalibrationAction::Annotate { punt_id, note }) => {
+                    calibration::annotate_calibration(project_root, punt_id, note)?;
+                    println!("Annotated calibration record {punt_id}.");
+                    return Ok(());
+                }
+                None => {}
+            }
+            let records = calibration::read_all_calibrations(project_root);
+            let bucket = if *all {
+                None
+            } else if *agreement {
+                Some(calibration::AgreementBucket::Agreement)
+            } else if *disagreement {
+                Some(calibration::AgreementBucket::Disagreement)
+            } else {
+                // Default = disagreements (the triage signal). `--all` widens
+                // the view; `--agreement` swaps to the agreement bucket.
+                Some(calibration::AgreementBucket::Disagreement)
+            };
+            let since_dur = match since.as_deref() {
+                Some(s) => Some(calibration::parse_since(s).map_err(|e| anyhow::anyhow!(e))?),
+                None => None,
+            };
+            let filtered = calibration::filter(
+                &records,
+                &calibration::CalibrationFilter {
+                    since: since_dur,
+                    bucket,
+                },
+            );
+
+            if *stats {
+                let now = chrono::Utc::now();
+                let s = calibration::compute_stats(&records, *last, now);
+                if *json {
+                    let value = serde_json::json!({
+                        "considered": s.considered,
+                        "paired": s.paired,
+                        "agreed": s.agreed,
+                        "disagreed": s.disagreed,
+                        "no_fork": s.no_fork,
+                        "agreement_rate": if s.paired == 0 {
+                            None
+                        } else {
+                            Some(s.agreed as f64 / s.paired as f64)
+                        },
+                        "weekly": s.weekly.iter().map(|w| serde_json::json!({
+                            "week_start": w.week_start.to_rfc3339(),
+                            "paired": w.paired,
+                            "agreed": w.agreed,
+                        })).collect::<Vec<_>>(),
+                        "categories": {
+                            "gap": s.categories.gap,
+                            "in_flight": s.categories.in_flight,
+                            "cold_boot_correct": s.categories.cold_boot_correct,
+                            "unannotated": s.categories.unannotated,
+                        },
+                    });
+                    println!("{}", serde_json::to_string_pretty(&value)?);
+                } else {
+                    println!("{}", "Calibration stats".bold());
+                    println!("  considered:    {}", s.considered);
+                    println!("  paired:        {}", s.paired);
+                    if s.paired > 0 {
+                        let rate = s.agreed as f64 / s.paired as f64 * 100.0;
+                        println!(
+                            "  agreement:     {} / {} ({:.1}%)",
+                            s.agreed, s.paired, rate
+                        );
+                    }
+                    println!("  disagreed:     {}", s.disagreed);
+                    println!("  no-fork:       {}", s.no_fork);
+                    println!();
+                    println!("{}", "4-week trend (most recent first)".dimmed());
+                    for w in &s.weekly {
+                        let rate = if w.paired > 0 {
+                            format!("{:.0}%", w.agreed as f64 / w.paired as f64 * 100.0)
+                        } else {
+                            "—".to_string()
+                        };
+                        println!(
+                            "  week of {}  paired {:>3}, agreed {:>3} ({})",
+                            w.week_start.format("%Y-%m-%d"),
+                            w.paired,
+                            w.agreed,
+                            rate
+                        );
+                    }
+                    println!();
+                    println!("{}", "Disagreement categories".dimmed());
+                    println!("  gap:                {}", s.categories.gap);
+                    println!("  in-flight:          {}", s.categories.in_flight);
+                    println!("  cold-boot correct:  {}", s.categories.cold_boot_correct);
+                    println!("  unannotated:        {}", s.categories.unannotated);
+                }
+                return Ok(());
+            }
+
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&filtered)?);
+                return Ok(());
+            }
+
+            if filtered.is_empty() {
+                let label = match bucket {
+                    Some(calibration::AgreementBucket::Agreement) => "agreement",
+                    Some(calibration::AgreementBucket::Disagreement) => "disagreement",
+                    Some(calibration::AgreementBucket::NoFork) => "no-fork",
+                    None => "calibration",
+                };
+                println!("{}", format!("No {label} records.").dimmed());
+                return Ok(());
+            }
+
+            println!(
+                "{}",
+                format!("Calibration records ({})", filtered.len()).bold()
+            );
+            for r in &filtered {
+                let agreement_label = match r.agreement() {
+                    Some(true) => "AGREE".green().to_string(),
+                    Some(false) => "DISAGREE".yellow().bold().to_string(),
+                    None => "no-fork".dimmed().to_string(),
+                };
+                println!();
+                println!(
+                    "  {}  {}  {}",
+                    r.punt_id.bold(),
+                    r.timestamp.format("%Y-%m-%d %H:%M").to_string().dimmed(),
+                    agreement_label,
+                );
+                let cold_answer = r
+                    .cold_boot
+                    .answer
+                    .as_deref()
+                    .unwrap_or(&r.cold_boot.reasoning);
+                println!(
+                    "    cold-boot ({}): {}",
+                    r.cold_boot.resolution.cyan(),
+                    truncate(cold_answer, 100)
+                );
+                match &r.fork {
+                    Some(f) => {
+                        let fork_answer = f.answer.as_deref().unwrap_or(&f.reasoning);
+                        println!(
+                            "    fork      ({}): {}",
+                            f.resolution.cyan(),
+                            truncate(fork_answer, 100)
+                        );
+                    }
+                    None => {
+                        let why = r.fork_skip_reason.as_deref().unwrap_or("not run");
+                        println!("    fork      (skipped): {}", why);
+                    }
+                }
+                if let Some(note) = &r.annotation {
+                    println!("    annotation: {}", note.dimmed());
+                }
+            }
+            println!();
+            println!(
+                "{}",
+                "Annotate: `aida findings calibration annotate <punt-id> \"<note>\"`".dimmed()
+            );
         }
     }
     Ok(())
@@ -47612,6 +47795,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             quiet,
             no_tee_headless,
             user,
+            calibrate,
+            no_calibrate,
         } => {
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
@@ -47747,6 +47932,25 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     );
                 }
                 let escalate_mode = auto_complete::EscalateMode::from_flags(*escalate_defaults);
+                // STORY-347: per-drain calibration override propagates via an
+                // env var, so it composes with `--batch` / `nextN` / single-
+                // spec drains without threading through three signatures.
+                // `run_advisor` reads `AIDA_CALIBRATE` as `1` (force on) or `0`
+                // (force off); absence falls through to `[advisor]
+                // calibration_mode` in `.aida/config.toml`. Only meaningful
+                // under `--no-human=both` where the advisor tier runs.
+                // trace:STORY-347 | ai:claude
+                if *calibrate || *no_calibrate {
+                    if no_human_mode != Some(auto_complete::NoHumanMode::Both) {
+                        anyhow::bail!(
+                            "--calibrate / --no-calibrate only apply when the advisor tier runs — \
+                             pair with `--no-human=both`"
+                        );
+                    }
+                    std::env::set_var("AIDA_CALIBRATE", if *calibrate { "1" } else { "0" });
+                } else {
+                    std::env::remove_var("AIDA_CALIBRATE");
+                }
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
                 // batch — one full lifecycle per member, advancing the head
                 // after each — instead of one session per re-invocation.
@@ -53205,6 +53409,157 @@ impl RealPhaseDriver {
     fn mark_drain_phase(&self, phase: auto_complete::Phase) {
         drain_state::set_phase(&self.project_root, &self.spec, phase.index(), phase.slug());
     }
+
+    /// STORY-347: spawn one headless advisor (cold-boot OR fork) against the
+    /// already-written punt request and collect its [`punt::PuntResponse`] +
+    /// JSONL log path. Factored out so the calibration loop can run two
+    /// passes against the same request — one cold-boot driving the drain,
+    /// one fork-from-live as shadow. Returns the response and absolute log
+    /// path; an error is a phase-fatal (the spawn failed or the advisor
+    /// wrote no usable response).
+    ///
+    /// `response_path` is the file the advisor will write to — distinct
+    /// paths for the primary and shadow passes so they don't clobber. The
+    /// caller is responsible for clearing any stale file beforehand.
+    /// trace:STORY-347 | ai:claude
+    fn spawn_advisor_session(
+        &self,
+        pass: AdvisorPass,
+        advisor_cfg: &advisor::AdvisorConfig,
+        response_path: &std::path::Path,
+        request_path: &std::path::Path,
+    ) -> Result<(punt::PuntResponse, std::path::PathBuf), auto_complete::PhaseFailure> {
+        use auto_complete::{FailureKind, PhaseFailure};
+
+        let (advisor_uuid, forked_from) = match &pass {
+            AdvisorPass::Fork(plan) => match advisor::execute_fork(plan) {
+                Ok(_) => (plan.fork_uuid.clone(), Some(plan.live.clone())),
+                Err(e) => {
+                    if !self.json {
+                        eprintln!(
+                            "  {} advisor fork failed ({e}); falling back to cold-boot.",
+                            "◆".yellow()
+                        );
+                    }
+                    (uuid::Uuid::now_v7().to_string(), None)
+                }
+            },
+            AdvisorPass::ColdBoot => (uuid::Uuid::now_v7().to_string(), None),
+        };
+        let is_fork = forked_from.is_some();
+
+        let log_path = self
+            .project_root
+            .join(".aida")
+            .join("headless-logs")
+            .join(format!(
+                "advise-{}-{}.jsonl",
+                self.spec,
+                &advisor_uuid[..advisor_uuid.len().min(8)]
+            ));
+        if let Some(dir) = log_path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let log = std::fs::File::create(&log_path).map_err(|e| {
+            PhaseFailure::of(
+                FailureKind::Spawn,
+                format!("advisor tier: could not create the headless log: {e}"),
+            )
+        })?;
+        if !self.json {
+            if let Some(live) = forked_from.as_ref() {
+                let mb = live.jsonl_size_bytes as f64 / (1024.0 * 1024.0);
+                eprintln!(
+                    "  {} forking live advisor session {} ({:.2} MB transcript, via {}) for the design-fork…",
+                    "◆".cyan(),
+                    &live.uuid[..live.uuid.len().min(8)],
+                    mb,
+                    live.discovery.label(),
+                );
+            } else {
+                eprintln!(
+                    "  {} spawning a headless advisor (cold-boot) for the design-fork…",
+                    "◆".cyan()
+                );
+            }
+        }
+        let tee_label = if is_fork { "advisor-fork" } else { "advisor" };
+        let tee_opts =
+            crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label(tee_label);
+        let tee_handle = crate::headless_tee::start_tee(&log_path, &tee_opts);
+        let claude_args = if is_fork {
+            session::claude_headless_resume_args("/aida-advise", &advisor_uuid)
+        } else {
+            session::claude_headless_args("/aida-advise", &advisor_uuid)
+        };
+        let status = std::process::Command::new("claude")
+            .current_dir(&self.project_root)
+            .args(claude_args)
+            .env("AIDA_HEADLESS", "1")
+            .env(punt::REQUEST_FILE_ENV, request_path)
+            .env(punt::RESPONSE_FILE_ENV, response_path)
+            .env("AIDA_SESSION_ROLE", "dialog")
+            .stdout(std::process::Stdio::from(log))
+            .status()
+            .map_err(|e| {
+                PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor tier: could not launch the advisor session: {e}"),
+                )
+            })?;
+        tee_handle.stop();
+
+        // Clean up the fork JSONL if the config asks us to. Default is to
+        // keep it for audit. Errors are non-fatal.
+        if is_fork && !advisor_cfg.keep_fork_jsonls {
+            if let AdvisorPass::Fork(plan) = &pass {
+                let _ = std::fs::remove_file(&plan.fork_jsonl);
+            }
+        }
+        if !status.success() {
+            return Err(PhaseFailure::new(format!(
+                "the headless advisor session exited {} — see {}",
+                status
+                    .code()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "with a signal".to_string()),
+                log_path.display(),
+            )));
+        }
+        let response = punt::read_punt_response(response_path).ok_or_else(|| {
+            PhaseFailure::of(
+                FailureKind::Internal,
+                format!(
+                    "the headless advisor wrote no usable response — see {}",
+                    log_path.display()
+                ),
+            )
+        })?;
+        Ok((response, log_path))
+    }
+}
+
+/// STORY-347: which kind of advisor pass to spawn — a fresh cold-boot
+/// `claude -p` (substrate only) or a fork-from-live `claude --resume` on a
+/// copied JSONL. The orchestrator decides which up front; this enum is the
+/// internal type that flows into `spawn_advisor_session`.
+/// trace:STORY-347 | ai:claude
+enum AdvisorPass {
+    ColdBoot,
+    Fork(advisor::ForkPlan),
+}
+
+/// STORY-347: resolve the effective calibration mode for the current
+/// orchestrator run. The `AIDA_CALIBRATE=1`/`0` env var (set by the
+/// `--calibrate`/`--no-calibrate` queue-work flags) overrides
+/// `[advisor] calibration_mode` from `.aida/config.toml`.
+/// trace:STORY-347 | ai:claude
+fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::CalibrationMode {
+    match std::env::var("AIDA_CALIBRATE").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") | Some("yes") => advisor::CalibrationMode::On,
+        Some("0") | Some("false") | Some("off") | Some("no") => advisor::CalibrationMode::Off,
+        _ => cfg.calibration_mode,
+    }
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
@@ -53945,133 +54300,152 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })?;
 
-        // STORY-360: decide between fork-from-live and cold-boot. The fork
-        // path copies the live advisor's JSONL transcript into the spec's
-        // worktree project slug under a fresh UUID and `claude --resume`s it,
-        // so the headless advisor boots with the full in-flight context.
-        // Cold-boot is the default fallback whenever no live advisor is
-        // registered, the registered session looks dead, the source JSONL
-        // exceeds `max_source_size_mb`, or `fork_mode = "never"`.
-        // trace:STORY-360 | ai:claude
+        // STORY-347: resolve effective calibration mode. Per-drain `--calibrate`
+        // / `--no-calibrate` (via `AIDA_CALIBRATE`) overrides `[advisor]
+        // calibration_mode` in `.aida/config.toml`. When ON, the cold-boot
+        // verdict drives the drain *and* the orchestrator fires a fork-from-
+        // live shadow verdict (when a live advisor is registered) to record
+        // both into `.aida/punts/<punt-id>/calibration.yaml`. When OFF, the
+        // drain is byte-identical to STORY-360's path — that path is left
+        // unchanged below. trace:STORY-347 | ai:claude
         let advisor_cfg = advisor::AdvisorConfig::load(&self.project_root);
-        let fork_plan = advisor::plan_fork(&self.project_root, &advisor_cfg);
-        let (advisor_uuid, forked_from) = match fork_plan.as_ref() {
-            Some(plan) => match advisor::execute_fork(plan) {
-                Ok(_) => (plan.fork_uuid.clone(), Some(plan.live.clone())),
-                Err(e) => {
+        let calibration_mode = effective_calibration_mode(&advisor_cfg);
+        let punt_timestamp = chrono::Utc::now();
+        let punt_id = calibration::build_punt_id(&self.spec, punt_timestamp);
+
+        // Decide the primary path (the one whose verdict drives the drain).
+        //   - Calibration OFF (today's STORY-360 behaviour): use `plan_fork` —
+        //     fork if a live advisor exists and the config permits; cold-boot
+        //     otherwise.
+        //   - Calibration ON: force cold-boot for the primary path — the spec
+        //     explicitly says "cold-boot drives the drain, the fork is shadow."
+        //     trace:STORY-347 | ai:claude
+        let (primary_response, primary_log) = if calibration_mode.is_on() {
+            self.spawn_advisor_session(
+                AdvisorPass::ColdBoot,
+                &advisor_cfg,
+                &response_path,
+                &request_path,
+            )?
+        } else {
+            let fork_plan = advisor::plan_fork(&self.project_root, &advisor_cfg);
+            let pass = match fork_plan {
+                Some(plan) => AdvisorPass::Fork(plan),
+                None => AdvisorPass::ColdBoot,
+            };
+            self.spawn_advisor_session(pass, &advisor_cfg, &response_path, &request_path)?
+        };
+
+        // STORY-347: shadow fork in calibration mode. We've already spent the
+        // cold-boot's cost; only run the fork when a live advisor exists so
+        // the operator's `aida advisor register` is the explicit opt-in for
+        // the second-fork cost. Failures here are non-fatal — the drain still
+        // ships on the cold-boot verdict.
+        let (shadow_response, shadow_log, fork_skip_reason) = if calibration_mode.is_on() {
+            let live =
+                advisor::discover_live_advisor_session(&advisor_cfg, Some(&self.project_root));
+            match live {
+                None => {
                     if !self.json {
                         eprintln!(
-                            "  {} advisor fork failed ({e}); falling back to cold-boot.",
-                            "◆".yellow()
+                            "  {} calibration: no live advisor registered, skipping fork.",
+                            "◆".dimmed()
                         );
                     }
-                    (uuid::Uuid::now_v7().to_string(), None)
+                    (None, None, Some("no-live-advisor".to_string()))
                 }
-            },
-            None => (uuid::Uuid::now_v7().to_string(), None),
-        };
-        let is_fork = forked_from.is_some();
-
-        let log_path = self
-            .project_root
-            .join(".aida")
-            .join("headless-logs")
-            .join(format!(
-                "advise-{}-{}.jsonl",
-                self.spec,
-                &advisor_uuid[..advisor_uuid.len().min(8)]
-            ));
-        if let Some(dir) = log_path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let log = std::fs::File::create(&log_path).map_err(|e| {
-            PhaseFailure::of(
-                FailureKind::Spawn,
-                format!("advisor tier: could not create the headless log: {e}"),
-            )
-        })?;
-        if !self.json {
-            if let Some(live) = forked_from.as_ref() {
-                let mb = live.jsonl_size_bytes as f64 / (1024.0 * 1024.0);
-                eprintln!(
-                    "  {} forking live advisor session {} ({:.2} MB transcript, via {}) for the design-fork…",
-                    "◆".cyan(),
-                    &live.uuid[..live.uuid.len().min(8)],
-                    mb,
-                    live.discovery.label(),
-                );
-            } else {
-                eprintln!(
-                    "  {} spawning a headless advisor (cold-boot) for the design-fork…",
-                    "◆".cyan()
-                );
+                Some(_live) => {
+                    // Re-plan now that we have a target so the size cap +
+                    // mtime fallback rules in `plan_fork` apply.
+                    match advisor::plan_fork(&self.project_root, &advisor_cfg) {
+                        None => (None, None, Some("plan-skipped".to_string())),
+                        Some(plan) => {
+                            // Use a separate response file path so the shadow
+                            // does not clobber the cold-boot's response we
+                            // already consumed.
+                            let shadow_response_path = self
+                                .project_root
+                                .join(".aida")
+                                .join("punts")
+                                .join(format!("{}.calibration-fork.response.json", self.spec));
+                            let _ = std::fs::remove_file(&shadow_response_path);
+                            match self.spawn_advisor_session(
+                                AdvisorPass::Fork(plan),
+                                &advisor_cfg,
+                                &shadow_response_path,
+                                &request_path,
+                            ) {
+                                Ok((resp, log)) => (Some(resp), Some(log), None),
+                                Err(e) => {
+                                    if !self.json {
+                                        eprintln!(
+                                            "  {} calibration: shadow fork failed ({}); recording cold-boot only.",
+                                            "◆".dimmed(),
+                                            e.reason
+                                        );
+                                    }
+                                    (None, None, Some("fork-failed".to_string()))
+                                }
+                            }
+                        }
+                    }
+                }
             }
-        }
-        // TASK-307: tee the headless advisor too — design-fork judgements
-        // benefit just as much from live visibility as the reviewer phase.
-        // Label = "advisor" (cold-boot) or "advisor-fork" (resumed) so the
-        // operator can tell advisor lines apart from the reviewer / resume
-        // lines in a busy drain. trace:TASK-307 trace:STORY-360 | ai:claude
-        let tee_label = if is_fork { "advisor-fork" } else { "advisor" };
-        let tee_opts =
-            crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label(tee_label);
-        let tee_handle = crate::headless_tee::start_tee(&log_path, &tee_opts);
-        // Fork resumes the copied JSONL via `--resume`; cold-boot mints a
-        // fresh `--session-id`. SPIKE-7's mandatory flag set is identical
-        // across both.
-        let claude_args = if is_fork {
-            session::claude_headless_resume_args("/aida-advise", &advisor_uuid)
         } else {
-            session::claude_headless_args("/aida-advise", &advisor_uuid)
+            (None, None, None)
         };
-        let status = std::process::Command::new("claude")
-            .current_dir(&self.project_root)
-            .args(claude_args)
-            .env("AIDA_HEADLESS", "1")
-            .env(punt::REQUEST_FILE_ENV, &request_path)
-            .env(punt::RESPONSE_FILE_ENV, &response_path)
-            // The advisor judges in the advisor (`dialog`) role's seat.
-            .env("AIDA_SESSION_ROLE", "dialog")
-            .stdout(std::process::Stdio::from(log))
-            .status()
-            .map_err(|e| {
-                PhaseFailure::of(
-                    FailureKind::Spawn,
-                    format!("advisor tier: could not launch the advisor session: {e}"),
-                )
-            })?;
-        tee_handle.stop();
 
-        // Clean up the fork JSONL if the config asks us to. Default is to
-        // keep it for audit (a fork transcript is a record of what the
-        // advisor saw at decision time). Errors are non-fatal — the fork
-        // JSONL is just data under `~/.claude/projects/`.
-        if is_fork && !advisor_cfg.keep_fork_jsonls {
-            if let Some(plan) = fork_plan.as_ref() {
-                let _ = std::fs::remove_file(&plan.fork_jsonl);
+        // STORY-347: write the calibration ledger. Best-effort — a write
+        // failure logs and continues; the drain still ships on the cold-boot.
+        if calibration_mode.is_on() {
+            let cold_log_rel = primary_log
+                .strip_prefix(&self.project_root)
+                .ok()
+                .map(|p| p.to_string_lossy().to_string());
+            let shadow_log_rel = shadow_log.as_ref().and_then(|p| {
+                p.strip_prefix(&self.project_root)
+                    .ok()
+                    .map(|s| s.to_string_lossy().to_string())
+            });
+            let record = calibration::CalibrationRecord {
+                punt_id: punt_id.clone(),
+                spec: self.spec.clone(),
+                timestamp: punt_timestamp,
+                cold_boot: calibration::CalibrationVerdict::from_response(
+                    &primary_response,
+                    cold_log_rel,
+                ),
+                fork: shadow_response
+                    .as_ref()
+                    .map(|r| calibration::CalibrationVerdict::from_response(r, shadow_log_rel)),
+                fork_skip_reason,
+                drove_drain: "cold-boot".to_string(),
+                annotation: None,
+            };
+            if let Err(e) = calibration::write_calibration(&self.project_root, &record) {
+                if !self.json {
+                    eprintln!(
+                        "  {} calibration: failed to write ledger ({e}); continuing.",
+                        "◆".yellow()
+                    );
+                }
+            } else if !self.json {
+                let summary = match record.agreement() {
+                    Some(true) => "agreement",
+                    Some(false) => "disagreement",
+                    None => "cold-boot only",
+                };
+                eprintln!(
+                    "  {} calibration: recorded {} at {}",
+                    "◆".cyan(),
+                    summary,
+                    calibration::calibration_path(&self.project_root, &record.punt_id).display(),
+                );
             }
         }
-        if !status.success() {
-            return Err(PhaseFailure::new(format!(
-                "the headless advisor session exited {} — see {}",
-                status
-                    .code()
-                    .map(|c| c.to_string())
-                    .unwrap_or_else(|| "with a signal".to_string()),
-                log_path.display(),
-            )));
-        }
 
-        // Read the advisor's response.
-        let response = punt::read_punt_response(&response_path).ok_or_else(|| {
-            PhaseFailure::of(
-                FailureKind::Internal,
-                format!(
-                    "the headless advisor wrote no usable response — see {}",
-                    log_path.display()
-                ),
-            )
-        })?;
+        let response = primary_response;
+        let _ = primary_log; // referenced in calibration ledger above; not needed by post-processing
 
         // Append the advisor decision to the punt ledger (STORY-325 coupling —
         // v1's escalation rate must be measurable from day one).

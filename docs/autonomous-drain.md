@@ -483,6 +483,75 @@ byte-clean (the fork writes only to its own UUID), and a debugger can read
 every advisor decision back via `aida headless tail` from inside the spec's
 worktree.
 
+### Calibration mode: cold-boot vs fork-from-live ledger (STORY-347)
+
+Substrate-enrichment is **open-loop** by default — the advisor writes memories
+they think will close context gaps, but there is no empirical signal on
+whether those memories actually narrow the cold-boot-vs-live-advisor reasoning
+gap. Calibration mode closes that loop. When ON, every punt the advisor tier
+sees produces **two** verdicts side-by-side:
+
+1. The **cold-boot** advisor (the existing `claude -p` path). This drives
+   the drain — calibration never changes drain behaviour.
+2. The **fork-from-live** advisor (per STORY-360, when registered). This is
+   shadow-only — the verdict is recorded but discarded for drain purposes.
+
+Both verdicts land in `.aida/punts/<punt-id>/calibration.yaml`. Each
+disagreement is interpretable: same model, same prompt, only the context
+differs, so a disagreement names exactly one of three failure modes — a
+substrate gap (a memory that should exist but doesn't), an inherently
+in-flight framing (something a live session can hold that file-substrate
+can't), or the rare case where the cold-boot's fresh read of the substrate
+was actually cleaner than the live advisor's potentially-stale context.
+
+**Toggle**:
+
+```toml
+[advisor]
+calibration_mode = "off"   # off (default) | on
+```
+
+**Per-drain override**:
+
+```bash
+aida queue work --auto-complete --no-human=both --calibrate    # force ON
+aida queue work --auto-complete --no-human=both --no-calibrate # force OFF
+```
+
+**Cost**: with calibration mode ON, every punt pays for **both** advisor
+runs — roughly `cold-boot + fork` (~$0.50-1.00 + ~$4 first / ~$0.03 cached).
+The right time to turn it on is when you want to **mine substrate gaps**:
+run a batch overnight with calibration on, then triage the disagreements
+in the morning to find what to write into memory. Turn it back off once you
+trust the substrate again.
+
+**Review surface**:
+
+```bash
+aida findings calibration                  # disagreements (the triage signal)
+aida findings calibration --all            # disagreements + agreements
+aida findings calibration --agreement      # only the agreements
+aida findings calibration --since 7d       # window the view
+aida findings calibration --stats          # rolling agreement-rate metric
+aida findings calibration annotate <punt-id> "gap → wrote memory feedback_x"
+```
+
+The annotation categories the `--stats` histogram recognises (suggested,
+not enforced):
+
+- `gap → wrote memory <name>` — the disagreement named a substrate gap and
+  you wrote the memory that closes it.
+- `inherently in-flight, accept` — the disagreement names a framing that
+  cannot easily be externalised; accept the gap as a property of the
+  substrate.
+- `cold-boot was actually correct` — the live-advisor's verdict was
+  drift; the cold-boot's fresh read was the right call.
+
+**Graceful skip**: calibration ON with no live advisor registered logs a
+single line ("calibration: no live advisor registered, skipping fork") and
+proceeds with cold-boot only. The calibration record still gets written so
+the review surface can see "how many punts found no live advisor."
+
 ## Recovery: merging a drained spec's PR by hand (TASK-406)
 
 When a drain bails before phase 4 (CI hung, the orchestrator was interrupted,
