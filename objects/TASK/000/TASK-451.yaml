@@ -1,0 +1,41 @@
+id: 019e4e6c-fd35-7852-ac94-4e704c74ae92
+spec_id: TASK-451
+agreed_id: TASK-451
+title: Land Codex's MCP stdio compatibility tests — tests/test_mcp_stdio.py + tests/test_mcp_stdio.sh
+description: |-
+  ## Background
+
+  During the empirical roundtrip work (STORY-398), the sibling agent (Codex) added two compatibility tests at the stdio boundary:
+
+  - \`tests/test_mcp_stdio.py\`
+  - \`tests/test_mcp_stdio.sh\`
+
+  These exercise the MCP server's actual stdio protocol — initialize → tools/list → tools/call — and assert the responses match the documented contract. The tests are currently failing on the expected gap (missing outputSchema, which TASK-440 ships).
+
+  Land these tests in the main repo. After TASK-440 ships, the outputSchema-presence assertions should pass and the test progresses to store/tool roundtrip checks.
+
+  ## Acceptance
+
+  - The two test files land in \`tests/\` (or wherever Codex authored them).
+  - CI runs them (likely as part of the integration-test stage; if a new stage is needed, add it).
+  - Tests document their expected post-TASK-440 outcomes inline.
+  - A README or comment explains the stdio-boundary testing rationale.
+
+  ## Composes with
+
+  - TASK-440 — once outputSchema descriptors land, the test should advance from "fails on missing outputSchema" to "store/tool roundtrip checks."
+  - STORY-398 — these tests are the empirical-roundtrip's automation hook.
+  - BUG-310 — likely surfaced by these tests (MCP/CLI consistency).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T06:43:46.101249412Z
+modified_at: 2026-05-22T06:43:46.101249412Z
+req_type: Task
+tags:
+- empirical
+- from-codex
+- mcp
+- story-398-prereq
+- test
