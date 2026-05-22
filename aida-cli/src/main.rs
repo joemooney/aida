@@ -31211,6 +31211,25 @@ fn normalize_batch_name(s: &str) -> &str {
     strip_batch_prefix(s).unwrap_or(s)
 }
 
+/// TASK-310: parse comma-separated batch-chain names. Names are kept in the
+/// caller's declared order; `batch:` prefixes are tolerated per TASK-270.
+fn parse_batch_chain(raw: &str) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    for part in raw.split(',') {
+        let name = normalize_batch_name(part.trim()).trim();
+        if name.is_empty() {
+            anyhow::bail!(
+                "batch list contains an empty name — use comma-separated names like `--batches A,B,C`"
+            );
+        }
+        names.push(name.to_string());
+    }
+    if names.is_empty() {
+        anyhow::bail!("batch list is empty — use comma-separated names like `--batches A,B,C`");
+    }
+    Ok(names)
+}
+
 /// TASK-270: resolve the effective positional id and batch name for
 /// `aida queue work`. Accepts `batch:NAME` as a positional id
 /// (equivalent to `--batch NAME`) and strips a redundant `batch:`
@@ -48971,6 +48990,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             path,
             steal,
             batch,
+            batches,
             dry_run,
             resume,
             fresh,
@@ -49058,11 +49078,27 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // token back as an identifier. trace:TASK-270 | ai:claude
             let (effective_id, effective_batch) =
                 resolve_queue_work_batch(id.as_deref(), batch.as_deref());
+            let effective_batches = if let Some(raw) = batches.as_deref() {
+                Some(parse_batch_chain(raw)?)
+            } else if auto_complete.is_some()
+                && effective_batch.map(|b| b.contains(',')).unwrap_or(false)
+            {
+                Some(parse_batch_chain(effective_batch.unwrap())?)
+            } else {
+                None
+            };
+            if auto_complete.is_none() && effective_batch.map(|b| b.contains(',')).unwrap_or(false)
+            {
+                anyhow::bail!(
+                    "comma-separated batches require `--auto-complete` — use \
+                     `aida queue work --batch A,B --auto-complete` or `--batches A,B`"
+                );
+            }
             // TASK-270: clap rejects `--batch` alongside `--type`; the
             // positional `batch:NAME` form bypasses that rule, so enforce
             // the same conflict here rather than silently dropping
             // `--type`. trace:TASK-270 | ai:claude
-            if effective_batch.is_some() && type_filter.is_some() {
+            if (effective_batch.is_some() || effective_batches.is_some()) && type_filter.is_some() {
                 anyhow::bail!(
                     "`--type` does not apply to batch pickup — drop it, or pass an EPIC/STORY id for a typed cluster"
                 );
@@ -49146,6 +49182,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // batch — one full lifecycle per member, advancing the head
                 // after each — instead of one session per re-invocation.
                 // `--max` bounds the drain. trace:TASK-285 | ai:claude
+                if let Some(batch_names) = effective_batches.as_deref() {
+                    handle_auto_complete_batches(
+                        storage,
+                        &user_id,
+                        batch_names,
+                        variant,
+                        *json,
+                        permission_mode.as_deref(),
+                        role.as_deref(),
+                        *max,
+                        no_human_mode,
+                        escalate_mode,
+                        *steal,
+                    );
+                }
                 if let Some(batch_name) = effective_batch {
                     if batch_name.is_empty() {
                         anyhow::bail!(
@@ -49952,6 +50003,23 @@ mod queue_progress_tests {
 
         // No id, no flag → nothing resolved (head-pickup path).
         assert_eq!(resolve_queue_work_batch(None, None), (None, None));
+    }
+
+    #[test]
+    fn parse_batch_chain_preserves_order_and_strips_prefixes() {
+        assert_eq!(
+            parse_batch_chain("batch:display-polish, workflow-hint-polish,BUGS").unwrap(),
+            vec!["display-polish", "workflow-hint-polish", "BUGS"]
+        );
+    }
+
+    #[test]
+    fn parse_batch_chain_rejects_empty_names() {
+        let err = parse_batch_chain("alpha,,beta").unwrap_err();
+        assert!(
+            err.to_string().contains("empty name"),
+            "unexpected error: {err}"
+        );
     }
 }
 
@@ -52829,6 +52897,318 @@ fn handle_auto_complete_batch(
         let _ = drain_state::DrainState::clear(root);
     }
     std::process::exit(exit_code);
+}
+
+/// Entry point for `aida queue work --batches A,B,C --auto-complete`
+/// (TASK-310). Drains named batches left-to-right, exhausting one before
+/// moving to the next. Empty batches are skipped; a failed phase or `--max`
+/// cap stops the chain at the active batch.
+#[allow(clippy::too_many_arguments)]
+fn handle_auto_complete_batches(
+    storage: &Storage,
+    user_id: &str,
+    batch_names: &[String],
+    variant: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<&str>,
+    role: Option<&str>,
+    max: Option<usize>,
+    no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
+    steal: bool,
+) -> ! {
+    if !json {
+        eprintln!();
+        eprintln!(
+            "{} {} {}",
+            "🚀".bold(),
+            format!(
+                "auto-complete batches: {}",
+                batch_names
+                    .iter()
+                    .map(|b| format!("batch:{b}"))
+                    .collect::<Vec<_>>()
+                    .join(" → ")
+            )
+            .bold(),
+            format!("({})", variant.describe()).dimmed()
+        );
+        if let Some(limit) = max {
+            eprintln!(
+                "  {} drain capped at {} item{} total",
+                "ℹ".cyan(),
+                limit,
+                if limit == 1 { "" } else { "s" }
+            );
+        }
+    }
+
+    let drain_root = find_main_worktree_root().ok();
+    let mut batch_index = 0usize;
+    let result = auto_complete::drain_batch_chain(batch_names, max, |batch_name| {
+        batch_index += 1;
+        let members_for_state = resolve_batch_members(storage, user_id, batch_name, role);
+        if !json
+            && members_for_state
+                .as_ref()
+                .map(|members| !members.is_empty())
+                .unwrap_or(true)
+        {
+            eprintln!(
+                "  {} drain: batch:{} ({}/{})",
+                "→".dimmed(),
+                batch_name.cyan(),
+                batch_index,
+                batch_names.len()
+            );
+        }
+        if let Some(root) = &drain_root {
+            if let Ok(members) = members_for_state {
+                let specs: Vec<String> = members.into_iter().map(|m| m.1).collect();
+                let _ = drain_state::DrainState::new_batch(batch_name, &specs).write(root);
+            }
+        }
+        Box::new(RealBatchDriver {
+            storage,
+            user_id: user_id.to_string(),
+            batch_name: batch_name.to_string(),
+            role: role.map(|s| s.to_string()),
+            variant,
+            json,
+            permission_mode: permission_mode.map(|s| s.to_string()),
+            no_human,
+            escalate_mode,
+            steal,
+        })
+    });
+
+    let no_activity = result.shipped.is_empty()
+        && result.punted.is_empty()
+        && result.escalated.is_empty()
+        && matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained);
+    let exit_code = if no_activity { 1 } else { result.exit_code };
+    emit_batch_chain_summary(batch_names, &result, exit_code, json);
+    if let Some(root) = &drain_root {
+        let _ = drain_state::DrainState::clear(root);
+    }
+    std::process::exit(exit_code);
+}
+
+/// Print the closing summary for a multi-batch drain. Per-batch summaries are
+/// intentionally compact: empty batches are omitted from human output so an
+/// already-drained intermediate batch is a silent skip. trace:TASK-310
+fn emit_batch_chain_summary(
+    batch_names: &[String],
+    result: &auto_complete::BatchChainDrainResult,
+    exit_code: i32,
+    json: bool,
+) {
+    use auto_complete::BatchDrainOutcome;
+
+    if json {
+        let outcome = match &result.outcome {
+            BatchDrainOutcome::Drained => "drained",
+            BatchDrainOutcome::MaxReached => "max-reached",
+            BatchDrainOutcome::Failed(_) => "failed",
+            BatchDrainOutcome::Stalled => "stalled",
+            BatchDrainOutcome::Mismatched { .. } => "mismatched",
+            BatchDrainOutcome::Inconclusive => "inconclusive",
+        };
+        let mut obj = serde_json::Map::new();
+        obj.insert(
+            "event".to_string(),
+            serde_json::Value::String("batch-chain-drain".into()),
+        );
+        obj.insert(
+            "batches".to_string(),
+            serde_json::Value::Array(
+                batch_names
+                    .iter()
+                    .map(|b| serde_json::Value::String(format!("batch:{b}")))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "outcome".to_string(),
+            serde_json::Value::String(outcome.into()),
+        );
+        obj.insert(
+            "shipped".to_string(),
+            serde_json::Value::Array(
+                result
+                    .shipped
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "shipped_count".to_string(),
+            serde_json::Value::Number((result.shipped.len() as u64).into()),
+        );
+        obj.insert(
+            "punted".to_string(),
+            serde_json::Value::Array(
+                result
+                    .punted
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "punted_count".to_string(),
+            serde_json::Value::Number((result.punted.len() as u64).into()),
+        );
+        obj.insert(
+            "escalated".to_string(),
+            serde_json::Value::Array(
+                result
+                    .escalated
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "escalated_count".to_string(),
+            serde_json::Value::Number((result.escalated.len() as u64).into()),
+        );
+        obj.insert(
+            "stopped_batch".to_string(),
+            match &result.stopped_batch {
+                Some(b) => serde_json::Value::String(format!("batch:{b}")),
+                None => serde_json::Value::Null,
+            },
+        );
+        obj.insert(
+            "stopped_at".to_string(),
+            match &result.stopped_at {
+                Some(s) => serde_json::Value::String(s.clone()),
+                None => serde_json::Value::Null,
+            },
+        );
+        obj.insert(
+            "exit_code".to_string(),
+            serde_json::Value::Number(exit_code.into()),
+        );
+        println!("{}", serde_json::Value::Object(obj));
+        return;
+    }
+
+    let shipped_list = if result.shipped.is_empty() {
+        "(none)".to_string()
+    } else {
+        result.shipped.join(", ")
+    };
+    let n = result.shipped.len();
+    let plural = if n == 1 { "" } else { "s" };
+    eprintln!();
+
+    if result.shipped.is_empty() && result.punted.is_empty() && result.escalated.is_empty() {
+        eprintln!(
+            "{} no queued items found in any requested batch: {}",
+            "✗".red().bold(),
+            batch_names
+                .iter()
+                .map(|b| format!("batch:{b}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        return;
+    }
+
+    match &result.outcome {
+        BatchDrainOutcome::Drained => {
+            eprintln!(
+                "{} batch chain drained — {n} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+        }
+        BatchDrainOutcome::MaxReached => {
+            eprintln!(
+                "{} batch chain — `--max` reached, {n} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+            if let Some(batch) = &result.stopped_batch {
+                eprintln!(
+                    "  {} stopped while draining `batch:{batch}` — re-run the same command to continue",
+                    "→".dimmed()
+                );
+            }
+        }
+        BatchDrainOutcome::Failed(phase) => {
+            let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch chain stopped in `batch:{batch}` at {} (phase {} failed)",
+                "✗".red().bold(),
+                stopped.bold(),
+                phase.index()
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} later batches were not started — fix {stopped}, then re-run the chain",
+                "→".dimmed()
+            );
+        }
+        BatchDrainOutcome::Stalled => {
+            let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch chain stopped in `batch:{batch}` — {} stayed at the head after a successful run",
+                "✗".red().bold(),
+                stopped.bold()
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+        }
+        BatchDrainOutcome::Mismatched {
+            dispatched,
+            shipped,
+        } => {
+            let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
+            eprintln!(
+                "{} batch chain stopped in `batch:{batch}` — dispatched {} but PR credited {}",
+                "ⓘ".cyan().bold(),
+                dispatched.bold(),
+                shipped.bold()
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+        }
+        BatchDrainOutcome::Inconclusive => {
+            let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch chain paused in `batch:{batch}` at {} — phase 1 inconclusive",
+                "⏸".yellow().bold(),
+                stopped.bold()
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+        }
+    }
+
+    if !result.punted.is_empty() {
+        let pn = result.punted.len();
+        eprintln!(
+            "  {} {pn} spec{} punted to Needs Attention: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if pn == 1 { "" } else { "s" },
+            result.punted.join(", ")
+        );
+    }
+    if !result.escalated.is_empty() {
+        let en = result.escalated.len();
+        eprintln!(
+            "  {} {en} spec{} escalated to a human: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if en == 1 { "" } else { "s" },
+            result.escalated.join(", ")
+        );
+    }
 }
 
 /// Print the closing summary of a `--batch --auto-complete` drain: what

@@ -1780,6 +1780,29 @@ pub(crate) struct BatchDrainResult {
     pub(crate) exit_code: i32,
 }
 
+/// One completed segment of a multi-batch drain. trace:TASK-310 | ai:codex
+#[derive(Debug, Clone)]
+pub(crate) struct BatchChainStep {
+    pub(crate) batch_name: String,
+    pub(crate) result: BatchDrainResult,
+}
+
+/// Aggregated result for `aida queue work --batches A,B,C --auto-complete`.
+/// The individual [`BatchDrainResult`] values stay available so the CLI can
+/// render per-batch summaries without losing where the chain stopped.
+/// trace:TASK-310 | ai:codex
+#[derive(Debug, Clone)]
+pub(crate) struct BatchChainDrainResult {
+    pub(crate) steps: Vec<BatchChainStep>,
+    pub(crate) shipped: Vec<String>,
+    pub(crate) punted: Vec<String>,
+    pub(crate) escalated: Vec<String>,
+    pub(crate) stopped_batch: Option<String>,
+    pub(crate) stopped_at: Option<String>,
+    pub(crate) outcome: BatchDrainOutcome,
+    pub(crate) exit_code: i32,
+}
+
 /// Drives a batch drain: yields the current batch head and runs one spec's
 /// full `--auto-complete` orchestration. The real implementation re-resolves
 /// the `batch:NAME` tag against the queue and calls `run_auto_complete`; the
@@ -1903,6 +1926,126 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
         } else {
             shipped.push(head);
         }
+    }
+}
+
+/// Drain multiple named batches left-to-right. Each batch is exhausted before
+/// the next starts; any non-clean stop (failed phase, stall, mismatch,
+/// inconclusive) stops the chain at that batch. Empty batches are clean
+/// `Drained` steps and are skipped by the caller's UI.
+///
+/// `max` is total work across the whole chain. Because [`drain_batch`] counts
+/// shipped + punted + escalated members toward its cap, this helper carries
+/// the remaining allowance into each subsequent batch. trace:TASK-310
+pub(crate) fn drain_batch_chain<'a, F>(
+    batch_names: &[String],
+    max: Option<usize>,
+    mut make_driver: F,
+) -> BatchChainDrainResult
+where
+    F: FnMut(&str) -> Box<dyn BatchDriver + 'a>,
+{
+    let mut steps = Vec::new();
+    let mut shipped = Vec::new();
+    let mut punted = Vec::new();
+    let mut escalated = Vec::new();
+
+    for batch_name in batch_names {
+        let consumed = shipped.len() + punted.len() + escalated.len();
+        let remaining = max.map(|limit| limit.saturating_sub(consumed));
+        let mut driver = make_driver(batch_name);
+        let result = drain_batch(driver.as_mut(), remaining);
+
+        shipped.extend(result.shipped.iter().cloned());
+        punted.extend(result.punted.iter().cloned());
+        escalated.extend(result.escalated.iter().cloned());
+
+        let step = BatchChainStep {
+            batch_name: batch_name.clone(),
+            result: result.clone(),
+        };
+        steps.push(step);
+
+        match result.outcome {
+            BatchDrainOutcome::Drained => continue,
+            BatchDrainOutcome::MaxReached => {
+                return BatchChainDrainResult {
+                    steps,
+                    shipped,
+                    punted,
+                    escalated,
+                    stopped_batch: Some(batch_name.clone()),
+                    stopped_at: result.stopped_at,
+                    outcome: BatchDrainOutcome::MaxReached,
+                    exit_code: result.exit_code,
+                };
+            }
+            BatchDrainOutcome::Failed(phase) => {
+                return BatchChainDrainResult {
+                    steps,
+                    shipped,
+                    punted,
+                    escalated,
+                    stopped_batch: Some(batch_name.clone()),
+                    stopped_at: result.stopped_at,
+                    outcome: BatchDrainOutcome::Failed(phase),
+                    exit_code: result.exit_code,
+                };
+            }
+            BatchDrainOutcome::Stalled => {
+                return BatchChainDrainResult {
+                    steps,
+                    shipped,
+                    punted,
+                    escalated,
+                    stopped_batch: Some(batch_name.clone()),
+                    stopped_at: result.stopped_at,
+                    outcome: BatchDrainOutcome::Stalled,
+                    exit_code: result.exit_code,
+                };
+            }
+            BatchDrainOutcome::Mismatched {
+                dispatched,
+                shipped: actual,
+            } => {
+                return BatchChainDrainResult {
+                    steps,
+                    shipped,
+                    punted,
+                    escalated,
+                    stopped_batch: Some(batch_name.clone()),
+                    stopped_at: result.stopped_at,
+                    outcome: BatchDrainOutcome::Mismatched {
+                        dispatched,
+                        shipped: actual,
+                    },
+                    exit_code: result.exit_code,
+                };
+            }
+            BatchDrainOutcome::Inconclusive => {
+                return BatchChainDrainResult {
+                    steps,
+                    shipped,
+                    punted,
+                    escalated,
+                    stopped_batch: Some(batch_name.clone()),
+                    stopped_at: result.stopped_at,
+                    outcome: BatchDrainOutcome::Inconclusive,
+                    exit_code: result.exit_code,
+                };
+            }
+        }
+    }
+
+    BatchChainDrainResult {
+        steps,
+        shipped,
+        punted,
+        escalated,
+        stopped_batch: None,
+        stopped_at: None,
+        outcome: BatchDrainOutcome::Drained,
+        exit_code: 0,
     }
 }
 
@@ -3627,6 +3770,86 @@ mod tests {
         assert_eq!(result.exit_code, 0);
         assert_eq!(result.outcome, BatchDrainOutcome::Drained);
         assert!(result.shipped.is_empty());
+    }
+
+    /// TASK-310: a multi-batch drain exhausts each batch before advancing to
+    /// the next batch in the user-declared order.
+    #[test]
+    fn drain_batch_chain_drains_two_batches_in_order() {
+        let names = vec!["alpha".to_string(), "beta".to_string()];
+        let result = drain_batch_chain(&names, None, |name| match name {
+            "alpha" => Box::new(MockBatchDriver::new(&["TASK-A1", "TASK-A2"])),
+            "beta" => Box::new(MockBatchDriver::new(&["TASK-B1"])),
+            other => panic!("unexpected batch {other}"),
+        });
+
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-A1", "TASK-A2", "TASK-B1"]);
+        assert_eq!(
+            result
+                .steps
+                .iter()
+                .map(|s| s.batch_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["alpha", "beta"]
+        );
+    }
+
+    /// TASK-310: an empty intermediate batch is silently skipped; later
+    /// batches still run.
+    #[test]
+    fn drain_batch_chain_skips_empty_middle_batch() {
+        let names = vec!["alpha".to_string(), "empty".to_string(), "beta".to_string()];
+        let result = drain_batch_chain(&names, None, |name| match name {
+            "alpha" => Box::new(MockBatchDriver::new(&["TASK-A1"])),
+            "empty" => Box::new(MockBatchDriver::new(&[])),
+            "beta" => Box::new(MockBatchDriver::new(&["TASK-B1"])),
+            other => panic!("unexpected batch {other}"),
+        });
+
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-A1", "TASK-B1"]);
+        assert_eq!(result.steps.len(), 3);
+        assert!(result.steps[1].result.shipped.is_empty());
+    }
+
+    /// TASK-310: a failure in one batch stops the whole chain and does not
+    /// advance into later batches.
+    #[test]
+    fn drain_batch_chain_failure_stops_before_next_batch() {
+        let names = vec!["alpha".to_string(), "beta".to_string()];
+        let result = drain_batch_chain(&names, None, |name| match name {
+            "alpha" => Box::new(
+                MockBatchDriver::new(&["TASK-A1", "TASK-A2"]).failing("TASK-A2", Phase::Reviewer),
+            ),
+            "beta" => Box::new(MockBatchDriver::new(&["TASK-B1"])),
+            other => panic!("unexpected batch {other}"),
+        });
+
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Reviewer));
+        assert_eq!(result.shipped, vec!["TASK-A1"]);
+        assert_eq!(result.stopped_batch.as_deref(), Some("alpha"));
+        assert_eq!(result.stopped_at.as_deref(), Some("TASK-A2"));
+        assert_eq!(result.steps.len(), 1, "beta should never start");
+    }
+
+    /// TASK-310: `--max` caps total acted-on specs across all batches, not
+    /// per batch.
+    #[test]
+    fn drain_batch_chain_max_caps_across_batches() {
+        let names = vec!["alpha".to_string(), "beta".to_string()];
+        let result = drain_batch_chain(&names, Some(3), |name| match name {
+            "alpha" => Box::new(MockBatchDriver::new(&["TASK-A1", "TASK-A2"])),
+            "beta" => Box::new(MockBatchDriver::new(&["TASK-B1", "TASK-B2"])),
+            other => panic!("unexpected batch {other}"),
+        });
+
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::MaxReached);
+        assert_eq!(result.shipped, vec!["TASK-A1", "TASK-A2", "TASK-B1"]);
+        assert_eq!(result.stopped_batch.as_deref(), Some("beta"));
     }
 
     /// STORY-276: a punted member advances the drain — it leaves the queue
