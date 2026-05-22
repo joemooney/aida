@@ -18,12 +18,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:18.077004527Z
-modified_at: 2026-05-22T04:22:54.068072630Z
+modified_at: 2026-05-22T04:22:55.144759710Z
 req_type: Task
 tags:
 - from-review:PR-162
 - needs-human
 - severity:cosmetic
+comments:
+- id: 019e4dec-09a8-7a43-a657-32488b01ca23
+  author: joe
+  content: |-
+    Advisor escalated this design-fork to a human (STORY-306).
+
+    Reasoning: TASK-440 contains a triple fork the recorded corpus does not resolve. (1) Defer-vs-do: the spec body explicitly says 'Defer until the first MCP client surfaces a need for the structured shape — the text envelope is sufficient for current Claude Code use,' yet the spec was Approved and queued for implementer pickup. (2) Declare-only (Path A) vs declare-and-emit-structuredContent (Path B): the MCP spec expects servers that declare outputSchema to also emit structuredContent matching it, so Path A is technically non-conformant and could mislead any third-party MCP client (Codex, Cursor, future agents) that ever connects — exactly the cross-agent surface STORY-361 promises ('any MCP-speaking agent can participate'). Path B is materially larger than the 'severity:cosmetic' tag from PR-162 review implies (~21 tool responses reshaped) and bullet-2 of the description lists it as a separate concern. (3) Scope of bullet-3 'backfill the original 7' is also open. The implementer's lean (Path A + file bullet-2 as a follow-up TASK) is a defensible middle ground, but it rests on the strategic call of how strictly AIDA's MCP surface conforms to the MCP spec — a positioning question for the cross-agent coordination surface STORY-361 ships. No discipline doc, plan, memory, or codebase convention records that call; no prior outputSchema use exists. To unblock, pick one: (a) confirm Path A despite the conformance gap (text-envelope-is-sufficient stance trumps third-party MCP-client concern); (b) approve Path B and accept the scope inflation past 'cosmetic'; (c) re-defer the spec to honor its own 'Defer until...' instruction and unqueue it.
+
+    When you resolve this, record the answer (a memory, an acceptance-criteria edit, or a discipline doc) so a future advisor can resolve the same kind of fork as a recorded principle.
+  created_at: 2026-05-22T04:22:55.144759710Z
+  modified_at: 2026-05-22T04:22:55.144759710Z
 attention_reason:
   category: ambiguous-spec
   detail: 'The spec body ends with ''Defer until the first MCP client surfaces a need for the structured shape — the text envelope is sufficient for current Claude Code use,'' yet the spec sits Approved and was queued for implementer pickup. Beyond the defer-vs-do contradiction there is a real implementation fork: (A) declare outputSchema descriptors only across the 21 tools — minimal, matches the title and bullet-1 of the description, but technically out of line with the MCP spec which expects servers to also emit structuredContent matching the declared schema; (B) declare outputSchema AND switch each tool to also return structuredContent — correct per MCP spec, but a materially larger change than the ''severity:cosmetic'' tag from the original PR-162 review implies, and bullet-2 of the description lists this as a separate concern. The cost of A is misleading consumers if a third-party MCP client ever connects; the cost of B is shipping ~21 reshaped tool responses on a ''cosmetic'' ticket. Cannot resolve from the spec or codebase.'
