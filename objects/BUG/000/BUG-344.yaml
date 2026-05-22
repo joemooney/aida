@@ -43,7 +43,7 @@ description: |-
   ## Note
 
   A few PRs today were merged manually after aida pr ship bailed at this point. The success rate of aida pr ship would meaningfully improve with this fix.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
