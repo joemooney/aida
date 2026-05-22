@@ -11,12 +11,12 @@ description: |-
   2. OR add a one-line note under recipe 1 that the cosmetic error may still print and is expected/harmless.
 
   Raised in review of PR-160: https://github.com/joemooney/aida/pull/160#issuecomment-4510827316
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T17:26:31.691485590Z
-modified_at: 2026-05-22T01:06:38.545841180Z
+modified_at: 2026-05-22T04:47:52.164370274Z
 req_type: Task
 tags:
 - docs
