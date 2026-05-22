@@ -35,12 +35,12 @@ description: |-
   - STORY-276 / STORY-306 / STORY-332 / STORY-333 / BUG-257 / STORY-347 — the keystone arc the demo showcases.
   - Memory \`feedback_advocate_not_be_passive\` — this task IS the advocacy in operational form.
   - Memory \`feedback_competitive_analysis_is_living_doc\` — the writeup is a chance to refresh the public-facing comparative positioning.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:25:56.023469640Z
-modified_at: 2026-05-22T18:03:45.808812866Z
+modified_at: 2026-05-22T18:03:55.661364012Z
 req_type: Task
 tags:
 - autonomy-keystone
@@ -48,3 +48,9 @@ tags:
 - marketing
 - visibility
 - wedge
+attention_reason:
+  category: other
+  detail: 'TASK-403 is a demo/marketing meta-task whose acceptance criteria require actions a headless coding implementer cannot perform: (1) record an asciinema of a *future* overnight drain — the keystone artifact cannot be produced in a single REPL session; (2) curate a 4-6 spec batch — judgment about queue composition belongs to the advisor/operator, not a code-implementer; (3) pick a publish surface — the spec explicitly says ''user decides''; (4) write ~800-1500 word external narrative — depends on (1) existing first, and needs editorial judgment about AIDA''s public voice. There is no code surface here; the spec is misrouted to the headless implementer queue.'
+  lean: 'Operator (Joe) runs this manually: pick a 4-6 spec batch (include one likely-to-punt design-fork spec + one likely-to-hit-transient-error spec for the resilience arc), launch ''aida queue work --auto-complete --no-human=both'' overnight with asciinema recording the launching shell, edit the recording in the morning, draft the narrative in a dialog session, choose a publish surface. Implementer/dialog seats can help with prose drafting once the recording exists.'
+  raised_by: implementer
+  raised_at: 2026-05-22T18:03:55.661364012Z
