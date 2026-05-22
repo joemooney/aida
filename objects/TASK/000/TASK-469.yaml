@@ -11,10 +11,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:24:56.992433592Z
-modified_at: 2026-05-22T20:31:36.466100062Z
+modified_at: 2026-05-22T21:16:18.234633236Z
 req_type: Task
 tags:
 - from-review:PR-202
 - severity:cosmetic
 - story-281
 - tests
+comments:
+- id: 019e518b-d1ba-7ea2-bd42-58b13e905fad
+  author: Bundling with TASK-471 as recommended because the added unit test is pure classifier coverage in the same stale-base code path.
+  content: mcp
+  created_at: 2026-05-22T21:16:18.234624131Z
+  modified_at: 2026-05-22T21:16:18.234624131Z
