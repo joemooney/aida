@@ -1,0 +1,78 @@
+id: 019e508f-13af-77f3-85a3-9e960875b628
+spec_id: STORY-408
+agreed_id: STORY-408
+title: Define 'supported agent' tier model for AIDA — Verified / Experimental / Unsupported (post-STORY-407 + STORY-398)
+description: |-
+  ## Background
+
+  AIDA positions as agent-agnostic (any MCP-speaking agent can participate). But "supported" today is implicit — Claude Code is the primary surface; Codex is being integrated (STORY-398); Antigravity is starting (STORY-407). A coherent tier model gives:
+
+  - **Users**: clear expectation per agent ("safe for unattended drains" vs "test with eyes on" vs "known to break")
+  - **Adoption signal**: what AIDA officially supports vs what's experimental
+  - **Empirical bar**: what an agent must demonstrate to graduate tiers
+
+  ## Approach
+
+  Define three tiers based on empirical data from STORY-398 (Codex) + STORY-407 (Antigravity) + future agent integrations:
+
+  ### Verified
+
+  - Full coordination tool set works reliably end-to-end
+  - Roundtrip tests pass (post → CLI verify → mutate → CLI verify)
+  - Schema discovery (\`tools/list\` + \`outputSchema\`) is consumed correctly
+  - Error handling is robust (graceful on isError responses)
+  - Safe for unattended drains (claim_task, post_punt, file_finding under \`--no-human=both\`-equivalent)
+  - Has an authoritative \`docs/agents/<agent>-mcp-setup.md\` doc tested by a third party
+
+  ### Experimental
+
+  - Read operations work reliably
+  - Bounded write operations work with manual verification (no unattended)
+  - Coordination tools work but have known caveats (documented)
+  - Roundtrip tests partial — not all 21 tools verified
+  - Has a setup doc but rough edges remain
+  - Recommended for at-keyboard exploration only
+
+  ### Unsupported
+
+  - Known to malfunction on AIDA's MCP surface
+  - Documented to inform user choice ("X agent breaks on Y tool because Z")
+  - Anti-recommendation surface — users see explicit guidance to avoid
+
+  ## Acceptance
+
+  - \`docs/agents/SUPPORTED.md\` (or similar) — single document listing each tested agent + its tier + the evidence + the conditions
+  - Each agent's row links to its setup doc, verdict doc, and the BUGs/TASKs filed against it
+  - \`aida init\`'s \`AGENTS.md\` (Codex agent instructions) references this tier model
+  - README mention of the agent-agnostic positioning links to SUPPORTED.md
+  - Process for tier-graduation: what must an agent prove to move from Experimental → Verified? Documented checklist (probably based on STORY-398/407's roundtrip acceptance criteria)
+  - Tier-classification is reviewed periodically (cadence TBD; probably each AIDA release boundary)
+
+  ## Out of scope
+
+  - Building third-party agent integrations ourselves. Tier classification is a documentation + verification exercise; the integration work for each agent is its own STORY.
+  - Promising support for any specific agent at any tier — claims must be evidence-backed.
+
+  ## Composes with
+
+  - **STORY-398** — Codex verdict will be the first concrete tier-classification data point
+  - **STORY-407** — Antigravity verdict will be the second
+  - **Memory \`feedback_one_master_advisor_until_subsystems\`** — governance model overlaps; tier-classification IS architecture, requires master sign-off
+
+  ## Origin
+
+  User direction 2026-05-22 framing Antigravity CLI as needing to "be a supported agent for projects using aida." The supported-agent concept exists implicitly but isn't formalized; this story formalizes it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T16:40:14.511180807Z
+modified_at: 2026-05-22T16:40:14.511180807Z
+req_type: Story
+tags:
+- adoption
+- agent-agnostic
+- from-user-direction
+- governance
+- supported-agent
+- tier-model
