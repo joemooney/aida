@@ -58,12 +58,12 @@ description: |-
   ## Origin
 
   2026-05-22 overnight drain, BUG-312 phase-3 reviewer failure. Third instance of paper-enforcement-reasoned-past pattern in 5 days. Strong signal that the skill-template-only approach is structurally insufficient for invariants that must hold under headless mode.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T15:45:26.219016285Z
-modified_at: 2026-05-22T15:45:26.219016285Z
+modified_at: 2026-05-22T16:07:59.975657482Z
 req_type: Bug
 tags:
 - aida-review
