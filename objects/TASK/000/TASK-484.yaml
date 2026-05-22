@@ -1,0 +1,28 @@
+id: 019e5216-825a-7542-a858-d32a7c4a1911
+spec_id: TASK-484
+agreed_id: TASK-484
+title: Restore or remove AGENTS.md (CLAUDE.md references it as scaffolded but it doesn't exist)
+description: |-
+  CLAUDE.md states '`aida init` creates ... AGENTS.md (Codex)' but no AGENTS.md exists in this repo nor in aida-core/templates/. Two paths to resolve documentation drift:
+
+  A. **Create AGENTS.md** — Codex's CLAUDE.md equivalent. Mirror the structure: high-level orientation, conventions, project commands, agent-specific guidance. Add to aida-core/templates/ and the scaffolding pipeline.
+
+  B. **Remove the CLAUDE.md reference** — if AGENTS.md was a planned-but-never-implemented file, retract the claim.
+
+  RECOMMEND: A. Codex is a first-class collaborator agent per today's evidence (6 PRs shipped). A real AGENTS.md gives Codex sessions in any new AIDA project a proper home.
+
+  ## Composes with
+
+  - STORY (parent) — cross-agent scaffolding audit (just filed)
+  - CLAUDE.md (the doc making the false claim)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:47:47.418072597Z
+modified_at: 2026-05-22T23:47:47.418072597Z
+req_type: Task
+tags:
+- cross-agent
+- documentation-drift
+- from-self-test
