@@ -527,6 +527,18 @@ impl Storage {
             return self.save_sqlite(store);
         }
 
+        // Directory paths → git-canonical store (EPIC-1-001). Symmetric with
+        // `load()` and `update_atomically()`. Without this, an MCP server
+        // handed a `Storage::new(.aida-store/)` would silently overwrite the
+        // directory entry as a YAML file (or fail), and the canonical store
+        // would never receive the write.
+        // trace:BUG-310 | ai:claude
+        if self.file_path.is_dir() {
+            use crate::db::DatabaseBackend;
+            let backend = crate::db::GitBackend::new(&self.file_path)?;
+            return backend.save(store);
+        }
+
         // Create parent directories if they don't exist
         if let Some(parent) = self.file_path.parent() {
             fs::create_dir_all(parent)?;
@@ -1821,5 +1833,47 @@ mod tests {
         assert_eq!(final_store.requirements.len(), 1);
         assert!(final_store.requirements.iter().any(|r| r.id == req1_id));
         assert!(!final_store.requirements.iter().any(|r| r.id == req2_id));
+    }
+
+    // trace:BUG-310 | ai:claude
+    //
+    // Regression: pointing Storage at a git-canonical store directory must
+    // round-trip writes through GitBackend so that a *different* GitBackend
+    // (e.g. the CLI's CachedGitBackend) sees the new requirement on the next
+    // load. Before BUG-310 was fixed, `Storage::save` ignored the directory
+    // case and wrote a YAML file at the directory path, which either failed
+    // or corrupted the store — so MCP-served writes never reached the
+    // canonical store the CLI reads.
+    #[test]
+    fn storage_save_on_directory_writes_through_git_backend() {
+        use crate::db::DatabaseBackend;
+        let temp_dir = TempDir::new().unwrap();
+        let store_dir = temp_dir.path().join("store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+
+        // Seed the directory as a real GitBackend (sets up `objects/`).
+        let backend = crate::db::GitBackend::new(&store_dir).unwrap();
+        backend.save(&create_test_store()).unwrap();
+
+        // Use the Storage façade — the same surface the MCP server uses.
+        let storage = Storage::new(&store_dir);
+        let mut store = storage.load().unwrap();
+        let mut req = create_test_requirement("MCP-written req");
+        req.spec_id = Some("SPEC-001".to_string());
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+
+        // A fresh GitBackend (mirroring an independent CLI invocation) must
+        // see the requirement that Storage wrote.
+        let cli_view = crate::db::GitBackend::new(&store_dir).unwrap();
+        let loaded = cli_view.load().unwrap();
+        assert!(
+            loaded
+                .requirements
+                .iter()
+                .any(|r| r.title == "MCP-written req"),
+            "GitBackend reload did not see the requirement Storage wrote — \
+             Storage::save likely fell through to the YAML path on a directory"
+        );
     }
 }

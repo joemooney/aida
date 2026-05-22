@@ -2357,4 +2357,52 @@ mod tests {
         write_atomic(&target, b"updated2").unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"updated2");
     }
+
+    /// BUG-310: an MCP `add_requirement` against a Storage pointing at the
+    /// git-canonical store directory must be visible to a fresh GitBackend
+    /// load — that is, to the next CLI invocation. The pre-fix MCP startup
+    /// wrote to a private YAML snapshot, so this roundtrip silently dropped
+    /// every MCP write.
+    /// trace:BUG-310 | ai:claude
+    #[test]
+    fn mcp_add_requirement_is_visible_to_cli_via_git_backend() {
+        use aida_core::db::{DatabaseBackend, GitBackend};
+
+        let dir = tempdir().unwrap();
+        let store_dir = dir.path().join(".aida-store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+
+        // Seed an empty git-canonical store so subsequent loads succeed.
+        let seed = GitBackend::new(&store_dir).unwrap();
+        seed.save(&aida_core::RequirementsStore::new()).unwrap();
+
+        // Point the MCP server at the store directory — the same shape the
+        // fixed `aida mcp-serve` startup now uses.
+        let storage = Box::leak(Box::new(Storage::new(&store_dir)));
+        let server = McpServer::new(storage, dir.path().to_path_buf());
+
+        let args = serde_json::json!({
+            "title": "Roundtrip via MCP",
+            "description": "MCP add must reach the canonical git store",
+            "type": "task",
+        });
+        let result = server.tool_add_requirement(&args).expect("MCP add failed");
+        assert!(
+            result.contains("Requirement added"),
+            "unexpected MCP add response: {result}"
+        );
+
+        // A fresh GitBackend simulates the next `aida` CLI invocation. It
+        // must see the requirement the MCP server just wrote — that is the
+        // contract BUG-310 broke.
+        let cli_view = GitBackend::new(&store_dir).unwrap();
+        let loaded = cli_view.load().unwrap();
+        assert!(
+            loaded
+                .requirements
+                .iter()
+                .any(|r| r.title == "Roundtrip via MCP"),
+            "CLI-equivalent GitBackend did not see the MCP-written requirement"
+        );
+    }
 }
