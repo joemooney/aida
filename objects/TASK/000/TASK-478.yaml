@@ -1,0 +1,43 @@
+id: 019e51ea-b221-7fa2-9d0d-1da267ef6374
+spec_id: TASK-478
+agreed_id: TASK-478
+title: 'STORY-305: merge rule lives in .claude/AIDA.md, not per-skill stubs'
+description: |-
+  Design call worth advisor visibility:
+
+  The append-merge semantics for <skill>.local.md were recorded in a single
+  place — the always-imported .claude/AIDA.md — rather than appending a
+  'project-local extensions' stub to each of the ~34 stock skill templates.
+
+  What:
+    - aida-core/src/scaffolding/aida_md.rs §'Per-project skill extensions
+      (STORY-305)' — the rule instructs Claude Code to read <name>.local.md
+      alongside any stock <name>.md and treat it as appended guidance with
+      last-word authority.
+    - Stock skill files (aida-core/templates/skills/*.md) were NOT modified.
+
+  Why this choice: one place to maintain the convention; no churn across 34
+  templates; the rule sits in CLAUDE.md's import chain so every session
+  sees it. Cost: the convention is conveyed by instruction (Claude
+  following AIDA.md), not by file structure or runtime enforcement. A
+  future-Claude that ignores AIDA.md would also ignore the merge rule.
+
+  Alternative considered: append a small loader stub to each stock skill
+  template ('if <name>.local.md exists in this dir, treat its contents as
+  the project-specific addendum…'). Would be self-enforcing per-skill at
+  the cost of template-wide churn and per-skill duplication of the same
+  rule.
+
+  Raised by the implementer while working STORY-305.
+  Branch: story-305  ·  Commit: (pending — added on first commit)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T22:59:56.065588456Z
+modified_at: 2026-05-22T22:59:56.065588456Z
+req_type: Task
+tags:
+- from-implementer:STORY-305
+- kind:design-choice
+- severity:minor
