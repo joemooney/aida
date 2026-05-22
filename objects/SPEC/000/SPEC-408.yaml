@@ -1,0 +1,23 @@
+id: 019e50ff-0105-70c2-ac0c-69a51d8361a1
+spec_id: SPEC-408
+title: 'Antigravity Phase 3 Outcome: Clean; Ready for Graduation to Verified Tier (STORY-407)'
+description: |-
+  Outcome: Clean. All four coordination operations (Requirement Creation, Punt Channel, Task Leases, and Worker Directives) verified end-to-end between the stdio MCP bridge and the AIDA CLI in sibling worktree `/home/joe/ai/aida-story-407-phase3`.
+
+  Rough Edges Discovered:
+  1. Directive Schema Parameter Typing: post_directive expects `args` to be a JSON array of strings (["arg1", "arg2"]), not a singular string. Singular strings evaluate to empty args list on parse.
+  2. Isolated Directive Scope: The MCP server's directives manage the immediate session worker's coordination flow (local pause/exit), which is independent of the global orchestrator's task runner directives listed in the CLI `aida worker directives`.
+  3. Worktree-Isolation Symlink: Symlinking `.aida-store` remains necessary to enable native git-canonical store detection in sibling worktrees (tracked under BUG-331).
+
+  Graduation Readiness: Antigravity has achieved 100% completion of STORY-407 across all three phases. We are fully ready for graduation from Experimental to Verified tier per STORY-408.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T18:42:29.765989378Z
+modified_at: 2026-05-22T18:42:29.765989378Z
+req_type: Task
+tags:
+- from-implementer:STORY-407
+- kind:outcome
+- severity:minor
