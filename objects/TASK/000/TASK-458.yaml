@@ -1,0 +1,89 @@
+id: 019e509b-01b4-7eb0-9079-a53c4690c6f4
+spec_id: TASK-458
+agreed_id: TASK-458
+title: aida pr ship [<N>] — one-command create-if-needed + watch CI + merge + pull + worktree-aware cleanup
+description: |-
+  ## Problem
+
+  The "push my commits + open PR + merge after CI green + pull + clean up worktree" sequence is **the most recurring command pattern in active AIDA development**. Variations of it have shown up dozens of times in a single session:
+
+  \`\`\`bash
+  git push -u origin <branch>
+  gh pr create --title "..." --body "$(git log -1 --format=%B)" --base main
+  # Capture PR number from gh's output — manual cut-and-paste
+  gh pr checks <new-PR#> --watch
+  gh pr merge <new-PR#> --squash --delete-branch
+  aida pull
+  aida session end <lease>   # if a lease still exists for this worktree
+  \`\`\`
+
+  The user's friction: *"I have to manually cut-and-paste replacing the \`<new-PR#>\`. It feels like there is an aida command there if we end up doing this frequently?"* — yes, that's exactly the shape.
+
+  This is the **direct-publish** path (human-reviewed, no orchestrator review phase needed) — distinct from TASK-405's \`aida queue work PR-N --auto-complete\` which drives the full review + merge + pull + build pipeline.
+
+  ## Approach
+
+  \`aida pr ship [<N>]\` with the following behavior:
+
+  - **No \`<N>\` argument:** detect the current branch's open PR (or create one if none exists; use commit title as PR title and commit message body as PR body); proceed.
+  - **\`<N>\` argument:** ship the specified PR (must be against current branch's tracked remote).
+
+  Per-step behavior:
+
+  1. If no PR open for the branch, \`gh pr create\` with auto-derived title/body. Capture the PR number internally.
+  2. \`gh pr checks <N> --watch\` until CI green (or fail with the failure detail).
+  3. \`gh pr merge <N> --squash --delete-branch\`. Use BUG-286's transient-retry layer.
+  4. \`aida pull\` to sync local main + auto-bump statuses.
+  5. **Worktree cleanup**: if the merging PR is on a non-main worktree (per the TASK-406 friction class), end the lease with \`aida session end <id>\` (which handles worktree removal + local branch cleanup correctly).
+  6. Log the activity to \`.aida/advisor-activity.jsonl\` (composes with STORY-405).
+
+  ## Acceptance
+
+  - \`aida pr ship\` (no args) — assumes the current branch is what to ship; creates PR if needed; full flow.
+  - \`aida pr ship <N>\` — ships the specified PR.
+  - \`aida pr ship --no-pull\` — skip the post-merge \`aida pull\` (for compositions).
+  - \`aida pr ship --no-cleanup\` — skip the worktree-end step (rare; useful when you want to inspect post-merge before cleanup).
+  - \`aida pr ship --dry-run\` — print the sequence that would execute without doing it.
+  - Output is structured: clear per-step status + the captured PR number always visible.
+  - Failure at any step exits cleanly with the failure named + the next-step recovery hint.
+  - Composes with BUG-286's transient-retry for the gh calls.
+
+  ## Why NOT cover the reviewer phase
+
+  \`aida queue work PR-N --auto-complete\` (TASK-405) is the right verb for full-pipeline drive. \`aida pr ship\` is for the **human-pre-approved** publish path: docs PRs, master-signed-off architecture work, recovery merges, etc. The reviewer-phase orchestration is intentionally NOT in scope for this command; that's TASK-405's job.
+
+  ## Composes with
+
+  - **TASK-308** (\`aida pr rebase\`, shipped) — sibling verb in the same family.
+  - **TASK-405** (\`aida queue work PR-N --auto-complete\`) — the full-pipeline analogue; \`aida pr ship\` is the smaller scope.
+  - **TASK-406** (worktree-aware merge sequence, shipped) — its semantics are absorbed into \`aida pr ship\`'s cleanup step.
+  - **BUG-286** (orchestrator retry layer) — the retry wrapper this command uses.
+  - **STORY-384** (\`aida queue recover\` wizard) — uses \`aida pr ship\` for its PR-create-and-merge branch.
+  - **STORY-405** (advisor activity log) — \`aida pr ship\` writes activity entries.
+
+  ## Out of scope
+
+  - Auto-merge when CI is pending (security risk; CI must pass first).
+  - Force-merge / admin-merge bypass.
+  - Cross-machine PR operations.
+  - Replacing \`gh pr\` for ad-hoc operations — \`aida pr ship\` is for the specific blessed-publish flow.
+
+  ## Origin
+
+  User question 2026-05-22 during the Codex MCP docs PR: *"this is a recurring command pattern. I have to manually cut-n-paste replacing the \`<new-PR#>\`. It feels like there is an aida command there if we end up doing this frequently?"*
+
+  The pattern has hit dozens of times in active development. Recurring + bounded + composes with existing verbs → worth a thin wrapper.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T16:53:16.340454234Z
+modified_at: 2026-05-22T16:53:16.340454234Z
+req_type: Task
+tags:
+- cli-ux
+- from-user-friction
+- gh-wrapper
+- pr-flow
+- recurring-pattern
+- task-308-companion
