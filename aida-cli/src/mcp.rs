@@ -895,17 +895,23 @@ impl<'a> McpServer<'a> {
             .get("source")
             .and_then(|v| v.as_str())
             .unwrap_or("implementer");
-        let origin = args
-            .get("spec_id")
-            .or_else(|| args.get("pr"))
-            .and_then(|v| {
-                if let Some(s) = v.as_str() {
-                    Some(s.to_string())
-                } else {
-                    v.as_u64().map(|n| format!("PR-{}", n))
-                }
-            })
-            .ok_or("Missing required parameter: spec_id (or pr)")?;
+        // trace:TASK-437 | ai:claude — enforce the inputSchema contract.
+        // `spec_id` is a string SPEC-ID (e.g. "TASK-42"); `pr` is the bare integer.
+        // Loose clients used to pass `pr: "7"` and get `from-review:7` instead of
+        // `from-review:PR-7`, silently invisible to `aida findings list --pr 7`.
+        let origin = if let Some(v) = args.get("spec_id") {
+            let s = v
+                .as_str()
+                .ok_or("spec_id must be a string (e.g. \"TASK-42\")")?;
+            s.to_string()
+        } else if let Some(v) = args.get("pr") {
+            let n = v.as_u64().ok_or(
+                "pr must be an integer (the bare PR number, e.g. 7 — not \"7\" or \"PR-7\")",
+            )?;
+            format!("PR-{}", n)
+        } else {
+            return Err("Missing required parameter: spec_id (or pr)".to_string());
+        };
         let kind = args
             .get("kind")
             .and_then(|v| v.as_str())
@@ -1865,6 +1871,67 @@ mod tests {
         let listed_after = srv.tool_list_directives().unwrap();
         assert!(!listed_after.contains("drain --zen"), "{}", listed_after);
         assert!(listed_after.contains("pause"), "{}", listed_after);
+    }
+
+    // trace:TASK-437 | ai:claude
+    #[test]
+    fn file_finding_rejects_pr_as_string() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+
+        let err = srv
+            .tool_file_finding(&json!({
+                "title": "x",
+                "description": "y",
+                "source": "review",
+                "pr": "7",
+            }))
+            .expect_err("string pr should be rejected");
+        assert!(err.contains("pr must be an integer"), "{}", err);
+    }
+
+    // trace:TASK-437 | ai:claude
+    #[test]
+    fn file_finding_accepts_pr_as_integer_and_uses_canonical_tag() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+
+        srv.tool_file_finding(&json!({
+            "title": "broken thing",
+            "description": "details",
+            "source": "review",
+            "pr": 7,
+        }))
+        .expect("integer pr should be accepted");
+
+        let store = srv.storage.load().unwrap();
+        let req = store
+            .requirements
+            .iter()
+            .find(|r| r.title == "broken thing")
+            .expect("requirement should have been saved");
+        assert!(
+            req.tags.contains("from-review:PR-7"),
+            "expected canonical from-review:PR-7 tag, got tags: {:?}",
+            req.tags,
+        );
+    }
+
+    // trace:TASK-437 | ai:claude
+    #[test]
+    fn file_finding_rejects_spec_id_as_integer() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+
+        let err = srv
+            .tool_file_finding(&json!({
+                "title": "x",
+                "description": "y",
+                "source": "implementer",
+                "spec_id": 42,
+            }))
+            .expect_err("integer spec_id should be rejected");
+        assert!(err.contains("spec_id must be a string"), "{}", err);
     }
 
     // trace:TASK-436 | ai:claude
