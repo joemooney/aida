@@ -42,3 +42,7 @@ tags:
 - auto-drafted
 - failure-1
 - implementer
+relationships:
+- rel_type: Child
+  target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
+  created_at: 2026-05-22T18:20:00.162594613Z
