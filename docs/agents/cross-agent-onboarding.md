@@ -54,7 +54,7 @@ These mirror the `aida list / show / add / edit / search / comment` CLI verbs. *
   - `list_active_leases()` — list all active leases.
 
 - **Directive channel** (control plane over `.aida/worker.cmd`):
-  - `post_directive({verb, args?})` — required: `verb`. Verbs: `drain`, `pause`, `exit` (per `aida-worker` discipline).
+  - `post_directive({verb, args?})` — required: `verb`. Verbs: `drain`, `pause`, `exit` (per `aida-worker` discipline). Note: `args` must be a JSON array of strings (e.g., `["arg1"]`), not a bare string. Directives coordinate the local worker session thread flow, which is distinct from global queue commands.
   - `list_directives()` — list pending directives.
   - `ack_directive({index})` — required: `index`. Remove a directive by its 0-based position.
 
