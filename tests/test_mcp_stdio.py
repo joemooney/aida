@@ -11,6 +11,7 @@ Coverage:
 - Every tool advertises inputSchema and outputSchema.
 - Path-A tool results use the MCP text content envelope.
 - Optional future Path-B strict mode requires structuredContent.
+- Spec-ID parsing is anchored to known success lines, not first regex match.
 - CLI-created specs are visible through MCP.
 - MCP-created specs are visible through local CLI.
 - Core spec graph tools round-trip.
@@ -59,6 +60,8 @@ REQUIRED_TOOLS = [
     "list_directives",
     "ack_directive",
 ]
+
+SPEC_ID_RE = r"[A-Z]+(?:-[A-Z0-9]+)?-\d+(?:-\d+)?"
 
 
 class Failure(Exception):
@@ -162,10 +165,62 @@ def require_structured_content_if_requested(result: dict[str, Any], tool: str, r
     require(isinstance(result["structuredContent"], dict), f"{tool} structuredContent must be object")
 
 
-def parse_spec_id(text: str) -> str:
-    match = re.search(r"\b([A-Z]+(?:-[A-Z0-9]+)?-\d+(?:-\d+)?)\b", text)
-    require(bool(match), f"could not parse SPEC-ID from text:\n{text}")
-    return match.group(1)
+def strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def parse_spec_id(text: str, source: str) -> str:
+    patterns = [
+        rf"^Added:\s+({SPEC_ID_RE})\s+-\s+.+$",
+        rf"^ID:\s+({SPEC_ID_RE})\s*$",
+        rf"^Requirement added:\s+({SPEC_ID_RE})\s+[—-]\s+.+$",
+        rf"^Finding filed:\s+({SPEC_ID_RE})\s+[—-]\s+.+$",
+    ]
+    anchored: list[str] = []
+    for line in text.splitlines():
+        cleaned = strip_ansi(line).strip()
+        for pattern in patterns:
+            match = re.match(pattern, cleaned)
+            if match:
+                anchored.append(match.group(1))
+                break
+
+    unique = sorted(set(anchored))
+    if len(unique) == 1:
+        return unique[0]
+    if len(unique) > 1:
+        raise Failure(f"{source}: multiple anchored SPEC-ID candidates {unique} in output:\n{text}")
+
+    loose = sorted(set(re.findall(rf"\b({SPEC_ID_RE})\b", strip_ansi(text))))
+    if loose:
+        raise Failure(
+            f"{source}: found loose SPEC-ID candidates {loose}, but none appeared "
+            f"on a recognized success line:\n{text}"
+        )
+    raise Failure(f"{source}: could not parse SPEC-ID from output:\n{text}")
+
+
+def test_parse_spec_id_fixtures() -> None:
+    require(
+        parse_spec_id("Hint: see META-1\nAdded: TASK-82 - created\n", "aida add") == "TASK-82",
+        "aida add parser should ignore earlier loose IDs",
+    )
+    require(
+        parse_spec_id("META-1 preface\nRequirement added: TASK-83 — created\n", "add_requirement")
+        == "TASK-83",
+        "MCP add_requirement parser should anchor on its success line",
+    )
+    require(
+        parse_spec_id("BUG-1 is related\nFinding filed: TASK-84 — finding\n", "file_finding")
+        == "TASK-84",
+        "file_finding parser should anchor on its success line",
+    )
+    try:
+        parse_spec_id("Hint: see META-1\nNo creation line\n", "negative fixture")
+    except Failure as exc:
+        require("loose SPEC-ID candidates" in str(exc), f"negative fixture had unclear failure: {exc}")
+    else:
+        raise Failure("negative fixture unexpectedly parsed a loose SPEC-ID")
 
 
 def setup_project(aida: Path, root: Path) -> str:
@@ -193,7 +248,7 @@ def setup_project(aida: Path, root: Path) -> str:
         root,
     )
     require(added.returncode == 0, f"aida add failed:\nstdout={added.stdout}\nstderr={added.stderr}")
-    return parse_spec_id(added.stdout)
+    return parse_spec_id(added.stdout, "aida add")
 
 
 def test_initialize(client: McpClient) -> None:
@@ -264,7 +319,7 @@ def test_mcp_to_cli_visibility(client: McpClient, aida: Path, root: Path, strict
         },
     )
     require_structured_content_if_requested(added, "add_requirement", strict)
-    spec = parse_spec_id(content_text(added))
+    spec = parse_spec_id(content_text(added), "add_requirement")
 
     shown = run([str(aida), "show", spec], root)
     require(
@@ -357,7 +412,7 @@ def test_finding_round_trip(client: McpClient) -> None:
             "severity": "minor",
         },
     )
-    spec = parse_spec_id(content_text(filed))
+    spec = parse_spec_id(content_text(filed), "file_finding")
     findings = content_text(client.tool("list_findings", {"source": "review", "pr": 162}))
     require(spec in findings, f"list_findings missing filed finding {spec}:\n{findings}")
 
@@ -398,6 +453,7 @@ def main() -> int:
         seed_spec = setup_project(aida, tmp)
         client = McpClient(aida, tmp)
 
+        run_test("spec-ID parser fixtures", test_parse_spec_id_fixtures)
         run_test("initialize", lambda: test_initialize(client))
         run_test("tools/list descriptors", lambda: test_tool_descriptors(client))
         run_test("CLI-created spec visible through MCP", lambda: test_cli_to_mcp_visibility(client, seed_spec, args.require_structured_content))
