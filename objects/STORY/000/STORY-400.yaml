@@ -1,0 +1,26 @@
+id: 019e4e65-4f2e-7550-8563-dacfdc571cbc
+spec_id: STORY-400
+agreed_id: STORY-400
+title: 'Review PR-172: feat(mcp): add outputSchema to all 21 tool descriptors (TASK-440)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4e5a`) for branch `task-440-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/172>
+  - Branch: `task-440-2` → `main`
+
+  ## Covers
+
+  - TASK-440
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 172` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T06:35:22.798968938Z
+modified_at: 2026-05-22T06:35:22.798968938Z
+req_type: Story
