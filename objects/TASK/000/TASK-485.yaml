@@ -1,0 +1,44 @@
+id: 019e5218-dacd-7670-827c-1bd55fc58a17
+spec_id: TASK-485
+agreed_id: TASK-485
+title: 'aida init: propagate docs/agents/ directory to new projects via templates'
+description: |-
+  Universal enabler for the per-agent setup story tracks (Codex's + Antigravity's). Currently `docs/agents/cross-agent-onboarding.md`, `docs/agents/codex-mcp-setup.md`, `docs/agents/antigravity-mcp-setup.md` live in THIS repo only. They are not propagated to new AIDA projects.
+
+  ## Scope
+
+  - Add `aida-core/templates/docs/agents/` directory mirroring the current `docs/agents/` contents
+  - Wire the propagation in the `aida init` scaffolding pipeline (the same mechanism that handles `docs/aida-discipline/` today)
+  - New projects get `docs/agents/` directory by default — opt-out via flag if needed, but default-on (low friction; small footprint; high cross-agent value)
+  - Verify: `aida init --force` rewrites them; `aida init --with-memories --refresh` doesn't clobber edits per existing scaffold-pack discipline
+
+  ## Acceptance
+
+  - [ ] `aida-core/templates/docs/agents/` exists with the three current docs (cross-agent-onboarding, codex-mcp-setup, antigravity-mcp-setup) as templates
+  - [ ] Build pipeline embeds them (matches the `docs/aida-discipline/` pattern via build.rs)
+  - [ ] `aida init` scaffolds `docs/agents/` into the new project
+  - [ ] Regression test: `aida init` in a clean tempdir produces `docs/agents/cross-agent-onboarding.md` matching the template
+  - [ ] No regression to existing docs/aida-discipline/ scaffolding
+
+  ## Why this is a pre-req for the per-agent stories
+
+  Codex and Antigravity each plan to refresh their own setup doc + ensure it reaches future users. The 'reaches future users' part requires this pipeline. Recommend shipping this TASK before (or alongside) the per-agent stories so the per-agent work has somewhere to land.
+
+  ## Composes with
+
+  - STORY-416 (parent)
+  - Sibling stories for Codex + Antigravity scaffolding (this enables those)
+  - feedback_propagate_generic_discipline_via_scaffolding (the established pattern for substrate propagation)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:50:21.133425879Z
+modified_at: 2026-05-22T23:50:21.133425879Z
+req_type: Task
+tags:
+- aida-init
+- cross-agent
+- enabler-for-codex-antigravity-stories
+- parent:STORY-416
+- scaffolding
