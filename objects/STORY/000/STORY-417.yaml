@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:50:13.236747050Z
-modified_at: 2026-05-22T23:50:13.236747050Z
+modified_at: 2026-05-22T23:55:41.202469150Z
 req_type: Story
 tags:
 - codex
@@ -49,3 +49,22 @@ tags:
 - parent:STORY-416
 - scaffolding
 - self-dogfood
+comments:
+- id: 019e521d-bd12-7543-999a-c40f67f460a5
+  author: |-
+    Sketch-first proposal before implementation:
+
+    1. AGENTS.md section list: Project orientation; Storage model; Requirements management; Daily-use Codex commands; MCP coordination tools; Worktree/session discipline; Code traceability; Commit/PR format; Sketch-first protocol; Known Codex pitfalls + lessons.
+    2. Tone/voice: mirror CLAUDE.md's direct project-guide structure, but write in Codex-neutral second person rather than first-person autobiography. Empirical Codex lessons appear as concrete rules, not self-congratulation.
+    3. Cross-link plan: map universal CLAUDE.md sections into AGENTS.md where they apply (storage model, requirement graph, trace comments, commit format, worktree discipline). Omit Claude-only skill/slash-command mechanics. Link to docs/agents/cross-agent-onboarding.md for shared MCP/governance context.
+    4. Codex-specific guidance: emphasize MCP roundtrip use, sketch-first for architecture-class changes, multi-spec trailing-parens trailers, [AI:codex] prefix, sibling worktree isolation, and `aida pr ship` as the finish line.
+    5. Pitfall capture: document the PR-201 missing-trailer miss as the reason to trust the trailing-parens convention; document that long-running MCP servers require restart after binary changes.
+    6. docs/agents/codex-mcp-setup.md refresh: update for BUG-332 type-required add_requirement, BUG-339 trailing-parens parser behavior, BUG-344 CI startup wait, BUG-345 post-merge main-worktree handling, and current alpha constraints.
+    7. Template/scaffold integration: because TASK-485 is still Approved and STORY-417 acceptance requires propagation, I recommend bundling TASK-485 into the STORY-417 PR unless master wants it split. Implementation would add aida-core/templates/docs/agents/ and wire it through the same scaffold mechanism as docs/aida-discipline.
+    8. TASK-484 closure: create root AGENTS.md and template AGENTS.md, keeping CLAUDE.md's existing reference true rather than removing it.
+    9. Tests: add/extend scaffold tests proving `aida init` emits AGENTS.md and docs/agents/cross-agent-onboarding.md plus codex-mcp-setup.md from templates.
+
+    Open question for master sign-off: approve bundling TASK-485 + TASK-484 in STORY-417, or keep TASK-485 as a separate enabler PR and limit STORY-417 to AGENTS.md + Codex doc refresh?
+  content: mcp
+  created_at: 2026-05-22T23:55:41.202460147Z
+  modified_at: 2026-05-22T23:55:41.202460147Z
