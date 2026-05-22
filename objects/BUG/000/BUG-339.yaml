@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:40:52.835212864Z
-modified_at: 2026-05-22T20:40:52.835212864Z
+modified_at: 2026-05-22T20:42:41.537236708Z
 req_type: Bug
 tags:
 - antigravity-pr-203
@@ -58,3 +58,25 @@ tags:
 - pr-ship
 - spec-410-related
 - validation
+comments:
+- id: 019e516d-0c01-74c3-a319-2a5287c713c4
+  author: joe
+  content: |-
+    Verified scope after PR-204 (SPEC-410) merged: BUG-339 is NOT closed by PR-204.
+
+    The asymmetry:
+    - `squash_subject_with_spec_ids` checks 'existing' via `extract_spec_ids_from_text` (broad regex: finds STORY-260 anywhere in subject text)
+    - The auto-bump scanner checks via `push_paren_spec_ids_from_line` (narrow: requires trailing `(SPEC-ID)`)
+
+    For Antigravity's PR-203 shape (`docs(...): ...STORY-260 (#203)`):
+    - Broad extract finds STORY-260 → 'existing' = [STORY-260] → 'missing' = [] → no append
+    - Narrow scanner finds nothing in trailing parens → no auto-bump
+    → silent miss persists
+
+    The right fix: align the 'existing' check in `squash_subject_with_spec_ids` with the scanner's narrow regex. Then Antigravity's subject would be detected as 'missing trailing parens' and rewritten to `docs(...): ...STORY-260 (#203) (STORY-260)` — ugly but correct. Cleaner: strip the bare mid-text spec ID and append in canonical position. Implementer's choice.
+
+    Sibling fix candidate: widen the scanner. Less safe — risks false positives from commit-body context mentions.
+
+    Test gap PR-204 should have caught: a regression test using Antigravity's PR-203 subject shape should have asserted the auto-bump-compatible result. It didn't — that's a hint the asymmetry wasn't seen during PR-204's implementation.
+  created_at: 2026-05-22T20:42:41.537236708Z
+  modified_at: 2026-05-22T20:42:41.537236708Z
