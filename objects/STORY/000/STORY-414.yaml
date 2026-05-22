@@ -1,0 +1,26 @@
+id: 019e5188-5937-7c22-8ca3-1889a6b4fa91
+spec_id: STORY-414
+agreed_id: STORY-414
+title: 'Review PR-208: [AI:claude] docs(architecture): autonomy + escalation architecture (TASK-339)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e517d`) for branch `task-339`.
+
+  - PR: <https://github.com/joemooney/aida/pull/208>
+  - Branch: `task-339` → `main`
+
+  ## Covers
+
+  - TASK-339
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 208` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T21:12:30.775842051Z
+modified_at: 2026-05-22T21:12:30.775842051Z
+req_type: Story
