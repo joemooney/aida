@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:46:43.678942829Z
-modified_at: 2026-05-15T23:46:43.678942829Z
+modified_at: 2026-05-22T06:43:58.203887092Z
 req_type: Story
 tags:
 - first-vertical
@@ -43,3 +43,9 @@ relationships:
 - rel_type: Child
   target_id: 019e2e08-fc13-7b12-a718-bc49910c1ea1
   created_at: 2026-05-15T23:46:45.889512906Z
+comments:
+- id: 019e4e6d-2c7b-7001-a34a-f2cff3884369
+  author: joe
+  content: 'Same refinement note (paired with EPIC-27): the modernization of the original 7 tools is not just about adding the new vocabulary — it''s about matching the coordination 14''s schema style, error shape, and description voice. Agent perspective (per Codex 2026-05-22): all 21 are ONE surface; consistency is the load-bearing UX property.'
+  created_at: 2026-05-22T06:43:58.203887092Z
+  modified_at: 2026-05-22T06:43:58.203887092Z
