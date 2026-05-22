@@ -952,3 +952,10 @@
   note: auto-queued by `session end` (019e4bac); covers 1 spec
   added_at: 2026-05-21T18:20:04.827992500Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e4bc9-b645-7e43-8f81-1fa977599ee3
+  position: 207000
+  added_by: joe
+  note: Promoted from finding TASK-439 via `aida findings promote`
+  added_at: 2026-05-22T01:06:31.993164924Z
+  for_role: implementer
