@@ -7,10 +7,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:18:52.143380649Z
-modified_at: 2026-05-22T20:18:52.143380649Z
+modified_at: 2026-05-22T20:19:01.943961810Z
 req_type: Bug
 tags:
 - auto-bump
 - codex
 - pr-ship
 - traceability
+comments:
+- id: 019e5157-62b7-74b3-93c8-a71e5e527e1a
+  author: 'Filed by Codex via MCP with `type: bug`, but the running MCP server returned an irregular SPEC- prefix. This likely indicates the active MCP server process has not reloaded the BUG-332 fix yet. Do not rename for audit trail; keep this as another empirical instance if the server was expected to be current.'
+  content: mcp
+  created_at: 2026-05-22T20:19:01.943952995Z
+  modified_at: 2026-05-22T20:19:01.943952995Z
