@@ -40,12 +40,12 @@ description: |-
   ## Origin
 
   User report 2026-05-22 — two lease conflicts during MCP-polish drain (TASK-440 phase 1, TASK-439 phase 3). Both leases were dormant; both forced manual intervention. The pattern is recurring + cheap to fix; high priority because it directly blocks unsupervised drain reliability.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:11:38.531432934Z
-modified_at: 2026-05-22T06:11:38.531432934Z
+modified_at: 2026-05-22T06:49:13.133544012Z
 req_type: Bug
 tags:
 - drain-friction
