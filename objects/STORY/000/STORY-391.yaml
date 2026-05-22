@@ -1,0 +1,26 @@
+id: 019e4d60-a66a-7e82-8457-1e79ce2632bd
+spec_id: STORY-391
+agreed_id: STORY-391
+title: 'Review PR-164: feat(advisor): cold-boot vs fork-from-live calibration ledger (STORY-347)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4d49`) for branch `story-347`.
+
+  - PR: <https://github.com/joemooney/aida/pull/164>
+  - Branch: `story-347` → `main`
+
+  ## Covers
+
+  - STORY-347
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 164` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T01:50:40.234744381Z
+modified_at: 2026-05-22T01:50:40.234744381Z
+req_type: Story
