@@ -8219,6 +8219,16 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 );
                 return Ok(());
             }
+            // trace:TASK-444 | ai:claude — surface the effective auto-claim
+            // knobs (`[block_allocation.<type>] auto_claim_threshold /
+            // auto_claim_size`) on each per-type line so users see what
+            // their threshold/size actually resolve to, not just the
+            // remaining count.
+            let project_dir = store_path
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            let alloc_cfg = read_block_allocation_config(&project_dir);
             println!("Blocks for node {}:", node_id);
             println!("{}", "─".repeat(50));
 
@@ -8258,6 +8268,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                         format!("{}-{}..{}", prefix, last.range_start, last.range_end),
                         prefix
                     );
+                    println!("       {}", auto_claim_summary(&alloc_cfg, prefix).dimmed());
                     continue;
                 }
 
@@ -8291,6 +8302,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                         span
                     );
                 }
+                println!("       {}", auto_claim_summary(&alloc_cfg, prefix).dimmed());
             }
         }
         // FR-281: cross-check nodes.toml against blocks.yaml.
@@ -9444,6 +9456,38 @@ fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::Blo
     cfg
 }
 
+/// Human-readable one-liner describing the effective auto-claim policy
+/// for `type_prefix`, used as the continuation line under each per-type
+/// row of `aida db block status` (TASK-444). Resolves the effective
+/// threshold/size, marks `(configured)` when any per-type override is in
+/// effect, and renders the off-cases with the reason (`global opt-out`
+/// vs `per-type opt-out`) so a user troubleshooting "why didn't a fresh
+/// block claim?" doesn't have to grep `.aida/config.toml` to find out.
+///
+/// trace:TASK-444 | ai:claude
+fn auto_claim_summary(cfg: &aida_core::BlockAllocationConfig, type_prefix: &str) -> String {
+    if !cfg.is_enabled_for(type_prefix) {
+        if !cfg.auto_claim {
+            return "auto-claim: off (global opt-out)".to_string();
+        }
+        return "auto-claim: off (per-type opt-out)".to_string();
+    }
+    let lower = type_prefix.to_ascii_lowercase();
+    let has_override = cfg
+        .per_type
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(&lower))
+        .map(|(_, t)| t.auto_claim_threshold.is_some() || t.auto_claim_size.is_some())
+        .unwrap_or(false);
+    let suffix = if has_override { " (configured)" } else { "" };
+    format!(
+        "auto-claim: threshold {}, size {}{}",
+        cfg.threshold_for(type_prefix),
+        cfg.size_for(type_prefix),
+        suffix
+    )
+}
+
 /// Outcome of a successful auto-claim — used by `add_requirement_cli` to
 /// print the one-line info notice ("Auto-claimed BUG-517..616 (threshold
 /// crossed: 18 remaining → 118)"). `previous_remaining` is the aggregate
@@ -9622,6 +9666,119 @@ mod block_allocation_reader_tests {
         );
         let cfg = read_block_allocation_config(tmp.path());
         assert_eq!(cfg.threshold_for("BUG"), 20);
+    }
+
+    // trace:TASK-444 | ai:claude — the per-type continuation line under
+    // each row of `aida db block status` is derived from these summaries.
+    #[test]
+    fn auto_claim_summary_shows_built_in_defaults_when_no_config() {
+        let cfg = aida_core::BlockAllocationConfig::default();
+        assert_eq!(
+            auto_claim_summary(&cfg, "BUG"),
+            "auto-claim: threshold 20, size 100"
+        );
+    }
+
+    #[test]
+    fn auto_claim_summary_marks_configured_when_threshold_overridden() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation.bug]\nauto_claim_threshold = 50\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            auto_claim_summary(&cfg, "BUG"),
+            "auto-claim: threshold 50, size 100 (configured)"
+        );
+    }
+
+    #[test]
+    fn auto_claim_summary_marks_configured_when_size_overridden() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation.bug]\nauto_claim_size = 250\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            auto_claim_summary(&cfg, "BUG"),
+            "auto-claim: threshold 20, size 250 (configured)"
+        );
+    }
+
+    #[test]
+    fn auto_claim_summary_no_configured_tag_when_only_auto_claim_bool_set() {
+        // `auto_claim = true/false` is opt-out plumbing, not a threshold
+        // override — don't mislead the reader by tagging it (configured).
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation]\nauto_claim = true\n\n\
+             [block_allocation.bug]\nauto_claim = true\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            auto_claim_summary(&cfg, "BUG"),
+            "auto-claim: threshold 20, size 100"
+        );
+    }
+
+    #[test]
+    fn auto_claim_summary_reports_global_opt_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[block_allocation]\nauto_claim = false\n");
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            auto_claim_summary(&cfg, "BUG"),
+            "auto-claim: off (global opt-out)"
+        );
+        assert_eq!(
+            auto_claim_summary(&cfg, "TASK"),
+            "auto-claim: off (global opt-out)"
+        );
+    }
+
+    #[test]
+    fn auto_claim_summary_reports_per_type_opt_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation]\nauto_claim = true\n\n\
+             [block_allocation.story]\nauto_claim = false\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            auto_claim_summary(&cfg, "STORY"),
+            "auto-claim: off (per-type opt-out)"
+        );
+        // Other types unaffected.
+        assert_eq!(
+            auto_claim_summary(&cfg, "BUG"),
+            "auto-claim: threshold 20, size 100"
+        );
+    }
+
+    #[test]
+    fn auto_claim_summary_per_type_re_enable_wins_over_global_off() {
+        // Global off, per-type explicitly on with overrides → summary
+        // reflects the per-type re-enable + (configured) tag.
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation]\nauto_claim = false\n\n\
+             [block_allocation.bug]\nauto_claim = true\nauto_claim_threshold = 10\nauto_claim_size = 50\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            auto_claim_summary(&cfg, "BUG"),
+            "auto-claim: threshold 10, size 50 (configured)"
+        );
+        // Untouched type still inherits the global off.
+        assert_eq!(
+            auto_claim_summary(&cfg, "TASK"),
+            "auto-claim: off (global opt-out)"
+        );
     }
 }
 
