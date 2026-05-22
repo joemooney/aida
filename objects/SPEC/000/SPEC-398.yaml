@@ -1,0 +1,17 @@
+id: 019e508b-7cbd-73b1-8cef-96150939e60f
+spec_id: SPEC-398
+title: MCP stdio suite should derive agent contract checks from canonical docs or tools/list
+description: 'During STORY-398 documentation, `tests/test_mcp_doc_consistency.sh` passed against `docs/agents/cross-agent-onboarding.md` and MCP `tools/list`, but `tests/test_mcp_stdio.sh` failed by default on its duplicated `AGENT_REQUIRED_FIELDS` alias table. This makes the stdio suite report stale alias drift even when the canonical doc-vs-MCP consistency gate passes. Fix by removing the duplicated table, deriving the check from the doc consistency parser, or making the stdio suite consume the same source of truth as `tests/test_mcp_doc_consistency.py`. Repro: run `tests/test_mcp_stdio.sh` on 2026-05-22 main checkout and compare with passing `tests/test_mcp_doc_consistency.sh`. trace:STORY-398 | ai:codex'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T16:36:19.261874714Z
+modified_at: 2026-05-22T16:36:19.261874714Z
+req_type: Task
+tags:
+- codex
+- doc-drift
+- mcp
+- story-398-followup
+- test
