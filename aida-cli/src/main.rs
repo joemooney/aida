@@ -15867,12 +15867,47 @@ fn find_lease_by_id_prefix(query: &str, leases: &[SessionLease]) -> Result<Sessi
     match matches.len() {
         0 => anyhow::bail!("no session matching `{}`", query),
         1 => Ok(matches[0].clone()),
-        n => anyhow::bail!(
-            "ambiguous session id `{}` — matches {} sessions, use a longer prefix",
-            query,
-            n
-        ),
+        n => {
+            // BUG-312: an honest "use a longer prefix" left the operator
+            // grepping `.aida/sessions/` to find HOW long was enough. List
+            // every match's full id + scope so the operator can pick.
+            // trace:BUG-312 | ai:claude
+            let listing: String = matches
+                .iter()
+                .map(|l| format!("  {}  ({})", l.id, l.scope))
+                .collect::<Vec<_>>()
+                .join("\n");
+            anyhow::bail!(
+                "ambiguous session id `{}` — matches {} sessions:\n{}",
+                query,
+                n,
+                listing
+            )
+        }
     }
+}
+
+/// BUG-312: shortest prefix of `target_id` that does not collide with any
+/// other id in `all_ids`, floored at `min_len`. Used by `aida session
+/// leases` to render an id that the operator can paste straight back into
+/// `aida session end`. HLC-derived UUIDs put the timestamp at the start,
+/// so two leases created in the same generation window collide on the
+/// historical 8-char prefix; this function bumps just those colliding
+/// rows wider while leaving solitary ids at the short form.
+/// trace:BUG-312 | ai:claude
+fn unique_prefix_len(target_id: &str, all_ids: &[&str], min_len: usize) -> usize {
+    let max_len = target_id.len();
+    let floor = min_len.min(max_len);
+    for len in floor..=max_len {
+        let prefix = &target_id[..len];
+        let collides = all_ids
+            .iter()
+            .any(|other| *other != target_id && other.starts_with(prefix));
+        if !collides {
+            return len;
+        }
+    }
+    max_len
 }
 
 /// STORY-52: locate the parent project's cargo `target/` directory so a
@@ -18880,10 +18915,18 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
     header.push_str(" worktree");
     println!("{}", header);
     println!("{}", "─".repeat(header.len().max(80)));
+    // BUG-312: HLC-derived UUIDs put the timestamp at the start, so two
+    // leases created in the same generation window share the historical
+    // 8-char prefix. Disambiguate against the FULL active set (not just
+    // `shown`) — `aida session end` resolves over the unfiltered set,
+    // so the rendered id has to be unique against everything an end
+    // call might match. trace:BUG-312 | ai:claude
+    let all_ids: Vec<&str> = leases.iter().map(|l| l.id.as_str()).collect();
     for (l, state, pid) in &shown {
+        let prefix_len = unique_prefix_len(&l.id, &all_ids, 8);
         let mut row = format!(
             "{:<14} {:<20} {:<18} {:<14}",
-            (&l.id[..8]).yellow(),
+            (&l.id[..prefix_len]).yellow(),
             truncate(&l.scope, 20),
             truncate(&l.branch, 18),
             truncate(l.role.as_deref().unwrap_or("-"), 14),
@@ -25179,6 +25222,25 @@ mod session_end_resolution_tests {
         assert!(err.to_string().contains("ambiguous"), "{}", err);
     }
 
+    /// BUG-312: the ambiguous-prefix error includes the FULL id + scope of
+    /// every match so the operator can pick the right one without
+    /// grepping `.aida/sessions/`.
+    /// trace:BUG-312 | ai:claude
+    #[test]
+    fn ambiguous_id_query_lists_full_ids_and_scopes() {
+        let leases = vec![
+            lease("019e4df1af45", "TASK-419", "/tmp/wt-419", None),
+            lease("019e4df1e131", "TASK-420", "/tmp/wt-420", None),
+        ];
+        // The collision case from the bug report: same 8-char prefix.
+        let err = resolve_session_to_end(Some("019e4df1"), &leases, false).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("019e4df1af45"), "{}", msg);
+        assert!(msg.contains("019e4df1e131"), "{}", msg);
+        assert!(msg.contains("TASK-419"), "{}", msg);
+        assert!(msg.contains("TASK-420"), "{}", msg);
+    }
+
     /// Empty id query miss bails (find_lease_by_id_prefix path).
     /// trace:STORY-73 | ai:claude
     #[test]
@@ -25215,6 +25277,46 @@ mod session_end_resolution_tests {
         std::env::remove_var("AIDA_SESSION_ID");
         let got = resolve_session_to_end(None, &leases, true).unwrap();
         assert_eq!(got.scope, "EPIC-1");
+    }
+
+    /// BUG-312: no collision against other ids → floor (8 chars) is enough.
+    /// trace:BUG-312 | ai:claude
+    #[test]
+    fn unique_prefix_len_returns_floor_when_no_collision() {
+        let ids = ["019e4df1af45", "019aaaaaaaaa", "019bbbbbbbbb"];
+        assert_eq!(unique_prefix_len("019e4df1af45", &ids, 8), 8);
+    }
+
+    /// BUG-312: two ids share the first 8 chars → bump to the first
+    /// distinguishing char (9). The historical 8-char display would lie;
+    /// 9 chars is the smallest honest answer.
+    /// trace:BUG-312 | ai:claude
+    #[test]
+    fn unique_prefix_len_bumps_past_collision() {
+        // From the bug report — same HLC generation window.
+        let ids = ["019e4df1af45", "019e4df1e131"];
+        assert_eq!(unique_prefix_len("019e4df1af45", &ids, 8), 9);
+        assert_eq!(unique_prefix_len("019e4df1e131", &ids, 8), 9);
+    }
+
+    /// BUG-312: an id identical (or prefix-of) to the WHOLE other id can
+    /// never be made unique by extending — return the full length and
+    /// let the caller decide. Defensive guard; lease ids are uniform 12
+    /// chars in practice, so this is the never-shorter-than-self path.
+    /// trace:BUG-312 | ai:claude
+    #[test]
+    fn unique_prefix_len_caps_at_id_length() {
+        let ids = ["019e4df1af45", "019e4df1af45ff"];
+        // Target is a prefix of the other → grows to its own length.
+        assert_eq!(unique_prefix_len("019e4df1af45", &ids, 8), 12);
+    }
+
+    /// BUG-312: a single-lease set never needs to extend — floor wins.
+    /// trace:BUG-312 | ai:claude
+    #[test]
+    fn unique_prefix_len_single_id() {
+        let ids = ["019e4df1af45"];
+        assert_eq!(unique_prefix_len("019e4df1af45", &ids, 8), 8);
     }
 }
 
