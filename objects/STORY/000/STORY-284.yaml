@@ -91,7 +91,7 @@ description: |-
   > \"maybe we are not doing \`aida push\` enough, in a team environment we would need to be regularly pushing\"
 
   Solo-mode hazard: laptop drive failure during this window = lost spec writes. Team-mode breakage: teammates blind to filings until manual sync. Both addressable by config-driven cadence.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
