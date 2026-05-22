@@ -1,0 +1,12 @@
+id: 019e4da0-82b4-79d2-bcf5-60c5e06b7a36
+spec_id: TASK-446
+agreed_id: TASK-446
+title: Consider extending the same auto-claim hook to `aida db merge-gate` (which can also create new agreed IDs as it promotes node-aware → short)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T03:00:25.396251575Z
+modified_at: 2026-05-22T03:00:25.396251575Z
+req_type: Task
