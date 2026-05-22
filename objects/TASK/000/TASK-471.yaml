@@ -13,7 +13,7 @@ description: |-
   Heavy because it needs real branches + real PRs (or a careful mock of fetch_pr_info_via_gh + the git plumbing).
 
   Raised in review of PR-202: https://github.com/joemooney/aida/pull/202#issuecomment-4522481404
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
