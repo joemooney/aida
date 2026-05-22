@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:49:19.704186488Z
-modified_at: 2026-05-22T17:59:20.911540483Z
+modified_at: 2026-05-22T17:59:22.138712502Z
 req_type: Story
 tags:
 - attention
@@ -256,3 +256,8 @@ comments:
     2026-05-22 after the 3-PR isolation sequence (SPEC-398 + STORY-407 Phase 1 + TASK-419): main worktree's `git status` showed 2 modified tracked files (`.gitignore`, `aida-cli/src/headless_tail.rs`) whose content matched HEAD exactly (post-merge), plus 8+ untracked files in two clear classes (recent vs stale-accumulated). The user had to mentally categorize each + decide per-file. `aida status` with this section would have presented: 'two tracked-modified-but-match-HEAD: safe to `git checkout --`; one stale-likely-OBE .bak file: safe to rm; 7 stale plans/writeup/script: review for commit-vs-keep-vs-remove decision.' Saves the manual sweep.
   created_at: 2026-05-22T17:51:05.619854825Z
   modified_at: 2026-05-22T17:51:05.619854825Z
+- id: 019e50d7-851a-7a70-a08b-edf80bb09f9b
+  author: joe
+  content: 'Priority bumped medium → high 2026-05-22. Empirical recurrence: the ''untracked-file blocks aida pull after worktree-isolated PR merges'' pattern has hit 7 times in the last 24 hours. Each occurrence costs 1-2 minutes of manual recovery (mv to .bak, pull, diff, rm). STORY-385''s working-tree section would either (a) warn the user BEFORE the pull attempts that untracked files match incoming HEAD entries (so they can pre-emptively rm), or (b) integrate the move-pull-diff-cleanup dance into a single `aida status --resolve` command. Either form closes the friction class. Pattern strength = high; structural fix is overdue.'
+  created_at: 2026-05-22T17:59:22.138712502Z
+  modified_at: 2026-05-22T17:59:22.138712502Z
