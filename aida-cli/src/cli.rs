@@ -2847,6 +2847,17 @@ pub enum QueueCommand {
         // trace:STORY-347 | ai:claude
         #[clap(long)]
         no_calibrate: bool,
+        /// Opt out of the reviewer pre-flight stale-base refusal. When
+        /// the orchestrator (phase 3) or a direct `aida queue work
+        /// <PR-N> --for reviewer` detects that the PR's base is behind
+        /// origin AND a file the PR touches has also moved on the base
+        /// since the PR forked, the reviewer is refused so reviews
+        /// don't run against stale code. Pass this flag to override
+        /// the refusal and review against stale anyway. The "stale +
+        /// no file overlap" case prints a warning either way.
+        // trace:STORY-281 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        allow_stale_base: bool,
     },
     /// Show what an active session has shipped so far alongside what
     /// remains. Bucketed view (Shipped / In flight / Working now /

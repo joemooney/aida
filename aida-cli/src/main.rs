@@ -19272,6 +19272,111 @@ fn pr_rebase_check_report(
     Ok(())
 }
 
+/// STORY-281: pre-flight stale-base check fired before launching the
+/// headless reviewer (orchestrator phase 3) or a direct
+/// `aida queue work <PR-N> --for reviewer` session. Mirrors the data
+/// `pr_rebase_check_report` derives (gh metadata → fetch origin →
+/// behind count → PR + base file lists → `git merge-tree` conflict
+/// probe), then runs `pr_rebase::classify_stale_base` to map it onto a
+/// reviewer-launch verdict.
+///
+/// Failure modes (gh not installed, PR not found, fetch failure)
+/// surface as `Err(anyhow!)` — caller decides whether to refuse the
+/// reviewer or proceed. The convention here is "fail open with a
+/// warning" so a transient network blip never blocks an autonomous
+/// drain, but a stale-base + overlap that we *did* successfully
+/// detect always blocks. trace:STORY-281 | ai:claude
+fn preflight_stale_base_check(
+    project_root: &std::path::Path,
+    n: u64,
+) -> Result<pr_rebase::StaleBaseOutcome> {
+    use pr_rebase::{
+        classify_stale_base, parse_merge_tree_conflicts, parse_pr_info, ConflictPrediction,
+    };
+
+    let info = fetch_pr_info_via_gh(project_root, n)
+        .and_then(|j| parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
+        .context("could not resolve PR metadata — is `gh` installed and authenticated?")?;
+
+    let origin_base = format!("origin/{}", info.base_ref);
+
+    // Refresh origin so origin/<base> is current, and fetch the PR's
+    // head ref into a local branch we can probe against.
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["fetch", "origin", "--prune"])
+        .status();
+    let pr_local_branch = format!("pr-{n}");
+    let pr_refspec = format!("+refs/pull/{n}/head:refs/heads/{pr_local_branch}");
+    let pr_fetch = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["fetch", "origin", pr_refspec.as_str()])
+        .status();
+    if !matches!(pr_fetch, Ok(s) if s.success()) {
+        anyhow::bail!(
+            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) for pre-flight \
+             stale-base check"
+        );
+    }
+
+    let behind: u32 = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-list",
+            "--count",
+            &format!("{pr_local_branch}..{origin_base}"),
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .parse()
+                .unwrap_or(0)
+        })
+        .unwrap_or(0);
+
+    let pr_files = files_in_range(project_root, &format!("{origin_base}...{pr_local_branch}"));
+    let base_files = files_in_range(project_root, &format!("{pr_local_branch}...{origin_base}"));
+
+    // git merge-tree probe — same as pr_rebase_check_report.
+    let mt = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            &origin_base,
+            &pr_local_branch,
+        ])
+        .output();
+    let prediction = match mt {
+        Ok(out) if out.status.success() => ConflictPrediction::Clean,
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let files = parse_merge_tree_conflicts(&stdout);
+            if files.is_empty() {
+                ConflictPrediction::Unknown
+            } else {
+                ConflictPrediction::Conflicting { files }
+            }
+        }
+        Err(_) => ConflictPrediction::Unknown,
+    };
+
+    Ok(classify_stale_base(
+        behind,
+        &pr_files,
+        &base_files,
+        prediction,
+    ))
+}
+
 /// Files touched by `git log --name-only --pretty=format:` over a range.
 /// Local helper for `pr_rebase_check_report` so we don't depend on
 /// `aida_core::rebase`'s internal helpers (which are crate-private).
@@ -49095,6 +49200,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             user,
             calibrate,
             no_calibrate,
+            allow_stale_base,
         } => {
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
@@ -49282,6 +49388,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         no_human_mode,
                         escalate_mode,
                         *steal,
+                        *allow_stale_base,
                     );
                 }
                 if let Some(batch_name) = effective_batch {
@@ -49302,6 +49409,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         no_human_mode,
                         escalate_mode,
                         *steal,
+                        *allow_stale_base,
                     );
                 }
                 // TASK-293: `nextN --auto-complete` drains N specs from the
@@ -49325,6 +49433,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             no_human_mode,
                             escalate_mode,
                             *steal,
+                            *allow_stale_base,
                         );
                     }
                 }
@@ -49356,6 +49465,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     no_human_mode,
                     escalate_mode,
                     *steal,
+                    *allow_stale_base,
                 );
             }
             // TASK-293: a multi-spec `nextN` has no coherent single
@@ -49460,6 +49570,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 effective_batch,
                 // BUG-226: suppress the standalone reviewer summary.
                 *quiet,
+                // STORY-281: opt out of the reviewer pre-flight stale-base
+                // refusal. trace:STORY-281 | ai:claude
+                *allow_stale_base,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -50396,6 +50509,7 @@ fn handle_queue_rework(
             /* no_human */ false,
             /* batch_name */ None,
             /* quiet */ false,
+            /* allow_stale_base */ false,
         )?;
     } else {
         println!(
@@ -51122,6 +51236,10 @@ fn handle_queue_work(
     // reviewer run (`--quiet`). Ignored for non-reviewer / orchestrator
     // launches, which never print one.
     quiet: bool,
+    // STORY-281: opt out of the reviewer pre-flight stale-base refusal.
+    // Only meaningful when scope resolves to a PR + role is reviewer;
+    // ignored on every other pickup. trace:STORY-281 | ai:claude
+    allow_stale_base: bool,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -51187,6 +51305,61 @@ fn handle_queue_work(
     );
 
     let prompt = derive_queue_work_prompt(&plan, &role);
+
+    // STORY-281: reviewer pre-flight stale-base check. Fires only when
+    // the resolved scope is a GitHub PR AND the inferred role is the
+    // reviewer — every other pickup (implementer, dialog, architect,
+    // GitLab MR) skips this branch. The check is also no-op'd when the
+    // pickup is `--no-launch` (no reviewer session about to run) and
+    // when the user passed `--list-sessions` (already exited above).
+    //
+    // Behaviour mirrors the orchestrator's phase-3 pre-flight:
+    //   Current        → silent proceed
+    //   StaleNoOverlap → warning, proceed
+    //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base
+    //   Err (gh / fetch) → warning, proceed (never block on transient infra)
+    //
+    // trace:STORY-281 | ai:claude
+    if !no_launch && role == "reviewer" {
+        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+            if let Some(root) = project_root_for_config.as_deref() {
+                match preflight_stale_base_check(root, pr_n) {
+                    Ok(pr_rebase::StaleBaseOutcome::Current) => {}
+                    Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
+                        eprintln!(
+                            "  {} {}",
+                            "⚠".yellow().bold(),
+                            pr_rebase::stale_base_warn_message(pr_n, behind).yellow()
+                        );
+                    }
+                    Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
+                        behind,
+                        overlap_files,
+                        ..
+                    }) => {
+                        let msg = pr_rebase::stale_base_block_message(pr_n, behind, &overlap_files);
+                        if allow_stale_base {
+                            eprintln!(
+                                "  {} stale-base + overlap detected; \
+                                 `--allow-stale-base` is set, proceeding.\n{}",
+                                "⚠".yellow().bold(),
+                                msg.yellow()
+                            );
+                        } else {
+                            anyhow::bail!(msg);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "  {} pre-flight stale-base check for PR-{pr_n} failed \
+                             ({e}); proceeding with reviewer",
+                            "⚠".yellow().bold()
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     // Pre-flight summary so the user sees what we resolved before any
     // side effects fire (worktree create, lease, exec). Goes to stderr.
@@ -52582,6 +52755,9 @@ fn handle_auto_complete(
     // BUG-311: thread the outer `--steal` through so phase 1's
     // `aida queue work` subprocess can clear a dormant lease on this scope.
     steal: bool,
+    // STORY-281: thread the outer `--allow-stale-base` through so phase 3's
+    // pre-flight stale-base check warns-only instead of refusing.
+    allow_stale_base: bool,
 ) -> ! {
     let result = run_auto_complete(
         storage,
@@ -52595,6 +52771,7 @@ fn handle_auto_complete(
         // STORY-301: a bare single-spec drain owns its drain-state file.
         true,
         steal,
+        allow_stale_base,
     );
     std::process::exit(result.exit_code);
 }
@@ -52628,6 +52805,11 @@ fn run_auto_complete(
     // dropped on the floor and the canned "pass --steal" message recurred.
     // trace:BUG-311 | ai:claude
     steal: bool,
+    // STORY-281: pass-through of the outer `--allow-stale-base` flag. When
+    // true, phase 3's pre-flight check warns-only instead of refusing on a
+    // stale-base + file-overlap; also propagated to the reviewer subprocess.
+    // trace:STORY-281 | ai:claude
+    allow_stale_base: bool,
 ) -> auto_complete::OrchestrationResult {
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
@@ -52713,6 +52895,7 @@ fn run_auto_complete(
         no_human,
         run_token,
         steal,
+        allow_stale_base,
     );
     let started_at = chrono::Utc::now();
     let result = auto_complete::orchestrate(&mut driver, spec, variant, json, escalate_mode);
@@ -52859,6 +53042,10 @@ struct RealBatchDriver<'a> {
     /// subprocess so a dormant lease on the member's scope is cleared rather
     /// than blocking the drain with the canned "pass --steal" message.
     steal: bool,
+    /// STORY-281: outer `--allow-stale-base` flag, propagated to every
+    /// member's phase-3 pre-flight check so the stale-base + overlap
+    /// signal becomes a warning instead of a refusal.
+    allow_stale_base: bool,
 }
 
 impl auto_complete::BatchDriver for RealBatchDriver<'_> {
@@ -52897,6 +53084,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             // file — the batch orchestrator created it.
             false,
             self.steal,
+            self.allow_stale_base,
         )
     }
 }
@@ -52920,6 +53108,9 @@ fn handle_auto_complete_batch(
     escalate_mode: auto_complete::EscalateMode,
     // BUG-311: outer `--steal`, threaded to every batch member's phase 1.
     steal: bool,
+    // STORY-281: outer `--allow-stale-base`, threaded to every batch
+    // member's phase 3 pre-flight stale-base check.
+    allow_stale_base: bool,
 ) -> ! {
     if !json {
         eprintln!();
@@ -52962,6 +53153,7 @@ fn handle_auto_complete_batch(
         no_human,
         escalate_mode,
         steal,
+        allow_stale_base,
     };
     let result = auto_complete::drain_batch(&mut driver, max);
     // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
@@ -53003,6 +53195,9 @@ fn handle_auto_complete_batches(
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
+    // STORY-281: outer `--allow-stale-base`, threaded into every member's
+    // RealBatchDriver via the per-batch closure below.
+    allow_stale_base: bool,
 ) -> ! {
     if !json {
         eprintln!();
@@ -53066,6 +53261,7 @@ fn handle_auto_complete_batches(
             no_human,
             escalate_mode,
             steal,
+            allow_stale_base,
         })
     });
 
@@ -53667,6 +53863,9 @@ struct RealNextNDriver<'a> {
     escalate_mode: auto_complete::EscalateMode,
     /// BUG-311: outer `--steal`, propagated to every member's phase 1.
     steal: bool,
+    /// STORY-281: outer `--allow-stale-base`, propagated to every member's
+    /// phase 3 pre-flight stale-base check.
+    allow_stale_base: bool,
 }
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
@@ -53688,6 +53887,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             // file — the batch orchestrator created it.
             false,
             self.steal,
+            self.allow_stale_base,
         )
     }
 }
@@ -53710,6 +53910,9 @@ fn handle_auto_complete_next_n(
     escalate_mode: auto_complete::EscalateMode,
     // BUG-311: outer `--steal`, threaded to every drained member's phase 1.
     steal: bool,
+    // STORY-281: outer `--allow-stale-base`, threaded to every drained
+    // member's phase 3 pre-flight stale-base check.
+    allow_stale_base: bool,
 ) -> ! {
     if !json {
         eprintln!();
@@ -53757,6 +53960,7 @@ fn handle_auto_complete_next_n(
         no_human,
         escalate_mode,
         steal,
+        allow_stale_base,
     };
     let result = auto_complete::drain_batch(&mut driver, Some(n));
     // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
@@ -55112,6 +55316,14 @@ struct RealPhaseDriver {
     /// and the orchestrator reports a generic phase-1 failure even though
     /// the user *did* pass --steal. trace:BUG-311 | ai:claude
     steal: bool,
+    /// STORY-281: opt out of the reviewer pre-flight stale-base refusal.
+    /// When false (default), phase 3 refuses to launch the reviewer if the
+    /// PR's base is behind origin AND a file the PR touches has moved on
+    /// the base since the PR forked. When true, the refusal becomes a
+    /// warning so review-against-stale proceeds. Also propagated to the
+    /// reviewer subprocess so its own pre-flight respects the opt-out.
+    /// trace:STORY-281 | ai:claude
+    allow_stale_base: bool,
 }
 
 impl RealPhaseDriver {
@@ -55123,6 +55335,7 @@ impl RealPhaseDriver {
         no_human: Option<auto_complete::NoHumanMode>,
         run_token: String,
         steal: bool,
+        allow_stale_base: bool,
     ) -> Self {
         Self {
             project_root,
@@ -55140,6 +55353,7 @@ impl RealPhaseDriver {
             implementer_session: None,
             implementer_worktree: None,
             steal,
+            allow_stale_base,
         }
     }
 
@@ -55763,6 +55977,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })?;
 
+        // STORY-281: pre-flight stale-base check before launching the
+        // headless reviewer. The 2026-05-17 self-test surfaced the
+        // failure mode — PR queued for review with two PRs merged in
+        // the interim, one touching the same file. Block if the PR's
+        // base is behind origin AND a file the PR touches has moved on
+        // base since fork. `--allow-stale-base` opts out.
+        // A failure inside the check itself (gh missing, fetch failure)
+        // logs a warning and proceeds — we never block a drain on
+        // transient infrastructure issues, only on confirmed-stale
+        // confirmed-overlap. trace:STORY-281 | ai:claude
+        match preflight_stale_base_check(&self.project_root, pr as u64) {
+            Ok(pr_rebase::StaleBaseOutcome::Current) => {}
+            Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
+                eprintln!(
+                    "  {} {}",
+                    "⚠".yellow().bold(),
+                    pr_rebase::stale_base_warn_message(pr as u64, behind).yellow()
+                );
+            }
+            Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
+                behind,
+                overlap_files,
+                ..
+            }) => {
+                let msg = pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
+                if self.allow_stale_base {
+                    eprintln!(
+                        "  {} stale-base + overlap detected; `--allow-stale-base` is set, \
+                         proceeding with reviewer.\n{}",
+                        "⚠".yellow().bold(),
+                        msg.yellow()
+                    );
+                } else {
+                    return Err(auto_complete::PhaseFailure::new(msg));
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",
+                    "⚠".yellow().bold()
+                );
+            }
+        }
+
         // Verdict handshake: the `/aida-review` skill writes the verdict
         // JSON to AIDA_REVIEW_VERDICT_FILE and stops before merge.
         let verdict_dir = self.project_root.join(".aida").join("review-verdicts");
@@ -55821,6 +56079,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // trace:STORY-263 | ai:claude
         if self.no_human.is_some() {
             cmd.arg("--no-human");
+        }
+        // STORY-281: propagate the stale-base opt-out so the child's own
+        // pre-flight (in handle_queue_work) doesn't re-block on the same
+        // signal the orchestrator-level check already cleared.
+        // trace:STORY-281 | ai:claude
+        if self.allow_stale_base {
+            cmd.arg("--allow-stale-base");
         }
 
         // TASK-329: same graceful-exit handling as the implementer phase —
