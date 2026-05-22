@@ -132,7 +132,12 @@ pub fn manifest_path(project_root: &Path, session_id: &str) -> PathBuf {
 }
 
 pub fn load(path: &Path) -> Result<SessionManifest> {
-    let content = std::fs::read_to_string(path)
+    // Reader can race a concurrent `save` mid-`write_atomic`; on Windows
+    // that surfaces as a transient PermissionDenied/NotFound from
+    // `CreateFile`. Retry through `read_atomic` so a sibling session
+    // checking `planned_by_other` never fails on a transient open.
+    // trace:TASK-346 | ai:claude
+    let content = aida_core::read_atomic(path)
         .with_context(|| format!("read manifest {}", path.display()))?;
     let manifest: SessionManifest =
         toml::from_str(&content).with_context(|| format!("parse manifest {}", path.display()))?;
@@ -604,6 +609,29 @@ mod tests {
                 "session_manifest.rs:{} uses a bare fs::write on a \
                  known-concurrent path — use aida_core::write_atomic instead \
                  (torn-write race, TASK-331)",
+                n + 1
+            );
+        }
+    }
+
+    // TASK-346: grep guard for the read side. The manifest's `load` is
+    // routinely contended with a sibling session's `save` (both run during
+    // an autonomous drain), and on Windows the open can transiently fail
+    // mid-rename. Flags any bare `fs::read_to_string` reintroduced into the
+    // production code, nudging toward aida_core::read_atomic.
+    #[test]
+    fn manifest_read_path_stays_atomic() {
+        let src = include_str!("session_manifest.rs");
+        let production = src.split("#[cfg(test)]").next().unwrap_or(src);
+        for (n, line) in production.lines().enumerate() {
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
+            assert!(
+                !line.contains("fs::read_to_string("),
+                "session_manifest.rs:{} uses a bare fs::read_to_string on a \
+                 known-concurrent path — use aida_core::read_atomic instead \
+                 (Windows transient-open race, TASK-346)",
                 n + 1
             );
         }

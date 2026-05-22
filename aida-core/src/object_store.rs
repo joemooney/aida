@@ -153,8 +153,13 @@ pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result
     let yaml = serde_yaml::to_string(req)
         .with_context(|| format!("Failed to serialize requirement {}", spec_id))?;
 
+    // Reader can race a concurrent git checkout of the orphan branch
+    // (rename-based at the plumbing level); on Windows that surfaces as a
+    // transient PermissionDenied/NotFound from `CreateFile`. Retry through
+    // `read_atomic` so the "no-op when unchanged" optimization doesn't
+    // spuriously rewrite an unchanged file. trace:TASK-346 | ai:claude
     if path.exists() {
-        if let Ok(existing) = std::fs::read_to_string(&path) {
+        if let Ok(existing) = crate::read_atomic(&path) {
             if existing == yaml {
                 return Ok(false);
             }
@@ -170,21 +175,30 @@ pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result
 }
 
 /// Read a single requirement from the object store by spec_id.
+///
+/// Routes through `read_atomic` so a concurrent git checkout of the orphan
+/// branch (which is rename-based at the plumbing level) can't make this
+/// fail with a transient Windows `ERROR_ACCESS_DENIED`/`ERROR_FILE_NOT_FOUND`
+/// from `CreateFile`. trace:TASK-346 | ai:claude
 #[cfg(feature = "native")]
 pub fn read_object(objects_root: &Path, spec_id: &str) -> Result<Requirement> {
     let path = object_path(objects_root, spec_id)?;
-    let yaml = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let yaml =
+        crate::read_atomic(&path).with_context(|| format!("Failed to read {}", path.display()))?;
     let req: Requirement = serde_yaml::from_str(&yaml)
         .with_context(|| format!("Failed to parse {}", path.display()))?;
     Ok(req)
 }
 
 /// Read a single requirement from a specific file path.
+///
+/// Routes through `read_atomic` for the same reason as `read_object`:
+/// concurrent rename-based writes from git plumbing on Windows.
+/// trace:TASK-346 | ai:claude
 #[cfg(feature = "native")]
 pub fn read_object_from_path(path: &Path) -> Result<Requirement> {
-    let yaml = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let yaml =
+        crate::read_atomic(path).with_context(|| format!("Failed to read {}", path.display()))?;
     let req: Requirement = serde_yaml::from_str(&yaml)
         .with_context(|| format!("Failed to parse {}", path.display()))?;
     Ok(req)
