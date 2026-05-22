@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:35:44.137066478Z
-modified_at: 2026-05-22T03:00:11.155525698Z
+modified_at: 2026-05-22T03:00:31.193683689Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -33,3 +33,10 @@ comments:
   content: Commit 8a6fc25d references this requirement
   created_at: 2026-05-21T03:03:04.373016960Z
   modified_at: 2026-05-21T03:03:04.373016960Z
+- id: 019e4da0-9b2f-7e80-b84d-968f9d05cdfe
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-20-task-281-auto-claim-blocks.md
+    filed 3 task(s): TASK-444, TASK-445, TASK-446
+  created_at: 2026-05-22T03:00:31.663878052Z
+  modified_at: 2026-05-22T03:00:31.663878052Z
