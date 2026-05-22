@@ -1,0 +1,27 @@
+id: 019e51f5-b118-7bd3-8e1b-5e3c8cd1f2f3
+spec_id: TASK-483
+agreed_id: TASK-483
+title: Consider an integration smoke for .local.md append-merge (STORY-305 follow-up)
+description: |
+  STORY-305 acceptance bullet 6 asks for tests covering "discovery / merge / re-sync". The PR covers discovery (`test_local_skills_dir_and_readme_scaffolded`) and re-sync (`test_resync_preserves_local_skill_extensions`) but intentionally does NOT test the `.local.md` merge producing a combined skill — the merge happens *inside Claude Code* when a skill loads, not in any AIDA build step (documented at `docs/extending-skills.md:36-41`).
+
+  This isn't blocking. The indirect proxy (`test_aida_md_documents_local_extension_rule` asserts the rule is in AIDA.md, which CLAUDE.md imports each session) is reasonable. But it leaves the actual append-merge as an untestable contract on Claude Code's reading behavior.
+
+  Possible directions if this gap matters later:
+  - An integration test that scaffolds a fake project, drops a `<skill>.local.md`, and verifies the scaffolded AIDA.md / CLAUDE.md contains the load-this-too instruction (a stronger version of the existing AIDA.md test).
+  - A skill-discovery probe that simulates Claude Code's read path (likely overkill).
+  - Accept the structural limitation explicitly in the spec (close the bullet as documented N/A rather than as a missing test).
+
+  Raised in review of PR-210: https://github.com/joemooney/aida/pull/210#issuecomment-4523279133
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:11:56.696199463Z
+modified_at: 2026-05-22T23:11:56.696199463Z
+req_type: Task
+tags:
+- from-review:PR-210
+- scaffolding
+- severity:cosmetic
+- tests
