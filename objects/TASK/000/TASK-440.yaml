@@ -14,11 +14,11 @@ description: |
 
   Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
 status: NeedsAttention
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:18.077004527Z
-modified_at: 2026-05-22T04:22:55.144759710Z
+modified_at: 2026-05-22T06:01:04.289649328Z
 req_type: Task
 tags:
 - from-review:PR-162
