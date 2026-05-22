@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:25:05.134497601Z
-modified_at: 2026-05-22T20:31:32.521525905Z
+modified_at: 2026-05-22T21:16:16.687167906Z
 req_type: Task
 tags:
 - e2e
@@ -26,3 +26,9 @@ tags:
 - integration-test
 - severity:major
 - story-281
+comments:
+- id: 019e518b-cbaf-7d30-a1c1-ce2528ca32ca
+  author: 'Codex implementation note: using a deterministic temp-repo integration test for the reviewer stale-base pre-flight plumbing rather than a live GitHub/Claude full E2E. The fixture creates a bare origin, a synthetic refs/pull/1/head, and a fake `gh pr view`, then asserts real git plumbing classifies stale overlap and emits the recovery hint. This covers the phase-3 gate without CI depending on external auth/model execution.'
+  content: mcp
+  created_at: 2026-05-22T21:16:16.687158669Z
+  modified_at: 2026-05-22T21:16:16.687158669Z
