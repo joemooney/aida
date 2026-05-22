@@ -78,7 +78,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:53:16.340454234Z
-modified_at: 2026-05-22T16:53:16.340454234Z
+modified_at: 2026-05-22T17:35:54.905949968Z
 req_type: Task
 tags:
 - cli-ux
@@ -87,3 +87,21 @@ tags:
 - pr-flow
 - recurring-pattern
 - task-308-companion
+comments:
+- id: 019e50c2-0c19-7880-98cf-f79988fa449b
+  author: joe
+  content: |-
+    Acceptance refinements 2026-05-22 from stopgap shell function experience:
+
+    1. **cd-back-to-main-worktree before aida pull.** When invoked from a sibling worktree (the typical pattern — you ship from the worktree you authored in), `aida pull` must run from the main worktree because `.aida-store/` only exists there. The wrapper must `cd` to the project root ($AIDA_PROJECT_ROOT or the parent containing .aida-store/) before the pull step.
+
+    2. **Worktree-aware --delete-branch handling.** TASK-406's friction class also applies here. If the PR's source branch is checked out in a sibling worktree, gh pr merge --delete-branch's local cleanup fails with 'branch X is already used by worktree at Y.' The wrapper should:
+       - Detect the worktree before invoking the merge
+       - Either end the lease first (`aida session end <lease>`) OR skip --delete-branch and rely on `aida session end` afterward for cleanup
+       - Surface the situation clearly (not as a misleading 'failed to run git' message)
+
+    3. **Activity log entry on completion.** Every `aida pr ship` invocation should append a structured event to .aida/advisor-activity.jsonl (composes with STORY-405) — start, per-step transitions, final success/failure.
+
+    User-supplied evidence: `aida-pr-ship 182` for SPEC-398 today produced 'failed to run git: fatal: main is already used by worktree at /home/joe/ai/aida' AND 'Error: aida pull requires a git-canonical store'. The first is cosmetic but confusing; the second blocks the post-merge auto-bump entirely. Both are operationally addressable in the wrapper logic.
+  created_at: 2026-05-22T17:35:54.905949968Z
+  modified_at: 2026-05-22T17:35:54.905949968Z
