@@ -20,12 +20,12 @@ description: |
 
   Raised in review of PR-171:
   https://github.com/joemooney/aida/pull/171#issuecomment-4515233922
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T05:21:05.306123432Z
-modified_at: 2026-05-22T05:57:13.825786585Z
+modified_at: 2026-05-22T19:36:13.933563062Z
 req_type: Task
 tags:
 - from-review:PR-171
