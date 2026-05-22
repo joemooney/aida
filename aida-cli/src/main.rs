@@ -19404,11 +19404,17 @@ fn derive_pr_ship_squash_subject(
     if current_subject.is_empty() {
         return Ok(None);
     }
+    if !pr_ship::extract_trailing_spec_ids_from_subject(&current_subject).is_empty() {
+        return Ok(None);
+    }
 
     let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
     let ids = pr_ship::derive_squash_subject_spec_ids(&pr.title, branch, &pr.body);
     if ids.is_empty() {
-        return Ok(None);
+        anyhow::bail!(
+            "final squash subject would lack a trailing `(SPEC-ID)` and no spec ID could be derived from PR title, branch name, or PR body: `{}`",
+            current_subject
+        );
     }
     let normalized = pr_ship::squash_subject_with_spec_ids(&current_subject, &ids);
     if normalized == current_subject {
