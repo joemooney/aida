@@ -1,0 +1,39 @@
+id: 019e4e6d-0beb-7170-ac25-5727ecf98cd5
+spec_id: TASK-452
+agreed_id: TASK-452
+title: 'Test: every tool + arg documented in docs/agents/cross-agent-onboarding.md must appear in MCP tools/list'
+description: |-
+  ## Problem
+
+  \`docs/agents/cross-agent-onboarding.md\` is an agent-facing API contract. If it drifts from the actual MCP server's \`tools/list\` advertisement, agents that follow the doc will fail (as Codex caught the live advisor doing 2026-05-22 — five argument names were fictional).
+
+  Prevent the regression with a test.
+
+  ## Acceptance
+
+  - New test (likely under \`tests/\` adjacent to the stdio tests from TASK-N above) that:
+    1. Parses \`docs/agents/cross-agent-onboarding.md\` for documented tool names + argument names.
+    2. Spins up \`aida mcp-serve\`, queries \`tools/list\`.
+    3. Asserts every documented tool exists in the advertised list.
+    4. Asserts every documented argument exists in the corresponding tool's inputSchema.
+  - Test fails LOUDLY on drift — names the documented-but-missing or advertised-but-undocumented entries explicitly.
+  - Pre-commit / CI gate that runs this test, so doc edits + MCP edits drift-fail-fast.
+
+  ## Origin
+
+  User shared sibling-agent (Codex) recommendation 2026-05-22: *"The onboarding brief is now an agent-facing API contract. We should test that every documented tool and argument is actually advertised by tools/list."*
+
+  The live-advisor doc had 5 fictional argument names; the test would have caught all of them at commit time.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T06:43:49.867267221Z
+modified_at: 2026-05-22T06:43:49.867267221Z
+req_type: Task
+tags:
+- consistency-check
+- doc-drift
+- from-codex
+- mcp
+- test
