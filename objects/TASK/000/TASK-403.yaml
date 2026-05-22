@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:25:56.023469640Z
-modified_at: 2026-05-22T18:45:41.545257420Z
+modified_at: 2026-05-22T20:31:46.247262512Z
 req_type: Task
 tags:
 - autonomy-keystone
@@ -90,6 +90,11 @@ comments:
     Defer until you have ~1-2 hours of focused writing bandwidth.
   created_at: 2026-05-22T18:45:41.545257420Z
   modified_at: 2026-05-22T18:45:41.545257420Z
+- id: 019e5163-0c47-7ce3-a50f-aec724497905
+  author: joe
+  content: 'Advisor''s escalation verdict accepted: this spec is user-authoring work, not implementer-pickup work. Leaving parked at NeedsAttention with the existing 019e50d9 lease. Lease + worktree intentionally retained for when operator picks up the writing pass. Removing from auto-pickup eligibility via the punt verdict; will not appear in standard queue routing until operator status-flips to in-progress and works it themselves.'
+  created_at: 2026-05-22T20:31:46.247262512Z
+  modified_at: 2026-05-22T20:31:46.247262512Z
 attention_reason:
   category: other
   detail: 'TASK-403 is a demo/marketing meta-task whose acceptance criteria require actions a headless coding implementer cannot perform: (1) record an asciinema of a *future* overnight drain — the keystone artifact cannot be produced in a single REPL session; (2) curate a 4-6 spec batch — judgment about queue composition belongs to the advisor/operator, not a code-implementer; (3) pick a publish surface — the spec explicitly says ''user decides''; (4) write ~800-1500 word external narrative — depends on (1) existing first, and needs editorial judgment about AIDA''s public voice. There is no code surface here; the spec is misrouted to the headless implementer queue.'
