@@ -1,0 +1,59 @@
+id: 019e50f9-7b76-7ef3-9598-03c5db60feee
+spec_id: BUG-331
+agreed_id: BUG-331
+title: 'Substrate gap: sibling worktrees fall back to centralized mode because .aida-store detection doesn''t traverse up the worktree tree'
+description: |-
+  ## Problem
+
+  When AIDA operates from a sibling worktree (the `git worktree add /path -b branch main` pattern used by the orchestrator + our manual PR isolation flows + per the worktree-hygiene discipline), the canonical-store detection fails:
+
+  - The git-canonical mode looks for `.aida-store/` (the orphan-branch worktree) in the current directory
+  - Sibling worktrees don't have their own `.aida-store/` — they inherit from `/path/to/main-worktree/.aida-store/` conceptually
+  - AIDA's current detection logic doesn't traverse the git-worktree tree to find the canonical store at the main worktree
+  - Result: AIDA falls back to the deprecated centralized SQLite/YAML mode silently
+
+  Antigravity discovered this on 2026-05-22 during STORY-407 Phase 2 verification. Workaround: created a symlink at `<sibling>/.aida-store` → `<main>/.aida-store`. Resolved their immediate roundtrip needs but is a hack, not the proper fix.
+
+  ## Why this matters
+
+  - **Multi-agent coordination assumes git-canonical mode** — the MCP coordination tools (claim_task, file_finding, post_punt, etc.) rely on the git-canonical store. If sibling worktrees use the deprecated centralized mode, cross-worktree visibility is inconsistent.
+  - **`aida queue work --auto-complete` creates sibling worktrees** — the orchestrator's spec worktrees would hit this same fallback. Today's drains have been working DESPITE this fallback (the orchestrator routes some operations through main-worktree paths), but the architectural mismatch is real.
+  - **The "agent-agnostic substrate" claim weakens** if it only works from one specific directory.
+
+  ## Acceptance
+
+  - AIDA's canonical-store detection walks up the git-worktree tree (via `git worktree list --porcelain` or equivalent) to find the main worktree, then locates `.aida-store/` there.
+  - From any sibling worktree, AIDA operations route through the canonical store at the main worktree's `.aida-store/` — no fallback to centralized mode unless the user explicitly opts in.
+  - The symlink workaround Antigravity documented becomes obsolete; doc gets updated to remove the symlink instructions.
+  - Regression tests: synthetic sibling-worktree fixture; assert canonical-store operations work without symlink intervention.
+  - Composes with the existing per-worktree `.aida/` (cache, sessions, etc.) which stays local — only the canonical store needs cross-worktree detection.
+
+  ## Out of scope
+
+  - Cross-repository / cross-project worktree detection (intentionally narrow — sibling-worktree-of-same-project is the case).
+  - Replacing the deprecated centralized mode (still warned-on init; this BUG just stops accidentally using it from sibling worktrees).
+
+  ## Composes with
+
+  - **STORY-407 Phase 2** — surfaced this gap empirically; documented as Phase 2 condition.
+  - **PR-187** (Antigravity setup doc) — currently documents the symlink workaround; will need a follow-up edit to point at this BUG once it ships and remove the symlink narrative.
+  - **Memory `feedback_one_master_advisor_until_subsystems`** — substrate-detection from sibling worktrees is architecture-class; sign-off discussion on the fix's shape worth having.
+
+  ## Origin
+
+  Antigravity report 2026-05-22 during STORY-407 Phase 2: *"Discovered & Solved a Key Edge Case: Sibling worktrees naturally fall back to centralized SQLite/YAML mode because the .aida-store folder (which represents the git-canonical store) is gitignored and nested worktrees aren't automatically generated."*
+
+  The "key edge case" framing is correct — it's a real bug; the symlink is a workaround.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T18:36:27.894170541Z
+modified_at: 2026-05-22T18:36:27.894170541Z
+req_type: Bug
+tags:
+- from-antigravity
+- from-self-test
+- git-canonical
+- substrate
+- worktrees
