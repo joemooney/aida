@@ -1,0 +1,46 @@
+id: 019e4e0e-0cdb-7fc3-b51f-a0314747831a
+spec_id: BUG-295
+agreed_id: BUG-295
+title: 'auto-complete failure: phase 3 (reviewer) on TASK-435'
+description: |
+  Auto-drafted by `aida queue work TASK-435 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  the reviewer session produced no verdict file — the review did not complete — the reviewer's headless log (/home/joe/ai/aida/.aida/headless-logs/pr-170-019e4e07-6551-7133-b1d2-922ac89a41e1.jsonl) contains an AskUserQuestion call, which is forbidden under `--no-human` and likely caused the session to bail before writing the verdict file (BUG-280). The `/aida-review` skill must auto-resolve every confirmation under AIDA_HEADLESS=1 instead of calling AskUserQuestion.
+
+  Failure kind: `no-verdict`
+
+  ## Recovery hint shown to the user
+
+  The reviewer session ended without a usable verdict — re-run the review: `aida queue work PR-170 --steal`
+
+  ## Phase durations
+
+    - phase 1 (implementer): 192312 ms
+    - phase 2 (ci): 199948 ms
+    - phase 3 (reviewer): 429747 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"TASK-435","started_at":"2026-05-22T04:46:15.216919281+00:00","completed_at":"2026-05-22T04:59:58.247035564+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"no-verdict","failure_message":"the reviewer session produced no verdict file — the review did not complete — the reviewer's headless log (/home/joe/ai/aida/.aida/headless-logs/pr-170-019e4e07-6551-7133-b1d2-922ac89a41e1.jsonl) contains an AskUserQuestion call, which is forbidden under `--no-human` and likely caused the session to bail before writing the verdict file (BUG-280). The `/aida-review` skill must auto-resolve every confirmation under AIDA_HEADLESS=1 instead of calling AskUserQuestion.","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":192312},{"phase":2,"slug":"ci","elapsed_ms":199948},{"phase":3,"slug":"reviewer","elapsed_ms":429747}],"total_ms":823030,"binary_sha":"895465d6"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T05:00:04.187309480Z
+modified_at: 2026-05-22T05:00:04.187309480Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- reviewer
