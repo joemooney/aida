@@ -45,7 +45,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T15:53:40.778620533Z
-modified_at: 2026-05-22T15:53:40.778620533Z
+modified_at: 2026-05-22T15:59:34.411794256Z
 req_type: Story
 tags:
 - advisor-activity
@@ -53,3 +53,29 @@ tags:
 - from-user-question
 - observability
 - visibility-gap
+comments:
+- id: 019e5069-d80b-7ea0-b64f-d8671c860a53
+  author: joe
+  content: |-
+    Refinement 2026-05-22 from user question: process-list visibility is a related-but-narrower concern than the in-AIDA activity log this story captures. When the live advisor (or any AIDA caller) runs `gh pr checks --watch` as raw shell, two layers of invisibility apply:
+
+    1. **AIDA state-level** (this story) — `aida status` doesn't show the activity; downstream readers can't see what's affecting the project right now.
+    2. **Process-list level** — `ps aux | grep aida` won't see the gh subprocess because it's not aida-prefixed.
+
+    Layer 1 is the more important fix (this story). Layer 2 is a free side-benefit IF we wrap the common gh sequences (PR-N watch → merge → pull) in aida-prefixed verbs:
+
+    - `aida pr wait <N>` — watch CI on a PR, log to activity file, retry transient gh errors (composes with BUG-286)
+    - `aida pr complete <N>` — the full watch + merge + pull dance, single command
+    - `aida pr rebase <N>` — already shipped (TASK-308)
+
+    Together these form an `aida pr` verb family that:
+    - Auto-writes activity entries (composes with this story's activity log)
+    - Retries transient errors (composes with BUG-286's retry layer)
+    - Composes with STORY-384's recover wizard (which is essentially a higher-level orchestration of these)
+    - Has natural process-list visibility because the process IS named `aida …`
+
+    **Acceptance addition:** when the activity-log surface ships, also build (or evaluate) thin `aida pr wait` / `aida pr complete` wrappers. Don't build them in isolation — the value is in the composition with the activity log + retry layer + recover wizard, not in the wrappers themselves.
+
+    User invited skepticism on the wrap-everything question. The skepticism-grounded answer: build the activity log first; add the wrappers only as the natural composition surface, not because wrap-for-wrap's-sake.
+  created_at: 2026-05-22T15:59:34.411794256Z
+  modified_at: 2026-05-22T15:59:34.411794256Z
