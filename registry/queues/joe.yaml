@@ -994,3 +994,10 @@
   note: Promoted from finding TASK-435 via `aida findings promote`
   added_at: 2026-05-22T01:06:38.459166077Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e4d60-a66a-7e82-8457-1e79ce2632bd
+  position: 213000
+  added_by: joe
+  note: auto-queued by `session end` (019e4d49); covers 1 spec
+  added_at: 2026-05-22T01:50:46.064754730Z
+  for_role: reviewer
