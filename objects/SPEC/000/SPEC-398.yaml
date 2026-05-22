@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:36:19.261874714Z
-modified_at: 2026-05-22T17:36:16.154165779Z
+modified_at: 2026-05-22T17:36:44.171505546Z
 req_type: Task
 tags:
 - codex
@@ -39,6 +39,13 @@ comments:
   content: mcp
   created_at: 2026-05-22T16:47:32.604279374Z
   modified_at: 2026-05-22T16:47:32.604279374Z
+- id: 019e50c2-ce9f-7f51-b4aa-244bd77afc1f
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-22-track-1-agent-lift-evaluation.md
+    filed 4 task(s): TASK-459, TASK-460, TASK-461, TASK-462
+  created_at: 2026-05-22T17:36:44.703408254Z
+  modified_at: 2026-05-22T17:36:44.703408254Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T17:36:16.154165779Z
