@@ -150,13 +150,13 @@ pub fn derive_squash_subject_spec_ids(pr_title: &str, branch: &str, pr_body: &st
 
 /// Ensure the squash subject carries every derived spec ID exactly once.
 /// Existing well-formed subjects are left untouched.
-// trace:SPEC-410 | ai:codex
+// trace:SPEC-410 BUG-339 | ai:codex
 pub fn squash_subject_with_spec_ids(subject: &str, ids: &[String]) -> String {
     let subject = subject.trim();
     if ids.is_empty() || subject.is_empty() {
         return subject.to_string();
     }
-    let existing = extract_spec_ids_from_text(subject);
+    let existing = extract_trailing_spec_ids_from_subject(subject);
     let missing: Vec<&String> = ids
         .iter()
         .filter(|id| !existing.iter().any(|seen| seen == *id))
@@ -169,7 +169,73 @@ pub fn squash_subject_with_spec_ids(subject: &str, ids: &[String]) -> String {
         .map(String::as_str)
         .collect::<Vec<_>>()
         .join(" ");
-    format!("{subject} ({joined})")
+    append_spec_ids_before_pr_suffix(subject, &joined)
+}
+
+/// Extract the exact shape the auto-bump scanner recognizes: a trailing
+/// `(SPEC-ID[, SPEC-ID...])` group, optionally followed by GitHub's `(#N)`.
+// trace:BUG-339 | ai:codex
+pub fn extract_trailing_spec_ids_from_subject(subject: &str) -> Vec<String> {
+    let mut tail = subject.trim();
+    if let Some((head, inner)) = trailing_paren_group(tail) {
+        let pr_suffix = inner
+            .strip_prefix('#')
+            .filter(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()));
+        if pr_suffix.is_some() {
+            tail = head.trim_end();
+        }
+    }
+    let Some((_, inner)) = trailing_paren_group(tail) else {
+        return Vec::new();
+    };
+    parse_spec_id_group(inner)
+}
+
+fn append_spec_ids_before_pr_suffix(subject: &str, joined_ids: &str) -> String {
+    if let Some((head, inner)) = trailing_paren_group(subject) {
+        let pr_suffix = inner
+            .strip_prefix('#')
+            .filter(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()));
+        if pr_suffix.is_some() {
+            return format!("{} ({}) ({})", head.trim_end(), joined_ids, inner);
+        }
+    }
+    format!("{subject} ({joined_ids})")
+}
+
+fn trailing_paren_group(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim();
+    if !trimmed.ends_with(')') {
+        return None;
+    }
+    let open_at = trimmed.rfind('(')?;
+    Some((
+        &trimmed[..open_at],
+        &trimmed[open_at + 1..trimmed.len() - 1],
+    ))
+}
+
+fn parse_spec_id_group(inner: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut tok_count = 0;
+    for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
+        let tok = tok.trim();
+        if tok.is_empty() {
+            continue;
+        }
+        tok_count += 1;
+        let ids = extract_spec_ids_from_text(tok);
+        if ids.len() == 1 && ids[0].eq_ignore_ascii_case(tok) {
+            out.push(ids[0].clone());
+        } else {
+            return Vec::new();
+        }
+    }
+    if tok_count == 0 {
+        Vec::new()
+    } else {
+        out
+    }
 }
 
 /// Build the `gh pr merge` argv. Kept pure so SPEC-410 can pin the
@@ -464,6 +530,38 @@ mod tests {
                 &["BUG-332".to_string()]
             ),
             "[AI:antigravity] fix(mcp): normalize ids (BUG-332)"
+        );
+    }
+
+    #[test]
+    fn trailing_spec_ids_match_auto_bump_shape() {
+        assert_eq!(
+            extract_trailing_spec_ids_from_subject(
+                "[AI:codex] fix(pr-ship): preserve subject (SPEC-410) (#204)"
+            ),
+            vec!["SPEC-410".to_string()]
+        );
+        assert!(extract_trailing_spec_ids_from_subject(
+            "docs(competitive): implement maintained surface for STORY-260 (#203)"
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn squash_subject_repairs_mid_text_spec_id_before_pr_suffix() {
+        let subject = "docs(competitive): implement maintained competitive analysis surface for STORY-260 (#203)";
+        assert_eq!(
+            squash_subject_with_spec_ids(subject, &["STORY-260".to_string()]),
+            "docs(competitive): implement maintained competitive analysis surface for STORY-260 (STORY-260) (#203)"
+        );
+    }
+
+    #[test]
+    fn squash_subject_repairs_missing_codex_subject_before_pr_suffix() {
+        let subject = "[AI:codex] feat(store): add configurable auto-push cadence (#201)";
+        assert_eq!(
+            squash_subject_with_spec_ids(subject, &["STORY-284".to_string()]),
+            "[AI:codex] feat(store): add configurable auto-push cadence (STORY-284) (#201)"
         );
     }
 
