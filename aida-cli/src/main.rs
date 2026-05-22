@@ -82,10 +82,9 @@ use crate::cli::{
     DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
     GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand,
     OrchestratorCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand,
-    ReportCommand,
-    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
-    ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand, TraceCommand,
-    TypeCommand, WorkerCommand, ZenCommand,
+    ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
+    ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand,
+    TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
