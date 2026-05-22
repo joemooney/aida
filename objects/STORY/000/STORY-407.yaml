@@ -89,7 +89,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:39:18.065512796Z
-modified_at: 2026-05-22T18:15:16.092248379Z
+modified_at: 2026-05-22T18:52:51.959136179Z
 req_type: Story
 tags:
 - agent-agnostic
@@ -110,3 +110,21 @@ comments:
   content: mcp
   created_at: 2026-05-22T18:15:16.092214872Z
   modified_at: 2026-05-22T18:15:16.092214872Z
+- id: 019e5108-7f77-72d2-aeb4-53fab1ecc6e0
+  author: joe
+  content: |-
+    Phase 3 ✓ — PR-191 approved + ready to merge. All four coordination tools (post_punt+read+resolve, claim+list+release, post_directive+list+ack) verified end-to-end in clean sibling worktree. Test fixture SPEC-407 created, exercised, rejected cleanly.
+
+    **STORY-407 fully complete — graduating Antigravity from Experimental to Verified tier per STORY-408.**
+
+    Three substantive substrate observations from Antigravity worth capturing separately:
+
+    1. post_directive args typing — expects JSON array of strings; singular string parses to empty list. Worth a small TASK to improve the inputSchema description / clarity (TASK-N filed below).
+    2. MCP-level vs global directive scope distinction — MCP coordinates local worker session thread flow (pauses/shutdowns); separate from global orchestrator queue directives. Worth documenting in MCP coordination surface architecture doc.
+    3. Punt ledger independence — post_punt records to .aida/punts.jsonl but doesn't auto-flip spec status to needs-attention; that's a separate operator action. Potential gap or intentional design decision; worth investigating (TASK-N below).
+
+    PR-187 (Phase 2) and PR-191 (Phase 3) both approved for merge after CI green. STORY-408's supported-agent tier model has its first verdict-eligible data point: Antigravity → Verified.
+
+    trace:STORY-407 | ai:claude
+  created_at: 2026-05-22T18:52:51.959136179Z
+  modified_at: 2026-05-22T18:52:51.959136179Z
