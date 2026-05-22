@@ -24,7 +24,10 @@ pub struct Registry {
 impl Registry {
     /// Loads the registry from the provided path
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = fs::read_to_string(&path)
+        // Reader can race a concurrent registry writer mid-`write_atomic`;
+        // on Windows that surfaces as a transient PermissionDenied/NotFound
+        // from `CreateFile`. Retry through `read_atomic`. trace:TASK-346
+        let content = crate::read_atomic(path.as_ref())
             .with_context(|| format!("Failed to read registry file: {:?}", path.as_ref()))?;
 
         serde_yaml::from_str(&content)

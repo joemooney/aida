@@ -835,9 +835,13 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
 
     let counters_path = registry_dir.join("agreed_counters.toml");
 
-    // Load counters
+    // Load counters. Reader can race a concurrent merge-gate writer
+    // mid-`write_atomic`; on Windows that surfaces as a transient
+    // PermissionDenied/NotFound from `CreateFile`. Retry through
+    // `read_atomic` so the gate never fails to read its own state.
+    // trace:TASK-346 | ai:claude
     let mut counters = if counters_path.exists() {
-        let content = std::fs::read_to_string(&counters_path)?;
+        let content = crate::read_atomic(&counters_path)?;
         toml::from_str::<AgreedCounters>(&content).unwrap_or_default()
     } else {
         AgreedCounters::default()

@@ -63,7 +63,11 @@ impl WorkspaceManifest {
         loop {
             let candidate = current.join(WORKSPACE_FILE);
             if candidate.exists() {
-                if let Ok(content) = std::fs::read_to_string(&candidate) {
+                // Reader can race a concurrent `WorkspaceManifest::save`
+                // mid-`write_atomic`; on Windows that surfaces as a
+                // transient PermissionDenied/NotFound from `CreateFile`.
+                // Retry through `read_atomic`. trace:TASK-346 | ai:claude
+                if let Ok(content) = crate::read_atomic(&candidate) {
                     if let Ok(manifest) = toml::from_str::<WorkspaceManifest>(&content) {
                         return Some((current, manifest));
                     }
