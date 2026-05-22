@@ -477,17 +477,16 @@ fn run() -> Result<()> {
         );
         if !is_external_integration {
             if let Some(store_path) = detect_distributed_store() {
-                // MCP server needs the Storage class — snapshot git backend to temp YAML
+                // MCP server reads/writes through the same canonical git store
+                // the CLI uses. Pointing Storage at the store directory lets
+                // its load/save transparently delegate to GitBackend, so
+                // every MCP write lands in `objects/` and is visible to the
+                // next CLI invocation. The previous YAML-snapshot approach
+                // wrote to `.aida/mcp-cache.yaml` only — invisible to the
+                // CLI and overwritten on every MCP restart.
+                // trace:BUG-310 | ai:claude
                 if matches!(&cli.command, Command::McpServe) {
-                    let backend = aida_core::GitBackend::new(&store_path)?;
-                    let store = aida_core::DatabaseBackend::load(&backend)?;
-                    let cache_path = store_path.join(".aida").join("mcp-cache.yaml");
-                    std::fs::create_dir_all(cache_path.parent().unwrap())?;
-                    // Use the YAML backend to write the snapshot
-                    let yaml_backend = aida_core::YamlBackend::new(&cache_path);
-                    aida_core::DatabaseBackend::save(&yaml_backend, &store)?;
-                    let mcp_storage = Storage::new(cache_path);
-                    // STORY-361: project root = store_path's parent (the AIDA project root).
+                    let mcp_storage = Storage::new(&store_path);
                     let project_root = find_project_root().unwrap_or_else(|_| store_path.clone());
                     mcp::run_mcp_server(&mcp_storage, project_root)?;
                     return Ok(());
