@@ -35,12 +35,12 @@ description: |-
   - Punted again 2026-05-22: cold-boot implementer treated the original "Defer until..." text in the description as authoritative over the resolution comment. Advisor escalated with explicit recommendation to edit the spec body itself. This description is that edit.
 
   trace:TASK-440 | ai:claude
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:18.077004527Z
-modified_at: 2026-05-22T06:43:42.901743450Z
+modified_at: 2026-05-22T06:45:15.490157885Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -104,3 +104,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-22T06:32:01.353576286Z
   implemented_by: joe
+  completed_at: 2026-05-22T06:45:15.490157885Z
+  completion_sha: 269ac33c3ec5168cb63b32aef67632be826413ff
