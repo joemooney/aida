@@ -1,0 +1,49 @@
+id: 019e51eb-0c66-7803-889a-048eb9a50a75
+spec_id: TASK-480
+agreed_id: TASK-480
+title: '/aida-review: detect intermediate-only diffs (build artifacts, generated code) and refuse'
+description: |-
+  Substrate-as-bouncer enhancement for the headless reviewer. Cross-validated by external operator empirical observation 2026-05-22.
+
+  ## The pain
+
+  LLMs frequently take shortcuts: editing intermediate build products (target/, build/, dist/, node_modules/), generated code, test fixtures, log files, or compiled artifacts — instead of modifying the source code or build scripts that produce them. This produces fixes that 'work' but are not reproducible (overwritten on next build). Rules-as-instructions (CLAUDE.md, memory files, skill templates) do NOT stop this — see feedback_substrate_as_bouncer_not_rules + BUG-269 + BUG-280 for the ceiling pattern.
+
+  The reviewer phase is the right substrate layer to enforce this: it reads the diff against main; it can refuse PRs whose diff is exclusively (or majority) gitignored / generated paths without an accompanying source change.
+
+  ## Acceptance
+
+  - [ ] In headless review under AIDA_HEADLESS=1, classify each changed path:
+    - SOURCE: tracked-in-git, non-ignored, not in known-generated paths
+    - INTERMEDIATE: matches .gitignore patterns, matches known-generated paths (target/, build/, dist/, node_modules/, *.lock when not deliberately regenerated, etc.)
+  - [ ] If diff contains ONLY intermediate paths → reviewer refuses with verdict 'intermediate-only diff; this fix is not reproducible — modify the source code or build scripts that produce these files'
+  - [ ] If diff contains BOTH source + intermediate where intermediate looks coincidental (e.g., regenerated lockfile alongside dependency-add) → allow but flag
+  - [ ] If diff is SOURCE-MAJORITY with minor intermediate noise → allow
+  - [ ] Composes with existing stale-base refusal (STORY-281); both are substrate-as-bouncer
+  - [ ] Per BUG-280-class lesson: the check is a PROGRAMMATIC GATE in the reviewer code path, NOT instruction text in the skill template
+  - [ ] Regression test: a PR with only target/debug/foo.bin changes → reviewer refuses; a PR with src/foo.rs + target/debug/foo.bin → reviewer flags but allows; a PR with only src/foo.rs → reviewer allows clean
+
+  ## Composes with
+
+  - feedback_substrate_as_bouncer_not_rules (the positive design principle)
+  - BUG-342 (programmatic gate for AskUserQuestion under headless — sibling gate)
+  - STORY-281 (stale-base programmatic refusal — sibling gate)
+  - External cross-validation 2026-05-22 (different operator, different agent, same ceiling pattern)
+
+  ## Why high-leverage
+
+  The same operators experiencing this pain are exactly the ones who'd benefit from AIDA's positioning as 'substrate that doesn't require trusting the agent.' This enhancement makes the value proposition concrete: 'AIDA's reviewer catches the shortcut Claude would have taken, independently of whether you set rules.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:00:19.174364070Z
+modified_at: 2026-05-22T23:00:19.174364070Z
+req_type: Task
+tags:
+- aida-review
+- external-validation
+- from-self-test
+- gitignored-paths
+- reviewer
+- substrate-as-bouncer
