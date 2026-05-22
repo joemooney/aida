@@ -59,6 +59,36 @@ impl ForkMode {
     }
 }
 
+/// STORY-347 calibration mode — measure how often a cold-boot advisor and a
+/// fork-from-live advisor *disagree* on the same punt. With it ON, every
+/// punt produces both verdicts; cold-boot drives the drain, the fork is
+/// shadow-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CalibrationMode {
+    /// No calibration shadow-fork. Behaviour is byte-identical to today's
+    /// drains — the default.
+    Off,
+    /// On every punt, fire a cold-boot advisor *and* (when a live advisor
+    /// is registered) a fork-from-live advisor. Record both verdicts to
+    /// `.aida/punts/<punt-id>/calibration.yaml`; the cold-boot verdict
+    /// drives the drain, the fork is shadow only.
+    On,
+}
+
+impl CalibrationMode {
+    fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "off" | "false" | "0" | "no" => Some(CalibrationMode::Off),
+            "on" | "true" | "1" | "yes" => Some(CalibrationMode::On),
+            _ => None,
+        }
+    }
+
+    pub fn is_on(self) -> bool {
+        matches!(self, CalibrationMode::On)
+    }
+}
+
 /// `[advisor]` section in `.aida/config.toml`. Each field has a sensible
 /// default so a project that has never written the section still has a
 /// well-defined behaviour (the default `auto` + no live registration falls
@@ -69,6 +99,8 @@ pub struct AdvisorConfig {
     pub allow_mtime_fallback: bool,
     pub keep_fork_jsonls: bool,
     pub max_source_size_mb: u64,
+    /// trace:STORY-347 | ai:claude
+    pub calibration_mode: CalibrationMode,
 }
 
 impl Default for AdvisorConfig {
@@ -78,6 +110,7 @@ impl Default for AdvisorConfig {
             allow_mtime_fallback: false,
             keep_fork_jsonls: true,
             max_source_size_mb: 10,
+            calibration_mode: CalibrationMode::Off,
         }
     }
 }
@@ -130,6 +163,11 @@ fn apply_key(cfg: &mut AdvisorConfig, key: &str, val: &str) {
         "max_source_size_mb" => {
             if let Ok(n) = val.parse::<u64>() {
                 cfg.max_source_size_mb = n;
+            }
+        }
+        "calibration_mode" => {
+            if let Some(m) = CalibrationMode::parse(val) {
+                cfg.calibration_mode = m;
             }
         }
         _ => {}
@@ -510,6 +548,32 @@ mod tests {
         assert!(!cfg.allow_mtime_fallback);
         assert!(cfg.keep_fork_jsonls);
         assert_eq!(cfg.max_source_size_mb, 10);
+        // STORY-347: calibration mode defaults Off — the spec promises
+        // byte-identical behaviour when the user has not opted in.
+        assert_eq!(cfg.calibration_mode, CalibrationMode::Off);
+        assert!(!cfg.calibration_mode.is_on());
+    }
+
+    #[test]
+    fn config_reads_calibration_mode_on() {
+        let toml = "\
+[advisor]
+calibration_mode = \"on\"
+";
+        let cfg = AdvisorConfig::from_toml_str(toml);
+        assert_eq!(cfg.calibration_mode, CalibrationMode::On);
+        assert!(cfg.calibration_mode.is_on());
+    }
+
+    #[test]
+    fn calibration_mode_parse_accepts_known_values() {
+        assert_eq!(CalibrationMode::parse("on"), Some(CalibrationMode::On));
+        assert_eq!(CalibrationMode::parse("ON"), Some(CalibrationMode::On));
+        assert_eq!(CalibrationMode::parse("true"), Some(CalibrationMode::On));
+        assert_eq!(CalibrationMode::parse("1"), Some(CalibrationMode::On));
+        assert_eq!(CalibrationMode::parse("off"), Some(CalibrationMode::Off));
+        assert_eq!(CalibrationMode::parse("false"), Some(CalibrationMode::Off));
+        assert_eq!(CalibrationMode::parse("garbage"), None);
     }
 
     #[test]
