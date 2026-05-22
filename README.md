@@ -2,7 +2,7 @@
 
 **A hidden kernel that maintains a stable, queryable graph of what exists, served to AI through MCP and to you through a small CLI.**
 
-**Without it**, coding agents start every session cold, re-deriving the same context they had yesterday; humans rediscover and re-debate decisions for years; cross-references between code and intent rot silently. **With it**, *"does this already exist?"*, *"why did we choose X?"*, and *"is this code still tied to a live requirement?"* are one query away — for the agent and for you.
+**Without it**, *"why did we choose X?"* gets re-debated for years; cross-references between code and intent rot silently; coding agents (when you use them) start every session cold. **With it**, both questions are one query away — and AI-assisted work becomes auditable instead of opaque, since every line traces to a spec and every commit names what it implements.
 
 ```rust
 // trace:FR-042 | ai:claude
@@ -32,6 +32,37 @@ Most agent-collaboration tooling is a queue, a swarm orchestrator, or a one-shot
 
 For deeper positioning vs specific tools, see [`docs/positioning/`](docs/positioning/README.md).
 
+## Where this is and isn't proven
+
+<!-- trace:TASK-403 | ai:claude -->
+
+AIDA is **alpha-quality**. The strongest empirical evidence so far comes from this repository's own multi-agent dogfood on 2026-05-22, where three different coding agents (Claude Code, Codex CLI, Antigravity CLI) coordinated on this project via AIDA's MCP server. In a single 24-hour window:
+
+- 30+ PRs merged through the autonomy keystone plus manual recovery flows.
+- Each agent surfaced bugs in shared substrate that the others missed.
+- Reliability fixes (auto-clean dormant leases, programmatic queue-done gate, structured-disable for headless AskUserQuestion, transient-error retry layer) shipped *through the system they fix* — dogfood-merge as validation primitive.
+- The substrate (spec graph, leases, findings, punts, directives) held under concurrent multi-agent operation without state corruption.
+
+**Proven on this project:**
+
+- Multi-agent coordination via MCP works — three agents, no SaaS, no cross-agent state corruption.
+- Spec graph survives refactors, renames, and multi-author commits across months.
+- Recovery flows close the known failure modes (orphan leases, missed PRs, transient API errors, worktree-merge friction).
+- Substrate holds under unattended overnight drains — measured ~75-85% per-spec success rate, with all failures recoverable in a few mechanical commands.
+- AI-assisted code is auditable — every line traces to a spec, every commit names what it implements.
+
+**Not yet proven (hypothesis):**
+
+- Scales to N developers on one project. Today's evidence is single-user multi-agent.
+- Production-stable unattended runs. The ~15-25% per-spec recoverable-failure rate is fine with discipline; it's not "set it and forget it" yet.
+- Throughput-vs-reliability tradeoff is net-positive vs a human-only baseline. We don't measure this rigorously yet.
+- Agent-agnostic positioning works across agents we haven't tested. Verified: Claude Code, Codex CLI, Antigravity CLI. Untested: Cursor, Continue, others.
+- Value sustains across project domains. One project (this AI-tooling repo) is the empirical sample.
+
+**Skeptical of AI reasoning?** AIDA's value doesn't require LLMs to reason from first principles. The substrate makes AI-assisted code *auditable*: every line points back to a spec, every commit names what it implements, every spec has a verifiable status. If you treat LLMs as competent pattern-matchers within bounded scope, the substrate is the audit trail that makes the pattern-matching verifiable.
+
+**The honest pitch:** AIDA is worth the overhead when value compounds — multiple agents, multiple sessions, cross-month continuity, multi-developer handoffs. It is plausibly *not* worth the overhead for a solo developer on one-off work with no agents involved. The substrate scales sub-linearly with project size and super-linearly with concurrent collaborators (human or AI).
+
 ## Spec lifecycle
 
 <!-- trace:TASK-273 | ai:claude -->
@@ -54,9 +85,9 @@ Every spec in AIDA travels the same path, from "filed an idea" to "users have it
    └────┬────┘
         │   aida queue work SPEC   → spawns a Claude session in a fresh worktree
         ▼
-   ┌─────────────┐                ┌────────────────┐
+   ┌─────────────┐                ┌─────────────────┐
    │ In Progress │ ──aida punt──► │ Needs Attention │  paused — an agent
-   └──────┬──────┘                └────────────────┘  punted a design-fork
+   └──────┬──────┘                └─────────────────┘  punted a design-fork
           │   /aida-pr   → push branch + open PR        it couldn't resolve;
           ▼                                             awaits triage
    ┌────────┐
@@ -288,15 +319,15 @@ Concretely, `--auto-complete` is a process tree — the orchestrator process spa
 ```
    $ aida queue work SPEC --auto-complete       ← orchestrator process (your terminal)
    │
-   ├─▶ Phase 1: spawn implementer Claude  ─────►  [Claude session — implements SPEC,
-   │   (waits for it to exit)                     runs /aida-pr, exits]
-   │◀──── detects exit ────────────────────────────────────────────────────────────┘
+   ├─▶ Phase 1: spawn implementer Claude  ─────►  [Claude session — implements SPEC, ─┐
+   │   (waits for it to exit)                     runs /aida-pr, exits]               │
+   │◀──── detects exit ───────────────────────────────────────────────────────────────┘
    │
    ├─▶ Phase 2: end session + wait for CI       (deterministic — no Claude session)
    │
-   ├─▶ Phase 3: spawn reviewer Claude  ────────►  [Claude session — reviews PR,
-   │   (waits for it to exit)                     writes verdict, exits]
-   │◀──── detects exit ────────────────────────────────────────────────────────────┘
+   ├─▶ Phase 3: spawn reviewer Claude  ────────►  [Claude session — reviews PR,  ─────┐
+   │   (waits for it to exit)                     writes verdict, exits]              │
+   │◀──── detects exit ───────────────────────────────────────────────────────────────┘
    │
    ├─▶ Phase 4: gh pr merge                     (deterministic)
    ├─▶ Phase 5: aida pull + auto-bump           (deterministic)
