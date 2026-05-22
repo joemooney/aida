@@ -10,12 +10,12 @@ description: |-
   3. Worktree-Isolation Symlink: Symlinking `.aida-store` remains necessary to enable native git-canonical store detection in sibling worktrees (tracked under BUG-331).
 
   Graduation Readiness: Antigravity has achieved 100% completion of STORY-407 across all three phases. We are fully ready for graduation from Experimental to Verified tier per STORY-408.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:42:29.765989378Z
-modified_at: 2026-05-22T18:42:29.765989378Z
+modified_at: 2026-05-22T18:42:37.160253276Z
 req_type: Task
 tags:
 - from-implementer:STORY-407
