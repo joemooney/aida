@@ -1,0 +1,166 @@
+# Codex MCP Setup for AIDA
+
+Status: empirical setup from STORY-398 on 2026-05-22.
+
+This document records the working local setup for connecting Codex CLI to AIDA's MCP server. It supersedes the Codex-specific placeholder in `docs/agents/cross-agent-onboarding.md`.
+
+## Preconditions
+
+- `aida` is installed and available on `PATH`, or you can substitute an absolute path to the binary.
+- The target repository has been initialized with AIDA and contains `.aida/`.
+- Codex CLI is installed.
+- The Codex session is started from the AIDA project root, or with `codex --cd /path/to/project`, so `aida mcp-serve` can discover the correct project.
+
+Verified local Codex command surface:
+
+```bash
+codex mcp add --help
+codex mcp list
+```
+
+The relevant Codex command shape is:
+
+```bash
+codex mcp add <name> -- <command>...
+```
+
+## Register AIDA as a Codex MCP Server
+
+From the AIDA project root:
+
+```bash
+codex mcp add aida -- aida mcp-serve
+```
+
+If `aida` is not on `PATH`, use the absolute binary:
+
+```bash
+codex mcp add aida -- /absolute/path/to/aida mcp-serve
+```
+
+Check registration:
+
+```bash
+codex mcp list
+```
+
+Expected shape:
+
+```text
+Name  Command  Args       Env  Cwd  Status   Auth
+aida  aida     mcp-serve  -    -    enabled  Unsupported
+```
+
+`Auth: Unsupported` is expected for this local stdio setup. There is no HTTP server or bearer token in the current local-machine transport.
+
+## Start Codex in the Project
+
+Use one of:
+
+```bash
+cd /path/to/aida-project
+codex
+```
+
+or:
+
+```bash
+codex --cd /path/to/aida-project
+```
+
+The MCP server is launched by Codex over stdio. You do not need to run `aida mcp-serve` in a separate terminal for the Codex integration. Running it manually is still useful for debugging JSON-RPC framing or the black-box stdio tests.
+
+## Verify Tool Discovery
+
+Inside a Codex session with the MCP server connected, the AIDA tools are exposed as MCP tools. In this environment they were available under the `mcp__aida__` namespace.
+
+The expected tool count is 21:
+
+- Spec graph: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`.
+- Punt channel: `list_punts`, `read_punt`, `post_punt`, `resolve_punt`, `escalate_punt`.
+- Findings channel: `list_findings`, `file_finding`, `triage_finding`.
+- Task claims: `claim_task`, `release_task`, `list_active_leases`.
+- Worker directives: `post_directive`, `list_directives`, `ack_directive`.
+
+The canonical argument names are the names advertised by MCP `tools/list`. If a document disagrees with `tools/list`, trust `tools/list` and file a doc-drift finding.
+
+## Validate From the Shell
+
+AIDA has a black-box stdio compatibility suite that launches `aida mcp-serve` and speaks JSON-RPC like Codex does:
+
+```bash
+tests/test_mcp_stdio.sh --skip-agent-contract
+```
+
+Expected result on 2026-05-22:
+
+```text
+TEST initialize ... ok
+TEST tools/list descriptors ... ok
+TEST CLI-created spec visible through MCP ... ok
+TEST MCP-created spec visible through CLI ... ok
+TEST spec graph round trips ... ok
+TEST coordination tools round trips ... ok
+TEST findings round trip ... ok
+PASS MCP stdio compatibility suite
+```
+
+The doc consistency gate should also pass:
+
+```bash
+tests/test_mcp_doc_consistency.sh
+```
+
+Expected result:
+
+```text
+TEST parse docs/agents/cross-agent-onboarding.md ... ok (21 tools mentioned)
+TEST start aida mcp-serve in scratch project ... ok
+TEST tools/list ... ok (21 tools advertised)
+TEST doc-vs-MCP consistency ... ok
+PASS doc-vs-MCP consistency
+```
+
+## Response Shape
+
+Current AIDA MCP responses are Path A:
+
+- Tools advertise `inputSchema`.
+- Tools advertise `outputSchema`.
+- Runtime tool results return MCP text content envelopes: `content: [{type: "text", text: "..."}]`.
+- Runtime tool results do not yet emit `structuredContent`.
+
+Strict structured-output validation is expected to fail until STORY-399 ships:
+
+```bash
+tests/test_mcp_stdio.sh --skip-agent-contract --require-structured-content
+```
+
+Observed failure:
+
+```text
+FAIL show_requirement missing structuredContent in strict mode
+```
+
+## Operational Expectations for Codex
+
+Use MCP for AIDA substrate operations instead of shelling out when the tool exists. Shell commands are still appropriate for build/test/git work and for independent verification.
+
+Recommended pattern:
+
+- Read via MCP first: `show_requirement`, `list_requirements`, `list_active_leases`, `list_findings`.
+- Write via MCP when coordinating: `post_punt`, `file_finding`, `claim_task`, `post_directive`.
+- Verify cross-surface state with CLI when testing the substrate: MCP write, then CLI read.
+- Parse tool output defensively. Error and success bodies are human-readable text envelopes today.
+- Avoid concurrent claims on the same spec until TASK-438 closes the `claim_task` TOCTOU race.
+- Punt design forks instead of guessing. Use `post_punt` when a spec is ambiguous and `file_finding` for rough edges.
+
+## Current Known Constraints
+
+- `structuredContent` is not emitted yet. STORY-399 tracks Path B.
+- Error bodies are text-first rather than structured error objects. STORY-401 tracks richer error shape.
+- `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
+- Cross-machine MCP and auth are out of scope for this local stdio setup.
+- Project-local automatic Codex registration is not scaffolded by `aida init` yet. Manual `codex mcp add aida -- aida mcp-serve` is the working path.
+
+trace:STORY-398 | ai:codex
