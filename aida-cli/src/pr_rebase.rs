@@ -237,6 +237,113 @@ pub enum ConflictPrediction {
     Unknown,
 }
 
+/// Pre-flight verdict produced before launching a headless reviewer
+/// against a PR (STORY-281). The orchestrator's phase 3 entry point and
+/// the direct `aida queue work PR-N --for reviewer` path both call
+/// [`classify_stale_base`] over the same inputs `--check` already
+/// computes; the variant decides whether reviewer launch is silent
+/// (Current), warning-only (StaleNoOverlap), or refused
+/// (StaleOverlap).
+///
+/// Reading reviewer code against a stale base is the failure mode the
+/// 2026-05-17 self-test surfaced: PR-65 sat unrebased while two PRs
+/// merged in the interim, one of them touching the same file. With no
+/// overlap, the review is suboptimal but safe — a textual rebase will
+/// land clean at merge time. With overlap, the review is against the
+/// wrong version of the code and the conflict may not show up until
+/// merge.
+/// trace:STORY-281 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StaleBaseOutcome {
+    /// origin/<base> has not moved since the PR forked — silent proceed.
+    Current,
+    /// origin/<base> has moved but no file the PR touches has been
+    /// modified on the base — review-against-stale is suboptimal but
+    /// safe to proceed with a warning. `behind` is the commit count.
+    StaleNoOverlap { behind: u32 },
+    /// origin/<base> has moved AND at least one file the PR touches has
+    /// also been modified on the base since the PR forked — reviewer
+    /// launch is refused unless `--allow-stale-base` is passed. The
+    /// prediction surfaces whether `git merge-tree` predicts a literal
+    /// conflict; either way, the human-attention threshold is met.
+    StaleOverlap {
+        behind: u32,
+        overlap_files: Vec<String>,
+        prediction: ConflictPrediction,
+    },
+}
+
+/// Pure classifier: given the same inputs `pr_rebase_check_report`
+/// derives (behind-count, PR-touched files, base-touched-since-fork
+/// files, merge-tree prediction), pick the [`StaleBaseOutcome`] for
+/// the reviewer pre-flight. trace:STORY-281 | ai:claude
+pub fn classify_stale_base(
+    behind: u32,
+    pr_files: &[String],
+    base_files: &[String],
+    prediction: ConflictPrediction,
+) -> StaleBaseOutcome {
+    if behind == 0 {
+        return StaleBaseOutcome::Current;
+    }
+    let pr_set: std::collections::HashSet<&String> = pr_files.iter().collect();
+    let overlap: Vec<String> = base_files
+        .iter()
+        .filter(|f| pr_set.contains(*f))
+        .cloned()
+        .collect();
+    if overlap.is_empty() {
+        StaleBaseOutcome::StaleNoOverlap { behind }
+    } else {
+        StaleBaseOutcome::StaleOverlap {
+            behind,
+            overlap_files: overlap,
+            prediction,
+        }
+    }
+}
+
+/// Format the user-facing "reviewer refused — stale base + overlap"
+/// message for [`StaleBaseOutcome::StaleOverlap`]. Pulled out so the
+/// text is pinned by unit tests — first-users see this string and it
+/// must name the conflicting files and the exact recovery command.
+/// trace:STORY-281 | ai:claude
+pub fn stale_base_block_message(n: u64, behind: u32, overlap: &[String]) -> String {
+    let mut msg = format!(
+        "PR-{n} base is {behind} commit{plural} behind origin and overlaps {count} \
+         file{file_plural} touched on base since the PR forked — refusing to launch \
+         reviewer against stale code.\n\n",
+        plural = if behind == 1 { "" } else { "s" },
+        count = overlap.len(),
+        file_plural = if overlap.len() == 1 { "" } else { "s" },
+    );
+    msg.push_str("Overlapping files:\n");
+    for f in overlap.iter().take(10) {
+        msg.push_str(&format!("  {f}\n"));
+    }
+    if overlap.len() > 10 {
+        msg.push_str(&format!("  … and {} more\n", overlap.len() - 10));
+    }
+    msg.push('\n');
+    msg.push_str(&format!(
+        "Recover with:\n  aida pr rebase {n}              # clean rebase + force-push-with-lease\n  \
+         aida pr rebase {n} --interactive  # if conflicts need manual resolve\n\n\
+         Or pass `--allow-stale-base` to proceed anyway (review will be against stale code)."
+    ));
+    msg
+}
+
+/// Format the warning printed for [`StaleBaseOutcome::StaleNoOverlap`].
+/// Same pinning rationale as [`stale_base_block_message`].
+/// trace:STORY-281 | ai:claude
+pub fn stale_base_warn_message(n: u64, behind: u32) -> String {
+    format!(
+        "PR-{n} base is {behind} commit{plural} behind origin (no file overlap) — \
+         proceeding with reviewer; consider `aida pr rebase {n}` before merge.",
+        plural = if behind == 1 { "" } else { "s" },
+    )
+}
+
 /// Parse the stdout from `git merge-tree --write-tree --name-only
 /// <base> <head>`. On a clean merge, stdout is the resulting tree's
 /// SHA on a single line. On a conflict, merge-tree exits non-zero
@@ -558,6 +665,116 @@ enforcement = "warn"
             files,
             stdout
         );
+    }
+
+    // --- STORY-281: stale-base classifier + message formatters ---
+
+    fn s(v: &[&str]) -> Vec<String> {
+        v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn classify_stale_base_current_when_behind_zero() {
+        let out = classify_stale_base(
+            0,
+            &s(&["src/a.rs"]),
+            &s(&["src/a.rs"]), // overlap doesn't matter when behind == 0
+            ConflictPrediction::Clean,
+        );
+        assert_eq!(out, StaleBaseOutcome::Current);
+    }
+
+    #[test]
+    fn classify_stale_base_no_overlap() {
+        let out = classify_stale_base(
+            3,
+            &s(&["src/a.rs", "src/b.rs"]),
+            &s(&["docs/c.md", "src/d.rs"]),
+            ConflictPrediction::Clean,
+        );
+        assert_eq!(out, StaleBaseOutcome::StaleNoOverlap { behind: 3 });
+    }
+
+    #[test]
+    fn classify_stale_base_with_overlap() {
+        let out = classify_stale_base(
+            2,
+            &s(&["src/a.rs", "src/b.rs"]),
+            &s(&["src/b.rs", "src/c.rs"]),
+            ConflictPrediction::Clean,
+        );
+        match out {
+            StaleBaseOutcome::StaleOverlap {
+                behind,
+                overlap_files,
+                prediction,
+            } => {
+                assert_eq!(behind, 2);
+                assert_eq!(overlap_files, vec!["src/b.rs".to_string()]);
+                assert_eq!(prediction, ConflictPrediction::Clean);
+            }
+            other => panic!("expected StaleOverlap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn classify_stale_base_overlap_carries_conflict_prediction() {
+        let out = classify_stale_base(
+            1,
+            &s(&["src/a.rs"]),
+            &s(&["src/a.rs"]),
+            ConflictPrediction::Conflicting {
+                files: vec!["src/a.rs".to_string()],
+            },
+        );
+        match out {
+            StaleBaseOutcome::StaleOverlap { prediction, .. } => {
+                assert_eq!(
+                    prediction,
+                    ConflictPrediction::Conflicting {
+                        files: vec!["src/a.rs".to_string()],
+                    }
+                );
+            }
+            other => panic!("expected StaleOverlap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stale_base_block_message_names_pr_and_files() {
+        let msg = stale_base_block_message(65, 2, &s(&["aida-cli/src/session.rs"]));
+        assert!(msg.contains("PR-65"), "{msg}");
+        assert!(msg.contains("2 commits behind"), "{msg}");
+        assert!(msg.contains("aida-cli/src/session.rs"), "{msg}");
+        assert!(msg.contains("aida pr rebase 65"), "{msg}");
+        assert!(msg.contains("--allow-stale-base"), "{msg}");
+    }
+
+    #[test]
+    fn stale_base_block_message_singular_behind() {
+        let msg = stale_base_block_message(1, 1, &s(&["a.rs"]));
+        assert!(msg.contains("1 commit behind"), "{msg}");
+        // No plural "s" after "commit".
+        assert!(!msg.contains("1 commits behind"), "{msg}");
+    }
+
+    #[test]
+    fn stale_base_block_message_truncates_long_overlap() {
+        let many: Vec<String> = (0..15).map(|i| format!("file-{i}.rs")).collect();
+        let msg = stale_base_block_message(1, 1, &many);
+        assert!(msg.contains("file-0.rs"), "{msg}");
+        assert!(msg.contains("file-9.rs"), "{msg}");
+        assert!(!msg.contains("file-10.rs"), "{msg}");
+        assert!(msg.contains("and 5 more"), "{msg}");
+    }
+
+    #[test]
+    fn stale_base_warn_message_proceeds() {
+        let msg = stale_base_warn_message(42, 3);
+        assert!(msg.contains("PR-42"), "{msg}");
+        assert!(msg.contains("3 commits behind"), "{msg}");
+        assert!(msg.contains("proceeding with reviewer"), "{msg}");
+        assert!(msg.contains("aida pr rebase 42"), "{msg}");
     }
 
     /// Integration test: a clean rebase scenario — same temp-repo
