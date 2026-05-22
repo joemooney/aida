@@ -1552,14 +1552,33 @@ pub fn tool_descriptors() -> Value {
         // ---- Spec graph (original 7) ----
         {
             "name": "list_requirements",
-            "description": "List requirements from the AIDA database, optionally filtered by status, type, or feature",
+            "description": "List requirements from the AIDA database, optionally filtered by status, type, or feature category. Returns a summarized list of matching requirements.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "status": { "type": "string", "description": "Filter by status: draft, approved, planned, in-progress, needs-attention, done, completed, rejected" },
-                    "type": { "type": "string", "description": "Filter by type: functional, non-functional, system, user, bug, epic, story, task, spike, sprint" },
-                    "feature": { "type": "string", "description": "Filter by feature category" },
-                    "limit": { "type": "integer", "description": "Maximum number of results (default: 50)" }
+                    "status": {
+                        "type": "string",
+                        "description": "Filter by the current status of the requirement.",
+                        "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected"],
+                        "example": "in-progress"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Filter by the semantic type of the requirement.",
+                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint"],
+                        "example": "story"
+                    },
+                    "feature": {
+                        "type": "string",
+                        "description": "Filter by feature category name (e.g., auth, backend).",
+                        "example": "auth"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (must be at least 1).",
+                        "minimum": 1,
+                        "example": 10
+                    }
                 }
             },
             "outputSchema": text_envelope_output_schema(
@@ -1568,11 +1587,16 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "show_requirement",
-            "description": "Show full details of a specific requirement by its SPEC-ID (e.g., FR-0042)",
+            "description": "Retrieve and display the full markdown details of a specific requirement (description, relationships, comments) by its unique SPEC-ID.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "id": { "type": "string", "description": "The SPEC-ID of the requirement (e.g., FR-0042)" }
+                    "id": {
+                        "type": "string",
+                        "description": "The unique SPEC-ID of the requirement (e.g., FR-0042). Must follow the canonical spec format.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    }
                 },
                 "required": ["id"]
             },
@@ -1582,16 +1606,44 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "add_requirement",
-            "description": "Add a new requirement to the AIDA database",
+            "description": "Create and add a new requirement to the AIDA database. Generates a new canonical SPEC-ID automatically based on the type.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "title": { "type": "string", "description": "Title of the requirement" },
-                    "description": { "type": "string", "description": "Detailed description" },
-                    "type": { "type": "string", "description": "Required requirement type. Valid types: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc. The assigned SPEC-ID prefix is auto-normalized from this type." },
-                    "status": { "type": "string", "description": "Status: draft, approved, planned, in-progress, done, completed, rejected" },
-                    "priority": { "type": "string", "description": "Priority: high, medium, low" },
-                    "tags": { "type": "array", "items": { "type": "string" }, "description": "Tags to attach to the requirement" }
+                    "title": {
+                        "type": "string",
+                        "description": "Short, descriptive title of the requirement.",
+                        "example": "Implement OAuth2 login flow"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed description of the requirement including goals, constraints, and checklist.",
+                        "example": "Implement Google and GitHub OAuth2 sign-in capabilities per SEC-101 specifications."
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Required requirement type. Valid types: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc. Normalizes the assigned SPEC-ID prefix (e.g., 'task' becomes 'TASK-N').",
+                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "example": "story"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Initial status of the requirement.",
+                        "enum": ["draft", "approved", "planned", "in-progress", "done", "completed", "rejected"],
+                        "example": "draft"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "Urgency or priority level.",
+                        "enum": ["high", "medium", "low"],
+                        "example": "medium"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional list of tags to categorize this requirement.",
+                        "example": ["auth", "security"]
+                    }
                 },
                 "required": ["title", "description", "type"]
             },
@@ -1601,13 +1653,27 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "update_requirement",
-            "description": "Update an existing requirement's status or description",
+            "description": "Update specific fields (status, description) of an existing requirement. Fields omitted from parameters remain unchanged.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "id": { "type": "string", "description": "The SPEC-ID of the requirement" },
-                    "status": { "type": "string", "description": "New status" },
-                    "description": { "type": "string", "description": "New description" }
+                    "id": {
+                        "type": "string",
+                        "description": "The unique SPEC-ID of the requirement to update.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "New status to transition the requirement into.",
+                        "enum": ["draft", "approved", "planned", "in-progress", "done", "completed", "rejected", "needs-attention"],
+                        "example": "in-progress"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Updated detailed description of the requirement.",
+                        "example": "Updated detailed implementation checklist for the login interface."
+                    }
                 },
                 "required": ["id"]
             },
@@ -1617,11 +1683,15 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "search_requirements",
-            "description": "Search requirements by keyword (searches titles and descriptions)",
+            "description": "Perform a case-insensitive keyword search across requirement titles and descriptions in the database.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "Search query (case-insensitive)" }
+                    "query": {
+                        "type": "string",
+                        "description": "Case-insensitive query string to search for.",
+                        "example": "oauth2"
+                    }
                 },
                 "required": ["query"]
             },
@@ -1631,12 +1701,21 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "add_comment",
-            "description": "Add a comment to a requirement",
+            "description": "Append a comment to a requirement's audit trail, providing updates, context, or discussion notes.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "id": { "type": "string", "description": "The SPEC-ID of the requirement" },
-                    "text": { "type": "string", "description": "Comment text" }
+                    "id": {
+                        "type": "string",
+                        "description": "The unique SPEC-ID of the requirement to comment on.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "The text content of the comment to add.",
+                        "example": "Verified with the design team; OAuth2 client secrets will be fetched from Secrets Manager."
+                    }
                 },
                 "required": ["id", "text"]
             },
@@ -1646,7 +1725,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "list_features",
-            "description": "List all feature categories in the project",
+            "description": "List all active feature categories defined in the project, displaying their names and normalized prefixes.",
             "inputSchema": { "type": "object", "properties": {} },
             "outputSchema": text_envelope_output_schema(
                 "either `Features (N):` followed by `- <name> (prefix: <prefix>)` lines, or `No features defined in this project.` when empty."
@@ -1656,11 +1735,16 @@ pub fn tool_descriptors() -> Value {
         // ---- Punt channel (.aida/punts.jsonl + .aida/punts/) ----
         {
             "name": "list_punts",
-            "description": "List punt records from .aida/punts.jsonl. Optional status filter (`awaiting`, `advisor-resolved`, `escalated-to-human`, `escalate-defaulted`).",
+            "description": "List existing punt obstacles recorded in `.aida/punts.jsonl`, optionally filtered by resolution status.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "status": { "type": "string", "description": "Filter on resolution_path; 'awaiting' = still 'punted'" }
+                    "status": {
+                        "type": "string",
+                        "description": "Filter on resolution_path status. 'awaiting' represents unresolved/active obstacles.",
+                        "enum": ["awaiting", "advisor-resolved", "escalated-to-human", "escalate-defaulted"],
+                        "example": "awaiting"
+                    }
                 }
             },
             "outputSchema": text_envelope_output_schema(
@@ -1669,11 +1753,16 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "read_punt",
-            "description": "Read the most recent punt record for a given spec from .aida/punts.jsonl (returns JSON).",
+            "description": "Read the full historical details and response data of the most recent punt filed for a specific spec.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "spec_id": { "type": "string", "description": "Display ID of the punted spec" }
+                    "spec_id": {
+                        "type": "string",
+                        "description": "The SPEC-ID of the punted requirement.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    }
                 },
                 "required": ["spec_id"]
             },
@@ -1683,15 +1772,37 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "post_punt",
-            "description": "Append a punt record to .aida/punts.jsonl (does not modify spec status — pair with `update_requirement status=needs-attention` from a session lease).",
+            "description": "Append an unresolved obstacle or decision fork (punt) for a spec to `.aida/punts.jsonl` to seek advice or escalate. (Does not modify spec status — pair with `update_requirement status=needs-attention`).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "spec_id": { "type": "string" },
-                    "detail": { "type": "string", "description": "Human-readable description of the obstacle" },
-                    "category": { "type": "string", "description": "design-fork | ambiguous-spec | missing-context | blocked-dependency | other" },
-                    "lean": { "type": "string", "description": "Best guess if forced to choose" },
-                    "raised_by": { "type": "string", "description": "Role/agent that raised the punt (defaults to 'mcp')" }
+                    "spec_id": {
+                        "type": "string",
+                        "description": "The unique SPEC-ID of the requirement facing the obstacle.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    },
+                    "detail": {
+                        "type": "string",
+                        "description": "Detailed human-readable description of the obstacle or design fork.",
+                        "example": "The downstream service API has updated its rate limits from 100/min to 10/min, breaking our batch ingest assumption."
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "The class of obstacle being encountered.",
+                        "enum": ["design-fork", "ambiguous-spec", "missing-context", "blocked-dependency", "other"],
+                        "example": "blocked-dependency"
+                    },
+                    "lean": {
+                        "type": "string",
+                        "description": "The sender's preferred resolution or best-guess path forward.",
+                        "example": "Wait for the downstream service to lift limits or switch to a queue"
+                    },
+                    "raised_by": {
+                        "type": "string",
+                        "description": "Identify the role/agent raising this punt (e.g., implementer, reviewer).",
+                        "example": "implementer"
+                    }
                 },
                 "required": ["spec_id", "detail"]
             },
@@ -1701,14 +1812,32 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "resolve_punt",
-            "description": "Write a PuntResponse to .aida/punts/<spec>.response.json marking the fork resolved. The orchestrator will resume the implementer with this answer (advisor-tier protocol, STORY-306).",
+            "description": "Resolve a punt obstacle by writing a decision response to `.aida/punts/<spec>.response.json`, enabling resumed implementation.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "spec_id": { "type": "string" },
-                    "answer": { "type": "string", "description": "The chosen resolution to apply" },
-                    "reasoning": { "type": "string", "description": "Why this resolution; always required (audit trail)" },
-                    "classification": { "type": "string", "description": "A/B/C calibration class (recorded-principle / recorded-preference / synthesized)" }
+                    "spec_id": {
+                        "type": "string",
+                        "description": "The unique SPEC-ID of the requirement to resolve.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    },
+                    "answer": {
+                        "type": "string",
+                        "description": "The authoritative resolution or action chosen.",
+                        "example": "We will adopt the design fork A and implement Redis-based queue ingestion."
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Audit-trail explanation of why this resolution was chosen.",
+                        "example": "Design fork A ensures we stay within the 10/min API limit by smoothing spikes, avoiding data loss."
+                    },
+                    "classification": {
+                        "type": "string",
+                        "description": "How this decision is categorized.",
+                        "enum": ["recorded-principle", "recorded-preference", "synthesized"],
+                        "example": "synthesized"
+                    }
                 },
                 "required": ["spec_id", "answer", "reasoning"]
             },
@@ -1718,14 +1847,33 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "escalate_punt",
-            "description": "Write a PuntResponse to .aida/punts/<spec>.response.json marking the fork escalated to a human. The orchestrator will park the spec for triage (STORY-306).",
+            "description": "Mark a punt obstacle as requiring human intervention or strategic oversight, saving response to `.aida/punts/<spec>.response.json`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "spec_id": { "type": "string" },
-                    "reasoning": { "type": "string", "description": "Why a human is needed (always required)" },
-                    "escalation_reason": { "type": "string", "description": "Categorized reason: strategy | irreversible | unrecorded-context | ..." },
-                    "classification": { "type": "string" }
+                    "spec_id": {
+                        "type": "string",
+                        "description": "The unique SPEC-ID of the requirement being escalated.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Explanation of why this requires human triage.",
+                        "example": "Choosing between direct webhooks and queue polling impacts long-term infrastructure budget and ops complexity; requires architectural committee sign-off."
+                    },
+                    "escalation_reason": {
+                        "type": "string",
+                        "description": "Categorized reason for the escalation.",
+                        "enum": ["strategy", "irreversible", "unrecorded-context", "other"],
+                        "example": "strategy"
+                    },
+                    "classification": {
+                        "type": "string",
+                        "description": "How this escalated decision should be classified.",
+                        "enum": ["recorded-principle", "recorded-preference", "synthesized"],
+                        "example": "recorded-principle"
+                    }
                 },
                 "required": ["spec_id", "reasoning"]
             },
@@ -1737,13 +1885,28 @@ pub fn tool_descriptors() -> Value {
         // ---- Findings channel (draft requirements with from-* tags) ----
         {
             "name": "list_findings",
-            "description": "List findings filed by headless drain phases: 'review' (phase 3) or 'implementer' (phase 1). Returns the same triage view as `aida findings list`.",
+            "description": "List review findings and structural discrepancies filed by automated drain checks or manual implementers.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "pr": { "type": "integer", "description": "Narrow review findings to one PR number" },
-                    "source": { "type": "string", "description": "review | implementer" },
-                    "kind": { "type": "string", "description": "deviation | design-choice | bug-spotted | followup-suggestion (implementer findings only)" }
+                    "pr": {
+                        "type": "integer",
+                        "description": "Filter findings to those associated with a specific PR number.",
+                        "minimum": 1,
+                        "example": 203
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Filter findings by their authoring source.",
+                        "enum": ["review", "implementer"],
+                        "example": "review"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "description": "Filter by type/category of the finding.",
+                        "enum": ["deviation", "design-choice", "bug-spotted", "followup-suggestion"],
+                        "example": "deviation"
+                    }
                 }
             },
             "outputSchema": text_envelope_output_schema(
@@ -1752,17 +1915,50 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "file_finding",
-            "description": "File a finding as a draft TASK with the appropriate from-* / severity: / kind: tags. Source is 'implementer' (carries spec_id) or 'review' (carries pr number).",
+            "description": "File a new review finding as a draft TASK with appropriate tags, identifying deviations, bugs, or suggestions.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "title": { "type": "string" },
-                    "description": { "type": "string" },
-                    "source": { "type": "string", "description": "implementer | review (default: implementer)" },
-                    "spec_id": { "type": "string", "description": "Required when source=implementer" },
-                    "pr": { "type": "integer", "description": "Required when source=review" },
-                    "kind": { "type": "string", "description": "deviation | design-choice | bug-spotted | followup-suggestion" },
-                    "severity": { "type": "string", "description": "cosmetic | minor | major (default: minor)" }
+                    "title": {
+                        "type": "string",
+                        "description": "Short, descriptive title summarizing the finding.",
+                        "example": "Missing validation on OAuth callback state"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed explanation of the issue, impact, and suggested fix.",
+                        "example": "The callback handler does not check the state parameter, making it vulnerable to CSRF attacks."
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Origin phase/role filing the finding.",
+                        "enum": ["implementer", "review"],
+                        "example": "implementer"
+                    },
+                    "spec_id": {
+                        "type": "string",
+                        "description": "Associated requirement SPEC-ID (required when source is 'implementer').",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    },
+                    "pr": {
+                        "type": "integer",
+                        "description": "Associated PR number (required when source is 'review').",
+                        "minimum": 1,
+                        "example": 203
+                    },
+                    "kind": {
+                        "type": "string",
+                        "description": "The category of this finding.",
+                        "enum": ["deviation", "design-choice", "bug-spotted", "followup-suggestion"],
+                        "example": "bug-spotted"
+                    },
+                    "severity": {
+                        "type": "string",
+                        "description": "Triage severity level.",
+                        "enum": ["cosmetic", "minor", "major"],
+                        "example": "major"
+                    }
                 },
                 "required": ["title", "description"]
             },
@@ -1772,13 +1968,27 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "triage_finding",
-            "description": "Promote (status → Approved) or dismiss (status → Rejected) a finding, recording the reason as a comment.",
+            "description": "Triage a finding, either promoting it to an approved active task or dismissing it.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "id": { "type": "string", "description": "Finding SPEC-ID" },
-                    "action": { "type": "string", "description": "promote | dismiss" },
-                    "reason": { "type": "string", "description": "One-line rationale (recorded as a comment)" }
+                    "id": {
+                        "type": "string",
+                        "description": "The SPEC-ID of the finding to triage (typically a draft TASK-N).",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "TASK-123"
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "Promotion to active or dismissal.",
+                        "enum": ["promote", "dismiss"],
+                        "example": "promote"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "One-line rationale for the triage decision, recorded as a comment.",
+                        "example": "This is a critical security vulnerability and must be promoted to an approved task."
+                    }
                 },
                 "required": ["id", "action"]
             },
@@ -1790,12 +2000,22 @@ pub fn tool_descriptors() -> Value {
         // ---- Task-claim channel (.aida/sessions/*.toml) ----
         {
             "name": "claim_task",
-            "description": "Claim a spec by writing a lightweight lease to .aida/sessions/<id>.toml. Returns the lease_id, or 'already_claimed' if a lease already covers the spec. Does NOT create a worktree — for that, use `aida session start --owns <spec>` from a shell.",
+            "description": "Acquire a lightweight advisory lock (lease) on a specific spec in `.aida/sessions/<id>.toml`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "spec_id": { "type": "string", "description": "The SPEC-ID to claim" },
-                    "role": { "type": "string", "description": "Role taking the claim (default: implementer)" }
+                    "spec_id": {
+                        "type": "string",
+                        "description": "The unique SPEC-ID of the requirement to claim.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "FR-0042"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "The role claiming the requirement.",
+                        "enum": ["implementer", "advisor", "reviewer"],
+                        "example": "implementer"
+                    }
                 },
                 "required": ["spec_id"]
             },
@@ -1805,11 +2025,16 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "release_task",
-            "description": "Delete an MCP-created lease (mcp_claim=true) from .aida/sessions/. Refuses to delete real `aida session start` leases — for those use `aida session end <lease_id>`.",
+            "description": "Release and delete an MCP-created advisory lock (lease) from the database by its lease ID. Refuses to delete CLI-created sessions.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "lease_id": { "type": "string" }
+                    "lease_id": {
+                        "type": "string",
+                        "description": "The 12-character hex ID of the lease to release.",
+                        "pattern": "^[a-f0-9]{12}$",
+                        "example": "019e5170660c"
+                    }
                 },
                 "required": ["lease_id"]
             },
@@ -1819,7 +2044,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "list_active_leases",
-            "description": "List every active lease in .aida/sessions/ — both real `aida session start` leases and MCP claim_task leases.",
+            "description": "List all active spec leases (both CLI-created and MCP-created sessions) in `.aida/sessions/`.",
             "inputSchema": { "type": "object", "properties": {} },
             "outputSchema": text_envelope_output_schema(
                 "either `Found N active lease(s):` followed by `- <id> scope=<SPEC-ID> role=<role> owner=<owner> kind=<mcp|session> started_at=<RFC3339 timestamp>` rows, or `No active leases.` when none exist."
@@ -1829,12 +2054,22 @@ pub fn tool_descriptors() -> Value {
         // ---- Worker-directive channel (.aida/worker.cmd) ----
         {
             "name": "post_directive",
-            "description": "Append a directive to .aida/worker.cmd. Verbs: drain (with optional args forwarded to `aida queue work`), pause, exit.",
+            "description": "Submit a command directive (drain, pause, exit) to `.aida/worker.cmd` for background worker orchestration.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "verb": { "type": "string", "description": "drain | pause | exit" },
-                    "args": { "type": "array", "items": { "type": "string" }, "description": "Args forwarded to `aida queue work` for drain directives" }
+                    "verb": {
+                        "type": "string",
+                        "description": "The directive command verb.",
+                        "enum": ["drain", "pause", "exit"],
+                        "example": "drain"
+                    },
+                    "args": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional CLI arguments to forward to `aida queue work` (only valid for 'drain' verb).",
+                        "example": ["--only-failed"]
+                    }
                 },
                 "required": ["verb"]
             },
@@ -1844,7 +2079,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "list_directives",
-            "description": "List pending directives in .aida/worker.cmd (the same view as `aida worker directives`).",
+            "description": "List all pending worker directives registered in `.aida/worker.cmd`.",
             "inputSchema": { "type": "object", "properties": {} },
             "outputSchema": text_envelope_output_schema(
                 "the same human-rendered directive list as `aida worker directives` — one line per pending directive (verb plus any forwarded args), or an empty/empty-state rendering when .aida/worker.cmd has no pending directives."
@@ -1852,11 +2087,16 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "ack_directive",
-            "description": "Remove a directive from .aida/worker.cmd by its 0-based index (matching the `list_directives` order). Use this after acting on the directive — the worker's natural flow `pops` directives on completion.",
+            "description": "Acknowledge and remove a pending directive from `.aida/worker.cmd` by its 0-based index.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "index": { "type": "integer", "description": "0-based index of the directive to ack" }
+                    "index": {
+                        "type": "integer",
+                        "description": "The 0-based index of the directive in the current list to acknowledge and remove.",
+                        "minimum": 0,
+                        "example": 0
+                    }
                 },
                 "required": ["index"]
             },
@@ -2062,6 +2302,52 @@ mod tests {
                 "tool '{}' outputSchema must declare a `content` property (Path A — text envelope wraps every response)",
                 name
             );
+        }
+    }
+
+    #[test]
+    fn every_tool_parameter_has_examples_patterns_or_enums() {
+        let desc = tool_descriptors();
+        let arr = desc.as_array().expect("tool_descriptors must be an array");
+
+        for tool in arr {
+            let tool_name = tool
+                .get("name")
+                .and_then(|n| n.as_str())
+                .expect("each tool descriptor must have a name");
+
+            let properties = tool
+                .pointer("/inputSchema/properties")
+                .and_then(|v| v.as_object());
+
+            if let Some(props) = properties {
+                for (param_name, param_val) in props {
+                    let param_obj = param_val.as_object().unwrap_or_else(|| {
+                        panic!(
+                            "tool '{}' parameter '{}' is not a JSON object",
+                            tool_name, param_name
+                        )
+                    });
+
+                    let has_example = param_obj.contains_key("example");
+                    let has_enum = param_obj.contains_key("enum");
+                    let has_pattern = param_obj.contains_key("pattern");
+                    let has_minimum = param_obj.contains_key("minimum");
+
+                    assert!(
+                        has_example || has_enum || has_pattern || has_minimum,
+                        "tool '{}' parameter '{}' must have an 'example', 'enum', 'pattern', or 'minimum' field",
+                        tool_name,
+                        param_name
+                    );
+
+                    assert!(
+                        has_example,
+                        "tool '{}' parameter '{}' is missing the 'example' field",
+                        tool_name, param_name
+                    );
+                }
+            }
         }
     }
 
