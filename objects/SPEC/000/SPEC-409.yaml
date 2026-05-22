@@ -2,12 +2,12 @@ id: 019e5128-0407-7353-b9b4-146c86e7bd74
 spec_id: SPEC-409
 title: Mainline aida-cli suite fails on stale discipline pack scaffold count
 description: 'While verifying BUG-332, `cargo test -p aida-cli --quiet` failed on current main in `story_255_discipline_pack_tests::discipline_pack_scaffolds_five_docs_plus_readme`: the test expects README + 5 docs (`written == 6`), but the template pack currently contains README + 6 docs including `skill-prompt-kinds.md` (`written == 7`). This appears unrelated to BUG-332 but will keep full package verification red until the test expectation is updated or the template set is clarified.'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T19:27:17.511575840Z
-modified_at: 2026-05-22T19:37:59.577243436Z
+modified_at: 2026-05-22T19:38:01.169283032Z
 req_type: Task
 tags:
 - from-implementer:BUG-332
