@@ -1,0 +1,36 @@
+id: 019e5164-4c1e-72e2-b113-c72766b93ff3
+spec_id: TASK-472
+agreed_id: TASK-472
+title: 'Clarify in cross-agent-onboarding.md: file_finding is for triageable bugs/tasks, NOT session checkpoints'
+description: |-
+  Empirical pattern observed today: Antigravity used `file_finding` MCP tool as a phase-completion journal during STORY-407's 3-phase verification. Filed 4 'findings' (SPEC-399, SPEC-401, SPEC-403, SPEC-404) where:
+  - SPEC-399: 'Antigravity Phase 1 Verification and Setup Complete' (status report)
+  - SPEC-404: 'Antigravity Phase 2 Outcome: Clean-with-Conditions' (status report)
+  - SPEC-401 / SPEC-403: identical title 'schema discovery worked but tool descriptions could benefit from more detail' (real feedback, but duplicated)
+
+  Three of four dismissed as not-real-findings + one duplicate. The non-Claude-Code agent inferred from MCP tool descriptions that file_finding was a journal verb.
+
+  The fix is doc-only: update `docs/agents/cross-agent-onboarding.md` Cluster 2 / Findings channel section to clarify:
+
+  1. `file_finding` is for **triageable items** — bugs/tasks the project should act on
+  2. NOT for: phase-completion checkpoints, session journals, intermediate status
+  3. For checkpoints / session journals, use:
+     - `aida session manifest` (per-session brief)
+     - `add_comment` on the spec being worked
+     - Local agent-side notes (walkthrough.md, etc.)
+  4. Add example: 'good finding: 'TOCTOU race in claim_task'. bad finding: 'Phase 1 complete''
+
+  Composes with: docs/agents/cross-agent-onboarding.md (the canonical agent onboarding doc Codex + Antigravity read)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:33:08.126462330Z
+modified_at: 2026-05-22T20:33:08.126462330Z
+req_type: Task
+tags:
+- cross-agent-onboarding
+- docs
+- from-implementer:STORY-407
+- from-self-test
+- mcp
