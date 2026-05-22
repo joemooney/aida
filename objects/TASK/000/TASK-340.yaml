@@ -58,12 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T02:32:59.072455559Z
-modified_at: 2026-05-19T02:32:59.072455559Z
+modified_at: 2026-05-22T22:45:32.533011569Z
 req_type: Task
 tags:
-- autonomy-metric
-- drain
-- maturity
-- measurement
-- scaffolding-pack
-- telemetry
+- batch:demo-overnight-2026-05-22
