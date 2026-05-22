@@ -1,0 +1,26 @@
+id: 019e51ef-ada6-78f1-a545-36e88953d0f6
+spec_id: STORY-415
+agreed_id: STORY-415
+title: 'Review PR-210: [STORY-305] feat(scaffolding): per-project skill extensions via local/ + .local.md'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e51df`) for branch `story-305`.
+
+  - PR: <https://github.com/joemooney/aida/pull/210>
+  - Branch: `story-305` → `main`
+
+  ## Covers
+
+  - STORY-305
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 210` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:05:22.598193387Z
+modified_at: 2026-05-22T23:05:22.598193387Z
+req_type: Story
