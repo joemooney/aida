@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T07:36:28.836854407Z
-modified_at: 2026-05-22T07:36:28.836854407Z
+modified_at: 2026-05-22T07:36:38.206201083Z
 req_type: Task
 tags:
 - ci
@@ -28,3 +28,8 @@ tags:
 - gates-on:BUG-310
 - mcp
 - test
+relationships:
+- rel_type: Child
+  target_id: 019e4e6c-fd35-7852-ac94-4e704c74ae92
+  created_at: 2026-05-22T07:36:38.206193078Z
+  created_by: joe
