@@ -36,12 +36,12 @@ description: |-
   ## Origin
 
   User report 2026-05-22 ~05:00 — cleanup script (\`aida session leases --all | grep dormant | awk '{print $1}' | ...\`) hit the ambiguous-prefix error on two leases sharing 8-char prefix. Real friction even with proper UUIDs underneath.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:25:13.882415412Z
-modified_at: 2026-05-22T08:03:46.426266702Z
+modified_at: 2026-05-22T08:11:14.502548124Z
 req_type: Bug
 tags:
 - cli-ux
@@ -50,3 +50,7 @@ tags:
 - from-self-test
 - session-leases
 - uuid-prefix
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-22T08:11:14.502548124Z
+  implemented_by: joe
