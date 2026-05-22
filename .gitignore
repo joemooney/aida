@@ -18,6 +18,7 @@ release/
 .vscode/
 .idea/
 *.iml
+.worktrees/
 
 # OS
 .DS_Store
@@ -81,3 +82,4 @@ docker/.env
 !.aida/docker-compose.yml
 !.aida/docker-compose.dev.yml
 !.aida/setup.sh
+.antigravitycli/
