@@ -162,6 +162,16 @@ fn leases_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("sessions")
 }
 
+// trace:TASK-438 | ai:claude
+/// Filename a MCP `claim_task` lease writes to. Keyed by lower-cased spec_id
+/// so two concurrent claims on the same spec target the same path — letting
+/// `OpenOptions::create_new(true)` enforce single-winner semantics. Distinct
+/// from the `<lease_id>.toml` shape `aida session start` uses, so the two
+/// claim modes don't collide.
+fn mcp_claim_path(dir: &Path, spec_id: &str) -> PathBuf {
+    dir.join(format!("mcp-claim.{}.toml", spec_id.to_ascii_lowercase()))
+}
+
 fn list_leases(project_root: &Path) -> Vec<LightLease> {
     let dir = leases_dir(project_root);
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -1026,6 +1036,9 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .unwrap_or("implementer");
 
+        // First pass: surface non-MCP leases (e.g. `aida session start`) that
+        // cover this spec — those land at arbitrary filenames, so the
+        // create_new(true) atomic-create below can't see them.
         let leases = list_leases(&self.project_root);
         if let Some(existing) = leases
             .iter()
@@ -1059,9 +1072,36 @@ impl<'a> McpServer<'a> {
 
         let dir = leases_dir(&self.project_root);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let path = dir.join(format!("{}.toml", id));
+        // trace:TASK-438 | ai:claude
+        // Key the MCP claim file by spec_id (lower-cased) instead of lease_id,
+        // so two concurrent claim_task calls on the same spec target the same
+        // path. `create_new(true)` maps to O_EXCL|O_CREAT on POSIX and
+        // CREATE_NEW on Windows — atomically fails if the file already exists.
+        // That gives a single serialization point per spec, closing the TOCTOU
+        // window between the pre-scan above and the lease write.
+        let path = mcp_claim_path(&dir, spec_id_arg);
         let body = toml::to_string(&lease).map_err(|e| e.to_string())?;
-        write_atomic(&path, body.as_bytes()).map_err(|e| e.to_string())?;
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut f) => {
+                f.write_all(body.as_bytes()).map_err(|e| e.to_string())?;
+                f.sync_all().map_err(|e| e.to_string())?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Another claim_task call won the race. Read the existing
+                // lease so the response matches the pre-scan format.
+                let body = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+                let existing: LightLease = toml::from_str(&body).map_err(|e| e.to_string())?;
+                return Ok(format!(
+                    "already_claimed by {} (lease {} since {})",
+                    existing.owner, existing.id, existing.started_at
+                ));
+            }
+            Err(e) => return Err(e.to_string()),
+        }
 
         Ok(format!("claimed: lease_id={}", id))
     }
@@ -1072,23 +1112,44 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: lease_id")?;
 
-        let path = leases_dir(&self.project_root).join(format!("{}.toml", lease_id));
-        if !path.exists() {
-            return Err(format!("lease '{}' not found", lease_id));
+        // trace:TASK-438 | ai:claude
+        // Lease files are no longer named `<lease_id>.toml` — MCP claims live
+        // at `mcp-claim.<spec>.toml`, and session-start leases use their own
+        // scheme. Scan the directory and match the embedded `id` field.
+        let dir = leases_dir(&self.project_root);
+        let entries =
+            std::fs::read_dir(&dir).map_err(|_| format!("lease '{}' not found", lease_id))?;
+        let mut found: Option<(PathBuf, LightLease)> = None;
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                if name.contains(".activity.") || name.contains(".manifest.") {
+                    continue;
+                }
+            }
+            if let Ok(body) = std::fs::read_to_string(&p) {
+                if let Ok(l) = toml::from_str::<LightLease>(&body) {
+                    if l.id == lease_id {
+                        found = Some((p, l));
+                        break;
+                    }
+                }
+            }
         }
+
+        let (path, lease) = found.ok_or_else(|| format!("lease '{}' not found", lease_id))?;
 
         // Refuse to delete a non-MCP lease — the MCP surface only owns the
         // lightweight claims it creates. Real `aida session start` leases must
         // be released via `aida session end`.
-        if let Ok(body) = std::fs::read_to_string(&path) {
-            if let Ok(l) = toml::from_str::<LightLease>(&body) {
-                if !l.mcp_claim {
-                    return Err(format!(
-                        "lease '{}' is a real `aida session start` lease — use `aida session end {}` to release it",
-                        lease_id, lease_id
-                    ));
-                }
-            }
+        if !lease.mcp_claim {
+            return Err(format!(
+                "lease '{}' is a real `aida session start` lease — use `aida session end {}` to release it",
+                lease_id, lease_id
+            ));
         }
 
         std::fs::remove_file(&path).map_err(|e| e.to_string())?;
@@ -2266,6 +2327,69 @@ mod tests {
         let unique: std::collections::HashSet<_> =
             directives.iter().map(|d| d.raw.clone()).collect();
         assert_eq!(unique.len(), N);
+    }
+
+    /// Concurrent claim_task calls on the same spec must elect exactly one
+    /// winner — the others must see `already_claimed`. Regression test for
+    /// the pre-fix TOCTOU race between the existence check and the lease
+    /// write. trace:TASK-438 | ai:claude
+    #[test]
+    fn concurrent_claim_task_on_same_spec_elects_one_winner() {
+        let dir = tempdir().unwrap();
+        let project_root = Arc::new(dir.path().to_path_buf());
+        const N: usize = 16;
+        const SPEC: &str = "STORY-RACE";
+
+        // Gate every thread on a barrier so the contention window is as
+        // tight as possible — maximises the chance the buggy version would
+        // flake before the fix lands.
+        let barrier = Arc::new(std::sync::Barrier::new(N));
+
+        let mut handles = Vec::new();
+        for _ in 0..N {
+            let root = Arc::clone(&project_root);
+            let barrier = Arc::clone(&barrier);
+            handles.push(thread::spawn(move || {
+                let storage = Box::leak(Box::new(Storage::new(
+                    root.join(".aida").join("mcp-test-cache.yaml"),
+                )));
+                std::fs::create_dir_all(root.join(".aida")).unwrap();
+                let srv = McpServer::new(storage, (*root).clone());
+                barrier.wait();
+                srv.tool_claim_task(&json!({"spec_id": SPEC})).unwrap()
+            }));
+        }
+        let results: Vec<String> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+
+        let claimed: Vec<&String> = results
+            .iter()
+            .filter(|r| r.starts_with("claimed:"))
+            .collect();
+        let already: Vec<&String> = results
+            .iter()
+            .filter(|r| r.contains("already_claimed"))
+            .collect();
+
+        assert_eq!(
+            claimed.len(),
+            1,
+            "exactly one thread should win the claim, got {:?}",
+            results
+        );
+        assert_eq!(
+            already.len(),
+            N - 1,
+            "every loser should see already_claimed, got {:?}",
+            results
+        );
+
+        // And on disk: exactly one MCP claim file for this spec.
+        let leases = list_leases(&project_root);
+        let matching: Vec<_> = leases
+            .iter()
+            .filter(|l| l.scope.eq_ignore_ascii_case(SPEC) && l.mcp_claim)
+            .collect();
+        assert_eq!(matching.len(), 1, "exactly one lease file on disk");
     }
 
     /// Crash-mid-write recovery: a punt-ledger truncated mid-line must still
