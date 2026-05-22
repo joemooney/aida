@@ -47,12 +47,12 @@ description: |-
   - Memory \`feedback_headless_advisor_is_cold_boot\` — the load-bearing fact this story responds to.
   - Memory \`feedback_memory_pack_hygiene\` — calibration-triage compose naturally with the audit cycle (concrete inputs to the audit).
   - STORY-306 — the punt-routing infrastructure this layers on.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T14:13:46.906023859Z
-modified_at: 2026-05-22T01:46:18.948140484Z
+modified_at: 2026-05-22T01:47:25.650885253Z
 req_type: Story
 tags:
 - advisor
@@ -70,3 +70,7 @@ comments:
   content: Commit e42de602 references this requirement
   created_at: 2026-05-22T01:46:18.948140484Z
   modified_at: 2026-05-22T01:46:18.948140484Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-22T01:47:25.650885253Z
+  implemented_by: joe
