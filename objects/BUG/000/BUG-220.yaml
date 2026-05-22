@@ -60,12 +60,12 @@ description: |-
   ## Origin
 
   User observed 2026-05-16: *\"note: when I was at work (a different node) the queue was empty. I am not sure if this is still an issue. I think I should be able to make another local clone of aida on this machine as a different node and see how that works, but this is low priority, it is important that the single user/node setup is solid first.\"*
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:33:05.413783730Z
-modified_at: 2026-05-22T20:50:29.306818222Z
+modified_at: 2026-05-22T20:51:59.028153933Z
 req_type: Bug
 tags:
 - bug-89-family
@@ -105,3 +105,7 @@ comments:
     Follow-up filed: aida queue list freshness nudge (warn when local orphan store is behind origin/aida-store using ~/.aida/cache/last-fetch.toml). Low priority — '--sync' already covers the opt-in case.
   created_at: 2026-05-22T20:50:04.955669507Z
   modified_at: 2026-05-22T20:50:04.955669507Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-22T20:51:59.028153933Z
+  implemented_by: joe
