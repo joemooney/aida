@@ -1,0 +1,12 @@
+id: 019e4d44-e024-7042-a922-ae7eef0ce84b
+spec_id: TASK-441
+agreed_id: TASK-441
+title: '**Calibration ledger (STORY-347)** is now unblocked — cold-boot and fork can run in parallel for the same punt and record both verdicts. The acceptance criteria mentioned in SPIKE-11 §"Composes with" is now satisfiable'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T01:20:20.004116519Z
+modified_at: 2026-05-22T01:20:20.004116519Z
+req_type: Task
