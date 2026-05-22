@@ -3,12 +3,12 @@ spec_id: BUG-310
 agreed_id: BUG-310
 title: MCP-created specs are not consistently visible to local CLI
 description: 'Usability/data-consistency bug discovered while planning Codex tracks. A SPEC-397 epic created through the MCP surface was visible via MCP show_requirement, but local CLI writes with --parent SPEC-397 failed with parent not found. Subsequent MCP add_requirement calls then returned IDs that appeared to collide/reuse previously reported MCP IDs. Until this is resolved, MCP-created IDs should be treated as provisional and local CLI should remain the canonical backlog write surface. Expected behavior: MCP and CLI resolve the same current project/store, allocate non-conflicting IDs, and agree on parent resolution.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:14:19.560864882Z
-modified_at: 2026-05-22T06:43:45.083265074Z
+modified_at: 2026-05-22T07:15:02.492305632Z
 req_type: Bug
 tags:
 - cli
