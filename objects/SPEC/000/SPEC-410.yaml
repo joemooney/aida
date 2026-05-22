@@ -2,7 +2,7 @@ id: 019e5157-3c6f-7d80-8847-52b956db9468
 spec_id: SPEC-410
 title: aida pr ship squash merge can drop spec ID from merge commit subject
 description: 'Codex shipped STORY-284 via PR-201 with PR title `feat(store): add configurable auto-push cadence (STORY-284)`, but the resulting squash commit on main was `[AI:codex] feat(store): add configurable auto-push cadence (#201)` because the branch commit subject lacked the spec ID. The auto-bump scanner keys off landed commit text, so STORY-284 stayed In Progress after `aida pull` and required a manual status flip. Expected: `aida pr ship` should preserve a referenced spec ID from the PR title/body in the squash commit subject/body, or warn/refuse when the final merge commit would not contain a referenced spec ID. This is especially important for Codex/agent PRs where the PR title may be correct even if a local commit hook warning was not amended.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
