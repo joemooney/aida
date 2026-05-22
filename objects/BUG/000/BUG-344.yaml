@@ -1,0 +1,58 @@
+id: 019e5200-e6a7-7bf0-82ec-76e43a27ef00
+spec_id: BUG-344
+agreed_id: BUG-344
+title: 'aida pr ship: ''no checks reported'' interpreted as CI failure; doesn''t wait for CI startup window'
+description: |-
+  Empirical instance 2026-05-22 16:22: master ran `aida pr ship` to recover Antigravity's STORY-318 commit. The script:
+
+  1. ✓ Pushed branch story-318-ecosystem-review to origin
+  2. ✓ Created PR-212
+  3. ✗ Started watching CI 'no checks reported on the branch' → declared FAILURE → exited 1
+  4. ⚠ Actual state at that moment: PR was OPEN, CI was IN_PROGRESS (started seconds later)
+
+  The script confused 'no checks have registered YET' (CI startup window, typically 5-30s) with 'CI has run and failed.' The latter is a real failure; the former is just startup latency.
+
+  ## Repro
+  - Push a branch that hasn't been pushed before
+  - Immediately query gh pr checks (within ~10s of push) — returns empty
+  - aida pr ship interprets this as failure and bails
+
+  ## Fix options
+
+  A. **Poll for CI presence**: after push, wait up to ~60s for the FIRST check to appear before declaring 'no CI configured' or 'CI failed'. If checks appear, continue with --watch. If timeout expires with zero checks, then warn 'no CI workflows triggered — is .github/workflows configured?' and refuse cleanly with that message.
+
+  B. **Use gh run list as the check**: query workflows on the ref rather than relying on pull-request checks API which has a startup lag.
+
+  C. **Distinguish exit semantics**: 'failure' vs 'not yet started' are different conditions; the wrapper should treat them separately.
+
+  RECOMMEND: A + C. Wait for CI to register (60s timeout is generous for the startup window); if it never registers, exit with a different error code/message than 'CI failed' (since 'CI didn't run at all' is a config issue, not a failure).
+
+  ## Acceptance
+
+  - [ ] aida pr ship waits up to N seconds (configurable, default 60s) for the first CI check to appear after push
+  - [ ] If a check appears: continue with normal --watch flow
+  - [ ] If no checks appear within timeout: error message distinguishes 'CI did not register' from 'CI failed' — different fix paths
+  - [ ] Regression test: push a branch; CI check appears 30s later; verify aida pr ship doesn't bail prematurely
+
+  ## Composes with
+
+  - TASK-458 (aida pr ship original wrapper)
+  - SPEC-410 + BUG-339 (sibling pr ship gaps fixed today)
+  - feedback_substrate_as_bouncer_not_rules (this is gate-quality work — the substrate should distinguish 'didn't start' from 'failed')
+
+  ## Note
+
+  A few PRs today were merged manually after aida pr ship bailed at this point. The success rate of aida pr ship would meaningfully improve with this fix.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T23:24:11.303656221Z
+modified_at: 2026-05-22T23:24:11.303656221Z
+req_type: Bug
+tags:
+- ci-polling
+- external-validation
+- from-self-test
+- pr-ship
+- task-458-followup
