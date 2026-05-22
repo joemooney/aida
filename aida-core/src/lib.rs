@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod analytics;
+pub mod block_allocation;
 pub mod conflict;
 #[cfg(all(unix, feature = "native"))]
 pub mod daemon;
@@ -47,6 +48,7 @@ pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,
     EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,
 };
+pub use block_allocation::{BlockAllocationConfig, BlockAllocationTypeConfig};
 #[cfg(feature = "postgres")]
 pub use db::PostgresBackend;
 #[cfg(feature = "native")]
