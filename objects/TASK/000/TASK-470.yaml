@@ -17,7 +17,7 @@ description: |-
   3. Document as a known gap (low-frequency in practice)
 
   Raised in review of PR-202: https://github.com/joemooney/aida/pull/202#issuecomment-4522481404
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
