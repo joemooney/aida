@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T06:39:38.656170431Z
-modified_at: 2026-05-21T06:39:38.656170431Z
+modified_at: 2026-05-22T05:55:35.586416372Z
 req_type: Story
 tags:
 - aida-worker
@@ -73,3 +73,14 @@ tags:
 - deprecation
 - from-user-direction
 - single-vector
+comments:
+- id: 019e4e40-e222-7e82-98b6-5b343a1b3bc6
+  author: joe
+  content: |-
+    Re-evaluation 2026-05-22, user direction: 'We have the for loop. Why do we need drain/aida-worker?' Honest answer: the user's actual workflow (write a long shell for-loop once, run overnight, see morning results) doesn't benefit from any of aida-worker's distinctives (mid-run plan editing, pause/resume, comment annotation). For-loop is simpler, more debuggable, and equally effective for this usage.
+
+    Recommendation: deprioritize this story (and STORY-374's watch directive) until a user actually wants to edit the plan mid-run. If that need surfaces, file a fresh story with the concrete use case attached. Until then, this and STORY-374 are speculative infrastructure that don't pay for their complexity.
+
+    Composes with feedback_pushback_on_overengineering: bash loop is the simpler thing that works. Don't build daemon-grade infrastructure for the case at hand.
+  created_at: 2026-05-22T05:55:35.586416372Z
+  modified_at: 2026-05-22T05:55:35.586416372Z
