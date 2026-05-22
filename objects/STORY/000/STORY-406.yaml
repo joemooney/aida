@@ -1,0 +1,26 @@
+id: 019e507e-bc62-74b3-9c8c-e7b9b1b49377
+spec_id: STORY-406
+agreed_id: STORY-406
+title: 'Review PR-179: fix(session): structurally disable AskUserQuestion in headless argv (BUG-327)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e5071`) for branch `bug-327`.
+
+  - PR: <https://github.com/joemooney/aida/pull/179>
+  - Branch: `bug-327` → `main`
+
+  ## Covers
+
+  - BUG-327
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 179` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T16:22:23.586810605Z
+modified_at: 2026-05-22T16:22:23.586810605Z
+req_type: Story
