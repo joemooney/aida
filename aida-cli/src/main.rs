@@ -19306,6 +19306,76 @@ mod task_358_escalation_cleanup_tests {
         );
     }
 
+    /// BUG-307: when the feature flag is off, the wrapper always reports
+    /// `Live` — restores pre-BUG-307 behaviour for an operator who wants
+    /// the explicit-`--steal` discipline back.
+    #[test]
+    fn auto_release_disabled_always_reports_live() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_test_lease(root, "off01", "TASK-307", false);
+        let lease = list_leases(root).into_iter().next().unwrap();
+        let cfg = orchestrator::OrchestratorConfig {
+            auto_release_dormant_leases: false,
+            stale_lease_threshold_minutes: 10,
+        };
+        assert_eq!(
+            auto_release_decision_for_lease(root, &lease, &cfg),
+            orchestrator::AutoReleaseDecision::Live
+        );
+    }
+
+    /// BUG-307: a lease whose creator_pid points at a long-dead process,
+    /// whose mtime is past the threshold, and whose worktree is missing
+    /// (worktree_path was never created in the temp dir) auto-releases.
+    /// This is the canonical "lease leaked from a previous stall" case.
+    #[test]
+    fn auto_release_dormant_missing_worktree_is_safely_dormant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let path = write_test_lease(root, "leak01", "TASK-307", false);
+        // Backdate the lease file's mtime past the 10-minute threshold so
+        // the freshness gate doesn't pin it. `File::set_modified` is the
+        // stable-since-1.75 way to do this without pulling a new crate.
+        let stale = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+        let f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+        f.set_modified(stale).unwrap();
+        drop(f);
+
+        let lease = list_leases(root).into_iter().next().unwrap();
+        let cfg = orchestrator::OrchestratorConfig::default();
+        let decision = auto_release_decision_for_lease(root, &lease, &cfg);
+        assert!(
+            matches!(
+                decision,
+                orchestrator::AutoReleaseDecision::SafelyDormant {
+                    process_dead: true,
+                    worktree_missing: true,
+                    ..
+                }
+            ),
+            "expected SafelyDormant with worktree_missing, got {:?}",
+            decision
+        );
+    }
+
+    /// BUG-307: a lease whose lease file was just written (mtime ~now)
+    /// short-circuits to `Live` even with a never-existed PID — the
+    /// freshness gate protects the brief window where a session_start is
+    /// still wiring up its shell.
+    #[test]
+    fn auto_release_fresh_lease_is_live() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_test_lease(root, "fresh1", "TASK-307", false);
+        let lease = list_leases(root).into_iter().next().unwrap();
+        let cfg = orchestrator::OrchestratorConfig::default();
+        assert_eq!(
+            auto_release_decision_for_lease(root, &lease, &cfg),
+            orchestrator::AutoReleaseDecision::Live
+        );
+    }
+
     /// A legacy lease TOML written before this field existed deserializes
     /// fine with `escalated_to_human` as `None` — backward compatibility.
     #[test]
@@ -50125,9 +50195,19 @@ fn handle_queue_work(
     // escalate to --force on the user's behalf because that would
     // silently discard their in-flight work; the message points at
     // `aida session end --force` for the user-driven path.
-    // trace:TASK-81 | ai:claude
+    //
+    // BUG-307 extension: before refusing or applying --steal, check
+    // whether the conflict lease is **dormant** (process dead, mtime
+    // stale, no live claude in the worktree). If it is AND the worktree
+    // is clean, auto-release it transparently — the dominant friction
+    // class for unsupervised drains is stale-lease state from PREVIOUS
+    // stalls, every recovered failure leaves a lease behind. If the
+    // worktree carries uncommitted changes we still refuse, but with a
+    // loss-risk-aware message instead of the generic "pass --steal".
+    // trace:TASK-81 trace:BUG-307 | ai:claude
     {
         let project_root_for_conflict = find_main_worktree_root()?;
+        let orch_config = orchestrator::OrchestratorConfig::load(&project_root_for_conflict);
         // Safety cap: in practice this resolves in 1 iteration for the
         // canonical case, 2-3 for the multi-lease state. A bound prevents
         // a hypothetical infinite loop if session_end ever returns Ok
@@ -50136,6 +50216,79 @@ fn handle_queue_work(
         while let Some(conflict) =
             find_scope_lease_conflict(&list_leases(&project_root_for_conflict), &plan.scope)
         {
+            // BUG-307: classify before deciding to refuse. The auto-release
+            // path only fires when every liveness signal says the lease is
+            // truly dormant; a live or freshly-minted lease falls through to
+            // the existing --steal/refuse logic unchanged.
+            // trace:BUG-307 | ai:claude
+            match auto_release_decision_for_lease(
+                &project_root_for_conflict,
+                &conflict,
+                &orch_config,
+            ) {
+                orchestrator::AutoReleaseDecision::SafelyDormant {
+                    process_dead,
+                    mtime_age_secs,
+                    worktree_missing,
+                } => {
+                    let cause = if worktree_missing {
+                        format!(
+                            "worktree missing, lease {}",
+                            humanize_secs_short(mtime_age_secs)
+                        )
+                    } else if process_dead {
+                        format!(
+                            "process dead {} ago, worktree clean",
+                            humanize_secs_short(mtime_age_secs)
+                        )
+                    } else {
+                        format!(
+                            "mtime {} old, worktree clean",
+                            humanize_secs_short(mtime_age_secs)
+                        )
+                    };
+                    eprintln!(
+                        "  {} released stale lease {} ({})",
+                        "ⓘ".cyan(),
+                        (&conflict.id[..conflict.id.len().min(8)]).yellow(),
+                        cause.dimmed()
+                    );
+                    // force_cleanup_lease removes the lease file first, then
+                    // attempts `git worktree remove --force`. A `false` return
+                    // means the worktree leg failed (likely already gone or
+                    // permissions); the lease file is still removed and the
+                    // loop's `find_scope_lease_conflict` re-check will confirm
+                    // the conflict has cleared. force_cleanup_lease prints its
+                    // own Warning so the operator sees the worktree-remove
+                    // failure without a hard bail.
+                    let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    remaining -= 1;
+                    if remaining == 0 {
+                        anyhow::bail!(
+                            "auto-release sweep gave up after 16 iterations on scope `{}` — \
+                             the lease store may be corrupt; inspect `.aida/sessions/`",
+                            plan.scope
+                        );
+                    }
+                    continue;
+                }
+                orchestrator::AutoReleaseDecision::DormantDirty { dirty_entries } => {
+                    anyhow::bail!(
+                        "lease {} for scope `{}` is dormant but its worktree has {} \
+                         uncommitted change(s) at {} — commit/stash them first, or \
+                         `aida session end {} --force` to discard, then retry.",
+                        &conflict.id[..conflict.id.len().min(8)],
+                        plan.scope,
+                        dirty_entries,
+                        conflict.worktree_path.display(),
+                        &conflict.id[..conflict.id.len().min(8)]
+                    );
+                }
+                orchestrator::AutoReleaseDecision::Live => {
+                    // Fall through to the existing --steal/refuse logic.
+                }
+            }
+
             if !steal {
                 anyhow::bail!(
                     "scope `{}` is owned by lease {} ({}, worktree: {}) — pass --steal to end \
@@ -55019,6 +55172,93 @@ fn find_scope_lease_conflict(leases: &[SessionLease], scope: &str) -> Option<Ses
         .filter(|l| l.scope.eq_ignore_ascii_case(scope))
         .max_by_key(|l| l.started_at)
         .cloned()
+}
+
+/// BUG-307: gather the three independent liveness signals for `lease` and
+/// hand them to [`orchestrator::classify_for_auto_release`]. The classifier
+/// is pure; this wrapper is where we touch the process table, lease-file
+/// mtime, and `git status --porcelain`. Returns
+/// [`orchestrator::AutoReleaseDecision::Live`] when the feature is disabled
+/// so callers can branch uniformly. trace:BUG-307 | ai:claude
+fn auto_release_decision_for_lease(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    config: &orchestrator::OrchestratorConfig,
+) -> orchestrator::AutoReleaseDecision {
+    if !config.auto_release_dormant_leases {
+        return orchestrator::AutoReleaseDecision::Live;
+    }
+
+    // Signal 1: creator shell still alive? A lease without a recorded
+    // `creator_pid` (pre-STORY-73) defaults to "dead" — those leases also
+    // pre-date the orchestrator drain and are the canonical leaked-lease
+    // case, so the auto-release path catches them.
+    let pid_alive = lease
+        .creator_pid
+        .map(process_probe::pid_is_alive)
+        .unwrap_or(false);
+
+    // Signal 2: lease-file mtime age. We use the filesystem mtime rather
+    // than `started_at` because future writers (mark_lease_escalated_to_human
+    // etc.) bump the mtime — the file's freshness is the authoritative
+    // "this lease was touched recently" signal.
+    let lease_file = lease_path(project_root, &lease.id);
+    let mtime_age_secs = std::fs::metadata(&lease_file)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.elapsed().ok())
+        .map(|d| d.as_secs() as i64)
+        // No mtime readable → treat as old (the lease was just listed from
+        // disk, so this only fires under genuine fs weirdness; failing
+        // "stale" lets the cleanup proceed).
+        .unwrap_or(i64::MAX);
+
+    // Signal 3: live `claude` running inside the worktree. Reuses the same
+    // probe `aida session leases --all` uses for the ● live glyph so the
+    // classifier agrees with what the operator sees in `session leases`.
+    let live_claude_in_worktree = process_probe::probe_live_claude_sessions().iter().any(|s| {
+        !s.stale_cwd && (s.cwd == lease.worktree_path || s.cwd.starts_with(&lease.worktree_path))
+    });
+
+    let worktree_exists = lease.worktree_path.exists();
+    let worktree_dirty_count = if worktree_exists {
+        worktree_dirty_entries(&lease.worktree_path).len()
+    } else {
+        0
+    };
+
+    orchestrator::classify_for_auto_release(
+        pid_alive,
+        mtime_age_secs,
+        live_claude_in_worktree,
+        worktree_exists,
+        worktree_dirty_count,
+        config.stale_lease_threshold_minutes,
+    )
+}
+
+/// BUG-307: format a seconds-old duration into the short human form used in
+/// the auto-release log line (`"2h"`, `"45m"`, `"30s"`). Distinct from
+/// [`humanize_relative`] — that one takes a chrono datetime and appends
+/// " ago"; here the caller controls the surrounding text.
+fn humanize_secs_short(secs: i64) -> String {
+    if secs < 0 {
+        return "0s".to_string();
+    }
+    let secs = secs as u64;
+    if secs < 60 {
+        return format!("{}s", secs);
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{}m", mins);
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        return format!("{}h", hours);
+    }
+    let days = hours / 24;
+    format!("{}d", days)
 }
 
 /// STORY-42: shell out to `aida db sync --pull`. We could refactor the
