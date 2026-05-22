@@ -582,10 +582,16 @@ Two worktree-aware sequences side-step it. Pick by where your shell is:
 
 ```bash
 cd /home/joe/ai/aida
+aida session end <lease-id>      # removes the spec's worktree first so
+                                 # gh's local --delete-branch step succeeds
 gh pr merge <N> --squash --delete-branch
-aida pull
-aida session end <lease-id>      # removes the spec's worktree + lease
+aida pull                        # auto-bumps Done → Completed
 ```
+
+Order matters: `git branch -d` (which `gh --delete-branch` runs locally
+last) refuses to delete a branch that any worktree has checked out, no
+matter the cwd. Ending the session first removes the spec's worktree so
+`--delete-branch` cleans both remote and local in one shot.
 
 **From inside the spec's worktree:**
 
@@ -600,10 +606,11 @@ aida session end <lease-id>      # cwd-back via the shell wrapper; the
 
 `aida session end` never tries to delete the local branch itself — it removes
 the worktree and prints `branch <name> retained — merge or git branch -D
-<name> when ready`. That makes both sequences robust whether gh's local
-branch-delete step succeeded or failed: the lease + worktree get cleaned, a
-lingering local branch is harmless, and `aida pull` auto-bumps the spec's
-status from Done → Completed when it sees the merge SHA on main.
+<name> when ready`. Recipe 1 lets `gh --delete-branch` do the local cleanup
+after the worktree is gone; recipe 2 skips `--delete-branch` entirely and
+the lingering local branch is harmless. Either way, the lease + worktree get
+cleaned and `aida pull` auto-bumps the spec's status from Done → Completed
+when it sees the merge SHA on main.
 
 > An `aida pr merge <N>` wrapper that detects cwd vs worktree and picks the
 > right flag set is a tracked-but-deferred follow-up — TASK-406 acceptance
