@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:25:56.023469640Z
-modified_at: 2026-05-22T18:06:50.840259639Z
+modified_at: 2026-05-22T18:45:41.545257420Z
 req_type: Task
 tags:
 - autonomy-keystone
@@ -60,6 +60,36 @@ comments:
     When you resolve this, record the answer (a memory, an acceptance-criteria edit, or a discipline doc) so a future advisor can resolve the same kind of fork as a recorded principle.
   created_at: 2026-05-22T18:06:50.840259639Z
   modified_at: 2026-05-22T18:06:50.840259639Z
+- id: 019e5101-ee29-7a00-9903-05a39c056363
+  author: joe
+  content: |-
+    Status update 2026-05-22: substantial material accumulated for the writeup; ready when you have bandwidth:
+
+    **Multi-day arc available:**
+    - Day 1 (autonomy keystone day, 2026-05-20) — recovery from API outages + 8-spec autonomous drain + dogfood-merge of reliability fixes shipping through the system they fix
+    - Day 2 (multi-agent operational day, 2026-05-22) — 3 sibling agents (Claude Code + Codex + Antigravity) coordinating via AIDA's MCP server; 30+ PRs in 24 hours; substrate held under concurrent multi-agent stress; sketch-first governance demonstrably worked (BUG-328's sketch caught 3 substantive issues pre-implementation)
+
+    **Strategic positioning evidence:**
+    - README revisions (PR-190) landed the 'Where this is and isn't proven' section with the multi-agent dogfood as canonical evidence
+    - Codex's verdict doc (docs/agents/codex-mcp-roundtrip-verdict.md) records the operational-with-conditions verdict from an external agent's perspective
+    - Antigravity's setup doc (docs/agents/antigravity-mcp-setup.md) records the N=2 second-agent integration with Phase 1+2 verified
+    - Memory pack captures the discipline lessons (feedback_one_master_advisor_until_subsystems, feedback_sketch_first_pays_for_itself, feedback_reliability_fixes_use_keyboard_not_drain, feedback_sibling_agents_stop_and_flag, etc.)
+
+    **Materials to compose the writeup from:**
+    - Drain logs: ~/drain-20260520.log, ~/drain-20260521.log, ~/drain-20260522.log
+    - The morning scrollback file (cleaned via scripts/dedup-scrollback.py)
+    - Today's git log (gh pr list --state merged --limit 50 + git log --since='2 days ago')
+    - The docs/agents/ + docs/plans/ + memory pack as the substrate evidence
+    - The user's voice — the writeup needs your perspective as the project owner
+
+    **Suggested narrative arc:**
+    - Day 1: autonomy keystone proves itself through real adversity (Anthropic 529 mid-drain; recovery flows; reliability fixes shipping through the system that's broken)
+    - Day 2: agent-agnostic substrate proves itself through real multi-agent operation (3 agents, 30+ PRs, each finding bugs the others missed, governance protocol catching issues pre-implementation)
+    - Meta-point: multi-agent dogfood IS the demo; not a feature list — an empirical record
+
+    Defer until you have ~1-2 hours of focused writing bandwidth.
+  created_at: 2026-05-22T18:45:41.545257420Z
+  modified_at: 2026-05-22T18:45:41.545257420Z
 attention_reason:
   category: other
   detail: 'TASK-403 is a demo/marketing meta-task whose acceptance criteria require actions a headless coding implementer cannot perform: (1) record an asciinema of a *future* overnight drain — the keystone artifact cannot be produced in a single REPL session; (2) curate a 4-6 spec batch — judgment about queue composition belongs to the advisor/operator, not a code-implementer; (3) pick a publish surface — the spec explicitly says ''user decides''; (4) write ~800-1500 word external narrative — depends on (1) existing first, and needs editorial judgment about AIDA''s public voice. There is no code surface here; the spec is misrouted to the headless implementer queue.'
