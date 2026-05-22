@@ -1,0 +1,60 @@
+id: 019e516b-6363-7fa2-8ee1-9ce44f7a0ba8
+spec_id: BUG-339
+agreed_id: BUG-339
+title: 'aida pr ship: validate final squash subject ends with (SPEC-ID) before merging'
+description: |-
+  Second empirical instance of `aida pr ship` producing a squash subject the auto-bump scanner can't parse.
+
+  ## Today's two empirical cases
+
+  | PR | Squash subject | Auto-bump | Root cause |
+  |---|---|---|---|
+  | #201 (Codex, STORY-284) | `[AI:codex] feat(store): add configurable auto-push cadence (#201)` | ✗ | Branch commit lacked spec ID; gh merge used branch subject; **SPEC-410** |
+  | #203 (Antigravity, STORY-260) | `docs(competitive): implement maintained competitive analysis surface for STORY-260 (#203)` | ✗ | Spec ID present but mid-text bare, NOT in trailing parens; scanner expects `(SPEC-ID)` per documented convention; **THIS** |
+
+  ## The scanner
+
+  `aida-cli/src/main.rs:45182` `extract_spec_ids_from_commit` calls `push_paren_spec_ids_from_line(subject, ...)` — the function explicitly requires `(SPEC-ID)`-shaped parens. The scanner is correctly strict per the convention documented in CLAUDE.md: `type(scope): description (REQ-ID)` with the spec ID in trailing parens.
+
+  ## Why both classes happen
+
+  - Codex case: agent's local commit discipline drops the trailer; PR title may have it but `gh pr merge --squash` uses the branch commit subject when there's a single commit.
+  - Antigravity case: agent's PR title puts the spec ID mid-text (`...for STORY-260`) instead of trailing (`...for the maintained surface (STORY-260)`); the squash subject inherits this shape.
+
+  Both fail silently — manual status-flip required afterward.
+
+  ## Fix
+
+  `aida pr ship` should validate the FINAL squash subject (what gh will write to main) before triggering the merge:
+
+  1. **Derive the final squash subject** the same way `gh pr merge --squash` would — branch commit subject if single-commit, PR title if multi-commit.
+  2. **Check for trailing `(SPEC-ID)` pattern** matching the same regex the scanner uses (`push_paren_spec_ids_from_line`).
+  3. **If missing AND a spec ID is referenced anywhere** (PR title body, branch name, commit body): pass `--subject "[subject] (SPEC-ID)"` to gh to inject it. This composes with SPEC-410's fix.
+  4. **If missing AND no spec ID is derivable**: refuse with a warning ('Final commit subject would be X — no (SPEC-ID) trailer; amend the local commit or pass --subject explicitly').
+
+  ## Acceptance
+
+  - [ ] `aida pr ship` rejects (with helpful message) when final squash subject would lack a trailing `(SPEC-ID)` AND no spec ID can be derived from PR title/branch name/body
+  - [ ] When the spec ID IS derivable but the final subject lacks the trailer, `aida pr ship` injects it via `--subject`
+  - [ ] Regression test: simulate Antigravity's PR-203 shape — `docs(...): ...STORY-260 (#203)` should be rewritten to `docs(...): ... (STORY-260) (#203)` (or end-of-subject equivalent)
+  - [ ] Regression test: simulate Codex's PR-201 shape — branch commit `feat(store): add configurable auto-push cadence` + PR title with `(STORY-284)` should produce `feat(store): add configurable auto-push cadence (STORY-284) (#201)`
+  - [ ] Both real PRs (197, 200) by Antigravity that already carried correct trailers continue to merge cleanly (no double-(SPEC-ID))
+
+  ## Composes with
+
+  - SPEC-410 (Codex's filing — branch-commit-drops-ID case)
+  - TASK-472 (cross-agent-onboarding clarification — explicitly document the `(SPEC-ID)` trailer convention for non-Claude-Code agents)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:40:52.835212864Z
+modified_at: 2026-05-22T20:40:52.835212864Z
+req_type: Bug
+tags:
+- antigravity-pr-203
+- auto-bump
+- from-self-test
+- pr-ship
+- spec-410-related
+- validation
