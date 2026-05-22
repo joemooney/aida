@@ -9201,5 +9201,45 @@ operations:
   timestamp: 2026-05-22T06:09:17.460985513Z
   kind: !SetStatus
     status: Done
-clock: 989
+- id: 019e4e59-31de-7981-8301-264b793867a8
+  target_id: 019e4bc9-d15d-77e0-9bb1-fbac441d882c
+  author: aida
+  node_id: '1'
+  lamport: 990
+  timestamp: 2026-05-22T06:22:08.862505715Z
+  kind: !SetDescription
+    description: |-
+      The 21 MCP tools (7 original + 14 STORY-361 coordination tools) lack `outputSchema` descriptors. MCP clients that do schema-based tool discovery (e.g., Codex) see opaque-shape tool responses.
+
+      ## Scope — Path A only (descriptor-level)
+
+      For this story, "output schema" means **descriptor-level `outputSchema` metadata only**. Add an `outputSchema` field to each of the 21 tool descriptors that captures the shape of what the tool returns.
+
+      **Preserve current tool response behavior: continue returning the existing MCP text envelope.** Do NOT reshape any tool's implementation to emit `structuredContent` in this ticket.
+
+      Reshaping the 21 tool implementations to return `structuredContent` matching the declared schema is a behavioral / API change with backward-compatibility implications for clients that currently consume the text envelopes. That work is filed separately as the Path B follow-up (see ## Related below) and is NOT in scope here.
+
+      ## Acceptance
+
+      - Each of the 21 MCP tool descriptors (in `aida-cli/src/mcp.rs`) gains an `outputSchema` field with a JSON Schema describing the shape of its text-envelope content.
+      - No change to the runtime tool response behavior — tools still return the text envelope they return today.
+      - Schema entries are static (compile-time) and discoverable via `tools/list`.
+      - `aida mcp-serve` continues to work for Claude Code consumers without behavioral change.
+      - Tests: assert each tool descriptor has a non-null `outputSchema` field and that the schema is valid JSON Schema (basic structural validation).
+      - Documentation in the file header (or `docs/architecture/mcp-tools.md`) explains the descriptor-only scope and points at the Path B follow-up for the structured-emission story.
+
+      ## Related
+
+      - **Path B follow-up** (filed alongside this resolution): emit structuredContent matching outputSchema across all tools. That story will decide backward-compat for current text-envelope consumers.
+      - **STORY-361** — the 14 coordination tools this descriptor work covers (alongside the original 7).
+      - **STORY-398** — Codex empirical roundtrip; outputSchema descriptors are load-bearing prereq for Codex tool discovery.
+      - **PR-162 review** surfaced this as a finding tagged severity:cosmetic; the Path A scope holds severity:cosmetic accurate. Path B (structuredContent emission) is NOT cosmetic and should not be smuggled into this ticket.
+
+      ## Punt history
+
+      - Punted 2026-05-21: advisor identified Path A vs Path B ambiguity, escalated. Resolved by comment + re-queue.
+      - Punted again 2026-05-22: cold-boot implementer treated the original "Defer until..." text in the description as authoritative over the resolution comment. Advisor escalated with explicit recommendation to edit the spec body itself. This description is that edit.
+
+      trace:TASK-440 | ai:claude
+clock: 990
 node_id: '1'
