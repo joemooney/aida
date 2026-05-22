@@ -1,0 +1,12 @@
+id: 019e50c2-9cb0-7311-9d42-6bd56b65ff34
+spec_id: TASK-461
+agreed_id: TASK-461
+title: Add a benchmark for MCP-only vs CLI-only AIDA access
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T17:36:31.920866978Z
+modified_at: 2026-05-22T17:36:31.920866978Z
+req_type: Task
