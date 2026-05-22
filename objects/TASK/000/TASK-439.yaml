@@ -10,12 +10,12 @@ description: |
   Severity is minor because (a) punt responses are written by the advisor tier (not under contention) and (b) JSON parsers reject truncated JSON cleanly. But the failure mode — orchestrator reads "valid JSON missing a field" because of a fortuitous truncation — would be hard to diagnose.
 
   Raised in review of PR-162: https://github.com/joemooney/aida/pull/162#issuecomment-4511420914
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:11.141458341Z
-modified_at: 2026-05-22T06:06:13.230475250Z
+modified_at: 2026-05-22T06:06:25.714412631Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -29,3 +29,9 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-22T03:59:39.765054528Z
   implemented_by: joe
+attention_reason:
+  category: other
+  detail: 'Redundant drain: TASK-439 is already implemented, committed, pushed, and under review as PR-166 (https://github.com/joemooney/aida/pull/166). Commit d3953d99 on branch pr-166 (worktree /home/joe/ai/aida-pr-166) carries the write_atomic fix the spec asks for, and STORY-393 has an active reviewer lease 019e4dda on it. Pre-existing spec status was Done; this orchestrator session (drain pid 596956, session 019e4e47, branch task-439-2) was spawned on top of the in-flight work and has nothing to implement — re-doing the fix here would create a competing branch racing PR-166.'
+  lean: 'Cancel this drain. Let PR-166 finish its review/merge cycle; the spec''s natural state transition is Done → Completed when PR-166 merges (the aida pull auto-bump handles it per STORY-86). End session 019e4e47 and remove worktree /home/joe/ai/aida-task-439 with ''aida session end 019e4e47 --force''. Worth a follow-up TASK: investigate why ''aida queue work TASK-439 --auto-complete --no-human=both'' was launchable while the spec was already Done with an open PR — the queue-work entry path should refuse a re-drain on a Done spec with a live PR.'
+  raised_by: implementer
+  raised_at: 2026-05-22T06:06:25.714412631Z
