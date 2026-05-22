@@ -1,0 +1,31 @@
+id: 019e5154-613c-7242-9bc5-fa25ba325686
+spec_id: TASK-468
+agreed_id: TASK-468
+title: 'Integration test: full --auto-complete --no-human cycle hitting stale-base block'
+description: |-
+  STORY-281 acceptance asked for a 'full --auto-complete --no-human cycle that hits a stale-base block and surfaces actionable next steps.' STORY-281 shipped pure classifier + message-formatter unit tests + the merge-tree integration tests in pr_rebase.rs, but skipped the full e2e because it requires a live GitHub remote with a controlled multi-PR scenario.
+
+  ## Scope
+  - Spin up a temp repo with a PR + concurrent overlapping merge on main.
+  - Invoke 'aida queue work PR-N --for reviewer --no-human' (or the orchestrator path).
+  - Assert: process exits non-zero, stderr contains the actionable 'aida pr rebase N' recovery hint, no reviewer session was spawned.
+  - Mirror test for '--allow-stale-base' opt-out: warns, proceeds.
+
+  ## Out of scope
+  - Full orchestrator state-machine mock — already covered by orchestrate_* tests in auto_complete.rs.
+
+  ## Origin
+  STORY-281 ship, 2026-05-22.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T20:15:44.956487525Z
+modified_at: 2026-05-22T20:15:44.956487525Z
+req_type: Task
+tags:
+- from-followup
+- from-self-test
+- reviewer-phase
+- stale-base
+- test
