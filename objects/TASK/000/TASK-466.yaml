@@ -1,0 +1,24 @@
+id: 019e513e-fba9-74a3-bd24-fe240f89fd89
+spec_id: TASK-466
+agreed_id: TASK-466
+title: global_auto_claim_summary suppresses (configured) when auto_claim=false even with per-type re-enables
+description: |-
+  TASK-449 added `global_auto_claim_summary` for the empty-blocks branch of `aida db block status`. When `cfg.auto_claim == false`, the function unconditionally returns `auto-claim: off (global opt-out)` — even when a per-type section re-enables auto-claim (e.g. `[block_allocation] auto_claim = false` + `[block_allocation.bug] auto_claim = true`).
+
+  The populated-blocks branch's `auto_claim_summary(cfg, "BUG")` honours the re-enable (see `auto_claim_summary_per_type_re_enable_wins_over_global_off` on main). The empty-blocks summary is type-agnostic so it can't render the full nuance, but suppressing the `(configured)` tag in the opt-out case also hides the signal that `[block_allocation]` is wired up at all.
+
+  Where: aida-cli/src/main.rs:9504-9518 (`global_auto_claim_summary`).
+
+  Why it matters: minor surfacing quirk — a user with `[block_allocation] auto_claim = false` plus per-type re-enables would see "off (global opt-out)" before their first claim and may assume auto-claim is fully off. A `(configured — see per-type)` hint, or "off globally (per-type overrides exist)", would resolve.
+
+  Raised in review of PR-198: https://github.com/joemooney/aida/pull/198#issuecomment-4522294377
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T19:52:22.696998299Z
+modified_at: 2026-05-22T19:52:22.696998299Z
+req_type: Task
+tags:
+- from-review:PR-198
+- severity:minor
