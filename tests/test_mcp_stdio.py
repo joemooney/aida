@@ -11,6 +11,7 @@ Coverage:
 - Every tool advertises inputSchema and outputSchema.
 - Path-A tool results use the MCP text content envelope.
 - Optional future Path-B strict mode requires structuredContent.
+- Per-request deadlines fail fast if `aida mcp-serve` hangs.
 - CLI-created specs are visible through MCP.
 - MCP-created specs are visible through local CLI.
 - Core spec graph tools round-trip.
@@ -28,6 +29,7 @@ import argparse
 import json
 import os
 import re
+import selectors
 import shutil
 import subprocess
 import sys
@@ -66,7 +68,7 @@ class Failure(Exception):
 
 
 class McpClient:
-    def __init__(self, aida: Path, cwd: Path):
+    def __init__(self, aida: Path, cwd: Path, request_timeout: float):
         self.proc = subprocess.Popen(
             [str(aida), "mcp-serve"],
             cwd=cwd,
@@ -79,6 +81,7 @@ class McpClient:
         if self.proc.stdin is None or self.proc.stdout is None:
             raise Failure("failed to open MCP process stdio pipes")
         self._next_id = 1
+        self.request_timeout = request_timeout
 
     def close(self) -> None:
         if self.proc.poll() is None:
@@ -100,9 +103,12 @@ class McpClient:
         assert self.proc.stdout is not None
         self.proc.stdin.write(json.dumps(payload) + "\n")
         self.proc.stdin.flush()
-        raw = self.proc.stdout.readline()
+        raw = self._readline_with_deadline(method)
         if raw == "":
-            raise Failure(f"MCP server exited before {method} response; rc={self.proc.poll()}")
+            raise Failure(
+                f"MCP server exited before {method} response; "
+                f"rc={self.proc.poll()}; stderr={self._read_stderr_tail()!r}"
+            )
         try:
             resp = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -121,6 +127,38 @@ class McpClient:
         if result.get("isError"):
             raise Failure(f"tool {name} returned isError: {result}")
         return result
+
+    def _readline_with_deadline(self, method: str) -> str:
+        assert self.proc.stdout is not None
+        selector = selectors.DefaultSelector()
+        selector.register(self.proc.stdout, selectors.EVENT_READ)
+        try:
+            if not selector.select(timeout=self.request_timeout):
+                stderr = self._read_stderr_tail()
+                self.close()
+                raise Failure(
+                    f"timed out after {self.request_timeout:g}s waiting for MCP "
+                    f"response to {method}; stderr={stderr!r}"
+                )
+            return self.proc.stdout.readline()
+        finally:
+            selector.close()
+
+    def _read_stderr_tail(self) -> str:
+        if self.proc.stderr is None:
+            return ""
+        fd = self.proc.stderr.fileno()
+        try:
+            os.set_blocking(fd, False)
+            chunks: list[str] = []
+            while True:
+                chunk = self.proc.stderr.read()
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            return "".join(chunks)[-4000:]
+        except (BlockingIOError, OSError, TypeError, ValueError):
+            return ""
 
 
 def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -377,6 +415,12 @@ def main() -> int:
     parser.add_argument("--aida", default="target/debug/aida", help="Path to aida binary")
     parser.add_argument("--keep-tmp", action="store_true", help="Keep temporary project for debugging")
     parser.add_argument(
+        "--request-timeout",
+        type=float,
+        default=30.0,
+        help="Seconds to wait for each MCP JSON-RPC response before failing fast",
+    )
+    parser.add_argument(
         "--require-structured-content",
         action="store_true",
         help="Require Path-B structuredContent objects in tools/call results",
@@ -387,6 +431,8 @@ def main() -> int:
         help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
+    if args.request_timeout <= 0:
+        raise Failure("--request-timeout must be greater than 0")
 
     aida = Path(args.aida).resolve()
     if not aida.exists():
@@ -396,7 +442,7 @@ def main() -> int:
     client: McpClient | None = None
     try:
         seed_spec = setup_project(aida, tmp)
-        client = McpClient(aida, tmp)
+        client = McpClient(aida, tmp, args.request_timeout)
 
         run_test("initialize", lambda: test_initialize(client))
         run_test("tools/list descriptors", lambda: test_tool_descriptors(client))
