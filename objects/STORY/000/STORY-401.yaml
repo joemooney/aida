@@ -1,0 +1,64 @@
+id: 019e4e6d-19c5-77c3-a4af-f456a3255553
+spec_id: STORY-401
+agreed_id: STORY-401
+title: 'MCP server: stable error shapes — isError:true + structured {code, message, tool, recoverable}'
+description: |-
+  ## Problem
+
+  Current MCP tool errors return free-form text on the content array (and may not consistently set \`isError: true\`). Codex (sibling agent during STORY-398 roundtrip) flagged: *"Current text errors are okay for humans, but MCP clients need predictable isError: true plus a short text. Later, structured errors should include {code, message, tool, recoverable}."*
+
+  For schema-driven MCP clients (Codex, future agents), unpredictable error shapes break programmatic recovery.
+
+  ## Acceptance
+
+  ### Phase 1 — predictable isError + text (immediate)
+
+  - Every tool's error path sets \`isError: true\` on the response.
+  - Error text is short, machine-friendly format: \`<tool>: <code>: <one-line message>\` (e.g. \`post_punt: invalid_arg: spec_id required\`).
+
+  ### Phase 2 — structured error payload (follow-up; composes with STORY-399)
+
+  - Errors carry structured fields alongside the text envelope:
+    \`\`\`json
+    {
+      "isError": true,
+      "content": [{"type": "text", "text": "human-readable"}],
+      "structuredError": {
+        "code": "invalid_arg",
+        "message": "spec_id required",
+        "tool": "post_punt",
+        "recoverable": true
+      }
+    }
+    \`\`\`
+  - \`code\` is a stable enum across tools: \`invalid_arg\`, \`not_found\`, \`conflict\`, \`io_error\`, \`internal\`, etc.
+  - \`recoverable: true\` indicates the client can retry after correcting input; \`false\` indicates structural failure.
+
+  ## Out of scope
+
+  - Switching to MCP's full \`structuredContent\` for success paths (that's STORY-399 / Path B).
+  - Replacing the text envelope (additive only).
+
+  ## Composes with
+
+  - STORY-398 — empirical Codex roundtrip surfaces error-shape gaps; this story closes them.
+  - STORY-399 — Path B structuredContent; the Phase 2 error shape composes with Path B's structuredContent emission.
+  - EPIC-27 — MCP modernization.
+
+  ## Origin
+
+  User-relayed sibling-agent (Codex) recommendation 2026-05-22.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T06:43:53.413717316Z
+modified_at: 2026-05-22T06:43:53.413717316Z
+req_type: Story
+tags:
+- agent-agnostic
+- errors
+- from-codex
+- mcp
+- reliability
+- story-398-followup
