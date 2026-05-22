@@ -1,0 +1,19 @@
+id: 019e5108-a015-7493-9ca7-bfeb0feda1e1
+spec_id: TASK-464
+agreed_id: TASK-464
+title: 'Document: MCP-level worker directives vs global orchestrator queue directives — scope distinction'
+description: 'Per Antigravity Phase 3 observation 2026-05-22: `post_directive` (MCP coordination tool) writes to `.aida/worker.cmd` for local worker session thread flow (pauses, shutdowns). `aida worker directives` (CLI) shows the same file. But a separate global orchestrator-queue directive concept exists (`drain TASK-N` shown in some CLI views) that''s distinct. The two are NOT the same channel; documentation should clearly distinguish them. Acceptance: docs/architecture/mcp-coordination-surface.md gains a ''Directive channels: local worker vs global orchestrator'' section explaining the scope, the underlying files, which tools/commands touch which, and when to use each. Compose with docs/agents/cross-agent-onboarding.md if the distinction affects how sibling agents should use post_directive.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T18:53:00.309174297Z
+modified_at: 2026-05-22T18:53:00.309174297Z
+req_type: Task
+tags:
+- coordination
+- docs
+- from-antigravity
+- from-story-407
+- mcp
+- worker-directives
