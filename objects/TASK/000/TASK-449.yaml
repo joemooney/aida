@@ -1,0 +1,33 @@
+id: 019e4e21-4b1a-7250-bd70-c539350cebd0
+spec_id: TASK-449
+agreed_id: TASK-449
+title: Show auto-claim summary even when a type has no blocks yet (db block status early-return)
+description: |
+  TASK-444 surfaces the effective `[block_allocation.<type>]` auto-claim
+  threshold/size as a continuation line under each per-type row of
+  `aida db block status`. The early-return at
+  `aida-cli/src/main.rs:8215-8220` ("No blocks for node N. Run `aida db
+  block claim` to allocate one.") skips that summary entirely — but that's
+  exactly the case where a user would benefit most from knowing what
+  threshold their first claim will fire at, what size it'll allocate, and
+  whether their `[block_allocation]` config is wired up at all.
+
+  Out of TASK-444's stated scope (per-type rows under existing blocks),
+  so non-blocking, but a small ergonomics gap worth closing: print a
+  single global `auto-claim: ...` line in the empty-blocks branch too,
+  synthesised from `BlockAllocationConfig::default` knobs + any
+  configured overrides for `*` / per-type entries the user has set.
+
+  Raised in review of PR-171:
+  https://github.com/joemooney/aida/pull/171#issuecomment-4515233922
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T05:21:05.306123432Z
+modified_at: 2026-05-22T05:21:05.306123432Z
+req_type: Task
+tags:
+- from-review:PR-171
+- severity:minor
+- task-444-followup
