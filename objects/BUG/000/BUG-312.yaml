@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:25:13.882415412Z
-modified_at: 2026-05-22T08:11:14.502548124Z
+modified_at: 2026-05-22T08:15:24.558725440Z
 req_type: Bug
 tags:
 - cli-ux
@@ -50,6 +50,11 @@ tags:
 - from-self-test
 - session-leases
 - uuid-prefix
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 019e4ec0-d237-7a20-b1e3-284cbbd68f92
+  created_at: 2026-05-22T08:15:24.558712572Z
+  created_by: joe
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T08:11:14.502548124Z
