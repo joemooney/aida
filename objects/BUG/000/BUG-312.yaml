@@ -1,0 +1,52 @@
+id: 019e4e5c-049a-79e2-92e4-5b139ed7555e
+spec_id: BUG-312
+agreed_id: BUG-312
+title: 'aida session leases display: 8-char prefix collides on HLC-derived UUIDs in the same generation window — show enough chars to disambiguate'
+description: |-
+  ## Symptom
+
+  \`aida session leases --all\` shows lease IDs as 8-character prefixes. AIDA's HLC-derived UUIDs put the timestamp at the start, so two leases created within the same generation window collide on the displayed prefix even though their full UUIDs differ:
+
+  \`\`\`
+  id             scope                branch             role           state      worktree
+  ─────────────────────────────────────────────────────────────────────────────────────────
+  019e4df1       TASK-419             task-419           implementer    ◐ dormant  /home/joe/ai/aida-task-419
+  019e4df1       TASK-420             task-420           implementer    ◐ dormant  /home/joe/ai/aida-task-420
+  \`\`\`
+
+  Both show \`019e4df1\` but their full UUIDs are \`019e4df1af45\` and \`019e4df1e131\` respectively. Any \`aida session end 019e4df1\` call errors out: *"ambiguous session id 019e4df1 — matches 2 sessions, use a longer prefix."*
+
+  ## Impact
+
+  - Bulk-cleanup scripts that parse the displayed prefix and feed it back fail unpredictably.
+  - Operators eyeballing the lease list can't reliably copy-paste a single ID for \`aida session end\`.
+  - The error message ("use a longer prefix") is honest but unhelpful: the operator doesn't know HOW long is enough without inspecting \`.aida/sessions/\` directly.
+
+  ## Acceptance
+
+  - The lease-display logic checks for prefix collisions in the active set and extends the displayed prefix for colliding entries until it's unique. Single-lease entries can still show 8 chars; colliding entries show 10 or 12 as needed.
+  - Alternatively (simpler): always show a longer prefix (e.g., 12 chars) — HLC UUIDs are long enough that 12 chars rarely collides. Trade-off: wider column.
+  - \`aida session end <ambiguous>\` error message includes the FULL UUIDs of all matching sessions, so the operator can pick the right one without grepping the lease directory.
+  - Bulk-cleanup scripts can rely on the displayed ID being unambiguous.
+
+  ## Composes with
+
+  - **BUG-307** — auto-clean dormant leases. When that lands, the population of leases shrinks dramatically and collisions become rare. This BUG is the meantime fix for display correctness.
+
+  ## Origin
+
+  User report 2026-05-22 ~05:00 — cleanup script (\`aida session leases --all | grep dormant | awk '{print $1}' | ...\`) hit the ambiguous-prefix error on two leases sharing 8-char prefix. Real friction even with proper UUIDs underneath.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T06:25:13.882415412Z
+modified_at: 2026-05-22T06:25:13.882415412Z
+req_type: Bug
+tags:
+- cli-ux
+- collision
+- display
+- from-self-test
+- session-leases
+- uuid-prefix
