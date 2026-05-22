@@ -1,0 +1,44 @@
+id: 019e5061-2096-78c3-b2d5-e079502ad626
+spec_id: TASK-456
+agreed_id: TASK-456
+title: 'Discipline pack: add ''recursive-failure-risk fixes use keyboard, not drain'' section to workflow-patterns.md'
+description: |-
+  ## Background
+
+  The memory \`feedback_reliability_fixes_use_keyboard_not_drain\` captures a refinement to the dogfood-merge pattern: reliability fixes that affect the autonomy keystone's own shipping mechanism (orchestrator lease management, reviewer/implementer skill enforcement, phase-X recovery, retry layers) should ship via \`--zen --auto-complete\` at the keyboard, NOT unsupervised headless drain. The fix rides through the broken system; if the broken system's failure rate is non-trivial, the fix gets caught in it.
+
+  This principle should mirror into the discipline pack so new AIDA projects inherit it.
+
+  ## Acceptance
+
+  - Add a new subsection to \`aida-core/templates/docs/aida-discipline/workflow-patterns.md\` (or whichever discipline doc best fits) titled something like *"Reliability fixes: when dogfood-merge needs eyes on"*.
+  - The section captures:
+    - Recognize recursive-failure-risk fixes by their target: orchestrator lease management, reviewer/implementer skill enforcement under headless, phase-X recovery/retry, anything where the fix's failure mode impedes its own shipping pipeline.
+    - For these, use \`aida queue work <spec> --zen --auto-complete\` at the keyboard, not \`--no-human=both\` unsupervised.
+    - For all other fixes, dogfood-merge as normal (the existing principle).
+    - Concrete examples: BUG-307 (auto-clean dormant leases), BUG-311 (--steal fix), BUG-280 (reviewer AskUserQuestion), BUG-285 (queue-done gate), TASK-401 (implementer pre-exit gate). All shipped/attempted via dogfood-merge; the ones in this class stalled their own drains until programmatic gates landed.
+  - The discipline-pack copy stays in sync with the master template (per scaffolding-pack discipline).
+  - Cross-reference the memory file `~/.claude/projects/<slug>/memory/feedback_reliability_fixes_use_keyboard_not_drain.md` so users with the memory pack see the local + scaffolded versions aligned.
+
+  ## Composes with
+
+  - Memory \`feedback_reliability_fixes_use_keyboard_not_drain\` — the principle this task scaffolds.
+  - Memory \`feedback_self_test_via_dogfood_merge\` — the broader pattern this refines.
+  - Discipline file \`docs/aida-discipline/workflow-patterns.md\` — likely target.
+
+  ## Origin
+
+  2026-05-22 after the overnight drain caught 3/6 specs (BUG-307, BUG-311, BUG-310) in exactly the recursive-failure-risk pattern. Memory captured the principle; this task propagates it to new projects via the scaffolding pack.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T15:50:03.158657255Z
+modified_at: 2026-05-22T15:50:03.158657255Z
+req_type: Task
+tags:
+- discipline
+- from-self-test
+- reliability-fixes
+- scaffolding-pack
+- workflow-patterns
