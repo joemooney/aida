@@ -1094,3 +1094,10 @@
   note: Promoted from finding TASK-454 via `aida findings promote`
   added_at: 2026-05-22T15:46:43.930651103Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e507e-bc62-74b3-9c8c-e7b9b1b49377
+  position: 235000
+  added_by: joe
+  note: auto-queued by `session end` (019e5071); covers 1 spec
+  added_at: 2026-05-22T16:22:30.449117980Z
+  for_role: reviewer
