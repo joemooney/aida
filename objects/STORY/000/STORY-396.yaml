@@ -1,0 +1,26 @@
+id: 019e4e07-4900-74e1-af0a-abd74e5b84b2
+spec_id: STORY-396
+agreed_id: STORY-396
+title: 'Review PR-170: docs(autonomous-drain): reorder recovery recipe 1 so --delete-branch succeeds (TASK-435)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e4e01`) for branch `task-435`.
+
+  - PR: <https://github.com/joemooney/aida/pull/170>
+  - Branch: `task-435` → `main`
+
+  ## Covers
+
+  - TASK-435
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 170` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T04:52:40.832438376Z
+modified_at: 2026-05-22T04:52:40.832438376Z
+req_type: Story
