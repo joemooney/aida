@@ -35,12 +35,12 @@ description: |-
   - Punted again 2026-05-22: cold-boot implementer treated the original "Defer until..." text in the description as authoritative over the resolution comment. Advisor escalated with explicit recommendation to edit the spec body itself. This description is that edit.
 
   trace:TASK-440 | ai:claude
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:26:18.077004527Z
-modified_at: 2026-05-22T06:23:40.126824777Z
+modified_at: 2026-05-22T06:32:01.353576286Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -62,3 +62,7 @@ comments:
   content: 'Bumped to high 2026-05-22: TASK-440 (Path A — outputSchema descriptors) is now load-bearing prereq for the just-filed Codex-MCP empirical verification story. Codex likely uses schemas for tool discovery; without outputSchema descriptors, Codex may surface AIDA''s 21 tools as opaque-shape and limit the depth of the roundtrip test.'
   created_at: 2026-05-22T06:01:05.409078085Z
   modified_at: 2026-05-22T06:01:05.409078085Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-22T06:32:01.353576286Z
+  implemented_by: joe
