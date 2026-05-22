@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:25:01.119064647Z
-modified_at: 2026-05-22T20:31:34.311861225Z
+modified_at: 2026-05-22T23:14:04.768399060Z
 req_type: Task
 tags:
 - from-review:PR-202
 - rename-detection
 - severity:minor
 - story-281
+comments:
+- id: 019e51f7-a560-7251-94bf-23280fe968be
+  author: 'Implemented by PR-211, merged at 4e29ab3181ae4f0bedb532db9a859e2894715e0b. Local verification: `cargo test -p aida-cli classify_stale_base_blocks_on_predicted_conflict_without_path_overlap --quiet`, `cargo test -p aida-cli classify_stale_base --quiet`, and `cargo test -p aida-cli --quiet`. CI green. Note: `aida pr ship` could not auto-bump because the main worktree is currently on local branch `story-318-ecosystem-review`, whose origin ref is gone; status flipped manually after confirming merge.'
+  content: mcp
+  created_at: 2026-05-22T23:14:04.768389073Z
+  modified_at: 2026-05-22T23:14:04.768389073Z
