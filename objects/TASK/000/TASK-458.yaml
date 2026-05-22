@@ -78,7 +78,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:53:16.340454234Z
-modified_at: 2026-05-22T18:05:04.986138113Z
+modified_at: 2026-05-22T18:19:30.814130689Z
 req_type: Task
 tags:
 - cli-ux
@@ -105,3 +105,8 @@ comments:
     User-supplied evidence: `aida-pr-ship 182` for SPEC-398 today produced 'failed to run git: fatal: main is already used by worktree at /home/joe/ai/aida' AND 'Error: aida pull requires a git-canonical store'. The first is cosmetic but confusing; the second blocks the post-merge auto-bump entirely. Both are operationally addressable in the wrapper logic.
   created_at: 2026-05-22T17:35:54.905949968Z
   modified_at: 2026-05-22T17:35:54.905949968Z
+- id: 019e50e9-f67e-7770-8c66-da1ffa4c6d55
+  author: joe
+  content: Commit b3a7bbbe references this requirement
+  created_at: 2026-05-22T18:19:30.814130689Z
+  modified_at: 2026-05-22T18:19:30.814130689Z
