@@ -1,0 +1,11 @@
+id: 019e50fc-e6f0-7bd3-a2de-d4cceb5f6a02
+spec_id: SPEC-405
+title: Antigravity Phase 3 coordination test fixture
+description: Created by Antigravity Phase 3 coordination roundtrip. Safe to flip and clean up after Phase 3 verification.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T18:40:12.016648659Z
+modified_at: 2026-05-22T18:40:12.016648659Z
+req_type: Task
