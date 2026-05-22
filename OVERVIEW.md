@@ -145,6 +145,10 @@ Each clone of an AIDA-using project gets a unique **node id** and writes its ide
 
 The native desktop and WASM clients (egui-based) were extracted to a separate repo on 2026-05-02. The React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
 
+### Autonomy & escalation
+
+The autonomous-collaboration layer — the three-mode autonomy ladder (default / `--zen` / `--no-human`), the implementer → advisor → human escalation cascade, the advisor's Type A/B/C resolve-vs-escalate calibration, and the file-based handshakes that coordinate the tiers — is described in [docs/architecture/autonomy-and-escalation.md](docs/architecture/autonomy-and-escalation.md). For the practical user guide to `--auto-complete` and `--no-human` see [docs/autonomous-drain.md](docs/autonomous-drain.md); for the MCP transport layer over the same filesystem substrate see [docs/architecture/mcp-coordination-surface.md](docs/architecture/mcp-coordination-surface.md).
+
 ---
 
 ## Workspace layout
@@ -240,4 +244,7 @@ For project conventions (commit format, scaffold/template architecture, CLI refe
 | [docs/user-guide.md](docs/user-guide.md) | CLI / web dashboard usage, use-case tutorials, integration recipes |
 | [docs/admin-guide.md](docs/admin-guide.md) | Storage administration, multi-user configuration |
 | [docs/storage-modes.md](docs/storage-modes.md) | Deeper dive on storage modes and migration paths |
+| [docs/architecture/autonomy-and-escalation.md](docs/architecture/autonomy-and-escalation.md) | The autonomy modes, the implementer → advisor → human escalation cascade, the advisor's Type A/B/C calibration, the inter-agent comms substrate |
+| [docs/architecture/mcp-coordination-surface.md](docs/architecture/mcp-coordination-surface.md) | The MCP transport layer over the filesystem-canonical coordination substrate |
+| [docs/autonomous-drain.md](docs/autonomous-drain.md) | Practical user guide to `--auto-complete` and `--no-human` (paired with the autonomy architecture doc above) |
 | [docs/plans/](docs/plans/) | Archived implementation plans (one per `YYYY-MM-DD-<slug>.md`) |
