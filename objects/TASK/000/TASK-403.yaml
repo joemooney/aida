@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:25:56.023469640Z
-modified_at: 2026-05-22T18:06:49.756532224Z
+modified_at: 2026-05-22T18:06:50.840259639Z
 req_type: Task
 tags:
 - autonomy-keystone
@@ -49,6 +49,17 @@ tags:
 - needs-human
 - visibility
 - wedge
+comments:
+- id: 019e50de-5dd8-7f21-871e-8aa02bbed84f
+  author: joe
+  content: |-
+    Advisor escalated this design-fork to a human (STORY-306).
+
+    Reasoning: TASK-403 is misrouted to the headless implementer queue. Every line of its Acceptance section requires operator action a headless coding implementer cannot perform: (a) the asciinema must capture a *future* overnight drain that has not occurred — there is no artifact to record, edit, or narrate from this REPL; (b) batch curation (4-6 specs mixing simple/complex with a likely-punt + likely-transient-error spec) is operator judgment about queue composition, the dialog/advisor seat's documented job per CLAUDE.md (`Driver, not implementer`) and memory `feedback_dialog_role_responsibilities` (responsibility #1: route work); (c) the spec explicitly states `Publish surface: user decides` — a recorded preference embedded in the acceptance criteria that the advisor tier must respect, not override; (d) the ~800-1500 word external narrative requires editorial judgment about AIDA's public voice and depends on (a) existing first. The spec also names two preconditions — BUG-266 and TASK-401 — that the acceptance criteria say `must land first` before recording is even appropriate; check `aida show BUG-266` / `aida show TASK-401` for current status before deciding. The fork the user needs to resolve is strategy/routing, not design: pick one of (1) defer the spec — wait until BUG-266 + TASK-401 ship, then operator drives it manually in a dialog session post-overnight-drain; (2) reroute — re-queue under the dialog role (`aida queue add --for dialog`) since the work is advocacy/curation/editorial rather than code; (3) decompose — split into a precondition-checking sentinel + a separate operator-driven recording task + a separate narrative-drafting task, each with realistic ownership; (4) unqueue + reclassify — convert from queued TASK to a meta-todo on the operator's roadmap. Recommend (1) or (2): the spec's own `Wait for the right base state` clause prefers (1); the role-routing principle prefers (2). The implementer's lean (operator runs it manually) aligns with (1)+(2). All four options are reversible. No code work should ship from this drain pickup; the worktree should exit phase 1 with zero commits and the spec should return to NeedsAttention for human routing.
+
+    When you resolve this, record the answer (a memory, an acceptance-criteria edit, or a discipline doc) so a future advisor can resolve the same kind of fork as a recorded principle.
+  created_at: 2026-05-22T18:06:50.840259639Z
+  modified_at: 2026-05-22T18:06:50.840259639Z
 attention_reason:
   category: other
   detail: 'TASK-403 is a demo/marketing meta-task whose acceptance criteria require actions a headless coding implementer cannot perform: (1) record an asciinema of a *future* overnight drain — the keystone artifact cannot be produced in a single REPL session; (2) curate a 4-6 spec batch — judgment about queue composition belongs to the advisor/operator, not a code-implementer; (3) pick a publish surface — the spec explicitly says ''user decides''; (4) write ~800-1500 word external narrative — depends on (1) existing first, and needs editorial judgment about AIDA''s public voice. There is no code surface here; the spec is misrouted to the headless implementer queue.'
