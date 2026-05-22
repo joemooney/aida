@@ -1,0 +1,76 @@
+id: 019e505c-e6cb-7e92-862f-403299f56ccd
+spec_id: BUG-327
+agreed_id: BUG-327
+title: 'BUG-280 hole: /aida-review skill template''s AskUserQuestion ban is paper enforcement — reviewer reasoned past it, no verdict file written'
+description: |-
+  ## Symptom
+
+  2026-05-22 overnight drain (BUG-312 phase 3 on PR-175). Orchestrator output:
+
+  \`\`\`
+  ✗ phase 3 (reviewer session) failed: the reviewer session produced no verdict file
+    — the reviewer's headless log contains an AskUserQuestion call, which is forbidden
+    under \`--no-human\` and likely caused the session to bail before writing the verdict
+    file (BUG-280). The \`/aida-review\` skill must auto-resolve every confirmation under
+    AIDA_HEADLESS=1 instead of calling AskUserQuestion.
+  \`\`\`
+
+  **BUG-280 shipped 2026-05-20 with the explicit acceptance:** *"Never calls AskUserQuestion under \`--no-human=both\` / \`AIDA_HEADLESS=1\`. Confirmations auto-resolve to the default verdict-file value."* Yet here the reviewer called AskUserQuestion under `--no-human=both` and bailed.
+
+  ## Why BUG-280 didn't fully close this
+
+  BUG-280 added skill-template instructions saying *"don't call AskUserQuestion under headless."* Same shape as TASK-401's pre-exit checklist for the implementer. **Same failure mode:** the model reads the instruction, may even acknowledge it, and then calls AskUserQuestion anyway in some code path the skill template doesn't structurally prevent.
+
+  **Skill-template instructions cannot enforce invariants under \`--no-human=both\`.** They can only describe them. Same lesson BUG-285 captured for the queue-done gate; this is the reviewer-side analogue.
+
+  ## What programmatic enforcement looks like
+
+  The reviewer's `claude -p` invocation is spawned by the orchestrator. The orchestrator could:
+
+  1. **Refuse to spawn the reviewer in a configuration that allows AskUserQuestion under `--no-human=both`.** Add `--disable-tool=AskUserQuestion` (or equivalent) to the spawned claude's invocation when AIDA_HEADLESS=1. Programmatic block at the spawn boundary.
+  2. **Detect AskUserQuestion calls in the headless log mid-stream and inject a "you cannot ask; write the verdict file and exit" message via `continue` to the live session** (similar to BUG-266's mid-turn retry pattern for transient API errors).
+  3. **Auto-resolve AskUserQuestion calls in the headless log by writing a sentinel response that drives the reviewer to the safe default.** Less elegant; works if (1) isn't available.
+
+  Option (1) is the cleanest — it's a programmatic block, not advisory. Verify whether `claude -p` accepts a `--disable-tool` (or whatever the equivalent flag is) and use it.
+
+  ## Acceptance
+
+  - The reviewer's `claude -p` invocation under `--no-human=both` (or whenever AIDA_HEADLESS=1) is spawned with AskUserQuestion structurally disabled. The tool is not available to the reviewer Claude; attempting to call it fails immediately rather than blocking.
+  - If `claude -p` doesn't support tool-disabling, implement (2): orchestrator watches the headless log; on detecting `AskUserQuestion` it injects a continue-message instructing the reviewer to write the verdict file and exit.
+  - Regression test: synthetic reviewer-session that tries to call AskUserQuestion. Under headless, the call must fail (or be auto-resolved); the verdict file must land.
+  - Update BUG-280's documentation / acceptance noting that the skill-template-instruction approach is insufficient and was superseded by this programmatic gate.
+
+  ## The meta-pattern (third instance)
+
+  This is the **third time** a skill-template-instruction-based fix has been shown insufficient and required a programmatic-gate complement:
+
+  1. TASK-401 (pre-exit /aida-pr discipline, skill template) → BUG-285 (queue-done programmatic refusal)
+  2. BUG-280 (reviewer no-AskUserQuestion, skill template) → **this BUG** (programmatic disable)
+  3. The general principle is captured in BUG-269's notes + memory \`feedback_self_test_via_dogfood_merge\`: when a behavior must be guaranteed under \`--no-human=both\`, ship a programmatic gate, not a skill-template instruction.
+
+  ## Composes with
+
+  - **BUG-280** — the skill-template fix this BUG complements. Don't revert BUG-280; the instruction is useful documentation. Add the programmatic gate alongside.
+  - **BUG-285** — the implementer-side analogue. Same pattern at a different gate.
+  - **TASK-401** — the original skill-template-only attempt that BUG-285 patched programmatically.
+  - Memory \`feedback_self_test_via_dogfood_merge\` — predicts exactly this: dogfood-merge surfaces the NEXT gap that the previous fix's depth didn't cover.
+
+  ## Origin
+
+  2026-05-22 overnight drain, BUG-312 phase-3 reviewer failure. Third instance of paper-enforcement-reasoned-past pattern in 5 days. Strong signal that the skill-template-only approach is structurally insufficient for invariants that must hold under headless mode.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-22T15:45:26.219016285Z
+modified_at: 2026-05-22T15:45:26.219016285Z
+req_type: Bug
+tags:
+- aida-review
+- askuserquestion
+- bug-280-followup
+- from-self-test
+- headless
+- paper-enforcement
+- reviewer
+- verdict-file
