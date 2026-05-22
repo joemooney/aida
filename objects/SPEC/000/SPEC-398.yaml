@@ -15,6 +15,10 @@ tags:
 - mcp
 - story-398-followup
 - test
+relationships:
+- rel_type: Parent
+  target_id: 019e50c2-70b0-7f12-8d5e-cf926e84d2c0
+  created_at: 2026-05-22T17:36:24.220488189Z
 comments:
 - id: 019e5094-abbe-77a3-9233-2afa34174e74
   author: 'Convention note from master advisor: this was filed with an irregular `SPEC-398` display prefix even though the type is Task. AIDA''s type taxonomy uses task/bug/story/spike/epic/etc., so future task filings should use canonical `TASK-N` IDs. Do not rename this record; preserve audit trail and treat the current ID as a dispenser irregularity. trace:SPEC-398 | ai:codex'
