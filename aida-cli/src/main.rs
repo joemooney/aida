@@ -43628,6 +43628,9 @@ struct QueueRow {
     title: String,
     status: String,
     for_role: Option<String>,
+    in_progress: bool,
+    lease_id: Option<String>,
+    lease_started_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn collect_user_context(
@@ -43666,7 +43669,8 @@ fn collect_user_context(
             .map(|b| collect_pr_facts(project_root, &b.name))
     };
 
-    let (queue_head, queue_total) = collect_queue_snapshot(backend, store, role.as_deref());
+    let (queue_head, queue_total) =
+        collect_queue_snapshot(backend, store, role.as_deref(), &leases);
     let agents = agent_registry::list_agent_views(project_root);
 
     UserStatusContext {
@@ -43873,15 +43877,23 @@ fn collect_queue_snapshot(
     backend: &aida_core::CachedGitBackend,
     store: &aida_core::models::RequirementsStore,
     role: Option<&str>,
+    leases: &[SessionLease],
 ) -> (Vec<QueueRow>, usize) {
     use aida_core::DatabaseBackend;
     let user_id = current_user_id(None);
     let entries = backend.queue_list(&user_id, false).unwrap_or_default();
 
-    let mut rows: Vec<QueueRow> = Vec::new();
+    // TASK-490: an at-keyboard operator's first question is "what is being
+    // worked on right now?" — surface in-progress queue items unconditionally,
+    // then fill the next-up display budget with the FIFO head of the rest.
+    // The "X more" counter in the renderer is computed against next-up only
+    // so the two sections sum to the visible totals.
+    // trace:TASK-490 | ai:claude
+    const NEXT_UP_BUDGET: usize = 5;
+    let mut in_progress_rows: Vec<QueueRow> = Vec::new();
+    let mut next_up_rows: Vec<QueueRow> = Vec::new();
     let mut total: usize = 0;
     for entry in entries {
-        // Filter by role when one is active.
         if let Some(r) = role {
             let mismatch = entry
                 .for_role
@@ -43899,7 +43911,6 @@ fn collect_queue_snapshot(
         else {
             continue;
         };
-        // Hide terminal status to match `aida queue list` defaults.
         if matches!(
             req.status,
             aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
@@ -43907,16 +43918,36 @@ fn collect_queue_snapshot(
             continue;
         }
         total += 1;
-        if rows.len() < 5 {
-            rows.push(QueueRow {
-                spec_id: req.display_id(),
-                title: req.title.clone(),
-                status: format!("{}", req.status),
-                for_role: entry.for_role.clone(),
-            });
+        let is_in_progress = matches!(req.status, aida_core::RequirementStatus::InProgress);
+        let spec_id = req.display_id();
+        let (lease_id, lease_started_at) = if is_in_progress {
+            leases
+                .iter()
+                .find(|l| l.scope.eq_ignore_ascii_case(&spec_id))
+                .map(|l| (Some(l.id.clone()), Some(l.started_at)))
+                .unwrap_or((None, None))
+        } else {
+            (None, None)
+        };
+        let row = QueueRow {
+            spec_id,
+            title: req.title.clone(),
+            status: format!("{}", req.status),
+            for_role: entry.for_role.clone(),
+            in_progress: is_in_progress,
+            lease_id,
+            lease_started_at,
+        };
+        if is_in_progress {
+            in_progress_rows.push(row);
+        } else if next_up_rows.len() < NEXT_UP_BUDGET {
+            next_up_rows.push(row);
         }
     }
-    (rows, total)
+    // In-progress first (all of them — typically few), then the FIFO head of
+    // the remaining queue up to the display budget.
+    in_progress_rows.extend(next_up_rows);
+    (in_progress_rows, total)
 }
 
 fn print_status_session_section(ctx: &UserStatusContext) {
@@ -44053,6 +44084,30 @@ fn print_status_pr_section(ctx: &UserStatusContext, focused: bool) {
     println!();
 }
 
+/// TASK-490: pure split of the queue head into the two display groups, with
+/// the counter math the renderer needs ("X more" reflects only not-in-progress
+/// items). Lifted out of the renderer so the layout invariants can be tested
+/// without stdout capture. trace:TASK-490 | ai:claude
+struct QueueViewSplit<'a> {
+    in_progress_rows: Vec<&'a QueueRow>,
+    next_up_rows: Vec<&'a QueueRow>,
+    in_progress_total: usize,
+    next_up_total: usize,
+}
+
+fn split_queue_view<'a>(head: &'a [QueueRow], queue_total: usize) -> QueueViewSplit<'a> {
+    let (in_progress_rows, next_up_rows): (Vec<&QueueRow>, Vec<&QueueRow>) =
+        head.iter().partition(|r| r.in_progress);
+    let in_progress_total = in_progress_rows.len();
+    let next_up_total = queue_total.saturating_sub(in_progress_total);
+    QueueViewSplit {
+        in_progress_rows,
+        next_up_rows,
+        in_progress_total,
+        next_up_total,
+    }
+}
+
 fn print_status_queue_section(ctx: &UserStatusContext, focused: bool) {
     println!("{}", "─── Queue ───".bold());
     let role_label = ctx.role.as_deref().unwrap_or("(no active role)");
@@ -44064,24 +44119,65 @@ fn print_status_queue_section(ctx: &UserStatusContext, focused: bool) {
             format!("{} item(s)", ctx.queue_total).cyan(),
             role_label.cyan()
         );
-        for (i, row) in ctx.queue_head.iter().enumerate() {
-            // TASK-269: shared status badge. trace:TASK-269 | ai:claude
+        // TASK-490: split queue display into "In progress" + "Next up". The
+        // "what's being worked on right now?" signal is the highest-value
+        // piece of queue info for an at-keyboard operator — surface it first
+        // so it isn't buried in the FIFO tail. trace:TASK-490 | ai:claude
+        let QueueViewSplit {
+            in_progress_rows,
+            next_up_rows,
+            in_progress_total,
+            next_up_total,
+        } = split_queue_view(&ctx.queue_head, ctx.queue_total);
+
+        if !in_progress_rows.is_empty() {
             println!(
-                "  {:>2}. {} [{}] {}",
-                i + 1,
-                row.spec_id.bold(),
-                status_display::status_badge(&row.status),
-                row.title
+                "  {} {}",
+                "◐".magenta(),
+                format!("In progress ({}):", in_progress_total).magenta()
             );
+            for row in &in_progress_rows {
+                let lease_chip = match (&row.lease_id, &row.lease_started_at) {
+                    (Some(id), Some(started)) => {
+                        let short = &id[..id.len().min(8)];
+                        format!(
+                            "  [{}: {}, {}]",
+                            "lease".dimmed(),
+                            short.yellow(),
+                            humanize_relative(*started).dimmed()
+                        )
+                    }
+                    _ => String::new(),
+                };
+                println!(
+                    "      {} [{}] {}{}",
+                    row.spec_id.bold(),
+                    status_display::status_badge(&row.status),
+                    row.title,
+                    lease_chip
+                );
+            }
         }
-        if ctx.queue_total > ctx.queue_head.len() {
-            println!(
-                "    {} {} more (run `aida queue list`)",
-                "…".dimmed(),
-                (ctx.queue_total - ctx.queue_head.len())
-                    .to_string()
-                    .dimmed()
-            );
+
+        if !next_up_rows.is_empty() {
+            println!("  {}", "Next up:".dimmed());
+            for (i, row) in next_up_rows.iter().enumerate() {
+                // TASK-269: shared status badge. trace:TASK-269 | ai:claude
+                println!(
+                    "  {:>2}. {} [{}] {}",
+                    i + 1,
+                    row.spec_id.bold(),
+                    status_display::status_badge(&row.status),
+                    row.title
+                );
+            }
+            if next_up_total > next_up_rows.len() {
+                println!(
+                    "    {} {} more (run `aida queue list`)",
+                    "…".dimmed(),
+                    (next_up_total - next_up_rows.len()).to_string().dimmed()
+                );
+            }
         }
     }
     if focused {
@@ -44189,15 +44285,31 @@ fn print_status_json(
         GhStatus::Failed(r) => Some(json!({ "error": "gh-failed", "reason": r })),
         GhStatus::Skipped => Some(json!({ "skipped": true })),
     });
-    let queue = json!({
-        "role": ctx.role,
-        "total": ctx.queue_total,
-        "head": ctx.queue_head.iter().map(|r| json!({
+    let head_json = |r: &QueueRow| {
+        let mut obj = json!({
             "spec_id": r.spec_id,
             "title": r.title,
             "status": r.status,
             "for_role": r.for_role,
-        })).collect::<Vec<_>>(),
+            "in_progress": r.in_progress,
+        });
+        if r.in_progress {
+            if let Some(id) = &r.lease_id {
+                obj["lease_id"] = json!(id);
+            }
+            if let Some(started) = r.lease_started_at {
+                obj["lease_started_at"] = json!(started.to_rfc3339());
+            }
+        }
+        obj
+    };
+    let queue_split = split_queue_view(&ctx.queue_head, ctx.queue_total);
+    let queue = json!({
+        "role": ctx.role,
+        "total": ctx.queue_total,
+        "in_progress_count": queue_split.in_progress_total,
+        "next_up_count": queue_split.next_up_total,
+        "head": ctx.queue_head.iter().map(head_json).collect::<Vec<_>>(),
     });
 
     let mut out = serde_json::Map::new();
@@ -44260,6 +44372,168 @@ fn print_status_json(
     }
     println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod task_490_status_in_progress_tests {
+    use super::*;
+
+    fn row(spec_id: &str, status: &str, in_progress: bool) -> QueueRow {
+        QueueRow {
+            spec_id: spec_id.into(),
+            title: format!("Title for {}", spec_id),
+            status: status.into(),
+            for_role: Some("implementer".into()),
+            in_progress,
+            lease_id: None,
+            lease_started_at: None,
+        }
+    }
+
+    // TASK-490 acceptance: a queue with 2 in-progress + N approved items
+    // surfaces both in-progress at the top, and the "Next up" counter
+    // reflects only the not-in-progress slice. trace:TASK-490 | ai:claude
+    #[test]
+    fn split_surfaces_in_progress_first_and_excludes_them_from_next_up_counter() {
+        let head = vec![
+            row("STORY-248", "Planned", false),
+            row("STORY-244", "Approved", false),
+            row("TASK-487", "In Progress", true),
+            row("TASK-311", "Approved", false),
+            row("PR-210", "In Progress", true),
+        ];
+        // Queue total simulates a backlog of 16: 2 in-progress + 14 not.
+        let split = split_queue_view(&head, 16);
+        assert_eq!(split.in_progress_total, 2, "two in-progress items");
+        assert_eq!(
+            split.next_up_total, 14,
+            "next_up counter excludes the in-progress count"
+        );
+        let in_progress_ids: Vec<_> =
+            split.in_progress_rows.iter().map(|r| r.spec_id.as_str()).collect();
+        assert_eq!(in_progress_ids, vec!["TASK-487", "PR-210"]);
+        let next_up_ids: Vec<_> =
+            split.next_up_rows.iter().map(|r| r.spec_id.as_str()).collect();
+        assert_eq!(next_up_ids, vec!["STORY-248", "STORY-244", "TASK-311"]);
+    }
+
+    // When no In Progress items exist, the in_progress section is empty
+    // (renderer omits the subsection header), and "Next up" math is
+    // identical to the pre-TASK-490 single-list behavior.
+    #[test]
+    fn split_with_no_in_progress_leaves_next_up_total_unchanged() {
+        let head = vec![
+            row("STORY-248", "Planned", false),
+            row("STORY-244", "Approved", false),
+            row("SPIKE-8", "Approved", false),
+        ];
+        let split = split_queue_view(&head, 12);
+        assert_eq!(split.in_progress_total, 0);
+        assert!(split.in_progress_rows.is_empty());
+        assert_eq!(split.next_up_total, 12);
+        assert_eq!(split.next_up_rows.len(), 3);
+    }
+
+    // collect_queue_snapshot pulls ALL in-progress items into the head Vec
+    // even when they sit past the next-up display budget (5), and attaches
+    // lease info when a lease's scope matches the spec id. Without this
+    // surfacing the in-progress item at queue position 8 was the "buried in
+    // '… N more'" friction TASK-490 documents.
+    #[test]
+    fn collect_queue_snapshot_pulls_in_progress_past_display_budget_with_lease() {
+        use aida_core::models::{Requirement, RequirementsStore};
+        use aida_core::{CachedGitBackend, DatabaseBackend, RequirementStatus};
+        use chrono::TimeZone;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let project_root = dir.path();
+        let store_root = project_root.join("store");
+        let cache_path = project_root.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+
+        let user_id = current_user_id(None);
+        let mut store = RequirementsStore::new();
+        let now = chrono::Utc::now();
+
+        for i in 1..=7 {
+            let mut r = Requirement::new(format!("approved {}", i), String::new());
+            r.spec_id = Some(format!("TASK-{}", 9000 + i));
+            r.status = RequirementStatus::Approved;
+            let entry = aida_core::models::QueueEntry {
+                user_id: user_id.clone(),
+                requirement_id: r.id,
+                position: i as i64,
+                added_by: user_id.clone(),
+                note: None,
+                added_at: now,
+                for_role: Some("implementer".into()),
+                for_scope: None,
+                for_session: None,
+            };
+            backend.queue_add(entry).unwrap();
+            store.requirements.push(r);
+        }
+
+        let mut buried = Requirement::new("buried in-progress".into(), String::new());
+        buried.spec_id = Some("TASK-9999".into());
+        buried.status = RequirementStatus::InProgress;
+        let buried_entry = aida_core::models::QueueEntry {
+            user_id: user_id.clone(),
+            requirement_id: buried.id,
+            position: 8,
+            added_by: user_id.clone(),
+            note: None,
+            added_at: now,
+            for_role: Some("implementer".into()),
+            for_scope: None,
+            for_session: None,
+        };
+        backend.queue_add(buried_entry).unwrap();
+        store.requirements.push(buried);
+
+        // Drop a matching lease file so the in-progress row gets a chip.
+        let lease_dir = leases_dir(project_root);
+        std::fs::create_dir_all(&lease_dir).unwrap();
+        let lease_id = "01900000task";
+        let started = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 22, 0, 0).unwrap();
+        let lease_toml = format!(
+            "id = \"{lease_id}\"\n\
+             scope = \"TASK-9999\"\n\
+             slug = \"task-9999\"\n\
+             owner = \"tester\"\n\
+             worktree_path = \"/tmp/x\"\n\
+             branch = \"task-9999\"\n\
+             started_at = \"{}\"\n\
+             hostname = \"h\"\n",
+            started.to_rfc3339()
+        );
+        std::fs::write(lease_dir.join(format!("{lease_id}.toml")), lease_toml).unwrap();
+        let leases = list_leases(project_root);
+
+        let (head, total) =
+            collect_queue_snapshot(&backend, &store, Some("implementer"), &leases);
+
+        assert_eq!(total, 8, "all eight non-terminal entries counted");
+        let head_ids: Vec<_> = head.iter().map(|r| r.spec_id.as_str()).collect();
+        assert_eq!(
+            head_ids[0], "TASK-9999",
+            "in-progress item surfaces first, not buried at position 8 (got {:?})",
+            head_ids
+        );
+        let promoted = &head[0];
+        assert!(promoted.in_progress);
+        assert_eq!(promoted.lease_id.as_deref(), Some(lease_id));
+        assert_eq!(promoted.lease_started_at, Some(started));
+        // The rest are the approved head in FIFO order, up to the 5-slot budget.
+        assert_eq!(head.len(), 6, "1 in-progress + 5 next-up = 6 head rows");
+        for (i, row) in head[1..].iter().enumerate() {
+            assert_eq!(row.spec_id, format!("TASK-{}", 9001 + i));
+            assert!(!row.in_progress);
+            assert!(row.lease_id.is_none());
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
