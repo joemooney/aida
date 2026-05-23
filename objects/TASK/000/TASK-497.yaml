@@ -1,0 +1,82 @@
+id: 019e558b-77e7-7382-83e7-43916896930c
+spec_id: TASK-497
+agreed_id: TASK-497
+title: 'aida --asciinema: project-local default directory + spec-aware filename/title derivation (STORY-423 refinement)'
+description: |-
+  User direction 2026-05-23 morning: STORY-423 (the aida --asciinema wrapper, shipped overnight via PR-228) writes casts to $HOME/.aida/casts/ with a flag-derived slug. Both default choices are friction:
+
+  1. **Global path mixes cross-project casts** — operator browsing for 'today's AIDA demo casts' has to filter; in a multi-project setup the directory grows opaque
+  2. **Slug is flag-soup** — current default for `aida --asciinema queue work --batch overnight-2026-05-23 --auto-complete --no-human=both --escalate-blocks` is roughly `queue-work-batch-overnight-2026-05-23-auto-complete-no-human-both-escalate-blocks`. Long, ugly, semantically weak.
+
+  ## Proposed refinement
+
+  ### 1. Default directory: project-local
+
+  Move default from `$HOME/.aida/casts/` to a project-local location. Two options:
+
+  - **Option A**: `.aida/casts/` (under existing `.aida/` namespace; gitignored by existing `.aida/*` deny-by-default)
+  - **Option B**: `.asciinema/` at project root (new top-level dir; needs its own gitignore entry)
+
+  RECOMMEND: Option A. Consistent with existing `.aida/` namespace (cache, sessions, headless-logs, agent-briefs all live there). Gitignore convention already covers it. No new top-level dir.
+
+  ### 2. Spec-aware slug derivation
+
+  When the wrapped invocation involves a spec ID or batch name, the slug should focus on that, not the flag-soup:
+
+  - `aida queue work TASK-488 --auto-complete` → slug `task-488` (not `queue-work-task-488-auto-complete`)
+  - `aida queue work --batch overnight-2026-05-23 --auto-complete` → slug `batch-overnight-2026-05-23`
+  - `aida pr ship 220` → slug `pr-220` (or `pr-ship-220`)
+  - `aida queue work TASK-340 TASK-425` (multi-spec) → slug `task-340-task-425`
+  - Generic fallback (no spec ID detectable in argv): use subcommand + first non-flag arg, still capped at the 80-char limit STORY-423 established
+
+  Default filename: `.aida/casts/<timestamp>-<spec-slug>.cast`. Cleaner. Browsable.
+
+  ### 3. Semantic title derivation
+
+  Title should be readable as a sentence, not a command echo. For queue work specifically:
+
+  - `aida queue work TASK-488 --auto-complete` → title `AIDA drain: TASK-488`
+  - `aida queue work --batch X --auto-complete` → title `AIDA drain: batch X`
+  - `aida pr ship 220` → title `AIDA pr ship: PR-220`
+  - Generic fallback: keep current behavior
+
+  The --cast-title override remains for operator-specified titles.
+
+  ## Acceptance
+
+  - [ ] Default cast directory changes from $HOME/.aida/casts/ to .aida/casts/ (project-local). Operator can still override with --cast-out PATH.
+  - [ ] `.aida/casts/` is gitignored by AIDA's deny-by-default `.aida/*` convention; `aida init` confirms this in scaffolded .gitignore (likely already covered).
+  - [ ] Slug derivation prefers spec IDs / batch names over flag listings. Pattern: scan argv for [A-Z]+-\d+ (spec ID) or --batch <name> (batch tag); use those as primary slug components.
+  - [ ] Title derivation produces semantic titles ('AIDA drain: TASK-X' style) when the subcommand is recognizable (queue work, pr ship, etc.); falls back to current behavior otherwise.
+  - [ ] --cast-out and --cast-title overrides still work; they take precedence over defaults.
+  - [ ] Backward compat: existing casts at $HOME/.aida/casts/ are not moved/touched; the change is forward-only.
+  - [ ] Documented in CLAUDE.md / AGENTS.md.
+  - [ ] Regression test: `aida --asciinema queue work TASK-488 --auto-complete` writes to .aida/casts/<timestamp>-task-488.cast with title 'AIDA drain: TASK-488' (when no overrides given).
+
+  ## Composes with
+
+  - STORY-423 (parent — the original wrapper)
+  - TASK-485 (scaffolding propagation pipeline — if .aida/casts/ needs explicit setup, this is the integration point)
+  - The aida-store + .aida/ deny-by-default convention from CLAUDE.md
+
+  ## Estimated time
+
+  ~1.5-2h. Bounded — argv parsing for spec-id detection, default-path move, title-template lookup, tests + docs.
+
+  ## Empirical anchor
+
+  User observation 2026-05-23: 'can we write them to maybe a .asciinema directory and default the output file and title based on the work?' — operator wanted cleaner defaults after using the wrapper for the morning drain.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T15:54:24.103783031Z
+modified_at: 2026-05-23T15:54:24.103783031Z
+req_type: Task
+tags:
+- asciinema
+- from-self-test
+- from-user-direction
+- recording
+- story-423-followup
+- ux
