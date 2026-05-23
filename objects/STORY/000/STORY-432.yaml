@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:07.897401164Z
-modified_at: 2026-05-23T16:22:07.897401164Z
+modified_at: 2026-05-23T23:12:58.338229275Z
 req_type: Story
 tags:
 - agent-launcher
@@ -53,3 +53,20 @@ tags:
 - depends-on:phase-1
 - parent:EPIC-31
 - phase-2
+comments:
+- id: 019e571c-fde2-79f2-bc1d-9ce45673f314
+  author: codex
+  content: |-
+    Sketch for STORY-432 before implementation:
+
+    1. Add a new top-level `aida agent` command with nested `new claude [--role <role>] [--spec <SPEC-ID>] [--cwd <path>] [--permission-mode <mode>]` in `cli.rs`; keep the shape narrow so STORY-433/434 can add sibling agent variants later.
+    2. Project-correct config: resolve `--cwd` to an AIDA project root (or use `find_project_root()` from current cwd) and fail clearly if `.aida/config.toml` / store discovery fails. Do not parse `.mcp.json` or CLAUDE.md; launching `claude` with cwd set to the resolved project/worktree lets Claude discover project-local config normally.
+    3. `--spec`: call existing `session_start(... launch=false ...)` in-process to pre-create sibling worktree + lease, then locate the fresh lease by scope and launch from `lease.worktree_path`. Without `--spec`, launch in the resolved project root and register with no `current_spec`.
+    4. Role handling: set `AIDA_SESSION_ROLE=<role>` in the child environment when explicit; if omitted with `--spec`, use the lease/session-start role. Do not run `aida role enter`; this launcher should not mutate the operator shell's persistent role state.
+    5. Registry handshake: add a small `agent_registry::register_spawned_agent(...)` helper that writes `.aida/agents/claude-<pid>.toml` immediately after `Command::spawn`, with `source="agent-launcher"`, pid, role, current_spec, cwd, version/build fields best-effort. Do not wait for first MCP request; status should show the process immediately.
+    6. Deregistration: run Claude foreground/inherited-stdio via spawn+wait, not exec or detach, so AIDA can remove the registry entry on child exit and propagate Claude's exit code. If cleanup fails, warn but preserve Claude's exit status.
+    7. Environment: set `AIDA_AGENT_TYPE=claude`, `AIDA_PROJECT_ROOT=<root>`, and when applicable `AIDA_SESSION_SCOPE=<SPEC-ID>` plus `AIDA_SESSION_ROLE`. Preserve PATH; preflight `claude` by attempting to resolve it on PATH and return a helpful error if missing.
+    8. Tests: pure unit tests for CLI parse/env/registry-entry construction; integration-style test with a fake `claude` script on PATH that exits 0, asserting registry appears while child runs and is removed after exit; `--spec` test can use session_start fixture or a narrow helper test to avoid spawning real Claude.
+    9. Open question: should `--cwd` + `--spec` mean "base project root for creating the worktree" (my recommendation) rather than "launch cwd"? Once `--spec` creates a worktree, launch cwd should be the worktree to preserve lease/worktree discipline.
+  created_at: 2026-05-23T23:12:58.338229275Z
+  modified_at: 2026-05-23T23:12:58.338229275Z
