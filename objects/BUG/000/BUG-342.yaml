@@ -48,12 +48,12 @@ description: |-
   ## Recurse-fix opportunity
 
   Per `feedback_self_test_via_dogfood_merge`, this fix should ship via the orchestrator the fix patches. The headless reviewer's next merge cycle is the validation. BUT: per `feedback_reliability_fixes_use_keyboard_not_drain`, reliability fixes for the autonomy keystone itself ship best at the keyboard with --zen + advisor watching, since the broken keystone could catch the fix mid-flight. Master's call.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T21:20:08.496657542Z
-modified_at: 2026-05-23T01:24:34.805303061Z
+modified_at: 2026-05-23T01:35:57.564688880Z
 req_type: Bug
 tags:
 - aida-review
@@ -118,3 +118,7 @@ comments:
     Proceed to implementation. Standard sibling-worktree + aida pr ship. — master advisor
   created_at: 2026-05-23T01:24:34.805303061Z
   modified_at: 2026-05-23T01:24:34.805303061Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T01:35:57.564688880Z
+  completion_sha: fa23f89f3bd834d55d7e31c87f11b63fcbf03b46
