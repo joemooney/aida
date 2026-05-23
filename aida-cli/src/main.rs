@@ -1,4 +1,5 @@
 mod advisor;
+mod agent_registry;
 mod auto_complete;
 mod auto_complete_telemetry;
 mod calibration;
@@ -42874,6 +42875,7 @@ struct UserStatusContext {
     pr: Option<PrFacts>,
     queue_head: Vec<QueueRow>,
     queue_total: usize,
+    agents: Vec<agent_registry::AgentRegistryView>,
 }
 
 #[derive(Debug, Clone)]
@@ -42950,6 +42952,7 @@ fn collect_user_context(
     };
 
     let (queue_head, queue_total) = collect_queue_snapshot(backend, store, role.as_deref());
+    let agents = agent_registry::list_agent_views(project_root);
 
     UserStatusContext {
         session,
@@ -42958,6 +42961,7 @@ fn collect_user_context(
         pr,
         queue_head,
         queue_total,
+        agents,
     }
 }
 
@@ -43372,6 +43376,20 @@ fn print_status_queue_section(ctx: &UserStatusContext, focused: bool) {
     }
 }
 
+fn print_status_agents_section(ctx: &UserStatusContext) {
+    if ctx.agents.is_empty() {
+        return;
+    }
+    println!(
+        "{}",
+        format!("─── Active agents ({}) ───", ctx.agents.len()).bold()
+    );
+    for line in agent_registry::format_agent_status_lines(&ctx.agents) {
+        println!("{line}");
+    }
+    println!();
+}
+
 fn print_status_short(ctx: &UserStatusContext) {
     let role = ctx.role.as_deref().unwrap_or("-");
     let scope = ctx
@@ -43489,6 +43507,30 @@ fn print_status_json(
         out.insert("queue".to_string(), queue);
     }
     if !queue_only && !ci_only {
+        out.insert(
+            "agents".to_string(),
+            json!(ctx
+                .agents
+                .iter()
+                .map(|a| {
+                    json!({
+                        "id": a.id,
+                        "agent_type": a.agent_type,
+                        "pid": a.pid,
+                        "tty": a.tty,
+                        "started_at": a.started_at,
+                        "last_active_at": a.last_active_at,
+                        "role": a.role,
+                        "current_spec": a.current_spec,
+                        "status": a.status.as_str(),
+                        "worktree_path": a.worktree_path.display().to_string(),
+                        "source": a.source,
+                        "binary_version": a.binary_version,
+                        "build_sha": a.build_sha,
+                    })
+                })
+                .collect::<Vec<_>>()),
+        );
         let cache = backend.cache();
         let recorded = cache.source_head_sha().ok().flatten().unwrap_or_default();
         let actual = aida_core::git_ops::head_sha(store_path).unwrap_or_default();
@@ -43563,6 +43605,8 @@ fn handle_status_command_distributed(
         println!("  {}", line);
         println!();
     }
+
+    print_status_agents_section(&user_ctx);
 
     println!("{}", "─── Project ───".bold());
     let name = if store.name.is_empty() {
