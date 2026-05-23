@@ -47,12 +47,12 @@ description: |-
   ## Estimated time
 
   ~2-3h (similar to BUG-346). Iterate-via-CI on Windows tests; release-blocker urgency.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:10:54.425142081Z
-modified_at: 2026-05-23T16:10:54.425142081Z
+modified_at: 2026-05-23T16:51:02.305129317Z
 req_type: Bug
 tags:
 - bug-346-sibling
@@ -62,3 +62,7 @@ tags:
 - regression
 - release-blocker
 - windows
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T16:51:02.305129317Z
+  completion_sha: 17e96f91df0ab83ac2081125a6ac5b5a3f9ff3e6
