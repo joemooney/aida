@@ -1,0 +1,26 @@
+id: 019e558d-dd03-7932-86ae-81ef169053ef
+spec_id: STORY-430
+agreed_id: STORY-430
+title: 'Review PR-238: [AI:claude] fix(release): skip AI-tag/trace warnings on mechanical release commits (TASK-488)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e5588`) for branch `task-492-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/238>
+  - Branch: `task-492-2` → `main`
+
+  ## Covers
+
+  - TASK-488
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 238` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T15:57:01.059494311Z
+modified_at: 2026-05-23T15:57:01.059494311Z
+req_type: Story
