@@ -1,0 +1,26 @@
+id: 019e5286-86f4-7691-b7e8-60ff5a4b3a5c
+spec_id: STORY-421
+agreed_id: STORY-421
+title: 'Review PR-223: [AI:claude] docs(cli): drop SPEC-IDs from findings dismiss/promote --help (TASK-420)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e527f`) for branch `task-420-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/223>
+  - Branch: `task-420-2` → `main`
+
+  ## Covers
+
+  - TASK-420
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 223` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T01:50:08.628010036Z
+modified_at: 2026-05-23T01:50:08.628010036Z
+req_type: Story
