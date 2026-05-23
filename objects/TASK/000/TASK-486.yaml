@@ -1,0 +1,62 @@
+id: 019e523c-2fd3-79e1-828d-afc87e00ed1b
+spec_id: TASK-486
+agreed_id: TASK-486
+title: 'aida status: surface cross-platform CI status so ''ready to cut a release'' reflects the actual release gate'
+description: |-
+  Empirical UX gap observed 2026-05-22 evening: `aida status` reported '88 commits ahead of v0.8.0 — release-readiness: ready to cut a release' while the cross-platform nightly CI was RED on the last two runs (24h+ stale). Per CLAUDE.md, releases require cross-platform CI green within 24h of tagging — that IS the release gate. The status summary advertised readiness without checking the gate.
+
+  Recovery cost: operator started release prep, discovered the blocker via separate `gh run list --workflow cross-platform.yml` query, then had to file BUG-346 + defer release. The wasted step is what aida status should prevent.
+
+  ## Scope
+
+  Extend the 'AIDA development context' section of `aida status` to include cross-platform CI status:
+
+  Current:
+    88 commits ahead of v0.8.0 — release-readiness: ready to cut a release
+
+  Proposed:
+    88 commits ahead of v0.8.0 — release-readiness: BLOCKED
+    Cross-platform CI: ✗ red (14h ago, run 26280474891)
+      Last green: 2 days ago. Releases require <24h green. See BUG-346.
+
+  When CI is green within 24h:
+    88 commits ahead of v0.8.0 — release-readiness: ready
+    Cross-platform CI: ✓ green (6h ago)
+
+  ## Implementation hints
+
+  The check can mirror what `pre-release-check.sh` already does:
+  - `gh run list --workflow cross-platform.yml --limit 1 --json conclusion,createdAt,databaseId`
+  - Compute age (now - createdAt)
+  - If conclusion == success AND age < 24h → green
+  - Otherwise → red, surface staleness + run ID
+
+  Cache the result for ~5min to avoid hammering the gh API on every `aida status` call.
+
+  ## Acceptance
+
+  - [ ] `aida status` shows cross-platform CI status when commits-ahead-of-tag > 0
+  - [ ] When CI is red OR stale (>24h), release-readiness summary says BLOCKED (not ready)
+  - [ ] When CI is green within 24h, release-readiness says ready as today
+  - [ ] Cache prevents gh API spam (e.g., 5min cache in .aida/cache)
+  - [ ] Network failure on gh query degrades gracefully ('Cross-platform CI: unknown (gh unreachable)') rather than panicking
+  - [ ] Regression test: mock gh response → assert correct status rendering for green/red/stale/unknown
+
+  ## Composes with
+
+  - BUG-346 (the empirical example — Windows test failures making CI red while status said 'ready')
+  - `scripts/release.sh` + `scripts/pre-release-check.sh` (the existing gate this surfaces earlier)
+  - aida status UX (informational ledger; should reflect the actual gates)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T00:28:56.659255638Z
+modified_at: 2026-05-23T00:28:56.659255638Z
+req_type: Task
+tags:
+- aida-status
+- cross-platform
+- from-self-test
+- release-readiness
+- ux
