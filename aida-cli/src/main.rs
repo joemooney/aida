@@ -19230,11 +19230,11 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         );
         let pull_status = match prepare_main_worktree_for_pr_ship_pull(&main_worktree) {
             Ok(()) => {
-                // Spawn `aida pull` as a subcommand. We resolve the current
-                // binary via `current_exe()` so an unactivated dev build still
-                // calls itself, not whatever `aida` happens to be on PATH.
-                let aida_bin = std::env::current_exe()
-                    .context("could not resolve current `aida` binary path")?;
+                // Spawn `aida pull` as a subcommand. Use the hardened resolver
+                // instead of raw current_exe(): dev rebuilds can make Linux
+                // report "<path> (deleted)", which Command::new cannot spawn.
+                // trace:SPEC-411 | ai:codex
+                let aida_bin = pr_ship_post_merge_aida_exe();
                 Some(
                     std::process::Command::new(&aida_bin)
                         .current_dir(&main_worktree)
@@ -19334,8 +19334,7 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
                         lease.id,
                         lease.worktree_path.display()
                     );
-                    let aida_bin = std::env::current_exe()
-                        .context("could not resolve current `aida` binary path")?;
+                    let aida_bin = pr_ship_post_merge_aida_exe();
                     let end_status = std::process::Command::new(&aida_bin)
                         .current_dir(&main_worktree)
                         .args(["session", "end", &lease.id, "--yes", "--skip-ci"])
@@ -19386,6 +19385,10 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
     // unused-import doesn't fire if a future refactor narrows usage.
     let _ = format_activity_event;
     Ok(())
+}
+
+fn pr_ship_post_merge_aida_exe() -> std::path::PathBuf {
+    resolve_aida_exe()
 }
 
 /// `gh pr create` with title/body derived from the latest commit on
@@ -56573,7 +56576,7 @@ fn register_mcp_agent(name: &str, print_only: bool, force: bool) -> Result<()> {
 
 #[cfg(test)]
 mod resolve_aida_exe_tests {
-    use super::resolve_aida_exe;
+    use super::{pr_ship_post_merge_aida_exe, resolve_aida_exe};
 
     #[test]
     fn returns_a_path() {
@@ -56600,6 +56603,20 @@ mod resolve_aida_exe_tests {
         assert!(
             !s.contains(" (deleted)"),
             "resolved path must not contain ' (deleted)' suffix; got: {s}"
+        );
+    }
+
+    #[test]
+    fn pr_ship_post_merge_subcommands_do_not_require_path_lookup() {
+        // In tests, current_exe() resolves to this test binary. pr_ship's
+        // post-merge `pull` / `session end` path should therefore use an
+        // existing executable path, not the bare "aida" PATH fallback.
+        // trace:SPEC-411 | ai:codex
+        let exe = pr_ship_post_merge_aida_exe();
+        assert!(
+            exe.exists(),
+            "expected pr-ship post-merge subcommands to use an existing executable path, got: {}",
+            exe.display()
         );
     }
 }
