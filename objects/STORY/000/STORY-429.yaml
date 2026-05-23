@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T15:31:37.672226680Z
-modified_at: 2026-05-23T15:31:37.672226680Z
+modified_at: 2026-05-23T15:58:39.206927333Z
 req_type: Story
 tags:
 - autonomy-keystone
@@ -110,3 +110,17 @@ tags:
 - reviewer
 - stale-base
 - story-281-followup
+comments:
+- id: 019e558f-5c66-7352-9d99-8406c95d7452
+  author: joe
+  content: |-
+    Sketch for STORY-429 implementation:
+    1. Injection point: RealPhaseDriver::run_reviewer, exactly where STORY-281 currently handles preflight_stale_base_check before spawning the reviewer. Replace the one-shot match with a small loop/attempt helper around the preflight block.
+    2. Retry semantics: only auto-rebase on StaleOverlap, only when no_human == Some(Both), allow_stale_base is false, and the new opt-out is false. Attempt at most once. On clean rebase, log and restart the preflight from the top before creating the reviewer verdict file or spawning/claiming reviewer, so there is no double reviewer lease.
+    3. Rebase command: invoke current aida binary as `aida pr rebase <PR> --no-smoke` in default clean-only mode. Default mode already aborts/cleans on conflicts and exits non-zero; conflict/nonzero falls back to current stale-base block message. `--no-smoke` avoids running build/test smoke inside phase 3 because phase 2 CI will re-run/verify the pushed rebased head.
+    4. Opt-out: add `--no-auto-rebase` to `aida queue work --auto-complete ...`; thread it through run_auto_complete/RealPhaseDriver/batch drivers. Also read config `[auto-complete] auto_rebase_stale_base = false` as a project default; CLI flag wins. Keep `--allow-stale-base` stronger than auto-rebase: it proceeds rather than rebasing.
+    5. Telemetry: extend AutoCompleteEvent with optional `auto_rebase: {attempted, outcome, pr_number, phase}` or a small Vec, populated from RealPhaseDriver. Outcomes: clean, conflict, skipped, failed. Also print a phase line to stderr for operator visibility.
+    6. Tests: pure/mock tests for the retry helper if factored, plus existing orchestrator tests for phase sequencing unchanged. For side effects, unit-test decision function: stale overlap + both + enabled -> attempt; conflict/nonzero -> original refusal; clean -> retry once; second stale -> refusal. Avoid full gh/git E2E in this PR unless a narrow temp fixture is already available.
+    Open question: telemetry shape could be either embedded in the run event or separate local JSONL. I recommend embedded optional field so `aida usage --auto-complete` can correlate recovery with the run outcome without joining logs.
+  created_at: 2026-05-23T15:58:39.206927333Z
+  modified_at: 2026-05-23T15:58:39.206927333Z
