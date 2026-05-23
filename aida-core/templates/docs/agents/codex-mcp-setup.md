@@ -201,7 +201,7 @@ Before relying on the wrapper in a new environment, read the five-bug arc that h
 - `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
 - Cross-machine MCP and auth are out of scope for this local stdio setup.
 - Project-local automatic Codex registration is not scaffolded by `aida init` yet. Manual `codex mcp add aida -- aida mcp-serve` is the working path.
-- `aida mcp-serve` is long-running and does not hot-reload the binary. Restart it after pulling or rebuilding AIDA if you need newly shipped MCP behavior.
+- `aida mcp-serve` self-respawns after handled requests when the on-disk `aida --version` reports a newer package version or a different build SHA. If MCP still appears stale, kill that agent's server process and let the client respawn it.
 - Headless drains have the same binary-staleness caveat. If an existing `target/debug/aida` or `target/release/aida` binary predates a merged orchestrator reliability fix, that running binary will not enforce the new behavior. Rebuild/relaunch and use `aida dev status` when runtime behavior disagrees with current source.
 
 trace:STORY-398 | ai:codex

@@ -163,9 +163,10 @@ project convention.
   environment: SPEC-410, BUG-339, BUG-344, and BUG-345 document subject
   repair, parser alignment, CI startup waiting, and stale-main-worktree
   handling.
-- `aida mcp-serve` is long-running and does not hot-reload the binary.
-  Restart it after pulling or rebuilding AIDA if you need new MCP tool
-  behavior.
+- `aida mcp-serve` self-respawns after handled requests when the on-disk
+  `aida --version` reports a newer package version or different build
+  SHA. If MCP still appears stale, kill that agent's server process and
+  let the client respawn it.
 - If an instruction from another session sounds inconsistent with the
   branch contents, verify the PR contents and flag the mismatch.
 "#
