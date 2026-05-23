@@ -3349,6 +3349,26 @@ pub enum DrainCommand {
 }
 
 #[derive(Subcommand, Debug)]
+pub enum BriefCommand {
+    /// List pending brief files.
+    List {
+        /// Only list briefs routed to this agent.
+        #[clap(long = "for-agent")]
+        for_agent: Option<String>,
+
+        /// Include acknowledged briefs.
+        #[clap(long)]
+        include_acked: bool,
+    },
+
+    /// Mark a brief acknowledged so it stops appearing in default lists.
+    Ack {
+        /// Brief file path, either absolute or relative to the current directory.
+        brief_file: PathBuf,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 pub enum Command {
     /// Add a new requirement
     Add {
@@ -4080,6 +4100,23 @@ pub enum Command {
     // trace:TASK-294 | ai:claude
     #[clap(subcommand)]
     Worker(WorkerCommand),
+
+    /// Generate, list, and acknowledge per-agent pickup briefs.
+    // trace:TASK-492 | ai:codex
+    Brief {
+        /// Agent name for brief creation, e.g. codex or antigravity.
+        agent: Option<String>,
+
+        /// Requirement id for brief creation.
+        spec: Option<String>,
+
+        /// Optional operator context. Use '-' to read a multi-line note from stdin.
+        #[clap(long)]
+        note: Option<String>,
+
+        #[clap(subcommand)]
+        cmd: Option<BriefCommand>,
+    },
 
     /// Emit the seven-row finish-state preamble (Spec / Branch / PR / Drain
     /// / Tests / Fmt / Plan) deterministically. One source of truth for
