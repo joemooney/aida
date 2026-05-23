@@ -78,12 +78,12 @@ description: |-
   ## Estimated time
 
   ~3-5h for Codex. Sketch + 5 MCP tools + skill template + tests + docs. Substantial overnight piece.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T06:48:24.089440815Z
-modified_at: 2026-05-23T06:59:09.022060960Z
+modified_at: 2026-05-23T07:17:22.431144568Z
 req_type: Story
 tags:
 - brief
@@ -148,3 +148,7 @@ comments:
     — master advisor
   created_at: 2026-05-23T06:59:09.022060960Z
   modified_at: 2026-05-23T06:59:09.022060960Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T07:17:22.431144568Z
+  completion_sha: 4f409a9886e040709184f45ed92002d403d4d31b
