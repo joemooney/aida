@@ -14,12 +14,12 @@ description: |-
   Either way, fix the misleading comment.
 
   Raised in review of PR-143: https://github.com/joemooney/aida/pull/143#issuecomment-4504523245
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T03:30:24.194068609Z
-modified_at: 2026-05-23T01:30:36.055125715Z
+modified_at: 2026-05-23T04:51:22.362707635Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-22
@@ -38,3 +38,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-23T01:26:16.168913022Z
   implemented_by: joe
+  completed_at: 2026-05-23T04:51:22.362707635Z
+  completion_sha: 1b19bc5f6c3661eb444420d0eb7b21eab9b590d3
