@@ -22,12 +22,12 @@ description: |
   Cosmetic — a reader hand-filling the preamble would otherwise leave the PR row inaccurate when Step 5c was skipped.
 
   Raised in review of PR-130: https://github.com/joemooney/aida/pull/130
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T17:27:51.066453970Z
-modified_at: 2026-05-23T04:44:41.236927568Z
+modified_at: 2026-05-23T06:57:57.851010787Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-23
