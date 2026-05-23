@@ -120,6 +120,13 @@ parse defensively until `structuredContent` ships. Restart
 `aida mcp-serve` after pulling or rebuilding AIDA if you need newly
 shipped MCP behavior.
 
+Headless orchestrator reliability fixes have the same binary-staleness
+risk. If a drain is already running an older `target/debug/aida` or
+`target/release/aida`, newly merged headless gates such as the
+AskUserQuestion denial will not apply until the binary is rebuilt and the
+next drain is launched from that binary. Use `aida dev status` when the
+runtime behavior contradicts current source.
+
 ## Known Codex Pitfalls
 
 - PR-201 missed the trailing spec trailer in the squash subject; that
@@ -130,4 +137,3 @@ shipped MCP behavior.
   handling.
 - If an instruction from another session sounds inconsistent with branch
   contents, verify the PR contents and flag the mismatch.
-
