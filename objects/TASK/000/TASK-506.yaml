@@ -1,0 +1,50 @@
+id: 019e5720-ff63-7150-9cb1-3a9c8eda00f9
+spec_id: TASK-506
+agreed_id: TASK-506
+title: 'aida brief read <PATH>: CLI verb to read a brief without a direct file read (matches list + ack pattern)'
+description: |-
+  ## Empirical 2026-05-23 — Codex hit this during STORY-432 sketch
+
+  Codex's STORY-432 brief told them to 'use list_briefs + read_brief MCP tools' or 'cat the file'. The MCP tools (STORY-426) work via MCP; the CLI surface (TASK-492) provides aida brief list and aida brief ack — but no aida brief read.
+
+  Codex had to fall back to direct file read despite the brief instruction. Operator-UX gap: the CLI verb set is incomplete vs the MCP tool set.
+
+  ## Proposed shape
+
+  aida brief read <path> prints the brief markdown to stdout. Optionally aida brief read <agent>/<filename> resolves to .aida/agent-briefs/<agent>/<filename>.md as a shortcut.
+
+
+
+  ## Acceptance
+
+  - [ ] aida brief read <path> implemented; prints body
+  - [ ] Shortcut resolution: <agent>/<filename> → .aida/agent-briefs/<agent>/<filename>
+  - [ ] --latest flag: most recent unacked brief for the given agent
+  - [ ] Error message points at aida brief list when path resolves to nothing
+  - [ ] Test: list → read → ack round-trip
+  - [ ] Help text consistent with list and ack
+
+  ## Composes with
+
+  - TASK-492 (aida brief verb — added list + ack, missed read)
+  - STORY-426 (MCP brief surface — read_brief exists there; this closes the CLI gap)
+  - TASK-502 (aida brief --notify — sentinel mechanism; uses the same read path)
+
+  ## Origin
+
+  2026-05-23 codex during STORY-432 sketch: 'aida brief has list and ack, but no CLI read; direct file read was necessary despite the brief instruction.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T23:17:20.867209589Z
+modified_at: 2026-05-23T23:17:20.867209589Z
+req_type: Task
+tags:
+- agent-comms
+- brief
+- cli-ux
+- from-codex
+- from-self-test
+- papercut
+- sibling-of-TASK-492
