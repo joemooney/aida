@@ -27,12 +27,12 @@ description: |-
 
   - BUG-89 family — multi-cwd / multi-worktree state attribution patterns
   - Today's multi-agent dogfood — three different agents hit lease metadata oddities, all stemming from the same fallback heuristic
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:35:34.316691752Z
-modified_at: 2026-05-23T06:50:01.658583153Z
+modified_at: 2026-05-23T18:08:21.418715319Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-23
