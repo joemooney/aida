@@ -1,0 +1,26 @@
+id: 019e5348-dc2d-7a80-b42a-10590e021f36
+spec_id: STORY-424
+agreed_id: STORY-424
+title: 'Review PR-229: docs(cli): drop SPEC-IDs from --help doc-comments (TASK-487)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e5336`) for branch `task-487`.
+
+  - PR: <https://github.com/joemooney/aida/pull/229>
+  - Branch: `task-487` → `main`
+
+  ## Covers
+
+  - TASK-487
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 229` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T05:22:24.429678135Z
+modified_at: 2026-05-23T05:22:24.429678135Z
+req_type: Story
