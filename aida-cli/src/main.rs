@@ -11087,11 +11087,11 @@ fn auto_claim_summary(cfg: &aida_core::BlockAllocationConfig, type_prefix: &str)
         }
         return "auto-claim: off (per-type opt-out)".to_string();
     }
-    let lower = type_prefix.to_ascii_lowercase();
+    // trace:TASK-448 | ai:claude
     let has_override = cfg
         .per_type
         .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case(&lower))
+        .find(|(k, _)| k.eq_ignore_ascii_case(type_prefix))
         .map(|(_, t)| t.auto_claim_threshold.is_some() || t.auto_claim_size.is_some())
         .unwrap_or(false);
     let suffix = if has_override { " (configured)" } else { "" };
