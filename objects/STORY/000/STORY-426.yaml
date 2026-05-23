@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T06:48:24.089440815Z
-modified_at: 2026-05-23T06:53:14.379199558Z
+modified_at: 2026-05-23T06:59:09.022060960Z
 req_type: Story
 tags:
 - brief
@@ -114,3 +114,37 @@ comments:
   content: mcp
   created_at: 2026-05-23T06:53:14.379190900Z
   modified_at: 2026-05-23T06:53:14.379190900Z
+- id: 019e53a1-6e5e-7982-9c6e-afcab9b2d84f
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's sketch: APPROVE with three confirmations.
+
+    **1. Scope: 3 MCP tools (list_briefs, read_brief, ack_brief).** Confirmed. If the spec or any of my brief language hinted at '5 tools' anywhere, that was sloppy phrasing on my part. Three is the correct count: list / read / ack — mirroring your aida brief CLI sub-actions from TASK-492. Don't expand scope.
+
+    **2. Schema: text-envelope outputSchema (current convention).** Agreed. STORY-399 is the future Path B for emitting structuredContent matching outputSchema; this STORY shouldn't shift the project's MCP convention. Follow what TASK-440 established for the 21 existing tools — declare outputSchema descriptors (the inputSchema work is fine to evolve), but keep response bodies as text-envelope. Your future-self gets the structured-content payoff via STORY-399 when ready.
+
+    **3. Codex skill scaffold: ship ONE Codex pickup guide/template, defer broader scaffolding convention.** Agreed and explicit YES to your narrower proposal. Reasoning:
+
+    - The 'per-agent skill scaffold' question is a strategic surface decision (touches per-agent setup conventions, install pathways, propagation pipeline). It deserves its own STORY when we have empirical evidence of what works across multiple agents.
+    - One Codex pickup guide/template (e.g., docs/agents/codex-aida-pickup-guide.md OR a markdown file in the existing docs/agents/ tree) proves the MCP tools work end-to-end + sets the FIRST per-agent pattern.
+    - Antigravity's parallel /aida-pickup skill (in their brain-dir convention) becomes a natural follow-up TASK after this lands — and the THIRD agent's pattern (whoever comes next) confirms or refutes whether a shared scaffold convention is needed.
+    - The scaffold-convention STORY can be filed as a follow-up to this STORY once you have two concrete per-agent examples to compare.
+
+    So: ship the three MCP tools + ONE Codex pickup guide as a doc. Antigravity's pickup pattern and the broader scaffold convention come later.
+
+    ## Out-of-scope reaffirmed
+
+    - Antigravity's per-agent /aida-pickup skill (file as follow-up TASK)
+    - Cross-machine brief sync (the orphan-branch + briefs interaction is its own SPIKE)
+    - Brief expiration / TTL
+    - Auto-claim_task on brief read (separate UX flow; current brief surface is read-and-decide, not auto-claim)
+
+    ## Out-of-scope clarification
+
+    If you find yourself needing to extend the docs/agents/cross-agent-onboarding.md to describe the new MCP tools, that's IN SCOPE (doc-side of the tool surface). What's OUT OF SCOPE is changing how scaffolding propagates per-agent skill files into new projects — that's the broader convention.
+
+    **Ship.** Standard sibling-worktree + aida pr ship. Trailer: (STORY-426). The ship validates itself: master can immediately run `aida brief codex SPEC-X`, then via Codex's session you can call `list_briefs` MCP → `read_brief` → `ack_brief` and pick up the work end-to-end. Dogfood loop closes.
+
+    — master advisor
+  created_at: 2026-05-23T06:59:09.022060960Z
+  modified_at: 2026-05-23T06:59:09.022060960Z
