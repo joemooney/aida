@@ -1480,6 +1480,27 @@ impl Scaffolder {
             }
         }
 
+        // Per-project skill extension guide referenced by scaffolded
+        // skill-local guidance. trace:TASK-482 | ai:codex
+        if let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get("docs/extending-skills.md") {
+            let path = PathBuf::from("docs/extending-skills.md");
+            let artifact = self.create_artifact(
+                path.clone(),
+                body.to_string(),
+                "Guide for extending AIDA skills per project".to_string(),
+                false,
+            );
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+            artifacts.push(artifact);
+        }
+
         // .git/hooks/ directory (only if .git exists)
         if self.config.generate_git_hooks && self.project_root.join(".git").exists() {
             new_dirs.insert(PathBuf::from(".git/hooks"));
@@ -2310,6 +2331,7 @@ mod tests {
             .path()
             .join("docs/agents/codex-mcp-setup.md")
             .exists());
+        assert!(temp_dir.path().join("docs/extending-skills.md").exists());
     }
 
     #[test]
@@ -2325,6 +2347,7 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/agents/cross-agent-onboarding.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/codex-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
+        assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
     }
 
     #[test]
