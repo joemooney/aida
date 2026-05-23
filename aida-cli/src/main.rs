@@ -51178,6 +51178,57 @@ mod headless_hint_tests {
             assert_eq!(parsed.last().unwrap().as_str(), prompt);
         }
     }
+
+    /// BUG-342: every unattended Claude launch must route through the shared
+    /// headless argv builders. Those builders carry
+    /// `--disallowed-tools AskUserQuestion`; direct `claude -p` construction
+    /// or plain `claude --resume` under no-human mode is the bypass class.
+    /// trace:BUG-342 | ai:codex
+    #[test]
+    fn headless_env_launches_route_through_shared_argv_builders() {
+        fn assert_env_setter_has_builder_context(file: &str, src: &str) {
+            let lines: Vec<&str> = src.lines().collect();
+            for (idx, line) in lines.iter().enumerate() {
+                if !line.contains(".env(\"AIDA_HEADLESS\", \"1\")") {
+                    continue;
+                }
+                let start = idx.saturating_sub(12);
+                let end = (idx + 3).min(lines.len());
+                let window = lines[start..end].join("\n");
+                assert!(
+                    window.contains("claude_headless_args")
+                        || window.contains("claude_headless_resume_args"),
+                    "{file}: AIDA_HEADLESS claude launch at line {} does not use a shared headless argv builder:\n{window}",
+                    idx + 1
+                );
+            }
+        }
+
+        assert_env_setter_has_builder_context("session.rs", include_str!("session.rs"));
+        assert_env_setter_has_builder_context("main.rs", include_str!("main.rs"));
+    }
+
+    /// BUG-342 regression for the actual bypass: `QueueWorkLaunch::Resume`
+    /// used to ignore `no_human` and call plain `claude --resume`, so the
+    /// BUG-327 builder-level AskUserQuestion denial never reached resumed
+    /// implementer/reviewer sessions.
+    /// trace:BUG-342 | ai:codex
+    #[test]
+    fn no_human_resume_paths_use_headless_resume_launcher() {
+        let src = include_str!("main.rs");
+        let count = src
+            .matches("session::spawn_claude_headless_resume(")
+            .count();
+        assert!(
+            count >= 3,
+            "expected implementer resume, standalone reviewer resume, and advisor resume \
+             to use the shared headless resume launcher; found {count}"
+        );
+        assert!(
+            src.contains("if no_human {\n                let log_path = project_root"),
+            "QueueWorkLaunch::Resume should branch on no_human before plain claude --resume"
+        );
+    }
 }
 
 /// TASK-218: shared implementation backing both `aida queue rework SPEC`
@@ -52734,6 +52785,42 @@ fn handle_queue_work(
     }
     match launch {
         QueueWorkLaunch::Resume(id) => {
+            if no_human {
+                let log_path = project_root
+                    .join(".aida")
+                    .join("headless-logs")
+                    .join(format!("{}-{}.jsonl", lease.branch, id));
+                eprintln!(
+                    "{} {}",
+                    "▶".green().bold(),
+                    format!(
+                        "resuming claude headless session {} in {} (claude -p, permission-mode bypassPermissions, prompt `{}`)",
+                        &id[..id.len().min(8)],
+                        lease.worktree_path.display(),
+                        prompt
+                    )
+                    .cyan()
+                );
+                eprintln!(
+                    "  {} headless output → {}",
+                    "ℹ".cyan(),
+                    log_path.display().to_string().dimmed()
+                );
+                // BUG-342: no-human resumes must use the same structural
+                // AskUserQuestion denial as fresh headless launches. Plain
+                // `claude --resume` bypasses `claude_headless_resume_args`.
+                // trace:BUG-342 | ai:codex
+                let tee_opts =
+                    headless_tee::TeeOptions::from_env_and_flag(false).with_label(&lease.branch);
+                let status = session::spawn_claude_headless_resume(
+                    &prompt,
+                    &id,
+                    &log_path,
+                    &lease.worktree_path,
+                    &tee_opts,
+                )?;
+                std::process::exit(status.code().unwrap_or(1));
+            }
             eprintln!(
                 "{} {}",
                 "▶".green().bold(),
@@ -52829,21 +52916,53 @@ fn run_standalone_reviewer(
     // for an interactive review — there is no stream-json log).
     let (status, log_path): (std::process::ExitStatus, Option<std::path::PathBuf>) = match launch {
         QueueWorkLaunch::Resume(id) => {
-            eprintln!(
-                "{} {}",
-                "▶".green().bold(),
-                format!(
-                    "resuming claude reviewer session {} in {} (permission-mode {})",
-                    &id[..id.len().min(8)],
-                    worktree.display(),
-                    permission_mode
+            if no_human {
+                let log_path = project_root
+                    .join(".aida")
+                    .join("headless-logs")
+                    .join(format!("{branch}-{id}.jsonl"));
+                eprintln!(
+                    "{} {}",
+                    "▶".green().bold(),
+                    format!(
+                        "resuming claude headless reviewer session {} in {} (claude -p, permission-mode bypassPermissions)",
+                        &id[..id.len().min(8)],
+                        worktree.display()
+                    )
+                    .cyan()
+                );
+                eprintln!(
+                    "  {} headless output → {}",
+                    "ℹ".cyan(),
+                    log_path.display().to_string().dimmed()
+                );
+                // BUG-342: a no-human reviewer resume is still unattended;
+                // route it through the shared headless resume argv so
+                // AskUserQuestion is structurally denied.
+                // trace:BUG-342 | ai:codex
+                let tee_opts =
+                    headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
+                let status = session::spawn_claude_headless_resume(
+                    prompt, &id, &log_path, worktree, &tee_opts,
+                )?;
+                (status, Some(log_path))
+            } else {
+                eprintln!(
+                    "{} {}",
+                    "▶".green().bold(),
+                    format!(
+                        "resuming claude reviewer session {} in {} (permission-mode {})",
+                        &id[..id.len().min(8)],
+                        worktree.display(),
+                        permission_mode
+                    )
+                    .cyan()
+                );
+                (
+                    session::spawn_claude_resume(&id, Some(permission_mode))?,
+                    None,
                 )
-                .cyan()
-            );
-            (
-                session::spawn_claude_resume(&id, Some(permission_mode))?,
-                None,
-            )
+            }
         }
         QueueWorkLaunch::Fresh(id) => {
             if no_human {
