@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T07:05:21.735843047Z
-modified_at: 2026-05-23T07:05:21.735843047Z
+modified_at: 2026-05-23T07:10:00.684265514Z
 req_type: Task
 tags:
 - aida-mcp-serve
@@ -66,3 +66,49 @@ tags:
 - mcp
 - operational
 - staleness
+comments:
+- id: 019e53ab-5fec-74f0-8edc-cb59751cd100
+  author: joe
+  content: |-
+    User direction refinement 2026-05-23: **version-string-based self-respawn** is the right mechanism (cleaner than mtime-based).
+
+    ## Refined implementation (replaces Option B in original description)
+
+    ### Detection
+
+    - At server startup, capture self-version: `env!("CARGO_PKG_VERSION")` + git-SHA injected via build.rs (matches the existing aida-version-string pattern)
+    - On each MCP request (cheap check) OR via a low-frequency timer (every 60s; cheaper but adds detection latency): shell out to current_exe() and read on-disk `aida --version` output
+    - Parse both into structured form (version + sha); compare
+
+    ### Action when on-disk > self
+
+    Self-respawn via `std::os::unix::process::CommandExt::exec()` (or equivalent) replacing the running server process with the new binary. The MCP client's stdio/socket remains open through the exec; the client sees no interruption beyond a brief request-latency blip.
+
+    ### Why version-string beats mtime
+
+    - mtime changes on touch + IDE saves + no-op builds; version only changes when actual code shifts
+    - Version string is the operator-visible identifier (`aida --version` shows it); easier to diagnose 'server is at X; binary is at Y'
+    - Git-SHA suffix catches dev builds without committing; `+dirty` flag composes naturally
+
+    ### Self-respawn vs warn-and-refuse
+
+    Option A (warn) and Option C (refuse) from the original description are simpler fallbacks. The version-comparison + exec() respawn is the ambitious version. Implementer judgment: ship A first (warn-on-stale) as a thin slice, then implement respawn (Option B refined) as a follow-up if the warning isn't enough.
+
+    ### Implementation notes for exec() respawn
+
+    - Must handle in-flight MCP requests gracefully: drain (let current request complete) before exec
+    - exec() inherits file descriptors; the MCP stdin/stdout (or socket) survives
+    - argv should match the parent's invocation; current_exe() + original argv preserves invocation context
+    - Test: spawn mcp-serve, rebuild aida (cargo build), call a tool — server should respawn transparently and the next call should hit the new binary's code
+
+    ### Composes with
+
+    - SPEC-411 (resolve_aida_exe() — the helper Codex's pr-ship work hardened; reuse here)
+    - BUG-342 (the bypass-discovery pattern — version-check could be analogous: catch silent staleness at the request layer)
+    - TASK-486 (aida status surfacing — could include MCP server staleness as a release-readiness signal: 'MCP server stale by X versions')
+
+    ### User direction quote 2026-05-23
+
+    'if we provide aida --version as part of mcp request, and it is a more recent version than a version information of the running mcp server then it could respawn itself.'
+  created_at: 2026-05-23T07:10:00.684265514Z
+  modified_at: 2026-05-23T07:10:00.684265514Z
