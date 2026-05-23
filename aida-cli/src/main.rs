@@ -44409,11 +44409,17 @@ mod task_490_status_in_progress_tests {
             split.next_up_total, 14,
             "next_up counter excludes the in-progress count"
         );
-        let in_progress_ids: Vec<_> =
-            split.in_progress_rows.iter().map(|r| r.spec_id.as_str()).collect();
+        let in_progress_ids: Vec<_> = split
+            .in_progress_rows
+            .iter()
+            .map(|r| r.spec_id.as_str())
+            .collect();
         assert_eq!(in_progress_ids, vec!["TASK-487", "PR-210"]);
-        let next_up_ids: Vec<_> =
-            split.next_up_rows.iter().map(|r| r.spec_id.as_str()).collect();
+        let next_up_ids: Vec<_> = split
+            .next_up_rows
+            .iter()
+            .map(|r| r.spec_id.as_str())
+            .collect();
         assert_eq!(next_up_ids, vec!["STORY-248", "STORY-244", "TASK-311"]);
     }
 
@@ -44512,8 +44518,7 @@ mod task_490_status_in_progress_tests {
         std::fs::write(lease_dir.join(format!("{lease_id}.toml")), lease_toml).unwrap();
         let leases = list_leases(project_root);
 
-        let (head, total) =
-            collect_queue_snapshot(&backend, &store, Some("implementer"), &leases);
+        let (head, total) = collect_queue_snapshot(&backend, &store, Some("implementer"), &leases);
 
         assert_eq!(total, 8, "all eight non-terminal entries counted");
         let head_ids: Vec<_> = head.iter().map(|r| r.spec_id.as_str()).collect();
