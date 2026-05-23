@@ -68,12 +68,12 @@ description: |-
   ## Origin
 
   2026-05-18 user, on the v1-vs-v2 staging: *"how are we going to measure how often it escalates for genuine lack-of-synthesis? We need to have this metadata captured. Any project using aida will also need this capability since their problems may be different in nature. Every decision to punt is an opportunity to record and later analyze for a pattern that can be applied for future instances."* Correct — and it exposes that STORY-306's "measure it" was hollow without this instrument. The punt ledger is the measurement substrate AND the learning substrate.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T02:21:35.904151679Z
-modified_at: 2026-05-19T02:33:04.508940051Z
+modified_at: 2026-05-23T07:18:30.041913983Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -89,3 +89,7 @@ comments:
   content: 'Schema requirement 2026-05-18: punt records MUST carry `paused_at` and `resolved_at` timestamps (or `paused_at` + `wait_ms`). A punt record without ''when it paused / when it resolved'' is incomplete — and it''s the data source for the autonomy metric (TASK-340): Σ(resolved_at − paused_at) over escalate-to-human records = total human-wait time; count of those records = intervention count. Fold the timestamp fields into STORY-325''s record schema acceptance.'
   created_at: 2026-05-19T02:33:04.508940051Z
   modified_at: 2026-05-19T02:33:04.508940051Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T07:18:30.041913983Z
+  completion_sha: 48f7e6aafec4681e2bf14be3ff8371243913924f
