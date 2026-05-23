@@ -1,7 +1,7 @@
 # AIDA - AI Design Assistant
 # Makefile for building, testing, and running the application
 
-.PHONY: help build build-release build-all cli gui server \
+.PHONY: help build build-release build-all restart-mcp-servers cli gui server \
         cli-remote gui-remote run-cli run-gui run-server run-server-force \
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
@@ -96,11 +96,22 @@ help: ## Show this help message
 
 build: ## Build all packages (debug mode)
 	cargo build --workspace
+	@$(MAKE) --no-print-directory restart-mcp-servers
 
 build-release: ## Build all packages (release mode, optimized)
 	cargo build --workspace --release
+	@$(MAKE) --no-print-directory restart-mcp-servers
 
 build-all: build cli-remote ## Build everything including remote features
+
+# trace:TASK-505 | ai:claude
+# Kills only stale MCP servers (binary older than the freshly-built one) so
+# the current session's MCP — already running the just-built binary — survives.
+# Composes with TASK-493 (MCP self-respawn): post-TASK-493 servers would respawn
+# stochastically on the next request anyway; this just makes it deterministic.
+# Pre-TASK-493 zombies (no self-respawn code) only ever drop via this nudge.
+restart-mcp-servers: ## Kill stale aida mcp-serve processes so MCP clients respawn with the fresh binary
+	@./scripts/restart-mcp-servers.sh
 
 cli: ## Build CLI only (aida binary)
 	cargo build -p aida-cli
