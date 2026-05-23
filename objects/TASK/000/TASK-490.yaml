@@ -74,7 +74,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:13:22.863212061Z
-modified_at: 2026-05-23T06:48:22.517974282Z
+modified_at: 2026-05-23T06:50:04.921423915Z
 req_type: Task
 tags:
+- aida-status
 - batch:overnight-2026-05-23
+- from-self-test
+- from-user-friction
+- queue-display
+- ux
