@@ -44,12 +44,12 @@ description: |-
   ## Priority rationale
 
   LOW. Cosmetic friction; the cwd-resolution workaround covers most cases. But the lease-ID requirement is unfriendly mental model when you have spec/branch context.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:55:10.427768060Z
-modified_at: 2026-05-23T06:49:57.613239795Z
+modified_at: 2026-05-23T16:16:18.700051045Z
 req_type: Task
 tags:
 - aida-session
