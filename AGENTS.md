@@ -57,19 +57,19 @@ aida show <SPEC-ID>
 aida list --status approved
 aida queue work <SPEC-ID>
 aida pr ship
-aida brief list --for-agent codex
-aida brief ack .aida/agent-briefs/codex/<brief>.md
+aida brief list --for-agent <agent>
+aida brief ack .aida/agent-briefs/<agent>/<brief>.md
 aida --asciinema --cast-title "Demo" queue work --batch <name> --auto-complete
 tests/test_mcp_stdio.sh --skip-agent-contract
 tests/test_mcp_doc_consistency.sh
 ```
 
-Use `aida brief list --for-agent codex` when a master/advisor session says
-there is a pickup brief. Briefs live under `.aida/agent-briefs/codex/`,
+Use `aida brief list --for-agent <agent>` (where `<agent>` is `codex` or `antigravity`) when a master/advisor session says
+there is a pickup brief. Briefs live under `.aida/agent-briefs/<agent>/`,
 embed the target spec plus setup/trailer reminders, and are local
 runtime state. After reading one, run `aida brief ack <path>` so the
 default list stays focused on pending work. If MCP is available, prefer
-the MCP trio `list_briefs({agent:"codex"})`, `read_brief({path})`, and
+the MCP trio `list_briefs({agent: "<agent>"})`, `read_brief({path})`, and
 `ack_brief({path})` so pickup works without shelling out.
 
 Use `aida --asciinema <subcommand>` for first-class terminal capture when
