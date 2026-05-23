@@ -52000,8 +52000,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             );
                         }
                         Some(branch) => {
-                            let commits_ahead =
-                                branch_commits_ahead_main(&project_root, &branch);
+                            let commits_ahead = branch_commits_ahead_main(&project_root, &branch);
                             // commits_ahead is None when branch is "main" / "HEAD" (intentional
                             // skip) OR when rev-list itself failed. The intentional case is
                             // silent; the failure case warns.
@@ -52019,9 +52018,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                                     &project_root,
                                     &branch,
                                 ) {
-                                    PrLookup::Found(pr) => {
-                                        workflow_hints::PrState::Open(pr.number)
-                                    }
+                                    PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
                                     PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
                                     PrLookup::GhMissing
                                     | PrLookup::GhFailed(_)
@@ -52034,13 +52031,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                                         workflow_hints::PrState::Unknown
                                     }
                                 };
-                                if let Some(lines) =
-                                    workflow_hints::queue_done_precheck_error(
-                                        display_id,
-                                        commits_ahead,
-                                        pr_state,
-                                    )
-                                {
+                                if let Some(lines) = workflow_hints::queue_done_precheck_error(
+                                    display_id,
+                                    commits_ahead,
+                                    pr_state,
+                                ) {
                                     for line in &lines {
                                         eprintln!("{}", line);
                                     }
