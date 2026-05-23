@@ -30,14 +30,18 @@ description: |-
 
   Raised by the implementer while working STORY-305.
   Branch: story-305  ·  Commit: (pending — added on first commit)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:00:05.034231431Z
-modified_at: 2026-05-23T00:10:32.879392013Z
+modified_at: 2026-05-23T05:01:46.838796850Z
 req_type: Task
 tags:
 - from-implementer:STORY-305
 - kind:followup-suggestion
 - severity:minor
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T05:01:46.838796850Z
+  completion_sha: f7cd7f9aad32f0f2397a22f51d17c232e6dfd0fe
