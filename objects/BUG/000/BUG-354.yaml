@@ -1,0 +1,77 @@
+id: 019e539f-0d59-7783-a12a-4cd71ee3bcc0
+spec_id: BUG-354
+agreed_id: BUG-354
+title: 'Headless implementer text-question bypass: model asks question in markdown output (no AskUserQuestion tool call), then exits — BUG-342 doesn''t catch'
+description: |-
+  Fourth empirical variant of the ceiling pattern surfaced 2026-05-22 23:50 during overnight drain on TASK-425.
+
+  ## What happened
+
+  aida queue work TASK-425 --auto-complete --no-human=both phase 1 spawned headless claude implementer. Implementer:
+
+  1. Read spec, understood the work (verify download-artifact@v5 multi-artifact layout)
+  2. Produced substantive analysis — three viable paths (A wait, B upstream-check, C fix-forward) with cost/risk table
+  3. Wrote: 'Which path do you want me to take? My recommendation is B first...'
+  4. Exited cleanly with no PR opened
+
+  The orchestrator: 'phase 1 failed — exited cleanly but opened no PR.'
+
+  ## Why BUG-342 doesn't catch this
+
+  BUG-342 closed the AskUserQuestion-tool-call bypass at the headless argv layer (--disallowed-tools AskUserQuestion + the spawn_claude_headless_resume bypass fix). That covers TOOL CALLS asking for user input.
+
+  THIS variant uses NO tool call. The implementer wrote a question in plain markdown output then exited. The exit was clean (exit code 0), the output was descriptive, but the work was incomplete (no PR).
+
+  ## The deeper ceiling class
+
+  LLMs are trained to be consultative — when uncertain between paths, ask. In interactive contexts, this is correct. In autonomous --no-human=both contexts, it's the failure mode.
+
+  Closing the AskUserQuestion tool was necessary but not sufficient. The model can simulate AskUserQuestion via text output: 'Should I do A or B? My recommendation is A.' The exit-without-PR is the failure.
+
+  ## The principle (from feedback_substrate_as_bouncer_not_rules)
+
+  When an invariant MUST hold under autonomous operation, ship a programmatic gate. The gate that catches this variant:
+
+  - **/aida-pickup must enforce decisive commit before exit.** The orchestrator already checks for the PR-open-with-commits invariant (TASK-401's intent). The check should be the gate; if exit happens without a PR, the session is failed AND the model should know in advance that it cannot end this way.
+  - **Skill-template wording is insufficient.** TASK-401's prior fix added template wording 'commit + push + PR + exit is atomic.' Per BUG-269 / BUG-280, that's paper enforcement.
+  - **Programmatic gate options:**
+    A. **Spec-acceptance enforcement** — implementer skill template REFUSES to render exit cleanup until commits_ahead > 0 AND pushed AND pr_open. The check exists; needs to gate the exit code path.
+    B. **Runtime ask-pattern detection** — orchestrator scans the implementer's final output for question patterns ('which path?', 'should I?', '?') and treats exit-with-pending-question as failure with specific message.
+    C. **Punt-as-substitute** — when the model is genuinely uncertain, /aida-punt is the substrate verb. Train it: 'if you need to ask, punt instead.'
+
+  RECOMMEND: A (skill-template-becomes-runtime-gate) + C (punt-as-substitute training). A is the programmatic enforcement; C is the substrate-side discipline that gives the model a legitimate non-question path.
+
+  ## Acceptance
+
+  - [ ] Headless implementer that wants to ask a question must either commit to a path AND ship, OR run /aida-punt with the decision-fork as the punt content
+  - [ ] The exit path in /aida-pickup is GATED on commits_ahead > 0 + pushed + pr_open (programmatic check at the skill-template execution layer)
+  - [ ] If gate refuses, the session writes the punt instead of exiting silently
+  - [ ] Regression test: simulated implementer session that ends with text question gets caught (exit fails OR auto-converts to punt)
+  - [ ] Composes with TASK-401's intent (which was wording-only) and BUG-342's gate (which was tool-call-layer-only) — this closes the text-pattern variant
+
+  ## Empirical anchor
+
+  The asciinema cast /tmp/aida-overnight-2026-05-22_final.cast captures the failure. The implementer's analysis was high quality — three paths, clear cost/risk table, defensible recommendation. The failure was stopping at 'asking' instead of 'deciding-and-shipping' or 'punting.'
+
+  ## Composes with
+
+  - BUG-249 / BUG-269 (the original ceiling — implementer ignored exit instruction)
+  - BUG-280 / BUG-342 (the reviewer-side ceiling + bypass fix)
+  - TASK-401 (the prior 'must push + PR' fix — wording-only)
+  - feedback_substrate_as_bouncer_not_rules (the principle)
+  - /aida-punt skill (the substrate-side alternative for genuine uncertainty)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T06:56:33.113932015Z
+modified_at: 2026-05-23T06:56:33.113932015Z
+req_type: Bug
+tags:
+- bouncer-principle
+- bug-249-family
+- bug-342-sibling
+- ceiling-pattern
+- from-self-test
+- headless
+- implementer
