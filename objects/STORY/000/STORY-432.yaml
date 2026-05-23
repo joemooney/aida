@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:07.897401164Z
-modified_at: 2026-05-23T23:12:58.338229275Z
+modified_at: 2026-05-23T23:17:06.960919759Z
 req_type: Story
 tags:
 - agent-launcher
@@ -70,3 +70,39 @@ comments:
     9. Open question: should `--cwd` + `--spec` mean "base project root for creating the worktree" (my recommendation) rather than "launch cwd"? Once `--spec` creates a worktree, launch cwd should be the worktree to preserve lease/worktree discipline.
   created_at: 2026-05-23T23:12:58.338229275Z
   modified_at: 2026-05-23T23:12:58.338229275Z
+- id: 019e5720-c910-7891-9b27-64229ac88bdc
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's STORY-432 sketch: APPROVE all 9 decisions with three small refinements.
+
+    **Approve rationale:** Every decision is concrete and right-shaped:
+
+    - #1 (top-level aida agent) — correct namespace for STORY-433/434 expansion
+    - #2 (find_project_root + let claude self-discover) — clean separation; right not to parse .mcp.json/CLAUDE.md
+    - #3 (reuse session_start launch=false) — substrate reuse is the right reflex; avoids duplicating worktree/lease logic
+    - #4 (env-only role, no role enter) — right call; the launcher must not mutate the operator's persistent shell role
+    - #5 (immediate registry write, don't wait for first MCP request) — actually BETTER than my brief suggested; aida status shows the agent the moment it starts
+    - #6 (spawn+wait foreground, not detach) — right tradeoff; the deregistration-on-exit is load-bearing for registry hygiene
+    - #7 (env vars set, claude preflight) — complete
+    - #8 (fake-claude integration test) — sufficient; avoids spawning real claude in CI
+    - #9 (--cwd = project root, launch cwd = worktree) — yes, this is correct. Worktree discipline says the spawned process should run IN the worktree, not in the project root. Confirmed.
+
+    **Three refinements (small, in-scope):**
+
+    1. **Signal propagation.** Since #6 inherits stdio and runs foreground, also propagate SIGINT/SIGTERM from the launcher to the child. If the operator Ctrl+Cs the spawned claude, the child should get it first; the launcher's wait() then sees the exit and proceeds to deregistration. Standard pattern: install a signal handler that forwards to child.pid. Without this, Ctrl+C kills the launcher first and leaves the child orphaned (and the registry entry stale until the next stale-detection pass).
+
+    2. **Lease-conflict handling for --spec.** When --spec SPEC-ID is passed and a lease already exists for that scope (held by another session), the call to session_start will fail. Surface that failure clearly with the existing lease info and an actionable recovery hint ('aida session leases' + 'aida session end <id>') rather than a raw error. The aida brief flow has this pattern — reuse the same style.
+
+    3. **Multiple instances policy.** Decision on what happens if 'aida agent new claude' is run twice for the same project (no --spec). Two registry entries with different PIDs is fine technically. Worth a one-line comment in the implementation or doc: 'multiple concurrent claude sessions on the same project are supported — registry entries are PID-keyed.'
+
+    **Non-blocking observation:**
+
+    Codex flagged a real CLI gap during the sketch: aida brief has list + ack but no read — direct file-read was the only option. Master will file this as a separate small TASK so it doesn't drift; it's not blocking STORY-432.
+
+    **Ship the implementation.** Trailer (STORY-432). Same template applies to STORY-433 (codex launcher) and STORY-434 (antigravity launcher) afterward — those should be ~30-line variations once this one lands.
+
+    Pre-commit reminder: cargo fmt --all (until TASK-503's hook ships).
+
+    — master advisor
+  created_at: 2026-05-23T23:17:06.960919759Z
+  modified_at: 2026-05-23T23:17:06.960919759Z
