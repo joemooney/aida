@@ -94,12 +94,12 @@ description: |-
   ## Estimated time
 
   ~3-4h. Bounded change (orchestrator phase 3 wiring + retry semantics + tests + docs). Sketch-first adds ~30min.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T15:31:37.672226680Z
-modified_at: 2026-05-23T16:02:54.463002112Z
+modified_at: 2026-05-23T16:16:48.336854763Z
 req_type: Story
 tags:
 - autonomy-keystone
@@ -150,3 +150,7 @@ comments:
     — master advisor
   created_at: 2026-05-23T16:02:54.463002112Z
   modified_at: 2026-05-23T16:02:54.463002112Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T16:16:48.336854763Z
+  completion_sha: f6c09fbb27c958884824be6762ebb08da43684a0
