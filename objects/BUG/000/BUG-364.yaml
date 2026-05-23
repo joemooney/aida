@@ -1,0 +1,66 @@
+id: 019e56f9-e76b-7e40-bbeb-d89e1dbf7d7f
+spec_id: BUG-364
+agreed_id: BUG-364
+title: stale-base re-check after auto-rebase fires against stale gh pr view cache (false-positive phase-3 failure)
+description: |-
+  ## Empirical 2026-05-23 — TASK-474 drain stopped at phase 3 false-positive
+
+  Sequence:
+  1. Phase 3 pre-flight detects stale-base on PR-250 (1 behind, 3 overlapping files including agent_registry.rs which is new from STORY-431)
+  2. Auto-rebase succeeds cleanly: 'PR-250 rebased onto origin/main — new head e05b2559088c'
+  3. Re-pre-flight re-fires: 'PR-250 base is 1 commit behind origin and overlaps 3 files'
+  4. Drain stops, batch halts at TASK-474
+
+  Verified state at time of failure:
+  - git log origin/main..origin/task-474 → 1 commit (task-474's commit, current)
+  - git log origin/task-474..origin/main → empty (0 behind)
+  - gh pr view 250 → baseRefOid: 67f277ea (current main), mergeStateStatus: CLEAN, mergeable: MERGEABLE
+  - PR-250 files = main.rs + mcp.rs (2 files, NOT the 3 the orchestrator reported — agent_registry.rs is a STORY-431 file that's not in PR-250)
+
+  PR was genuinely current. The detector hallucinated stale state.
+
+  ## Root cause hypothesis
+
+  After 'git push --force-with-lease', GitHub's PR API takes 1-30 seconds to refresh baseRefOid + behind-count. The re-pre-flight ran IMMEDIATELY after the push and hit GitHub's stale cache.
+
+  The '3 overlapping files' count is also suspicious — agent_registry.rs is in PR-249 (STORY-431, already merged), not PR-250. The detector may be mixing in main-side touches from already-merged PRs as 'overlaps' rather than just PR-vs-current-main overlap.
+
+  ## Fix direction
+
+  Three options:
+
+  A. **Trust local git after a successful auto-rebase.** After 'git rebase origin/main && git push --force-with-lease' succeeds, the branch is by construction 0 commits behind origin/main. Skip the re-check via 'gh pr view' entirely; pass directly to phase 3 launch.
+
+  B. **Poll gh pr view until baseRefOid catches up.** After force-push, loop 'gh pr view <N> --json baseRefOid,headRefOid' until baseRefOid == origin/main HEAD or until timeout. Adds latency but stays defensive.
+
+  C. **Use local git for the re-check.** Replace gh pr view with 'git rev-list origin/main..origin/<branch>' and 'git diff --name-only origin/main...origin/<branch>'. No GitHub round-trip, no cache.
+
+  A is simplest + correct under the invariant. C is most robust to network/cache flakiness. Lean A.
+
+  ## Acceptance
+
+  - [ ] Decide A/B/C (or hybrid)
+  - [ ] Implementation in orchestrator phase 3 pre-flight after auto-rebase
+  - [ ] Regression test: simulate a 'main moved + auto-rebase succeeded + re-check fires immediately' and confirm pre-flight passes
+  - [ ] Also fix the overlapping-files count to exclude already-merged commits (agent_registry.rs case)
+
+  ## Composes with
+
+  - STORY-281 / STORY-429 — original stale-base detection + auto-rebase work
+  - Operator UX: a real drain stopped on a phantom for 21m44s; high cost for an autonomy keystone bug
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T22:34:38.827629011Z
+modified_at: 2026-05-23T22:34:38.827629011Z
+req_type: Bug
+tags:
+- false-positive
+- from-self-test
+- from-task-474
+- from-user-friction
+- orchestrator
+- phase-3
+- reliability
+- stale-base
