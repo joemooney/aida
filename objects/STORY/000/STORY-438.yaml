@@ -1,0 +1,26 @@
+id: 019e5615-4bcc-7242-8aac-a0300c477e4b
+spec_id: STORY-438
+agreed_id: STORY-438
+title: 'Review PR-250: fix(mcp): claim_task records agent cwd; cwd matcher skips empty-worktree leases (TASK-474)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e5605`) for branch `task-474`.
+
+  - PR: <https://github.com/joemooney/aida/pull/250>
+  - Branch: `task-474` → `main`
+
+  ## Covers
+
+  - TASK-474
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 250` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T18:24:56.780354735Z
+modified_at: 2026-05-23T18:24:56.780354735Z
+req_type: Story
