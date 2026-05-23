@@ -49,12 +49,12 @@ description: |-
   ## Estimated time
 
   ~1.5-2h. Doc + MCP-tool smoke test + propagation pipeline integration.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T15:29:46.939768888Z
-modified_at: 2026-05-23T15:29:46.939768888Z
+modified_at: 2026-05-23T15:43:54.244420486Z
 req_type: Task
 tags:
 - antigravity
@@ -64,3 +64,7 @@ tags:
 - from-self-test
 - parent:STORY-425
 - skill
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T15:43:54.244420486Z
+  completion_sha: 763a69b1cdd16e70df0260e9555123335b6a5f56
