@@ -57496,7 +57496,7 @@ fn register_mcp_agent(name: &str, print_only: bool, force: bool) -> Result<()> {
         path.display(),
         server_url
     );
-    println!("MCP-speaking agents (Codex, Cursor, etc.) can now call AIDA's 21 tools — see `aida mcp register-agent --print` for the full surface.");
+    println!("MCP-speaking agents (Codex, Cursor, etc.) can now call AIDA's 24 tools — see `aida mcp register-agent --print` for the full surface.");
     Ok(())
 }
 
