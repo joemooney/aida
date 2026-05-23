@@ -44,12 +44,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: empirical observation that the May 17 mcp-serve (PID 2675834, 5d20h old, pre-TASK-493) was still running despite TASK-493 shipping today. Codex referenced an MCP staleness during STORY-432 dispatch.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T23:16:14.347232646Z
-modified_at: 2026-05-23T23:16:14.347232646Z
+modified_at: 2026-05-23T23:30:42.427508179Z
 req_type: Task
 tags:
 - build
