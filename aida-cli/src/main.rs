@@ -21717,8 +21717,8 @@ fn preflight_stale_base_check_with_gh(
         })
         .unwrap_or(0);
 
-    let pr_files = files_in_range(project_root, &format!("{origin_base}...{pr_local_branch}"));
-    let base_files = files_in_range(project_root, &format!("{pr_local_branch}...{origin_base}"));
+    let (pr_files, base_files) =
+        preflight_stale_base_file_sets(project_root, &origin_base, &pr_local_branch);
 
     // git merge-tree probe — same as pr_rebase_check_report.
     let mt = std::process::Command::new("git")
@@ -21778,6 +21778,17 @@ fn files_in_range(repo: &std::path::Path, range: &str) -> Vec<String> {
             out
         })
         .unwrap_or_default()
+}
+
+fn preflight_stale_base_file_sets(
+    repo: &std::path::Path,
+    origin_base: &str,
+    pr_branch: &str,
+) -> (Vec<String>, Vec<String>) {
+    (
+        files_in_range(repo, &format!("{origin_base}..{pr_branch}")),
+        files_in_range(repo, &format!("{pr_branch}..{origin_base}")),
+    )
 }
 
 #[cfg(test)]
@@ -21875,6 +21886,44 @@ mod task_471_stale_base_preflight_tests {
             other => panic!("expected stale overlap, got {other:?}"),
         }
     }
+
+    #[test]
+    fn file_sets_exclude_base_only_files_from_pr_side() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+
+        git(tmp.path(), &["init", "-b", "main", repo.to_str().unwrap()]);
+        git(&repo, &["config", "user.email", "aida@example.test"]);
+        git(&repo, &["config", "user.name", "AIDA Test"]);
+
+        std::fs::write(repo.join("shared.txt"), "base\n").unwrap();
+        git(&repo, &["add", "shared.txt"]);
+        git(&repo, &["commit", "-m", "base"]);
+
+        git(&repo, &["checkout", "-b", "pr-branch"]);
+        std::fs::write(repo.join("pr-only.txt"), "pr\n").unwrap();
+        git(&repo, &["add", "pr-only.txt"]);
+        git(&repo, &["commit", "-m", "pr touches pr-only"]);
+
+        git(&repo, &["checkout", "main"]);
+        std::fs::write(repo.join("base-only.txt"), "base\n").unwrap();
+        git(&repo, &["add", "base-only.txt"]);
+        git(&repo, &["commit", "-m", "base touches base-only"]);
+
+        let (pr_files, base_files) = preflight_stale_base_file_sets(&repo, "main", "pr-branch");
+
+        assert_eq!(pr_files, vec!["pr-only.txt".to_string()]);
+        assert_eq!(base_files, vec!["base-only.txt".to_string()]);
+        assert_eq!(
+            pr_rebase::classify_stale_base(
+                1,
+                &pr_files,
+                &base_files,
+                pr_rebase::ConflictPrediction::Clean,
+            ),
+            pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind: 1 }
+        );
+    }
 }
 
 #[cfg(test)]
@@ -21936,6 +21985,43 @@ mod story_429_auto_rebase_tests {
             driver.should_auto_rebase_stale_base(false),
             Err("not-fully-headless")
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn clean_auto_rebase_proceeds_without_retrying_preflight() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let fake_aida = tmp.path().join("aida");
+        std::fs::write(
+            &fake_aida,
+            "#!/bin/sh\n\
+             if [ \"$1\" = pr ] && [ \"$2\" = rebase ] && [ \"$4\" = --no-smoke ]; then\n\
+               exit 0\n\
+             fi\n\
+             echo unexpected aida args: \"$@\" >&2\n\
+             exit 1\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&fake_aida).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_aida, perms).unwrap();
+
+        let mut driver = driver(Some(auto_complete::NoHumanMode::Both), false, false);
+        driver.aida_exe = fake_aida;
+        driver.project_root = tmp.path().to_path_buf();
+        let mut attempted = false;
+        let action = driver.resolve_phase3_stale_overlap(
+            250,
+            &mut attempted,
+            "stale cache should not be rechecked".to_string(),
+        );
+
+        assert_eq!(action, Phase3StaleOverlapAction::Proceed);
+        assert!(attempted);
+        assert_eq!(driver.auto_rebase_events.len(), 1);
+        assert_eq!(driver.auto_rebase_events[0].outcome, "clean");
     }
 }
 
@@ -59086,6 +59172,12 @@ struct RealPhaseDriver {
     auto_rebase_events: Vec<auto_complete_telemetry::AutoRebaseEvent>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum Phase3StaleOverlapAction {
+    Proceed,
+    Refuse(String),
+}
+
 impl RealPhaseDriver {
     fn new(
         project_root: std::path::PathBuf,
@@ -59170,7 +59262,7 @@ impl RealPhaseDriver {
                 self.record_auto_rebase(pr_number, "clean");
                 if !self.json {
                     eprintln!(
-                        "  {} PR-{pr_number} auto-rebased cleanly; retrying phase 3 pre-flight",
+                        "  {} PR-{pr_number} auto-rebased cleanly; proceeding with phase 3",
                         "✓".green().bold()
                     );
                 }
@@ -59183,6 +59275,37 @@ impl RealPhaseDriver {
             Err(e) => {
                 self.record_auto_rebase(pr_number, format!("failed:{e}"));
                 false
+            }
+        }
+    }
+
+    fn resolve_phase3_stale_overlap(
+        &mut self,
+        pr_number: u32,
+        auto_rebase_attempted: &mut bool,
+        msg: String,
+    ) -> Phase3StaleOverlapAction {
+        match self.should_auto_rebase_stale_base(*auto_rebase_attempted) {
+            Ok(()) => {
+                *auto_rebase_attempted = true;
+                if self.attempt_phase3_auto_rebase(pr_number as u64) {
+                    return Phase3StaleOverlapAction::Proceed;
+                }
+                Phase3StaleOverlapAction::Refuse(msg)
+            }
+            Err("allow-stale-base") => {
+                self.record_auto_rebase(pr_number as u64, "skipped:allow-stale-base");
+                eprintln!(
+                    "  {} stale-base + overlap detected; `--allow-stale-base` is set, \
+                     proceeding with reviewer.\n{}",
+                    "⚠".yellow().bold(),
+                    msg.yellow()
+                );
+                Phase3StaleOverlapAction::Proceed
+            }
+            Err(reason) => {
+                self.record_auto_rebase(pr_number as u64, format!("skipped:{reason}"));
+                Phase3StaleOverlapAction::Refuse(msg)
             }
         }
     }
@@ -59871,26 +59994,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 }) => {
                     let msg =
                         pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
-                    match self.should_auto_rebase_stale_base(auto_rebase_attempted) {
-                        Ok(()) => {
-                            auto_rebase_attempted = true;
-                            if self.attempt_phase3_auto_rebase(pr as u64) {
-                                continue;
-                            }
-                            return Err(auto_complete::PhaseFailure::new(msg));
-                        }
-                        Err("allow-stale-base") => {
-                            self.record_auto_rebase(pr as u64, "skipped:allow-stale-base");
-                            eprintln!(
-                                "  {} stale-base + overlap detected; `--allow-stale-base` is set, \
-                                 proceeding with reviewer.\n{}",
-                                "⚠".yellow().bold(),
-                                msg.yellow()
-                            );
-                            break;
-                        }
-                        Err(reason) => {
-                            self.record_auto_rebase(pr as u64, format!("skipped:{reason}"));
+                    match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
+                        Phase3StaleOverlapAction::Proceed => break,
+                        Phase3StaleOverlapAction::Refuse(msg) => {
                             return Err(auto_complete::PhaseFailure::new(msg));
                         }
                     }
