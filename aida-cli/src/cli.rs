@@ -2524,10 +2524,13 @@ pub enum QueueCommand {
     Move {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
-        /// Move to the front of the queue (slot 1). `--to-front` is an
-        /// accepted alias for the same action.
+        /// Move to the front of the queue (slot 1). `--to-front` and
+        /// `--to-top` are accepted aliases for the same action. When
+        /// the target is already at slot 1, the command is a friendly
+        /// no-op that prints `<id> is already at queue head`.
         // trace:TASK-280 | ai:claude
-        #[clap(long, visible_alias = "to-front")]
+        // trace:TASK-491 | ai:claude
+        #[clap(long, visible_aliases = ["to-front", "to-top"])]
         top: bool,
         /// Move to the back of the queue (last slot). `--to-back` is an
         /// accepted alias for the same action.
