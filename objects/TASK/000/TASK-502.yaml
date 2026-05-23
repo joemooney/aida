@@ -1,0 +1,67 @@
+id: 019e56fd-fc05-77b0-9647-89f088023fd6
+spec_id: TASK-502
+agreed_id: TASK-502
+title: 'aida brief --notify: sentinel-file mechanism so idle agent chats surface pending briefs without heartbeat'
+description: |-
+  ## Empirical 2026-05-23 — master had to manually wake Codex chat
+
+  Master filed a brief for Codex via aida brief codex BUG-364 → '.aida/agent-briefs/codex/BUG-364-*.md'. Codex's CLI chat session was idle (waiting for a user prompt). The brief sat unread until the operator pasted a wake message into Codex.
+
+  This is the multi-agent coordination friction the substrate is supposed to dissolve. EPIC-31 Phase 4 (STORY-435 — agent heartbeat + idle detection) eventually closes it: a heartbeating agent's MCP server polls list_briefs on idle and surfaces 'you have N new briefs' to its chat. Until then, the operator is the router.
+
+  This TASK is the pre-Phase-4 lightweight bridge: a sentinel-file mechanism that doesn't require heartbeat infrastructure.
+
+  ## Proposed shape
+
+  aida brief <agent> <SPEC> [existing flags] --notify writes (in addition to the brief markdown) a sentinel file at .aida/agent-briefs/<agent>/.pending (or similar). The file contains the list of unacked brief paths.
+
+  The agent's substrate-side surface (SessionStart hook, statusline, or aida status itself) checks for .pending on startup / on each render and displays:
+
+    📬 2 pending briefs for codex — run 'aida brief list --for-agent codex'
+
+  aida brief ack <path> removes that path from .pending; when .pending is empty, the file is removed.
+
+  ## Why opt-in --notify (not always)
+
+  Some briefs are FYI-only and the master doesn't want to wake the agent (drain in flight; agent shouldn't context-switch). --notify is explicit signal-of-urgency.
+
+  ## Why file-based (no daemon)
+
+  Composes with substrate-as-bouncer principle. No new process, no socket, no heartbeat protocol. Sentinel file is the substrate; aida status / hook / statusline are the readers. Phase 4's heartbeat (STORY-435) is the heavier real-time version; this is the substrate-only bridge.
+
+  ## Acceptance
+
+  - [ ] aida brief <agent> <SPEC> --notify writes .aida/agent-briefs/<agent>/.pending alongside the brief markdown
+  - [ ] aida brief ack <path> updates .pending (removes the entry; deletes file when empty)
+  - [ ] aida status surfaces pending briefs for the current agent's identity (or all agents if not set)
+  - [ ] Idempotent: re-notifying the same brief doesn't duplicate the entry
+  - [ ] Regression test: file → notify → list → ack → confirm .pending cleared
+
+  ## Out of scope (defer to STORY-435)
+
+  - Real-time push (no inotify, no socket, no daemon)
+  - Cross-host notification (operator on a different machine)
+  - Notification-channel routing (Slack, desktop notification, etc.)
+
+  ## Composes with
+
+  - TASK-492 (aida brief CLI verb — already shipped)
+  - STORY-426 (MCP brief surface — already shipped)
+  - STORY-435 (EPIC-31 Phase 4 — agent heartbeat; this TASK is the lightweight bridge until then)
+  - EPIC-31 strategic arc — agent-lifecycle layer
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T22:39:06.245891646Z
+modified_at: 2026-05-23T22:39:06.245891646Z
+req_type: Task
+tags:
+- agent-comms
+- brief
+- from-self-test
+- from-user-friction
+- multi-agent
+- papercut
+- parent:EPIC-31
+- sibling-of-STORY-435
