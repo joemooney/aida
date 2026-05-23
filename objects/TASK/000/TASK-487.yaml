@@ -15,12 +15,12 @@ description: |
   Severity: cosmetic — `--help` text quality, not a behavior or security issue.
 
   Raised in review of PR-223: https://github.com/joemooney/aida/pull/223#issuecomment-4523800854
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T01:53:34.840091117Z
-modified_at: 2026-05-23T01:53:34.840091117Z
+modified_at: 2026-05-23T05:00:45.603267272Z
 req_type: Task
 tags:
 - cli
