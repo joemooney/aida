@@ -558,4 +558,163 @@ mod tests {
             );
         }
     }
+
+    /// TASK-333 regression guard — the `/aida-review` skill template must
+    /// carry an explicit `## Fix-forward policy` section with the scoped
+    /// allowance + guardrails so reviewers stop improvising inconsistently
+    /// (PR-64 refused, PR-91 fix-forwarded; same skill, opposite behavior).
+    /// The policy has five load-bearing pieces: (1) a top-level section
+    /// header, (2) both PERMITTED and FORBIDDEN buckets named with the
+    /// build/test-behavior discriminator, (3) a worked-examples table with
+    /// rows for at least one fix-forward and one RequestChanges case so the
+    /// discriminator is concrete, (4) the procedure names mergeStateStatus
+    /// CLEAN re-verification, (5) a `kind:reviewer-fix-forward` finding tag
+    /// for the STORY-285 surface. Step 5 must point at the policy section
+    /// rather than carrying its own (formerly contradictory) examples.
+    /// trace:TASK-333 | ai:claude
+    #[test]
+    fn aida_review_carries_task_333_fix_forward_policy() {
+        let review = EMBEDDED_TEMPLATES
+            .get("skills/aida-review.md")
+            .expect("aida-review.md embedded");
+
+        // (1) Top-level Fix-forward policy section is present.
+        let policy_idx = review.find("## Fix-forward policy").expect(
+            "aida-review.md must define a top-level `## Fix-forward policy` \
+             section (TASK-333 acceptance criterion 1)",
+        );
+
+        // The policy must appear BEFORE the Workflow header so reviewers
+        // read it before walking the steps that reference it.
+        let workflow_idx = review
+            .find("\n## Workflow")
+            .expect("aida-review.md must define a `## Workflow` section");
+        assert!(
+            policy_idx < workflow_idx,
+            "the `## Fix-forward policy` section must appear before \
+             `## Workflow` so step 5's pointer resolves to context already \
+             on screen"
+        );
+
+        // Scope subsequent assertions to the policy section's body
+        // (between its header and the next top-level `## ` header).
+        let policy_body = {
+            let after_header = &review[policy_idx..];
+            let end = after_header[2..]
+                .find("\n## ")
+                .map(|n| n + 2)
+                .unwrap_or(after_header.len());
+            &after_header[..end]
+        };
+
+        // (2) Both PERMITTED and FORBIDDEN buckets named with the
+        // build/test-behavior discriminator — improvisation comes from a
+        // missing discriminator, so the explicit one is load-bearing.
+        assert!(
+            policy_body.contains("PERMITTED") && policy_body.contains("FORBIDDEN"),
+            "policy section must name both PERMITTED and FORBIDDEN buckets \
+             (acceptance criterion 2: doc-only-vs-logic discriminator)"
+        );
+        assert!(
+            policy_body.contains("build or test behavior"),
+            "policy section must name the `build or test behavior` \
+             discriminator that decides PERMITTED vs FORBIDDEN — without \
+             the rule the buckets are vibe-checks"
+        );
+
+        // (3) Worked-examples table with at least one ✅ row and one ❌ row
+        // so the discriminator is concrete enough to apply without
+        // judgment-call ambiguity (acceptance criterion 2's "worked
+        // examples"). The table also makes the PR-91 / PR-64 inconsistency
+        // re-derivable: a reviewer looking up "is this doc-only?" reads
+        // the row, not their own intuition.
+        let table_marker = "| Diff | Verdict | Reason |";
+        assert!(
+            policy_body.contains(table_marker),
+            "policy section must include the worked-examples table header \
+             `{table_marker}` so the discriminator carries concrete rows"
+        );
+        let table_idx = policy_body.find(table_marker).unwrap();
+        let table_body = &policy_body[table_idx..];
+        let table_end = table_body
+            .find("\n\n")
+            .map(|n| table_idx + n)
+            .unwrap_or(policy_body.len());
+        let table = &policy_body[table_idx..table_end];
+        let permitted_rows = table.matches("✅").count();
+        let forbidden_rows = table.matches("❌").count();
+        assert!(
+            permitted_rows >= 1 && forbidden_rows >= 1,
+            "worked-examples table must include ≥1 ✅ Fix-forward row and \
+             ≥1 ❌ RequestChanges row — got {permitted_rows} ✅ and \
+             {forbidden_rows} ❌"
+        );
+
+        // (4) Procedure names mergeStateStatus CLEAN re-verification — the
+        // CI-desync guard that bounds the doc-only allowance's first risk.
+        assert!(
+            policy_body.contains("mergeStateStatus") && policy_body.contains("CLEAN"),
+            "policy procedure must require `mergeStateStatus: CLEAN` \
+             re-verification on the fix-forward commit before Approving \
+             (acceptance criterion 4)"
+        );
+
+        // (5) `kind:reviewer-fix-forward` finding tag is named so the
+        // STORY-285 surface picks it up (acceptance criterion 3, the
+        // self-grading guardrail).
+        assert!(
+            policy_body.contains("kind:reviewer-fix-forward"),
+            "policy section must name the `kind:reviewer-fix-forward` \
+             finding tag for the STORY-285 surface (acceptance criterion 3)"
+        );
+        assert!(
+            policy_body.contains("from-review:PR-"),
+            "policy section must name the `from-review:PR-<N>` finding tag \
+             so the finding rides the same STORY-285 surface that step 7b \
+             uses — the advisor's `aida findings list` groups by it"
+        );
+
+        // (6) Logic-touching changes route to RequestChanges — acceptance
+        // criterion 5. Search both the policy section and Step 5 to be
+        // robust against later prose reorgs.
+        let logic_to_rc = policy_body.contains("RequestChanges instead")
+            || policy_body.contains("return RequestChanges");
+        assert!(
+            logic_to_rc,
+            "policy section must explicitly route logic-touching changes \
+             to RequestChanges (acceptance criterion 5)"
+        );
+
+        // Step 5 must point at the policy section rather than carry its
+        // own (formerly contradictory) inline examples. The pre-TASK-333
+        // text used the heading `Mechanical fix-forward`; the new heading
+        // mentions the doc-only policy explicitly.
+        let step_5_idx = review
+            .find("### 5. ")
+            .expect("aida-review.md must define a `### 5.` step");
+        let step_5_end = review[step_5_idx..]
+            .find("\n### ")
+            .map(|n| step_5_idx + n)
+            .unwrap_or(review.len());
+        let step_5 = &review[step_5_idx..step_5_end];
+        assert!(
+            step_5.contains("Fix-forward policy"),
+            "step 5 must reference the `Fix-forward policy` section so the \
+             reviewer reads the policy before acting (acceptance \
+             criterion 6: consistent behavior)"
+        );
+
+        // Step 5 must NOT re-introduce a `#[cfg(unix)]` test gate as a
+        // permitted fix-forward example — the pre-TASK-333 text did, and
+        // it directly contradicts the new policy (test attributes change
+        // which tests CI runs).
+        let cfg_unix_as_permitted = step_5.contains("gate USERPROFILE assertion on #[cfg(unix)]")
+            && !step_5.contains("Forbidden");
+        assert!(
+            !cfg_unix_as_permitted,
+            "step 5 must not surface `#[cfg(unix)]` test-gating as a \
+             permitted fix-forward — the pre-TASK-333 example contradicts \
+             the new policy"
+        );
+    }
 }
