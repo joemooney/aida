@@ -76,6 +76,8 @@ A `.mcp.json` is scaffolded at project init for Claude Code MCP integration. Oth
 
 `aida mcp-serve` is a long-running process and does not hot-reload the CLI binary. Restart the MCP server after pulling or building AIDA changes if you need newly shipped tool behavior.
 
+When working from an AIDA source checkout, `cargo run -p aida-cli -- pr ship` is supported. The wrapper reinvokes the current development binary for post-merge `aida pull` and `aida session end`, so agents do not need an installed `aida` on `PATH` just to complete the ship flow.
+
 ## Conventions you should follow
 
 When you participate in an AIDA project — whether as implementer, reviewer, advisor, or other role — these conventions matter:
