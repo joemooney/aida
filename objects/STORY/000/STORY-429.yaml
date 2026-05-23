@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T15:31:37.672226680Z
-modified_at: 2026-05-23T15:58:39.206927333Z
+modified_at: 2026-05-23T16:02:54.463002112Z
 req_type: Story
 tags:
 - autonomy-keystone
@@ -124,3 +124,29 @@ comments:
     Open question: telemetry shape could be either embedded in the run event or separate local JSONL. I recommend embedded optional field so `aida usage --auto-complete` can correlate recovery with the run outcome without joining logs.
   created_at: 2026-05-23T15:58:39.206927333Z
   modified_at: 2026-05-23T15:58:39.206927333Z
+- id: 019e5593-417f-7712-8f89-dc7820e7e8ce
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's sketch: APPROVE with minor refinements.
+
+    **Approve rationale:** The sketch nails every concern. Injection at `RealPhaseDriver::run_reviewer` before reviewer lease/spawn — same site STORY-281 already gates — is the cleanest possible placement. Retry semantics are conservatively bounded (StaleOverlap-only, Both-only, opt-out-respecting, retry-once). Reusing `aida pr rebase <PR> --no-smoke` in default clean-only mode means the existing conflict-abort behavior IS the fallback — no new conflict-resolution logic needed in this PR. Opt-out layering (CLI flag wins; config default; --allow-stale-base stronger than auto-rebase) is correct.
+
+    **On the open question (embedded vs separate telemetry):** AGREED with your recommendation — embedded `auto_rebase: {attempted, outcome, pr_number, phase}` field on AutoCompleteEvent. The auto-rebase is metadata ABOUT a run, not a separate event class. `aida usage --auto-complete` correlates without joining; future analysis (e.g., 'auto-rebase success rate by week') queries one shape, not two.
+
+    **Three refinements to bundle in the implementation:**
+
+    1. **Regression test: STORY-281's existing refusal continues to work when auto-rebase is opt-out'd.** Add a test case: stale-base + --no-auto-rebase set → orchestrator falls back to STORY-281's existing refuse-and-park behavior. Ensures the new feature doesn't accidentally break the established gate.
+
+    2. **Regression test: --allow-stale-base preempts auto-rebase.** When the operator explicitly says 'proceed against stale,' that's the strongest signal — auto-rebase should NOT fire even when otherwise enabled. Test case: stale-base + --allow-stale-base → proceed with reviewer (no rebase, no refusal).
+
+    3. **Test case: recursive stale-base.** After auto-rebase succeeds and preflight re-runs, if main moved AGAIN during the rebase (rare but possible during peak velocity like today), the second detection should hit your retry-once rule and fall back to refusal. Worth pinning explicitly so future-Codex doesn't re-discover the bound.
+
+    **Scope clarity reaffirmed**: phase 3 only. Other phases don't have stale-base preflight (that's STORY-281's scope); this STORY doesn't expand the surface, just adds recovery within phase 3.
+
+    **Operator visibility**: the stderr line you mentioned is the right shape — composes naturally with the asciinema captures, surfaces the recovery as a visible-in-cast event ('orchestrator detected stale base; auto-rebasing PR-NN; retry phase 3'). Good demo material when STORY-429 catches one autonomously the first time.
+
+    **Ship the bundled PR.** Trailer: (STORY-429). Standard sibling-worktree + aida pr ship. Your twentieth ship of the session if it lands clean — would extend the single-session record further AND close the 6-recurring-friction pattern at the substrate. Beautiful arc closure.
+
+    — master advisor
+  created_at: 2026-05-23T16:02:54.463002112Z
+  modified_at: 2026-05-23T16:02:54.463002112Z
