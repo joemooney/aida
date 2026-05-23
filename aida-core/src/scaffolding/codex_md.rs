@@ -1,5 +1,27 @@
 use super::*;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generated_agents_md_has_codex_operating_sections() {
+        let scaffolder = Scaffolder::new(
+            std::path::PathBuf::from("/tmp/aida-story-417-test"),
+            ScaffoldConfig::default(),
+        );
+        let store = RequirementsStore::default();
+        let md = scaffolder.generate_agents_md(&store);
+
+        assert!(md.contains("## Codex Operating Discipline"));
+        assert!(md.contains("docs/agents/codex-mcp-setup.md"));
+        assert!(md.contains("[AI:codex]"));
+        assert!(md.contains("SPEC-410"));
+        assert!(md.contains("BUG-345"));
+        assert!(md.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
+    }
+}
+
 impl Scaffolder {
     /// Generate AGENTS.md content for Codex-compatible coding agents.
     ///
@@ -33,59 +55,116 @@ impl Scaffolder {
         format!(
             r#"# AGENTS.md
 
-Guidance for AI coding agents (Codex CLI, MCP-compatible agents, etc.)
-working in this repository. The block delimited by HTML comment markers
-below is auto-generated from `.claude/AIDA.md` on each
-`aida scaffold apply` — edit that file (the markers themselves are
-intentionally machine-readable, so leave them in place). Anything
-outside the marked block is yours to tailor.
+Guidance for Codex and MCP-compatible coding agents working in this
+repository. Read this as instructions-to-self: when you implement work,
+coordinate through AIDA, keep the git/aida-store state coherent, and
+leave durable traces for the next agent.
 
-## Project overview
+The block delimited by HTML comment markers below is auto-generated from
+`.claude/AIDA.md` on each `aida scaffold apply`. Leave the markers in
+place. Content outside the marked block is project-owned guidance.
+
+## Project Orientation
 
 {project_name}{description}
 
+Use `OVERVIEW.md` for product/architecture context and
+`docs/agents/cross-agent-onboarding.md` for the shared MCP operating
+model. Use `docs/agents/codex-mcp-setup.md` when configuring Codex
+against AIDA's MCP server.
+
 {aida_block}
 
-## Codex / MCP-specific notes
+## Codex Operating Discipline
 
-### MCP integration
+### Storage Model
 
-If AIDA is configured as an MCP server (`.mcp.json` is auto-scaffolded),
-these tools are available:
+AIDA's source of truth is the git-canonical spec store, not an ad hoc
+notes file. Use MCP tools for spec graph and coordination operations
+when available; use shell commands for build, test, git inspection, and
+cross-surface verification.
 
-| Tool | Purpose |
-|------|---------|
-| `list_requirements` | List requirements with optional status/type filters |
-| `show_requirement` | Show full details by SPEC-ID |
-| `search_requirements` | Search by keyword across titles + descriptions |
-| `add_requirement` | Create a new requirement |
-| `update_requirement` | Update status / priority / owner |
-| `add_comment` | Add an implementation note |
-| `list_features` | List feature categories |
+### Requirements Management
 
-To configure for Codex CLI:
+Before implementing, make sure a requirement exists and read it with
+`show_requirement` or `aida show <ID>`. If you file new requirements via
+MCP, pass a valid lowercase `type`; AIDA derives the canonical ID prefix
+from that type. Do not invent `SPEC-N` IDs.
+
+### Daily-Use Commands
 
 ```bash
 codex mcp add aida -- aida mcp-serve
+aida show <SPEC-ID>
+aida list --status approved
+aida queue work <SPEC-ID>
+aida pr ship
+tests/test_mcp_stdio.sh --skip-agent-contract
+tests/test_mcp_doc_consistency.sh
 ```
 
-### Non-interactive workflows (codex exec)
+### MCP Coordination
 
-```bash
-# Implement a specific requirement
-codex exec "Implement FR-042. Use 'aida show FR-042' to see the details first."
+Use AIDA MCP for substrate operations: `show_requirement`,
+`list_active_leases`, `claim_task`, `release_task`, `file_finding`,
+`post_punt`, `add_comment`, and directive tools. Trust MCP `tools/list`
+for argument names. Current responses are text envelopes; parse
+defensively until structuredContent ships.
 
-# Sprint standup
-codex exec "Run 'aida list --status in-progress' and 'git log --since=yesterday'. Generate a standup report."
+### Worktree And Session Discipline
 
-# Capture untraced work
-codex exec "Review today's git commits. For each, check if trace comments exist. Create requirements for untraced code."
+Do implementation work in a sibling worktree. Link `.aida-store` into
+that worktree when the local CLI needs direct store access. Do not edit
+another agent's dirty main worktree. If a branch, lease, or worktree
+state looks inconsistent, stop and surface it instead of forcing git.
+
+### Code Traceability
+
+When code implements a spec, add a trace comment in the touched code:
+
+```rust
+// trace:TASK-123 | ai:codex
 ```
 
-### Commit attribution
+Keep spec IDs in developer artifacts: commits, PR titles, trace
+comments, and plans. Do not leak internal IDs into user-facing CLI text
+unless that output is explicitly developer/operator-facing.
 
-When committing on behalf of Codex, use the `[AI:codex]` prefix per the
-commit format spec in the AIDA-AUTOGEN block above.
+### Commit And PR Format
+
+Use the Codex prefix and put every shipped spec in trailing parens:
+
+```text
+[AI:codex] fix(scope): concise description (TASK-123)
+[AI:codex] docs(agents): Codex setup integration (STORY-417 TASK-485 TASK-484)
+```
+
+The auto-bump scanner reads the trailing parens. If one PR closes
+multiple specs, include every spec ID in that group.
+
+### Sketch-First Protocol
+
+Before opening a PR for architecture-class changes, post a sketch on the
+owning spec and wait for master sign-off. Architecture-class means file
+formats, MCP tool contracts, orchestrator semantics, lease model,
+cross-cutting lifecycle vocabulary, or discipline/memory changes.
+Bounded tests, docs refreshes, and acceptance-criteria implementation do
+not need a sketch unless they introduce a reusable harness or new
+project convention.
+
+### Known Codex Pitfalls
+
+- PR-201 missed the trailing spec trailer in the squash subject; that
+  incident is why trailing-parens discipline is non-optional.
+- Read the `aida pr ship` arc before relying on the wrapper in a new
+  environment: SPEC-410, BUG-339, BUG-344, and BUG-345 document subject
+  repair, parser alignment, CI startup waiting, and stale-main-worktree
+  handling.
+- `aida mcp-serve` is long-running and does not hot-reload the binary.
+  Restart it after pulling or rebuilding AIDA if you need new MCP tool
+  behavior.
+- If an instruction from another session sounds inconsistent with the
+  branch contents, verify the PR contents and flag the mismatch.
 "#
         )
     }

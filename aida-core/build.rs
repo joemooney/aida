@@ -46,6 +46,10 @@ fn main() {
         "docs/aida-discipline",
     );
 
+    // Cross-agent onboarding docs — MCP setup and operating guidance for
+    // Codex, Antigravity, and other MCP-speaking agents. trace:TASK-485
+    embed_directory(&mut code, "templates/docs/agents", "docs/agents");
+
     // Starter memory pack — generic AIDA-using discipline written to the
     // Claude Code project memory dir by `aida init --with-memories`.
     // trace:STORY-255
@@ -65,6 +69,9 @@ fn main() {
     code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");
     code.push_str("    (\"plan-template.md\", \"Plan template - scaffolded into docs/plans/_TEMPLATE.md\"),\n");
     code.push_str("    (\"docs/aida-discipline\", \"Discipline pack - AIDA-using guidance scaffolded into docs/aida-discipline/\"),\n");
+    code.push_str(
+        "    (\"docs/agents\", \"Cross-agent onboarding docs scaffolded into docs/agents/\"),\n",
+    );
     code.push_str("    (\"memories\", \"Starter memory pack - generic discipline for `aida init --with-memories`\"),\n");
     code.push_str("];\n");
 
