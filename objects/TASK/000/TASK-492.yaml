@@ -75,12 +75,12 @@ description: |-
   ## Estimated time
 
   ~1.5-3h. Bounded subcommand + file template + tests + docs. Codex has the relevant context (today's 16 PRs of subcommand work + 5 PRs of pr-ship hardening that touched similar template-render territory).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:30:38.859366257Z
-modified_at: 2026-05-23T05:30:38.859366257Z
+modified_at: 2026-05-23T05:48:22.858725830Z
 req_type: Task
 tags:
 - aida-brief
@@ -89,3 +89,7 @@ tags:
 - parent:STORY-425
 - routing
 - scaffolding
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T05:48:22.858725830Z
+  completion_sha: 38ba4a2296f7f9ad08bb79c5df45dab9c53d6ee5
