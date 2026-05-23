@@ -1,0 +1,76 @@
+id: 019e557b-a3f1-7640-9ce2-fdfa1fa4aebb
+spec_id: TASK-496
+agreed_id: TASK-496
+title: Auto-invoke /aida-capture via Claude Code Stop hook to catch missed requirement filings
+description: |-
+  User direction 2026-05-23 morning: extend the safety net for the verbal-tic pattern from feedback_worth_noting_means_note_it. The memory is the proactive instruction (catch at decision time); /aida-capture is the reactive safety net (catch at session end). The reactive layer currently requires manual invocation — operator OR advisor must remember to run it. When neither remembers, the safety net doesn't deploy.
+
+  ## The structural fix
+
+  Configure a Claude Code Stop hook (settings.json) that surfaces /aida-capture's prompt when Claude's response completes. The hook fires automatically; substrate enforces the safety net even when operator + advisor both forget.
+
+  Per substrate-as-bouncer principle: this turns 'remember to invoke /aida-capture' (instruction) into 'hook fires automatically' (programmatic gate).
+
+  ## Scope
+
+  1. **Hook script**: add scripts/hooks/aida-capture-prompt.sh (or similar) that runs at Stop time
+     - Scans recent transcript activity (cheaply — last N turns)
+     - If trigger phrases detected ('worth noting', 'worth filing', 'should file', 'we should', 'we need to track', etc.) AND no matching aida add invocation recently
+     - Output a system-reminder-style line surfacing the candidate items + the suggestion to run /aida-capture
+
+  2. **settings.json wire-up** at .claude/settings.json: add the Stop hook entry invoking the script. Use $CLAUDE_PROJECT_DIR per project-hook convention.
+
+  3. **Tuning**: avoid noise. The hook should:
+     - Only fire when transcript exceeds threshold (e.g., >N turns since last /aida-capture invocation)
+     - Be silent when no trigger phrases detected
+     - Be cheap (the scan should run in <1s)
+
+  4. **Template propagation**: same hook scaffolded into new AIDA projects via aida init's settings.json template. Composes with template/symlink pattern.
+
+  ## Acceptance
+
+  - [ ] Hook script exists at scripts/hooks/aida-capture-prompt.sh (executable; documented)
+  - [ ] .claude/settings.json includes Stop hook entry invoking the script
+  - [ ] Hook is silent when no trigger phrases detected (no noise on routine completions)
+  - [ ] Hook surfaces visible message when trigger phrases detected, prompting /aida-capture invocation
+  - [ ] Threshold-tuning prevents firing every Claude response (per implementation note above)
+  - [ ] aida-core/templates/settings.json (the master template) includes the hook so new AIDA projects scaffold with it
+  - [ ] Documented in CLAUDE.md / AGENTS.md (the hook's purpose + how to disable per-project if undesired)
+  - [ ] Regression test: simulated Stop event with trigger phrases in transcript → hook fires + outputs prompt. Simulated Stop event without triggers → hook silent.
+
+  ## Composes with
+
+  - feedback_worth_noting_means_note_it memory (the proactive instruction this reactively backstops)
+  - /aida-capture skill (the safety net this auto-invokes)
+  - update-config skill (the configuration mechanism this leverages)
+  - Today's hook conventions in CLAUDE.md ($CLAUDE_PROJECT_DIR path resolution)
+  - Scaffolding propagation pipeline (TASK-485-style template work)
+
+  ## Out of scope
+
+  - In-conversation real-time pattern detection (heavier; separate TASK if needed)
+  - Modifying /aida-capture itself (the skill is fine as-is; this just auto-invokes it)
+  - Per-agent skill auto-invocation for Codex / Antigravity (those agents have different hook surfaces; file separately if needed)
+
+  ## Empirical anchor
+
+  Today's session: at least TWO verbal-tic occurrences caught by the user ('are you going to note?' x2; 'is it not friction already?' x1). The proactive memory + manual reminders worked; the substrate-side safety net would have caught all three at session-end-sweep regardless of whether master remembered.
+
+  ## Estimated time
+
+  ~1.5-3h. Hook script + settings.json wiring + template propagation + tests + docs. Sketch-first NOT required (it's hook plumbing, not architecture).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T15:37:06.801531216Z
+modified_at: 2026-05-23T15:37:06.801531216Z
+req_type: Task
+tags:
+- aida-capture
+- from-self-test
+- from-user-direction
+- scaffolding
+- settings-json
+- stop-hook
+- substrate-as-bouncer
