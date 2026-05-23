@@ -1206,3 +1206,10 @@
   added_at: 2026-05-23T07:12:33.423867224Z
   for_role: implementer
   for_scope: STORY-426
+- user_id: joe
+  requirement_id: 019e53b3-c6ba-7890-8d1f-cc3195baf119
+  position: 265000
+  added_by: joe
+  note: auto-queued by `session end` (019e53ad); covers 1 spec
+  added_at: 2026-05-23T07:19:18.768432991Z
+  for_role: reviewer
