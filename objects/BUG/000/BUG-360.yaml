@@ -60,12 +60,12 @@ description: |-
   ## Estimated time
 
   ~2-3h. Investigation + fix + regression test.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:28:35.539711055Z
-modified_at: 2026-05-23T16:44:37.272543613Z
+modified_at: 2026-05-23T16:54:26.878743288Z
 req_type: Bug
 tags:
 - aida-queue-done
@@ -80,3 +80,7 @@ comments:
   content: Commit e0c1e412 references this requirement
   created_at: 2026-05-23T16:44:37.272543613Z
   modified_at: 2026-05-23T16:44:37.272543613Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T16:54:26.878743288Z
+  completion_sha: cd0dd8bc1aed2ecae137e3cb187e71b1274f3e12
