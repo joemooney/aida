@@ -244,8 +244,16 @@ pub struct AdvisorRegistration {
 
 /// Path to the per-user registration file (`~/.aida/advisor.toml`).
 pub fn registration_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate ~/.aida/advisor.toml")?;
+    let home = advisor_home_dir().context("HOME not set; cannot locate ~/.aida/advisor.toml")?;
     Ok(home.join(".aida").join("advisor.toml"))
+}
+
+fn advisor_home_dir() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
+        return Some(PathBuf::from(home));
+    }
+    dirs::home_dir()
 }
 
 /// Read the registration if it exists and parses. Returns `None` (not Err)
@@ -367,7 +375,7 @@ pub fn discover_live_advisor_session(
 }
 
 fn locate_session(uuid: &str, project_slug: &str, discovery: Discovery) -> Option<LiveAdvisor> {
-    let home = dirs::home_dir()?;
+    let home = advisor_home_dir()?;
     let jsonl = home
         .join(".claude")
         .join("projects")
@@ -384,7 +392,7 @@ fn locate_session(uuid: &str, project_slug: &str, discovery: Discovery) -> Optio
 }
 
 fn locate_session_by_uuid(uuid: &str, discovery: Discovery) -> Option<LiveAdvisor> {
-    let home = dirs::home_dir()?;
+    let home = advisor_home_dir()?;
     let projects = home.join(".claude").join("projects");
     let dirs = std::fs::read_dir(&projects).ok()?;
     for d in dirs.flatten() {
@@ -405,7 +413,7 @@ fn locate_session_by_uuid(uuid: &str, discovery: Discovery) -> Option<LiveAdviso
 
 fn latest_jsonl_under_project(project_root: &Path, discovery: Discovery) -> Option<LiveAdvisor> {
     let slug = process_probe::encode_cwd_for_projects(project_root);
-    let home = dirs::home_dir()?;
+    let home = advisor_home_dir()?;
     let dir = home.join(".claude").join("projects").join(&slug);
     let entries = std::fs::read_dir(&dir).ok()?;
     let mut newest: Option<(SystemTime, PathBuf, u64)> = None;
@@ -649,7 +657,7 @@ max_source_size_mb = 50
         // Sandbox HOME so we don't accidentally read the developer's real
         // ~/.aida/advisor.toml.
         let home = tempfile::tempdir().unwrap();
-        with_env("HOME", home.path().to_str().unwrap(), || {
+        with_home(home.path(), || {
             let cfg = AdvisorConfig::default();
             let found = discover_live_advisor_session(&cfg, None);
             assert!(found.is_none());
@@ -668,6 +676,7 @@ max_source_size_mb = 50
         let jsonl = session_dir.join(format!("{}.jsonl", uuid));
         let mut f = std::fs::File::create(&jsonl).unwrap();
         writeln!(f, "{{\"type\":\"user\"}}").unwrap();
+        drop(f);
 
         // Write the registration.
         let reg = AdvisorRegistration {
@@ -678,7 +687,7 @@ max_source_size_mb = 50
             claude_pid: None,
         };
 
-        with_env("HOME", home.path().to_str().unwrap(), || {
+        with_home(home.path(), || {
             write_registration(&reg).unwrap();
             let cfg = AdvisorConfig::default();
             let found = discover_live_advisor_session(&cfg, None).expect("registered+fresh → some");
@@ -699,7 +708,7 @@ max_source_size_mb = 50
             claude_pid: None,
         };
 
-        with_env("HOME", home.path().to_str().unwrap(), || {
+        with_home(home.path(), || {
             write_registration(&reg).unwrap();
             let cfg = AdvisorConfig::default();
             assert!(discover_live_advisor_session(&cfg, None).is_none());
@@ -734,7 +743,7 @@ max_source_size_mb = 50
             claude_pid: None,
         };
 
-        with_env("HOME", home.path().to_str().unwrap(), || {
+        with_home(home.path(), || {
             write_registration(&reg).unwrap();
             let cfg = AdvisorConfig::default();
             assert!(
@@ -749,7 +758,7 @@ max_source_size_mb = 50
         let home = tempfile::tempdir().unwrap();
         let source_slug = "-home-joe-ai-aida"; // the live advisor's project
         let spec_worktree = PathBuf::from("/home/joe/ai/aida-story-360");
-        let expected_dest_slug = "-home-joe-ai-aida-story-360";
+        let expected_dest_slug = process_probe::encode_cwd_for_projects(&spec_worktree);
         let uuid = "019e0000-0000-7000-8000-0000000fork1";
 
         let session_dir = home
@@ -769,7 +778,7 @@ max_source_size_mb = 50
             claude_pid: None,
         };
 
-        with_env("HOME", home.path().to_str().unwrap(), || {
+        with_home(home.path(), || {
             write_registration(&reg).unwrap();
             let cfg = AdvisorConfig::default();
             let plan =
@@ -808,7 +817,7 @@ max_source_size_mb = 50
             claude_pid: None,
         };
 
-        with_env("HOME", home.path().to_str().unwrap(), || {
+        with_home(home.path(), || {
             write_registration(&reg).unwrap();
             let cfg = AdvisorConfig {
                 max_source_size_mb: 1,
@@ -832,7 +841,7 @@ max_source_size_mb = 50
             claude_pid: Some(12345),
         };
 
-        with_env("HOME", home.path().to_str().unwrap(), || {
+        with_home(home.path(), || {
             write_registration(&reg).unwrap();
             let read = read_registration().expect("registration roundtrips");
             assert_eq!(read, reg);
@@ -858,17 +867,39 @@ max_source_size_mb = 50
     // developer's real ~/.aida/advisor.toml. Tests can run in parallel
     // within a process, so we serialise HOME swaps with a mutex.
 
-    fn with_env(key: &str, value: &str, f: impl FnOnce()) {
+    fn with_home(home: &Path, f: impl FnOnce()) {
+        let value = home.to_str().unwrap();
+        with_env_vars(
+            &[
+                ("AIDA_TEST_HOME", Some(value)),
+                ("HOME", Some(value)),
+                ("USERPROFILE", Some(value)),
+            ],
+            f,
+        );
+    }
+
+    fn with_env_vars(keys: &[(&str, Option<&str>)], f: impl FnOnce()) {
         use std::sync::Mutex;
         static ENV_LOCK: Mutex<()> = Mutex::new(());
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        let prior = std::env::var_os(key);
-        // SAFETY: serialised by ENV_LOCK so no other thread touches the same key.
-        unsafe { std::env::set_var(key, value) };
+        let prior: Vec<(&str, Option<std::ffi::OsString>)> = keys
+            .iter()
+            .map(|(key, _)| (*key, std::env::var_os(key)))
+            .collect();
+        // SAFETY: serialised by ENV_LOCK so no other test mutates these keys.
+        for (key, value) in keys {
+            match value {
+                Some(value) => unsafe { std::env::set_var(key, value) },
+                None => unsafe { std::env::remove_var(key) },
+            }
+        }
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-        match prior {
-            Some(v) => unsafe { std::env::set_var(key, v) },
-            None => unsafe { std::env::remove_var(key) },
+        for (key, value) in prior {
+            match value {
+                Some(value) => unsafe { std::env::set_var(key, value) },
+                None => unsafe { std::env::remove_var(key) },
+            }
         }
         if let Err(p) = result {
             std::panic::resume_unwind(p);

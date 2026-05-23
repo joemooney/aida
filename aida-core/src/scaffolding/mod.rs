@@ -2570,7 +2570,15 @@ mod tests {
 
         // Helper to run hook with cleared parent git environment variables
         let run_hook = |env_var: Option<(&str, &str)>| -> std::process::Output {
-            let mut cmd = Command::new(&hook_path);
+            // Windows cannot execute POSIX hook scripts directly as Win32 programs;
+            // Git for Windows runs them through its shell. trace:BUG-346 | ai:codex
+            let mut cmd = if cfg!(windows) {
+                let mut cmd = Command::new("sh");
+                cmd.arg(&hook_path);
+                cmd
+            } else {
+                Command::new(&hook_path)
+            };
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
                 if key.starts_with("GIT_") {

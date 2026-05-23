@@ -20982,7 +20982,14 @@ branch = "task-358"
 started_at = "2026-05-19T00:00:00Z"
 hostname = "h"
 "#,
-            wt.canonicalize().unwrap().display()
+            // Windows canonical paths contain backslashes, which are escape
+            // characters in TOML basic strings. Escape them so this legacy
+            // fixture tests optional-field compatibility, not TOML syntax.
+            // trace:BUG-346 | ai:codex
+            wt.canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "\\\\")
         );
         let sessions = leases_dir(&root);
         std::fs::create_dir_all(&sessions).unwrap();
@@ -51260,7 +51267,7 @@ mod headless_hint_tests {
     /// trace:BUG-342 | ai:codex
     #[test]
     fn no_human_resume_paths_use_headless_resume_launcher() {
-        let src = include_str!("main.rs");
+        let src = include_str!("main.rs").replace("\r\n", "\n");
         let count = src
             .matches("session::spawn_claude_headless_resume(")
             .count();
