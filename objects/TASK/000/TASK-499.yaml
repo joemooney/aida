@@ -1,0 +1,65 @@
+id: 019e55b3-0f39-7f31-af53-bebad56ed759
+spec_id: TASK-499
+agreed_id: TASK-499
+title: 'aida session start: accept --spec as alias for --owns (CLI flag-name consistency with rest of substrate)'
+description: |-
+  Empirical friction observed 2026-05-23 during BUG-360 setup: user (and master advisor across multiple briefs all session) reached for `aida session start --spec <ID>` because `--spec` is the convention everywhere else in the substrate (aida queue work, aida edit, aida show, aida session end since TASK-489 shipped, etc.).
+
+  `aida session start` uses `--owns` instead. The semantic distinction is real (--owns can be EPIC-N, FR-N, SPEC-ID, path globs like 'src/scaffolding/**', or free-form tags like 'feature:auth' — broader than just spec IDs), but the inconsistency creates real operator friction:
+
+  ## Empirical evidence
+
+  In this session alone, the master advisor's briefs to Codex and Antigravity consistently included `aida session add --spec <ID>` (wrong subcommand AND wrong flag) or `aida session start --spec <ID>` (wrong flag). The agents who DID successfully register leases were either:
+  1. Using `aida session start --owns <ID>` (the correct form) — they probably saw the same error and self-corrected
+  2. Going through the orchestrator's queue-work code path, which creates leases via a different surface
+
+  The master kept making the typo because mental model is 'I want to scope this session to spec X' → --spec feels natural.
+
+  ## Proposed fix
+
+  Accept `--spec <ID>` as an alias for `--owns <ID>` on `aida session start`. Keep --owns as the canonical name (preserves semantic accuracy for the broader cases — path globs, tags), but treat --spec as the operator-mental-model-matching alias.
+
+  Implementation hint (clap): the field can have multiple long names via #[arg(long, alias = "spec")] or similar.
+
+  ## Acceptance
+
+  - [ ] `aida session start --spec BUG-360 --role implementer` works identically to `--owns BUG-360 --role implementer`
+  - [ ] `aida session start --help` documents both: '--owns <SCOPE> (alias: --spec <SCOPE>)'
+  - [ ] Existing --owns invocations continue to work unchanged
+  - [ ] Conflict handling: if BOTH --owns and --spec are provided, error with clear message ('use one or the other')
+  - [ ] No regression to existing tests
+  - [ ] Composes with TASK-489 (which added --spec / --branch to aida session end — same operator-mental-model-matching principle)
+
+  ## Composes with
+
+  - TASK-489 (recently shipped — added --spec/--branch to aida session end; same flag-consistency principle)
+  - TASK-474 (scope-detection heuristic — same 'operator has spec context' UX cluster)
+  - TASK-489 / TASK-490 / TASK-491 / TASK-494 — operator-control + scope UX cluster
+
+  ## Out of scope
+
+  - Migrating ALL --owns uses to --spec (broader rename; would be disruptive). Alias approach is non-breaking.
+  - Reverse alias: making --owns work on aida queue work / aida edit / etc. (--spec is genuinely narrower there; --owns wouldn't add value).
+
+  ## Priority rationale
+
+  LOW. Cosmetic; semantic distinction between --owns (broader scope) and --spec (spec-graph-typed) is real. But the friction is real and recurring. Worth fixing when the queue surfaces it.
+
+  ## Empirical anchor for the writeup
+
+  Across one multi-day session, the master advisor made this typo ~10 times in briefs to subordinate agents. Each typo cost an agent ~30 seconds of error + retry. ~5 min wasted total — for a flag alias that takes ~5 min to implement. Strong-positive ROI fix.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:37:38.745329065Z
+modified_at: 2026-05-23T16:37:38.745329065Z
+req_type: Task
+tags:
+- aida-session
+- cli
+- flag-consistency
+- from-self-test
+- from-user-friction
+- papercut
+- ux
