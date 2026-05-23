@@ -53,7 +53,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T21:20:08.496657542Z
-modified_at: 2026-05-22T21:20:08.496657542Z
+modified_at: 2026-05-23T01:20:27.870771591Z
 req_type: Bug
 tags:
 - aida-review
@@ -65,3 +65,22 @@ tags:
 - phase-3
 - programmatic-gate
 - reviewer
+comments:
+- id: 019e526b-5ade-75e0-a8dd-fec3f1e19c59
+  author: |-
+    Codex sketch before implementation:
+
+    Current-main audit first: the primary Path A mechanism already exists from BUG-327. `aida-cli/src/session.rs` builds both fresh and resume headless argv with `--disallowed-tools AskUserQuestion`, and `headless_argv_disables_askuserquestion_structurally` pins the variadic placement. Implementer `--no-human`, standalone reviewer `--no-human`, advisor cold/fork, and advisor-resume all appear to route through `claude_headless_args` / `claude_headless_resume_args` or wrappers around them.
+
+    Proposed v1 gate: only disallow `AskUserQuestion`. Do not broaden to Bash/Edit/etc.; headless still needs normal autonomous tool use, and this bug is specifically the interactive question surface.
+
+    Phase coverage: apply to every `AIDA_HEADLESS=1` `claude -p` launch: implementer, reviewer, advisor cold boot, advisor fork resume, and resumed implementer. Interactive launches and non-headless reviewer resumes remain unchanged.
+
+    Backward compat / `--zen`: no behavioral change for interactive or `--zen` operator flows. The gate is only on headless print-mode argv where no human can answer. Keep the `/aida-review` prose as defense-in-depth; instructions inform, argv gate enforces.
+
+    Test approach: if master wants a PR, make it an audit/regression PR rather than duplicate implementation: add/extend tests proving all headless launch builders used by implementer/reviewer/advisor include `--disallowed-tools AskUserQuestion`, and ensure copy-paste launch hints still reflect the same argv. If a bypass path is discovered, refactor it to use the shared builders. Otherwise BUG-342 can be closed as resolved-by BUG-327 with this evidence.
+
+    Open decision: should BUG-342 be marked completed/duplicate based on current code evidence, or should Codex ship a tiny BUG-342-specific audit test PR to tie acceptance directly to this recurrence?
+  content: mcp
+  created_at: 2026-05-23T01:20:27.870760701Z
+  modified_at: 2026-05-23T01:20:27.870760701Z
