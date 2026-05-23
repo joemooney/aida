@@ -69,12 +69,12 @@ description: |-
   ## Priority rationale
 
   MEDIUM. Real friction (user just hit it during tonight's drain monitoring). Not blocking but rapidly-encountered for anyone running multi-agent drains. Bigger value lift than the cosmetic papercuts in the queue right now.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:13:22.863212061Z
-modified_at: 2026-05-23T23:29:24.649407263Z
+modified_at: 2026-05-23T23:49:41.881643437Z
 req_type: Task
 tags:
 - aida-status
@@ -92,3 +92,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-23T22:50:31.984364831Z
   implemented_by: joe
+  completed_at: 2026-05-23T23:49:41.881643437Z
+  completion_sha: 2cd3776e3fc59b525caf67a935be84c0000d416e
