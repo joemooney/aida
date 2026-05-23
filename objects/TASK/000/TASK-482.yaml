@@ -13,15 +13,19 @@ description: |
   2. Drop the broken pointer from the scaffolded README + AIDA.md sections and accept that target projects only see the README's TL;DR (cheaper, less useful).
 
   Raised in review of PR-210: https://github.com/joemooney/aida/pull/210#issuecomment-4523279133
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:11:46.215489695Z
-modified_at: 2026-05-23T00:10:34.719925688Z
+modified_at: 2026-05-23T00:39:17.454462080Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-210
 - scaffolding
 - severity:minor
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T00:39:17.454462080Z
+  completion_sha: d44c359a32830c52a1b77e0cbf3b3c5a82306468
