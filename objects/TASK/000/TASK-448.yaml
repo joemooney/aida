@@ -15,12 +15,12 @@ description: |
 
   Raised in review of PR-171:
   https://github.com/joemooney/aida/pull/171#issuecomment-4515233922
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T05:20:58.411194184Z
-modified_at: 2026-05-23T07:19:17.096347585Z
+modified_at: 2026-05-23T15:31:17.101356551Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-23
@@ -33,3 +33,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-23T07:14:42.363215946Z
   implemented_by: joe
+  completed_at: 2026-05-23T15:31:17.101356551Z
+  completion_sha: 9cbb2fed0f48c1e088acff3265c560ef77e6ab30
