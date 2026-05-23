@@ -1,0 +1,56 @@
+id: 019e535e-9fee-73e3-bf52-9a9fcde5b879
+spec_id: BUG-352
+agreed_id: BUG-352
+title: Queue cluster-derivation routes new spec to active lease's scope without checking appropriateness (caused TASK-488 failure)
+description: |-
+  Empirical failure 2026-05-22 ~23:30: user ran `aida queue work TASK-488 --auto-complete --no-human=both` from /home/joe/ai/aida. The orchestrator:
+
+  1. TASK-488 wasn't queued; queue-add fired automatically
+  2. The add operation attached TASK-488 to the cwd's active scope as cluster anchor: `Added TASK-488 ... to queue [for:implementer @TASK-492]`
+  3. Phase 1 then tried to claim scope TASK-492 (not TASK-488)
+  4. TASK-492 was already owned by lease 019e5352 (Codex's misregistered lease in master's cwd per TASK-474)
+  5. Phase 1 errored: 'scope TASK-492 is owned by lease 019e5352'
+  6. Drain failed before any work happened
+
+  ## Root cause
+
+  When `aida queue work <SPEC>` is invoked from a cwd whose lease attributes the cwd to an EXISTING scope (here: TASK-492 via the TASK-474 misregistration), the queue-add operation cluster-derives the new spec to that scope. Then phase 1 tries to use the active lease for the cluster anchor, which collides with the actual lease owner.
+
+  This is the WRONG default. When the user explicitly invokes `aida queue work TASK-488`, the intent is to work TASK-488 in its OWN scope, not as a child of whatever happens to be active in cwd.
+
+  ## The cluster-derivation logic is fine for INTENDED clusters
+
+  When the user explicitly queues TASK-X + TASK-Y as a related cluster (via batch tags or explicit cluster ID), routing them under one anchor makes sense. The problem is the AUTOMATIC inference from cwd-active-scope, which is downstream of TASK-474's scope misregistration pattern.
+
+  ## Acceptance
+
+  - [ ] When `aida queue work <SPEC>` is invoked with an explicit spec, the queue-add does NOT auto-cluster under the cwd's active scope
+  - [ ] Cluster-derivation continues to work when explicitly requested (batch tags, --cluster flag, etc.)
+  - [ ] When the cwd has an active lease for scope X and user invokes work on a DIFFERENT spec Y, the orchestrator either:
+     a) Refuses with a clear message ('cwd has active lease for X; pass --new-worktree to work spec Y elsewhere'), OR
+     b) Creates a sibling worktree for Y automatically (cleaner; matches the sibling-worktree discipline)
+  - [ ] Regression test: from a worktree with active lease for spec A, invoke `aida queue work B` — B should get its own scope, not auto-cluster under A
+
+  ## Composes with
+
+  - TASK-474 (scope-detection heuristic misroutes filing hints — upstream root cause; same misregistration drives this failure)
+  - TASK-489 (session end --spec/--branch — same operator-mental-model gap)
+  - TASK-490 (status In Progress visibility — would have surfaced the active TASK-492 lease so user could see the misregistration)
+
+  ## Priority rationale
+
+  HIGH. This blocks legitimate `aida queue work <spec>` invocations whenever there's a misregistered lease in cwd — which is the TASK-474 pattern that recurs frequently in multi-agent sessions. The interaction makes single-spec drain commands unusable from master's cwd while sibling-agent leases exist.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T05:46:10.798310979Z
+modified_at: 2026-05-23T05:46:10.798310979Z
+req_type: Bug
+tags:
+- cluster-derivation
+- from-self-test
+- orchestrator
+- queue
+- routing
+- task-474-related
