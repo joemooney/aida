@@ -1,0 +1,55 @@
+id: 019e55a4-db19-7d21-aa92-d1b3e40a6a1a
+spec_id: STORY-432
+agreed_id: STORY-432
+title: aida agent new claude — Claude Code launcher with role context (EPIC-31 Phase 2)
+description: |-
+  Phase 2 of EPIC-31. Builds on Phase 1's agent registry. Single-command Claude Code session spawn with project-correct config + automatic registry entry.
+
+  ## Scope
+
+  `aida agent new claude [--role <role>] [--spec <SPEC-ID>] [--cwd <path>]`
+
+  Behavior:
+  1. Resolve cwd (default: project root; or sibling worktree if --spec creates one)
+  2. Spawn `claude` with project-correct PATH, env vars, MCP config
+  3. Set AIDA_SESSION_ROLE if --role provided
+  4. Register in agent registry (Phase 1's schema) with type=claude, pid, role
+  5. Optionally pre-create a worktree + lease if --spec provided (composes with `aida session add`)
+  6. On agent exit: de-register from registry
+
+  ## Why Claude first
+
+  The project IS a Claude Code project; Claude's spawn mechanics are well-understood by AIDA already (orchestrator's headless drain spawns claude -p subprocesses regularly via SPEC-411's resolve_aida_exe pattern). Lowest-friction first integration.
+
+  ## Acceptance
+
+  - [ ] aida agent new claude spawns Claude Code in the project cwd with proper env
+  - [ ] Registers agent in Phase 1's registry on spawn
+  - [ ] De-registers on agent exit (SIGCHLD handler OR polling)
+  - [ ] --role flag sets AIDA_SESSION_ROLE in the spawned env
+  - [ ] --spec flag pre-creates worktree + lease (composes with aida session add)
+  - [ ] Error gracefully if Claude isn't on PATH OR if project isn't an AIDA-initialized directory
+
+  ## Estimated time
+
+  ~5-8h. CLI subcommand + spawn logic + registry integration + tests.
+
+  ## Composes with
+
+  - EPIC-31 (parent)
+  - Phase 1 STORY (registry — dependency)
+  - SPEC-411 (resolve_aida_exe — reuse the helper for finding claude binary)
+  - aida session add (lease creation reuse if --spec given)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:22:07.897401164Z
+modified_at: 2026-05-23T16:22:07.897401164Z
+req_type: Story
+tags:
+- agent-launcher
+- claude
+- depends-on:phase-1
+- parent:EPIC-31
+- phase-2
