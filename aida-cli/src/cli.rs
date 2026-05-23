@@ -568,8 +568,25 @@ pub enum SessionCommand {
     // trace:STORY-66 | ai:claude
     End {
         /// Session id (8-char prefix accepted) to end. Omit to end the
-        /// session matching the current cwd.
+        /// session matching the current cwd. Also accepts a SPEC-ID
+        /// (e.g. `TASK-489` — treated as `--spec`) or a branch name
+        /// (e.g. `task-489` — treated as `--branch`) when the lease
+        /// covering cwd isn't the one you want to end.
+        // trace:TASK-489 | ai:claude
         id: Option<String>,
+
+        /// Resolve the lease by spec ID. Errors when zero or multiple
+        /// leases own the spec; in the multi-match case lists them so
+        /// you can disambiguate with the lease id.
+        // trace:TASK-489 | ai:claude
+        #[clap(long, conflicts_with = "branch")]
+        spec: Option<String>,
+
+        /// Resolve the lease by branch name. Errors when zero or
+        /// multiple leases ride that branch.
+        // trace:TASK-489 | ai:claude
+        #[clap(long, conflicts_with = "spec")]
+        branch: Option<String>,
 
         /// Skip the y/N confirmation.
         #[clap(long, short = 'y')]
