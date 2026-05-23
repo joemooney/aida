@@ -1,0 +1,29 @@
+id: 019e5289-ac78-7be3-9196-5ced99c7c90b
+spec_id: TASK-487
+agreed_id: TASK-487
+title: 'aida-cli/src/cli.rs: 75 other --help doc-comments still embed SPEC-IDs (TASK-268 convention)'
+description: |
+  TASK-420 dropped SPEC-IDs from the `findings dismiss --reason` / `findings promote --reason` example strings. Per TASK-268 / docs/user-facing-text-conventions.md the same convention applies to ALL `///` doc-comments on clap fields and subcommands (they render as `--help` output).
+
+  A grep across `aida-cli/src/cli.rs` finds 75 other `///` doc-comments that still mention SPEC-IDs — examples include references like BUG-61, BUG-67, BUG-86, EPIC-1-001, FR-7-048, PR-12 on commands such as `session start`, `manifest write`, `db merge-gate`, `db migrate`. These would surface in `--help` output today.
+
+  Scope of follow-up:
+  - `rg "^\s*///[^/]*\b(BUG|TASK|STORY|EPIC|FR|SPEC|PR)-[0-9]+" aida-cli/src/cli.rs` to enumerate.
+  - Reword each to be SPEC-ID-free (or move the SPEC-ID into a plain `//` comment above the `///` block, following TASK-420's pattern).
+  - Spot-check with `aida <cmd> --help` for the affected commands after edits.
+
+  Severity: cosmetic — `--help` text quality, not a behavior or security issue.
+
+  Raised in review of PR-223: https://github.com/joemooney/aida/pull/223#issuecomment-4523800854
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T01:53:34.840091117Z
+modified_at: 2026-05-23T01:53:34.840091117Z
+req_type: Task
+tags:
+- cli
+- docs
+- from-review:PR-223
+- severity:cosmetic
