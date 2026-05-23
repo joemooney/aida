@@ -48,12 +48,12 @@ description: |-
   ## Empirical anchor for the writeup
 
   Across one multi-day session, the master advisor made this typo ~10 times in briefs to subordinate agents. Each typo cost an agent ~30 seconds of error + retry. ~5 min wasted total — for a flag alias that takes ~5 min to implement. Strong-positive ROI fix.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:37:38.745329065Z
-modified_at: 2026-05-23T16:37:38.745329065Z
+modified_at: 2026-05-23T22:56:44.353913317Z
 req_type: Task
 tags:
 - aida-session
@@ -63,3 +63,7 @@ tags:
 - from-user-friction
 - papercut
 - ux
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T22:56:44.353913317Z
+  completion_sha: 3ed3b84d9f88cd082d170a5690dd81440a1dd362
