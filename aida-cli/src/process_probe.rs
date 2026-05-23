@@ -187,7 +187,11 @@ pub fn claude_projects_dir_for_cwd(cwd: &Path) -> Option<PathBuf> {
 /// `/` (including leading) with `-`.
 pub fn encode_cwd_for_projects(cwd: &Path) -> String {
     let s = cwd.to_string_lossy().to_string();
-    s.replace('/', "-")
+    // Claude Code's project directory slug replaces path separators with
+    // hyphens. Tests and cross-platform paths can contain either separator
+    // spelling, so normalize both rather than keying off MAIN_SEPARATOR.
+    // trace:BUG-346 | ai:codex
+    s.replace('\\', "-").replace('/', "-")
 }
 
 /// Walk the chain of parent PIDs starting from `start` (typically the PID of
@@ -243,6 +247,12 @@ mod tests {
     fn encode_cwd_replaces_slashes() {
         let p = Path::new("/home/joe/ai/aida-epic-20");
         assert_eq!(encode_cwd_for_projects(p), "-home-joe-ai-aida-epic-20");
+    }
+
+    #[test]
+    fn encode_cwd_replaces_windows_backslashes() {
+        let p = Path::new(r"C:\Users\joe\ai\aida-epic-20");
+        assert_eq!(encode_cwd_for_projects(p), "C:-Users-joe-ai-aida-epic-20");
     }
 
     #[test]
