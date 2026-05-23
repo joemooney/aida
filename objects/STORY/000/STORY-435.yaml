@@ -1,0 +1,55 @@
+id: 019e55a5-08e4-7b81-8936-1966332152e0
+spec_id: STORY-435
+agreed_id: STORY-435
+title: MCP heartbeat busy/idle tracking for agent registry (EPIC-31 Phase 4)
+description: |-
+  Phase 4 of EPIC-31. Adds real-time busy/idle tracking to the agent registry via MCP server heartbeat — every MCP tool call from an agent updates last_active_at, and computed status flips between busy/idle based on freshness.
+
+  ## Scope
+
+  The MCP server already handles tool calls from all agents (Claude, Codex, Antigravity). Each call is an opportunity to update the agent's registry record:
+
+  1. Identify the calling agent (via MCP session correlation OR a session-ID handshake at MCP connection time)
+  2. On every tool call: update last_active_at on the agent's registry entry
+  3. Computed status:
+     - busy = last_active_at < N seconds ago (default N=30) OR active lease in working state
+     - idle = otherwise
+     - stale = process dead (Phase 1 stale-detect)
+  4. aida status surfaces the computed status in the agent listing
+
+  ## Why MCP heartbeat (not explicit busy/idle markers)
+
+  Implicit signal from tool-call frequency is more reliable than explicit marker (agents would need to remember to flip; per BUG-249 ceiling-pattern family, instruction-based markers fail).
+
+  ## Acceptance
+
+  - [ ] MCP server updates last_active_at on every tool call from a recognizable agent connection
+  - [ ] Agent identity is resolved at MCP connection time (handshake OR claim_task-style registration)
+  - [ ] aida status' Active agents section shows computed busy/idle/stale state
+  - [ ] Stale threshold configurable via .aida/config.toml; default 30s for busy/idle, dead-pid for stale
+  - [ ] Regression test: simulate 3 agents with different activity patterns; assert correct state computation
+
+  ## Estimated time
+
+  ~3-5h. Composes with existing MCP server (just adds telemetry write).
+
+  ## Composes with
+
+  - EPIC-31 (parent)
+  - Phase 1 STORY (registry schema — dependency)
+  - STORY-407 (Antigravity MCP roundtrip — established MCP connection patterns)
+  - STORY-426 (MCP brief surface — same tool-call surface)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:22:19.620624859Z
+modified_at: 2026-05-23T16:22:19.620624859Z
+req_type: Story
+tags:
+- busy-idle
+- depends-on:phase-1
+- heartbeat
+- mcp
+- parent:EPIC-31
+- phase-4
