@@ -779,6 +779,11 @@ impl<'a> McpServer<'a> {
             escalation_reason: None,
             answer: None,
             answered_by: None,
+            decision: None,
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: None,
+            resolved_at: None,
         };
 
         append_to_ledger(&self.project_root, &record).map_err(|e| e.to_string())?;
@@ -2714,6 +2719,11 @@ mod tests {
                     escalation_reason: None,
                     answer: None,
                     answered_by: None,
+                    decision: None,
+                    principle_link: None,
+                    calibration_pair: None,
+                    paused_at: None,
+                    resolved_at: None,
                 };
                 append_to_ledger(&root, &record).unwrap();
             }));
@@ -2839,6 +2849,11 @@ mod tests {
             escalation_reason: None,
             answer: None,
             answered_by: None,
+            decision: None,
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: None,
+            resolved_at: None,
         };
         let valid_b = PuntRecord {
             spec: "STORY-B".to_string(),
