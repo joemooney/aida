@@ -1,0 +1,59 @@
+id: 019e55a4-f990-7b93-bfc2-19960b4a6b85
+spec_id: STORY-434
+agreed_id: STORY-434
+title: aida agent new antigravity — Antigravity CLI launcher (EPIC-31 Phase 3b)
+description: |-
+  Phase 3b of EPIC-31. Antigravity-CLI integration with the agent launcher. Parallel to Phase 3a (Codex).
+
+  ## Scope
+
+  `aida agent new antigravity [--role <role>] [--spec <SPEC-ID>] [--cwd <path>]`
+
+  Behavior mirrors Phase 2 but for Antigravity:
+  - Spawn Antigravity CLI with proper flags
+  - MCP config wire-up
+  - Brain-directory integration consideration (Antigravity uses ~/.gemini/antigravity-cli/brain/<session>/ for per-session artifacts)
+  - Register in agent registry
+
+  ## Per-agent CLI differences
+
+  Antigravity differs from Claude AND Codex in:
+  - Different binary (Gemini-based)
+  - Different per-session brain-directory artifact pattern
+  - Different slash-command surface
+  - Different MCP wire-up
+
+  The implementer should document in docs/agents/antigravity-mcp-setup.md (already shipped via STORY-418).
+
+  ## Acceptance
+
+  - [ ] aida agent new antigravity spawns Antigravity CLI with project-correct cwd + MCP config
+  - [ ] Registers agent in Phase 1's registry
+  - [ ] Documents brain-directory integration consideration
+  - [ ] De-registration on agent exit
+  - [ ] Documented updates to docs/agents/antigravity-mcp-setup.md
+
+  ## Estimated time
+
+  ~5-8h.
+
+  ## Composes with
+
+  - EPIC-31 (parent)
+  - Phase 1 + Phase 2 STORYs (dependencies)
+  - STORY-418 (Antigravity setup docs)
+  - TASK-495 (Antigravity pickup skill — uses MCP brief surface; this launcher composes)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:22:15.696421776Z
+modified_at: 2026-05-23T16:22:15.696421776Z
+req_type: Story
+tags:
+- agent-launcher
+- antigravity
+- depends-on:phase-1
+- depends-on:phase-2
+- parent:EPIC-31
+- phase-3b
