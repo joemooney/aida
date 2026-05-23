@@ -1,0 +1,55 @@
+id: 019e5733-266b-7e21-81b4-fcc5f0e9aa09
+spec_id: TASK-507
+agreed_id: TASK-507
+title: aida history --shipped — recent Done→Completed transitions (the missing 'did my ship register?' view)
+description: |-
+  ## Empirical 2026-05-23
+
+  User just shipped TASK-505 + TASK-474 (their 10m44s drain) and ran 'aida history' to confirm. TASK-474 didn't appear — because the default digest hides terminal-status (Completed/Rejected). The ship was the most ceremonial state change the substrate produced; it vanished from history view the moment it succeeded.
+
+  The current escape — 'aida history --all' — works, but it's a recency-blind dump (every Completed/Rejected spec, ever). Too broad for the 'what just shipped' question.
+
+  ## Proposed shape
+
+  aida history --shipped lists recent Done→Completed transitions only. Compatible with --since, --until, --limit. Maps to the events-mode internal path filtered to that specific transition.
+
+
+
+  Output: spec ID, type, title, when, the PR/commit if available.
+
+  ## Acceptance
+
+  - [ ] --shipped flag implemented; lists Done→Completed transitions only
+  - [ ] Composes with --since / --until / --limit
+  - [ ] Output includes commit SHA or PR if available
+  - [ ] Help text documents the difference from --all (recency-relevant vs archive-dump)
+  - [ ] Test: ship two specs, run aida history --shipped, both appear in chronological order
+
+  ## May be subsumed by
+
+  STORY-441 (the archive-concept rethink) — if that lands first and reshapes the default view to include recent ships, --shipped may become redundant. File this small TASK as the immediate-fix path; defer or merge if STORY-441 ships first.
+
+  ## Composes with
+
+  - STORY-439 (assistance + complexity calibration layer — needs ship-events query path; this TASK builds part of it)
+  - STORY-441 (the rethink — if the default shows recent ships, this flag is unnecessary; until then, --shipped is the bridge)
+  - aida usage / aida punts analyze (sibling reporting surfaces)
+
+  ## Origin
+
+  2026-05-23 user: 'why does history not show the ship?' after TASK-474's 10m44s drain. The default filter is correct for 'still-live work' but wrong for 'did my ship register?'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T23:37:10.507263122Z
+modified_at: 2026-05-23T23:37:10.507263122Z
+req_type: Task
+tags:
+- cli-ux
+- from-self-test
+- from-user-friction
+- history
+- papercut
+- parent:STORY-441
+- ship-visibility
