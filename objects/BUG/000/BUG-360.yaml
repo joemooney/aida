@@ -1,0 +1,76 @@
+id: 019e55aa-c553-74e1-a6ac-9df5b33d90e8
+spec_id: BUG-360
+agreed_id: BUG-360
+title: 'BUG-269 regression: aida queue done allowed dequeue with commits-ahead-of-origin but no open PR (TASK-489 exit-without-PR)'
+description: |-
+  Empirical regression observed 2026-05-23 ~09:25 during TASK-489 drain. The headless implementer:
+
+  1. Implemented TASK-489 cleanly (12 new tests, all pass, smoke-tested)
+  2. Ran `aida queue done TASK-489` → SUCCEEDED
+  3. Exited cleanly without pushing or opening a PR
+  4. Orchestrator phase 1 reported 'exited cleanly but opened no PR'
+
+  The implementer's OWN final summary stated: *'Branch task-489 is one ahead of origin/main, ready for PR.'*
+
+  ## BUG-269 was supposed to prevent this
+
+  BUG-269 (#136, shipped 2026-05-21) acceptance criterion: 'aida queue done refuses when commits exist without an open PR'. The TASK-489 case had:
+  - Commits ahead of main: YES (1 commit)
+  - Open PR: NO (branch not even pushed to origin)
+  - aida queue done: SHOULD HAVE REFUSED. DID NOT.
+
+  ## Possible root causes
+
+  A. **Binary staleness** — the running aida (debug build mtime 2026-05-23 09:04 per aida status) may not include BUG-269's gate, OR the gate path isn't being hit. Need to verify the gate actually compiles into the current binary.
+
+  B. **Gate edge case** — BUG-269's check may be 'commits ahead of MAIN AND no PR' but the implementation might check the wrong thing (e.g., 'commits ahead of origin/<branch>' vs 'commits ahead of origin/main'). Branch wasn't pushed so origin/task-489 doesn't exist → the check might bypass.
+
+  C. **--skip-pr-check or --force flag** — the implementer might have bypassed via flag (would be in headless log). TASK-447 mentioned the --skip-pr-check flag has blank help text; possible the implementer found it and bypassed.
+
+  D. **Race condition** — queue done check happens, passes, then push/PR step fails or is skipped.
+
+  ## Investigation path
+
+  1. Read the failing implementer's headless log:
+     /home/joe/ai/aida/.aida/headless-logs/task-489-019e559f-*.jsonl
+     — search for 'queue done' invocation and any --skip-pr-check / --force flags
+  2. Read BUG-269's implementation in the codebase — verify the gate code path
+  3. Reproduce locally: from a worktree with 1 commit + no push + no PR, run `aida queue done <spec>` and confirm it does NOT refuse
+  4. Identify the bypass and close it
+
+  ## Composes with
+
+  - BUG-269 (#136) — the original gate that should have caught this
+  - BUG-354 (closed by Codex's PR-237) — sibling ceiling-pattern at a different surface; both are 'work-finished-but-not-shipped' failure modes
+  - TASK-401 (#127) — the original /aida-pickup wording-side fix (paper enforcement; per BUG-269, the programmatic gate was needed because wording wasn't sufficient)
+  - feedback_substrate_as_bouncer_not_rules — empirical reinforcement that gates need to actually fire at runtime
+
+  ## Acceptance
+
+  - [ ] Root cause identified (binary stale, edge case, bypass flag, or other)
+  - [ ] BUG-269's gate is restored to actually refuse when invariants are violated
+  - [ ] Regression test: programmatically simulate commits-ahead-of-main + no PR; assert aida queue done refuses with the right error message
+  - [ ] Test case for the --skip-pr-check / --force bypass paths (if they're the bypass): verify they require explicit operator-set flag and warn loudly
+  - [ ] Composes with whatever gate-strengthening BUG-354's fix established (treat punt as escape valve when refuse fires)
+
+  ## Empirical anchor
+
+  This is at least the SECOND time today the autonomy keystone allowed exit-without-PR (BUG-354 closed text-question-and-exit; this is the aida-queue-done bypass variant). The substrate-as-bouncer principle would say: every exit path from /aida-pickup needs the same gate. Per BUG-354's lesson — wording-side fix (TASK-401) was insufficient; programmatic gate (BUG-269) was the answer; but if the gate isn't reliably firing, we're back to square one.
+
+  ## Estimated time
+
+  ~2-3h. Investigation + fix + regression test.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:28:35.539711055Z
+modified_at: 2026-05-23T16:28:35.539711055Z
+req_type: Bug
+tags:
+- aida-queue-done
+- bug-269-regression
+- ceiling-pattern
+- from-drain-failure
+- from-self-test
+- substrate-as-bouncer-gap
