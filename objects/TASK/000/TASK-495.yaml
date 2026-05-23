@@ -1,0 +1,66 @@
+id: 019e5574-edbb-7931-b7c1-2d1eb60a1554
+spec_id: TASK-495
+agreed_id: TASK-495
+title: Antigravity /aida-pickup skill — consume STORY-426's MCP brief tools (list_briefs/read_brief/ack_brief)
+description: |-
+  Follow-on to STORY-426 (Codex's MCP brief surface, shipped overnight via PR-234). STORY-426 includes a Codex pickup guide but explicitly DEFERRED Antigravity's parallel skill. This TASK files that work.
+
+  ## Context
+
+  STORY-426 shipped three MCP tools: list_briefs / read_brief / ack_brief. They mirror aida brief's CLI sub-actions. Any MCP-speaking agent can now query/consume briefs without shelling out.
+
+  Codex's session uses the codex pickup guide STORY-426 added. Antigravity needs its own pickup mechanism — but uses different conventions (brain-directory artifacts under ~/.gemini/antigravity-cli/brain/<session>/, walkthrough.md style).
+
+  ## Scope
+
+  Antigravity's pickup pattern should:
+  1. Call list_briefs({agent: 'antigravity'}) via the MCP server (Codex's STORY-426 tools)
+  2. If briefs pending: surface the oldest in Antigravity's session — maybe via the brain-directory artifacts (walkthrough.md style preamble), maybe via direct console output
+  3. Call read_brief({path}) for the full content
+  4. Execute per the brief's setup section (sibling worktree, lease, [AI:antigravity] commits, aida pr ship)
+  5. Call ack_brief({path}) after work begins (or after merge)
+
+  ## Where the skill lives
+
+  Antigravity's conventions differ from Claude Code's .claude/skills/. Best guess: a markdown doc at docs/agents/antigravity-aida-pickup-guide.md (mirroring the codex-brief-pickup.md location STORY-426 established). Antigravity reads it via their brain-directory or as a session reference.
+
+  The implementer's first decision: is the right home docs/agents/ or aida-core/templates/docs/agents/? STORY-426 placed the codex variant in templates so it propagates via aida init; Antigravity's parallel should land the same way.
+
+  ## Acceptance
+
+  - [ ] docs/agents/antigravity-aida-pickup-guide.md (or equivalent location) exists with concrete instructions for Antigravity to consume briefs via MCP
+  - [ ] aida-core/templates/docs/agents/<filename>.md mirrors the project-local copy for propagation
+  - [ ] Brain-directory integration considerations documented (when brain artifacts complement brief consumption, when they don't)
+  - [ ] One end-to-end smoke test: master files an Antigravity-targeted brief via aida brief antigravity SPEC-X; Antigravity's pickup-guide steps demonstrably retrieve + ack it
+  - [ ] CLAUDE.md / AGENTS.md (or per-agent file) updated with the cross-agent symmetry
+
+  ## Composes with
+
+  - STORY-425 (parent — multi-agent communication model)
+  - STORY-426 (just shipped — provides the MCP tool surface this consumes)
+  - TASK-492 (the aida brief CLI verb — substrate written-side)
+  - STORY-418 (Antigravity's setup integration — this skill is the next per-agent layer)
+  - STORY-316 (Antigravity's just-shipped /aida-recover — same author, same cross-agent ethos)
+
+  ## Sketch-first
+
+  OPTIONAL. The pattern is established by STORY-426's codex-brief-pickup.md. Antigravity should mirror the shape; if their conventions differ enough that a structural deviation is needed, post a brief sketch for master alignment. Otherwise ship directly.
+
+  ## Estimated time
+
+  ~1.5-2h. Doc + MCP-tool smoke test + propagation pipeline integration.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T15:29:46.939768888Z
+modified_at: 2026-05-23T15:29:46.939768888Z
+req_type: Task
+tags:
+- antigravity
+- brief
+- cross-agent
+- follow-up:STORY-426
+- from-self-test
+- parent:STORY-425
+- skill
