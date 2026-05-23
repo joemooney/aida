@@ -101,8 +101,22 @@ if echo "$FIRST_LINE" | grep -qE "$FEAT_FIX_PATTERN"; then
     fi
 fi
 
+# AIDA_RELEASE=1 marks a mechanical release-script commit (scripts/release.sh
+# exports it before its commit step). Skip the AI-tag and trace-reference
+# warnings — a version bump doesn't need an [AI:tool] prefix, and the trace
+# comments in incidentally-touched files (CHANGELOG.md, Cargo.toml) don't
+# need to be re-stated in the commit message. Conventional-format and
+# feat/fix REQ-ID checks above still run; the substrate-as-bouncer
+# gitignored-file gate in aida-pre-commit.sh is unaffected.
+# trace:TASK-488 | ai:claude
+if [ "$AIDA_RELEASE" = "1" ]; then
+    SKIP_AI_WARNINGS=true
+else
+    SKIP_AI_WARNINGS=false
+fi
+
 # Validation 3: Check for AI attribution when trace comments exist
-if [ "$HAS_TRACE_FILES" = true ] && [ "$REQUIRE_AI_TAG" = "true" ]; then
+if [ "$SKIP_AI_WARNINGS" = false ] && [ "$HAS_TRACE_FILES" = true ] && [ "$REQUIRE_AI_TAG" = "true" ]; then
     if ! echo "$FIRST_LINE" | grep -qE "$AI_TAG_PATTERN"; then
         if [ "$STRICT_MODE" = "true" ]; then
             ERRORS+=("Commit includes AI-traced files but no [AI:tool] tag")
@@ -115,7 +129,7 @@ if [ "$HAS_TRACE_FILES" = true ] && [ "$REQUIRE_AI_TAG" = "true" ]; then
 fi
 
 # Validation 4: Extract and suggest requirement references from staged files
-if [ "$HAS_TRACE_FILES" = true ]; then
+if [ "$SKIP_AI_WARNINGS" = false ] && [ "$HAS_TRACE_FILES" = true ]; then
     SPEC_IDS=""
     for file in $STAGED_FILES; do
         skip=false
