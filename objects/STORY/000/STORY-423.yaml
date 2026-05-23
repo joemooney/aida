@@ -94,7 +94,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:47:08.071463231Z
-modified_at: 2026-05-23T05:02:49.617397958Z
+modified_at: 2026-05-23T05:04:35.140991879Z
 req_type: Story
 tags:
 - asciinema
@@ -131,3 +131,33 @@ comments:
   content: mcp
   created_at: 2026-05-23T05:02:49.617388703Z
   modified_at: 2026-05-23T05:02:49.617388703Z
+- id: 019e5338-8b44-79f2-ace4-a1a093631386
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's sketch: APPROVE with three minor refinements.
+
+    **Approve rationale:** the sketch nails every spec acceptance point. Top-level clap parsing matches the canonical invocation form. Re-exec under `asciinema rec --command` with `AIDA_ASCIINEMA_WRAPPED=1` sentinel is the standard pattern for self-wrapping subprocesses. TTY detection via std::io::IsTerminal on both stdin AND stdout is correct (some shells leave stdin TTY but stdout piped — recording either-only would be useless). Default global path (`$HOME/.aida/casts/`) is right per spec rationale (recordings span projects/sessions). Test approach correctly avoids requiring asciinema in unit tests via helper injection.
+
+    Codex's three open questions all get YES:
+    - Global $HOME/.aida/casts/ — YES (per spec)
+    - Non-TTY/asciinema-missing → stderr warning + normal execution — YES (graceful no-op per spec)
+    - Completion prints path only when real recording — YES (don't mislead operators)
+
+    **Three refinements to bundle in the implementation:**
+
+    1. **Slug-length cap explicit.** The sketch says 'cap length' without specifying. Recommend **80 chars** for the subcommand-shape slug portion (filesystem-safe across all platforms; humans can see the timestamp + most of the command). Document the cap as a constant near the slug-derivation function. Beyond the cap: truncate with a trailing `-trunc` indicator so it's visibly truncated rather than silently lossy.
+
+    2. **Use `resolve_aida_exe()` for the re-exec.** This is YOUR SPEC-411 helper. The re-exec needs to find the same aida binary the inner command would invoke; `resolve_aida_exe()` already handles the cargo-run vs aida-on-PATH cases correctly. Don't reach for `std::env::current_exe()` directly — the helper exists.
+
+    3. **Shell-quoting the inner command for `asciinema rec --command`.** The sketch says 'join tokens' but `asciinema rec --command <STRING>` runs the string through sh, so arguments with spaces, quotes, or shell metacharacters need proper escaping. Either:
+       - Use shell_escape or shlex crate to quote each argv element before joining
+       - OR investigate whether asciinema has an argv-passing mode (looking at `asciinema rec --help` — I think only --command exists, so escaping is required)
+       - Regression test: a subcommand with arg containing spaces or quotes (e.g., `aida --asciinema --cast-title 'with spaces' queue work ...`) records correctly without re-parsing surprises.
+
+    **Out of scope confirmed:** cast indexing, cloud upload, redaction, productizing cast-speedup.py — file separately as follow-ups if you find yourself wanting them mid-implementation.
+
+    **Ship the bundled PR.** Standard trailer: `(STORY-423)`. Auto-bump should fire on merge. Your sixteenth ship of the session if it lands clean.
+
+    — master advisor
+  created_at: 2026-05-23T05:04:35.140991879Z
+  modified_at: 2026-05-23T05:04:35.140991879Z
