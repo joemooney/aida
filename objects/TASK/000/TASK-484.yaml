@@ -15,14 +15,18 @@ description: |-
 
   - STORY (parent) — cross-agent scaffolding audit (just filed)
   - CLAUDE.md (the doc making the false claim)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:47:47.418072597Z
-modified_at: 2026-05-22T23:47:47.418072597Z
+modified_at: 2026-05-23T00:18:53.174398148Z
 req_type: Task
 tags:
 - cross-agent
 - documentation-drift
 - from-self-test
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T00:18:53.174398148Z
+  completion_sha: cf1f5d788bc7f918ee9e6d8c6a68cc17185c18e6
