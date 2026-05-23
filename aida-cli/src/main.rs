@@ -14852,7 +14852,20 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             cwd,
             permission_mode,
         }) => agent_new_claude(role.clone(), spec.clone(), cwd.as_deref(), permission_mode),
+        AgentCommand::New(AgentNewCommand::Codex {
+            role,
+            spec,
+            cwd,
+            bypass_sandbox,
+        }) => agent_new_codex(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentLaunchConfig {
+    agent_type: &'static str,
+    binary: &'static str,
+    default_args: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14869,10 +14882,46 @@ fn agent_new_claude(
     cwd: Option<&std::path::Path>,
     permission_mode: &str,
 ) -> Result<()> {
-    let claude = find_executable_on_path("claude").ok_or_else(|| {
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec!["--permission-mode".to_string(), permission_mode.to_string()],
+    };
+    agent_new_with_config(config, role, spec, cwd)
+}
+
+// trace:STORY-433 | ai:codex
+fn agent_new_codex(
+    role: Option<String>,
+    spec: Option<String>,
+    cwd: Option<&std::path::Path>,
+    bypass_sandbox: bool,
+) -> Result<()> {
+    let mut default_args = Vec::new();
+    if bypass_sandbox {
+        default_args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
+    }
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args,
+    };
+    agent_new_with_config(config, role, spec, cwd)
+}
+
+fn agent_new_with_config(
+    config: AgentLaunchConfig,
+    role: Option<String>,
+    spec: Option<String>,
+    cwd: Option<&std::path::Path>,
+) -> Result<()> {
+    let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
-            "`claude` is not on PATH — install Claude Code or activate the environment \
-             that provides it, then retry `aida agent new claude`"
+            "`{}` is not on PATH — install {} or activate the environment \
+             that provides it, then retry `aida agent new {}`",
+            config.binary,
+            config.agent_type,
+            config.agent_type
         )
     })?;
     let base = cwd
@@ -14880,11 +14929,12 @@ fn agent_new_claude(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = main_worktree_root_from(&discovered_root);
-    let plan = prepare_claude_agent_launch(&project_root, role, spec)?;
+    let plan = prepare_agent_launch(&project_root, role, spec)?;
 
     eprintln!(
-        "{} launching claude in {}",
+        "{} launching {} in {}",
         "▶".green().bold(),
+        config.agent_type,
         plan.launch_cwd.display().to_string().cyan()
     );
     if let Some(spec) = &plan.current_spec {
@@ -14894,14 +14944,15 @@ fn agent_new_claude(
         eprintln!("  {}: {}", "role".bold(), role.cyan());
     }
     eprintln!(
-        "  {} multiple concurrent claude sessions are supported; registry entries are PID-keyed.",
-        "ⓘ".cyan()
+        "  {} multiple concurrent {} sessions are supported; registry entries are PID-keyed.",
+        "ⓘ".cyan(),
+        config.agent_type
     );
 
-    run_tracked_claude_agent(&claude, &plan, permission_mode)
+    run_tracked_agent(&binary, &config, &plan)
 }
 
-fn prepare_claude_agent_launch(
+fn prepare_agent_launch(
     project_root: &std::path::Path,
     role: Option<String>,
     spec: Option<String>,
@@ -14978,17 +15029,16 @@ fn prepare_claude_agent_launch(
     }
 }
 
-fn run_tracked_claude_agent(
-    claude: &std::path::Path,
+fn run_tracked_agent(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
-    permission_mode: &str,
 ) -> Result<()> {
-    let mut command = std::process::Command::new(claude);
+    let mut command = std::process::Command::new(binary);
     command
         .current_dir(&plan.launch_cwd)
-        .arg("--permission-mode")
-        .arg(permission_mode)
-        .env("AIDA_AGENT_TYPE", "claude")
+        .args(&config.default_args)
+        .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
@@ -15002,7 +15052,7 @@ fn run_tracked_claude_agent(
 
     let mut child = command
         .spawn()
-        .with_context(|| format!("failed to spawn {}", claude.display()))?;
+        .with_context(|| format!("failed to spawn {}", binary.display()))?;
     let child_pid = child.id();
     let binary = agent_registry::AgentBinaryIdentity::new(
         env!("CARGO_PKG_VERSION").to_string(),
@@ -15010,7 +15060,7 @@ fn run_tracked_claude_agent(
     );
     agent_registry::register_spawned_agent(
         &plan.project_root,
-        "claude",
+        config.agent_type,
         child_pid,
         plan.role.clone(),
         plan.current_spec.clone(),
@@ -15018,12 +15068,16 @@ fn run_tracked_claude_agent(
         Some(&binary),
     )?;
     let signal_forwarder = install_child_signal_forwarder(child_pid)?;
-    let status = child.wait().context("failed to wait for claude")?;
+    let status = child
+        .wait()
+        .with_context(|| format!("failed to wait for {}", config.agent_type))?;
     signal_forwarder.stop();
-    if let Err(err) = agent_registry::remove_agent(&plan.project_root, "claude", child_pid) {
+    if let Err(err) = agent_registry::remove_agent(&plan.project_root, config.agent_type, child_pid)
+    {
         eprintln!(
-            "{} failed to remove agent registry entry for claude#{}: {err}",
+            "{} failed to remove agent registry entry for {}#{}: {err}",
             "warning:".yellow().bold(),
+            config.agent_type,
             child_pid
         );
     }
@@ -15186,6 +15240,37 @@ mod agent_launcher_tests {
     }
 
     #[test]
+    fn parses_agent_new_codex_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "codex",
+            "--role",
+            "implementer",
+            "--spec",
+            "STORY-433",
+            "--cwd",
+            "/tmp/project",
+            "--bypass-sandbox",
+        ])
+        .unwrap();
+        let Command::Agent(AgentCommand::New(AgentNewCommand::Codex {
+            role,
+            spec,
+            cwd,
+            bypass_sandbox,
+        })) = cli.command
+        else {
+            panic!("expected agent new codex command");
+        };
+        assert_eq!(role.as_deref(), Some("implementer"));
+        assert_eq!(spec.as_deref(), Some("STORY-433"));
+        assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
+        assert!(bypass_sandbox);
+    }
+
+    #[test]
     fn find_aida_project_root_walks_up_from_descendant() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -15236,7 +15321,7 @@ mod agent_launcher_tests {
 
     #[cfg(unix)]
     #[test]
-    fn tracked_fake_claude_receives_env_and_registry_is_removed() {
+    fn tracked_fake_agent_receives_env_and_registry_is_removed() {
         use std::os::unix::fs::PermissionsExt;
 
         let tmp = TempDir::new().unwrap();
@@ -15249,33 +15334,46 @@ mod agent_launcher_tests {
         .unwrap();
         let fake_bin = tmp.path().join("bin");
         std::fs::create_dir_all(&fake_bin).unwrap();
-        let fake_claude = fake_bin.join("claude");
+        let fake_agent = fake_bin.join("agent");
         std::fs::write(
-            &fake_claude,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\n",
+            &fake_agent,
+            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
         )
         .unwrap();
-        let mut perms = std::fs::metadata(&fake_claude).unwrap().permissions();
+        let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
-        std::fs::set_permissions(&fake_claude, perms).unwrap();
+        std::fs::set_permissions(&fake_agent, perms).unwrap();
         let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
+        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
+        };
         let plan = AgentLaunchPlan {
             project_root: project.clone(),
             launch_cwd: project.clone(),
             role: Some("implementer".into()),
-            current_spec: Some("STORY-432".into()),
+            current_spec: Some("STORY-433".into()),
         };
 
-        run_tracked_claude_agent(&fake_claude, &plan, "acceptEdits").unwrap();
+        run_tracked_agent(&fake_agent, &config, &plan).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
-        assert!(env.contains("AIDA_AGENT_TYPE=claude"), "{env}");
+        let argv = std::fs::read_to_string(&argv_out).unwrap();
+        assert!(env.contains("AIDA_AGENT_TYPE=codex"), "{env}");
         assert!(env.contains("AIDA_SESSION_ROLE=implementer"), "{env}");
-        assert!(env.contains("AIDA_SESSION_SCOPE=STORY-432"), "{env}");
+        assert!(env.contains("AIDA_SESSION_SCOPE=STORY-433"), "{env}");
         assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
+        assert!(
+            argv.contains("--dangerously-bypass-approvals-and-sandbox"),
+            "{argv}"
+        );
         assert!(agent_registry::list_agent_views(&project).is_empty());
         std::env::remove_var("AIDA_TEST_ENV_OUT");
+        std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
 }
 
