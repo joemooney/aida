@@ -1243,6 +1243,20 @@ impl<'a> McpServer<'a> {
             .get("role")
             .and_then(|v| v.as_str())
             .unwrap_or("implementer");
+        // TASK-474: optional `worktree_path` — the path of the agent's actual
+        // working directory (its `pwd`). An MCP server is launched in one
+        // place and stays there, so it cannot derive its caller's cwd from
+        // `self.project_root`; before this arg the lease always recorded the
+        // project root, which misrouted "this session owns scope X" hints
+        // in `aida add` to unrelated shells in the parent worktree.
+        // Empty / absent → record an empty `worktree_path` (advisory lock
+        // only; `lease_covers_cwd` skip-matches it so no cwd-based
+        // inference attaches to the lease). trace:TASK-474 | ai:claude
+        let worktree_path_arg = args
+            .get("worktree_path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
 
         // First pass: surface non-MCP leases (e.g. `aida session start`) that
         // cover this spec — those land at arbitrary filenames, so the
@@ -1270,7 +1284,7 @@ impl<'a> McpServer<'a> {
             scope: spec_id_arg.to_string(),
             slug: spec_id_arg.to_string(),
             owner,
-            worktree_path: self.project_root.to_string_lossy().to_string(),
+            worktree_path: worktree_path_arg,
             branch,
             started_at: Utc::now().to_rfc3339(),
             hostname,
@@ -2291,6 +2305,11 @@ pub fn tool_descriptors() -> Value {
                         "description": "The role claiming the requirement.",
                         "enum": ["implementer", "advisor", "reviewer"],
                         "example": "implementer"
+                    },
+                    "worktree_path": {
+                        "type": "string",
+                        "description": "Optional absolute path of the agent's actual working directory (its `pwd`). Recorded on the lease so consumers like `aida add`'s scope hint can tell whether the lease covers a given shell's cwd. When omitted, the lease records no worktree and is treated as a spec-level advisory lock only — no cwd-based session-context inference is attached to it. Pass this when you're working in a sibling git worktree so other agents in the parent worktree don't get misrouted hints.",
+                        "example": "/home/joe/ai/aida-task-310"
                     }
                 },
                 "required": ["spec_id"]
@@ -3308,6 +3327,85 @@ mod tests {
             .unwrap();
         let listed_after = srv.tool_list_active_leases().unwrap();
         assert!(!listed_after.contains("STORY-CLAIM"), "{}", listed_after);
+    }
+
+    /// TASK-474: when the agent passes `worktree_path`, the lease records it
+    /// verbatim. Consumers (`active_lease_for_cwd` in main.rs) can then tell
+    /// that the lease covers the agent's sibling worktree and route hints
+    /// correctly — instead of misattributing the agent's scope to every
+    /// shell in the parent (which is what happened before the arg existed:
+    /// `worktree_path` was hardcoded to `self.project_root`).
+    /// trace:TASK-474 | ai:claude
+    #[test]
+    fn claim_task_records_explicit_worktree_path() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+
+        let sibling = "/home/joe/ai/aida-task-310";
+        let claim = srv
+            .tool_claim_task(&json!({
+                "spec_id": "TASK-310",
+                "role": "implementer",
+                "worktree_path": sibling,
+            }))
+            .unwrap();
+        assert!(claim.starts_with("claimed:"), "{}", claim);
+
+        // Round-trip through the on-disk TOML — that's what `aida add`'s
+        // hint reads via `list_leases` + `active_lease_for_cwd`.
+        let leases = list_leases(dir.path());
+        let l = leases
+            .iter()
+            .find(|l| l.scope == "TASK-310")
+            .expect("the claim should have written a lease");
+        assert_eq!(l.worktree_path, sibling);
+    }
+
+    /// TASK-474: when `worktree_path` is omitted, the lease's worktree field
+    /// is the empty string — which `lease_covers_cwd` in main.rs treats as
+    /// "no session context, can't cover any cwd," preventing the misrouted
+    /// scope hint that was the original symptom.
+    /// trace:TASK-474 | ai:claude
+    #[test]
+    fn claim_task_omits_worktree_when_arg_absent() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+
+        srv.tool_claim_task(&json!({"spec_id": "TASK-474", "role": "implementer"}))
+            .unwrap();
+
+        let leases = list_leases(dir.path());
+        let l = leases
+            .iter()
+            .find(|l| l.scope == "TASK-474")
+            .expect("the claim should have written a lease");
+        assert_eq!(
+            l.worktree_path, "",
+            "absent worktree_path arg must NOT default to project_root — that was the BUG",
+        );
+    }
+
+    /// TASK-474: an empty-string `worktree_path` arg behaves the same as
+    /// omitting the arg — both signal "no session context, advisory lock
+    /// only," and both result in an empty `worktree_path` on the lease.
+    /// trace:TASK-474 | ai:claude
+    #[test]
+    fn claim_task_treats_empty_worktree_arg_as_absent() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+
+        srv.tool_claim_task(&json!({
+            "spec_id": "TASK-474B",
+            "worktree_path": "   ",
+        }))
+        .unwrap();
+
+        let leases = list_leases(dir.path());
+        let l = leases
+            .iter()
+            .find(|l| l.scope == "TASK-474B")
+            .expect("the claim should have written a lease");
+        assert_eq!(l.worktree_path, "");
     }
 
     #[test]
