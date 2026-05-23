@@ -1,0 +1,55 @@
+id: 019e5313-ff18-7b03-b465-e04f34ee51f8
+spec_id: TASK-488
+agreed_id: TASK-488
+title: 'Pre-commit hook: skip AI-tag/trace warnings on mechanical release-script commits'
+description: |-
+  Empirical UX observation 2026-05-22 evening during v0.9.0 release: `scripts/release.sh minor` produced a mechanical version-bump commit. The AIDA pre-commit hook fired on it and emitted warnings:
+
+    ⚠ Warnings:
+      Commit includes AI-traced files - consider adding [AI:tool] tag
+        Format: [AI:claude] or [AI:claude:med] or [AI:claude:low]
+      Staged files trace to: BUG-99 STORY-137
+        Consider including one in your commit message
+
+  The warnings are non-blocking but noisy. The release commit doesn't need an [AI:tool] prefix because it's a mechanical bump (Cargo.toml workspace version + lockfile + CHANGELOG.md regeneration), not AI-assisted code work. The trace references (BUG-99, STORY-137) are pre-existing trace comments in files the release script touches incidentally.
+
+  ## Fix options
+
+  A. **Detect release-script invocation via env var.** Have scripts/release.sh export AIDA_RELEASE=1 before running git commit; the pre-commit hook checks the env var and skips AI-tag/trace warnings when set.
+
+  B. **Detect via commit message pattern.** The release script's commit subject follows a known pattern (e.g., 'chore(release): bump to v0.9.0' or similar). The pre-commit hook can pattern-match and skip AI-tag/trace warnings for release-shaped commits.
+
+  C. **Detect via --no-verify equivalent.** scripts/release.sh could pass --no-verify to git commit to bypass hooks entirely. Simpler but loses other validation that might be useful (e.g., trailing-parens trailer check if added).
+
+  RECOMMEND: A — explicit, opt-in, narrow. The env var approach is unambiguous and the release script is the only legitimate path that should bypass AI-tag warnings.
+
+  ## Acceptance
+
+  - [ ] scripts/release.sh exports AIDA_RELEASE=1 before its git commit step
+  - [ ] aida-core/templates/hooks/aida-pre-commit.sh (TASK-481's bouncer hook) AND any AI-tag/trace warning hook check for AIDA_RELEASE=1 and skip AI-tag warnings when set
+  - [ ] OTHER hook validations (substrate-as-bouncer gitignored-file check) continue to apply — release commits shouldn't be allowed to bypass the bouncer for intermediate-file edits
+  - [ ] Regression test: mock release-script commit (with AIDA_RELEASE=1 set) does NOT emit AI-tag warnings; non-release commit still emits the warnings
+
+  ## Composes with
+
+  - TASK-481 (substrate-as-bouncer pre-commit hook — same hook script)
+  - scripts/release.sh (the trigger surface)
+  - TASK-486 (release-readiness UX overall — both improve the release flow)
+
+  ## Priority rationale
+
+  LOW. Cosmetic — warnings are non-blocking and only appear during release cycles (rare). Worth fixing eventually but not urgent. Could be batched with TASK-486 in a 'release-flow UX' cycle.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T04:24:39.960455739Z
+modified_at: 2026-05-23T04:24:39.960455739Z
+req_type: Task
+tags:
+- from-self-test
+- papercut
+- pre-commit-hook
+- release
+- scripts-release
+- ux
