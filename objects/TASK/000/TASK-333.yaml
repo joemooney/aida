@@ -63,7 +63,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T06:13:10.040246085Z
-modified_at: 2026-05-23T00:23:33.357975003Z
+modified_at: 2026-05-23T00:32:03.030697695Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-22
+comments:
+- id: 019e523f-07d6-7ac1-8445-358cd4d99cb1
+  author: joe
+  content: |-
+    Implemented via PR (commit e94a934f):
+
+    - Added `## Fix-forward policy` section to `aida-core/templates/skills/aida-review.md` with PERMITTED / FORBIDDEN buckets, build-or-test-behavior discriminator, an 11-row worked-examples table, the doc-only allowance procedure (commit → mergeStateStatus CLEAN → record in review comment → file `kind:reviewer-fix-forward` finding → verdict stays Approved)
+    - Rewrote Step 5 to point at the policy and dropped the formerly contradictory inline examples (`#[cfg(unix)]` test-gate, `.unwrap()` → `?`, error-string period); surfaced those exact ones as forbidden examples in Step 5
+    - Added `aida_review_carries_task_333_fix_forward_policy` regression test in `aida-core/src/templates.rs` enforcing the section header, both buckets + discriminator, ≥1 ✅ and ≥1 ❌ rows, `mergeStateStatus`+`CLEAN`, `kind:reviewer-fix-forward`, `from-review:PR-`, RequestChanges routing, and Step 5's reference to the policy
+    - STORY-285 dependency: finding rides the existing `from-review:PR-N` surface; policy includes a stub-fallback bullet if the surface is missing in another project
+
+    Test status: 7/7 template tests green (`cargo test -p aida-core --lib templates::tests`); `cargo fmt --all -- --check` clean
+  created_at: 2026-05-23T00:32:03.030697695Z
+  modified_at: 2026-05-23T00:32:03.030697695Z
