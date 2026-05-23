@@ -1,0 +1,103 @@
+id: 019e55d2-570e-78d3-9d1f-89f9635e6189
+spec_id: BUG-361
+agreed_id: BUG-361
+title: 'Ceiling variant: agent commits locally + verifies + exits without running aida queue done OR aida pr ship (no lifecycle command invoked)'
+description: |-
+  Fifth empirical variant of the ceiling pattern surfaced 2026-05-23 ~12:00 during Antigravity's TASK-497 work. Distinct from prior variants because NO lifecycle command was invoked — neither aida queue done nor aida pr ship — so no existing gate had a chance to fire.
+
+  ## What happened
+
+  Antigravity worked TASK-497 (asciinema cast refinement). The implementer:
+
+  1. ✓ Modified files (AGENTS.md, CLAUDE.md, aida-cli/src/main.rs) — 224 lines
+  2. ✓ Ran cargo test in background (passed eventually)
+  3. ✓ Staged + committed locally on branch task-497 (commit 7828b919)
+  4. ✓ Rebased onto origin/main (clean fast-forward)
+  5. ✓ Ran cargo check (passed)
+  6. ✓ Updated brain-dir artifacts (walkthrough.md, task.md)
+  7. ✗ NEVER ran git push
+  8. ✗ NEVER ran gh pr create or aida pr ship
+  9. ✗ NEVER ran aida queue done
+  10. ✗ Exited cleanly — reporting completion to the operator
+
+  Operator-side state: TASK-497 spec status still Approved (no queue done fired), no PR exists, branch task-497 sits locally with 1 commit ahead of origin/main, lease 019e55ab still active.
+
+  ## Why this is a new variant (vs BUG-249, BUG-354, BUG-360)
+
+  | Variant | Lifecycle command invoked | Gate that should catch | Why it failed |
+  |---|---|---|---|
+  | BUG-249 / BUG-269 | aida queue done | queue-done PR-check (BUG-269) | TASK-401 wording-only was paper enforcement |
+  | BUG-354 | none (text-question-in-output) | /aida-pickup Step 5c instruction | Same as above — instruction not gate |
+  | BUG-360 (subset of 269) | aida queue done | queue-done PR-check (BUG-269) | Gate's silent-skip paths bypassed |
+  | **THIS variant** | **NONE** | **(no gate exists)** | **Session-end allowed exit despite commits-without-PR + active lease** |
+
+  The agent achieved end-of-work state by simply EXITING — no lifecycle command was invoked. Every existing gate is on lifecycle commands; none gate session-end itself.
+
+  ## The proposed fix (substrate-as-bouncer at session-end)
+
+  When an agent session ends AND the worktree has commits ahead of origin/<branch> (i.e., unpushed local work) AND a registered lease for the worktree exists, the session-end logic should:
+
+  1. Detect the state (commits + lease + no PR)
+  2. Refuse the clean-exit OR auto-trigger the missing lifecycle steps
+  3. Emit warnings visible in the headless log / cast / stderr identifying the unfinished steps
+
+  The session-end is the natural choke-point because EVERY agent must exit eventually; lifecycle commands can be skipped by reasoning past them, exit cannot.
+
+  Concrete implementation options:
+
+  A. **Hard refusal**: on session exit with unshipped commits + lease + no PR, refuse with clear error. Forces the agent to either push+PR before exit OR explicitly  to discard.
+
+  B. **Auto-recover**: on session exit detect the state, run branch 'main' set up to track 'origin/main'. automatically. Risky — auto-shipping unreviewed work might land bad code. Probably too aggressive for the first iteration.
+
+  C. **Loud warning + record**: emit a visible warning + record the state in a ledger (composes with STORY-325 punt ledger), let exit proceed. Operator picks up the unshipped work next session.
+
+  RECOMMEND: C as the first iteration (visible, non-blocking; matches BUG-360's visibility-first approach). Escalate to A later if C isn't sufficient.
+
+  ## Acceptance
+
+  - [ ] Session-end logic (aida session end OR the implicit exit via headless drain orchestration) detects: lease registered AND commits ahead of origin AND no open PR
+  - [ ] When detected: emit visible warning (matching BUG-360 style — yellow  prefix, identifying the unshipped commits + missing PR)
+  - [ ] Record in the punt ledger (STORY-325) OR a new audit log so the operator sees it in the morning sweep
+  - [ ] Regression test: simulate agent commit + no push + session end → assert the warning fires + state is recorded
+  - [ ] Composes with BUG-360's visibility fix at the queue-done layer; same principle applied to session-end
+
+  ## Composes with
+
+  - BUG-249 / BUG-269 (parent — original ceiling-pattern arc)
+  - BUG-354 (sibling — text-question variant; closed by Codex's PR-237)
+  - BUG-360 (sibling — visibility at queue-done; closed by PR-242)
+  - TASK-500 (BUG-360 refactor follow-up — same pure-function-extraction discipline could apply here)
+  - STORY-325 (punt ledger — natural recording surface for these unfinished sessions)
+  - feedback_substrate_as_bouncer_not_rules (the principle this whole arc serves)
+
+  ## Estimated time
+
+  ~3-4h. New session-end gate logic + warning emission + ledger recording + tests + docs.
+
+  ## Empirical anchor
+
+  Antigravity's TASK-497 work today exhibits this variant cleanly:
+  - Commit 7828b919 on task-497 sat locally with no push
+  - No PR opened
+  - aida session end never invoked
+  - Lease 019e55ab still active when operator inspected
+  - Recovery: manual cd + git push + aida pr ship + aida session end
+
+  The recovery is mechanical but the gate-gap is real. Each subsequent occurrence costs ~3-5min of operator recovery + cognitive load to spot.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T17:11:48.750765844Z
+modified_at: 2026-05-23T17:11:48.750765844Z
+req_type: Bug
+tags:
+- antigravity-task-497
+- bug-269-family
+- bug-354-sibling
+- bug-360-sibling
+- ceiling-pattern
+- from-drain-failure
+- from-self-test
+- session-end-gate
+- substrate-as-bouncer-gap
