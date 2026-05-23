@@ -1,0 +1,84 @@
+id: 019e5340-98af-7ee2-a759-6140e0b354d9
+spec_id: TASK-490
+agreed_id: TASK-490
+title: 'aida status: surface In Progress queue items prominently (currently buried in ''... 11 more'')'
+description: |-
+  Empirical UX gap observed 2026-05-22 ~22:00 (post-v0.9.0): user noticed that `aida status` shows the queue head ordered by queue-position (FIFO), causing actively In-Progress items to be collapsed into '… N more' while older Approved/Planned items occupy the top-5 display slots.
+
+  ## Concrete example from tonight
+
+  User's `aida status`:
+  ```
+  ─── Queue ───
+    16 item(s) routed to role:implementer
+     1. STORY-248 [▷ Planned] ...
+     2. STORY-244 [▸ Approved] ...
+     3. SPIKE-8 [▸ Approved] ...
+     4. TASK-311 [▸ Approved] ...
+     5. STORY-316 [▸ Approved] ...
+      … 11 more (run `aida queue list`)
+  ```
+
+  User's `aida queue list | grep 'In Progress'` (showing position 17):
+  ```
+    17. TASK-487 ... [◐ In Progress]  [for:implementer]
+  ```
+
+  TASK-487 was the spec the orchestrator drain was actively working on. The operator's natural question 'what is being worked on right now?' doesn't get an answer from `aida status` — they have to run `aida queue list` and grep.
+
+  ## The right UX
+
+  The 'what's in flight' signal is the highest-value piece of queue info for an at-keyboard operator. Surface it first:
+
+  ```
+  ─── Queue ───
+    16 item(s) routed to role:implementer
+
+    ◐ Currently in progress (2):
+      TASK-487 aida-cli/src/cli.rs: 75 other --help doc-comments...
+          [planned:by-019e5336]
+      PR-210 (STORY-415) [STORY-305] feat(scaffolding): per-project...
+          [for:reviewer; auto-queued by session end]
+
+    ▸ Next up:
+      1. STORY-248 [▷ Planned] Stacked-branch awareness...
+      2. STORY-244 [▸ Approved] TUI architecture pivot...
+      3. SPIKE-8 [▸ Approved] /ultraplan output quality...
+       … 13 more (run `aida queue list`)
+  ```
+
+  If a session lease exists for the In-Progress spec, mention the lease ID inline so operator can reach it quickly:
+
+    TASK-487 ... [active: 019e5336, 12m]
+
+  ## Acceptance
+
+  - [ ] aida status queue section adds an 'In progress' subsection above 'Next up' when any queue item has In Progress status
+  - [ ] In-progress items show: spec ID + title (truncated) + lease ID + age if a lease is attached
+  - [ ] The 'Next up' / 'X more' counter reflects only NOT-in-progress items (so 'Next up: 14' + 'In progress: 2' sums to the 16 total)
+  - [ ] When no In Progress items exist, the 'In progress' subsection is omitted (no empty header noise)
+  - [ ] aida queue list (the full listing) is unchanged — that surface is for the comprehensive view
+  - [ ] Regression test: mock a queue with 2 in-progress + N approved items; assert aida status surfaces both in-progress at the top
+
+  ## Composes with
+
+  - TASK-486 (the aida status surface refresh — both improve at-keyboard awareness)
+  - aida session leases (cross-link from in-progress display to lease info)
+  - TASK-489 (session end --spec/--branch — composing UX for in-progress work)
+
+  ## Priority rationale
+
+  MEDIUM. Real friction (user just hit it during tonight's drain monitoring). Not blocking but rapidly-encountered for anyone running multi-agent drains. Bigger value lift than the cosmetic papercuts in the queue right now.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T05:13:22.863212061Z
+modified_at: 2026-05-23T05:13:22.863212061Z
+req_type: Task
+tags:
+- aida-status
+- from-self-test
+- from-user-friction
+- queue-display
+- ux
