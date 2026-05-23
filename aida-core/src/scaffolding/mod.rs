@@ -1442,6 +1442,44 @@ impl Scaffolder {
             artifacts.push(artifact);
         }
 
+        // Cross-agent onboarding docs. These are template-class files:
+        // new AIDA projects inherit the current MCP setup and discipline
+        // guidance for non-Claude agents. trace:TASK-485 | ai:codex
+        {
+            let agent_docs = [
+                (
+                    "cross-agent-onboarding.md",
+                    "Cross-agent MCP onboarding guide",
+                ),
+                ("codex-mcp-setup.md", "Codex MCP setup guide"),
+                (
+                    "codex-mcp-roundtrip-verdict.md",
+                    "Codex MCP roundtrip verdict",
+                ),
+                ("antigravity-mcp-setup.md", "Antigravity MCP setup guide"),
+            ];
+            for (name, desc) in agent_docs {
+                let key = format!("docs/agents/{name}");
+                let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get(key.as_str()) else {
+                    continue;
+                };
+                let path = PathBuf::from(format!("docs/agents/{name}"));
+                let artifact =
+                    self.create_artifact(path.clone(), body.to_string(), desc.to_string(), false);
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+                artifacts.push(artifact);
+            }
+        }
+
         // .git/hooks/ directory (only if .git exists)
         if self.config.generate_git_hooks && self.project_root.join(".git").exists() {
             new_dirs.insert(PathBuf::from(".git/hooks"));
@@ -2264,6 +2302,29 @@ mod tests {
         assert!(temp_dir.path().join(".claude/commands").exists());
         assert!(temp_dir.path().join(".claude/skills").exists());
         assert!(temp_dir.path().join(".codex/skills").exists());
+        assert!(temp_dir
+            .path()
+            .join("docs/agents/cross-agent-onboarding.md")
+            .exists());
+        assert!(temp_dir
+            .path()
+            .join("docs/agents/codex-mcp-setup.md")
+            .exists());
+    }
+
+    #[test]
+    fn preview_includes_cross_agent_onboarding_docs() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+
+        let preview = scaffolder.preview(&store);
+        let paths: Vec<PathBuf> = preview.artifacts.iter().map(|a| a.path.clone()).collect();
+
+        assert!(paths.contains(&PathBuf::from("docs/agents/cross-agent-onboarding.md")));
+        assert!(paths.contains(&PathBuf::from("docs/agents/codex-mcp-setup.md")));
+        assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
     }
 
     #[test]
