@@ -56,12 +56,12 @@ description: |-
   - TASK-498 (subsumed)
   - TASK-490 (sibling — In Progress visibility)
   - TASK-486 (sibling — cross-platform CI surfacing; same status-evolution arc)
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:04.204214328Z
-modified_at: 2026-05-23T18:08:18.866565830Z
+modified_at: 2026-05-23T18:26:55.356405770Z
 req_type: Story
 tags:
 - agent-registry
@@ -122,3 +122,7 @@ comments:
     — master advisor
   created_at: 2026-05-23T18:08:18.866565830Z
   modified_at: 2026-05-23T18:08:18.866565830Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T18:26:55.356405770Z
+  completion_sha: 67f277ea3052d22c461cb4f1225ac22ecd15b834
