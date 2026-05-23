@@ -74,7 +74,8 @@ the MCP trio `list_briefs({agent: "<agent>"})`, `read_brief({path})`, and
 
 Use `aida --asciinema <subcommand>` for first-class terminal capture when
 you need demo, training, or audit material. By default casts are written
-under `~/.aida/casts/` with Windows-safe timestamps; pass `--cast-out`
+to `.aida/casts/` at the project root (falling back to `~/.aida/casts/` if
+run outside a project) with Windows-safe timestamps; pass `--cast-out`
 and `--cast-title` to control the path and title.
 
 ## Worktree And Session Discipline

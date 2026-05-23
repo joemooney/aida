@@ -347,18 +347,66 @@ fn resolve_cast_output_path(
     if let Some(path) = override_path {
         return Ok(path.clone());
     }
-    let home = dirs::home_dir().ok_or_else(|| {
-        anyhow::anyhow!("--asciinema needs $HOME to derive the default cast output path")
-    })?;
+    let base_dir =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let stamp = chrono::Utc::now().format("%Y-%m-%dT%H%M%SZ");
     let slug = asciinema_command_slug(inner_args);
-    Ok(home
+    Ok(base_dir
         .join(".aida")
         .join("casts")
         .join(format!("{stamp}-{slug}.cast")))
 }
 
+fn derive_semantic_title(inner_args: &[String]) -> Option<String> {
+    let has_queue_work =
+        inner_args.iter().any(|arg| arg == "queue") && inner_args.iter().any(|arg| arg == "work");
+    let has_pr_ship =
+        inner_args.iter().any(|arg| arg == "pr") && inner_args.iter().any(|arg| arg == "ship");
+
+    if has_queue_work {
+        let mut specs = Vec::new();
+        let mut batch_name = None;
+
+        let mut i = 1;
+        let spec_re = regex::Regex::new(r"(?i)^[a-z]+-\d+$").unwrap();
+        while i < inner_args.len() {
+            let arg = &inner_args[i];
+            if arg == "--batch" && i + 1 < inner_args.len() {
+                batch_name = Some(inner_args[i + 1].clone());
+                i += 2;
+                continue;
+            } else if arg.starts_with("--batch=") {
+                batch_name = Some(arg["--batch=".len()..].to_string());
+                i += 1;
+                continue;
+            }
+
+            if spec_re.is_match(arg) {
+                specs.push(arg.to_uppercase());
+            }
+            i += 1;
+        }
+
+        if !specs.is_empty() {
+            return Some(format!("AIDA drain: {}", specs.join(", ")));
+        } else if let Some(batch) = batch_name {
+            return Some(format!("AIDA drain: batch {batch}"));
+        }
+    } else if has_pr_ship {
+        let pr_re = regex::Regex::new(r"^\d+$").unwrap();
+        for arg in inner_args.iter().skip(1) {
+            if pr_re.is_match(arg) {
+                return Some(format!("AIDA pr ship: PR-{arg}"));
+            }
+        }
+    }
+    None
+}
+
 fn default_cast_title(inner_args: &[String]) -> String {
+    if let Some(semantic) = derive_semantic_title(inner_args) {
+        return semantic;
+    }
     let rest = inner_args
         .iter()
         .skip(1)
@@ -372,30 +420,93 @@ fn default_cast_title(inner_args: &[String]) -> String {
     }
 }
 
-fn asciinema_command_slug(inner_args: &[String]) -> String {
-    let raw = inner_args
-        .iter()
-        .skip(1)
-        .map(|arg| arg.trim_start_matches('-'))
-        .filter(|arg| !arg.is_empty())
-        .collect::<Vec<_>>()
-        .join("-");
+fn slugify_str(s: &str) -> String {
     let mut slug = String::new();
     let mut last_dash = false;
-    for ch in raw.chars() {
+    for ch in s.chars() {
         if ch.is_ascii_alphanumeric() {
-            slug.push(ch);
+            slug.push(ch.to_ascii_lowercase());
             last_dash = false;
         } else if !last_dash {
             slug.push('-');
             last_dash = true;
         }
     }
-    let mut slug = slug.trim_matches('-').to_string();
-    if slug.is_empty() {
-        slug = "aida".to_string();
+    slug.trim_matches('-').to_string()
+}
+
+fn derive_spec_aware_slug(inner_args: &[String]) -> Option<String> {
+    let mut parts = Vec::new();
+    let mut i = 1;
+
+    let has_pr_ship =
+        inner_args.iter().any(|arg| arg == "pr") && inner_args.iter().any(|arg| arg == "ship");
+    let spec_re = regex::Regex::new(r"(?i)^[a-z]+-\d+$").unwrap();
+    let pr_re = regex::Regex::new(r"^\d+$").unwrap();
+
+    while i < inner_args.len() {
+        let arg = &inner_args[i];
+
+        if arg == "--batch" {
+            if i + 1 < inner_args.len() {
+                let val = slugify_str(&inner_args[i + 1]);
+                parts.push(format!("batch-{val}"));
+                i += 2;
+                continue;
+            }
+        } else if arg.starts_with("--batch=") {
+            let val = slugify_str(&arg["--batch=".len()..]);
+            parts.push(format!("batch-{val}"));
+            i += 1;
+            continue;
+        }
+
+        if spec_re.is_match(arg) {
+            parts.push(arg.to_lowercase());
+        } else if has_pr_ship && pr_re.is_match(arg) {
+            parts.push(format!("pr-{arg}"));
+        }
+
+        i += 1;
     }
-    truncate_asciinema_slug(&slug)
+
+    if !parts.is_empty() {
+        let mut seen = std::collections::HashSet::new();
+        let mut unique_parts = Vec::new();
+        for p in parts {
+            if seen.insert(p.clone()) {
+                unique_parts.push(p);
+            }
+        }
+        Some(unique_parts.join("-"))
+    } else {
+        None
+    }
+}
+
+fn asciinema_command_slug(inner_args: &[String]) -> String {
+    if let Some(spec_slug) = derive_spec_aware_slug(inner_args) {
+        return truncate_asciinema_slug(&spec_slug);
+    }
+
+    // Generic fallback: use subcommand + first non-flag arg
+    let pos_args: Vec<String> = inner_args
+        .iter()
+        .skip(1)
+        .filter(|arg| !arg.starts_with('-'))
+        .map(|arg| slugify_str(arg))
+        .filter(|arg| !arg.is_empty())
+        .collect();
+
+    let fallback_slug = if pos_args.len() >= 2 {
+        format!("{}-{}", pos_args[0], pos_args[1])
+    } else if pos_args.len() == 1 {
+        pos_args[0].clone()
+    } else {
+        "aida".to_string()
+    };
+
+    truncate_asciinema_slug(&fallback_slug)
 }
 
 fn truncate_asciinema_slug(slug: &str) -> String {
@@ -503,6 +614,7 @@ mod story_423_asciinema_tests {
 
     #[test]
     fn default_title_is_inner_aida_command() {
+        // queue work with batch name
         let inner = vec![
             "aida".to_string(),
             "queue".to_string(),
@@ -511,15 +623,42 @@ mod story_423_asciinema_tests {
             "overnight-X".to_string(),
             "--auto-complete".to_string(),
         ];
+        assert_eq!(default_cast_title(&inner), "AIDA drain: batch overnight-X");
 
+        // queue work with specs
+        let inner_specs = vec![
+            "aida".to_string(),
+            "queue".to_string(),
+            "work".to_string(),
+            "STORY-316".to_string(),
+            "TASK-479".to_string(),
+        ];
         assert_eq!(
-            default_cast_title(&inner),
-            "aida queue work --batch overnight-X --auto-complete"
+            default_cast_title(&inner_specs),
+            "AIDA drain: STORY-316, TASK-479"
         );
+
+        // pr ship with PR id
+        let pr_ship = vec![
+            "aida".to_string(),
+            "pr".to_string(),
+            "ship".to_string(),
+            "123".to_string(),
+        ];
+        assert_eq!(default_cast_title(&pr_ship), "AIDA pr ship: PR-123");
+
+        // generic fallback
+        let generic = vec![
+            "aida".to_string(),
+            "show".to_string(),
+            "TASK-123".to_string(),
+        ];
+        assert_eq!(default_cast_title(&generic), "aida show TASK-123");
     }
 
     #[test]
     fn cast_slug_is_windows_safe_and_truncated_visibly() {
+        // queue work with batch name
         let inner = vec![
             "aida".to_string(),
             "queue".to_string(),
@@ -528,10 +667,34 @@ mod story_423_asciinema_tests {
             "overnight-X".to_string(),
             "--auto-complete".to_string(),
         ];
-        assert_eq!(
-            asciinema_command_slug(&inner),
-            "queue-work-batch-overnight-X-auto-complete"
-        );
+        assert_eq!(asciinema_command_slug(&inner), "batch-overnight-x");
+
+        // queue work with specs
+        let inner_specs = vec![
+            "aida".to_string(),
+            "queue".to_string(),
+            "work".to_string(),
+            "STORY-316".to_string(),
+            "TASK-479".to_string(),
+        ];
+        assert_eq!(asciinema_command_slug(&inner_specs), "story-316-task-479");
+
+        // pr ship with PR id
+        let pr_ship = vec![
+            "aida".to_string(),
+            "pr".to_string(),
+            "ship".to_string(),
+            "123".to_string(),
+        ];
+        assert_eq!(asciinema_command_slug(&pr_ship), "pr-123");
+
+        // show with spec ID
+        let generic_spec = vec![
+            "aida".to_string(),
+            "show".to_string(),
+            "TASK-123".to_string(),
+        ];
+        assert_eq!(asciinema_command_slug(&generic_spec), "task-123");
 
         let long = "x".repeat(120);
         let truncated = truncate_asciinema_slug(&long);
