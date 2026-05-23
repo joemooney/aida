@@ -536,6 +536,15 @@ catches the bare case (and emits `FailureKind::NoPr` with the resume hint
 `aida queue work <SPEC> --resume <session>`), but the punt gives the advisor
 the structured *why* — far more actionable than a bare "no PR opened."
 
+Plain-text questions are the same invariant under headless mode. Do **not**
+write "which path should I take?", "do you want option A or B?", or any
+equivalent markdown question and then exit. If you cannot safely choose, run
+`/aida-punt` with the decision fork, your recommended lean, and the evidence
+you gathered. If you can safely choose, choose and ship. The orchestrator
+also scans the final headless result for this text-question-and-exit ceiling
+variant, but that is the safety net; the skill's exit path must prefer the
+explicit punt.
+
 **Interactive mode: this is still mandatory, just with a person in the
 loop.** Surface the precondition state to the operator and proceed to
 `/aida-pr` (do not ask "should I open the PR?" as a confirm — the rule is
