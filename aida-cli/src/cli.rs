@@ -2921,6 +2921,12 @@ pub enum QueueCommand {
         // trace:STORY-281 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         allow_stale_base: bool,
+        /// Opt out of phase-3 auto-rebase recovery. By default a fully
+        /// headless auto-complete drain that hits the reviewer stale-base
+        /// pre-flight attempts one clean `aida pr rebase` before refusing.
+        // trace:STORY-429 | ai:claude
+        #[clap(long)]
+        no_auto_rebase: bool,
     },
     /// Show what an active session has shipped so far alongside what
     /// remains. Bucketed view (Shipped / In flight / Working now /

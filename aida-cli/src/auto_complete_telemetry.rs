@@ -29,6 +29,19 @@ pub struct PhaseDuration {
     pub elapsed_ms: u64,
 }
 
+/// One phase-local auto-rebase decision during an `--auto-complete` run.
+/// STORY-429 records this inside the run event so recovery remains correlated
+/// with the lifecycle it helped.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AutoRebaseEvent {
+    /// 1-based phase index. STORY-429 only records phase 3.
+    pub phase: u8,
+    /// PR number whose head was considered for rebase.
+    pub pr_number: u64,
+    /// `clean`, `conflict`, `failed`, or `skipped:<reason>`.
+    pub outcome: String,
+}
+
 /// One `aida queue work --auto-complete` invocation — appended one-per-run
 /// to `~/.aida/auto-complete.jsonl`. trace:TASK-266 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -67,6 +80,9 @@ pub struct AutoCompleteEvent {
     /// Short build SHA of the aida binary (release tracking).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub binary_sha: Option<String>,
+    /// STORY-429: phase-3 stale-base auto-rebase attempts / skips.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_rebase: Vec<AutoRebaseEvent>,
 }
 
 impl AutoCompleteEvent {
@@ -192,6 +208,7 @@ mod tests {
             total_ms: 5000,
             drafted_bug: failed_phase.map(|_| "BUG-200".to_string()),
             binary_sha: Some("abc1234".to_string()),
+            auto_rebase: Vec::new(),
         }
     }
 
@@ -199,6 +216,20 @@ mod tests {
     fn event_round_trips_through_json() {
         let original = ev("TASK-259", "failed", Some(2));
         let line = serde_json::to_string(&original).unwrap();
+        let parsed: AutoCompleteEvent = serde_json::from_str(&line).unwrap();
+        assert_eq!(original, parsed);
+    }
+
+    #[test]
+    fn auto_rebase_events_round_trip_inside_run_event() {
+        let mut original = ev("STORY-429", "success", None);
+        original.auto_rebase.push(AutoRebaseEvent {
+            phase: 3,
+            pr_number: 234,
+            outcome: "clean".to_string(),
+        });
+        let line = serde_json::to_string(&original).unwrap();
+        assert!(line.contains("\"auto_rebase\""));
         let parsed: AutoCompleteEvent = serde_json::from_str(&line).unwrap();
         assert_eq!(original, parsed);
     }
