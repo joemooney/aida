@@ -1,0 +1,68 @@
+id: 019e53a7-1e47-7bd2-8d50-0597ca49cd01
+spec_id: TASK-493
+agreed_id: TASK-493
+title: 'aida mcp-serve: detect binary update + advise/auto-restart so long-running MCP servers don''t serve stale code'
+description: |-
+  Empirical observation 2026-05-23 00:00: user has TWO long-running `aida mcp-serve` processes:
+
+  - PID 784301 (spawned by Codex CLI 2026-05-22 09:32) — running binary pre-BUG-332, pre-BUG-339, pre-TASK-440, pre-STORY-423, pre-TASK-492 + all today's other fixes
+  - PID 2675834 (spawned by claude pts/18 session 2026-05-17 20:00) — running binary 5+ days behind
+
+  Each MCP-speaking agent client (Claude Code, Codex CLI, eventually Antigravity) auto-spawns its own `aida mcp-serve` via the project's .mcp.json. The server is a long-running subprocess; it does NOT reload when the aida binary on disk is rebuilt.
+
+  Result: agents using MCP tool calls (claim_task, list_punts, add_comment, file_finding, the new STORY-426 brief tools if they ship, etc.) hit STALE code. Every fix that lands in the binary (BUG-332's type validation, BUG-339's trailer scanner, BUG-342's subprocess args, TASK-492's brief verb, etc.) is invisible to existing MCP servers until they restart.
+
+  ## Codex flagged this in real time
+
+  During BUG-332 work earlier today, Codex noted: 'MCP still returned SPEC-410 for type:bug, likely because the running MCP server has not reloaded the BUG-332 fix.' That was the empirical surface; I didn't file then. Filing now.
+
+  ## Three fix options
+
+  A. **Detect-and-advise on next request.** On every MCP tool call, compare `current_exe()` mtime to the server's process start time. If binary is newer, prepend a warning to the response (or log to stderr) telling the operator to restart. Cheap; doesn't fix the staleness, just makes it visible.
+
+  B. **Auto-restart on binary mtime change.** When the server detects a newer binary on disk, gracefully drain in-flight requests, exec() the new binary, resume serving. The MCP client should see continuity (the server respawns transparently). Risk: in-flight requests need careful handling.
+
+  C. **Detect-and-refuse on startup-mtime-mismatch.** On every MCP tool call, if binary is newer, refuse with a clear error: 'MCP server is running stale binary (started <time>; current binary built <time>). Restart your agent to reload.' Forces the operator to fix it; doesn't auto-magic.
+
+  RECOMMEND: A first (low risk, immediate visibility). C as a follow-up if A isn't sufficient. B is the ambitious cleanest answer but has real implementation complexity around graceful in-flight handling.
+
+  ## Acceptance
+
+  - [ ] aida mcp-serve detects when the on-disk binary is newer than its own process start time
+  - [ ] On detection, EITHER warn (Option A) OR refuse (Option C) — picker's choice; both close the silent-staleness gap
+  - [ ] If warn: stderr output AND a one-line warning prepended to MCP response body (so the operator sees it in their agent's tool-call output)
+  - [ ] If refuse: clear error message naming the staleness + the restart procedure
+  - [ ] Composes with TASK-486 (aida status surfacing) — could include 'MCP server staleness' as another release-readiness signal
+  - [ ] Documented in CLAUDE.md / AGENTS.md / docs/agents/cross-agent-onboarding.md — operators learn the 'MCP servers need restart after aida rebuilds' discipline
+
+  ## Operational workaround until this ships
+
+  Each MCP-spawning agent session has its own server. To pick up new binary:
+  - Codex: exit Codex session + restart. The new session spawns a fresh MCP server with current binary.
+  - Claude Code: same (exit claude session in that terminal + restart).
+  - OR: `kill <mcp-server-pid>` and the parent process will respawn it on next MCP tool call (with current binary) — but this is process-coupling sensitive and may not always work cleanly across agents.
+
+  ## Composes with
+
+  - BUG-332 (the canonical example — Codex's MCP add_requirement used stale logic until restart)
+  - All MCP-bearing specs from today (the staleness affects every agent using MCP tool calls during a long-lived session)
+  - STORY-426 (Codex's MCP brief surface — once shipped, the staleness becomes higher-stakes since briefs are first-class agent coordination)
+  - TASK-486 (aida status surfacing — could surface MCP-server-stale state)
+
+  ## Empirical anchor
+
+  Today's session shipped 38 PRs touching MCP code; both running MCP servers are oblivious to most of it. The cost: every Codex MCP tool call during STORY-426 implementation is using the May-22-09:32 binary. Self-validation of STORY-426 would require Codex to restart their session after their PR merges.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T07:05:21.735843047Z
+modified_at: 2026-05-23T07:05:21.735843047Z
+req_type: Task
+tags:
+- aida-mcp-serve
+- from-codex-observation
+- from-self-test
+- mcp
+- operational
+- staleness
