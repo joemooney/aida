@@ -1,0 +1,104 @@
+id: 019e570c-a0f3-7891-a4d0-91a82ca44b95
+spec_id: STORY-439
+agreed_id: STORY-439
+title: Assistance + complexity calibration layer — predicted vs actual at pickup, ship, and review
+description: |-
+  ## Why
+
+  TASK-340 measures **actual** autonomy outcomes (autonomous fraction + intervention count per drain). This STORY adds the **predicted** side + **complexity** dimension, so the substrate can report:
+
+  - *Are we estimating our own work accurately?* (estimate vs actual)
+  - *Are we shipping faster at the same complexity?* (trend by complexity)
+  - *Are reviewers seeing what implementers expected?* (three-way calibration)
+
+  The point isn't grading the agents — it's making the substrate's self-knowledge a measurable thing. When estimate consistently underpredicts, that IS a substrate signal: a class of work the agents systematically misjudge.
+
+  ## Three measurement points (this STORY's spine)
+
+  | Point | When | Who | Records |
+  |---|---|---|---|
+  | **Pickup estimate** | aida queue work | implementer (or operator) | predicted complexity + predicted assistance level |
+  | **Ship self-assessment** | aida pr ship | implementer | actual punts hit, perceived complexity |
+  | **Reviewer verdict** | phase 3 reviewer | reviewer (headless or human) | reviewer-assessed implementation complexity + agreement-with-predicted |
+
+  The user's key insight: *'in the review we may be able to assess predicted complexity versus implementation complexity.'* The reviewer sees the full diff and can judge complexity more objectively than the implementer (who only sees their own narrative). Three-way calibration — pickup vs ship vs reviewer — is where the gold is.
+
+  ## Proposed shape
+
+  ### (a) Tag conventions — no schema change
+
+  - complexity:low | complexity:med | complexity:high (operator/implementer-set at pickup; reviewer can override)
+  - estimated-assistance:none | estimated-assistance:advisor | estimated-assistance:human (at pickup)
+
+  Tag-based first cut composes with existing tag tooling. Optional later: promote to first-class spec fields if the tag pattern gets heavy use.
+
+  ### (b) Capture-on-pickup
+
+  aida queue work <SPEC> prompts (or accepts flags) for estimated complexity + estimated assistance level. Recorded to .aida/calibration/<spec-id>.yaml or similar (composes with STORY-347's calibration ledger pattern). Implementer can refine when they actually pick up the work — first read is often wrong.
+
+  ### (c) Capture-on-ship
+
+  aida pr ship records: actual punt count (from STORY-325 punt ledger), implementer's self-assessed actual complexity, ship-time wall-clock. Stored to the same calibration record.
+
+  ### (d) Reviewer assessment in phase 3
+
+  Reviewer verdict file (existing — used by the orchestrator) gets two new fields: implementation_complexity: low | med | high and complexity_agreement: matched | implementer-underestimated | implementer-overestimated. Headless reviewer fills these; human reviewer can too if running interactively. The reviewer is the most objective judge — they have the full diff context.
+
+  ### (e) Roll-up reporting
+
+  aida autonomy report (extending TASK-340's surface) gains:
+  - --by priority,complexity — slice the autonomy fraction + intervention count by spec attributes
+  - --calibration — three-way estimate-vs-actual comparison, with rolling agreement rate (similar to STORY-347's calibration view)
+  - --since <window> — trend across weeks
+
+  ### (f) Calibration mining
+
+  aida autonomy calibration mismatches — shows where pickup-estimate diverged most from reviewer-assessed implementation complexity. THE substrate-gap signal: a class of work the agents systematically misjudge. Maps to memory candidates.
+
+  ## Acceptance
+
+  - [ ] Tag conventions documented (machinery-glossary.md update)
+  - [ ] aida queue work accepts/prompts for --complexity / --assist-est flags; records to calibration ledger
+  - [ ] aida pr ship records ship-side complexity + punt count to the same ledger
+  - [ ] Reviewer verdict schema adds implementation_complexity + complexity_agreement fields
+  - [ ] aida autonomy report extended with --by and --calibration slices
+  - [ ] aida autonomy calibration mismatches surface
+  - [ ] Local-only; no transmission (consistent with STORY-122 / TASK-340)
+  - [ ] Scaffolding-pack — every AIDA project wants its calibration readout
+  - [ ] Docs: tag conventions + how to read the calibration view + 'estimate is best-effort, not graded' framing
+
+  ## Out of scope
+
+  - Per-agent leaderboards / grading (not the point — calibration of the substrate, not of agents)
+  - Charts / dashboards (CLI tables suffice; visualization later if wanted)
+  - Cross-project rollup (local-only)
+  - Auto-estimation by an LLM at pickup time — may revisit once calibration data accumulates; first cut is human/implementer-supplied
+
+  ## Composes with
+
+  - TASK-340 (autonomous-duration fraction + intervention count — the actual-side metric this STORY extends)
+  - STORY-325 (punt ledger — punt count = actual assistance needed)
+  - STORY-347 (calibration ledger pattern — same shape applied to advisor decisions; this STORY applies it to implementer/reviewer estimates)
+  - STORY-122 (usage telemetry — sibling surface)
+  - The autonomy keystone arc — this STORY's reports are how 'are we improving' becomes legible
+
+  ## Origin
+
+  2026-05-23 user: *'when we work a task we may be in a position to estimate whether and what level of assistance it will require. That is a metric that may be useful to store as well as whether we ended up needing assistance. We may have a story for this be we need to see how we are improving over time. You talk about PRs shipped, we need to know the priority, complexity, etc. that we can report on over time.'* + refinement: *'in the review we may be able to assess predicted complexity versus implementation complexity.'*
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T22:55:05.971218903Z
+modified_at: 2026-05-23T22:55:05.971218903Z
+req_type: Story
+tags:
+- assistance-calibration
+- complexity-tracking
+- estimate-vs-actual
+- from-user-direction
+- metrics
+- multi-agent
+- sibling-of-TASK-340
+- strategic
+- telemetry
