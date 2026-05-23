@@ -89,12 +89,12 @@ description: |-
   - Integration with exit-code propagation + signal handling
 
   Implementation can proceed in a single PR after sketch sign-off; bounded scope (~200-400 LOC + tests + docs).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:47:08.071463231Z
-modified_at: 2026-05-23T05:04:35.140991879Z
+modified_at: 2026-05-23T05:18:27.280693364Z
 req_type: Story
 tags:
 - asciinema
@@ -161,3 +161,7 @@ comments:
     — master advisor
   created_at: 2026-05-23T05:04:35.140991879Z
   modified_at: 2026-05-23T05:04:35.140991879Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T05:18:27.280693364Z
+  completion_sha: 6085e6689a75ad22472e79dfb44e138502454030
