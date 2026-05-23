@@ -347,9 +347,8 @@ fn resolve_cast_output_path(
     if let Some(path) = override_path {
         return Ok(path.clone());
     }
-    let base_dir = find_project_root().unwrap_or_else(|_| {
-        std::env::current_dir().unwrap_or_default()
-    });
+    let base_dir =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let stamp = chrono::Utc::now().format("%Y-%m-%dT%H%M%SZ");
     let slug = asciinema_command_slug(inner_args);
     Ok(base_dir
@@ -359,13 +358,15 @@ fn resolve_cast_output_path(
 }
 
 fn derive_semantic_title(inner_args: &[String]) -> Option<String> {
-    let has_queue_work = inner_args.iter().any(|arg| arg == "queue") && inner_args.iter().any(|arg| arg == "work");
-    let has_pr_ship = inner_args.iter().any(|arg| arg == "pr") && inner_args.iter().any(|arg| arg == "ship");
-    
+    let has_queue_work =
+        inner_args.iter().any(|arg| arg == "queue") && inner_args.iter().any(|arg| arg == "work");
+    let has_pr_ship =
+        inner_args.iter().any(|arg| arg == "pr") && inner_args.iter().any(|arg| arg == "ship");
+
     if has_queue_work {
         let mut specs = Vec::new();
         let mut batch_name = None;
-        
+
         let mut i = 1;
         let spec_re = regex::Regex::new(r"(?i)^[a-z]+-\d+$").unwrap();
         while i < inner_args.len() {
@@ -379,13 +380,13 @@ fn derive_semantic_title(inner_args: &[String]) -> Option<String> {
                 i += 1;
                 continue;
             }
-            
+
             if spec_re.is_match(arg) {
                 specs.push(arg.to_uppercase());
             }
             i += 1;
         }
-        
+
         if !specs.is_empty() {
             return Some(format!("AIDA drain: {}", specs.join(", ")));
         } else if let Some(batch) = batch_name {
@@ -437,14 +438,15 @@ fn slugify_str(s: &str) -> String {
 fn derive_spec_aware_slug(inner_args: &[String]) -> Option<String> {
     let mut parts = Vec::new();
     let mut i = 1;
-    
-    let has_pr_ship = inner_args.iter().any(|arg| arg == "pr") && inner_args.iter().any(|arg| arg == "ship");
+
+    let has_pr_ship =
+        inner_args.iter().any(|arg| arg == "pr") && inner_args.iter().any(|arg| arg == "ship");
     let spec_re = regex::Regex::new(r"(?i)^[a-z]+-\d+$").unwrap();
     let pr_re = regex::Regex::new(r"^\d+$").unwrap();
 
     while i < inner_args.len() {
         let arg = &inner_args[i];
-        
+
         if arg == "--batch" {
             if i + 1 < inner_args.len() {
                 let val = slugify_str(&inner_args[i + 1]);
@@ -464,7 +466,7 @@ fn derive_spec_aware_slug(inner_args: &[String]) -> Option<String> {
         } else if has_pr_ship && pr_re.is_match(arg) {
             parts.push(format!("pr-{arg}"));
         }
-        
+
         i += 1;
     }
 
@@ -486,7 +488,7 @@ fn asciinema_command_slug(inner_args: &[String]) -> String {
     if let Some(spec_slug) = derive_spec_aware_slug(inner_args) {
         return truncate_asciinema_slug(&spec_slug);
     }
-    
+
     // Generic fallback: use subcommand + first non-flag arg
     let pos_args: Vec<String> = inner_args
         .iter()
@@ -621,10 +623,7 @@ mod story_423_asciinema_tests {
             "overnight-X".to_string(),
             "--auto-complete".to_string(),
         ];
-        assert_eq!(
-            default_cast_title(&inner),
-            "AIDA drain: batch overnight-X"
-        );
+        assert_eq!(default_cast_title(&inner), "AIDA drain: batch overnight-X");
 
         // queue work with specs
         let inner_specs = vec![
@@ -646,10 +645,7 @@ mod story_423_asciinema_tests {
             "ship".to_string(),
             "123".to_string(),
         ];
-        assert_eq!(
-            default_cast_title(&pr_ship),
-            "AIDA pr ship: PR-123"
-        );
+        assert_eq!(default_cast_title(&pr_ship), "AIDA pr ship: PR-123");
 
         // generic fallback
         let generic = vec![
@@ -657,10 +653,7 @@ mod story_423_asciinema_tests {
             "show".to_string(),
             "TASK-123".to_string(),
         ];
-        assert_eq!(
-            default_cast_title(&generic),
-            "aida show TASK-123"
-        );
+        assert_eq!(default_cast_title(&generic), "aida show TASK-123");
     }
 
     #[test]
@@ -674,10 +667,7 @@ mod story_423_asciinema_tests {
             "overnight-X".to_string(),
             "--auto-complete".to_string(),
         ];
-        assert_eq!(
-            asciinema_command_slug(&inner),
-            "batch-overnight-x"
-        );
+        assert_eq!(asciinema_command_slug(&inner), "batch-overnight-x");
 
         // queue work with specs
         let inner_specs = vec![
@@ -687,10 +677,7 @@ mod story_423_asciinema_tests {
             "STORY-316".to_string(),
             "TASK-479".to_string(),
         ];
-        assert_eq!(
-            asciinema_command_slug(&inner_specs),
-            "story-316-task-479"
-        );
+        assert_eq!(asciinema_command_slug(&inner_specs), "story-316-task-479");
 
         // pr ship with PR id
         let pr_ship = vec![
@@ -699,10 +686,7 @@ mod story_423_asciinema_tests {
             "ship".to_string(),
             "123".to_string(),
         ];
-        assert_eq!(
-            asciinema_command_slug(&pr_ship),
-            "pr-123"
-        );
+        assert_eq!(asciinema_command_slug(&pr_ship), "pr-123");
 
         // show with spec ID
         let generic_spec = vec![
@@ -710,10 +694,7 @@ mod story_423_asciinema_tests {
             "show".to_string(),
             "TASK-123".to_string(),
         ];
-        assert_eq!(
-            asciinema_command_slug(&generic_spec),
-            "task-123"
-        );
+        assert_eq!(asciinema_command_slug(&generic_spec), "task-123");
 
         let long = "x".repeat(120);
         let truncated = truncate_asciinema_slug(&long);
