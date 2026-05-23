@@ -1,0 +1,104 @@
+id: 019e5733-9c56-7df3-9755-e2f5520596f7
+spec_id: STORY-441
+agreed_id: STORY-441
+title: 'Rethink aida history filter model: introduce archive concept + show recent terminal-status by default'
+description: |-
+  ## Why
+
+  The current 'aida history' default hides Completed/Rejected items — the 'what's still live' view. Empirically wrong for the most common 'did my ship register?' question: ships vanish the moment they succeed.
+
+  But naively showing all Completed/Rejected items in the default view fails the other way: an old project has hundreds of done specs that drown out current activity. The current --all flag is a recency-blind dump; useful occasionally, not as default.
+
+  Two needs in tension:
+  1. Recent activity (including recent ships) should be visible by default — that's the 'what just happened' use case
+  2. Old completed work shouldn't drown the view — that's the 'what's relevant now' use case
+
+  ## Proposed shape: introduce an 'archive' concept distinct from terminal-status
+
+  **Status (Completed / Rejected)** is *what state the spec is in*.
+  **Archived (true / false)** is *whether the spec is still considered active context*.
+
+  These are orthogonal. A spec can be Completed but not Archived (recently shipped, still relevant context). A spec can be Approved but Archived (someone explicitly shelved it as out-of-scope, not yet implemented but won't be soon).
+
+  ### Default view
+
+  aida history (no flags) shows:
+  - All non-Archived specs
+  - Sorted by last-touch
+  - Including recent Done→Completed bumps (ships) — they're still 'active context' even though their state is terminal
+
+  ### Archive lifecycle
+
+  Three triggers:
+  - **Time-based**: a spec auto-archives N days after entering a terminal status. Configurable in .aida/config.toml; default e.g. 30 days.
+  - **Manual**: 'aida archive <SPEC-ID>' explicitly archives a spec regardless of age. 'aida unarchive <SPEC-ID>' restores.
+  - **On-demand sweep**: 'aida archive --older-than 30d --status completed,rejected' bulk-applies the time rule.
+
+  ### Flag surface
+
+  - aida history                         # default: non-archived, recency-sorted
+  - aida history --archived              # archived items only
+  - aida history --all                   # everything (current --all behavior preserved as escape hatch)
+  - aida history --shipped               # subset: Done→Completed transitions (TASK-507 — subsumed if this STORY ships first)
+  - aida list, aida search                # same archive filtering by default; same flags
+
+  ### Internal mechanism
+
+  - Add 'archived: bool' field to the spec YAML schema (default false; forward-compatible — old specs read as not archived)
+  - Add 'archived_at: HLC' field (set when archived; cleared on unarchive)
+  - Cache table includes 'archived' column for fast filtering
+  - aida archive / unarchive subcommands edit the field via the standard git-canonical path
+
+  ## Acceptance
+
+  - [ ] Schema: 'archived' (bool) + 'archived_at' (HLC) fields on Spec YAML
+  - [ ] Cache reflects archive state
+  - [ ] aida archive <SPEC-ID> / aida unarchive <SPEC-ID> commands
+  - [ ] aida archive --older-than 30d --status completed,rejected (and --dry-run preview)
+  - [ ] aida history default excludes archived, includes non-archived terminal-status
+  - [ ] aida history --archived flag
+  - [ ] aida history --all preserved as everything-escape-hatch
+  - [ ] aida list + aida search apply the same default filter
+  - [ ] Config: [archive] auto_after_days = 30 (optional auto-sweep on aida pull or aida db sync)
+  - [ ] Docs: archive concept in machinery-glossary.md, lifecycle-vocabulary.md
+  - [ ] Scaffolding-pack — every project benefits from the cleaner default view
+
+  ## Open design questions
+
+  1. **Auto-sweep timing**: opt-in via [archive] block in config? Run on aida pull (transparent), or only on aida db sync (more explicit)? Lean opt-in + on pull.
+  2. **Default age**: 30 days? 14? Configurable per project — default could be 30 for ample headroom.
+  3. **Archived in search**: aida search by default also exclude archived? Yes for consistency.
+  4. **Migration**: existing specs get archived=false on first read; the auto-sweep brings old terminal specs into archive on next pull.
+  5. **Linkage preservation**: archived specs still appear in graph/parent/child traversals so the requirement-graph stays coherent. Archive is a view-level filter, not a deletion.
+
+  ## Out of scope
+
+  - Hard deletion (archived ≠ deleted; preserves audit trail)
+  - Cross-project archive sweep (per-project local-only)
+
+  ## Composes with
+
+  - TASK-507 (--shipped flag — bridge until this lands; subsumed when archive lands)
+  - STORY-122 (usage telemetry — sibling 'recent activity surface' question)
+  - STORY-439 (calibration layer — reports on shipped specs; benefits from cleaner default view)
+  - STORY-86 (Done → Completed auto-bump — the lifecycle this STORY layers archive on top of)
+  - aida list / aida search — propagate the archive filter consistently
+
+  ## Origin
+
+  2026-05-23 user: 'I wonder if aida history should show the Completed/Rejected items and maybe we have an archive flag that gets applied after every n days or explicitly by the user?' Refines TASK-507's small-fix scope into a substrate-level design.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T23:37:40.694748941Z
+modified_at: 2026-05-23T23:37:40.694748941Z
+req_type: Story
+tags:
+- archive
+- cli-ux
+- design-fork
+- from-user-direction
+- history
+- sibling-of-STORY-122
+- strategic
