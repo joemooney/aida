@@ -1,0 +1,72 @@
+id: 019e55a4-ccac-79b3-92d9-2f394d80c107
+spec_id: STORY-431
+agreed_id: STORY-431
+title: Agent process registry + aida status integration (EPIC-31 Phase 1, subsumes TASK-498)
+description: |-
+  Phase 1 of EPIC-31. Lowest-effort/highest-value sub-story — gives operator visibility into running agents WITHOUT requiring per-agent launcher work. Foundation for Phases 2-5.
+
+  ## Scope
+
+  Extend the existing `.aida/sessions/<lease>.toml` schema (OR create a new `.aida/agents/<id>.toml` if the lease semantic doesn't fit cleanly) to record per-agent process metadata:
+
+  - `agent_type`: claude | codex | antigravity | other
+  - `pid`: process ID of the agent's CLI (or its MCP-connected subprocess)
+  - `tty` / `pts`: terminal device for operator identification
+  - `started_at`: ISO 8601 timestamp
+  - `last_active_at`: ISO 8601 timestamp (updated on MCP tool call OR heartbeat — see Phase 4)
+  - `role`: implementer / reviewer / advisor (mirrors lease role)
+  - `current_spec`: spec ID the agent is working (optional; empty when idle)
+  - `status`: busy | idle | stale (computed)
+
+  Registration: on `aida agent new` (Phase 2+) OR on first MCP tool call from the agent (Phase 1 fallback). De-registration: explicit `aida agent end` OR stale-detect (PID dead).
+
+  ## aida status integration
+
+  New section in `aida status` between Queue and Project:
+
+  ```
+  ─── Active agents (N) ───
+    claude#1234     implementer  TASK-340      busy   /home/joe/ai/aida-task-340
+    codex#5678      implementer  STORY-429     idle   /home/joe/ai/aida-story-429
+    antigravity#9012 advisor     (none)        idle   /home/joe/ai/aida (master)
+  ```
+
+  When no active agents: omit cleanly.
+
+  ## Subsumes TASK-498
+
+  TASK-498 (just filed) is the lite version of this Phase. Close TASK-498 as subsumed by this STORY.
+
+  ## Acceptance
+
+  - [ ] Agent registry persists at .aida/agents/ or extended .aida/sessions/
+  - [ ] aida status surfaces an 'Active agents' section when registry has entries; omits cleanly when empty
+  - [ ] Stale-PID detection (process dead) removes the entry or marks status=stale
+  - [ ] No per-agent launcher needed for Phase 1 — registry can be populated by MCP tool calls (heartbeat) or explicit registration commands
+  - [ ] Compatible with existing aida session leases output (the lease + agent registry should not contradict)
+  - [ ] Close TASK-498 as subsumed when this ships
+
+  ## Estimated time
+
+  ~5-8h. Bounded schema extension + status output + stale-detect.
+
+  ## Composes with
+
+  - EPIC-31 (parent)
+  - TASK-498 (subsumed)
+  - TASK-490 (sibling — In Progress visibility)
+  - TASK-486 (sibling — cross-platform CI surfacing; same status-evolution arc)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:22:04.204214328Z
+modified_at: 2026-05-23T16:22:04.204214328Z
+req_type: Story
+tags:
+- agent-registry
+- aida-status
+- from-user-direction
+- parent:EPIC-31
+- phase-1
+- subsumes:TASK-498
