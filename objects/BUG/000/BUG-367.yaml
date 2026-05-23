@@ -1,0 +1,17 @@
+id: 019e5732-a200-7a32-96ad-b000d88a5553
+spec_id: BUG-367
+agreed_id: BUG-367
+title: session end warns about unshipped commits after squash-merged aida pr ship
+description: 'After PR-255 merged via `aida pr ship`, `aida session end 019e5724460a --yes` warned that branch `story-432` had 1 unshipped commit and no open PR. The warning is technically reading the local branch correctly after a squash merge, but operationally false: the PR was already merged and STORY-432 auto-bumped Completed. The session-end unshipped-work gate should recognize a squash-merged PR/auto-bumped spec or recent pr-ship state and suppress this warning.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T23:36:36.608767879Z
+modified_at: 2026-05-23T23:36:36.608767879Z
+req_type: Bug
+tags:
+- codex
+- from-implementer:STORY-432
+- kind:bug-spotted
+- severity:minor
