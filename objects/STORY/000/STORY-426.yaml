@@ -1,0 +1,95 @@
+id: 019e5397-9719-7290-8323-a294e844eb23
+spec_id: STORY-426
+agreed_id: STORY-426
+title: 'STORY-425 Level 2: MCP brief surface — list_briefs / read_brief / ack_brief + per-agent /aida-pickup skill'
+description: |-
+  Level 2 of STORY-425 (multi-agent communication model). TASK-492 (Codex's ship tonight) gave us `aida brief <agent> <spec>` to GENERATE briefs as substrate-resident files. Level 2 is the CONSUMER side: an MCP-exposed brief surface + per-agent skill template that lets each agent pick up briefs from MCP autonomously.
+
+  ## Scope
+
+  ### MCP tool surface (the substrate side)
+
+  New MCP tools (Codex's ground):
+
+  ```
+  list_briefs({agent?: string, include_acked?: boolean}) → [BriefRef]
+    Returns brief files at .aida/agent-briefs/<agent>/ (filtered by agent if given)
+    Default: unacked only
+
+  read_brief({path: string}) → BriefContent
+    Returns the full content of a brief file (frontmatter + body)
+
+  ack_brief({path: string}) → AckResult
+    Marks a brief acknowledged (rename to .acked suffix OR move to acked/ — match the existing aida brief ack convention from TASK-492)
+  ```
+
+  These mirror the existing `aida brief list/ack` CLI commands but route through MCP so any MCP-speaking agent can query without shelling out.
+
+  ### Per-agent /aida-pickup skill template
+
+  In aida-core/templates/agents/<agent>/skills/aida-pickup.md (or wherever the cross-agent skill convention lands), a skill template that:
+
+  1. Calls list_briefs({agent: <self>}) via MCP
+  2. If empty: prints 'no pending briefs for <agent>'; exits cleanly
+  3. If non-empty: shows the oldest brief's title + spec ID; asks operator confirmation (interactive) OR auto-selects (headless)
+  4. Calls read_brief({path}) to get full content
+  5. Renders the brief's setup section as the actionable steps
+  6. Calls ack_brief({path}) when the operator proceeds OR after the actual work starts
+  7. Begins the standard worktree+lease setup for the spec the brief routes to
+
+  ### Acceptance
+
+  - [ ] MCP tools list_briefs / read_brief / ack_brief shipped + tested
+  - [ ] CLAUDE.md / AGENTS.md document the MCP brief tools alongside the existing aida brief CLI verbs
+  - [ ] At least ONE per-agent /aida-pickup skill template scaffolded (e.g., for Codex, sourced from Codex's slash-command convention). Antigravity's variant can be a follow-up TASK
+  - [ ] Regression test: a brief file at .aida/agent-briefs/codex/X.md gets returned by list_briefs({agent: 'codex'}); read_brief returns its full content; ack_brief flips its status
+  - [ ] Composes cleanly with TASK-492 (the CLI side) — the two surfaces share the same file convention and shouldn't drift
+
+  ## Sketch-first REQUIRED
+
+  The MCP tool surface is a new addition to the coordination cluster (14 tools today). Sketch on this STORY covering:
+  - Exact MCP tool signatures (inputSchema, outputSchema)
+  - How the brief-file path is communicated (absolute path? Relative to .aida/agent-briefs/<agent>/?)
+  - Whether ack_brief is idempotent (acking an already-acked brief)
+  - How the per-agent skill template invokes the MCP tools (which agent's slash-command convention is the reference?)
+  - Error handling: brief file deleted between list and read; concurrent ack races
+
+  Master verdict within ~30min; then implement.
+
+  ## Strategic placement
+
+  If TASK-492 was the verb that closes the cut-n-paste loop on the WRITER side, this STORY is the verb that closes it on the READER side. Together they make multi-agent coordination substrate-resident end-to-end.
+
+  Codex shipped TASK-492 (their 17th ship today, the session capstone). This is the natural overnight follow-on — same surface, same conventions, completes the substrate evolution.
+
+  ## Composes with
+
+  - STORY-425 (parent — multi-agent communication model)
+  - TASK-492 (the CLI side — Codex shipped this evening)
+  - STORY-417 + STORY-418 (per-agent scaffolding — the discipline docs the briefs point at)
+  - All 21 existing MCP tools (the new ones join the coordination cluster)
+
+  ## Out of scope (for THIS Level 2)
+
+  - Per-agent /aida-pickup skills for ALL agents (Antigravity, etc.) — focus on one canonical example here; file follow-ups for the others
+  - Cross-machine brief sync (the orphan-branch flow could share briefs eventually) — defer
+  - Brief expiration / TTL — defer
+
+  ## Estimated time
+
+  ~3-5h for Codex. Sketch + 5 MCP tools + skill template + tests + docs. Substantial overnight piece.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T06:48:24.089440815Z
+modified_at: 2026-05-23T06:48:24.089440815Z
+req_type: Story
+tags:
+- brief
+- communication-model
+- from-user-direction
+- mcp
+- multi-agent
+- parent:STORY-425
+- routing
