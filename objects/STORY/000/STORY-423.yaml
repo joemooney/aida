@@ -94,7 +94,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:47:08.071463231Z
-modified_at: 2026-05-23T04:49:38.482797922Z
+modified_at: 2026-05-23T05:02:49.617397958Z
 req_type: Story
 tags:
 - asciinema
@@ -104,3 +104,30 @@ tags:
 - marketing
 - recording
 - training-data
+comments:
+- id: 019e5336-ef11-7281-a2a1-71c9cbd55601
+  author: |-
+    Sketch for STORY-423 (`aida --asciinema`) before implementation.
+
+    1. Parse surface: add three top-level clap fields on `Cli`: `--asciinema: bool`, `--cast-out <PATH>`, `--cast-title <STR>`. They are wrapper flags, not subcommand-specific flags, so the canonical form `aida --asciinema --cast-out /tmp/demo.cast --cast-title "Demo" queue work ...` parses naturally before the subcommand.
+
+    2. Wrapper point: in `run()`, capture raw `argv` before `Cli::parse()`. After parse and before normal dispatch, if `cli.asciinema` is true and env sentinel `AIDA_ASCIINEMA_WRAPPED` is not set, call a wrapper helper that re-execs the same AIDA binary under `asciinema rec --command <quoted inner command> ...`; the inner command is the original argv with the three wrapper flags removed and `AIDA_ASCIINEMA_WRAPPED=1` set so it does not recursively wrap.
+
+    3. TTY fallback: require both stdin and stdout to be TTY using `std::io::IsTerminal`. If either is false, print a warning to stderr and continue through normal command execution without recording. This makes piped/CI invocations safe and preserves command behavior.
+
+    4. asciinema detection: resolve executable via PATH lookup by spawning `asciinema --version` (or `Command::new("asciinema")`). If missing or non-spawnable, warn and continue normally. No hard dependency.
+
+    5. Default path: use global `$HOME/.aida/casts/` per spec, not project-local. Rationale: recordings are operator artifacts spanning projects/sessions and should not dirty project worktrees. Filename is `YYYY-MM-DDTHHMMSSZ-<subcommand-shape>.cast`; timestamp from UTC chrono with `%Y-%m-%dT%H%M%SZ` so Windows-safe (no colons).
+
+    6. Filename/title derivation: derive from the raw inner argv after wrapper flag removal. Filename slug takes the subcommand + selected value-bearing flags in order, lower-risk implementation: join tokens, strip leading dashes, replace non `[A-Za-z0-9]+` runs with `-`, trim, cap length. Title defaults to `aida <inner args joined>`; `--cast-title` overrides.
+
+    7. Exit/signal propagation: wrapper process exits with asciinema's exit status. `asciinema rec --command <cmd>` should propagate the wrapped command's exit status in normal cases; if terminated by signal, return a conventional nonzero code. The inner aida process remains the actual command, so existing signal handling stays inside the inner invocation.
+
+    8. Completion output: after `asciinema rec` exits, print the cast path to stdout (e.g. `Cast saved: <path>`) when recording actually ran. For fallback/no-op paths, do not print a fake path.
+
+    9. Test approach: pure tests for wrapper-flag stripping, canonical parse shape, default path timestamp format (no colons, includes HHMMSSZ), slug derivation, and fallback decision. Avoid requiring real asciinema in tests by injecting/probing helper functions rather than running a recording. For a smoke/manual test, use `--cast-out /tmp/...` only when asciinema and TTY are available.
+
+    Open questions for master: OK to use global `$HOME/.aida/casts/` exactly as spec says; OK that non-TTY/asciinema-missing warnings go to stderr and command output remains unchanged; OK that completion prints the path only when a real recording occurred.
+  content: mcp
+  created_at: 2026-05-23T05:02:49.617388703Z
+  modified_at: 2026-05-23T05:02:49.617388703Z
