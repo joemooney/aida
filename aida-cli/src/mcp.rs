@@ -61,6 +61,7 @@ use aida_core::{
     Storage,
 };
 
+use crate::agent_registry::{self, AgentBinaryIdentity};
 use crate::findings::{
     build_findings_view, count_findings, finding_source, FindingsFilter, FROM_IMPLEMENTER_PREFIX,
     FROM_REVIEW_PREFIX,
@@ -405,6 +406,12 @@ impl<'a> McpServer<'a> {
 
     fn handle_request(&self, req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
         let id = req.id.clone().unwrap_or(Value::Null);
+
+        let running = McpBinaryIdentity::current();
+        let _ = agent_registry::touch_mcp_agent(
+            &self.project_root,
+            &AgentBinaryIdentity::new(running.version, running.sha),
+        );
 
         // Notifications (no id) don't get responses
         if req.id.is_none() && req.method == "notifications/initialized" {
@@ -2742,6 +2749,28 @@ mod tests {
             .strip_prefix("Requirement added: ")
             .and_then(|rest| rest.split_whitespace().next())
             .unwrap_or_else(|| panic!("unexpected add_requirement response: {response}"))
+    }
+
+    #[test]
+    fn handle_request_touches_agent_registry() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "ping".to_string(),
+            params: json!({}),
+            id: Some(json!(1)),
+        };
+        let response = server.handle_request(&request);
+
+        assert!(response.is_some());
+        let agents = agent_registry::list_agent_views(dir.path());
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].source, "mcp");
+        assert_eq!(
+            agents[0].binary_version.as_deref(),
+            Some(env!("CARGO_PKG_VERSION"))
+        );
     }
 
     #[test]
