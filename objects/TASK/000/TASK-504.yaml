@@ -1,0 +1,40 @@
+id: 019e5718-126c-71c1-a417-955c2516ec0c
+spec_id: TASK-504
+agreed_id: TASK-504
+title: claim_task should canonicalize worktree_path at record-time (or lease_covers_cwd should canonicalize both sides)
+description: |
+  Surfaced during review of PR-250 (TASK-474).
+
+  PR-250 stores the agent-supplied `worktree_path` arg verbatim on the MCP claim lease (`aida-cli/src/mcp.rs:1255-1259, 1287`):
+
+  ```rust
+  let worktree_path_arg = args
+      .get("worktree_path")
+      .and_then(|v| v.as_str())
+      .map(|s| s.trim().to_string())
+      .unwrap_or_default();
+  ```
+
+  The consumer side (`active_lease_for_cwd` and the 5 sister sites) canonicalizes cwd before comparison via `cwd.canonicalize().unwrap_or(cwd)`. The lease side does NOT canonicalize the stored worktree_path.
+
+  Failure mode: an agent passing a non-canonical path (a path containing a symlink, `..`, or trailing-slash variance) will not match the canonicalized cwd via `lease_covers_cwd`, even though both refer to the same directory. The `aida add` scope hint would silently regress to "no hint" for that agent.
+
+  Not introduced by PR-250 — the pre-fix code stored `self.project_root.to_string_lossy()` which was similarly non-canonical, just usually-canonical-in-practice. PR-250 widens the surface (agents can pass anything) without adding the canonicalization step.
+
+  Fix: either canonicalize `worktree_path_arg` at MCP claim_task before assigning to the lease, OR canonicalize BOTH sides inside `lease_covers_cwd` (the helper) for symmetry. The former is cheaper (paid once per claim, not once per comparison).
+
+  Severity: minor — symptom is "no hint when one was expected" (graceful degradation, the same UX as the original bug pre-fix). No correctness or data-loss risk.
+
+  Raised in review of PR-250: https://github.com/joemooney/aida/pull/250#issuecomment-4526762836
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T23:07:35.916556503Z
+modified_at: 2026-05-23T23:07:35.916556503Z
+req_type: Task
+tags:
+- canonicalization
+- from-review:PR-250
+- lease
+- severity:minor
