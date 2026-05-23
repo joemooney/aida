@@ -74,13 +74,14 @@ The MCP server is launched by Codex over stdio. You do not need to run `aida mcp
 
 Inside a Codex session with the MCP server connected, the AIDA tools are exposed as MCP tools. In this environment they were available under the `mcp__aida__` namespace.
 
-The expected tool count is 21:
+The expected tool count is 24:
 
 - Spec graph: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`.
 - Punt channel: `list_punts`, `read_punt`, `post_punt`, `resolve_punt`, `escalate_punt`.
 - Findings channel: `list_findings`, `file_finding`, `triage_finding`.
 - Task claims: `claim_task`, `release_task`, `list_active_leases`.
 - Worker directives: `post_directive`, `list_directives`, `ack_directive`.
+- Agent briefs: `list_briefs`, `read_brief`, `ack_brief`.
 
 The canonical argument names are the names advertised by MCP `tools/list`. If a document disagrees with `tools/list`, trust `tools/list` and file a doc-drift finding.
 
@@ -114,9 +115,9 @@ tests/test_mcp_doc_consistency.sh
 Expected result:
 
 ```text
-TEST parse docs/agents/cross-agent-onboarding.md ... ok (21 tools mentioned)
+TEST parse docs/agents/cross-agent-onboarding.md ... ok (24 tools mentioned)
 TEST start aida mcp-serve in scratch project ... ok
-TEST tools/list ... ok (21 tools advertised)
+TEST tools/list ... ok (24 tools advertised)
 TEST doc-vs-MCP consistency ... ok
 PASS doc-vs-MCP consistency
 ```
@@ -148,8 +149,8 @@ Use MCP for AIDA substrate operations instead of shelling out when the tool exis
 
 Recommended pattern:
 
-- Read via MCP first: `show_requirement`, `list_requirements`, `list_active_leases`, `list_findings`.
-- Write via MCP when coordinating: `post_punt`, `file_finding`, `claim_task`, `post_directive`.
+- Read via MCP first: `show_requirement`, `list_requirements`, `list_active_leases`, `list_findings`, `list_briefs`, `read_brief`.
+- Write via MCP when coordinating: `post_punt`, `file_finding`, `claim_task`, `post_directive`, `ack_brief`.
 - Verify cross-surface state with CLI when testing the substrate: MCP write, then CLI read.
 - Parse tool output defensively. Error and success bodies are human-readable text envelopes today.
 - Avoid concurrent claims on the same spec until TASK-438 closes the `claim_task` TOCTOU race.

@@ -7,7 +7,7 @@ the server at the client boundary rather than calling Rust helpers directly.
 
 Coverage:
 - JSON-RPC initialize / tools/list / tools/call framing.
-- All 21 expected tools are advertised.
+- All 24 expected tools are advertised.
 - Every tool advertises inputSchema and outputSchema.
 - Path-A tool results use the MCP text content envelope.
 - Optional future Path-B strict mode requires structuredContent.
@@ -60,6 +60,9 @@ REQUIRED_TOOLS = [
     "post_directive",
     "list_directives",
     "ack_directive",
+    "list_briefs",
+    "read_brief",
+    "ack_brief",
 ]
 
 SPEC_ID_RE = r"[A-Z]+(?:-[A-Z0-9]+)?-\d+(?:-\d+)?"
@@ -438,6 +441,44 @@ def test_coordination_round_trips(client: McpClient, strict: bool) -> None:
     require("acked" in acked, f"unexpected ack_directive response:\n{acked}")
 
 
+def test_brief_round_trip(client: McpClient, root: Path) -> None:
+    brief_dir = root / ".aida" / "agent-briefs" / "codex"
+    brief_dir.mkdir(parents=True, exist_ok=True)
+    brief = brief_dir / "TASK-492-2026-05-23T020000Z.md"
+    brief.write_text(
+        "---\n"
+        "spec_id: TASK-492\n"
+        "agent: codex\n"
+        "generated_at: 2026-05-23T020000Z\n"
+        "status: pending\n"
+        "---\n\n"
+        "## Routing\n\nBrief body from stdio test\n",
+        encoding="utf-8",
+    )
+
+    listed = content_text(client.tool("list_briefs", {"agent": "codex"}))
+    require("TASK-492" in listed, f"list_briefs missing brief:\n{listed}")
+    require("status=pending" in listed, f"list_briefs missing pending status:\n{listed}")
+    match = re.search(r"path=([^ ]+)", listed)
+    require(bool(match), f"could not parse brief path from list_briefs:\n{listed}")
+    path = match.group(1)
+
+    read = content_text(client.tool("read_brief", {"path": path}))
+    require("Brief body from stdio test" in read, f"read_brief missing body:\n{read}")
+
+    acked = content_text(client.tool("ack_brief", {"path": path}))
+    require("acked:" in acked, f"ack_brief did not ack:\n{acked}")
+    require(not brief.exists(), "ack_brief left original brief in place")
+    acked_path = Path(str(brief) + ".acked")
+    require(acked_path.exists(), "ack_brief did not create .acked file")
+    require("status: acked" in acked_path.read_text(encoding="utf-8"), "ack did not update frontmatter")
+
+    pending = content_text(client.tool("list_briefs", {"agent": "codex"}))
+    require(pending == "No briefs found.", f"acked brief should be hidden by default:\n{pending}")
+    included = content_text(client.tool("list_briefs", {"agent": "codex", "include_acked": True}))
+    require("status=acked" in included, f"include_acked missing acked brief:\n{included}")
+
+
 def test_finding_round_trip(client: McpClient) -> None:
     filed = client.tool(
         "file_finding",
@@ -506,6 +547,7 @@ def main() -> int:
         mcp_spec = run_test("MCP-created spec visible through CLI", lambda: test_mcp_to_cli_visibility(client, aida, tmp, args.require_structured_content))
         run_test("spec graph round trips", lambda: test_spec_graph_round_trips(client, mcp_spec, args.require_structured_content))
         run_test("coordination tools round trips", lambda: test_coordination_round_trips(client, args.require_structured_content))
+        run_test("brief tools round trip", lambda: test_brief_round_trip(client, tmp))
         run_test("findings round trip", lambda: test_finding_round_trip(client))
 
         print(f"PASS MCP stdio compatibility suite ({tmp})")

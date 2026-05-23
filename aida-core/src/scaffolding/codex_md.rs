@@ -99,6 +99,8 @@ aida show <SPEC-ID>
 aida list --status approved
 aida queue work <SPEC-ID>
 aida pr ship
+aida brief list --for-agent codex
+aida brief ack .aida/agent-briefs/codex/<brief>.md
 tests/test_mcp_stdio.sh --skip-agent-contract
 tests/test_mcp_doc_consistency.sh
 ```
@@ -107,9 +109,10 @@ tests/test_mcp_doc_consistency.sh
 
 Use AIDA MCP for substrate operations: `show_requirement`,
 `list_active_leases`, `claim_task`, `release_task`, `file_finding`,
-`post_punt`, `add_comment`, and directive tools. Trust MCP `tools/list`
-for argument names. Current responses are text envelopes; parse
-defensively until structuredContent ships.
+`post_punt`, `list_briefs`, `read_brief`, `ack_brief`, `add_comment`,
+and directive tools. Trust MCP `tools/list` for argument names. Current
+responses are text envelopes; parse defensively until structuredContent
+ships.
 
 ### Worktree And Session Discipline
 
