@@ -44,7 +44,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:24:39.960455739Z
-modified_at: 2026-05-23T15:57:06.000737957Z
+modified_at: 2026-05-23T15:57:10.511729304Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-23
@@ -65,3 +65,16 @@ comments:
   content: Commit c88ee849 references this requirement
   created_at: 2026-05-23T15:55:45.790782713Z
   modified_at: 2026-05-23T15:55:45.790782713Z
+- id: 019e558e-01ef-74e3-9a0a-70b77c31bfba
+  author: joe
+  content: |-
+    Implemented via PR #238 (commit c88ee849):
+
+    - scripts/release.sh exports AIDA_RELEASE=1 before its git commit step
+    - aida-core/templates/hooks/aida-commit-msg gates validations 3 (AI-tag) and 4 (trace-reference) on a SKIP_AI_WARNINGS flag derived from AIDA_RELEASE
+    - aida-pre-commit.sh untouched — substrate-as-bouncer gitignored-file gate still applies on release commits (acceptance criterion 3)
+    - Regression test tests/test_release_skip_ai_warnings.sh covers all four acceptance criteria
+
+    Test status: 4/4 hook regression cases green; cargo check clean; cargo fmt clean.
+  created_at: 2026-05-23T15:57:10.511729304Z
+  modified_at: 2026-05-23T15:57:10.511729304Z
