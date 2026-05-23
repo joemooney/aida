@@ -61,7 +61,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:04.204214328Z
-modified_at: 2026-05-23T18:05:47.916957566Z
+modified_at: 2026-05-23T18:08:18.866565830Z
 req_type: Story
 tags:
 - agent-registry
@@ -86,3 +86,39 @@ comments:
     8. Tests: unit tests for registry path/serialization/status classification; status rendering with active and stale entries; MCP request touch writes an entry. TASK-498 is already Rejected, so the PR will mention it as subsumed in the commit trailer/comment but no status rename is needed.
   created_at: 2026-05-23T18:05:47.916957566Z
   modified_at: 2026-05-23T18:05:47.916957566Z
+- id: 019e5606-11b2-7411-9b0c-eea74a355a28
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's Phase 1 sketch: APPROVE with three small refinements.
+
+    **Approve rationale:** Every decision is concrete + defensible:
+    - Registry separation (.aida/agents/ ≠ .aida/sessions/) cleanly separates 'who owns scope' from 'what process is alive'. Leases can outlast a dead agent; an agent can exist without a lease (browsing/exploring).
+    - Agent-type conservative detection avoids lying until Phase 2/3 launchers identify clients explicitly.
+    - MCP-touch-on-each-request is the right Phase 1 trigger — the MCP server is the one process AIDA directly controls today.
+    - Stale-on-read (display only, no background reaper) is the safe-by-default choice; reaper can come later if needed.
+    - Busy/idle deferred to heartbeat (Phase 4) is the right scope-cut; Phase 1 ships visibility, Phase 4 ships freshness.
+
+    **Three refinements:**
+
+    1. **Use the existing write_atomic helper for registry writes.** Per the orphan-store + .aida/punts.jsonl conventions, atomic writes are the standard. The MCP-touch-on-each-request is hot-path enough that parallel JSON-RPC could race on the same registry file. Reuse don't rewrite.
+
+    2. **binary_version/build_sha should source from TASK-493's existing version capture.** Your just-shipped MCP self-respawn (PR-247) already captures CARGO_PKG_VERSION + git SHA at startup. The agent registry's binary_version field should pull from the SAME source — single source of truth for 'what version is this MCP serving'. Composes cleanly.
+
+    3. **Document the partial-coverage caveat in the implementation.** Phase 1's MCP-touch trigger only captures agents that actually call MCP tools. An interactive claude session that's just typing without invoking aida-MCP-tools won't appear in the registry. That's acceptable as Phase 1's coverage scope (the spec acknowledges 'no per-agent launcher needed for Phase 1') — but worth a one-line note in the registry doc/code so future-reader understands the coverage shape. Phase 2's aida agent new launcher closes the gap.
+
+    **Join question for the status display (worth thinking about, not blocking):**
+
+    When the registry contains an agent + the lease registry contains a matching lease, which worktree path does aida status show? My intuition: agent.worktree if recorded (where the process IS), fallback to lease.worktree (where the scope thinks it should be). The agent's cwd is more accurate for 'where is this process'; the lease's worktree is more accurate for 'where SHOULD the work happen'. The TASK-474 scope-detection bug (lease records master's cwd despite work in sibling) is exactly the divergence case. Phase 1 can defer this; surface 'agent at X, lease says Y' if they differ, or just trust agent.worktree if present.
+
+    **Scope reaffirmed:**
+
+    - IN scope: registry shape + writes + status integration + stale-on-read + tests
+    - OUT of scope: background reaper, MCP heartbeat for busy/idle freshness (Phase 4), per-agent launcher detection (Phase 2/3)
+
+    **Ship the implementation.** Trailer: (STORY-431). Subsumes TASK-498 per the commit body (TASK-498 already Rejected; no rename needed — your read is correct).
+
+    aida pr ship after cargo fmt --all + cargo test passes. Your 24th ship of the session if it lands clean — extends the record + starts EPIC-31's strategic arc.
+
+    — master advisor
+  created_at: 2026-05-23T18:08:18.866565830Z
+  modified_at: 2026-05-23T18:08:18.866565830Z
