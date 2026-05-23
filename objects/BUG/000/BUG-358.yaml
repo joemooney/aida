@@ -1,0 +1,64 @@
+id: 019e559a-9459-7643-a40d-c518a16c82f4
+spec_id: BUG-358
+agreed_id: BUG-358
+title: 'Cross-platform CI: 4 new Windows-only test failures from STORY-426 + TASK-486 + TASK-492 (regression after BUG-346 fix)'
+description: |-
+  Cross-platform nightly CI failed 2026-05-23 ~02:30 UTC after green at 2026-05-23 02:29 UTC last night (BUG-346 fix verification). The four new Windows-only test failures:
+
+  1. `mcp::tests::brief_tools_list_read_ack_roundtrip` — from STORY-426 (Codex's MCP brief tools)
+  2. `mcp::tests::brief_tools_reject_path_escape_and_missing_files` — from STORY-426
+  3. `status_display::tests::paint_status_needs_attention_is_magenta` — from TASK-486 (aida status CI surfacing)
+  4. `task_492_brief_tests::create_brief_writes_frontmatter_sections_and_relationships` — from TASK-492 (aida brief verb)
+
+  macOS green; Linux green. **Windows only.** Same shape as BUG-346 — platform-specific path-handling / TOML-round-trip / terminal-color assertions that pass on POSIX but fail on Windows.
+
+  ## Common pattern
+
+  Three of four tests touch file paths or filesystem layout. Likely root cause: tests assume forward-slash path separators OR assume Unix-style atomic file operations that don't translate to Windows.
+
+  The 4th (`paint_status_needs_attention_is_magenta`) is a terminal-color assertion — Windows console color handling may differ.
+
+  ## Release blocker
+
+  v0.9.1 (and any future minor/major) requires <24h green cross-platform CI per CLAUDE.md. This blocks the next release.
+
+  ## Investigation approach
+
+  Same as BUG-346:
+  1. Read each failing test source
+  2. Identify the Windows-specific assumption (path separator, TOML field ordering, color rendering)
+  3. Write a fix attempt; prefer platform-neutral over cfg(windows)
+  4. Push branch + trigger `gh workflow run cross-platform.yml --ref bug-358`
+  5. Iterate until green
+
+  ## Acceptance
+
+  - [ ] All 4 named tests pass on Windows
+  - [ ] Cross-platform CI nightly run reports SUCCESS within 24h of merge
+  - [ ] No regression to macOS or Linux
+  - [ ] Document the Windows-specific shims for future test-additions (sibling docs to whatever BUG-346 produced)
+
+  ## Composes with
+
+  - BUG-346 (sibling — same class of Windows test failure)
+  - STORY-426 / TASK-486 / TASK-492 (the work that introduced the failures — Codex's overnight ships)
+  - Eventual goal: re-enable Windows in PR CI (currently nightly-only) once these recurring regressions are addressed
+
+  ## Estimated time
+
+  ~2-3h (similar to BUG-346). Iterate-via-CI on Windows tests; release-blocker urgency.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:10:54.425142081Z
+modified_at: 2026-05-23T16:10:54.425142081Z
+req_type: Bug
+tags:
+- bug-346-sibling
+- ci
+- cross-platform
+- from-self-test
+- regression
+- release-blocker
+- windows
