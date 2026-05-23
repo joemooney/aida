@@ -1,0 +1,99 @@
+id: 019e55c3-4faa-7032-a6e9-122a54384535
+spec_id: TASK-500
+agreed_id: TASK-500
+title: 'BUG-360 follow-up: refactor queue-done gate to pure queue_done_precheck_diagnose function for isolated testability'
+description: |-
+  Follow-up to BUG-360 (shipped via PR-242 as the minimum-viable visibility fix). The current state after PR-242:
+
+  - BUG-269's gate has visible warnings on each silent-skip path
+  - When the next bypass occurs, the warning identifies WHICH condition failed
+  - BUT: the gate logic still lives inline in QueueCommand::Done's handler (aida-cli/src/main.rs:51976-52050ish), mixing pure decision logic with I/O (eprintln + std::process::exit)
+
+  This task: extract the diagnostic logic into a pure function so the decision tree is testable in isolation.
+
+  ## Proposed shape
+
+  In aida-cli/src/workflow_hints.rs (sibling to existing queue_done_precheck_error):
+
+  ```rust
+  pub enum QueueDoneGateDiagnose {
+      /// All conditions resolved; gate decided to refuse with these error lines
+      Refuse(Vec<String>),
+      /// All conditions resolved; gate decided to proceed
+      Proceed,
+      /// A condition could not be resolved; gate skipped with a warning reason
+      SilentSkip { reason: SkipReason, warning_line: String },
+  }
+
+  pub enum SkipReason {
+      ProjectRootNotFound,
+      BranchUndetectable,
+      CommitsAheadFailed,
+      GhUnknown,
+  }
+
+  pub fn queue_done_precheck_diagnose(
+      display_id: &str,
+      project_root: Result<PathBuf>,
+      branch_at_root: impl FnOnce(&Path) -> Option<String>,
+      commits_ahead_of_main: impl FnOnce(&Path, &str) -> Option<u32>,
+      pr_lookup_for_branch: impl FnOnce(&Path, &str) -> PrLookup,
+  ) -> QueueDoneGateDiagnose { ... }
+  ```
+
+  Then in main.rs:
+
+  ```rust
+  match queue_done_precheck_diagnose(...) {
+      QueueDoneGateDiagnose::Refuse(lines) => {
+          for line in &lines { eprintln!("{}", line); }
+          std::process::exit(1);
+      }
+      QueueDoneGateDiagnose::SilentSkip { warning_line, .. } => {
+          eprintln!("{}", warning_line);
+      }
+      QueueDoneGateDiagnose::Proceed => {}
+  }
+  ```
+
+  ## Why this is a follow-up not the original ship
+
+  The original fix's goal was VISIBILITY (next bypass leaves a trace). Achieved with minimal code change. The refactor is a TESTABILITY improvement — needed eventually but not needed for the visibility behavior.
+
+  Refactor adds:
+  - Pure-function unit tests for all 4 skip-reason paths
+  - Pure-function tests for the Refuse / Proceed semantics
+  - Mock injection for project-root/branch/commits/pr lookups (no need for real git/gh in tests)
+  - Easier reasoning about gate behavior in code review
+
+  ## Acceptance
+
+  - [ ] queue_done_precheck_diagnose function in workflow_hints.rs with the enum + dependency-injection signature
+  - [ ] main.rs's QueueCommand::Done handler replaces the inline match-tree with a single call + action match
+  - [ ] Unit tests for: each SkipReason path emits the right warning; Refuse path returns the right error lines; Proceed path is silent
+  - [ ] No behavior change vs PR-242 — same warnings emit, same refusals fire
+  - [ ] Composes with existing queue_done_precheck_error tests
+
+  ## Composes with
+
+  - BUG-360 (parent — visibility fix shipped via PR-242; this refactors it)
+  - BUG-269 (the original gate this all stems from)
+  - TASK-66 (cargo fmt --all -- --check convention; remember to run cargo fmt --all FIRST during dev)
+  - feedback_substrate_as_bouncer_not_rules (the principle this gate serves)
+
+  ## Estimated time
+
+  ~2-3h. Refactor + tests + verify no regression.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:55:23.818121291Z
+modified_at: 2026-05-23T16:55:23.818121291Z
+req_type: Task
+tags:
+- bug-360-followup
+- refactor
+- substrate-as-bouncer
+- testability
+- workflow-hints
