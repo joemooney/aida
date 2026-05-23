@@ -83,14 +83,14 @@ use aida_core::{
 };
 
 use crate::cli::{
-    AdvisorCommand, BlockCommand, BriefCommand, CacheCommand, Cli, Command, CommentCommand,
-    ConfigCommand, DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
-    FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand,
-    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand,
-    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
-    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, SessionWakeupCommand, SkillCommand, TraceCommand, TypeCommand,
-    WorkerCommand, ZenCommand,
+    AdvisorCommand, AgentCommand, AgentNewCommand, BlockCommand, BriefCommand, CacheCommand, Cli,
+    Command, CommentCommand, ConfigCommand, DbCommand, DevCommand, DocCommand, DocsCommand,
+    DrainCommand, FeatureCommand, FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand,
+    JiraCommand, McpCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
+    PuntsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand,
+    RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand,
+    SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand, TraceCommand,
+    TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -979,6 +979,12 @@ fn run() -> Result<()> {
     if let Command::Session(session_cmd) = &cli.command {
         return handle_session_command(session_cmd);
     }
+    // EPIC-31 agent launchers supervise external CLIs and write process
+    // registry state directly; no requirement store handle needed.
+    // trace:STORY-432 | ai:codex
+    if let Command::Agent(agent_cmd) = &cli.command {
+        return handle_agent_command(agent_cmd);
+    }
 
     // STORY-90: PR side-effects dispatch before storage init — the
     // command's side-effects all live in git / gh / self-invoked `aida
@@ -1215,6 +1221,9 @@ fn run() -> Result<()> {
                 &store,
                 &project_root,
             )?;
+        }
+        Command::Agent(agent_cmd) => {
+            handle_agent_command(agent_cmd)?;
         }
         Command::Edit {
             id,
@@ -14831,6 +14840,446 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
 }
 
 // ----------------------------------------------------------------------------
+// EPIC-31 Phase 2 — supervised agent launchers.
+// trace:STORY-432 | ai:codex
+// ----------------------------------------------------------------------------
+
+fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
+    match cmd {
+        AgentCommand::New(AgentNewCommand::Claude {
+            role,
+            spec,
+            cwd,
+            permission_mode,
+        }) => agent_new_claude(role.clone(), spec.clone(), cwd.as_deref(), permission_mode),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentLaunchPlan {
+    project_root: std::path::PathBuf,
+    launch_cwd: std::path::PathBuf,
+    role: Option<String>,
+    current_spec: Option<String>,
+}
+
+fn agent_new_claude(
+    role: Option<String>,
+    spec: Option<String>,
+    cwd: Option<&std::path::Path>,
+    permission_mode: &str,
+) -> Result<()> {
+    let claude = find_executable_on_path("claude").ok_or_else(|| {
+        anyhow::anyhow!(
+            "`claude` is not on PATH — install Claude Code or activate the environment \
+             that provides it, then retry `aida agent new claude`"
+        )
+    })?;
+    let base = cwd
+        .map(std::path::PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let discovered_root = find_aida_project_root_from(&base)?;
+    let project_root = main_worktree_root_from(&discovered_root);
+    let plan = prepare_claude_agent_launch(&project_root, role, spec)?;
+
+    eprintln!(
+        "{} launching claude in {}",
+        "▶".green().bold(),
+        plan.launch_cwd.display().to_string().cyan()
+    );
+    if let Some(spec) = &plan.current_spec {
+        eprintln!("  {}: {}", "spec".bold(), spec.cyan());
+    }
+    if let Some(role) = &plan.role {
+        eprintln!("  {}: {}", "role".bold(), role.cyan());
+    }
+    eprintln!(
+        "  {} multiple concurrent claude sessions are supported; registry entries are PID-keyed.",
+        "ⓘ".cyan()
+    );
+
+    run_tracked_claude_agent(&claude, &plan, permission_mode)
+}
+
+fn prepare_claude_agent_launch(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+) -> Result<AgentLaunchPlan> {
+    match spec {
+        Some(spec) => {
+            if let Some(existing) = list_leases(project_root)
+                .into_iter()
+                .find(|lease| lease.scope.eq_ignore_ascii_case(&spec))
+            {
+                anyhow::bail!(
+                    "scope `{}` is already owned by session {} ({}, worktree: {}).\n  \
+                     Run `aida session leases` to inspect active work, then \
+                     `aida session end {}` when that session is ready to close.",
+                    spec,
+                    existing.id,
+                    existing.role.as_deref().unwrap_or("(unset role)"),
+                    existing.worktree_path.display(),
+                    existing.id
+                );
+            }
+
+            let previous_cwd = std::env::current_dir()?;
+            std::env::set_current_dir(project_root)
+                .with_context(|| format!("failed to cd to {}", project_root.display()))?;
+            let start_result = session_start(
+                &spec,
+                /* branch */ None,
+                /* base */ None,
+                /* reuse_branch */ false,
+                /* explicit_path */ None,
+                /* forge_override */ None,
+                /* branch_style */ "auto",
+                /* launch_claude */ false,
+                /* launch_title */ None,
+                /* launch_name */ None,
+                /* launch_permission_mode */ "bypassPermissions",
+                role.clone(),
+            );
+            let restore_result = std::env::set_current_dir(&previous_cwd);
+            restore_result
+                .with_context(|| format!("failed to restore cwd to {}", previous_cwd.display()))?;
+            start_result.with_context(|| {
+                format!(
+                    "failed to create session worktree for `{}`; run `aida session leases` \
+                     to inspect conflicting sessions",
+                    spec
+                )
+            })?;
+
+            let lease = list_leases(project_root)
+                .into_iter()
+                .filter(|lease| lease.scope.eq_ignore_ascii_case(&spec))
+                .max_by_key(|lease| lease.started_at)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "session_start completed but no lease for `{}` is visible",
+                        spec
+                    )
+                })?;
+            Ok(AgentLaunchPlan {
+                project_root: project_root.to_path_buf(),
+                launch_cwd: lease.worktree_path,
+                role: lease.role.or(role),
+                current_spec: Some(spec),
+            })
+        }
+        None => Ok(AgentLaunchPlan {
+            project_root: project_root.to_path_buf(),
+            launch_cwd: project_root.to_path_buf(),
+            role,
+            current_spec: None,
+        }),
+    }
+}
+
+fn run_tracked_claude_agent(
+    claude: &std::path::Path,
+    plan: &AgentLaunchPlan,
+    permission_mode: &str,
+) -> Result<()> {
+    let mut command = std::process::Command::new(claude);
+    command
+        .current_dir(&plan.launch_cwd)
+        .arg("--permission-mode")
+        .arg(permission_mode)
+        .env("AIDA_AGENT_TYPE", "claude")
+        .env("AIDA_PROJECT_ROOT", &plan.project_root)
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
+    if let Some(role) = &plan.role {
+        command.env("AIDA_SESSION_ROLE", role);
+    }
+    if let Some(spec) = &plan.current_spec {
+        command.env("AIDA_SESSION_SCOPE", spec);
+    }
+
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("failed to spawn {}", claude.display()))?;
+    let child_pid = child.id();
+    let binary = agent_registry::AgentBinaryIdentity::new(
+        env!("CARGO_PKG_VERSION").to_string(),
+        env!("AIDA_BUILD_GIT_SHA").to_string(),
+    );
+    agent_registry::register_spawned_agent(
+        &plan.project_root,
+        "claude",
+        child_pid,
+        plan.role.clone(),
+        plan.current_spec.clone(),
+        plan.launch_cwd.clone(),
+        Some(&binary),
+    )?;
+    let signal_forwarder = install_child_signal_forwarder(child_pid)?;
+    let status = child.wait().context("failed to wait for claude")?;
+    signal_forwarder.stop();
+    if let Err(err) = agent_registry::remove_agent(&plan.project_root, "claude", child_pid) {
+        eprintln!(
+            "{} failed to remove agent registry entry for claude#{}: {err}",
+            "warning:".yellow().bold(),
+            child_pid
+        );
+    }
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
+}
+
+struct ChildSignalForwarder {
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl ChildSignalForwarder {
+    fn stop(self) {
+        self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[cfg(unix)]
+fn install_child_signal_forwarder(child_pid: u32) -> Result<ChildSignalForwarder> {
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stop_for_thread = std::sync::Arc::clone(&stop);
+    let mut signals = signal_hook::iterator::Signals::new([
+        signal_hook::consts::SIGINT,
+        signal_hook::consts::SIGTERM,
+    ])
+    .context("installing agent launcher signal handlers")?;
+    std::thread::spawn(move || {
+        for signal in signals.forever() {
+            if stop_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
+            forward_signal_to_child(child_pid, signal);
+        }
+    });
+    Ok(ChildSignalForwarder { stop })
+}
+
+#[cfg(not(unix))]
+fn install_child_signal_forwarder(_child_pid: u32) -> Result<ChildSignalForwarder> {
+    // Windows delivers console control events to foreground console processes
+    // differently from Unix signals; the launcher still waits for Claude and
+    // performs registry cleanup when the child exits.
+    Ok(ChildSignalForwarder {
+        stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    })
+}
+
+#[cfg(unix)]
+fn forward_signal_to_child(child_pid: u32, signal: i32) {
+    unsafe {
+        libc::kill(child_pid as libc::pid_t, signal);
+    }
+}
+
+#[cfg(not(unix))]
+fn forward_signal_to_child(_child_pid: u32, _signal: i32) {
+    // On Windows, console control events are delivered to the foreground
+    // process group; the launcher still waits and deregisters the child.
+}
+
+fn find_aida_project_root_from(start: &std::path::Path) -> Result<std::path::PathBuf> {
+    let mut current = if start.is_file() {
+        start.parent().unwrap_or(start).to_path_buf()
+    } else {
+        start.to_path_buf()
+    };
+    current = current
+        .canonicalize()
+        .with_context(|| format!("failed to resolve {}", start.display()))?;
+    loop {
+        if current.join(".aida").join("config.toml").exists() {
+            return Ok(current);
+        }
+        match current.parent() {
+            Some(parent) => current = parent.to_path_buf(),
+            None => {
+                anyhow::bail!(
+                    "not inside an AIDA project (no .aida/config.toml found from {})",
+                    start.display()
+                )
+            }
+        }
+    }
+}
+
+fn find_executable_on_path(name: &str) -> Option<std::path::PathBuf> {
+    let candidate = std::path::Path::new(name);
+    if candidate.components().count() > 1 {
+        return is_executable_file(candidate).then(|| candidate.to_path_buf());
+    }
+
+    let path = std::env::var_os("PATH")?;
+    let extensions = executable_extensions();
+    for dir in std::env::split_paths(&path) {
+        for ext in &extensions {
+            let path = dir.join(format!("{name}{ext}"));
+            if is_executable_file(&path) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn executable_extensions() -> Vec<String> {
+    let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".EXE;.BAT;.CMD".to_string());
+    let mut exts = vec![String::new()];
+    exts.extend(pathext.split(';').map(|ext| ext.to_string()));
+    exts
+}
+
+#[cfg(not(windows))]
+fn executable_extensions() -> Vec<String> {
+    vec![String::new()]
+}
+
+fn is_executable_file(path: &std::path::Path) -> bool {
+    path.is_file()
+}
+
+#[cfg(test)]
+mod agent_launcher_tests {
+    use super::*;
+    use clap::Parser;
+    use tempfile::TempDir;
+
+    #[test]
+    fn parses_agent_new_claude_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "claude",
+            "--role",
+            "reviewer",
+            "--spec",
+            "STORY-432",
+            "--cwd",
+            "/tmp/project",
+            "--permission-mode",
+            "acceptEdits",
+        ])
+        .unwrap();
+        let Command::Agent(AgentCommand::New(AgentNewCommand::Claude {
+            role,
+            spec,
+            cwd,
+            permission_mode,
+        })) = cli.command
+        else {
+            panic!("expected agent new claude command");
+        };
+        assert_eq!(role.as_deref(), Some("reviewer"));
+        assert_eq!(spec.as_deref(), Some("STORY-432"));
+        assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
+        assert_eq!(permission_mode, "acceptEdits");
+    }
+
+    #[test]
+    fn find_aida_project_root_walks_up_from_descendant() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let nested = root.join("a/b/c");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let found = find_aida_project_root_from(&nested).unwrap();
+        assert_eq!(found, root.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn spawned_agent_registry_entry_is_pid_keyed_and_removable() {
+        let tmp = TempDir::new().unwrap();
+        let binary = agent_registry::AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+        let first = agent_registry::register_spawned_agent(
+            tmp.path(),
+            "claude",
+            111,
+            Some("implementer".into()),
+            None,
+            tmp.path().into(),
+            Some(&binary),
+        )
+        .unwrap();
+        let second = agent_registry::register_spawned_agent(
+            tmp.path(),
+            "claude",
+            222,
+            Some("implementer".into()),
+            None,
+            tmp.path().into(),
+            Some(&binary),
+        )
+        .unwrap();
+
+        assert_eq!(first.id, "claude-111");
+        assert_eq!(second.id, "claude-222");
+        assert!(agent_registry::remove_agent(tmp.path(), "claude", 111).unwrap());
+        assert!(agent_registry::remove_agent(tmp.path(), "claude", 222).unwrap());
+        assert!(!agent_registry::remove_agent(tmp.path(), "claude", 222).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tracked_fake_claude_receives_env_and_registry_is_removed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let fake_bin = tmp.path().join("bin");
+        std::fs::create_dir_all(&fake_bin).unwrap();
+        let fake_claude = fake_bin.join("claude");
+        std::fs::write(
+            &fake_claude,
+            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&fake_claude).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_claude, perms).unwrap();
+        let env_out = tmp.path().join("env.txt");
+        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project.clone(),
+            role: Some("implementer".into()),
+            current_spec: Some("STORY-432".into()),
+        };
+
+        run_tracked_claude_agent(&fake_claude, &plan, "acceptEdits").unwrap();
+
+        let env = std::fs::read_to_string(&env_out).unwrap();
+        assert!(env.contains("AIDA_AGENT_TYPE=claude"), "{env}");
+        assert!(env.contains("AIDA_SESSION_ROLE=implementer"), "{env}");
+        assert!(env.contains("AIDA_SESSION_SCOPE=STORY-432"), "{env}");
+        assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
+        assert!(agent_registry::list_agent_views(&project).is_empty());
+        std::env::remove_var("AIDA_TEST_ENV_OUT");
+    }
+}
+
+// ----------------------------------------------------------------------------
 // EPIC-20 v1 — scoped session leases.
 // trace:EPIC-20 | ai:claude
 // ----------------------------------------------------------------------------
@@ -16656,6 +17105,7 @@ fn session_start(
             std::fs::create_dir_all(&worktree_aida)?;
             for runtime in &[
                 "sessions",
+                "agents",
                 "roles",
                 "cache.db",
                 "cache.db-shm",

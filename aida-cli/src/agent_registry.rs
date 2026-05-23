@@ -140,6 +140,54 @@ pub(crate) fn touch_mcp_agent(
     Ok(entry)
 }
 
+/// Register an agent process spawned by `aida agent new ...`.
+///
+/// Multiple concurrent sessions for the same project are intentionally
+/// supported: registry IDs are `<agent-type>-<pid>`, so each process gets a
+/// distinct entry even when cwd/spec match.
+// trace:STORY-432 | ai:codex
+pub(crate) fn register_spawned_agent(
+    project_root: &Path,
+    agent_type: &str,
+    pid: u32,
+    role: Option<String>,
+    current_spec: Option<String>,
+    worktree_path: PathBuf,
+    binary: Option<&AgentBinaryIdentity>,
+) -> Result<AgentRegistryEntry> {
+    let now = Utc::now();
+    let agent_type = normalize_agent_type(agent_type.to_string());
+    let entry = AgentRegistryEntry {
+        id: agent_id(&agent_type, pid),
+        agent_type,
+        pid,
+        tty: current_tty(),
+        started_at: now,
+        last_active_at: now,
+        role,
+        current_spec,
+        worktree_path,
+        source: "agent-launcher".to_string(),
+        binary_version: binary.map(|b| b.version.clone()),
+        build_sha: binary.map(|b| b.sha.clone()),
+    };
+    write_entry(project_root, &entry)?;
+    Ok(entry)
+}
+
+// trace:STORY-432 | ai:codex
+pub(crate) fn remove_agent(project_root: &Path, agent_type: &str, pid: u32) -> Result<bool> {
+    let agent_type = normalize_agent_type(agent_type.to_string());
+    let path = registry_path(project_root, &agent_id(&agent_type, pid));
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(true),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(err) => {
+            Err(err).with_context(|| format!("removing agent registry entry {}", path.display()))
+        }
+    }
+}
+
 pub(crate) fn list_agent_views(project_root: &Path) -> Vec<AgentRegistryView> {
     let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) else {
         return Vec::new();
