@@ -39,12 +39,12 @@ description: |-
   ## Priority rationale
 
   LOW. Cosmetic — warnings are non-blocking and only appear during release cycles (rare). Worth fixing eventually but not urgent. Could be batched with TASK-486 in a 'release-flow UX' cycle.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:24:39.960455739Z
-modified_at: 2026-05-23T06:49:56.020326826Z
+modified_at: 2026-05-23T15:52:05.373646617Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-23
