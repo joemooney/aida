@@ -45,8 +45,11 @@
 //! owns the backward-compatibility call for clients that consume today's
 //! text envelopes.
 
+use std::cmp::Ordering;
+use std::ffi::OsString;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use anyhow::Result;
 use chrono::Utc;
@@ -69,6 +72,177 @@ use crate::punt::{
 
 const VALID_MCP_REQUIREMENT_TYPES: &str =
     "functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct McpBinaryIdentity {
+    version: String,
+    sha: String,
+    dirty: bool,
+}
+
+impl McpBinaryIdentity {
+    fn current() -> Self {
+        Self {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            sha: env!("AIDA_BUILD_GIT_SHA").to_string(),
+            dirty: env!("AIDA_BUILD_GIT_DIRTY") == "1",
+        }
+    }
+
+    fn label(&self) -> String {
+        format!(
+            "{} sha {}{}",
+            self.version,
+            self.sha,
+            if self.dirty { "+dirty" } else { "" }
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct McpRespawnPlan {
+    exe: PathBuf,
+    argv: Vec<OsString>,
+    running: McpBinaryIdentity,
+    on_disk: McpBinaryIdentity,
+}
+
+struct McpRespawnState {
+    running: McpBinaryIdentity,
+    argv: Vec<OsString>,
+}
+
+impl McpRespawnState {
+    fn new() -> Self {
+        Self {
+            running: McpBinaryIdentity::current(),
+            argv: std::env::args_os().collect(),
+        }
+    }
+
+    fn check(&self) -> Option<McpRespawnPlan> {
+        let exe = crate::resolve_aida_exe();
+        let on_disk = query_aida_binary_identity(&exe)?;
+        if mcp_binary_is_newer_or_different(&self.running, &on_disk) {
+            Some(McpRespawnPlan {
+                exe,
+                argv: self.argv.clone(),
+                running: self.running.clone(),
+                on_disk,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn respawn(&self, plan: McpRespawnPlan) -> Result<()> {
+        eprintln!(
+            "AIDA MCP server detected newer binary on disk; self-respawning (running: {}; disk: {})",
+            plan.running.label(),
+            plan.on_disk.label()
+        );
+        exec_mcp_respawn(plan)
+    }
+}
+
+fn strip_aida_program_prefix(output: &str) -> &str {
+    ["aida-cli ", "aida-server ", "aida "]
+        .iter()
+        .find_map(|prefix| output.strip_prefix(*prefix))
+        .unwrap_or(output)
+}
+
+fn parse_aida_binary_identity(output: &str) -> Option<McpBinaryIdentity> {
+    let banner = strip_aida_program_prefix(output.trim());
+    let version = banner
+        .split_whitespace()
+        .next()
+        .filter(|v| {
+            v.chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+        })?
+        .to_string();
+    let sha = banner
+        .split("sha ")
+        .nth(1)
+        .and_then(|s| s.split(|c: char| c == ')' || c == '+').next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("unknown")
+        .to_string();
+    Some(McpBinaryIdentity {
+        version,
+        sha,
+        dirty: banner.contains("+dirty"),
+    })
+}
+
+fn query_aida_binary_identity(exe: &Path) -> Option<McpBinaryIdentity> {
+    let out = Command::new(exe).arg("--version").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    parse_aida_binary_identity(&stdout)
+}
+
+fn compare_package_versions(a: &str, b: &str) -> Ordering {
+    let parse = |raw: &str| {
+        raw.split(['.', '-'])
+            .map(|part| part.parse::<u64>())
+            .collect::<Result<Vec<_>, _>>()
+    };
+    match (parse(a), parse(b)) {
+        (Ok(left), Ok(right)) => left.cmp(&right),
+        _ => a.cmp(b),
+    }
+}
+
+fn mcp_binary_is_newer_or_different(
+    running: &McpBinaryIdentity,
+    on_disk: &McpBinaryIdentity,
+) -> bool {
+    match compare_package_versions(&running.version, &on_disk.version) {
+        Ordering::Less => true,
+        Ordering::Greater => false,
+        Ordering::Equal => {
+            let both_sha_known = running.sha != "unknown" && on_disk.sha != "unknown";
+            both_sha_known && (running.sha != on_disk.sha || running.dirty != on_disk.dirty)
+        }
+    }
+}
+
+fn exec_mcp_respawn(plan: McpRespawnPlan) -> Result<()> {
+    let mut command = Command::new(&plan.exe);
+    if plan.argv.len() > 1 {
+        command.args(plan.argv.iter().skip(1));
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = command.exec();
+        Err(anyhow::anyhow!(
+            "failed to exec MCP self-respawn via {}: {}",
+            plan.exe.display(),
+            err
+        ))
+    }
+
+    #[cfg(windows)]
+    {
+        command.spawn().map_err(|e| {
+            anyhow::anyhow!(
+                "failed to spawn MCP self-respawn via {}: {}",
+                plan.exe.display(),
+                e
+            )
+        })?;
+        std::process::exit(0);
+    }
+}
 
 // ============================================================================
 // JSON-RPC 2.0 types
@@ -2275,6 +2449,7 @@ pub fn tool_descriptors() -> Value {
 /// coordination tools (STORY-361) resolve their file paths under this root.
 pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
     let server = McpServer::new(storage, project_root);
+    let respawn = McpRespawnState::new();
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
@@ -2296,6 +2471,9 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
                 let json = serde_json::to_string(&error_response)?;
                 writeln!(stdout, "{}", json)?;
                 stdout.flush()?;
+                if let Some(plan) = respawn.check() {
+                    respawn.respawn(plan)?;
+                }
                 continue;
             }
         };
@@ -2309,6 +2487,9 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
             let json = serde_json::to_string(&error_response)?;
             writeln!(stdout, "{}", json)?;
             stdout.flush()?;
+            if let Some(plan) = respawn.check() {
+                respawn.respawn(plan)?;
+            }
             continue;
         }
 
@@ -2316,6 +2497,9 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
             let json = serde_json::to_string(&response)?;
             writeln!(stdout, "{}", json)?;
             stdout.flush()?;
+            if let Some(plan) = respawn.check() {
+                respawn.respawn(plan)?;
+            }
         }
     }
 
@@ -2558,6 +2742,87 @@ mod tests {
             .strip_prefix("Requirement added: ")
             .and_then(|rest| rest.split_whitespace().next())
             .unwrap_or_else(|| panic!("unexpected add_requirement response: {response}"))
+    }
+
+    #[test]
+    fn parses_aida_version_banner_identity() {
+        let ident = parse_aida_binary_identity(
+            "aida 0.9.1 (built 2026-05-23 01:00:00 MST, sha abc1234+dirty)",
+        )
+        .expect("banner should parse");
+        assert_eq!(ident.version, "0.9.1");
+        assert_eq!(ident.sha, "abc1234");
+        assert!(ident.dirty);
+
+        let clean = parse_aida_binary_identity("aida-cli 0.9.2 (built x, sha deadbee)")
+            .expect("aida-cli prefix should parse");
+        assert_eq!(clean.version, "0.9.2");
+        assert_eq!(clean.sha, "deadbee");
+        assert!(!clean.dirty);
+    }
+
+    #[test]
+    fn mcp_respawn_decision_uses_version_then_build_identity() {
+        let running = McpBinaryIdentity {
+            version: "0.9.1".to_string(),
+            sha: "aaaaaaa".to_string(),
+            dirty: false,
+        };
+        let newer_version = McpBinaryIdentity {
+            version: "0.9.2".to_string(),
+            sha: "bbbbbbb".to_string(),
+            dirty: false,
+        };
+        assert!(mcp_binary_is_newer_or_different(&running, &newer_version));
+
+        let same_version_new_sha = McpBinaryIdentity {
+            version: "0.9.1".to_string(),
+            sha: "bbbbbbb".to_string(),
+            dirty: false,
+        };
+        assert!(mcp_binary_is_newer_or_different(
+            &running,
+            &same_version_new_sha
+        ));
+
+        let older_version = McpBinaryIdentity {
+            version: "0.9.0".to_string(),
+            sha: "zzzzzzz".to_string(),
+            dirty: false,
+        };
+        assert!(!mcp_binary_is_newer_or_different(&running, &older_version));
+
+        let unknown_sha = McpBinaryIdentity {
+            version: "0.9.1".to_string(),
+            sha: "unknown".to_string(),
+            dirty: false,
+        };
+        assert!(
+            !mcp_binary_is_newer_or_different(&running, &unknown_sha),
+            "unknown same-version SHA must not cause an endless respawn loop"
+        );
+    }
+
+    #[test]
+    fn mcp_respawn_plan_preserves_original_argv() {
+        let plan = McpRespawnPlan {
+            exe: PathBuf::from("/tmp/aida"),
+            argv: vec![OsString::from("aida"), OsString::from("mcp-serve")],
+            running: McpBinaryIdentity {
+                version: "0.9.1".to_string(),
+                sha: "aaaaaaa".to_string(),
+                dirty: false,
+            },
+            on_disk: McpBinaryIdentity {
+                version: "0.9.1".to_string(),
+                sha: "bbbbbbb".to_string(),
+                dirty: false,
+            },
+        };
+        assert_eq!(plan.exe, PathBuf::from("/tmp/aida"));
+        assert_eq!(plan.argv[1], OsString::from("mcp-serve"));
+        assert_eq!(plan.running.label(), "0.9.1 sha aaaaaaa");
+        assert_eq!(plan.on_disk.label(), "0.9.1 sha bbbbbbb");
     }
 
     #[test]
