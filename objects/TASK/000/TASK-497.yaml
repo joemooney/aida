@@ -66,12 +66,12 @@ description: |-
   ## Empirical anchor
 
   User observation 2026-05-23: 'can we write them to maybe a .asciinema directory and default the output file and title based on the work?' — operator wanted cleaner defaults after using the wrapper for the morning drain.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T15:54:24.103783031Z
-modified_at: 2026-05-23T15:54:24.103783031Z
+modified_at: 2026-05-23T17:14:43.378780775Z
 req_type: Task
 tags:
 - asciinema
@@ -80,3 +80,7 @@ tags:
 - recording
 - story-423-followup
 - ux
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T17:14:43.378780775Z
+  completion_sha: 019ccaff73eebd6986f1de5a0ff70d9c9d2059eb
