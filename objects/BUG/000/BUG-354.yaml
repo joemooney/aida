@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T06:56:33.113932015Z
-modified_at: 2026-05-23T06:56:33.113932015Z
+modified_at: 2026-05-23T15:35:56.105616682Z
 req_type: Bug
 tags:
 - bouncer-principle
@@ -75,3 +75,16 @@ tags:
 - from-self-test
 - headless
 - implementer
+comments:
+- id: 019e557a-8fc9-7612-a9ea-0b6c54c800a5
+  author: joe
+  content: |-
+    Sketch for BUG-354 implementation:
+    1. Keep Step 5c wording but harden /aida-pickup with an explicit headless rule: before any clean exit or next-item prompt, if AIDA_HEADLESS=1 and there is no PR, the only valid non-ship path is /aida-punt with the decision fork or publish failure.
+    2. Add orchestrator defense-in-depth in RealPhaseDriver::run_implementer: when phase 1 exits cleanly and PR lookup finds no PR, inspect that session headless JSONL result text. If it looks like a plain-text pending question/design fork, append a punt record/status update and return ImplementerOutcome::Punted instead of FailureKind::NoPr.
+    3. Detection is intentionally narrow: final result text with question mark plus decision-fork phrases such as which path, should I, do you want, which option, recommendation is. Avoid scanning every log line to reduce false positives from normal analysis.
+    4. If no question pattern is present, preserve current NoPr failure.
+    5. Tests: pure detector tests for positive/negative cases and a helper-level test that converts no-PR + question result text into a punt record/status without spawning Claude.
+    Open question: whether auto-punt should change status to NeedsAttention immediately via the same store transition as aida punt; I propose yes so batch drains see the same substrate state as explicit /aida-punt.
+  created_at: 2026-05-23T15:35:56.105616682Z
+  modified_at: 2026-05-23T15:35:56.105616682Z
