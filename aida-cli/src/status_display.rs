@@ -116,14 +116,12 @@ mod tests {
     #[test]
     fn paint_status_needs_attention_is_magenta() {
         // STORY-332: punted specs paint magenta — verify the arm resolves
-        // (and isn't swallowed by the unknown-status `_` fallback).
-        colored::control::set_override(true);
-        let painted = paint_status("Needs Attention", "Needs Attention").to_string();
-        colored::control::unset_override();
-        assert!(
-            painted.contains("\u{1b}[35m") || painted.contains("\u{1b}[1;35m"),
-            "expected a magenta escape: {painted:?}"
-        );
+        // (and isn't swallowed by the unknown-status `_` fallback). Assert on
+        // the selected style instead of ANSI bytes: colored intentionally
+        // renders plain text on some Windows test runners.
+        let painted = paint_status("Needs Attention", "Needs Attention");
+        assert_eq!(painted.fgcolor, Some(colored::Color::Magenta));
+        assert!(painted.style.contains(colored::Styles::Bold));
     }
 
     #[test]

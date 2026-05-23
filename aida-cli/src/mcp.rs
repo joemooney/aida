@@ -2471,23 +2471,56 @@ fn resolve_brief_path(project_root: &Path, raw_path: &str) -> Result<PathBuf, St
     {
         return Err("brief path must not contain `..`".to_string());
     }
-    let path = if raw.is_absolute() {
-        raw.to_path_buf()
-    } else {
-        project_root.join(raw)
-    };
     let root = brief_root(project_root);
-    if !path.starts_with(&root) {
-        return Err(format!("brief path must be under {}", root.display()));
+    if !raw.is_absolute() {
+        let mut components = raw.components();
+        let expected = [".aida", "agent-briefs"];
+        for want in expected {
+            match components.next() {
+                Some(std::path::Component::Normal(got)) if got == want => {}
+                _ => {
+                    return Err(format!(
+                        "brief path must be under {}",
+                        brief_path_for_message(&root)
+                    ));
+                }
+            }
+        }
+        return Ok(project_root.join(raw));
+    }
+
+    let path = raw.to_path_buf();
+    // BUG-358: Windows CI can report temp roots through short-name aliases
+    // (`RUNNER~1`) while callers pass normal absolute paths. Canonicalize the
+    // comparable side instead of relying on lexical `Path::starts_with`.
+    let canonical_root = std::fs::canonicalize(&root).unwrap_or(root);
+    let canonical_path = if path.exists() {
+        std::fs::canonicalize(&path).unwrap_or(path.clone())
+    } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_name()) {
+        std::fs::canonicalize(parent)
+            .map(|parent| parent.join(file_name))
+            .unwrap_or_else(|_| path.clone())
+    } else {
+        path.clone()
+    };
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(format!(
+            "brief path must be under {}",
+            brief_path_for_message(&canonical_root)
+        ));
     }
     Ok(path)
+}
+
+fn brief_path_for_message(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 fn brief_display_path(project_root: &Path, path: &Path) -> String {
     path.strip_prefix(project_root)
         .unwrap_or(path)
         .to_string_lossy()
-        .to_string()
+        .replace('\\', "/")
 }
 
 // Touch the imports re-exported above to silence dead_code on builds where
