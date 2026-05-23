@@ -1,0 +1,63 @@
+id: 019e5291-adea-7142-a5d4-ca9bacdd411f
+spec_id: BUG-349
+agreed_id: BUG-349
+title: 'auto-complete failure: phase 3 (reviewer) on TASK-417'
+description: |
+  Auto-drafted by `aida queue work TASK-417 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  PR-224 base is 1 commit behind origin and overlaps 9 files touched on base since the PR forked — refusing to launch reviewer against stale code.
+
+  Overlapping files:
+    CLAUDE.md
+    aida-cli/src/cli.rs
+    aida-cli/src/main.rs
+    aida-core/templates/docs/aida-discipline/README.md
+    aida-core/templates/docs/aida-discipline/robust-project-root-resolution.md
+    aida-core/templates/memories/feedback_robust_project_root_resolution.md
+    docs/aida-discipline/README.md
+    docs/aida-discipline/robust-project-root-resolution.md
+    aida-cli/src/drain_state.rs
+
+  Recover with:
+    aida pr rebase 224              # clean rebase + force-push-with-lease
+    aida pr rebase 224 --interactive  # if conflicts need manual resolve
+
+  Or pass `--allow-stale-base` to proceed anyway (review will be against stale code).
+
+  Failure kind: `failed`
+
+  ## Recovery hint shown to the user
+
+  Address the review feedback, then push fixups: `aida queue rework TASK-417 --work`
+
+  ## Phase durations
+
+    - phase 1 (implementer): 191230 ms
+    - phase 2 (ci): 235664 ms
+    - phase 3 (reviewer): 4500 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"TASK-417","started_at":"2026-05-23T01:55:03.570429731+00:00","completed_at":"2026-05-23T02:02:16.888526954+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"PR-224 base is 1 commit behind origin and overlaps 9 files touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  CLAUDE.md\n  aida-cli/src/cli.rs\n  aida-cli/src/main.rs\n  aida-core/templates/docs/aida-discipline/README.md\n  aida-core/templates/docs/aida-discipline/robust-project-root-resolution.md\n  aida-core/templates/memories/feedback_robust_project_root_resolution.md\n  docs/aida-discipline/README.md\n  docs/aida-discipline/robust-project-root-resolution.md\n  aida-cli/src/drain_state.rs\n\nRecover with:\n  aida pr rebase 224              # clean rebase + force-push-with-lease\n  aida pr rebase 224 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code).","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":191230},{"phase":2,"slug":"ci","elapsed_ms":235664},{"phase":3,"slug":"reviewer","elapsed_ms":4500}],"total_ms":433317,"binary_sha":"439245eb"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T02:02:19.498198166Z
+modified_at: 2026-05-23T02:02:19.498198166Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- reviewer
