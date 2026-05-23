@@ -14595,6 +14595,8 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         ),
         SessionCommand::End {
             id,
+            spec,
+            branch,
             yes,
             force,
             purge_cc,
@@ -14603,6 +14605,8 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             skip_ci,
         } => session_end(
             id.as_deref(),
+            spec.as_deref(),
+            branch.as_deref(),
             *yes,
             *force,
             *purge_cc,
@@ -17371,11 +17375,57 @@ fn resolve_lease_claude_session(lease: &SessionLease) -> (Option<String>, Option
 
 fn resolve_session_to_end(
     id_query: Option<&str>,
+    spec_query: Option<&str>,
+    branch_query: Option<&str>,
     leases: &[SessionLease],
     yes: bool,
 ) -> Result<SessionLease> {
+    // TASK-489: explicit --spec / --branch take precedence over the
+    // positional id resolution. Both are scoped lookups against the
+    // lease list rather than the id-prefix lookup.
+    // trace:TASK-489 | ai:claude
+    if let Some(q) = spec_query {
+        return find_lease_by_spec(q, leases);
+    }
+    if let Some(q) = branch_query {
+        return find_lease_by_branch(q, leases);
+    }
+
     if let Some(q) = id_query {
-        return find_lease_by_id_prefix(q, leases);
+        // TASK-489: if the positional looks like a SPEC-ID (uppercase
+        // alpha-dash-digits — `TASK-489`, `STORY-86`, `FR-1-001`), the
+        // user almost certainly means the spec, not the lease id. Skip
+        // the hex-prefix path and route to the spec lookup so a 0/many
+        // mismatch surfaces a spec-shaped error instead of "no session
+        // matching `TASK-489`". The shared `looks_like_spec_id` accepts
+        // lowercase too — `task-489` should route to the branch path —
+        // so apply an extra uppercase-prefix guard here.
+        // trace:TASK-489 | ai:claude
+        if looks_like_spec_id(q) && positional_has_uppercase_spec_prefix(q) {
+            return find_lease_by_spec(q, leases);
+        }
+        // Otherwise, prefer the existing 8-char lease-id-prefix lookup
+        // (back-compat), and fall back to branch-name lookup on miss.
+        // The branch fallback lets `aida session end task-489` resolve
+        // without the user reaching for `--branch`. When both miss we
+        // surface the branch error — it points the user at
+        // `aida session leases`, the right next step regardless of
+        // whether the user thought they were typing an id or a branch.
+        // trace:TASK-489 | ai:claude
+        return match find_lease_by_id_prefix(q, leases) {
+            Ok(l) => Ok(l),
+            Err(id_err) => {
+                // An "ambiguous id" miss is a real prefix collision —
+                // surface that error so the operator picks a longer
+                // prefix. Only treat a "no session matching" miss as a
+                // signal to fall through to branch resolution.
+                let msg = id_err.to_string();
+                if msg.contains("ambiguous") {
+                    return Err(id_err);
+                }
+                find_lease_by_branch(q, leases)
+            }
+        };
     }
 
     // 1. cwd
@@ -17584,6 +17634,87 @@ fn find_lease_by_id_prefix(query: &str, leases: &[SessionLease]) -> Result<Sessi
     }
 }
 
+/// TASK-489: is the alpha prefix of `s` (the chars before the first `-`)
+/// all uppercase? Used to disambiguate the positional resolution between
+/// SPEC-ID (`TASK-489` → spec lookup) and branch name (`task-489` →
+/// branch lookup) when the shared `looks_like_spec_id` would accept both.
+/// trace:TASK-489 | ai:claude
+fn positional_has_uppercase_spec_prefix(s: &str) -> bool {
+    let bytes = s.trim().as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+        if !bytes[i].is_ascii_uppercase() {
+            return false;
+        }
+        i += 1;
+    }
+    i > 0
+}
+
+/// TASK-489: look up a lease by spec ID (case-insensitive equality against
+/// `lease.scope`). Errors with the message shape the user friction asked
+/// for: zero matches surfaces `aida session leases` as the diagnostic;
+/// many matches lists every candidate plus its lease id so the operator
+/// can disambiguate. The lease's `scope` field holds the raw `--owns`
+/// argument from session start — for normal pickups that's the SPEC-ID,
+/// matching the operator's mental model exactly.
+/// trace:TASK-489 | ai:claude
+fn find_lease_by_spec(query: &str, leases: &[SessionLease]) -> Result<SessionLease> {
+    let q = query.trim().to_lowercase();
+    let matches: Vec<&SessionLease> = leases
+        .iter()
+        .filter(|l| l.scope.to_lowercase() == q)
+        .collect();
+    match matches.len() {
+        0 => anyhow::bail!(
+            "No lease found for spec `{}` — run `aida session leases` to see active leases",
+            query
+        ),
+        1 => Ok(matches[0].clone()),
+        n => {
+            let listing: String = matches
+                .iter()
+                .map(|l| format!("  {}  scope:{}  branch:{}", l.id, l.scope, l.branch))
+                .collect::<Vec<_>>()
+                .join("\n");
+            anyhow::bail!(
+                "{} leases own spec `{}` — disambiguate via lease id:\n{}",
+                n,
+                query,
+                listing
+            )
+        }
+    }
+}
+
+/// TASK-489: look up a lease by branch name (case-sensitive — git refs
+/// are case-sensitive). Same error shape as `find_lease_by_spec`.
+/// trace:TASK-489 | ai:claude
+fn find_lease_by_branch(query: &str, leases: &[SessionLease]) -> Result<SessionLease> {
+    let q = query.trim();
+    let matches: Vec<&SessionLease> = leases.iter().filter(|l| l.branch == q).collect();
+    match matches.len() {
+        0 => anyhow::bail!(
+            "No lease found for branch `{}` — run `aida session leases` to see active leases",
+            query
+        ),
+        1 => Ok(matches[0].clone()),
+        n => {
+            let listing: String = matches
+                .iter()
+                .map(|l| format!("  {}  scope:{}  branch:{}", l.id, l.scope, l.branch))
+                .collect::<Vec<_>>()
+                .join("\n");
+            anyhow::bail!(
+                "{} leases ride branch `{}` — disambiguate via --spec or lease id:\n{}",
+                n,
+                query,
+                listing
+            )
+        }
+    }
+}
+
 /// BUG-312: shortest prefix of `target_id` that does not collide with any
 /// other id in `all_ids`, floored at `min_len`. Used by `aida session
 /// leases` to render an id that the operator can paste straight back into
@@ -17761,6 +17892,8 @@ fn shell_join_display(args: &[String]) -> String {
 
 fn session_end(
     id_query: Option<&str>,
+    spec_query: Option<&str>,
+    branch_query: Option<&str>,
     yes: bool,
     force: bool,
     purge_cc: bool,
@@ -17775,7 +17908,7 @@ fn session_end(
         return Ok(());
     }
 
-    let target = resolve_session_to_end(id_query, &leases, yes)?;
+    let target = resolve_session_to_end(id_query, spec_query, branch_query, &leases, yes)?;
 
     // TASK-111: CI awareness. Probe the branch for an open PR's CI state
     // and surface info / prompt / warn based on the state. --skip-ci and
@@ -28233,7 +28366,7 @@ mod session_end_resolution_tests {
             lease("019e10260000", "EPIC-1", "/tmp/wt-1", None),
             lease("019e10271111", "EPIC-2", "/tmp/wt-2", None),
         ];
-        let got = resolve_session_to_end(Some("019e1027"), &leases, false).unwrap();
+        let got = resolve_session_to_end(Some("019e1027"), None, None, &leases, false).unwrap();
         assert_eq!(got.scope, "EPIC-2");
     }
 
@@ -28246,7 +28379,7 @@ mod session_end_resolution_tests {
             lease("019e10271111", "EPIC-2", "/tmp/wt-2", None),
         ];
         // "019e10" matches both.
-        let err = resolve_session_to_end(Some("019e10"), &leases, false).unwrap_err();
+        let err = resolve_session_to_end(Some("019e10"), None, None, &leases, false).unwrap_err();
         assert!(err.to_string().contains("ambiguous"), "{}", err);
     }
 
@@ -28261,7 +28394,7 @@ mod session_end_resolution_tests {
             lease("019e4df1e131", "TASK-420", "/tmp/wt-420", None),
         ];
         // The collision case from the bug report: same 8-char prefix.
-        let err = resolve_session_to_end(Some("019e4df1"), &leases, false).unwrap_err();
+        let err = resolve_session_to_end(Some("019e4df1"), None, None, &leases, false).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("019e4df1af45"), "{}", msg);
         assert!(msg.contains("019e4df1e131"), "{}", msg);
@@ -28274,8 +28407,13 @@ mod session_end_resolution_tests {
     #[test]
     fn unknown_id_query_bails() {
         let leases = vec![lease("019e10260000", "EPIC-1", "/tmp/wt-1", None)];
-        let err = resolve_session_to_end(Some("ffffffff"), &leases, false).unwrap_err();
-        assert!(err.to_string().contains("no session matching"));
+        let err = resolve_session_to_end(Some("ffffffff"), None, None, &leases, false).unwrap_err();
+        // TASK-489: the id-prefix miss falls through to branch resolution
+        // and surfaces the branch-shaped error pointing at `aida session
+        // leases` — the right next step whether the user thought they
+        // were typing an id or a branch. trace:TASK-489 | ai:claude
+        let s = err.to_string();
+        assert!(s.contains("aida session leases"), "{}", s);
     }
 
     /// No-arg + zero leases never reaches the chain (caller short-circuits)
@@ -28290,7 +28428,7 @@ mod session_end_resolution_tests {
         ];
         // Clear env so #2 doesn't fire.
         std::env::remove_var("AIDA_SESSION_ID");
-        let err = resolve_session_to_end(None, &leases, false).unwrap_err();
+        let err = resolve_session_to_end(None, None, None, &leases, false).unwrap_err();
         let s = err.to_string();
         assert!(s.contains("no active session resolvable"), "{}", s);
         assert!(s.contains("EPIC-1"), "{}", s);
@@ -28303,8 +28441,150 @@ mod session_end_resolution_tests {
     fn single_active_with_yes_resolves() {
         let leases = vec![lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None)];
         std::env::remove_var("AIDA_SESSION_ID");
-        let got = resolve_session_to_end(None, &leases, true).unwrap();
+        let got = resolve_session_to_end(None, None, None, &leases, true).unwrap();
         assert_eq!(got.scope, "EPIC-1");
+    }
+
+    /// TASK-489: `--spec` resolves by lease scope, case-insensitively.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn spec_flag_resolves_by_scope() {
+        let leases = vec![
+            lease("019e10260000", "TASK-489", "/tmp/wt-489", None),
+            lease("019e10271111", "TASK-490", "/tmp/wt-490", None),
+        ];
+        let got = resolve_session_to_end(None, Some("TASK-489"), None, &leases, false).unwrap();
+        assert_eq!(got.scope, "TASK-489");
+
+        // case-insensitive
+        let got = resolve_session_to_end(None, Some("task-489"), None, &leases, false).unwrap();
+        assert_eq!(got.scope, "TASK-489");
+    }
+
+    /// TASK-489: `--spec` with zero matches uses the spec-shaped error.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn spec_flag_zero_matches_errors() {
+        let leases = vec![lease("019e10260000", "TASK-1", "/tmp/wt-1", None)];
+        let err = resolve_session_to_end(None, Some("TASK-999"), None, &leases, false).unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("No lease found for spec"), "{}", s);
+        assert!(s.contains("TASK-999"), "{}", s);
+        assert!(s.contains("aida session leases"), "{}", s);
+    }
+
+    /// TASK-489: `--spec` with multiple matches lists every candidate's
+    /// lease id so the operator can disambiguate.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn spec_flag_multi_matches_lists_lease_ids() {
+        let leases = vec![
+            lease("019e10260000", "TASK-489", "/tmp/wt-489a", None),
+            lease("019e10271111", "TASK-489", "/tmp/wt-489b", None),
+        ];
+        let err = resolve_session_to_end(None, Some("TASK-489"), None, &leases, false).unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("019e10260000"), "{}", s);
+        assert!(s.contains("019e10271111"), "{}", s);
+        assert!(s.contains("disambiguate"), "{}", s);
+    }
+
+    /// TASK-489: `--branch` resolves by branch name.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn branch_flag_resolves_by_branch() {
+        let leases = vec![lease("019e10260000", "TASK-489", "/tmp/wt-489", None)];
+        // lease helper sets branch = format!("br-{}", id)
+        let branch = leases[0].branch.clone();
+        let got = resolve_session_to_end(None, None, Some(&branch), &leases, false).unwrap();
+        assert_eq!(got.scope, "TASK-489");
+    }
+
+    /// TASK-489: `--branch` with zero matches uses the branch-shaped
+    /// error.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn branch_flag_zero_matches_errors() {
+        let leases = vec![lease("019e10260000", "TASK-1", "/tmp/wt-1", None)];
+        let err = resolve_session_to_end(None, None, Some("nope-x"), &leases, false).unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("No lease found for branch"), "{}", s);
+        assert!(s.contains("nope-x"), "{}", s);
+        assert!(s.contains("aida session leases"), "{}", s);
+    }
+
+    /// TASK-489: positional matching the SPEC-ID pattern routes through
+    /// the spec lookup (so a missing scope errors with the spec-shaped
+    /// message, not the 8-char-id-prefix one).
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn positional_spec_pattern_routes_to_spec_lookup() {
+        let leases = vec![
+            lease("019e10260000", "TASK-489", "/tmp/wt-489", None),
+            lease("019e10271111", "STORY-86", "/tmp/wt-86", None),
+        ];
+        let got = resolve_session_to_end(Some("TASK-489"), None, None, &leases, false).unwrap();
+        assert_eq!(got.scope, "TASK-489");
+
+        // unknown spec → spec-shaped error
+        let err = resolve_session_to_end(Some("BUG-999"), None, None, &leases, false).unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("No lease found for spec"), "{}", s);
+        assert!(s.contains("BUG-999"), "{}", s);
+    }
+
+    /// TASK-489: positional that doesn't look like a spec ID and isn't a
+    /// hex-id-prefix match falls back to branch lookup.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn positional_non_spec_falls_back_to_branch() {
+        let leases = vec![lease("019e10260000", "TASK-489", "/tmp/wt-489", None)];
+        let branch = leases[0].branch.clone();
+        let got = resolve_session_to_end(Some(&branch), None, None, &leases, false).unwrap();
+        assert_eq!(got.scope, "TASK-489");
+    }
+
+    /// TASK-489: lowercase `task-489` shape is treated as a branch, not a
+    /// spec — the AC explicitly distinguishes the two by case. The shared
+    /// `looks_like_spec_id` accepts both, so the resolver applies an
+    /// extra uppercase-prefix guard.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn lowercase_spec_shape_routes_to_branch() {
+        let mut l = lease("019e10260000", "TASK-489", "/tmp/wt-489", None);
+        l.branch = "task-489".to_string();
+        let leases = vec![l];
+        let got = resolve_session_to_end(Some("task-489"), None, None, &leases, false).unwrap();
+        assert_eq!(got.scope, "TASK-489");
+    }
+
+    /// TASK-489: the uppercase-prefix guard accepts canonical SPEC-IDs
+    /// (`TASK-489`, `STORY-86`, `FR-1-001`) and rejects lowercase
+    /// (`task-489`) or mixed (`Task-489`) shapes.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn uppercase_spec_prefix_guard() {
+        assert!(positional_has_uppercase_spec_prefix("TASK-489"));
+        assert!(positional_has_uppercase_spec_prefix("STORY-86"));
+        assert!(positional_has_uppercase_spec_prefix("FR-1-001"));
+        assert!(!positional_has_uppercase_spec_prefix("task-489"));
+        assert!(!positional_has_uppercase_spec_prefix("Task-489"));
+        assert!(!positional_has_uppercase_spec_prefix("019e4df1"));
+    }
+
+    /// TASK-489: ambiguous hex-id prefix on a positional still surfaces
+    /// the ambiguous-prefix error (BUG-312 path) rather than masking it
+    /// with a branch fallback.
+    /// trace:TASK-489 | ai:claude
+    #[test]
+    fn positional_ambiguous_hex_prefix_keeps_ambiguous_error() {
+        let leases = vec![
+            lease("019e4df1af45", "TASK-419", "/tmp/wt-419", None),
+            lease("019e4df1e131", "TASK-420", "/tmp/wt-420", None),
+        ];
+        let err = resolve_session_to_end(Some("019e4df1"), None, None, &leases, false).unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("ambiguous"), "{}", s);
     }
 
     /// BUG-312: no collision against other ids → floor (8 chars) is enough.
@@ -54286,6 +54566,8 @@ fn handle_queue_work(
             let short_id = &conflict.id[..conflict.id.len().min(8)];
             session_end(
                 Some(&conflict.id),
+                /* spec */ None,
+                /* branch */ None,
                 /* yes */ true,
                 /* force */ false,
                 /* purge_cc */ false,
