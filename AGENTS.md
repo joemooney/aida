@@ -56,9 +56,15 @@ aida show <SPEC-ID>
 aida list --status approved
 aida queue work <SPEC-ID>
 aida pr ship
+aida --asciinema --cast-title "Demo" queue work --batch <name> --auto-complete
 tests/test_mcp_stdio.sh --skip-agent-contract
 tests/test_mcp_doc_consistency.sh
 ```
+
+Use `aida --asciinema <subcommand>` for first-class terminal capture when
+you need demo, training, or audit material. By default casts are written
+under `~/.aida/casts/` with Windows-safe timestamps; pass `--cast-out`
+and `--cast-title` to control the path and title.
 
 ## Worktree And Session Discipline
 

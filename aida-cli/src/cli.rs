@@ -23,6 +23,18 @@ pub struct Cli {
     #[clap(long, short = 's')]
     pub server: Option<String>,
 
+    /// Record this invocation with asciinema when running in a terminal
+    #[clap(long)]
+    pub asciinema: bool,
+
+    /// Output path for --asciinema recordings
+    #[clap(long, value_name = "PATH", requires = "asciinema")]
+    pub cast_out: Option<PathBuf>,
+
+    /// Title for --asciinema recordings
+    #[clap(long, value_name = "TITLE", requires = "asciinema")]
+    pub cast_title: Option<String>,
+
     #[clap(subcommand)]
     pub command: Command,
 }
