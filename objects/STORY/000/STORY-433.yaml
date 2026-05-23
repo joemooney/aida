@@ -1,0 +1,59 @@
+id: 019e55a4-e998-7d90-94b8-0c78d91a44c5
+spec_id: STORY-433
+agreed_id: STORY-433
+title: aida agent new codex — Codex CLI launcher (EPIC-31 Phase 3a)
+description: |-
+  Phase 3a of EPIC-31. Codex-CLI integration with the agent launcher. Mirrors Phase 2's Claude launcher shape with Codex's CLI conventions.
+
+  ## Scope
+
+  `aida agent new codex [--role <role>] [--spec <SPEC-ID>] [--cwd <path>]`
+
+  Behavior mirrors Phase 2 but for Codex:
+  - Spawn `codex` with proper flags (`--dangerously-bypass-approvals-and-sandbox` per today's empirical use, OR a saner default)
+  - MCP config wire-up (Codex uses .mcp.json or equivalent)
+  - Register in agent registry
+  - Handle Codex's CLI conventions (slash commands, env vars)
+
+  ## Per-agent CLI differences
+
+  Codex differs from Claude in:
+  - Different binary name and flags
+  - Different MCP-config location
+  - Different slash-command convention
+  - Different session-resume behavior (`codex resume <session-id>`)
+
+  The implementer should document the per-agent integration shape in docs/agents/codex-mcp-setup.md (the doc already exists; STORY-417 shipped it).
+
+  ## Acceptance
+
+  - [ ] aida agent new codex spawns Codex CLI with project-correct cwd + MCP config
+  - [ ] Registers agent in Phase 1's registry
+  - [ ] --role flag handled (Codex may use AIDA_SESSION_ROLE env OR per-session config)
+  - [ ] --spec flag composes with worktree + lease
+  - [ ] Documented in docs/agents/codex-mcp-setup.md
+  - [ ] De-registration on agent exit
+
+  ## Estimated time
+
+  ~5-8h.
+
+  ## Composes with
+
+  - EPIC-31 (parent)
+  - Phase 1 + Phase 2 STORYs (dependencies)
+  - STORY-417 (Codex setup docs)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:22:11.608203832Z
+modified_at: 2026-05-23T16:22:11.608203832Z
+req_type: Story
+tags:
+- agent-launcher
+- codex
+- depends-on:phase-1
+- depends-on:phase-2
+- parent:EPIC-31
+- phase-3a
