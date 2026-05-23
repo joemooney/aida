@@ -61,7 +61,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:04.204214328Z
-modified_at: 2026-05-23T16:22:04.204214328Z
+modified_at: 2026-05-23T18:05:47.916957566Z
 req_type: Story
 tags:
 - agent-registry
@@ -70,3 +70,19 @@ tags:
 - parent:EPIC-31
 - phase-1
 - subsumes:TASK-498
+comments:
+- id: 019e5603-c40c-7613-81dd-5218fe9ae374
+  author: codex
+  content: |-
+    Codex implementation sketch for Phase 1:
+
+    1. Registry shape: create a new process registry under .aida/agents/<agent_type>-<pid>.toml rather than extending .aida/sessions. Leases remain ownership records; agents are live-process records and can exist without a lease.
+    2. Entry fields: id, agent_type, pid, tty optional, started_at, last_active_at, role optional, current_spec optional, worktree_path, source=mcp, binary_version/build_sha optional. status is computed at read time: stale if pid is dead, busy if current_spec is present, otherwise idle.
+    3. Agent type detection: Phase 1 uses explicit env override first (AIDA_AGENT_TYPE), then conservative process/env inference where available, else other. This avoids lying about Codex/Claude/Antigravity until Phase 2/3 launchers can identify clients explicitly.
+    4. Registration trigger: MCP server writes/touches its own proxy agent entry on each valid JSON-RPC request. This records the observable process AIDA owns today: the MCP server subprocess attached to the agent.
+    5. Stale detection: aida status loads .aida/agents and uses existing process_probe::pid_is_alive. No background reaper in Phase 1; stale is displayed rather than mutating registry during a read.
+    6. Busy/idle: initial MCP entries are busy only when role/current_spec can be inferred from AIDA_SESSION_ROLE/AIDA_SESSION_SCOPE or an active lease covering the current worktree; otherwise idle/other is acceptable until heartbeat lands in Phase 4.
+    7. aida status integration: add Active agents after Queue/directive summary and before Project. Omit cleanly when no registry entries exist. JSON status gets an agents array in non-focused output.
+    8. Tests: unit tests for registry path/serialization/status classification; status rendering with active and stale entries; MCP request touch writes an entry. TASK-498 is already Rejected, so the PR will mention it as subsumed in the commit trailer/comment but no status rename is needed.
+  created_at: 2026-05-23T18:05:47.916957566Z
+  modified_at: 2026-05-23T18:05:47.916957566Z
