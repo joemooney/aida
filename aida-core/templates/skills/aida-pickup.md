@@ -881,7 +881,7 @@ the next pickup.">
 | ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <last-SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-finished member surfaced something the implementer can't grade (an emerging shared-file conflict, a plan deviation, a scope realization), park the keep-draining-vs-pivot call with the advisor instead of guessing through more cluster commits. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease mid-cluster; `[planned:by-<session>]` chips keep the rest claimed for next time |
 
-*Simple mode, queue has more items routed to this role:*
+*Simple mode, queue has more items routed to this role:* — trace:TASK-414
 
 Print the State preamble first (substitute concrete values; omit rows
 genuinely absent):
@@ -890,7 +890,7 @@ genuinely absent):
 State:
   Spec:    <SPEC-ID>  <title>            (Status: Done)
   Branch:  <branch>   <N> commits ahead of main   pushed
-  PR:      #<N> open: <url>
+  PR:      #<N> open: <url>   |  no PR yet
   Drain:   phase 1/6 interactive   orchestrator off
   Tests:   <last cargo test summary or "not run">
   Fmt:     <cargo fmt --check summary or "not run">
