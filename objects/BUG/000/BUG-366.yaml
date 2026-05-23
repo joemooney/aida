@@ -1,0 +1,53 @@
+id: 019e570f-ea14-7151-90f5-8491cf47e38e
+spec_id: BUG-366
+agreed_id: BUG-366
+title: aida queue list 'Next:' hint suggests 'aida queue work PR-N' but the command rejects PR numbers
+description: |-
+  ## Empirical 2026-05-23
+
+  aida queue list output's Done-awaiting-merge section prints:
+
+    PR-250 (open) — 1 spec:
+      ◐ TASK-474
+      ▶ Next: start review (`aida queue work PR-250`)
+
+  Operator pastes the suggested command:
+
+    aida queue work PR-250 --auto-complete --no-human=both --escalate-blocks
+    ✗ no requirement matches `PR-250`
+
+  aida queue work accepts spec IDs (TASK-474), not PR numbers. The hint is wrong.
+
+  ## Fix direction (two options)
+
+  A. **Make aida queue work resolve PR-N** — look up the spec backed by PR-N and forward. Operator's mental model 'I see PR-250 in the queue, I work PR-250' just works.
+
+  B. **Print the spec ID in the hint** — change the hint to 'Next: start review (`aida queue work TASK-474`)'. Smaller diff, no API surface change.
+
+  A is the operator-UX winner if the resolution is reliable; B is the minimal correctness fix.
+
+  ## Acceptance
+
+  - [ ] Decide A or B
+  - [ ] If A: aida queue work PR-N resolves to the spec, prints what it resolved, then runs
+  - [ ] If B: hint uses spec ID
+  - [ ] Test: queue list hint → paste verbatim → command succeeds
+
+  ## Composes with
+
+  - TASK-499 (aida session start --spec alias — same flag-consistency family)
+  - Operator-UX cluster (TASK-489 / TASK-490 / TASK-494 / TASK-499)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T22:58:41.300890035Z
+modified_at: 2026-05-23T22:58:41.300890035Z
+req_type: Bug
+tags:
+- cli-ux
+- from-self-test
+- from-user-friction
+- hint-accuracy
+- papercut
+- queue-display
