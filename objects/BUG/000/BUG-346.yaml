@@ -1,0 +1,52 @@
+id: 019e523b-1c64-7572-ac4a-5d7ab5ac2f8c
+spec_id: BUG-346
+agreed_id: BUG-346
+title: 'Cross-platform CI: 3 Windows-specific test failures blocking v0.9.0 release'
+description: |-
+  Cross-platform nightly CI has been failing on Windows for 2+ days (run 26280474891, 26218995921). macOS + Linux both green. Three specific Windows test failures:
+
+  1. `advisor::tests::discovery_picks_registered_session_when_alive` (aida-cli/src/advisor.rs)
+  2. `advisor::tests::plan_fork_destination_uses_spec_worktree_slug_not_source_slug` (aida-cli/src/advisor.rs:776)
+  3. `task_358_escalation_cleanup_tests::legacy_lease_without_field_deserializes_with_none` (aida-cli/src/main.rs:19335)
+
+  The third test's assertion: 'the legacy lease loads', left=0, right=1 — suggests a deserialization path difference on Windows. Likely TOML field-ordering or Optional-field handling.
+
+  The first two tests are advisor-related — likely path-handling (Windows backslash vs forward-slash) or session-discovery semantics that vary by platform.
+
+  ## Release blocker
+
+  Per CLAUDE.md: 'Releases require cross-platform CI green within 24h of tagging.' This blocks v0.9.0 release. Today's session shipped 21 PRs of user-facing capability expansion — the v0.9.0 cut is gated on this fix.
+
+  ## Investigation path
+
+  For each failing test:
+  - [ ] Run locally (or via 'cargo test --target x86_64-pc-windows-gnu' if cross-compile possible)
+  - [ ] Identify Windows-specific path/TOML/timing assumption
+  - [ ] Fix with cfg(windows) branch OR with a platform-neutral approach (preferred)
+  - [ ] Verify ALL three pass; re-run cross-platform CI
+
+  ## Acceptance
+
+  - [ ] All three named tests pass on Windows
+  - [ ] Cross-platform CI nightly run reports SUCCESS
+  - [ ] v0.9.0 release blocker cleared
+  - [ ] If fixes are non-trivial, file follow-up TASKs for any deeper cross-platform hardening
+
+  ## Composes with
+
+  - v0.9.0 release (this is the blocker)
+  - TASK-358 (the original spec; test name references it)
+  - STORY-360 (advisor fork-from-live — related advisor test territory)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T00:27:46.148209843Z
+modified_at: 2026-05-23T00:27:46.148209843Z
+req_type: Bug
+tags:
+- ci
+- cross-platform
+- from-self-test
+- release-blocker
+- windows
