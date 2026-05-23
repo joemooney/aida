@@ -322,10 +322,11 @@ pub enum ScaffoldCommand {
 /// can resume across shells — captures the working directory, last
 /// Inspect / resume past Claude Code sessions for this project, enriched
 /// with the AIDA role and most-recent spec from each session's .jsonl.
-/// STORY-67: review-prompt generation and related review-workflow
-/// helpers. v1: only `prompt`; future subcommands (e.g. `summary`,
-/// `checks`) can land here without bloating the top-level `aida` help.
+/// Review-prompt generation and related review-workflow helpers. v1:
+/// only `prompt`; future subcommands (e.g. `summary`, `checks`) can
+/// land here without bloating the top-level `aida` help.
 // trace:STORY-67 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum ReviewCommand {
     /// Generate a markdown review prompt from a set of linked
@@ -341,7 +342,7 @@ pub enum ReviewCommand {
     /// otherwise.
     // trace:STORY-67, TASK-40 | ai:claude
     Prompt {
-        /// Comma-separated list of spec IDs (e.g. "FR-1,STORY-2"). When
+        /// Comma-separated list of spec IDs (e.g. "FR-N,STORY-M"). When
         /// given, --pr is ignored.
         #[clap(long, value_name = "SPEC-IDS")]
         specs: Option<String>,
@@ -457,8 +458,8 @@ pub enum SessionCommand {
     // trace:EPIC-20 | ai:claude
     Start {
         /// Scope this session owns. Examples:
-        ///   - `EPIC-19` / `epic-19` (resolved against the store)
-        ///   - `FR-42` (any spec id)
+        ///   - `EPIC-N` / `epic-N` (resolved against the store)
+        ///   - `FR-N` (any spec id)
         ///   - `src/scaffolding/**` (path glob — stored, not validated)
         ///   - `feature:auth` (free-form tag)
         #[clap(long, value_name = "SCOPE")]
@@ -474,7 +475,7 @@ pub enum SessionCommand {
 
         /// Check out the existing `--branch` instead of forking a new
         /// one — the fixup-on-an-existing-PR-branch flow (e.g.
-        /// `aida session start --owns PR-30-fixup --branch <impl-branch>
+        /// `aida session start --owns PR-N-fixup --branch <impl-branch>
         /// --reuse-branch`). Errors if the branch exists nowhere.
         /// Without this flag, an explicitly-named `--branch` that
         /// already exists is reused automatically (with a hint), and an
@@ -578,15 +579,16 @@ pub enum SessionCommand {
         ///   1. Force-terminate any live `claude` processes inside the
         ///      worktree (SIGTERM, 5s grace, then SIGKILL). Without this,
         ///      `session end` refuses to remove a worktree with live
-        ///      claudes inside (BUG-61: prevents orphaned-claude-with-
-        ///      dangling-cwd leak).
+        ///      claudes inside (prevents orphaned-claude-with-dangling-
+        ///      cwd leak).
         ///   2. Discard uncommitted tracked/untracked-but-not-ignored
         ///      changes in the worktree. Without this, `session end`
-        ///      refuses and prints the dirty file list (BUG-67). Gitignored
+        ///      refuses and prints the dirty file list. Gitignored
         ///      differences — `target/`, `.aida/cache.db`, etc. — never
         ///      require `--force` and are always discarded.
         // trace:BUG-61 | ai:claude
         // trace:BUG-67 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         force: bool,
 
@@ -620,11 +622,12 @@ pub enum SessionCommand {
         #[clap(long, conflicts_with = "skip_ci")]
         watch_ci: bool,
 
-        /// Skip CI awareness entirely — restore pre-TASK-111 behavior
-        /// (release the lease without probing the PR's CI run). Use when
-        /// CI is broken, when you're not the one who'll merge, or when
-        /// the probe would be slow + you don't care.
+        /// Skip CI awareness entirely (release the lease without probing
+        /// the PR's CI run). Use when CI is broken, when you're not the
+        /// one who'll merge, or when the probe would be slow + you don't
+        /// care.
         // trace:TASK-111
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         skip_ci: bool,
     },
@@ -640,11 +643,12 @@ pub enum SessionCommand {
     // trace:BUG-98 | ai:claude
     Leases {
         /// Probe live `claude` processes and warn about ones whose cwd is
-        /// `(deleted)` (worktree was removed without ending claude — the
-        /// signature of BUG-61). `-v` adds two columns: PID of the live
-        /// claude (when present) and the Claude Code session id from
+        /// `(deleted)` — worktree was removed without ending claude. `-v`
+        /// adds two columns: PID of the live claude (when present) and
+        /// the Claude Code session id from
         /// `~/.claude/projects/<encoded>/<id>.jsonl`.
         // trace:STORY-69, TASK-56 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, short = 'v')]
         verbose: bool,
         /// Include stale leases in the listing. Default hides leases
@@ -781,11 +785,12 @@ pub enum SessionCommand {
     },
 }
 
-/// TASK-228: fallback-wakeup registry subcommands. Records live at
+/// Fallback-wakeup registry subcommands. Records live at
 /// `.aida/wakeups/<tag>.toml`. The agent owns the lifecycle: `register`
 /// at schedule time, `cancel` on clean completion, `check` from the
 /// re-entered skill's early-exit guard.
 // trace:TASK-228 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum SessionWakeupCommand {
     /// Register a fallback wakeup as active. Call this right after
@@ -836,9 +841,10 @@ pub enum SessionManifestCommand {
     /// /aida-pickup intends to work them.
     ///
     /// Example:
-    ///   aida session manifest write --items STORY-98,STORY-90,BUG-74
+    ///   aida session manifest write --items STORY-N,STORY-M,BUG-K
     ///
     // trace:STORY-98 | ai:claude
+    // trace:TASK-487 | ai:claude
     Write {
         /// Comma-separated SPEC-IDs in planned order (position derives
         /// from order in the list, starting at 1).
@@ -970,9 +976,11 @@ pub enum PrCommand {
     /// before deciding whether `--delete-branch` is safe — both
     /// papercuts surfaced by the 2026-05-22 stopgap-shell experience.
     ///
-    /// Composes with BUG-286's transient-retry layer for the `gh`
-    /// calls (sub-second network blips no longer abort the flow).
+    /// Composes with the transient-retry layer for the `gh` calls
+    /// (sub-second network blips no longer abort the flow).
     // trace:TASK-458 | ai:claude
+    // trace:BUG-286 | ai:claude
+    // trace:TASK-487 | ai:claude
     Ship {
         /// PR number to ship. When omitted, the command resolves the
         /// PR open on the current branch (or creates one if none
@@ -1267,8 +1275,10 @@ pub enum DevCommand {
     Patch,
 }
 
-/// Commands for the SQLite read-cache that projects the git-canonical store
-/// for fast list/filter/search queries (EPIC-1-001).
+/// Commands for the SQLite read-cache that projects the git-canonical
+/// store for fast list/filter/search queries.
+// trace:EPIC-1-001 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum CacheCommand {
     /// Force a full rebuild of the cache from the git store
@@ -1303,7 +1313,7 @@ pub enum DocsCommand {
     },
 }
 
-/// Living-documentation entry surface (EPIC-24 / STORY-104).
+/// Living-documentation entry surface.
 ///
 /// `Doc` requirements are narrative captured *during* work — rationale,
 /// scenarios, recipes, gotchas — linked back to the specs they explain via
@@ -1311,7 +1321,8 @@ pub enum DocsCommand {
 /// cache pipeline as every other requirement; this subcommand exists to
 /// make capture and lookup ergonomic so the docs land while the context
 /// is still fresh.
-// trace:STORY-104 | ai:claude
+// trace:EPIC-24, STORY-104 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DocCommand {
     /// Capture a documentation entry — narrative tied to one or more specs.
@@ -1393,8 +1404,10 @@ pub enum DbCommand {
     Path,
 
     /// (archived) Migrate between legacy YAML/SQLite/PostgreSQL backends.
-    /// Pre-EPIC-1-001 — kept for one-shot migrations off the legacy path.
+    /// Kept for one-shot migrations off the legacy pre-git-canonical path.
     // trace:FR-1-076 | ai:claude
+    // trace:EPIC-1-001 | ai:claude
+    // trace:TASK-487 | ai:claude
     #[clap(hide = true)]
     Migrate {
         /// Source format: "yaml", "sqlite", or "postgres"
@@ -1442,17 +1455,19 @@ pub enum DbCommand {
     },
 
     /// Assign agreed IDs (short IDs) to all objects that don't have one.
-    /// Run this at merge-to-trunk to give distributed IDs (FR-7-048) their
-    /// short form (FR-423).
+    /// Run this at merge-to-trunk to collapse a node-aware distributed id
+    /// (e.g. `FR-N-NNN`) down to its short form (`FR-NNN`).
+    // trace:TASK-487 | ai:claude
     MergeGate,
 
     /// Collapse legacy origin spec_ids onto their agreed_ids. For each
-    /// requirement where spec_id ≠ agreed_id (typically a legacy `FR-0153`
-    /// origin id with a later-assigned `FR-140` agreed id), set
+    /// requirement where spec_id ≠ agreed_id (typically a legacy
+    /// zero-padded origin id with a later-assigned short agreed id), set
     /// spec_id := agreed_id and clear agreed_id. The on-disk YAML moves
     /// to the new sharded path; relationships are unaffected (they use
     /// UUIDs). Run with --dry-run first to preview.
     // trace:FR-1-071 | ai:claude
+    // trace:TASK-487 | ai:claude
     RetireLegacyIds {
         /// Show what would change without writing anything.
         #[clap(long)]
@@ -1473,7 +1488,9 @@ pub enum DbCommand {
     /// Show status of the git-backed store (changes, sync state, conflicts)
     Status,
 
-    /// Manage pre-allocated agreed ID blocks for offline-safe trace comments (FR-2-005)
+    /// Manage pre-allocated agreed ID blocks for offline-safe trace comments
+    // trace:FR-2-005 | ai:claude
+    // trace:TASK-487 | ai:claude
     Block {
         #[clap(subcommand)]
         subcommand: BlockCommand,
@@ -1481,12 +1498,14 @@ pub enum DbCommand {
 
     /// Replay the Done → Completed auto-bump scan over a wider commit
     /// range than `aida pull` saw, recovering specs that got stranded
-    /// at Done. STORY-86's pull-time auto-bump only scans commits the
-    /// current pull brings in; if a spec's YAML was unreadable at pull
-    /// time (BUG-96 deletion), or the user pulled before flipping the
-    /// spec to Done, the bump silently misses and the spec is stuck
-    /// without manual intervention.
+    /// at Done. The pull-time auto-bump only scans commits the current
+    /// pull brings in; if a spec's YAML was unreadable at pull time, or
+    /// the user pulled before flipping the spec to Done, the bump
+    /// silently misses and the spec is stuck without manual intervention.
     // trace:TASK-226 | ai:claude
+    // trace:STORY-86 | ai:claude
+    // trace:BUG-96 | ai:claude
+    // trace:TASK-487 | ai:claude
     ReconcileStatus {
         /// Bound the scan range. Accepts a commit SHA, a tag, or any
         /// `git rev-parse`-able ref. Without --since, walks the most
@@ -1509,15 +1528,18 @@ pub enum DbCommand {
     },
 
     /// Audit the store for consistency problems. Currently supports
-    /// `--collisions` (two requirements claiming the same short id, the
-    /// shape BUG-82 prevents at gate time but doesn't retroactively detect).
+    /// `--collisions` (two requirements claiming the same short id,
+    /// which the gate-time check prevents going forward but doesn't
+    /// retroactively detect).
     // trace:TASK-80 | ai:claude
+    // trace:BUG-82 | ai:claude
+    // trace:TASK-487 | ai:claude
     Check {
         /// Report requirements whose preferred display id (agreed_id
         /// when assigned, else spec_id) collides with another
         /// requirement's spec_id or agreed_id. Pre-existing collisions
-        /// from before BUG-82's gate-time check (e.g., the 5 surfaced
-        /// by PR-12) persist in the store and won't auto-clear.
+        /// from before the gate-time check landed persist in the store
+        /// and won't auto-clear.
         #[clap(long)]
         collisions: bool,
 
@@ -1540,7 +1562,9 @@ pub enum NodeCommand {
     /// Show details for a single node. With no id, defaults to the current
     /// node (read from `.aida/node.toml`).
     Show {
-        /// Node id to show (omit for current node). String as of EPIC-9.
+        /// Node id to show (omit for current node). Accepted as a string.
+        // trace:EPIC-9 | ai:claude
+        // trace:TASK-487 | ai:claude
         id: Option<String>,
     },
 
@@ -1553,7 +1577,9 @@ pub enum NodeCommand {
     // trace:STORY-41 | ai:claude
     Acquire {
         /// Claim a specific node id (must be free in the registry).
-        /// String as of EPIC-9 — accepts "JM" or "1" alike.
+        /// Accepted as a string — `"JM"` or `"1"` alike.
+        // trace:EPIC-9 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         id: Option<String>,
 
@@ -1652,14 +1678,16 @@ pub enum StoreCommand {
 // trace:EPIC-19 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DoctorCommand {
-    /// Migrate this project from per-type counters (FR-1, BUG-1, EPIC-1
-    /// each independent) to global counters (FR-1, BUG-2, EPIC-3 — one
-    /// shared counter). Allocates a new `*` block above the existing
-    /// per-type blocks' max range_end, marks per-type blocks as
-    /// exhausted, sets `[id_format] counter_scope = "global"`. Existing
-    /// requirement spec_ids stay unchanged — only newly-added reqs use
-    /// the global counter.
+    /// Migrate this project from per-type counters (each type counts
+    /// independently — every type starts back at 1) to a single global
+    /// counter (one shared sequence — IDs increment across types).
+    /// Allocates a new `*` block above the existing per-type blocks'
+    /// max range_end, marks per-type blocks as exhausted, sets
+    /// `[id_format] counter_scope = "global"`. Existing requirement
+    /// spec_ids stay unchanged — only newly-added reqs use the global
+    /// counter.
     // trace:EPIC-19, FR-271 | ai:claude
+    // trace:TASK-487 | ai:claude
     MigrateCounterScope {
         /// Target scope. Today only `global` is supported. (Going from
         /// global back to per-type is harder — no migration path yet.)
@@ -1682,10 +1710,11 @@ pub enum DoctorCommand {
 
     /// Find and tombstone blocks whose `node_id` isn't in nodes.toml
     /// (orphaned from a clone that never registered, or from a
-    /// pre-EPIC-1-052 store). The block range stays reserved so other
+    /// pre-multi-node store). The block range stays reserved so other
     /// clones don't reallocate over it; `next` is bumped past `range_end`
     /// so the dispenser skips it.
-    // trace:EPIC-19 | ai:claude
+    // trace:EPIC-19, EPIC-1-052 | ai:claude
+    // trace:TASK-487 | ai:claude
     RepairStaleBlocks {
         /// Print what would change without writing.
         #[clap(long)]
@@ -1696,10 +1725,11 @@ pub enum DoctorCommand {
     },
 
     /// Detect duplicate spec_ids in the orphan store — multiple YAMLs
-    /// claiming the same id (BUG-31-era leftovers, imports gone wrong).
+    /// claiming the same id (legacy leftovers, imports gone wrong).
     /// Reports only; v1 doesn't auto-renumber because that would orphan
     /// trace comments and commit refs.
-    // trace:EPIC-19 | ai:claude
+    // trace:EPIC-19, BUG-31 | ai:claude
+    // trace:TASK-487 | ai:claude
     ScrubCollisions,
 
     /// Walk every requirement's `relationships` array and verify each
@@ -1751,10 +1781,11 @@ pub enum DoctorCommand {
     /// Check that STORY / BUG descriptions contain a recognized
     /// acceptance heading (`## Acceptance`, `## Verify`, `## Tests`,
     /// `## Test cases`, `## Verification` — case-insensitive). Surfaced
-    /// by STORY-67's review-prompt generator: missing sections produce
-    /// a placeholder downstream, this lint catches them at write-time.
+    /// by the review-prompt generator: missing sections produce a
+    /// placeholder downstream, this lint catches them at write-time.
     /// Exits non-zero if any STORY/BUG is missing a section.
-    // trace:STORY-70 | ai:claude
+    // trace:STORY-70, STORY-67 | ai:claude
+    // trace:TASK-487 | ai:claude
     ConventionCheck {
         /// Quiet mode — print only the summary line, omit per-spec rows.
         #[clap(long, short = 'q')]
@@ -1998,8 +2029,9 @@ pub enum RelationshipCommand {
     /// Add a relationship between requirements
     ///
     /// Both positional and flag forms work:
-    ///   aida rel add STORY-72 EPIC-13 --type child
-    ///   aida rel add --from STORY-72 --to EPIC-13 --type child
+    ///   aida rel add <from> <to> --type child
+    ///   aida rel add --from <from> --to <to> --type child
+    // trace:TASK-487 | ai:claude
     Add {
         /// Source requirement ID (UUID or SPEC-ID). Positional or via --from.
         #[clap(value_name = "FROM")]
@@ -2025,11 +2057,12 @@ pub enum RelationshipCommand {
         #[clap(long, short = 'b')]
         bidirectional: bool,
 
-        /// Override the BUG-64 guard that refuses `--type child` when
-        /// the target (the parent) is in a terminal status
+        /// Override the guard that refuses `--type child` when the
+        /// target (the parent) is in a terminal status
         /// (Completed/Rejected). Use when intentionally backfilling a
         /// forgotten child onto a closed epic.
         // trace:BUG-64 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         force_parent: bool,
     },
@@ -2037,8 +2070,9 @@ pub enum RelationshipCommand {
     /// Remove a relationship between requirements
     ///
     /// Both positional and flag forms work:
-    ///   aida rel remove STORY-72 EPIC-13 --type child
-    ///   aida rel remove --from STORY-72 --to EPIC-13 --type child
+    ///   aida rel remove <from> <to> --type child
+    ///   aida rel remove --from <from> --to <to> --type child
+    // trace:TASK-487 | ai:claude
     Remove {
         /// Source requirement ID (UUID or SPEC-ID). Positional or via --from.
         #[clap(value_name = "FROM")]
@@ -2070,13 +2104,14 @@ pub enum RelationshipCommand {
     ///
     /// Examples:
     ///   aida rel list                      # all edges in the graph
-    ///   aida rel list EPIC-20              # outgoing edges from EPIC-20
-    ///   aida rel list --source EPIC-20     # same as positional form
-    ///   aida rel list --target EPIC-20     # incoming edges (what points AT it)
+    ///   aida rel list <spec-id>            # outgoing edges from a spec
+    ///   aida rel list --source <spec-id>   # same as positional form
+    ///   aida rel list --target <spec-id>   # incoming edges (what points AT it)
     ///   aida rel list --type child         # filter by edge type
     ///   aida rel list --dangling           # only edges with unresolved targets
     ///   aida rel list --type child --dangling   # composable
     // trace:TASK-65 | ai:claude
+    // trace:TASK-487 | ai:claude
     #[clap(visible_alias = "show")]
     List {
         /// Source requirement ID (UUID or SPEC-ID). Positional alias of
@@ -2091,7 +2126,8 @@ pub enum RelationshipCommand {
         source: Option<String>,
 
         /// Target requirement — inverts the query to "what edges point AT
-        /// this requirement?". Useful for "who depends on EPIC-20?".
+        /// this requirement?". Useful for "who depends on this epic?".
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         target: Option<String>,
 
@@ -2101,8 +2137,10 @@ pub enum RelationshipCommand {
         r#type: Option<String>,
 
         /// Only show edges whose target UUID doesn't resolve (deleted-target
-        /// tombstones, BUG-53 territory). Pairs with `aida doctor
+        /// tombstones from removed reqs). Pairs with `aida doctor
         /// verify-relationships --repair` to clean them up.
+        // trace:BUG-53 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         dangling: bool,
 
@@ -2276,7 +2314,9 @@ pub enum GitLabCommand {
     },
 }
 
-/// Personal work queue commands (STORY-0368)
+/// Personal work queue commands.
+// trace:STORY-368 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum QueueCommand {
     /// List items in your queue. When a role is active and --role is not
@@ -2340,10 +2380,11 @@ pub enum QueueCommand {
         /// Filter to entries whose `for_scope` matches one of these
         /// scopes (comma list). Pass `none` to filter to entries with
         /// no `for_scope` set (the "uncategorized" pile).
-        /// Mirrors STORY-57's `--scope` shape on `queue add`. Distinct
-        /// from `--no-scope`, which bypasses the active role's
+        /// Mirrors the `--scope` shape on `queue add`. Distinct from
+        /// `--no-scope`, which bypasses the active role's
         /// scope_tags/scope_status filters — different axis.
-        // trace:TASK-52 | ai:claude
+        // trace:TASK-52, STORY-57 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "CSV")]
         scope: Option<String>,
         /// Group entries by their parent EPIC for a visual cluster view.
@@ -2368,9 +2409,10 @@ pub enum QueueCommand {
         #[clap(long, conflicts_with = "no_in_flight")]
         in_flight_only: bool,
         /// Filter to queued items tagged `batch:NAME`. Composes with
-        /// `aida queue work --batch NAME` (TASK-229) — the same tag
-        /// drives both the audit view and the per-item drain.
+        /// `aida queue work --batch NAME` — the same tag drives both
+        /// the audit view and the per-item drain.
         // trace:TASK-229 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "NAME")]
         batch: Option<String>,
         /// Filter to entries whose requirement carries this exact tag
@@ -2412,7 +2454,7 @@ pub enum QueueCommand {
         #[clap(long)]
         r#for: Option<String>,
         /// Restrict routing to sessions whose lease scope matches this
-        /// (e.g., "EPIC-20"). Default-populated to the active session's
+        /// (e.g., an EPIC id). Default-populated to the active session's
         /// scope when adding from inside a session worktree, unless
         /// --no-scope is passed. Pairs with --for so two implementer
         /// sessions don't see each other's incoming work.
@@ -2437,10 +2479,11 @@ pub enum QueueCommand {
         // trace:FR-1-012 | ai:claude
         #[clap(long)]
         global: bool,
-        /// Bypass the TASK-45 guard that refuses queueing a Completed
-        /// or Rejected requirement. Use for legitimate re-open
-        /// scenarios; the default error message hints at this flag.
+        /// Bypass the guard that refuses queueing a Completed or
+        /// Rejected requirement. Use for legitimate re-open scenarios;
+        /// the default error message hints at this flag.
         // trace:TASK-45 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         force: bool,
     },
@@ -2582,11 +2625,12 @@ pub enum QueueCommand {
     /// and routes the right skill.
     ///
     /// When `id` resolves to a known spec that ISN'T queued (and has no
-    /// queued children), the error is status-aware (TASK-217): the recovery
-    /// hint depends on the spec's current status — Done → `aida queue
+    /// queued children), the error is status-aware: the recovery hint
+    /// depends on the spec's current status — Done → `aida queue
     /// rework`; Planned → promote to Approved first; Completed/Rejected →
     /// re-open with `--force`.
     // trace:STORY-42, TASK-217 | ai:claude
+    // trace:TASK-487 | ai:claude
     Work {
         /// Queued requirement ID (UUID, SPEC-ID, or agreed-id) for item
         /// pickup, OR an EPIC/STORY id with queued children for cluster
@@ -2610,16 +2654,17 @@ pub enum QueueCommand {
         ///   2. `AIDA_PERMISSION_MODE` env var
         ///   3. `.aida/config.toml [behavior] permission_mode`
         ///   4. AIDA-managed worktree default → `bypassPermissions`
-        ///      (TASK-84 — the worktree is git-sandboxed; the prompt
-        ///      flood was eating autonomous overnight runs and Claude
-        ///      Code keeps the rm -rf circuit breakers on)
+        ///      (the worktree is git-sandboxed; the prompt flood was
+        ///      eating autonomous overnight runs and Claude Code keeps
+        ///      the rm -rf circuit breakers on)
         ///   5. fallback → `acceptEdits`
         /// Common values: `auto` (research preview: auto-approves with
-        /// background safety checks; pairs with TASK-82's pre-allow list),
+        /// background safety checks; pairs with the pre-allow list),
         /// `bypassPermissions` (legacy `--dangerously-skip-permissions`),
         /// `plan` (read-only), `default` (prompt on everything). Passed
         /// through unvalidated to `claude --permission-mode`.
-        // trace:STORY-42, TASK-83, TASK-84 | ai:claude
+        // trace:STORY-42, TASK-82, TASK-83, TASK-84 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "MODE")]
         permission_mode: Option<String>,
         /// Run the full setup (worktree, lease, manifest) but skip the
@@ -2641,8 +2686,8 @@ pub enum QueueCommand {
         no_pull: bool,
         /// Cluster-mode filter: when `id` resolves to a parent scope,
         /// only drain queued children whose requirement type matches.
-        /// E.g. `--type bug` to grab just the bug cluster under
-        /// EPIC-20. Case-insensitive. Ignored in single-item / head
+        /// E.g. `--type bug` to grab just the bug cluster under a
+        /// given epic. Case-insensitive. Ignored in single-item / head
         /// pickup modes.
         #[clap(long = "type", value_name = "TYPE")]
         type_filter: Option<String>,
@@ -2669,11 +2714,12 @@ pub enum QueueCommand {
         /// session exits independently; the next pickup picks the new
         /// head). Mutually exclusive with positional `id` and
         /// `--type`. `--dry-run --batch NAME` lists members in pickup
-        /// order without acting. Composes with `--auto-complete` (TASK-285):
+        /// order without acting. Composes with `--auto-complete`:
         /// `--batch NAME --auto-complete` drains the whole batch
         /// autonomously — one full lifecycle per member — instead of one
         /// session per re-invocation.
-        // trace:TASK-229 | ai:claude
+        // trace:TASK-229, TASK-285 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "NAME", conflicts_with_all = ["id", "type_filter"])]
         batch: Option<String>,
         /// Ordered multi-batch auto-complete drain. Comma-separated names are
@@ -2722,10 +2768,10 @@ pub enum QueueCommand {
         list_sessions: bool,
         /// Caller-minted Claude conversation id (a UUID) to launch with,
         /// instead of the auto-generated one. The AIDA TUI passes this so
-        /// it can track + later resume the conversation deterministically
-        /// (EPIC-26). Implies a fresh launch — mutually exclusive with
-        /// `--resume`.
-        // trace:STORY-132 | ai:claude
+        /// it can track + later resume the conversation deterministically.
+        /// Implies a fresh launch — mutually exclusive with `--resume`.
+        // trace:STORY-132, EPIC-26 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "UUID", conflicts_with = "resume")]
         session_id: Option<String>,
         /// Drive the full implementer → CI → reviewer → merge → pull →
@@ -2741,13 +2787,14 @@ pub enum QueueCommand {
         /// that failed (1 implementer, 2 CI, 3 review, 4 merge, 5 pull,
         /// 6 build). Takes a SPEC id; with no id it picks the head of the
         /// active role's queue, the same way the no-arg `aida queue work`
-        /// does. Or pass `--batch NAME` to drain a whole batch (TASK-285):
+        /// does. Or pass `--batch NAME` to drain a whole batch:
         /// `--batch NAME --auto-complete` runs one full lifecycle per batch
         /// member until the batch is empty, `--max` is reached, or a phase
         /// fails. The `nextN` keyword (e.g. `aida queue work next3
         /// --auto-complete`) is the un-pre-tagged equivalent — it drains the
         /// next N items from the queue head in order.
         // trace:STORY-246, TASK-285, TASK-293 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(
             long,
             value_name = "MODE",
@@ -2897,11 +2944,12 @@ pub enum QueueCommand {
         #[clap(long, value_name = "SESSION_ID")]
         session: Option<String>,
         /// Resolve items from a `batch:NAME` tag instead of a session
-        /// manifest. Composes with TASK-229's batch-drain convention:
-        /// items tagged `batch:NAME` (set via `aida add --tags` or
+        /// manifest. Composes with the batch-drain convention: items
+        /// tagged `batch:NAME` (set via `aida add --tags` or
         /// `aida edit --tags`) are members of the batch.
         /// Mutually exclusive with `--session`.
         // trace:TASK-232, TASK-229 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "NAME", conflicts_with = "session")]
         batch: Option<String>,
         /// Filter items to those modified after this timestamp
@@ -2932,7 +2980,7 @@ pub enum QueueCommand {
     ///   Planned    → InProgress
     ///   InProgress → no flip, refuse re-queue without --force
     ///   Done       → InProgress (typical PR-review-found-issues case)
-    ///   Completed  → InProgress, requires --force (TASK-45 guard)
+    ///   Completed  → InProgress, requires --force (terminal-status guard)
     ///   Rejected   → Approved, requires --force
     ///
     // trace:TASK-218 | ai:claude
@@ -2962,9 +3010,10 @@ pub enum QueueCommand {
         /// `--work`.
         #[clap(long)]
         resume: bool,
-        /// Bypass the TASK-45 terminal-status guard (Completed/Rejected)
-        /// and the "already in progress" guard. Mirrors `queue add
-        /// --force`.
+        /// Bypass the terminal-status guard (Completed/Rejected) and
+        /// the "already in progress" guard. Mirrors `queue add --force`.
+        // trace:TASK-45 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         force: bool,
         /// When chaining `--work`, end any session holding the target
@@ -2987,9 +3036,10 @@ pub enum QueueCommand {
 }
 
 /// `aida findings` — triage findings filed by headless drain phases: the
-/// reviewer (`from-review:`, STORY-278) and the implementer (`from-implementer:`,
-/// STORY-285).
-// trace:STORY-278 trace:STORY-285 | ai:claude
+/// reviewer (`from-review:` tag) and the implementer (`from-implementer:`
+/// tag).
+// trace:STORY-278, STORY-285 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum FindingsCommand {
     /// List draft findings awaiting triage, grouped by source then origin and
@@ -3133,12 +3183,13 @@ pub enum OrchestratorCommand {
     },
 }
 
-/// Zen-mode introspection (BUG-237). `AIDA_ZEN=1` enables zen mode but is
+/// Zen-mode introspection. `AIDA_ZEN=1` enables zen mode but is
 /// inherited by every child process — a leaked / stale value is unverifiable
 /// on its own. These subcommands let a session — or a skill running inside one
 /// — verify whether zen mode is *genuinely* in effect rather than trusting the
 /// bare env var.
 // trace:BUG-237 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum ZenCommand {
     /// Print the corroborated zen context of the current process: `zen` when
@@ -3155,12 +3206,13 @@ pub enum ZenCommand {
     },
 }
 
-/// Live-advisor registration (STORY-360). The `--no-human=both` orchestrator
-/// reads `~/.aida/advisor.toml` to decide whether to **fork** the live advisor
+/// Live-advisor registration. The `--no-human=both` orchestrator reads
+/// `~/.aida/advisor.toml` to decide whether to **fork** the live advisor
 /// session (full in-flight context) instead of **cold-booting** a fresh
 /// headless advisor (substrate-only). Register once per advisor session;
 /// `unregister` clears the file.
 // trace:STORY-360 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum AdvisorCommand {
     /// Record the current Claude session as the live advisor — writes
@@ -3193,12 +3245,13 @@ pub enum AdvisorCommand {
     },
 }
 
-/// Worker-directive introspection (TASK-294). The `aida-worker` shell function
-/// reads pending directives from `.aida/worker.cmd` (a FIFO — one directive
+/// Worker-directive introspection. The `aida-worker` shell function reads
+/// pending directives from `.aida/worker.cmd` (a FIFO — one directive
 /// per line); this subcommand lists them so a user can see "what will the
 /// worker do next?" without `cat`ing a runtime file. Pairs with the
 /// `aida-worker` function emitted by `aida dev shell-init`.
 // trace:TASK-294 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum WorkerCommand {
     /// List pending directives from `.aida/worker.cmd` in FIFO order — the
@@ -3222,11 +3275,12 @@ pub enum HeadlessCommand {
     /// Stream a headless-drain JSONL log as clean text — one block of
     /// assistant prose per message, blank line between messages. No daemon,
     /// no parsing into cache.db. With no argument, picks the most-recently-
-    /// modified log under `.aida/headless-logs/`; pass a SPEC-ID (`TASK-398`)
-    /// to pick the newest log for that spec, or a lease/session id prefix
-    /// (`019e4400`) to disambiguate between concurrent drains.
+    /// modified log under `.aida/headless-logs/`; pass a SPEC-ID to pick
+    /// the newest log for that spec, or a lease/session id prefix
+    /// (e.g. `019e4400`) to disambiguate between concurrent drains.
+    // trace:TASK-487 | ai:claude
     Tail {
-        /// SPEC-ID (e.g. `TASK-398`) or lease/session id prefix. Optional —
+        /// SPEC-ID (e.g. `TASK-N`) or lease/session id prefix. Optional —
         /// when omitted, the most-recently-modified log is followed.
         target: Option<String>,
 
@@ -3268,12 +3322,13 @@ pub enum HeadlessCommand {
     },
 }
 
-/// Drain-state introspection (STORY-301). An `aida queue work --auto-complete`
+/// Drain-state introspection. An `aida queue work --auto-complete`
 /// orchestrator writes `.aida/drain-state.json` while a drain is live; this
 /// subcommand reads it so a user inside the orchestrator-spawned session can
 /// see what command launched the drain, whether it is a single-spec or a batch
 /// drain, how far through it is, and what happens when they exit the session.
 // trace:STORY-301 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DrainCommand {
     /// Show the active `--auto-complete` drain: the launching command, the
@@ -3350,11 +3405,12 @@ pub enum Command {
         #[clap(long)]
         parent: Option<String>,
 
-        /// Override the BUG-64 guard that refuses `--parent <X>` when X
-        /// is in a terminal status (Completed/Rejected). Use when
-        /// intentionally backfilling a forgotten child onto a closed
-        /// epic for traceability.
+        /// Override the guard that refuses `--parent <X>` when X is in
+        /// a terminal status (Completed/Rejected). Use when intentionally
+        /// backfilling a forgotten child onto a closed epic for
+        /// traceability.
         // trace:BUG-64 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         force_parent: bool,
 
@@ -3392,10 +3448,12 @@ pub enum Command {
 
         /// Show the origin id alongside the canonical id. The origin id is
         /// the original spec_id assigned when the requirement was created
-        /// (legacy `FR-0153` for pre-EPIC-1-001 reqs, node-aware `FR-1-053`
-        /// for distributed-mode reqs). The canonical id is the agreed-id
-        /// post-merge-gate when one exists, else the origin id itself.
+        /// (zero-padded form for legacy reqs, node-aware
+        /// `<TYPE>-<node>-<NNN>` for distributed-mode reqs). The canonical
+        /// id is the agreed-id post-merge-gate when one exists, else the
+        /// origin id itself.
         // trace:FR-1-070 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, alias = "verbose", short = 'v')]
         show_origin: bool,
 
@@ -3410,9 +3468,10 @@ pub enum Command {
 
         /// Restrict the listing to direct children of <id> (UUID or
         /// SPEC-ID). Composes with --status / --type / --tags etc., so
-        /// e.g. `aida list --parent EPIC-20 --status approved` shows
+        /// e.g. `aida list --parent <epic-id> --status approved` shows
         /// what's still open under that EPIC.
         // trace:STORY-62 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "ID")]
         parent: Option<String>,
 
@@ -3561,12 +3620,13 @@ pub enum Command {
         #[clap(long)]
         strict: bool,
 
-        /// Bypass the TASK-47 guard that refuses re-opening a Completed
-        /// or Rejected requirement (e.g. flipping `--status in-progress`
+        /// Bypass the guard that refuses re-opening a Completed or
+        /// Rejected requirement (e.g. flipping `--status in-progress`
         /// on something already shipped). Use when intentionally
         /// re-opening: usually you should instead file a new req that
         /// supersedes the closed one.
         // trace:TASK-47 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         force: bool,
 
@@ -3646,9 +3706,10 @@ pub enum Command {
     /// Manage per-clone node identity (acquire/release node ids in the
     /// shared registry, list registered clones). Each clone of an AIDA
     /// project gets a unique node id; that id is the namespace for
-    /// node-aware spec ids like `FR-2-005` until the merge gate
+    /// node-aware spec ids (e.g. `FR-<node>-<NNN>`) until the merge gate
     /// promotes them to short agreed-ids.
     // trace:EPIC-1-052 | ai:claude
+    // trace:TASK-487 | ai:claude
     #[clap(subcommand)]
     Node(NodeCommand),
 
@@ -4202,8 +4263,10 @@ pub enum Command {
         force: bool,
 
         /// (deprecated, accepted for backwards compat) Initialize in
-        /// distributed mode. As of EPIC-1-001 distributed is the default,
-        /// so this flag is a no-op. Use `--centralized` to opt out.
+        /// distributed mode. Distributed is now the default, so this
+        /// flag is a no-op. Use `--centralized` to opt out.
+        // trace:EPIC-1-001 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long, hide = true)]
         distributed: bool,
 
@@ -4277,15 +4340,17 @@ pub enum Command {
 
     /// MCP server management commands (register agents, list tool surface).
     ///
-    /// STORY-361: the AIDA MCP server's coordination tools are how non-
-    /// Claude-Code agents (Codex, Cursor, …) participate in AIDA drains.
+    /// The AIDA MCP server's coordination tools are how non-Claude-Code
+    /// agents (Codex, Cursor, …) participate in AIDA drains.
     /// `aida mcp register-agent` writes the AIDA server's entry into a
     /// project's `.mcp.json` so an MCP-speaking agent can connect.
+    // trace:STORY-361 | ai:claude
+    // trace:TASK-487 | ai:claude
     #[clap(subcommand, hide = true)]
     Mcp(McpCommand),
 
     /// Launch the AIDA TUI — a terminal-UI shell that PTY-hosts Claude
-    /// Code sessions (EPIC-26).
+    /// Code sessions.
     ///
     /// The TUI becomes the outer shell: it owns the terminal, reserves a
     /// bottom status strip, and hosts a Claude session as a PTY child
@@ -4299,7 +4364,9 @@ pub enum Command {
         /// Omit to open an empty shell.
         scope: Option<String>,
         /// Skip crash-recovery re-attach of orphaned sessions on launch
-        /// and discard any stale `.aida/tui-state.json` (STORY-135).
+        /// and discard any stale `.aida/tui-state.json`.
+        // trace:STORY-135 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         no_recover: bool,
     },
@@ -4316,8 +4383,9 @@ pub enum Command {
     /// (rationale, scenarios, recipes, gotchas) linked to the specs they
     /// explain. Different from `aida docs` (plural), which renders the
     /// graph as a layered docs tree; this is the *raw* doc entry surface
-    /// powering EPIC-24's book/tutorial projection.
-    // trace:STORY-104 | ai:claude
+    /// powering the book/tutorial projection.
+    // trace:STORY-104, EPIC-24 | ai:claude
+    // trace:TASK-487 | ai:claude
     #[clap(subcommand)]
     Doc(DocCommand),
 
@@ -4564,9 +4632,10 @@ pub enum Command {
         json: bool,
 
         /// Omit the `## Comments` section — the spec's enrichment
-        /// comments are pulled in by default (TASK-247); pass this for
-        /// the leaner pre-TASK-247 prompt.
+        /// comments are pulled in by default; pass this for the
+        /// leaner comment-free prompt.
         // trace:TASK-247 | ai:claude
+        // trace:TASK-487 | ai:claude
         #[clap(long)]
         no_comments: bool,
     },
@@ -4632,7 +4701,9 @@ pub enum SkillCommand {
 }
 
 /// Implementation-plan tooling. Plans live in `docs/plans/` and follow
-/// the structured template (`docs/plans/_TEMPLATE.md`, see TASK-92).
+/// the structured template at `docs/plans/_TEMPLATE.md`.
+// trace:TASK-92 | ai:claude
+// trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PlanCommand {
     /// Verify a plan file against the structured template: report
@@ -4813,7 +4884,9 @@ pub enum GitHubCommand {
 #[derive(Subcommand, Debug)]
 pub enum McpCommand {
     /// Register the AIDA MCP server in `.mcp.json` so MCP-speaking agents
-    /// (Codex, Cursor, …) can call its coordination tools (STORY-361).
+    /// (Codex, Cursor, …) can call its coordination tools.
+    // trace:STORY-361 | ai:claude
+    // trace:TASK-487 | ai:claude
     ///
     /// For local single-machine use the entry runs `aida mcp-serve` over
     /// stdio. Cross-machine MCP is deferred to a follow-up SPIKE; the
