@@ -58,12 +58,12 @@ description: |-
   ## Origin
 
   2026-05-18: PR-91 (TASK-277 doc) re-review — the headless reviewer fix-forwarded 3 output-accuracy misses (commit \`90fc26cb\`) and approved. A prior reviewer (PR-64) had explicitly refused the same move citing CI desync. The inconsistency is the skill's fault — no documented policy — so reviewers improvise. PR-91's fix-forward was low-risk (doc-only, CI CLEAN), but the next one might not be.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T06:13:10.040246085Z
-modified_at: 2026-05-23T00:33:06.169775775Z
+modified_at: 2026-05-23T00:40:25.604264433Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-22
@@ -90,3 +90,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-23T00:33:06.169775775Z
   implemented_by: joe
+  completed_at: 2026-05-23T00:40:25.604264433Z
+  completion_sha: 2ef81ce74c0b401ac25a03aa67b7444fb2f0231a
