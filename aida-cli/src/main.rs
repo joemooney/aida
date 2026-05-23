@@ -14991,7 +14991,102 @@ fn active_lease_for_cwd(
     let canon = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
     list_leases(project_root)
         .into_iter()
-        .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+        .find(|l| lease_covers_cwd(l, &canon))
+}
+
+/// Whether `lease` covers `canon_cwd` — true iff the lease records a real
+/// worktree path AND `canon_cwd` is exactly that path or a descendant of it.
+///
+/// TASK-474: leases with an empty `worktree_path` are advisory locks with
+/// no session context (e.g. an MCP `claim_task` lease that didn't pass a
+/// `worktree_path` argument — see `aida-cli/src/mcp.rs::tool_claim_task`).
+/// `Path::starts_with` treats every path as starting with the empty path,
+/// so an empty-worktree lease would otherwise match every cwd and misroute
+/// "this session owns scope X" hints in `aida add` to unrelated shells.
+/// trace:TASK-474 | ai:claude
+fn lease_covers_cwd(lease: &SessionLease, canon_cwd: &std::path::Path) -> bool {
+    if lease.worktree_path.as_os_str().is_empty() {
+        return false;
+    }
+    canon_cwd == lease.worktree_path || canon_cwd.starts_with(&lease.worktree_path)
+}
+
+#[cfg(test)]
+mod lease_covers_cwd_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    fn lease_with_worktree(path: PathBuf) -> SessionLease {
+        SessionLease {
+            id: "abc123".into(),
+            scope: "TASK-474".into(),
+            slug: "task-474".into(),
+            owner: "tester".into(),
+            worktree_path: path,
+            branch: "task-474".into(),
+            started_at: chrono::Utc::now(),
+            hostname: "imac".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+        }
+    }
+
+    #[test]
+    fn matches_when_cwd_equals_worktree() {
+        let lease = lease_with_worktree(PathBuf::from("/home/joe/ai/aida-task-474"));
+        assert!(lease_covers_cwd(
+            &lease,
+            Path::new("/home/joe/ai/aida-task-474")
+        ));
+    }
+
+    #[test]
+    fn matches_when_cwd_is_descendant_of_worktree() {
+        let lease = lease_with_worktree(PathBuf::from("/home/joe/ai/aida-task-474"));
+        assert!(lease_covers_cwd(
+            &lease,
+            Path::new("/home/joe/ai/aida-task-474/aida-cli/src"),
+        ));
+    }
+
+    #[test]
+    fn rejects_unrelated_cwd() {
+        let lease = lease_with_worktree(PathBuf::from("/home/joe/ai/aida-task-474"));
+        assert!(!lease_covers_cwd(&lease, Path::new("/tmp")));
+    }
+
+    /// `Path::starts_with` respects path components, so a sibling worktree
+    /// whose name happens to start with the lease's worktree name does NOT
+    /// match — protects against `/home/joe/ai/aida` being treated as
+    /// covering `/home/joe/ai/aida-task-474`.
+    #[test]
+    fn sibling_with_shared_prefix_does_not_match() {
+        let lease = lease_with_worktree(PathBuf::from("/home/joe/ai/aida"));
+        assert!(!lease_covers_cwd(
+            &lease,
+            Path::new("/home/joe/ai/aida-task-474"),
+        ));
+    }
+
+    /// TASK-474: a lease with an empty `worktree_path` (the MCP `claim_task`
+    /// shape when the agent did not pass its cwd) must NOT match — otherwise
+    /// `Path::starts_with(empty)` returns true for every cwd and misroutes
+    /// "this session owns scope X" hints to unrelated shells.
+    /// trace:TASK-474 | ai:claude
+    #[test]
+    fn empty_worktree_lease_matches_no_cwd() {
+        let lease = lease_with_worktree(PathBuf::new());
+        assert!(!lease_covers_cwd(&lease, Path::new("/home/joe/ai/aida")));
+        assert!(!lease_covers_cwd(&lease, Path::new("/tmp")));
+        assert!(!lease_covers_cwd(&lease, Path::new("/")));
+    }
 }
 
 /// STORY-58: from inside a session worktree, return the parent project's
@@ -17698,10 +17793,7 @@ fn resolve_session_to_end(
     // 1. cwd
     if let Ok(cwd) = std::env::current_dir() {
         let canon = cwd.canonicalize().unwrap_or(cwd);
-        if let Some(l) = leases
-            .iter()
-            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
-        {
+        if let Some(l) = leases.iter().find(|&l| lease_covers_cwd(l, &canon)) {
             return Ok(l.clone());
         }
     }
@@ -23614,7 +23706,7 @@ fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
         let canon = cwd.canonicalize().unwrap_or(cwd);
         leases
             .iter()
-            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+            .find(|&l| lease_covers_cwd(l, &canon))
             .cloned()
     }) {
         l
@@ -23986,7 +24078,7 @@ fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
             let canon = cwd.canonicalize().unwrap_or(cwd);
             leases
                 .iter()
-                .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+                .find(|&l| lease_covers_cwd(l, &canon))
                 .cloned()
         }
         None => None,
@@ -24393,10 +24485,7 @@ fn resolve_manifest_target_lease(
     }
     if let Ok(cwd) = std::env::current_dir() {
         let canon = cwd.canonicalize().unwrap_or(cwd);
-        if let Some(l) = leases
-            .iter()
-            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
-        {
+        if let Some(l) = leases.iter().find(|&l| lease_covers_cwd(l, &canon)) {
             return Ok(l.clone());
         }
     }
@@ -43102,7 +43191,7 @@ fn collect_user_context(
         let canon = cwd.canonicalize().unwrap_or(cwd);
         leases
             .iter()
-            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+            .find(|&l| lease_covers_cwd(l, &canon))
             .cloned()
     });
     let role = std::env::var("AIDA_SESSION_ROLE")
@@ -53537,7 +53626,7 @@ fn handle_queue_progress(
                     let canon = cwd.canonicalize().unwrap_or(cwd);
                     leases
                         .iter()
-                        .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+                        .find(|&l| lease_covers_cwd(l, &canon))
                         .cloned()
                 })
                 .or_else(|| leases.last().cloned())
