@@ -6581,10 +6581,23 @@ mod task_492_brief_tests {
         )
         .unwrap();
 
-        let relative = path.strip_prefix(temp.path()).unwrap().to_string_lossy();
-        assert!(relative.starts_with(".aida/agent-briefs/codex/TASK-492-"));
-        assert!(relative.ends_with("Z.md"));
-        assert!(!relative.contains(':'));
+        let relative = path.strip_prefix(temp.path()).unwrap();
+        let components = relative
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &components[..3],
+            &[
+                ".aida".to_string(),
+                "agent-briefs".to_string(),
+                "codex".to_string()
+            ]
+        );
+        let file_name = relative.file_name().unwrap().to_string_lossy();
+        assert!(file_name.starts_with("TASK-492-"));
+        assert!(file_name.ends_with("Z.md"));
+        assert!(!file_name.contains(':'));
 
         let body = std::fs::read_to_string(path).unwrap();
         assert!(body.contains("spec_id: TASK-492"));
