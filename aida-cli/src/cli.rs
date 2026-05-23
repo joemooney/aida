@@ -3435,8 +3435,8 @@ pub enum AgentCommand {
     New(AgentNewCommand),
 }
 
-/// Agent-specific launchers. Claude lands first; Codex and Antigravity
-/// follow the same nested shape in later EPIC-31 phases.
+/// Agent-specific launchers. Each variant maps AIDA's supervision layer onto
+/// the corresponding CLI's launch flags.
 // trace:STORY-432 | ai:codex
 #[derive(Subcommand, Debug)]
 pub enum AgentNewCommand {
@@ -3457,6 +3457,30 @@ pub enum AgentNewCommand {
         /// Claude Code permission mode passed through to `claude`.
         #[clap(long, default_value = "bypassPermissions")]
         permission_mode: String,
+    },
+
+    /// Spawn Codex CLI with project-correct cwd/env and registry tracking.
+    // trace:STORY-433 | ai:codex
+    Codex {
+        /// Role propagated to the spawned Codex process as AIDA_SESSION_ROLE.
+        #[clap(long)]
+        role: Option<String>,
+
+        /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
+        #[clap(long)]
+        spec: Option<String>,
+
+        /// AIDA project root or descendant used as the launch base.
+        #[clap(long, value_name = "PATH")]
+        cwd: Option<PathBuf>,
+
+        /// Pass Codex's unsafe autonomous-mode flag.
+        ///
+        /// This is opt-in by design. Interactive launches keep Codex's normal
+        /// approval/sandbox behavior unless the operator explicitly asks for
+        /// the empirical autonomous-drain posture used in prior dogfood runs.
+        #[clap(long)]
+        bypass_sandbox: bool,
     },
 }
 

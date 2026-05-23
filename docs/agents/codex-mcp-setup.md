@@ -70,6 +70,25 @@ codex --cd /path/to/aida-project
 
 The MCP server is launched by Codex over stdio. You do not need to run `aida mcp-serve` in a separate terminal for the Codex integration. Running it manually is still useful for debugging JSON-RPC framing or the black-box stdio tests.
 
+## Launch Codex Through AIDA
+
+For AIDA projects, prefer the supervised launcher:
+
+```bash
+aida agent new codex --role implementer
+aida agent new codex --spec STORY-433 --role implementer
+```
+
+The launcher runs Codex from the project root, sets `AIDA_AGENT_TYPE=codex`, propagates `AIDA_SESSION_ROLE` and `AIDA_SESSION_SCOPE`, registers the process in `.aida/agents/`, and deregisters it on exit. When `--spec` is supplied, it first creates the standard sibling worktree + lease and launches Codex from that worktree.
+
+Keep the unsafe autonomous flag explicit:
+
+```bash
+aida agent new codex --spec STORY-433 --role implementer --bypass-sandbox
+```
+
+`--bypass-sandbox` passes Codex's `--dangerously-bypass-approvals-and-sandbox`; it is not the interactive default.
+
 ## Verify Tool Discovery
 
 Inside a Codex session with the MCP server connected, the AIDA tools are exposed as MCP tools. In this environment they were available under the `mcp__aida__` namespace.
