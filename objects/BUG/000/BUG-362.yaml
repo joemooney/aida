@@ -1,0 +1,53 @@
+id: 019e5609-9c32-7be1-9049-f09d87867314
+spec_id: BUG-362
+agreed_id: BUG-362
+title: aida pr ship leaves session lease + worktree orphaned (closing-discipline gap, BUG-361 family)
+description: |-
+  ## Empirical 2026-05-23 morning
+
+  Antigravity shipped TASK-497 via aida pr ship → PR-244 → merge → auto-bump to ✓ Completed. The lease (019e55ab) and worktree (/home/joe/ai/aida-task-497) remained registered after ship. Master had to manually run aida session end to clean up.
+
+  ## Symptom
+
+  aida session leases shows stale entries for branches that have already shipped + merged. Operator sees apparent in-flight work that is actually finished. Stale worktrees consume disk + can mislead the worktree-conflict heuristic.
+
+  ## Ceiling-pattern family
+
+  This is BUG-361's flip side. BUG-361: agent commits but never runs aida queue done OR aida pr ship → spec stays In Progress. This BUG: agent DOES run aida pr ship, but never runs aida session end → lease orphaned.
+
+  Both are 'agent does most of the lifecycle but skips the last step.' Substrate-as-bouncer principle says: ship a gate.
+
+  ## Design fork (advisor punt → user/master decides)
+
+  Option A: aida pr ship --end-session is a flag (opt-in). Operator-controlled.
+  Option B: aida pr ship runs aida session end automatically when the lease scope matches the branch scope (no-op if no matching lease). Implicit, opportunistic.
+  Option C: After PR merge auto-bump in aida pull, scan for orphaned leases (where branch is merged AND lease scope = branch scope) and offer to end them with --yes-end-stale or similar.
+  Option D: A periodic aida session prune that finds orphaned leases (worktree clean + branch merged + spec terminal) and ends them — operator-invoked housekeeping.
+
+  A is simplest; B is most invisible (best UX if reliable); C couples to the auto-bump scan; D is the explicit-housekeeping path.
+
+  ## Acceptance (one option chosen)
+
+  - [ ] Decide A/B/C/D (or hybrid)
+  - [ ] Implementation
+  - [ ] Regression test: simulate ship → merge → auto-bump and confirm no orphaned lease/worktree remains (for B/C) or that the housekeeping command finds + ends it (for D)
+
+  ## Composes with
+
+  - BUG-361 (session-end gate for un-shipped commits — opposite direction)
+  - BUG-360 (queue-done gate visibility — same family)
+  - BUG-354 / BUG-249 / BUG-269 (ceiling-pattern arc)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T18:12:10.930679221Z
+modified_at: 2026-05-23T18:12:10.930679221Z
+req_type: Bug
+tags:
+- ceiling-pattern
+- from-self-test
+- from-task-497
+- lifecycle-discipline
+- papercut
+- parent:BUG-361
