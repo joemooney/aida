@@ -33,12 +33,12 @@ description: |
   - aida-cli/src/drain_state.rs:41-45  (state constants)
 
   Raised in review of PR-131: https://github.com/joemooney/aida/pull/131
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T17:56:27.467733934Z
-modified_at: 2026-05-23T02:02:09.997179302Z
+modified_at: 2026-05-23T04:34:57.612371222Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-22
@@ -51,3 +51,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-23T01:58:05.565405410Z
   implemented_by: joe
+  completed_at: 2026-05-23T04:34:57.612371222Z
+  completion_sha: 856bbc5f08121294d64dd5cc7360155ebeb8c319
