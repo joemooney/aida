@@ -2,14 +2,18 @@ id: 019e5319-6741-7e60-a6fa-53e77aaf6642
 spec_id: SPEC-411
 title: aida pr ship post-merge pull assumes aida is on PATH
 description: 'During TASK-486 shipping, `cargo run -p aida-cli -- pr ship` created and merged PR-226 successfully, then failed at step 4 with `Error: could not invoke `aida pull` ... No such file or directory (os error 2)`. The wrapper had enough context to run itself, but the post-merge pull shells out to `aida` by name and breaks when the binary is not installed/on PATH. Manual recovery via `cargo run -p aida-cli -- pull` completed the auto-bump. Suggested follow-up: have pr_ship reinvoke the current executable (`std::env::current_exe`) or provide a clear fallback/error before merging.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:30:34.305214468Z
-modified_at: 2026-05-23T04:34:18.138458642Z
+modified_at: 2026-05-23T04:51:22.362707635Z
 req_type: Task
 tags:
 - from-implementer:TASK-486
 - kind:bug-spotted
 - severity:minor
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T04:51:22.362707635Z
+  completion_sha: b1624bba24f470e8729bb8be32cbfe5075fcf77c
