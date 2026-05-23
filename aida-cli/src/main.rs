@@ -14728,6 +14728,21 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
     Ok(())
 }
 
+fn validate_session_start_args(args: &[String]) -> Result<()> {
+    let has_owns = args
+        .iter()
+        .any(|arg| arg == "--owns" || arg.starts_with("--owns="));
+    let has_spec = args
+        .iter()
+        .any(|arg| arg == "--spec" || arg.starts_with("--spec="));
+    if has_owns && has_spec {
+        return Err(anyhow::anyhow!(
+            "error: Cannot specify both --owns and --spec"
+        ));
+    }
+    Ok(())
+}
+
 /// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     match cmd {
@@ -14755,20 +14770,24 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             name,
             permission_mode,
             role,
-        } => session_start(
-            owns,
-            branch.as_deref(),
-            base.as_deref(),
-            *reuse_branch,
-            path.as_deref(),
-            forge.as_deref(),
-            branch_style,
-            *launch,
-            title.clone(),
-            name.clone(),
-            permission_mode,
-            role.clone(),
-        ),
+        } => {
+            let args: Vec<String> = std::env::args().collect();
+            validate_session_start_args(&args)?;
+            session_start(
+                owns,
+                branch.as_deref(),
+                base.as_deref(),
+                *reuse_branch,
+                path.as_deref(),
+                forge.as_deref(),
+                branch_style,
+                *launch,
+                title.clone(),
+                name.clone(),
+                permission_mode,
+                role.clone(),
+            )
+        }
         SessionCommand::End {
             id,
             spec,
@@ -15961,6 +15980,77 @@ mod session_start_reuse_tests {
         // preexists signal.
         assert!(!should_reuse_branch(false, false, true));
         assert!(!should_reuse_branch(false, false, false));
+    }
+}
+
+#[cfg(test)]
+mod session_start_args_tests {
+    use super::validate_session_start_args;
+
+    #[test]
+    fn test_valid_start_args() {
+        // Only --owns is fine
+        assert!(validate_session_start_args(&[
+            "aida".to_string(),
+            "session".to_string(),
+            "start".to_string(),
+            "--owns".to_string(),
+            "BUG-360".to_string()
+        ])
+        .is_ok());
+
+        // Only --spec is fine
+        assert!(validate_session_start_args(&[
+            "aida".to_string(),
+            "session".to_string(),
+            "start".to_string(),
+            "--spec".to_string(),
+            "BUG-360".to_string()
+        ])
+        .is_ok());
+
+        // Only --owns= is fine
+        assert!(validate_session_start_args(&[
+            "aida".to_string(),
+            "session".to_string(),
+            "start".to_string(),
+            "--owns=BUG-360".to_string()
+        ])
+        .is_ok());
+
+        // Only --spec= is fine
+        assert!(validate_session_start_args(&[
+            "aida".to_string(),
+            "session".to_string(),
+            "start".to_string(),
+            "--spec=BUG-360".to_string()
+        ])
+        .is_ok());
+    }
+
+    #[test]
+    fn test_conflicting_start_args() {
+        // Both --owns and --spec conflicts
+        assert!(validate_session_start_args(&[
+            "aida".to_string(),
+            "session".to_string(),
+            "start".to_string(),
+            "--owns".to_string(),
+            "BUG-360".to_string(),
+            "--spec".to_string(),
+            "BUG-360".to_string()
+        ])
+        .is_err());
+
+        // Both --owns= and --spec= conflicts
+        assert!(validate_session_start_args(&[
+            "aida".to_string(),
+            "session".to_string(),
+            "start".to_string(),
+            "--owns=BUG-360".to_string(),
+            "--spec=BUG-360".to_string()
+        ])
+        .is_err());
     }
 }
 
