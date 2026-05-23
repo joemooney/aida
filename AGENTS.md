@@ -40,8 +40,9 @@ aida show <SPEC-ID>
 
 Prefer MCP tools for spec graph and coordination operations:
 `show_requirement`, `list_requirements`, `claim_task`, `release_task`,
-`file_finding`, `post_punt`, and `add_comment`. Use shell commands for
-build, test, git inspection, and cross-surface verification.
+`file_finding`, `post_punt`, `list_briefs`, `read_brief`, `ack_brief`,
+and `add_comment`. Use shell commands for build, test, git inspection,
+and cross-surface verification.
 
 When adding requirements through MCP, pass a valid lowercase `type`.
 AIDA derives the canonical ID prefix from that type, for example
@@ -67,7 +68,9 @@ Use `aida brief list --for-agent codex` when a master/advisor session says
 there is a pickup brief. Briefs live under `.aida/agent-briefs/codex/`,
 embed the target spec plus setup/trailer reminders, and are local
 runtime state. After reading one, run `aida brief ack <path>` so the
-default list stays focused on pending work.
+default list stays focused on pending work. If MCP is available, prefer
+the MCP trio `list_briefs({agent:"codex"})`, `read_brief({path})`, and
+`ack_brief({path})` so pickup works without shelling out.
 
 Use `aida --asciinema <subcommand>` for first-class terminal capture when
 you need demo, training, or audit material. By default casts are written

@@ -1479,6 +1479,7 @@ impl Scaffolder {
                     "cross-agent-onboarding.md",
                     "Cross-agent MCP onboarding guide",
                 ),
+                ("codex-brief-pickup.md", "Codex brief pickup guide"),
                 ("codex-mcp-setup.md", "Codex MCP setup guide"),
                 (
                     "codex-mcp-roundtrip-verdict.md",
@@ -2366,6 +2367,10 @@ mod tests {
             .exists());
         assert!(temp_dir
             .path()
+            .join("docs/agents/codex-brief-pickup.md")
+            .exists());
+        assert!(temp_dir
+            .path()
             .join("docs/agents/codex-mcp-setup.md")
             .exists());
         assert!(temp_dir.path().join("docs/extending-skills.md").exists());
@@ -2382,6 +2387,7 @@ mod tests {
         let paths: Vec<PathBuf> = preview.artifacts.iter().map(|a| a.path.clone()).collect();
 
         assert!(paths.contains(&PathBuf::from("docs/agents/cross-agent-onboarding.md")));
+        assert!(paths.contains(&PathBuf::from("docs/agents/codex-brief-pickup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/codex-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));

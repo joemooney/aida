@@ -19,6 +19,8 @@
 //!      `release_task`, `list_active_leases`.
 //!    - **Worker directives** (`.aida/worker.cmd`): `post_directive`,
 //!      `list_directives`, `ack_directive`.
+//!    - **Agent briefs** (`.aida/agent-briefs/<agent>/`): `list_briefs`,
+//!      `read_brief`, `ack_brief`.
 //!
 //! The coordination tools are the *MCP transport* over AIDA's
 //! filesystem-canonical coordination substrate. The orchestrator still
@@ -305,6 +307,11 @@ impl<'a> McpServer<'a> {
             "post_directive" => self.tool_post_directive(&arguments),
             "list_directives" => self.tool_list_directives(),
             "ack_directive" => self.tool_ack_directive(&arguments),
+
+            // Agent-brief channel (.aida/agent-briefs/<agent>/)
+            "list_briefs" => self.tool_list_briefs(&arguments),
+            "read_brief" => self.tool_read_brief(&arguments),
+            "ack_brief" => self.tool_ack_brief(&arguments),
 
             _ => Err(format!("Unknown tool: {}", tool_name)),
         };
@@ -1287,6 +1294,85 @@ impl<'a> McpServer<'a> {
         Ok(format!("acked: {}", removed))
     }
 
+    fn tool_list_briefs(&self, args: &Value) -> Result<String, String> {
+        let agent = optional_string(args, "agent")?;
+        if let Some(agent) = agent {
+            validate_brief_agent(agent)?;
+        }
+        let include_acked = args
+            .get("include_acked")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let entries = collect_brief_refs(&self.project_root, agent, include_acked)?;
+        if entries.is_empty() {
+            return Ok("No briefs found.".to_string());
+        }
+        let mut out = format!("Found {} brief(s):", entries.len());
+        for entry in entries {
+            out.push_str(&format!(
+                "\n- path={} agent={} spec_id={} generated_at={} status={}",
+                entry.path, entry.agent, entry.spec_id, entry.generated_at, entry.status
+            ));
+        }
+        Ok(out)
+    }
+
+    fn tool_read_brief(&self, args: &Value) -> Result<String, String> {
+        let raw_path = required_string(args, "path")?;
+        let path = resolve_brief_path(&self.project_root, raw_path)?;
+        std::fs::read_to_string(&path)
+            .map_err(|e| format!("reading brief {}: {}", path.display(), e))
+    }
+
+    fn tool_ack_brief(&self, args: &Value) -> Result<String, String> {
+        let raw_path = required_string(args, "path")?;
+        let path = resolve_brief_path(&self.project_root, raw_path)?;
+        let acked_path = if path.extension().and_then(|e| e.to_str()) == Some("acked") {
+            path.clone()
+        } else {
+            let file_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or_else(|| format!("invalid brief path: {}", path.display()))?;
+            path.with_file_name(format!("{file_name}.acked"))
+        };
+
+        if acked_path.exists() {
+            return Ok(format!(
+                "already_acked: {}",
+                brief_display_path(&self.project_root, &acked_path)
+            ));
+        }
+        if !path.exists() {
+            return Err(format!("brief file not found: {}", raw_path));
+        }
+
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| format!("reading brief {}: {}", path.display(), e))?;
+        let content = if content.contains("\nstatus: pending\n") {
+            content.replacen("\nstatus: pending\n", "\nstatus: acked\n", 1)
+        } else {
+            content
+        };
+        write_atomic(&path, content.as_bytes()).map_err(|e| e.to_string())?;
+        match std::fs::rename(&path, &acked_path) {
+            Ok(()) => Ok(format!(
+                "acked: {}",
+                brief_display_path(&self.project_root, &acked_path)
+            )),
+            Err(e) if acked_path.exists() => Ok(format!(
+                "already_acked: {}",
+                brief_display_path(&self.project_root, &acked_path)
+            )),
+            Err(e) => Err(format!(
+                "acking brief {} -> {}: {}",
+                path.display(),
+                acked_path.display(),
+                e
+            )),
+        }
+    }
+
     // ========================================================================
     // Resource implementations
     // ========================================================================
@@ -2107,6 +2193,69 @@ pub fn tool_descriptors() -> Value {
             "outputSchema": text_envelope_output_schema(
                 "a confirmation line `acked: <verb [args...]>` echoing the directive line that was removed from .aida/worker.cmd."
             )
+        },
+
+        // ---- Agent-brief channel (.aida/agent-briefs/<agent>/) ----
+        {
+            "name": "list_briefs",
+            "description": "List substrate-resident agent pickup briefs under `.aida/agent-briefs/<agent>/`, optionally filtered to one agent.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "agent": {
+                        "type": "string",
+                        "description": "Optional agent name to filter by, e.g. codex.",
+                        "pattern": "^[A-Za-z0-9_.-]+$",
+                        "example": "codex"
+                    },
+                    "include_acked": {
+                        "type": "boolean",
+                        "description": "Include acknowledged briefs that normally stay hidden from pickup lists.",
+                        "example": false
+                    }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Found N brief(s):` followed by `- path=<project-relative path> agent=<agent> spec_id=<SPEC-ID> generated_at=<YYYY-MM-DDTHHMMSSZ> status=<pending|acked>` rows, or `No briefs found.` when no matching briefs exist."
+            )
+        },
+        {
+            "name": "read_brief",
+            "description": "Read the full markdown content of an agent brief file returned by list_briefs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Project-relative `.aida/agent-briefs/...` path returned by list_briefs, or an absolute path under the same directory.",
+                        "pattern": "^(\\.aida/agent-briefs/|/).+",
+                        "example": ".aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md"
+                    }
+                },
+                "required": ["path"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "the full brief file content, including YAML frontmatter and all markdown body sections. On failure (not found or path outside .aida/agent-briefs), the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "ack_brief",
+            "description": "Mark an agent brief acknowledged using the TASK-492 convention: update frontmatter status and rename with a `.acked` suffix.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Project-relative `.aida/agent-briefs/...` path returned by list_briefs, or an absolute path under the same directory. Passing an already-acked path is idempotent.",
+                        "pattern": "^(\\.aida/agent-briefs/|/).+",
+                        "example": ".aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md"
+                    }
+                },
+                "required": ["path"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `acked: <project-relative .acked path>` or idempotent `already_acked: <project-relative .acked path>`. On failure, the envelope sets `isError: true` with a human-readable message."
+            )
         }
     ])
 }
@@ -2169,6 +2318,173 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BriefRef {
+    path: String,
+    agent: String,
+    spec_id: String,
+    generated_at: String,
+    status: String,
+}
+
+fn brief_root(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("agent-briefs")
+}
+
+fn required_string<'a>(args: &'a Value, key: &str) -> Result<&'a str, String> {
+    args.get(key)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("Missing required parameter: {}", key))
+}
+
+fn optional_string<'a>(args: &'a Value, key: &str) -> Result<Option<&'a str>, String> {
+    match args.get(key) {
+        None => Ok(None),
+        Some(v) => v
+            .as_str()
+            .map(Some)
+            .ok_or_else(|| format!("Parameter `{}` must be a string", key)),
+    }
+}
+
+fn validate_brief_agent(agent: &str) -> Result<(), String> {
+    if agent.trim().is_empty() {
+        return Err("agent name cannot be empty".to_string());
+    }
+    if !agent
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err(
+            "agent name must contain only ASCII letters, digits, '.', '_' or '-'".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn collect_brief_refs(
+    project_root: &Path,
+    for_agent: Option<&str>,
+    include_acked: bool,
+) -> Result<Vec<BriefRef>, String> {
+    let root = brief_root(project_root);
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    let mut entries = Vec::new();
+    for agent_dir in
+        std::fs::read_dir(&root).map_err(|e| format!("reading {}: {}", root.display(), e))?
+    {
+        let agent_dir = agent_dir.map_err(|e| e.to_string())?;
+        let file_type = agent_dir.file_type().map_err(|e| e.to_string())?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let agent = agent_dir.file_name().to_string_lossy().to_string();
+        if for_agent.is_some_and(|want| want != agent) {
+            continue;
+        }
+        for file in std::fs::read_dir(agent_dir.path()).map_err(|e| e.to_string())? {
+            let file = file.map_err(|e| e.to_string())?;
+            if !file.file_type().map_err(|e| e.to_string())?.is_file() {
+                continue;
+            }
+            let path = file.path();
+            let name = file.file_name().to_string_lossy().to_string();
+            let suffix_acked = name.ends_with(".acked");
+            if !(name.ends_with(".md") || suffix_acked) {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            let fm_status = frontmatter_value(&content, "status");
+            let status = if suffix_acked || fm_status.as_deref() == Some("acked") {
+                "acked"
+            } else {
+                "pending"
+            };
+            if status == "acked" && !include_acked {
+                continue;
+            }
+            let spec_id = frontmatter_value(&content, "spec_id")
+                .unwrap_or_else(|| spec_id_from_brief_filename(&name).unwrap_or_default());
+            let generated_at = frontmatter_value(&content, "generated_at")
+                .unwrap_or_else(|| timestamp_from_brief_filename(&name).unwrap_or_default());
+            entries.push(BriefRef {
+                path: brief_display_path(project_root, &path),
+                agent: agent.clone(),
+                spec_id,
+                generated_at,
+                status: status.to_string(),
+            });
+        }
+    }
+    entries.sort_by(|a, b| {
+        a.agent
+            .cmp(&b.agent)
+            .then(a.generated_at.cmp(&b.generated_at))
+            .then(a.path.cmp(&b.path))
+    });
+    Ok(entries)
+}
+
+fn frontmatter_value(content: &str, key: &str) -> Option<String> {
+    let mut lines = content.lines();
+    if lines.next()? != "---" {
+        return None;
+    }
+    let prefix = format!("{key}:");
+    for line in lines {
+        if line == "---" {
+            return None;
+        }
+        if let Some(raw) = line.strip_prefix(&prefix) {
+            return Some(raw.trim().trim_matches('\'').to_string());
+        }
+    }
+    None
+}
+
+fn spec_id_from_brief_filename(name: &str) -> Option<String> {
+    let name = name.strip_suffix(".acked").unwrap_or(name);
+    let name = name.strip_suffix(".md").unwrap_or(name);
+    let (spec, _) = name.split_once("-20")?;
+    Some(spec.to_string())
+}
+
+fn timestamp_from_brief_filename(name: &str) -> Option<String> {
+    let name = name.strip_suffix(".acked").unwrap_or(name);
+    let name = name.strip_suffix(".md").unwrap_or(name);
+    let (_, rest) = name.split_once("-20")?;
+    Some(format!("20{rest}"))
+}
+
+fn resolve_brief_path(project_root: &Path, raw_path: &str) -> Result<PathBuf, String> {
+    let raw = Path::new(raw_path);
+    if raw
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err("brief path must not contain `..`".to_string());
+    }
+    let path = if raw.is_absolute() {
+        raw.to_path_buf()
+    } else {
+        project_root.join(raw)
+    };
+    let root = brief_root(project_root);
+    if !path.starts_with(&root) {
+        return Err(format!("brief path must be under {}", root.display()));
+    }
+    Ok(path)
+}
+
+fn brief_display_path(project_root: &Path, path: &Path) -> String {
+    path.strip_prefix(project_root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_string()
+}
+
 // Touch the imports re-exported above to silence dead_code on builds where
 // the punt module's helpers happen to be unused (defensive against future
 // refactors). All five items are used in tool implementations.
@@ -2207,15 +2523,15 @@ mod tests {
     }
 
     #[test]
-    fn tool_descriptors_lists_at_least_14_coordination_tools() {
+    fn tool_descriptors_lists_coordination_tools() {
         let desc = tool_descriptors();
         let arr = desc.as_array().unwrap();
         let names: Vec<&str> = arr
             .iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
             .collect();
-        // 7 spec-graph + 14 coordination = 21 total
-        assert!(names.len() >= 21, "expected ≥21 tools, got {}", names.len());
+        // 7 spec-graph + 17 coordination = 24 total.
+        assert!(names.len() >= 24, "expected ≥24 tools, got {}", names.len());
         for required in [
             "list_punts",
             "read_punt",
@@ -2231,6 +2547,9 @@ mod tests {
             "post_directive",
             "list_directives",
             "ack_directive",
+            "list_briefs",
+            "read_brief",
+            "ack_brief",
         ] {
             assert!(names.contains(&required), "missing tool: {}", required);
         }
@@ -2247,8 +2566,8 @@ mod tests {
         let desc = tool_descriptors();
         let arr = desc.as_array().expect("tool_descriptors must be an array");
         assert!(
-            arr.len() >= 21,
-            "expected ≥21 tool descriptors (7 spec-graph + 14 coordination), got {}",
+            arr.len() >= 24,
+            "expected ≥24 tool descriptors (7 spec-graph + 17 coordination), got {}",
             arr.len()
         );
 
@@ -2687,6 +3006,139 @@ mod tests {
             .unwrap_err();
         assert!(err.contains("aida session end"), "{}", err);
         assert!(path.exists(), "non-mcp lease should not be deleted");
+    }
+
+    fn write_test_brief(root: &Path, agent: &str, name: &str, status: &str) -> PathBuf {
+        let dir = root.join(".aida").join("agent-briefs").join(agent);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(name);
+        let spec_id = name.split_once("-20").map(|(s, _)| s).unwrap_or("TASK-X");
+        std::fs::write(
+            &path,
+            format!(
+                "---\nspec_id: {spec_id}\nagent: {agent}\ngenerated_at: 2026-05-23T020000Z\nstatus: {status}\n---\n\n## Routing\n\nBrief body for {spec_id}\n"
+            ),
+        )
+        .unwrap();
+        path
+    }
+
+    #[test]
+    fn brief_tools_list_read_ack_roundtrip() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+        let path = write_test_brief(
+            dir.path(),
+            "codex",
+            "TASK-492-2026-05-23T020000Z.md",
+            "pending",
+        );
+        write_test_brief(
+            dir.path(),
+            "antigravity",
+            "TASK-999-2026-05-23T020001Z.md",
+            "pending",
+        );
+
+        let listed = srv
+            .tool_list_briefs(&json!({"agent": "codex"}))
+            .expect("list briefs");
+        assert!(listed.contains("Found 1 brief(s):"), "{}", listed);
+        assert!(
+            listed.contains("path=.aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md"),
+            "{}",
+            listed
+        );
+        assert!(listed.contains("status=pending"), "{}", listed);
+        assert!(!listed.contains("antigravity"), "{}", listed);
+
+        let read = srv
+            .tool_read_brief(
+                &json!({"path": ".aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md"}),
+            )
+            .expect("read brief");
+        assert!(read.contains("Brief body for TASK-492"), "{}", read);
+
+        let acked = srv
+            .tool_ack_brief(
+                &json!({"path": ".aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md"}),
+            )
+            .expect("ack brief");
+        assert!(
+            acked.contains("acked: .aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md.acked"),
+            "{}",
+            acked
+        );
+        assert!(!path.exists());
+        let acked_path = dir
+            .path()
+            .join(".aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md.acked");
+        let body = std::fs::read_to_string(&acked_path).unwrap();
+        assert!(body.contains("status: acked"), "{}", body);
+
+        let pending = srv
+            .tool_list_briefs(&json!({"agent": "codex"}))
+            .expect("list pending");
+        assert_eq!(pending, "No briefs found.");
+        let all = srv
+            .tool_list_briefs(&json!({"agent": "codex", "include_acked": true}))
+            .expect("list acked");
+        assert!(all.contains("status=acked"), "{}", all);
+    }
+
+    #[test]
+    fn ack_brief_is_idempotent_for_acked_paths_and_original_paths() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+        write_test_brief(
+            dir.path(),
+            "codex",
+            "TASK-492-2026-05-23T020000Z.md",
+            "pending",
+        );
+        srv.tool_ack_brief(
+            &json!({"path": ".aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md"}),
+        )
+        .unwrap();
+
+        let again_original = srv
+            .tool_ack_brief(
+                &json!({"path": ".aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md"}),
+            )
+            .unwrap();
+        assert!(
+            again_original.starts_with("already_acked:"),
+            "{}",
+            again_original
+        );
+
+        let again_acked = srv
+            .tool_ack_brief(
+                &json!({"path": ".aida/agent-briefs/codex/TASK-492-2026-05-23T020000Z.md.acked"}),
+            )
+            .unwrap();
+        assert!(again_acked.starts_with("already_acked:"), "{}", again_acked);
+    }
+
+    #[test]
+    fn brief_tools_reject_path_escape_and_missing_files() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+
+        let err = srv
+            .tool_read_brief(&json!({"path": "../secret"}))
+            .unwrap_err();
+        assert!(err.contains("must not contain"), "{}", err);
+
+        let err = srv
+            .tool_read_brief(&json!({"path": "CLAUDE.md"}))
+            .unwrap_err();
+        assert!(err.contains(".aida/agent-briefs"), "{}", err);
+
+        let err = srv
+            .tool_read_brief(&json!({"path": ".aida/agent-briefs/codex/missing.md"}))
+            .unwrap_err();
+        assert!(err.contains("reading brief"), "{}", err);
     }
 
     /// Concurrent-write contention test: many threads append punt records

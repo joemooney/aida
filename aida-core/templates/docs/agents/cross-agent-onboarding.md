@@ -18,7 +18,7 @@ The strategic positioning: the IDE-embedded coding assistants (Cursor, Cline, Ai
 
 ## What you can do via MCP today
 
-AIDA's MCP server exposes **21 tools** in two clusters:
+AIDA's MCP server exposes **24 tools** in two clusters:
 
 **Important:** the canonical argument names come from `tools/list` over MCP. The list below mirrors what the server actually advertises (verified via `aida-cli/src/mcp.rs` inputSchema descriptors). If a future edit to this doc drifts from the source, **trust `tools/list`**, file a finding, and `aida` will fix the doc.
 
@@ -34,7 +34,7 @@ AIDA's MCP server exposes **21 tools** in two clusters:
 
 These mirror the `aida list / show / add / edit / search / comment` CLI verbs. **Use them for any spec-graph interaction.** Don't shell out to `aida` for these. *(STORY-82 and EPIC-27 will modernize these 7 to match the coordination tools' vocabulary and capability — until then, expect a thinner surface than the coordination cluster.)*
 
-### Cluster 2 — Coordination (14 tools, STORY-361)
+### Cluster 2 — Coordination (17 tools, STORY-361 + STORY-426)
 
 - **Punt channel:**
   - `post_punt({spec_id, detail, category?, lean?, raised_by?})` — required: `spec_id`, `detail`. Append a punt record to `.aida/punts.jsonl`. Does NOT modify spec status — pair with `update_requirement` to flip to `needs-attention`.
@@ -58,9 +58,14 @@ These mirror the `aida list / show / add / edit / search / comment` CLI verbs. *
   - `list_directives()` — list pending directives.
   - `ack_directive({index})` — required: `index`. Remove a directive by its 0-based position.
 
+- **Agent-brief channel** (pickup briefs under `.aida/agent-briefs/<agent>/`):
+  - `list_briefs({agent?, include_acked?})` — list substrate-resident pickup briefs; defaults to pending/unacked only.
+  - `read_brief({path})` — read the full markdown brief content. Use paths returned by `list_briefs`.
+  - `ack_brief({path})` — mark a brief acknowledged using the same `.acked` suffix convention as `aida brief ack`; idempotent when already acked.
+
 These are the **agent-coordination primitives**. They're how multiple agents (you, a human, another agent) coordinate on the same spec graph without stepping on each other.
 
-> **Schemas:** all 21 tools advertise `inputSchema` and descriptor-level `outputSchema`. Runtime responses still use MCP text content envelopes; structured emission of `structuredContent` is the Path B follow-up (**STORY-399**). Treat `outputSchema` as descriptor metadata until that ships.
+> **Schemas:** all 24 tools advertise `inputSchema` and descriptor-level `outputSchema`. Runtime responses still use MCP text content envelopes; structured emission of `structuredContent` is the Path B follow-up (**STORY-399**). Treat `outputSchema` as descriptor metadata until that ships.
 
 ## How to connect (minimum viable)
 
@@ -75,6 +80,8 @@ That's the server. Configure your MCP client to connect to it. For a Codex clien
 A `.mcp.json` is scaffolded at project init for Claude Code MCP integration. Other MCP clients typically need their own config; the connection target is the same `aida mcp-serve` process. Auth is local-socket today; cross-machine + auth is a deferred SPIKE.
 
 `aida mcp-serve` is a long-running process and does not hot-reload the CLI binary. Restart the MCP server after pulling or building AIDA changes if you need newly shipped tool behavior.
+
+When working from an AIDA source checkout, `cargo run -p aida-cli -- pr ship` is supported. The wrapper reinvokes the current development binary for post-merge `aida pull` and `aida session end`, so agents do not need an installed `aida` on `PATH` just to complete the ship flow.
 
 ## Conventions you should follow
 
@@ -153,7 +160,7 @@ In priority order for an agent boarding the project:
 
 AIDA's bet is that the next phase of agent collaboration isn't "smarter agents" but "shared substrate that all agents can coordinate against." Today every coding agent runs in its own isolated context window with its own scratchpads and its own private notes. Switching agents — or running multiple in parallel — means losing context.
 
-The MCP server is the **substrate-as-shared-coordination-surface** made operational. When you (Codex / Cursor / future agent) attach to an AIDA project and use these 21 tools, you're not running on AIDA's island; you're contributing to a graph that Claude Code, the human, and any other agent are also working in. Findings filed via MCP show up in `aida findings list`. Punts you raise route to the same advisor tier human punts route to. Specs you implement get traced via the same `trace:SPEC-ID` convention any other agent uses.
+The MCP server is the **substrate-as-shared-coordination-surface** made operational. When you (Codex / Cursor / future agent) attach to an AIDA project and use these 24 tools, you're not running on AIDA's island; you're contributing to a graph that Claude Code, the human, and any other agent are also working in. Findings filed via MCP show up in `aida findings list`. Punts you raise route to the same advisor tier human punts route to. Briefs routed to you can be listed, read, and acknowledged through MCP. Specs you implement get traced via the same `trace:SPEC-ID` convention any other agent uses.
 
 This is what makes the "agent-agnostic" positioning real rather than rhetorical. Your participation evidences it.
 

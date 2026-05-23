@@ -99,7 +99,8 @@ operator's pickup message into a substrate-resident markdown file at
 `.aida/agent-briefs/<agent>/`. The directory is local runtime state under
 the existing `.aida/*` deny-by-default gitignore block. Use `brief list`
 to route work without scrollback and `brief ack` after the agent has read
-the file.
+the file. MCP-speaking agents should use the equivalent brief tools:
+`list_briefs`, `read_brief`, and `ack_brief`.
 
 `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
 the first-class capture wrapper for demos, training corpus material, and
