@@ -134,9 +134,12 @@ project convention.
 
 Trust MCP `tools/list` for tool names and argument names. Current AIDA
 MCP responses are text envelopes with descriptor-level output schemas;
-parse defensively until `structuredContent` ships. Restart
-`aida mcp-serve` after pulling or rebuilding AIDA if you need newly
-shipped MCP behavior.
+parse defensively until `structuredContent` ships. `aida mcp-serve`
+checks the on-disk `aida --version` after each handled request; when the
+binary version/build SHA has changed, it flushes the current response and
+self-respawns so the next MCP request hits the newer binary. If an agent
+still appears to serve stale behavior, kill that agent's `aida mcp-serve`
+process and let the MCP client respawn it.
 
 Headless orchestrator reliability fixes have the same binary-staleness
 risk. If a drain is already running an older `target/debug/aida` or

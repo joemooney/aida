@@ -79,7 +79,7 @@ That's the server. Configure your MCP client to connect to it. For a Codex clien
 
 A `.mcp.json` is scaffolded at project init for Claude Code MCP integration. Other MCP clients typically need their own config; the connection target is the same `aida mcp-serve` process. Auth is local-socket today; cross-machine + auth is a deferred SPIKE.
 
-`aida mcp-serve` is a long-running process and does not hot-reload the CLI binary. Restart the MCP server after pulling or building AIDA changes if you need newly shipped tool behavior.
+`aida mcp-serve` is a long-running process, but it now checks the on-disk `aida --version` after each handled request. If the package version is newer, or the same version has a different build SHA, the server flushes the current response and self-respawns so the next MCP request uses the new binary. If a client still appears stale, kill that agent's `aida mcp-serve` process and let the MCP client respawn it.
 
 When working from an AIDA source checkout, `cargo run -p aida-cli -- pr ship` is supported. The wrapper reinvokes the current development binary for post-merge `aida pull` and `aida session end`, so agents do not need an installed `aida` on `PATH` just to complete the ship flow.
 
