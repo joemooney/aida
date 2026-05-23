@@ -1,0 +1,39 @@
+id: 019e5603-9bcb-7c00-8fd4-974b03d2fbaa
+spec_id: TASK-501
+agreed_id: TASK-501
+title: TASK-491 regression test exercises --to N path, not --top arithmetic
+description: |
+  The PR-248 regression test `queue_move_to_top_promotes_last_item_to_head`
+  (aida-cli/src/main.rs:25950-25957) calls `move_to_absolute_position(&ids, ids[4], 1)`
+  and asserts queue order `[5, 1, 2, 3, 4]`.
+
+  `move_to_absolute_position` is the function used by the `--to <N>` (TASK-280)
+  code path. The `--top` / `--to-top` (TASK-491) code path does NOT call
+  `move_to_absolute_position`; it uses `entries.first().map(|e| e.position - 1000).unwrap_or(0)`
+  (aida-cli/src/main.rs:51891-51892) — a different mechanism that gives the
+  moved item a position lower than the current head and leaves other entries
+  untouched.
+
+  The two mechanisms produce equivalent end-state ordering for slot=1, so the
+  test is a fair stand-in. But the test's docstring claim ("which is the
+  same path `--top` falls into after the no-op check") is factually wrong,
+  and a regression in the `--top` arithmetic (e.g. someone refactoring the
+  `position - 1000` math) would not be caught by this test.
+
+  Cosmetic — acceptance criteria is substantively met. Two options for the
+  follow-up: (a) update the test comment to accurately describe what it
+  covers; (b) add a true integration test that exercises `aida queue move
+  --to-top` end-to-end through a storage fixture.
+
+  Raised in review of PR-248: https://github.com/joemooney/aida/pull/248#issuecomment-4526152541
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T18:05:37.611821652Z
+modified_at: 2026-05-23T18:05:37.611821652Z
+req_type: Task
+tags:
+- from-review:PR-248
+- kind:test-framing
+- severity:cosmetic
