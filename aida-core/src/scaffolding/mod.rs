@@ -548,7 +548,7 @@ impl Default for ScaffoldConfig {
             include_aida_digest_skill: true,
             generate_git_hooks: true,
             include_commit_msg_hook: true,
-            include_pre_commit_hook: false, // Optional, disabled by default
+            include_pre_commit_hook: true, // Enabled by default
             include_store_pair_hook: true,
             generate_claude_code_hooks: true,
             include_validate_commit_hook: true,
@@ -2504,5 +2504,154 @@ mod tests {
             DiffSlice::FullDiff { .. } => {}
             other => panic!("expected FullDiff, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_pre_commit_hook_scaffolded_and_works() {
+        use std::process::Command;
+        let temp_dir = TempDir::new().unwrap();
+
+        // Helper to run git commands with cleared parent git environment variables
+        let run_git = |args: &[&str]| {
+            let mut cmd = Command::new("git");
+            cmd.args(args);
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            let status = cmd.status().unwrap();
+            assert!(status.success(), "git command {:?} failed", args);
+        };
+
+        // Initialize git
+        run_git(&["init"]);
+
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+
+        let preview = scaffolder.preview(&store);
+
+        // Ensure .git/hooks/pre-commit is in the preview artifacts
+        let pre_commit_art = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == PathBuf::from(".git/hooks/pre-commit"));
+        assert!(
+            pre_commit_art.is_some(),
+            "pre-commit hook should be scaffolded"
+        );
+
+        // Apply the scaffolding
+        scaffolder.apply(&preview).unwrap();
+
+        let hook_path = temp_dir.path().join(".git/hooks/pre-commit");
+        assert!(hook_path.exists(), "pre-commit hook file should exist");
+
+        // Setup dummy git configs for commit
+        run_git(&["config", "user.email", "test@aida.dev"]);
+        run_git(&["config", "user.name", "AIDA Test"]);
+
+        // Write a test .gitignore file
+        std::fs::write(
+            temp_dir.path().join(".gitignore"),
+            "target/\n.aida-store/\n",
+        )
+        .unwrap();
+
+        // Make it executable
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        // Helper to run hook with cleared parent git environment variables
+        let run_hook = |env_var: Option<(&str, &str)>| -> std::process::Output {
+            let mut cmd = Command::new(&hook_path);
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            if let Some((k, v)) = env_var {
+                cmd.env(k, v);
+            }
+            cmd.output().unwrap()
+        };
+
+        // Verify that running the hook with no staged files exits 0
+        let output = run_hook(None);
+        assert!(
+            output.status.success(),
+            "hook should succeed when no files staged"
+        );
+
+        // 1. Stage a normal (non-ignored) file
+        let source_path = temp_dir.path().join("main.rs");
+        std::fs::write(&source_path, "fn main() {}").unwrap();
+
+        run_git(&["add", "main.rs", ".gitignore"]);
+
+        // Run the hook, should succeed!
+        let output = run_hook(None);
+        assert!(
+            output.status.success(),
+            "hook should succeed on non-ignored source file"
+        );
+
+        // 2. Stage a gitignored file
+        let ignored_dir = temp_dir.path().join("target");
+        std::fs::create_dir_all(&ignored_dir).unwrap();
+        let ignored_file = ignored_dir.join("debug.log");
+        std::fs::write(&ignored_file, "build log").unwrap();
+
+        run_git(&["add", "-f", "target/debug.log"]);
+
+        // Run the hook, should fail!
+        let output = run_hook(None);
+        println!("HOOK ATTEMPT STATUS: {:?}", output.status.code());
+        println!(
+            "HOOK ATTEMPT STDOUT: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        println!(
+            "HOOK ATTEMPT STDERR: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !output.status.success(),
+            "hook should refuse gitignored file"
+        );
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("is gitignored"),
+            "error message should say file is gitignored"
+        );
+        assert!(
+            stderr.contains("substrate-as-bouncer.md"),
+            "error message should refer to discipline guide"
+        );
+
+        // 3. Test bypass via environment variable
+        let output = run_hook(Some(("AIDA_ALLOW_INTERMEDIATE", "1")));
+        assert!(
+            output.status.success(),
+            "hook should succeed when AIDA_ALLOW_INTERMEDIATE=1 is set"
+        );
+
+        // 4. Test bypass via .aida-store branch exemption
+        // Create an aida-store branch
+        run_git(&["checkout", "-b", "aida-store"]);
+
+        let output = run_hook(None);
+        assert!(
+            output.status.success(),
+            "hook should succeed when on aida-store branch"
+        );
     }
 }
