@@ -1,0 +1,70 @@
+id: 019e53b1-379d-75a3-bac5-c507effad5f0
+spec_id: TASK-494
+agreed_id: TASK-494
+title: 'aida push: suppress merged-branch + stale-base warnings when code-leg has nothing to push'
+description: |-
+  Empirical UX friction 2026-05-23 ~00:30: user ran `aida push` from /home/joe/ai/aida-task-487 worktree. The command emitted TWO consecutive [y/N] warnings:
+
+  1. **Merged-branch warning**: 'branch task-487 was the head of PR-229 which already merged. New commits will land on origin/<branch> but won't reach main without a fresh PR.'
+
+  2. **Stale-base warning**: 'task-487 is 4 commits behind main: ... Rebase first to avoid stale-base review noise.'
+
+  Both warnings fired AT THE SAME TIME as the code-leg's own status line said 'code task-487 → origin (up to date, nothing to push)'.
+
+  ## The contradiction
+
+  If the code-leg has nothing to push, there are NO new commits to:
+  - Get orphaned on a merged branch (the merged-branch warning's concern)
+  - Generate stale-base review noise (the stale-base warning's concern)
+
+  Both warnings are guarding against risks that can ONLY occur when there ARE unpushed commits. Up-to-date code-leg means the risks are structurally impossible.
+
+  ## The user-experience cost
+
+  Two [y/N] prompts on a routine push where the actual operation is just the store-leg sync (substrate changes from session work). The operator has to read both warnings carefully, realize they don't apply, and press y twice. That's friction + invites blind-y-pressing habit which DEFEATS the purpose of the warnings when they DO matter.
+
+  ## The fix
+
+  In `aida push`:
+
+  - BEFORE emitting either warning, check the code-leg's push state
+  - If 'nothing to push' (no unpushed commits): suppress BOTH warnings; proceed silently to store-leg
+  - If 'has unpushed commits AND branch was merged': emit merged-branch warning (real risk)
+  - If 'has unpushed commits AND base is stale': emit stale-base warning (real risk)
+  - The store-leg's own logic is unaffected — it always runs regardless
+
+  ## Acceptance
+
+  - [ ] `aida push` from a worktree whose code-leg has no unpushed commits does NOT emit merged-branch warning
+  - [ ] `aida push` from a worktree whose code-leg has no unpushed commits does NOT emit stale-base warning
+  - [ ] When code-leg HAS unpushed commits + branch is merged: warning still fires (preserves intended safety)
+  - [ ] When code-leg HAS unpushed commits + base is stale: warning still fires
+  - [ ] Store-leg push proceeds normally in all cases
+  - [ ] Regression test: simulate a worktree with branch X merged + no unpushed commits → invoke aida push → assert NO merged-branch prompt is emitted, store-leg pushes cleanly
+
+  ## Composes with
+
+  - TASK-489 (aida session end --spec/--branch — same 'operator-mental-model vs command-strictness' cluster)
+  - TASK-490 (aida status In Progress visibility — same UX-cluster)
+  - TASK-491 (queue move --to-top — same operator-control cluster)
+  - STORY-411 family ('aida pr ship' wrapper hardening — adjacent infrastructure where warnings should match real risk)
+
+  Could batch into a 'Q1 release-flow + worktree UX' coherent ship.
+
+  ## Priority rationale
+
+  LOW. Cosmetic friction. The warnings are correct when commits exist; just noisy when they don't. Not blocking; reasonable to batch with other operator-UX papercuts in a future coherent cleanup pass.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T07:16:23.581595276Z
+modified_at: 2026-05-23T07:16:23.581595276Z
+req_type: Task
+tags:
+- aida-push
+- from-self-test
+- from-user-friction
+- operator-mental-model
+- papercut
+- ux
