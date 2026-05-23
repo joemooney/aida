@@ -1,0 +1,91 @@
+id: 019e5350-678b-7b22-a69e-defc9590eebc
+spec_id: TASK-492
+agreed_id: TASK-492
+title: 'aida brief: generate per-agent brief files at .aida/agent-briefs/<agent>/ (STORY-425 Level 1)'
+description: |-
+  Level 1 of STORY-425 (multi-agent communication model). The smallest step that removes the cut-n-paste friction we've been hitting all day.
+
+  ## Scope
+
+  New AIDA subcommand surface: `aida brief` with three sub-actions:
+
+  ### `aida brief <agent> <spec> [--note <STR>]`
+
+  Generates a brief file at:
+    `.aida/agent-briefs/<agent>/<SPEC-ID>-<YYYY-MM-DDTHHMMSSZ>.md`
+
+  Brief contents (markdown with frontmatter):
+  - **Frontmatter**: spec_id, agent, generated_at (ISO 8601), generated_by (master/advisor session ID), optional note
+  - **Routing**: 'This brief is for: <agent>. Generated at <timestamp> from the AIDA spec graph.'
+  - **Spec section**: title + status + tags + the spec's full description (acceptance criteria visible)
+  - **Composes with**: walk the relations graph (parent/child/sibling) and surface compose-with names so the agent sees the context
+  - **Discipline pointer**: 'See AGENTS.md (Codex) / docs/agents/<agent>-mcp-setup.md for the per-agent setup conventions.' Per-agent discipline lives in those docs (STORY-417/STORY-418 shipped them); the brief just points at them so it doesn't re-state.
+  - **Optional preamble** (from --note): the 'why this, why now' prose master would otherwise paste manually
+  - **Setup**: standard sibling-worktree + lease commands with the spec ID interpolated
+  - **Trailer convention reminder**: brief commit subject format with `(SPEC-ID)` trailing parens
+
+  ### `aida brief list [--for-agent <name>]`
+
+  Lists briefs at `.aida/agent-briefs/<agent>/` directories. With --for-agent filter, shows only briefs for one agent. Shows brief file + generated_at + spec ID + acked status.
+
+  ### `aida brief ack <brief-file>`
+
+  Marks a brief acknowledged. Implementation: rename brief file to add `.acked` suffix OR move to `.aida/agent-briefs/<agent>/acked/`. Either approach works; pick the cleaner one. Acked briefs stay on disk as audit trail but stop appearing in default `brief list` (use --include-acked to see them).
+
+  ## Acceptance
+
+  - [ ] `aida brief <agent> <spec>` generates a brief file at the specified path
+  - [ ] Default file path follows the timestamp convention from STORY-423 (no colons; Windows-safe)
+  - [ ] Brief contains all sections above; spec description embedded faithfully (don't truncate acceptance)
+  - [ ] `--note <STR>` overrides empty preamble with operator-provided context
+  - [ ] `--note -` reads preamble from stdin (for multi-line briefs)
+  - [ ] `aida brief list` lists current briefs (acked excluded by default)
+  - [ ] `aida brief list --for-agent codex` filters to one agent
+  - [ ] `aida brief ack <file>` marks acknowledged
+  - [ ] Error handling: spec doesn't exist; agent name empty; brief file already exists (with timestamp differentiation this shouldn't happen, but handle race)
+  - [ ] Tests cover all three sub-actions + composes-with derivation + frontmatter shape
+  - [ ] Documented in CLAUDE.md (commands section) and AGENTS.md (per-agent receive-brief workflow)
+  - [ ] `.gitignore` deny pattern: `.aida/agent-briefs/` is per-project ephemeral state (mirroring the existing `.aida/*` deny-by-default convention)
+
+  ## Implementation hints
+
+  - Add `Brief` subcommand in `aida-cli/src/cli.rs`
+  - Render template via a Rust string OR pull from `aida-core/templates/agent-brief.md`
+  - For composes-with: traverse relations via `aida-core/src/db/cached_git_backend.rs` (existing query patterns)
+  - For per-agent discipline pointer: hardcode the convention 'docs/agents/<agent>-mcp-setup.md' for the file name; if it doesn't exist for the named agent, omit the line gracefully
+
+  ## Sketch-first?
+
+  BORDERLINE. The verb is bounded; the file format is constrained by STORY-425's spec. BUT introducing a new subcommand surface IS architecture-class. RECOMMEND: post a 5-10 line subcommand-shape sketch on this TASK (just the clap structure + sub-action verbs) for master alignment; ship directly after. If the shape is obvious, skip the sketch.
+
+  ## Composes with
+
+  - STORY-425 (parent — multi-agent communication model strategic container)
+  - AGENTS.md (Codex's home doc — the brief points here for discipline)
+  - docs/agents/<agent>-mcp-setup.md (per-agent setup — brief points here)
+  - TASK-489 (session-end --spec/--branch — composing UX for spec-context input)
+  - The 35+ briefs master wrote today (empirical source material for what content matters)
+
+  ## Out of scope
+
+  - The agent-side /aida-pickup skill that reads briefs from .aida/agent-briefs/ — that's Level 2 of STORY-425, separate STORY
+  - Auto-cleanup of old acked briefs (handle via aida session prune --briefs as a later TASK)
+  - Sync briefs to remote substrate (the orphan-branch flow doesn't yet handle ephemeral state; future work)
+
+  ## Estimated time
+
+  ~1.5-3h. Bounded subcommand + file template + tests + docs. Codex has the relevant context (today's 16 PRs of subcommand work + 5 PRs of pr-ship hardening that touched similar template-render territory).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T05:30:38.859366257Z
+modified_at: 2026-05-23T05:30:38.859366257Z
+req_type: Task
+tags:
+- aida-brief
+- communication-model
+- multi-agent
+- parent:STORY-425
+- routing
+- scaffolding
