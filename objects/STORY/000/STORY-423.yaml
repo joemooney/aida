@@ -1,0 +1,88 @@
+id: 019e5328-9127-7992-9e18-90ad7947cc9d
+spec_id: STORY-423
+agreed_id: STORY-423
+title: 'aida --asciinema: top-level wrapper flag for recording any aida invocation'
+description: |-
+  User direction 2026-05-22 evening (post-v0.9.0 release): asciinema is going to be important from a training and marketing perspective. The manual incantation `asciinema rec --command "aida queue work ..."` is real friction. A first-class flag removes it for everyone.
+
+  ## Strategic rationale
+
+  The cast files capture FOUR distinct value streams:
+
+  1. **Marketing** — autonomous AIDA invocations are the strongest demos. Today's two /tmp/*.cast files are foundational material for the TASK-403 writeup (and any future demo content)
+  2. **Training corpus** — future agents (LLM training, AIDA's own scaffolded sessions) reading 'how a successful drain looks' need the recordings to exist
+  3. **Empirical evidence** — when a drain fails (BUG-342 ceiling, STORY-281 stale-base catch), the cast IS the substrate's audit trail of what happened
+  4. **Onboarding** — a new user wanting to see 'what does autonomous AIDA actually look like' can replay a cast vs reading a writeup
+
+  Per the substrate-as-bouncer principle (feedback_substrate_as_bouncer_not_rules): if recording is operationally useful, ship the substrate that enables it. Don't rely on humans remembering the manual asciinema incantation.
+
+  ## Proposed shape
+
+  **Top-level wrapper flag**: `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>`
+
+  Behavior:
+  - Wraps the entire `aida` invocation in `asciinema rec --command 'aida <subcommand>'`
+  - Default output path: `$HOME/.aida/casts/<UTC-iso8601>-<subcommand-shape>.cast`
+  - Default title: derived from subcommand + key flags (e.g., 'aida queue work --batch X --auto-complete')
+  - Gracefully no-ops with a warning if asciinema isn't installed ("asciinema not found; recording skipped. Install via: ...")
+  - Returns the cast file path on completion for downstream tooling
+
+  ## Alternative shapes considered
+
+  - **Per-command flag** (`aida queue work --asciinema`): narrower, but discoverability suffers. Top-level wrapper is more findable in `aida --help`.
+  - **Config-driven** (`[recording] asciinema = true`): always-on; useful for power users, but the explicit flag is clearer for ad-hoc demo capture.
+  - **Separate verb** (`aida record <subcommand>`): cleaner namespacing, but adds a new top-level verb for what's effectively a flag.
+
+  RECOMMEND: top-level wrapper flag. Composes with other flags naturally; familiar pattern (like `time aida ...` or `strace aida ...` from Unix tooling).
+
+  ## Acceptance
+
+  - [ ] `aida --asciinema <subcommand>` wraps the invocation in asciinema rec
+  - [ ] Default output: $HOME/.aida/casts/<timestamp>-<command>.cast
+  - [ ] Default title: auto-derived from subcommand + flags
+  - [ ] `--cast-out PATH` overrides default output
+  - [ ] `--cast-title STR` overrides default title
+  - [ ] Graceful no-op when asciinema not installed (warning + continue without recording)
+  - [ ] Graceful no-op when stdin/stdout is not a TTY (e.g., piped invocations) — log + skip recording, run command normally
+  - [ ] Returns the cast file path on completion (visible in stdout)
+  - [ ] Documented in CLAUDE.md / AGENTS.md as the first-class capture mechanism
+  - [ ] Cast files indexed (maybe `aida casts list` for browsing, but defer that to a follow-up)
+
+  ## Composes with
+
+  - TASK-403 (demo writeup — every recorded drain becomes potential narrative material)
+  - STORY-122 (telemetry — both are local-only opt-in recording mechanisms)
+  - The discipline-pack convention of `docs/aida-discipline/` getting an entry on 'recording your work' (follow-up)
+
+  ## Out of scope for this story
+
+  - Cast indexing (`aida casts list / show / play / prune`) — file as follow-up TASK after this lands
+  - Cloud upload integration (asciinema.org or self-hosted) — separate spec
+  - Cast editing/redaction tooling — separate spec
+  - The cast-speedup.py utility from tonight could become `aida casts speedup` eventually, but defer
+
+  ## Sketch-first
+
+  YES — this is a new top-level flag (architecture-class for the command surface). Implementer should sketch:
+  - Exact flag form: `--asciinema` vs `--record` vs other naming
+  - Where the flag is parsed (clap top-level vs custom)
+  - TTY-detection and graceful fallback behavior
+  - Default path conventions (.aida/casts/ project-local vs $HOME/.aida/casts/ global — important for multi-project users)
+  - Integration with the existing rec-aware workflows (asciinema's --command flag, exit-code propagation, signal handling)
+
+  Implementation can probably proceed in a single PR after sketch sign-off; bounded scope (~200-400 LOC + tests + docs).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T04:47:08.071463231Z
+modified_at: 2026-05-23T04:47:08.071463231Z
+req_type: Story
+tags:
+- asciinema
+- demo
+- first-class-recording
+- from-user-direction
+- marketing
+- recording
+- training-data
