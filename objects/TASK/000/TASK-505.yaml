@@ -1,0 +1,62 @@
+id: 019e571f-fb8b-7291-9a66-d7fe483f0463
+spec_id: TASK-505
+agreed_id: TASK-505
+title: make build (and build-release) kill running aida mcp-serve processes so clients respawn with the fresh binary
+description: |-
+  ## Why
+
+  TASK-493 (shipped today) added MCP self-respawn — long-running mcp-serve processes detect a newer on-disk binary and exec themselves on the next request.
+
+  But that only protects servers built >= TASK-493. Pre-TASK-493 servers (e.g. the May 17 PID 2675834 still running on this machine) lack the self-respawn code and just sit there serving stale tools forever. They need an external nudge — once.
+
+  Beyond the migration: every iterative dev rebuild ('make build') should also propagate the new binary into any MCP server immediately, not on the next stochastic MCP request. Otherwise Codex/Claude/Antigravity sessions silently keep talking to the previous build's MCP for a while.
+
+  ## Proposed shape
+
+  Add a 'restart-mcp-servers' make target that pgrep-finds running 'aida mcp-serve' processes and kills them. Wire it as a post-step into 'build' and 'build-release'.
+
+
+
+  ## Why kill (vs gentler signal)
+
+  Pre-TASK-493 servers don't have a signal-handler for graceful respawn — they exit on SIGTERM either way. Post-TASK-493 servers will self-respawn on the next request anyway; killing them just makes the respawn happen NOW instead of stochastically later. MCP clients (Claude Code, Codex, Antigravity) handle subprocess respawn transparently.
+
+  ## Edge cases
+
+  - Multiple worktrees building concurrently — both killing the same PIDs is harmless (kill is idempotent on already-dead pids)
+  - No MCP servers running — message says so, exit 0
+  - pgrep not installed — fall back to ps + grep (less portable but works); pgrep is available on every Linux/macOS we care about
+
+  ## Acceptance
+
+  - [ ] 'make restart-mcp-servers' target exists; works standalone
+  - [ ] 'make build' and 'make build-release' run it as a post-step
+  - [ ] Test: start a fake 'aida mcp-serve' background process, run 'make build', verify it's killed
+  - [ ] Test: 'make build' on a machine with no mcp-serve running emits the 'no running MCP servers' line and exits 0
+  - [ ] Help text registered (via the '## comment' convention)
+
+  ## Composes with
+
+  - TASK-493 (self-respawn — the steady-state mechanism; this TASK is the migration bridge + dev-loop accelerator)
+  - 'aida dev serve' (foreground supervisor for aida-server + vite; doesn't touch mcp-serve)
+  - Makefile build targets
+
+  ## Origin
+
+  2026-05-23 user: empirical observation that the May 17 mcp-serve (PID 2675834, 5d20h old, pre-TASK-493) was still running despite TASK-493 shipping today. Codex referenced an MCP staleness during STORY-432 dispatch.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T23:16:14.347232646Z
+modified_at: 2026-05-23T23:16:14.347232646Z
+req_type: Task
+tags:
+- build
+- dev-loop
+- from-self-test
+- from-user-direction
+- makefile
+- mcp
+- migration-bridge
+- sibling-of-TASK-493

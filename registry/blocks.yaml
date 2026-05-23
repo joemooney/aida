@@ -245,7 +245,7 @@ blocks:
   type_prefix: TASK
   range_start: 415
   range_end: 514
-  next: 505
+  next: 506
   allocated_at: 2026-05-17T07:12:20.304858484Z
 - node_id: '1'
   owner: joe
