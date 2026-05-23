@@ -82,13 +82,13 @@ use aida_core::{
 };
 
 use crate::cli::{
-    AdvisorCommand, BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand,
-    DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
-    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand,
-    OrchestratorCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand,
-    ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
-    ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand,
-    SkillCommand, TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
+    AdvisorCommand, BlockCommand, BriefCommand, CacheCommand, Cli, Command, CommentCommand,
+    ConfigCommand, DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
+    FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand,
+    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand,
+    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand,
+    SessionWakeupCommand, SkillCommand, TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1025,6 +1025,24 @@ fn run() -> Result<()> {
             // Legacy SQLite show_requirement always prints comments inline,
             // so the --comments flag is a no-op here. Git backend honors it.
             show_requirement(&storage, id)?;
+        }
+        Command::Brief {
+            agent,
+            spec,
+            note,
+            cmd,
+        } => {
+            let store = storage.load()?;
+            let project_root = find_project_root()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+            handle_brief_command(
+                agent.as_deref(),
+                spec.as_deref(),
+                note.as_deref(),
+                cmd,
+                &store,
+                &project_root,
+            )?;
         }
         Command::Edit {
             id,
@@ -3357,6 +3375,25 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Mcp(mcp_cmd) => {
             // trace:STORY-361 | ai:claude
             return handle_mcp_command(mcp_cmd);
+        }
+        Command::Brief {
+            agent,
+            spec,
+            note,
+            cmd,
+        } => {
+            let store = backend.load()?;
+            let project_root = store_path
+                .parent()
+                .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+            return handle_brief_command(
+                agent.as_deref(),
+                spec.as_deref(),
+                note.as_deref(),
+                cmd,
+                &store,
+                project_root,
+            );
         }
         Command::Status {
             no_dev_context,
@@ -5695,6 +5732,573 @@ pub fn is_terminal_status_str(s: &str) -> bool {
     // finished on a branch; auto-bumps to Completed once merged to main).
     let t = s.trim();
     t.eq_ignore_ascii_case("completed") || t.eq_ignore_ascii_case("rejected")
+}
+
+fn handle_brief_command(
+    agent: Option<&str>,
+    spec: Option<&str>,
+    note: Option<&str>,
+    cmd: &Option<BriefCommand>,
+    store: &RequirementsStore,
+    project_root: &std::path::Path,
+) -> Result<()> {
+    match cmd {
+        None => {
+            let agent = agent.ok_or_else(|| {
+                anyhow::anyhow!("usage: aida brief <agent> <SPEC-ID> [--note <STR>|--note -]")
+            })?;
+            let spec = spec.ok_or_else(|| {
+                anyhow::anyhow!("usage: aida brief <agent> <SPEC-ID> [--note <STR>|--note -]")
+            })?;
+            let note = read_brief_note(note)?;
+            let path = create_agent_brief(project_root, store, agent, spec, note.as_deref())?;
+            println!("{}", path.display());
+            Ok(())
+        }
+        Some(BriefCommand::List {
+            for_agent,
+            include_acked,
+        }) => list_agent_briefs(project_root, for_agent.as_deref(), *include_acked),
+        Some(BriefCommand::Ack { brief_file }) => ack_agent_brief(brief_file),
+    }
+}
+
+fn read_brief_note(note: Option<&str>) -> Result<Option<String>> {
+    match note {
+        Some("-") => {
+            let mut buf = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)
+                .context("failed to read --note - from stdin")?;
+            Ok(Some(buf.trim_end_matches(['\r', '\n']).to_string()))
+        }
+        Some(text) => Ok(Some(text.to_string())),
+        None => Ok(None),
+    }
+}
+
+fn create_agent_brief(
+    project_root: &std::path::Path,
+    store: &RequirementsStore,
+    agent: &str,
+    spec: &str,
+    note: Option<&str>,
+) -> Result<std::path::PathBuf> {
+    let agent = validate_brief_agent(agent)?;
+    let req = store
+        .get_requirement_by_spec_id(spec)
+        .ok_or_else(|| not_found::requirement_not_found(spec, None))?;
+    let spec_id = req.spec_id.as_deref().unwrap_or(spec);
+    let generated_at = chrono::Utc::now().format("%Y-%m-%dT%H%M%SZ").to_string();
+    let brief_dir = project_root.join(".aida").join("agent-briefs").join(agent);
+    std::fs::create_dir_all(&brief_dir)
+        .with_context(|| format!("failed to create {}", brief_dir.display()))?;
+    let path = brief_dir.join(format!("{spec_id}-{generated_at}.md"));
+    let body = render_agent_brief(agent, spec_id, req, store, &generated_at, note);
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .with_context(|| {
+            format!(
+                "brief already exists or cannot be written: {}",
+                path.display()
+            )
+        })?;
+    std::io::Write::write_all(&mut file, body.as_bytes())
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(path)
+}
+
+fn validate_brief_agent(agent: &str) -> Result<&str> {
+    let agent = agent.trim();
+    if agent.is_empty() {
+        anyhow::bail!("agent name cannot be empty");
+    }
+    if !agent
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        anyhow::bail!("agent name must contain only ASCII letters, digits, '.', '_' or '-'");
+    }
+    Ok(agent)
+}
+
+fn render_agent_brief(
+    agent: &str,
+    spec_id: &str,
+    req: &Requirement,
+    store: &RequirementsStore,
+    generated_at: &str,
+    note: Option<&str>,
+) -> String {
+    let generated_by = brief_generated_by();
+    let mut out = String::new();
+    out.push_str("---\n");
+    out.push_str(&format!("spec_id: {}\n", yaml_scalar(spec_id)));
+    out.push_str(&format!("agent: {}\n", yaml_scalar(agent)));
+    out.push_str(&format!("generated_at: {}\n", yaml_scalar(generated_at)));
+    out.push_str(&format!("generated_by: {}\n", yaml_scalar(&generated_by)));
+    if let Some(note) = note {
+        out.push_str("note: |-\n");
+        out.push_str(&indent_block(note, "  "));
+    }
+    out.push_str("status: pending\n");
+    out.push_str("---\n\n");
+
+    out.push_str(&format!(
+        "## Routing\n\nThis brief is for: {agent}. Generated {generated_at} from the AIDA spec graph.\n\n"
+    ));
+    out.push_str("## Optional preamble\n\n");
+    if let Some(note) = note.filter(|n| !n.trim().is_empty()) {
+        out.push_str(note);
+        out.push_str("\n\n");
+    } else {
+        out.push_str("_No operator note provided._\n\n");
+    }
+    out.push_str("## Spec\n\n");
+    out.push_str(&format!("- ID: {spec_id}\n"));
+    out.push_str(&format!("- Title: {}\n", req.title));
+    out.push_str(&format!("- Status: {}\n", req.status));
+    out.push_str(&format!("- Type: {}\n", req.req_type));
+    out.push_str(&format!("- Priority: {}\n", req.priority));
+    out.push_str(&format!(
+        "- Tags: {}\n\n",
+        sorted_tags(&req.tags).unwrap_or_else(|| "none".to_string())
+    ));
+    out.push_str(&req.description);
+    out.push_str("\n\n");
+
+    out.push_str("## Composes with\n\n");
+    let relations = brief_relationship_lines(req, store);
+    if relations.is_empty() {
+        out.push_str("_No direct relationships recorded._\n\n");
+    } else {
+        for line in relations {
+            out.push_str("- ");
+            out.push_str(&line);
+            out.push('\n');
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Discipline\n\n");
+    out.push_str("- Start with AGENTS.md for Codex-oriented project discipline.\n");
+    out.push_str(&format!(
+        "- Agent setup convention: docs/agents/{agent}-mcp-setup.md if present.\n\n"
+    ));
+
+    let branch = spec_id.to_ascii_lowercase();
+    out.push_str("## Setup\n\n");
+    out.push_str("```bash\n");
+    out.push_str("cd /home/joe/ai/aida\n");
+    out.push_str("git fetch origin main\n");
+    out.push_str(&format!(
+        "git worktree add /home/joe/ai/aida-{branch} -b {branch} origin/main\n"
+    ));
+    out.push_str(&format!("cd /home/joe/ai/aida-{branch}\n"));
+    out.push_str("ln -s /home/joe/ai/aida/.aida-store .aida-store\n");
+    out.push_str(&format!(
+        "aida session start --owns {spec_id} --branch {branch} --path /home/joe/ai/aida-{branch} --reuse-branch\n"
+    ));
+    out.push_str("```\n\n");
+
+    out.push_str("## Trailer reminder\n\n");
+    out.push_str(&format!(
+        "Use a trailing-parens spec trailer in the commit subject: `({spec_id})` for a single-spec ship, or include every shipped spec in the same trailing parens.\n"
+    ));
+    out
+}
+
+fn brief_generated_by() -> String {
+    std::env::var("AIDA_SESSION_ID")
+        .or_else(|_| std::env::var("CLAUDE_CODE_SESSION_ID"))
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn yaml_scalar(value: &str) -> String {
+    if value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '/'))
+    {
+        value.to_string()
+    } else {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+}
+
+fn indent_block(value: &str, prefix: &str) -> String {
+    if value.is_empty() {
+        return format!("{prefix}\n");
+    }
+    value
+        .lines()
+        .map(|line| format!("{prefix}{line}\n"))
+        .collect()
+}
+
+fn sorted_tags(tags: &HashSet<String>) -> Option<String> {
+    if tags.is_empty() {
+        return None;
+    }
+    let mut tags = tags.iter().cloned().collect::<Vec<_>>();
+    tags.sort();
+    Some(tags.join(", "))
+}
+
+fn brief_relationship_lines(req: &Requirement, store: &RequirementsStore) -> Vec<String> {
+    let mut lines = Vec::new();
+    for rel in &req.relationships {
+        if let Some(target) = store.get_requirement_by_id(&rel.target_id) {
+            let target_id = target
+                .spec_id
+                .as_deref()
+                .or(target.agreed_id.as_deref())
+                .unwrap_or("<no-spec-id>");
+            lines.push(format!(
+                "{}: {} — {}",
+                rel.rel_type, target_id, target.title
+            ));
+        }
+    }
+    for other in &store.requirements {
+        for rel in &other.relationships {
+            if rel.target_id == req.id {
+                let other_id = other
+                    .spec_id
+                    .as_deref()
+                    .or(other.agreed_id.as_deref())
+                    .unwrap_or("<no-spec-id>");
+                lines.push(format!(
+                    "referenced by {}: {} — {}",
+                    rel.rel_type, other_id, other.title
+                ));
+            }
+        }
+    }
+    lines.sort();
+    lines.dedup();
+    lines
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BriefListEntry {
+    path: std::path::PathBuf,
+    spec_id: String,
+    agent: String,
+    generated_at: String,
+    acked: bool,
+}
+
+fn list_agent_briefs(
+    project_root: &std::path::Path,
+    for_agent: Option<&str>,
+    include_acked: bool,
+) -> Result<()> {
+    if let Some(agent) = for_agent {
+        validate_brief_agent(agent)?;
+    }
+    let entries = collect_agent_briefs(project_root, for_agent, include_acked)?;
+    if entries.is_empty() {
+        println!("No briefs found.");
+        return Ok(());
+    }
+    for entry in entries {
+        let status = if entry.acked { "acked" } else { "pending" };
+        println!(
+            "{}  {}  {}  {}  {}",
+            entry.generated_at,
+            entry.agent,
+            entry.spec_id,
+            status,
+            entry.path.display()
+        );
+    }
+    Ok(())
+}
+
+fn collect_agent_briefs(
+    project_root: &std::path::Path,
+    for_agent: Option<&str>,
+    include_acked: bool,
+) -> Result<Vec<BriefListEntry>> {
+    let root = project_root.join(".aida").join("agent-briefs");
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    let mut entries = Vec::new();
+    for agent_dir in
+        std::fs::read_dir(&root).with_context(|| format!("failed to read {}", root.display()))?
+    {
+        let agent_dir = agent_dir?;
+        if !agent_dir.file_type()?.is_dir() {
+            continue;
+        }
+        let agent = agent_dir.file_name().to_string_lossy().to_string();
+        if for_agent.is_some_and(|want| want != agent) {
+            continue;
+        }
+        for file in std::fs::read_dir(agent_dir.path())? {
+            let file = file?;
+            if !file.file_type()?.is_file() {
+                continue;
+            }
+            let path = file.path();
+            let name = file.file_name().to_string_lossy().to_string();
+            let acked = name.ends_with(".acked");
+            if acked && !include_acked {
+                continue;
+            }
+            if !(name.ends_with(".md") || acked) {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            let spec_id = frontmatter_value(&content, "spec_id")
+                .unwrap_or_else(|| spec_id_from_brief_filename(&name).unwrap_or_default());
+            let generated_at = frontmatter_value(&content, "generated_at").unwrap_or_default();
+            entries.push(BriefListEntry {
+                path,
+                spec_id,
+                agent: agent.clone(),
+                generated_at,
+                acked,
+            });
+        }
+    }
+    entries.sort_by(|a, b| {
+        a.agent
+            .cmp(&b.agent)
+            .then(a.generated_at.cmp(&b.generated_at))
+            .then(a.path.cmp(&b.path))
+    });
+    Ok(entries)
+}
+
+fn frontmatter_value(content: &str, key: &str) -> Option<String> {
+    let mut lines = content.lines();
+    if lines.next()? != "---" {
+        return None;
+    }
+    let prefix = format!("{key}:");
+    for line in lines {
+        if line == "---" {
+            return None;
+        }
+        if let Some(raw) = line.strip_prefix(&prefix) {
+            return Some(raw.trim().trim_matches('\'').to_string());
+        }
+    }
+    None
+}
+
+fn spec_id_from_brief_filename(name: &str) -> Option<String> {
+    let name = name.strip_suffix(".acked").unwrap_or(name);
+    let name = name.strip_suffix(".md").unwrap_or(name);
+    let (spec, _) = name.rsplit_once('-')?;
+    Some(spec.to_string())
+}
+
+fn ack_agent_brief(brief_file: &std::path::Path) -> Result<()> {
+    let path = brief_file;
+    if !path.exists() {
+        anyhow::bail!("brief file not found: {}", path.display());
+    }
+    if path.extension().and_then(|e| e.to_str()) == Some("acked") {
+        println!("Already acknowledged: {}", path.display());
+        return Ok(());
+    }
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("invalid brief file path: {}", path.display()))?;
+    let acked_path = path.with_file_name(format!("{file_name}.acked"));
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read brief {}", path.display()))?;
+    let content = if content.contains("\nstatus: pending\n") {
+        content.replacen("\nstatus: pending\n", "\nstatus: acked\n", 1)
+    } else {
+        content
+    };
+    std::fs::write(path, content)
+        .with_context(|| format!("failed to update brief status in {}", path.display()))?;
+    std::fs::rename(path, &acked_path).with_context(|| {
+        format!(
+            "failed to acknowledge brief {} -> {}",
+            path.display(),
+            acked_path.display()
+        )
+    })?;
+    println!("Acknowledged: {}", acked_path.display());
+    Ok(())
+}
+
+#[cfg(test)]
+mod task_492_brief_tests {
+    use super::*;
+    use aida_core::{Relationship, RelationshipType};
+
+    fn req(spec_id: &str, title: &str, description: &str) -> Requirement {
+        let mut req = Requirement::new(title.to_string(), description.to_string());
+        req.spec_id = Some(spec_id.to_string());
+        req.status = RequirementStatus::Approved;
+        req.req_type = RequirementType::Task;
+        req.tags.insert("codex".to_string());
+        req
+    }
+
+    fn store_with_related() -> RequirementsStore {
+        let mut parent = req("STORY-425", "Communication model", "Parent story");
+        parent.req_type = RequirementType::Story;
+        let mut task = req(
+            "TASK-492",
+            "aida brief command",
+            "Full description\n\n## Acceptance\n- embed this faithfully",
+        );
+        let child = req("TASK-493", "Follow-up", "Child task");
+        task.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: parent.id,
+            created_at: None,
+            created_by: None,
+        });
+        parent.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: task.id,
+            created_at: None,
+            created_by: None,
+        });
+        task.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: child.id,
+            created_at: None,
+            created_by: None,
+        });
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![parent, task, child];
+        store
+    }
+
+    #[test]
+    fn brief_cli_parses_canonical_create_shape() {
+        let cli = Cli::try_parse_from(["aida", "brief", "codex", "TASK-492", "--note", "ship it"])
+            .unwrap();
+        match cli.command {
+            Command::Brief {
+                agent,
+                spec,
+                note,
+                cmd,
+            } => {
+                assert_eq!(agent.as_deref(), Some("codex"));
+                assert_eq!(spec.as_deref(), Some("TASK-492"));
+                assert_eq!(note.as_deref(), Some("ship it"));
+                assert!(cmd.is_none());
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn brief_cli_parses_list_and_ack_subcommands() {
+        let list = Cli::try_parse_from([
+            "aida",
+            "brief",
+            "list",
+            "--for-agent",
+            "codex",
+            "--include-acked",
+        ])
+        .unwrap();
+        match list.command {
+            Command::Brief {
+                cmd:
+                    Some(BriefCommand::List {
+                        for_agent,
+                        include_acked,
+                    }),
+                ..
+            } => {
+                assert_eq!(for_agent.as_deref(), Some("codex"));
+                assert!(include_acked);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let ack = Cli::try_parse_from(["aida", "brief", "ack", "brief.md"]).unwrap();
+        match ack.command {
+            Command::Brief {
+                cmd: Some(BriefCommand::Ack { brief_file }),
+                ..
+            } => assert_eq!(brief_file, std::path::PathBuf::from("brief.md")),
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn create_brief_writes_frontmatter_sections_and_relationships() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let path = create_agent_brief(
+            temp.path(),
+            &store,
+            "codex",
+            "TASK-492",
+            Some("why this, why now"),
+        )
+        .unwrap();
+
+        let relative = path.strip_prefix(temp.path()).unwrap().to_string_lossy();
+        assert!(relative.starts_with(".aida/agent-briefs/codex/TASK-492-"));
+        assert!(relative.ends_with("Z.md"));
+        assert!(!relative.contains(':'));
+
+        let body = std::fs::read_to_string(path).unwrap();
+        assert!(body.contains("spec_id: TASK-492"));
+        assert!(body.contains("agent: codex"));
+        assert!(body.contains("status: pending"));
+        assert!(body.contains("## Routing"));
+        assert!(body.contains("## Optional preamble"));
+        assert!(body.contains("why this, why now"));
+        assert!(body.contains("## Spec"));
+        assert!(body.contains("## Acceptance\n- embed this faithfully"));
+        assert!(body.contains("## Composes with"));
+        assert!(body.contains("parent: STORY-425"));
+        assert!(body.contains("child: TASK-493"));
+        assert!(body.contains("## Discipline"));
+        assert!(body.contains("docs/agents/codex-mcp-setup.md"));
+        assert!(body.contains("## Setup"));
+        assert!(body.contains("aida session start --owns TASK-492"));
+        assert!(body.contains("## Trailer reminder"));
+        assert!(body.contains("(TASK-492)"));
+    }
+
+    #[test]
+    fn list_excludes_acked_by_default_and_ack_renames_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let path = create_agent_brief(temp.path(), &store, "codex", "TASK-492", None).unwrap();
+
+        let pending = collect_agent_briefs(temp.path(), Some("codex"), false).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].spec_id, "TASK-492");
+        assert!(!pending[0].acked);
+
+        ack_agent_brief(&path).unwrap();
+        let pending = collect_agent_briefs(temp.path(), Some("codex"), false).unwrap();
+        assert!(pending.is_empty());
+        let all = collect_agent_briefs(temp.path(), Some("codex"), true).unwrap();
+        assert_eq!(all.len(), 1);
+        assert!(all[0].acked);
+        let body = std::fs::read_to_string(&all[0].path).unwrap();
+        assert!(body.contains("status: acked"));
+    }
+
+    #[test]
+    fn invalid_agent_names_are_rejected() {
+        assert!(validate_brief_agent("").is_err());
+        assert!(validate_brief_agent("../codex").is_err());
+        assert!(validate_brief_agent("codex").is_ok());
+    }
 }
 
 /// Validate a status string against the canonical set. Accepts case-

@@ -88,8 +88,18 @@ aida goal --spec <ID> --copy           # --copy → clipboard; --invoke → bare
 aida changelog generate                # Print structured CHANGELOG.md to stdout — every release + [Unreleased] (TASK-299)
 aida changelog refresh                 # Rewrite CHANGELOG.md (idempotent — same git state → byte-identical output)
 aida changelog preview                 # Stdout-only preview of the [Unreleased] section
+aida brief codex TASK-492 --note "why this, why now"  # Write a local pickup brief under .aida/agent-briefs/
+aida brief list --for-agent codex      # List pending briefs for a target agent; add --include-acked for audit
+aida brief ack .aida/agent-briefs/codex/<file>.md  # Mark a brief acknowledged
 aida --asciinema queue work --batch overnight-X --auto-complete  # Record a demo/training/audit cast under ~/.aida/casts/
 ```
+
+`aida brief <agent> <SPEC-ID> [--note <STR>|--note -]` turns the
+operator's pickup message into a substrate-resident markdown file at
+`.aida/agent-briefs/<agent>/`. The directory is local runtime state under
+the existing `.aida/*` deny-by-default gitignore block. Use `brief list`
+to route work without scrollback and `brief ack` after the agent has read
+the file.
 
 `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
 the first-class capture wrapper for demos, training corpus material, and
