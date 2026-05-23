@@ -17,7 +17,7 @@ input — is learned the hard way, one papercut at a time. This pack ships
 that pattern up front so a new project starts with the discipline already
 in hand.
 
-## The five guides
+## The seven guides
 
 | Guide | What it covers |
 |-------|----------------|
@@ -26,6 +26,8 @@ in hand.
 | [`machinery-glossary.md`](machinery-glossary.md) | One-paragraph definitions of AIDA's orchestration / session / autonomy machinery — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode |
 | [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, and parallel-choice vs sequential-step UI |
 | [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
+| [`skill-prompt-kinds.md`](skill-prompt-kinds.md) | Classifying `AskUserQuestion` prompts into mechanical vs design-fork kind, and their `--zen` pause behavior |
+| [`substrate-as-bouncer.md`](substrate-as-bouncer.md) | The substrate-as-bouncer principle, detailing the pre-commit gitignored check hook and reviewer PR gates |
 
 ## The companion: the starter memory pack
 
