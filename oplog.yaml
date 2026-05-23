@@ -9777,5 +9777,99 @@ operations:
   timestamp: 2026-05-23T04:34:18.197001039Z
   kind: !SetStatus
     status: Approved
-clock: 1057
+- id: 019e532a-dced-7e72-a1c8-8c4fddb0f044
+  target_id: 019e5328-9127-7992-9e18-90ad7947cc9d
+  author: aida
+  node_id: '1'
+  lamport: 1058
+  timestamp: 2026-05-23T04:49:38.541623428Z
+  kind: !SetDescription
+    description: |-
+      User direction 2026-05-22 evening (post-v0.9.0 release): asciinema is going to be important from a training and marketing perspective. The manual incantation `asciinema rec --command "aida queue work ..."` is real friction. A first-class flag removes it for everyone.
+
+      ## Canonical invocation form (per user 2026-05-22)
+
+      ```
+      aida --asciinema --cast-out /tmp/demo.cast --cast-title "Demo: overnight drain" \
+           queue work --batch overnight-X --auto-complete
+      ```
+
+      That exact form MUST work when STORY-423 ships. All three flag positions are top-level wrappers around the inner subcommand.
+
+      ## Strategic rationale
+
+      The cast files capture FOUR distinct value streams:
+
+      1. **Marketing** — autonomous AIDA invocations are the strongest demos. Today's two /tmp/*.cast files are foundational material for the TASK-403 writeup
+      2. **Training corpus** — future agents reading 'how a successful drain looks' need recordings to exist
+      3. **Empirical evidence** — when a drain fails (BUG-342 ceiling, STORY-281 stale-base catch), the cast IS the substrate's audit trail
+      4. **Onboarding** — a new user wanting to see 'what does autonomous AIDA actually look like' can replay a cast vs reading a writeup
+
+      Per feedback_substrate_as_bouncer_not_rules: if recording is operationally useful, ship the substrate that enables it.
+
+      ## Shape
+
+      **Top-level wrapper flag**: `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>`
+
+      ## Default path — TIMESTAMP MUST INCLUDE HHMMSS (per user 2026-05-22)
+
+      Default output when `--cast-out` is not provided:
+
+        $HOME/.aida/casts/YYYY-MM-DDTHHMMSSZ-<subcommand-shape>.cast
+
+      The timestamp uses **ISO 8601 basic time form** (no colons in time portion) so:
+      - Filenames are filesystem-safe across all platforms (Windows hates colons)
+      - Multiple runs on the same day produce unique paths
+      - Sort order matches chronological order
+
+      Examples:
+        2026-05-23T013045Z-queue-work-batch-overnight-X.cast
+        2026-05-23T020112Z-queue-work-TASK-340-auto-complete.cast
+        2026-05-23T143022Z-aida-pr-ship-220.cast
+
+      NOT: 2026-05-23-... (day-only — collides on multi-run-per-day; explicit no per user direction)
+      NOT: 2026-05-23T01:30:45Z (colon-separated — Windows-hostile, even though valid ISO 8601)
+
+      ## Default title
+
+      When `--cast-title` is not provided: auto-derived from subcommand + key flags.
+      Example: 'aida queue work --batch overnight-X --auto-complete'
+
+      ## Acceptance
+
+      - [ ] `aida --asciinema <subcommand>` wraps the invocation in asciinema rec
+      - [ ] Default output path: `$HOME/.aida/casts/YYYY-MM-DDTHHMMSSZ-<subcommand-shape>.cast` with the EXACT timestamp format above (ISO 8601 basic time form, Z suffix, no colons in time)
+      - [ ] Default title: auto-derived from subcommand + flags
+      - [ ] `--cast-out PATH` overrides default output (absolute or relative path)
+      - [ ] `--cast-title STR` overrides default title (arbitrary string)
+      - [ ] The canonical invocation form from this spec works end-to-end (regression test)
+      - [ ] Graceful no-op when asciinema not installed (warning + continue without recording)
+      - [ ] Graceful no-op when stdin/stdout is not a TTY (e.g., piped invocations) — log + skip recording, run command normally
+      - [ ] Returns the cast file path on completion (visible in stdout)
+      - [ ] Documented in CLAUDE.md / AGENTS.md as the first-class capture mechanism
+      - [ ] On Windows, the filename works because colons are absent from the timestamp
+
+      ## Composes with
+
+      - TASK-403 (demo writeup — every recorded drain becomes potential narrative material)
+      - STORY-122 (telemetry — both are local-only opt-in recording mechanisms)
+      - TASK-486 (aida status — could surface 'recent casts' in dev context block as a follow-up)
+
+      ## Out of scope for this story
+
+      - Cast indexing (`aida casts list / show / play / prune`) — follow-up TASK after this lands
+      - Cloud upload integration — separate spec
+      - Cast editing/redaction tooling — separate spec
+      - `aida casts speedup` (tonight's cast-speedup.py utility productized) — separate TASK
+
+      ## Sketch-first required
+
+      YES — this is a new top-level flag (architecture-class for the command surface). Implementer should sketch:
+      - Where the flag is parsed (clap top-level vs custom)
+      - TTY-detection and graceful fallback behavior
+      - Cross-platform filename considerations (the timestamp-no-colons decision above is one such; verify implementation honors it)
+      - Integration with exit-code propagation + signal handling
+
+      Implementation can proceed in a single PR after sketch sign-off; bounded scope (~200-400 LOC + tests + docs).
+clock: 1058
 node_id: '1'
