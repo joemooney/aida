@@ -457,12 +457,12 @@ pub enum SessionCommand {
     /// can use the lease list to coordinate.
     // trace:EPIC-20 | ai:claude
     Start {
-        /// Scope this session owns. Examples:
+        /// Scope this session owns (alias: --spec <SCOPE>). Examples:
         ///   - `EPIC-N` / `epic-N` (resolved against the store)
         ///   - `FR-N` (any spec id)
         ///   - `src/scaffolding/**` (path glob — stored, not validated)
         ///   - `feature:auth` (free-form tag)
-        #[clap(long, value_name = "SCOPE")]
+        #[clap(long, alias = "spec", value_name = "SCOPE")]
         owns: String,
 
         /// Branch name for the new worktree (default: derived from --owns).
