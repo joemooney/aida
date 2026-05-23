@@ -88,9 +88,9 @@ aida goal --spec <ID> --copy           # --copy → clipboard; --invoke → bare
 aida changelog generate                # Print structured CHANGELOG.md to stdout — every release + [Unreleased] (TASK-299)
 aida changelog refresh                 # Rewrite CHANGELOG.md (idempotent — same git state → byte-identical output)
 aida changelog preview                 # Stdout-only preview of the [Unreleased] section
-aida brief codex TASK-492 --note "why this, why now"  # Write a local pickup brief under .aida/agent-briefs/
-aida brief list --for-agent codex      # List pending briefs for a target agent; add --include-acked for audit
-aida brief ack .aida/agent-briefs/codex/<file>.md  # Mark a brief acknowledged
+aida brief <agent> TASK-492 --note "why this, why now"  # Write a local pickup brief under .aida/agent-briefs/
+aida brief list --for-agent <agent>      # List pending briefs for a target agent; add --include-acked for audit
+aida brief ack .aida/agent-briefs/<agent>/<file>.md  # Mark a brief acknowledged
 aida --asciinema queue work --batch overnight-X --auto-complete  # Record a demo/training/audit cast under ~/.aida/casts/
 ```
 

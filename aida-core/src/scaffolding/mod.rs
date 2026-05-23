@@ -1486,6 +1486,10 @@ impl Scaffolder {
                     "Codex MCP roundtrip verdict",
                 ),
                 ("antigravity-mcp-setup.md", "Antigravity MCP setup guide"),
+                (
+                    "antigravity-brief-pickup.md",
+                    "Antigravity brief pickup guide",
+                ),
             ];
             for (name, desc) in agent_docs {
                 let key = format!("docs/agents/{name}");
@@ -2373,6 +2377,10 @@ mod tests {
             .path()
             .join("docs/agents/codex-mcp-setup.md")
             .exists());
+        assert!(temp_dir
+            .path()
+            .join("docs/agents/antigravity-brief-pickup.md")
+            .exists());
         assert!(temp_dir.path().join("docs/extending-skills.md").exists());
     }
 
@@ -2390,6 +2398,7 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/agents/codex-brief-pickup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/codex-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
+        assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-brief-pickup.md")));
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
     }
 
