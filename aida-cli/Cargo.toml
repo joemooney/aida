@@ -23,6 +23,7 @@ serde_json = { workspace = true }
 clap = { workspace = true }
 inquire = { workspace = true }
 colored = { workspace = true }
+signal-hook = "0.3"
 # Pure-Rust unified-diff producer for `aida scaffold diff` (FR-1-027).
 # Lightweight, no hard dep on /usr/bin/diff — works on Windows too.
 similar = "2"

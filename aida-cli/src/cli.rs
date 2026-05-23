@@ -3426,6 +3426,40 @@ pub enum BriefCommand {
     },
 }
 
+/// Launch and track external AI agent processes under AIDA supervision.
+// trace:STORY-432 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum AgentCommand {
+    /// Launch a new agent process.
+    #[clap(subcommand)]
+    New(AgentNewCommand),
+}
+
+/// Agent-specific launchers. Claude lands first; Codex and Antigravity
+/// follow the same nested shape in later EPIC-31 phases.
+// trace:STORY-432 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum AgentNewCommand {
+    /// Spawn Claude Code with project-correct cwd/env and registry tracking.
+    Claude {
+        /// Role propagated to the spawned Claude process as AIDA_SESSION_ROLE.
+        #[clap(long)]
+        role: Option<String>,
+
+        /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
+        #[clap(long)]
+        spec: Option<String>,
+
+        /// AIDA project root or descendant used as the launch base.
+        #[clap(long, value_name = "PATH")]
+        cwd: Option<PathBuf>,
+
+        /// Claude Code permission mode passed through to `claude`.
+        #[clap(long, default_value = "bypassPermissions")]
+        permission_mode: String,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Add a new requirement
@@ -4180,6 +4214,11 @@ pub enum Command {
         #[clap(subcommand)]
         cmd: Option<BriefCommand>,
     },
+
+    /// Launch and track AI agent processes for this AIDA project.
+    // trace:STORY-432 | ai:codex
+    #[clap(subcommand)]
+    Agent(AgentCommand),
 
     /// Emit the seven-row finish-state preamble (Spec / Branch / PR / Drain
     /// / Tests / Fmt / Plan) deterministically. One source of truth for
