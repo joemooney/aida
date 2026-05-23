@@ -1,0 +1,64 @@
+id: 019e570f-6c70-78f2-a3a9-f36875a9a4f1
+spec_id: TASK-503
+agreed_id: TASK-503
+title: Pre-commit git hook runs cargo fmt --all (substrate-as-bouncer for the recurring fmt-CI failure pattern)
+description: |-
+  ## Empirical 2026-05-23 — three fmt-CI failures in one session
+
+  | Spec | Symptom | Recovery cost |
+  |---|---|---|
+  | BUG-360 (first ship) | Master ran cargo fmt --check (verify-only) instead of cargo fmt --all (apply); CI red on Check formatting | manual fixup commit |
+  | TASK-497 ship | Antigravity skipped cargo fmt --all before commit; CI red | manual fixup commit |
+  | TASK-490 ship | Headless implementer skipped cargo fmt --all; CI red on Check formatting; drain stopped at phase 2 (18m23s wasted) | manual fixup + drain re-launch |
+
+  Same boundary, three times. Each costs ~5-20 minutes recovery; one stopped an autonomous drain. This is the recurring-failure-rate pattern feedback_substrate_as_bouncer_not_rules calls out: when an LLM can confidently forget an invariant, ship a programmatic gate, not a rule in CLAUDE.md or skill template.
+
+  ## Proposed gate
+
+  Pre-commit git hook (scaffolded by aida init, lives at .git/hooks/pre-commit or under .githooks/) that runs:
+
+    cargo fmt --all -- --check && exit 0 || (cargo fmt --all; exit 0)
+
+  Two-phase: verify first (cheap), apply if drift detected (one-shot fix). Commit proceeds with the formatting included. Operator/agent never has to remember.
+
+  ## Why this and not 'better skill template'
+
+  Templates have failed 3 times in one session despite the CLAUDE.md explicitly mentioning cargo fmt --all. The skill-template + memory layer is the second-best defence after a programmatic gate. Substrate-as-bouncer says: when correctness must hold under autonomous operation, the substrate enforces it.
+
+  ## Out of scope (deferred)
+
+  - Pre-push variant (commit-time is the better moment — push-time fix is later than the commit message references)
+  - Multi-language detection (this repo is Rust-only; if expansion needed later, file separately)
+  - Hook installer for pre-existing clones (a one-time aida init --refresh-hooks pass; not needed for new projects)
+
+  ## Acceptance
+
+  - [ ] Pre-commit hook script under aida-core/templates/githooks/ (or similar)
+  - [ ] aida init wires it up (composes with existing hook scaffolding)
+  - [ ] Hook runs cargo fmt --all on commit if drift detected
+  - [ ] Regression test: stage a fmt-violating change, commit, verify the staged content is fmt-clean
+  - [ ] Skip mechanism for emergency commits (--no-verify works by default; document it)
+  - [ ] Scaffolding-pack — every Rust AIDA project gets this gate
+  - [ ] Doc: short note in machinery-glossary.md or session-discipline.md
+
+  ## Composes with
+
+  - feedback_substrate_as_bouncer_not_rules memory (the principle)
+  - CLAUDE.md cargo fmt --all guidance (the rule-layer this gate makes redundant)
+  - aida init hook scaffolding (the installation surface)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T22:58:09.136851118Z
+modified_at: 2026-05-23T22:58:09.136851118Z
+req_type: Task
+tags:
+- cargo-fmt
+- ceiling-pattern
+- ci-discipline
+- from-self-test
+- from-user-friction
+- git-hook
+- scaffolding-pack
+- substrate-as-bouncer
