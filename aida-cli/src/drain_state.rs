@@ -38,9 +38,9 @@ use crate::process_probe;
 const DRAIN_STATE_FILE: &str = "drain-state.json";
 
 /// Member state: the spec has not started its lifecycle yet.
-const STATE_QUEUED: &str = "queued";
+pub(crate) const STATE_QUEUED: &str = "queued";
 /// Member state: the spec finished its full lifecycle successfully.
-const STATE_COMPLETED: &str = "completed";
+pub(crate) const STATE_COMPLETED: &str = "completed";
 /// Member state: the spec's lifecycle stopped on a phase failure.
 const STATE_FAILED: &str = "failed";
 

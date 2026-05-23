@@ -53740,15 +53740,19 @@ fn describe_drain_row(project_root: &std::path::Path) -> state_snapshot::DrainRo
 ///   * `"batch <NAME> (<done>/<total> done, <queued> queued)"`
 ///   * `"next-N (<done>/<total> done, <queued> queued)"`
 /// Lives in main.rs (not in `state_snapshot`) so the module stays free of
-/// `DrainState` coupling for tests. trace:TASK-391 | ai:claude
+/// `DrainState` coupling for tests. trace:TASK-391 trace:TASK-417 | ai:claude
 fn describe_drain_mode(state: &drain_state::DrainState) -> String {
     let total = state.members.len();
     let done = state
         .members
         .iter()
-        .filter(|m| m.state == "completed")
+        .filter(|m| m.state == drain_state::STATE_COMPLETED)
         .count();
-    let queued = state.members.iter().filter(|m| m.state == "queued").count();
+    let queued = state
+        .members
+        .iter()
+        .filter(|m| m.state == drain_state::STATE_QUEUED)
+        .count();
     match state.mode.as_str() {
         "single" => {
             let spec = state.current.clone().unwrap_or_else(|| "?".to_string());
