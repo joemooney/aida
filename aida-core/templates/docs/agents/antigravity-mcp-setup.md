@@ -1,6 +1,6 @@
 # Antigravity MCP Setup for AIDA
 
-Status: empirical setup from STORY-407 on 2026-05-22.
+Status: empirical setup from STORY-407, refreshed by STORY-418 on 2026-05-22.
 
 This document records the working local setup for connecting the Antigravity CLI agent to AIDA's MCP server. It establishes Antigravity as a supported Experimental-tier agent.
 
@@ -558,4 +558,68 @@ Upon successful verification of all roundtrips, we cleanly closed out the test f
   Updated: SPEC-407
   ```
 
+---
+
+## Known Antigravity Pitfalls & Lessons
+
+During early integration sessions, several critical discipline gaps were observed and resolved. Future Antigravity sessions must adhere strictly to these lessons to maintain repository integrity and prevent workflow friction:
+
+1. **Worktree Isolation (Mandatory)**
+   - **Pitfall**: Attempting to perform implementation work directly inside master's main worktree (`/home/joe/ai/aida`). This locks master, risks co-mingling dirty state, and blocks concurrent operations.
+   - **Lesson**: **ALWAYS** check out a sibling worktree using AIDA's session start command:
+     ```bash
+     aida session start --owns STORY-418 --role implementer
+     ```
+     This automatically handles branch creation, worktree setup, state symlinking, and lease registration under `/home/joe/ai/aida-<spec>`. Never commit to master's active main worktree.
+
+2. **Atomic Shipping via `aida pr ship` (The Finish Line)**
+   - **Pitfall**: Treating local commits or single branch pushes as the completion of a task.
+   - **Lesson**: A commit or requirement is **never** complete until it has been pushed to GitHub, successfully passed the repository's CI/CD builds, and been merged cleanly via:
+     ```bash
+     aida pr ship
+     ```
+     The shipping wrapper is load-bearing; it verifies CI readiness, repairs subject lines, aligns trailing spec trailers, and triggers the `aida pull` rebase cycle to keep local main up to date.
+
+3. **Commit Message Prefix & Attribution**
+   - **Pitfall**: Creating commits that lack clear agent attribution, complicating history audits.
+   - **Lesson**: All commit and PR squash subjects authored by Antigravity must carry the exact prefix:
+     ```text
+     [AI:antigravity] type(scope): description
+     ```
+
+4. **Multi-Spec Trailer Grouping**
+   - **Pitfall**: Including only a single spec ID in a PR title or squash subject when shipping changes that address multiple requirements (e.g. shipping STORY-407 follow-ups but only putting `(STORY-407)` instead of all affected specs, causing BUG-333 and TASK-464 to remain open).
+   - **Lesson**: If a PR closes or relates to multiple specs, **all** affected spec IDs must be grouped together in the trailing parens:
+     ```text
+     [AI:antigravity] fix(scaffold): description (BUG-333 TASK-464)
+     ```
+     The auto-bump scanner is space-separated; it will parse and transition every ID listed inside the parens group.
+
+5. **Local Spec Store Access via Symlink (BUG-331 Workaround)**
+   - **Pitfall**: AIDA CLI commands failing in sibling worktrees because the git-canonical store directory `.aida-store` is not present locally.
+   - **Lesson**: Sibling worktrees must symlink the main `.aida-store` to achieve canonical store detection. AIDA's standard `aida session start` command handles this automatically, but if configuring manually, run:
+     ```bash
+     ln -s /home/joe/ai/aida/.aida-store .aida-store
+     ```
+
+---
+
+## Brain-Directory Integration Guidelines
+
+Antigravity utilizes session-specific local markdown artifacts (`walkthrough.md`, `task.md`, `implementation_plan.md`) located under:
+`~/.gemini/antigravity-cli/brain/<session-id>/`
+
+To ensure clean coordination, use this clear division of labor:
+
+### When to Use Local Brain Artifacts
+- **Fine-Grained Task Checklists**: Local `task.md` checklists are perfect for tracking minor development details, build iterations, and local compilation checkpoints that are too granular or noisy for AIDA's global spec graph.
+- **Draft Design Proposals**: The `implementation_plan.md` acts as a technical scratchpad to sketch and refine architecture details before writing code.
+- **Verification Walkthroughs**: The `walkthrough.md` is used to capture manual verification logs, test command runs, and screenshots for direct human operator review.
+
+### When to Migrate/Use AIDA Spec Graph Tools
+- **Durable Specifications**: All formal requirements, feature gates, and bug fixes must be recorded in git-canonical AIDA specs via MCP or CLI (`add_requirement` / `post_punt`). Do not bury broad specifications in local brain files.
+- **Cross-Agent Coordination**: If a sub-task or feature needs to be shared with, claimed by, or delegated to another agent (e.g. Codex), it must be defined as an active approved requirement in the spec graph, allowing exclusive leases via `claim_task`.
+- **Durable Historical Record**: Essential design decisions, architectural sign-offs, and critical status updates should be posted as comments on the spec (`add_comment`) so they are preserved in the git history for future sessions.
+
 trace:STORY-407 | ai:antigravity
+trace:STORY-418 | ai:antigravity
