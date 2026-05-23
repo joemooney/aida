@@ -1162,13 +1162,6 @@
   added_at: 2026-05-23T05:22:32.030911070Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e5313-ff18-7b03-b465-e04f34ee51f8
-  position: 258000
-  added_by: joe
-  added_at: 2026-05-23T05:43:38.994432968Z
-  for_role: implementer
-  for_scope: TASK-492
-- user_id: joe
   requirement_id: 019e532f-ed5b-7cc3-9d47-d16c6fbef05f
   position: 259000
   added_by: joe
