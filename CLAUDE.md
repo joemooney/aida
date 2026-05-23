@@ -91,7 +91,7 @@ aida changelog preview                 # Stdout-only preview of the [Unreleased]
 aida brief <agent> TASK-492 --note "why this, why now"  # Write a local pickup brief under .aida/agent-briefs/
 aida brief list --for-agent <agent>      # List pending briefs for a target agent; add --include-acked for audit
 aida brief ack .aida/agent-briefs/<agent>/<file>.md  # Mark a brief acknowledged
-aida --asciinema queue work --batch overnight-X --auto-complete  # Record a demo/training/audit cast under ~/.aida/casts/
+aida --asciinema queue work --batch overnight-X --auto-complete  # Record a demo/training/audit cast under project-local .aida/casts/ (falls back to ~/.aida/casts/)
 ```
 
 `aida brief <agent> <SPEC-ID> [--note <STR>|--note -]` turns the
@@ -105,7 +105,7 @@ the file. MCP-speaking agents should use the equivalent brief tools:
 `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
 the first-class capture wrapper for demos, training corpus material, and
 autonomous-drain audit trails. It no-ops gracefully when `asciinema` is
-missing or the invocation is not attached to a TTY.
+missing or the invocation is not attached to a TTY. By default, casts are written to `.aida/casts/` at the project root, falling back to `~/.aida/casts/` if not run inside a project directory (defined by the presence of `.git` or `.aida/`).
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
 
