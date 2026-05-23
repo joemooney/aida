@@ -1,0 +1,78 @@
+id: 019e55a3-6a39-77a2-bd9a-4177960f00a1
+spec_id: EPIC-31
+agreed_id: EPIC-31
+title: Agent registry + launcher + state tracking — AIDA as agent-lifecycle layer
+description: |-
+  User direction 2026-05-23 morning: AIDA's substrate claim is 'agent-agnostic'. Today's session shipped the COMMUNICATION layer (STORY-425's brief surface — TASK-492 + STORY-426 + TASK-495). But agent LIFECYCLE is still entirely outside AIDA: which agents are running, what they're working on, are they idle, how to start them with proper context. This EPIC addresses that gap.
+
+  ## Scope
+
+  Three layered capabilities:
+
+  1. **Agent process registry** — AIDA knows about running agent sessions (PID, type, tty, role, current work, busy/idle)
+  2. **`aida agent new <type> [--role] [--spec]` launcher** — single command spawns claude/codex/antigravity with proper config + registers it
+  3. **Role-context injection on launch** — advisor session gets advisor context loaded; implementer gets implementer context; reviewer gets reviewer context
+
+  ## Why an EPIC (not a single STORY)
+
+  Substantial: ~25-35h total, multi-PR, multiple agent integrations. Parallel to STORY-425 (different axis):
+
+  - STORY-425: how briefs reach agents (communication)
+  - This EPIC: how agents start + are tracked (lifecycle)
+
+  Both essential to making 'agent-agnostic substrate' operationally real.
+
+  ## Phased decomposition
+
+  Six sub-stories filed alongside this EPIC. Sequencing matters — Phase 1 first because its registry data shape informs Phases 2-5:
+
+  - **Phase 1**: Agent process registry + `aida status` integration (substantive ROI, lowest effort, no per-agent work — subsumes TASK-498)
+  - **Phase 2**: `aida agent new claude` launcher (project's primary agent)
+  - **Phase 3a**: `aida agent new codex`
+  - **Phase 3b**: `aida agent new antigravity`
+  - **Phase 4**: MCP heartbeat busy/idle tracking (composes with existing MCP server)
+  - **Phase 5 (optional)**: Role-context auto-injection on session start
+
+  ## Strategic framing — phases are tentative
+
+  Per user direction: 'substrate evolution informs the later phases — review/pivot as needed.' Phase 1 ships first; its data shape and what we learn from operating with it inform Phases 2-5. Future Codex/Antigravity integrations may pivot per empirical evidence; the EPIC structure is tentative beyond Phase 1.
+
+  ## What exists today (the substrate baseline)
+
+  - `aida session add` / `aida session leases` — proto-registry (spec/role/worktree, but no PID/type/state)
+  - `aida brief` + MCP brief surface — communication layer (separate axis)
+  - Orchestrator subprocess spawn for `claude -p` — only headless drains, not user-facing
+  - Per-agent setup docs (AGENTS.md, antigravity-mcp-setup.md, etc.) — read manually
+  - MCP server — sees tool calls but doesn't track per-agent state explicitly
+
+  This EPIC extends the substrate WITHOUT breaking existing flows.
+
+  ## Acceptance (EPIC-level)
+
+  Each sub-story has its own acceptance. EPIC-level success = Phases 1-2 shipped + at least one additional agent (Codex or Antigravity) integrated. Phases 3b, 4, 5 are post-MVP and may be reprioritized based on Phase 1 learnings.
+
+  ## Composes with
+
+  - STORY-425 (sibling — communication model)
+  - TASK-498 (subsumed by Phase 1)
+  - TASK-490 (sibling — same 'what's running' UX class)
+  - Multi-agent dogfood from 2026-05-22+ (the empirical evidence this EPIC builds on)
+
+  ## Origin
+
+  User direction 2026-05-23: 'If I have claude code/codex/agy sessions opened, we should register them such that they show up with aida status and what their role is and what they are working on or if they are idle. Maybe we need an aida agent new command that will start one of those chats. If I am an advisor I need to get the right context and likewise for the different roles.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:20:33.465215952Z
+modified_at: 2026-05-23T16:20:33.465215952Z
+req_type: Epic
+tags:
+- agent-launcher
+- agent-registry
+- epic
+- from-user-direction
+- multi-agent
+- sibling-of-STORY-425
+- strategic
