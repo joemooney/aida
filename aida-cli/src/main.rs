@@ -18066,6 +18066,101 @@ fn shell_join_display(args: &[String]) -> String {
         .join(" ")
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SessionEndUnshippedWork {
+    lease_id: String,
+    scope: String,
+    branch: String,
+    commits_ahead: u32,
+}
+
+fn classify_session_end_unshipped_work(
+    lease_id: &str,
+    scope: &str,
+    branch: &str,
+    commits_ahead: Option<u32>,
+    pr_state: workflow_hints::PrState,
+) -> Option<SessionEndUnshippedWork> {
+    let commits = commits_ahead.unwrap_or(0);
+    if commits == 0 || !matches!(pr_state, workflow_hints::PrState::Absent) {
+        return None;
+    }
+    Some(SessionEndUnshippedWork {
+        lease_id: lease_id.to_string(),
+        scope: scope.to_string(),
+        branch: branch.to_string(),
+        commits_ahead: commits,
+    })
+}
+
+fn session_end_unshipped_warning_lines(work: &SessionEndUnshippedWork) -> Vec<String> {
+    vec![
+        format!(
+            "session end detected {} unshipped commit{} for {} on branch `{}` with no open PR.",
+            work.commits_ahead,
+            if work.commits_ahead == 1 { "" } else { "s" },
+            work.scope,
+            work.branch
+        ),
+        format!(
+            "Lease {} will be removed, but the branch is still local/unshipped; run `git push` + `aida pr ship` or recover manually.",
+            work.lease_id
+        ),
+    ]
+}
+
+fn session_end_unshipped_punt_record(
+    work: &SessionEndUnshippedWork,
+    now: chrono::DateTime<chrono::Utc>,
+) -> punt::PuntRecord {
+    punt::PuntRecord {
+        timestamp: now,
+        spec: work.scope.clone(),
+        category: aida_core::PuntCategory::Other,
+        detail: format!(
+            "session end observed {} commit{} ahead on branch `{}` with no open PR; work may need manual push/PR recovery",
+            work.commits_ahead,
+            if work.commits_ahead == 1 { "" } else { "s" },
+            work.branch
+        ),
+        lean: Some("recover by pushing the branch and opening/shipping a PR".to_string()),
+        raised_by: Some("session-end".to_string()),
+        resolution_path: "punted".to_string(),
+        classification: Some("UNSHIPPED-SESSION-END".to_string()),
+        escalation_reason: None,
+        answer: None,
+        answered_by: None,
+        decision: Some("visibility-warning".to_string()),
+        principle_link: None,
+        calibration_pair: None,
+        paused_at: Some(now),
+        resolved_at: None,
+    }
+}
+
+fn emit_session_end_unshipped_warning(work: &SessionEndUnshippedWork) {
+    for (idx, line) in session_end_unshipped_warning_lines(work).iter().enumerate() {
+        if idx == 0 {
+            eprintln!("{} {}", "warning:".yellow().bold(), line);
+        } else {
+            eprintln!("  {}", line);
+        }
+    }
+}
+
+fn record_session_end_unshipped_work(
+    project_root: &std::path::Path,
+    work: &SessionEndUnshippedWork,
+) {
+    let record = session_end_unshipped_punt_record(work, chrono::Utc::now());
+    if let Err(e) = punt::append_to_ledger(project_root, &record) {
+        eprintln!(
+            "{} could not write session-end punt ledger record: {e}",
+            "warning:".yellow().bold()
+        );
+    }
+}
+
 fn session_end(
     id_query: Option<&str>,
     spec_query: Option<&str>,
@@ -18085,6 +18180,32 @@ fn session_end(
     }
 
     let target = resolve_session_to_end(id_query, spec_query, branch_query, &leases, yes)?;
+
+    // BUG-361: visibility-first guard for the ceiling variant where an agent
+    // commits locally and exits without any lifecycle command (`queue done`,
+    // `/aida-pr`, or `aida pr ship`). `session end` is not a hard blocker here:
+    // it emits a BUG-360-style warning and writes a STORY-325 ledger record so
+    // the operator's next sweep sees the unshipped branch. This only fires when
+    // GH confirms no open PR; unknown GH states never assert "missing PR".
+    // trace:BUG-361
+    let commits_ahead = branch_commits_ahead_main(&project_root, &target.branch);
+    let pr_state = match detect_open_pr_for_branch(&project_root, &target.branch) {
+        PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
+        PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
+        PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_) => {
+            workflow_hints::PrState::Unknown
+        }
+    };
+    let session_end_unshipped_work = classify_session_end_unshipped_work(
+        &target.id,
+        &target.scope,
+        &target.branch,
+        commits_ahead,
+        pr_state,
+    );
+    if let Some(work) = &session_end_unshipped_work {
+        emit_session_end_unshipped_warning(&work);
+    }
 
     // TASK-111: CI awareness. Probe the branch for an open PR's CI state
     // and surface info / prompt / warn based on the state. --skip-ci and
@@ -18190,6 +18311,10 @@ fn session_end(
             eprintln!("Aborted.");
             return Ok(());
         }
+    }
+
+    if let Some(work) = &session_end_unshipped_work {
+        record_session_end_unshipped_work(&project_root, work);
     }
 
     // STORY-56: flatten the session's activity log into each
@@ -28594,6 +28719,137 @@ mod session_end_resolution_tests {
             zen_intent_token: None,
             escalated_to_human: None,
         }
+    }
+
+    /// BUG-361: session end warns only on the verified risk state:
+    /// commits ahead + GH-confirmed no open PR.
+    /// trace:BUG-361 | ai:codex
+    #[test]
+    fn classifies_session_end_unshipped_work_when_commits_and_no_pr() {
+        let got = classify_session_end_unshipped_work(
+            "019e55d2570e",
+            "BUG-361",
+            "bug-361",
+            Some(2),
+            workflow_hints::PrState::Absent,
+        )
+        .expect("commits ahead with no PR should warn");
+        assert_eq!(got.lease_id, "019e55d2570e");
+        assert_eq!(got.scope, "BUG-361");
+        assert_eq!(got.branch, "bug-361");
+        assert_eq!(got.commits_ahead, 2);
+
+        let lines = session_end_unshipped_warning_lines(&got);
+        assert!(lines[0].contains("2 unshipped commits"), "{lines:?}");
+        assert!(lines[0].contains("BUG-361"), "{lines:?}");
+        assert!(lines[0].contains("branch `bug-361`"), "{lines:?}");
+        assert!(lines[1].contains("git push"), "{lines:?}");
+        assert!(lines[1].contains("aida pr ship"), "{lines:?}");
+    }
+
+    /// BUG-361: if there are no commits ahead, an open PR, or GH state is
+    /// unknown, session end must not assert the missing-PR condition.
+    /// trace:BUG-361 | ai:codex
+    #[test]
+    fn session_end_unshipped_work_skips_non_risk_states() {
+        assert!(classify_session_end_unshipped_work(
+            "lease",
+            "BUG-361",
+            "bug-361",
+            Some(0),
+            workflow_hints::PrState::Absent,
+        )
+        .is_none());
+        assert!(classify_session_end_unshipped_work(
+            "lease",
+            "BUG-361",
+            "bug-361",
+            Some(1),
+            workflow_hints::PrState::Open(361),
+        )
+        .is_none());
+        assert!(classify_session_end_unshipped_work(
+            "lease",
+            "BUG-361",
+            "bug-361",
+            Some(1),
+            workflow_hints::PrState::Unknown,
+        )
+        .is_none());
+        assert!(classify_session_end_unshipped_work(
+            "lease",
+            "BUG-361",
+            "bug-361",
+            None,
+            workflow_hints::PrState::Absent,
+        )
+        .is_none());
+    }
+
+    /// BUG-361: the durable morning-sweep signal is a STORY-325 punt-ledger
+    /// record, not just ephemeral stderr.
+    /// trace:BUG-361 | ai:codex
+    #[test]
+    fn session_end_unshipped_work_builds_punt_ledger_record() {
+        let work = SessionEndUnshippedWork {
+            lease_id: "019e55d2570e".to_string(),
+            scope: "BUG-361".to_string(),
+            branch: "bug-361".to_string(),
+            commits_ahead: 1,
+        };
+        let now = chrono::Utc::now();
+        let record = session_end_unshipped_punt_record(&work, now);
+
+        assert_eq!(record.timestamp, now);
+        assert_eq!(record.spec, "BUG-361");
+        assert_eq!(record.category, aida_core::PuntCategory::Other);
+        assert_eq!(record.raised_by.as_deref(), Some("session-end"));
+        assert_eq!(record.resolution_path, "punted");
+        assert_eq!(
+            record.classification.as_deref(),
+            Some("UNSHIPPED-SESSION-END")
+        );
+        assert_eq!(record.decision.as_deref(), Some("visibility-warning"));
+        assert!(
+            record.detail.contains("1 commit ahead"),
+            "{}",
+            record.detail
+        );
+        assert!(
+            record.detail.contains("branch `bug-361`"),
+            "{}",
+            record.detail
+        );
+    }
+
+    /// BUG-361: recording uses the existing STORY-325 punt ledger path so
+    /// morning-sweep tooling can discover the unfinished session.
+    /// trace:BUG-361 | ai:codex
+    #[test]
+    fn session_end_unshipped_work_appends_to_punt_ledger() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let work = SessionEndUnshippedWork {
+            lease_id: "019e55d2570e".to_string(),
+            scope: "BUG-361".to_string(),
+            branch: "bug-361".to_string(),
+            commits_ahead: 3,
+        };
+
+        record_session_end_unshipped_work(tmp.path(), &work);
+
+        let records = punt::read_ledger(tmp.path());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].spec, "BUG-361");
+        assert_eq!(records[0].raised_by.as_deref(), Some("session-end"));
+        assert_eq!(
+            records[0].classification.as_deref(),
+            Some("UNSHIPPED-SESSION-END")
+        );
+        assert!(
+            records[0].detail.contains("3 commits ahead"),
+            "{}",
+            records[0].detail
+        );
     }
 
     /// Explicit id query short-circuits the resolution chain.
