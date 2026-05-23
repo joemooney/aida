@@ -47,12 +47,12 @@ description: |-
   - BUG-346 (the empirical example — Windows test failures making CI red while status said 'ready')
   - `scripts/release.sh` + `scripts/pre-release-check.sh` (the existing gate this surfaces earlier)
   - aida status UX (informational ledger; should reflect the actual gates)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T00:28:56.659255638Z
-modified_at: 2026-05-23T00:28:56.659255638Z
+modified_at: 2026-05-23T04:29:53.402507890Z
 req_type: Task
 tags:
 - aida-status
@@ -60,3 +60,7 @@ tags:
 - from-self-test
 - release-readiness
 - ux
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-23T04:29:53.402507890Z
+  completion_sha: 3c6de51f5d6c9118f1e601fe604c152e1c1e0c5a
