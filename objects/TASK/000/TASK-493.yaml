@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T07:05:21.735843047Z
-modified_at: 2026-05-23T07:10:00.684265514Z
+modified_at: 2026-05-23T07:12:29.316810133Z
 req_type: Task
 tags:
 - aida-mcp-serve
@@ -112,3 +112,36 @@ comments:
     'if we provide aida --version as part of mcp request, and it is a more recent version than a version information of the running mcp server then it could respawn itself.'
   created_at: 2026-05-23T07:10:00.684265514Z
   modified_at: 2026-05-23T07:10:00.684265514Z
+- id: 019e53ad-a484-77e2-97cd-362d16130d03
+  author: joe
+  content: |-
+    Decision 2026-05-23 (user direction): **commit to Option B (version-check + self-respawn).** Skip Option A (warn-only) and Option C (refuse-only) — they're band-aids, and this friction will keep recurring. Today's session already hit it empirically (Codex's BUG-332 observation, the two stale servers diagnosed tonight). Structural fix beats a notification.
+
+    ## Locked acceptance for Option B
+
+    - [ ] aida mcp-serve captures self-version at startup (CARGO_PKG_VERSION + git SHA via build.rs)
+    - [ ] On each MCP request (cheap pre-handler check), compare self-version with current_exe()'s on-disk version
+    - [ ] When on-disk > self: respawn via exec() — replace the running process with the new binary, transparent to the MCP client
+    - [ ] In-flight request handling: drain current request before exec (let the response complete; THEN respawn)
+    - [ ] Self-respawn preserves: original argv, stdin/stdout (or socket) file descriptors, environment
+    - [ ] Regression test: spawn aida mcp-serve, modify aida binary on disk (cargo build with bumped patch version OR mocked version), call a tool, assert next call uses new binary
+    - [ ] If version-comparison helper exists from prior work (release.sh, scripts/pre-release-check.sh), reuse it
+    - [ ] Composes with SPEC-411's resolve_aida_exe() helper for the current_exe() lookup
+    - [ ] Document in CLAUDE.md / AGENTS.md the new self-respawn behavior; operators should see it as transparent
+
+    ## Implementation hints
+
+    - The exec() respawn is the architectural-class part. Sketch-first recommended.
+    - On Linux: std::os::unix::process::CommandExt::exec() does the right thing (replaces image in-place). Windows: equivalent semantics via Command::spawn() + parent-exit pattern.
+    - Periodic timer alternative: also valid if pre-request check is too costly. ~60s interval; respawn at idle (no in-flight requests).
+    - Don't break: existing tests, the headless-claude subprocess spawn pattern, the .mcp.json client wire-up.
+
+    ## Why Option B over A/C
+
+    Per user direction 2026-05-23: 'we will keep running into it' — the empirical recurrence makes A (warn-only) insufficient. C (refuse) breaks in-flight work and forces operator restart, which is the same as today's manual workaround. B is the substrate-as-bouncer answer: the gate ENFORCES freshness; the operator doesn't have to know.
+
+    ## Queued for tomorrow
+
+    aida queue add TASK-493 --for implementer (executed as part of this comment)
+  created_at: 2026-05-23T07:12:29.316810133Z
+  modified_at: 2026-05-23T07:12:29.316810133Z
