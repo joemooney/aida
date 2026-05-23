@@ -1,0 +1,1 @@
+../../aida-core/templates/hooks/aida-capture-prompt.sh

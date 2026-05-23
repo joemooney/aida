@@ -83,3 +83,4 @@ docker/.env
 !.aida/docker-compose.dev.yml
 !.aida/setup.sh
 .antigravitycli/
+docs/writeups/
