@@ -3009,9 +3009,10 @@ pub enum FindingsCommand {
 
         /// Rationale for the dismissal. When provided, the audit comment
         /// includes the text verbatim (e.g. *"Dismissed by joe 2026-05-20:
-        /// duplicates BUG-254"*) instead of the bare "Dismissed" marker —
-        /// so the *why* lands in one command instead of two.
+        /// duplicates an earlier filing"*) instead of the bare "Dismissed"
+        /// marker — so the *why* lands in one command instead of two.
         // trace:TASK-404 | ai:claude
+        // trace:TASK-420 | ai:claude
         #[clap(long, value_name = "TEXT")]
         reason: Option<String>,
     },
@@ -3027,10 +3028,11 @@ pub enum FindingsCommand {
         r#for: Option<String>,
 
         /// Rationale for the promotion ("more important than its priority
-        /// suggests", "blocks PR-219", etc.). When provided, the rationale
-        /// is appended as an audit comment so the *why* survives alongside
-        /// the queue note.
+        /// suggests", "blocks another open PR", etc.). When provided, the
+        /// rationale is appended as an audit comment so the *why* survives
+        /// alongside the queue note.
         // trace:TASK-404 | ai:claude
+        // trace:TASK-420 | ai:claude
         #[clap(long, value_name = "TEXT")]
         reason: Option<String>,
     },
