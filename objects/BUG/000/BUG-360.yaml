@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:28:35.539711055Z
-modified_at: 2026-05-23T16:28:35.539711055Z
+modified_at: 2026-05-23T16:44:37.272543613Z
 req_type: Bug
 tags:
 - aida-queue-done
@@ -74,3 +74,9 @@ tags:
 - from-drain-failure
 - from-self-test
 - substrate-as-bouncer-gap
+comments:
+- id: 019e55b9-7218-7d53-986a-f5c2fa69375b
+  author: joe
+  content: Commit e0c1e412 references this requirement
+  created_at: 2026-05-23T16:44:37.272543613Z
+  modified_at: 2026-05-23T16:44:37.272543613Z
