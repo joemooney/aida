@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T07:05:21.735843047Z
-modified_at: 2026-05-23T07:12:29.316810133Z
+modified_at: 2026-05-23T17:42:36.319308631Z
 req_type: Task
 tags:
 - aida-mcp-serve
@@ -145,3 +145,8 @@ comments:
     aida queue add TASK-493 --for implementer (executed as part of this comment)
   created_at: 2026-05-23T07:12:29.316810133Z
   modified_at: 2026-05-23T07:12:29.316810133Z
+- id: 019e55ee-881f-7a43-885a-db60210cd41e
+  author: codex
+  content: 'Codex implementation sketch before code: implement locked Option B inside  as a per-request post-response respawn check. Pre-request would make a stale server disappear before answering the request that triggered detection; post-response gives explicit in-flight draining: handle request, write+flush response, then exec. Version model: parse the existing aida 0.5.2 (built 2026-05-13 18:58:06 -07:00, sha 724aafb8+dirty) banner into  and compare current process ( + build.rs git stamp) against . Stale means on-disk package version is greater OR same version with different SHA/dirty state; equal tuple does nothing. Respawn: preserve original argv via , inherit stdin/stdout/stderr/env, and on Unix call  after flushing stdout. On Windows use spawn + immediate parent exit as the documented fallback because true exec is unavailable. Test strategy: pure parser/decision tests plus command-plan tests for argv/exe preservation; avoid actually replacing the test process. Docs: update AGENTS.md/CLAUDE.md/cross-agent-onboarding with transparent MCP self-respawn behavior. Risk: exec preserves FDs, but some MCP clients may treat process image replacement as latency; stderr will log before respawn for diagnosis.'
+  created_at: 2026-05-23T17:42:36.319308631Z
+  modified_at: 2026-05-23T17:42:36.319308631Z
