@@ -1043,7 +1043,17 @@ fn collect_sessions_from_cwd(cwd: &Path, limit: usize) -> Result<Vec<SessionMeta
 /// `-home-joe-ai-aida`.
 pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
     let s = cwd.to_string_lossy();
-    let encoded = s.replace('/', "-");
+    // BUG-346: Windows paths can carry backslashes even when tests use
+    // Unix-shaped fixture strings elsewhere. Normalize both spellings so
+    // advisor fork destinations use the same slug convention cross-platform.
+    // trace:BUG-346 | ai:codex
+    let encoded = s.replace('\\', "-").replace('/', "-");
+    #[cfg(test)]
+    let home = std::env::var_os("AIDA_TEST_HOME")
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)
+        .context("HOME not set; cannot locate Claude project dir")?;
+    #[cfg(not(test))]
     let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;
     Ok(home.join(".claude/projects").join(encoded))
 }
