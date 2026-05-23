@@ -337,6 +337,12 @@ EOM
     fi
 fi
 
+# AIDA_RELEASE=1 signals the AIDA commit-msg hook (templates/hooks/aida-commit-msg)
+# to suppress AI-tag and trace-reference warnings on this mechanical version-bump
+# commit. The substrate-as-bouncer gitignored-file gate (templates/hooks/aida-pre-commit.sh)
+# is unaffected — release commits still can't sneak intermediate build products in.
+# trace:TASK-488 | ai:claude
+export AIDA_RELEASE=1
 git add "${manifest_paths[@]}"
 git commit -m "chore: release v$new"
 git tag -a "v$new" -F "$notes_file"
