@@ -37,6 +37,7 @@ mod zen;
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -41660,16 +41661,30 @@ fn print_aida_dev_context(project_root: &std::path::Path) {
     let workspace_version = read_workspace_version(project_root).unwrap_or_else(|| "?".into());
     let latest_tag = git_describe_latest_tag(project_root).unwrap_or_else(|| "(none)".into());
     let commits_since_tag = git_commits_since_tag(project_root, &latest_tag).unwrap_or(0);
+    let cross_platform_ci = if commits_since_tag > 0 {
+        Some(cross_platform_ci_status(project_root))
+    } else {
+        None
+    };
     println!("  Running binary:     {}", build_banner());
     println!("  Workspace version:  v{}", workspace_version);
     println!("  Latest release tag: {}", latest_tag);
     if commits_since_tag > 0 {
+        let readiness = match cross_platform_ci.as_ref().map(|ci| ci.release_gate) {
+            Some(CrossPlatformReleaseGate::Ready) => "ready to cut a release".green().to_string(),
+            Some(CrossPlatformReleaseGate::Blocked) => "BLOCKED".red().bold().to_string(),
+            Some(CrossPlatformReleaseGate::Unknown) | None => "unknown".yellow().to_string(),
+        };
         println!(
             "  {} commits ahead of {} — release-readiness: {}",
-            commits_since_tag,
-            latest_tag,
-            "ready to cut a release".yellow()
+            commits_since_tag, latest_tag, readiness
         );
+        if let Some(ci) = &cross_platform_ci {
+            println!("  Cross-platform CI:  {}", ci.summary);
+            if let Some(detail) = &ci.detail {
+                println!("    {}", detail);
+            }
+        }
     } else {
         println!("  Tree matches latest tag — no pending release");
     }
@@ -41702,6 +41717,303 @@ fn print_aida_dev_context(project_root: &std::path::Path) {
         "— cargo publish to crates.io"
     );
     println!();
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CrossPlatformReleaseGate {
+    Ready,
+    Blocked,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CrossPlatformCiSummary {
+    release_gate: CrossPlatformReleaseGate,
+    summary: String,
+    detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct CrossPlatformCiCache {
+    fetched_at: chrono::DateTime<chrono::Utc>,
+    runs: Vec<GhWorkflowRun>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+struct GhWorkflowRun {
+    status: Option<String>,
+    conclusion: Option<String>,
+    #[serde(rename = "createdAt")]
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(rename = "databaseId")]
+    database_id: Option<u64>,
+    url: Option<String>,
+}
+
+fn cross_platform_ci_status(project_root: &std::path::Path) -> CrossPlatformCiSummary {
+    const CACHE_TTL_SECONDS: i64 = 300;
+    let now = chrono::Utc::now();
+
+    if let Some(cache) = read_cross_platform_ci_cache(project_root) {
+        if now.signed_duration_since(cache.fetched_at).num_seconds() < CACHE_TTL_SECONDS {
+            return summarize_cross_platform_ci_runs(now, Ok(cache.runs));
+        }
+    }
+
+    let runs = fetch_cross_platform_ci_runs(project_root);
+    if let Ok(runs) = &runs {
+        let cache = CrossPlatformCiCache {
+            fetched_at: now,
+            runs: runs.clone(),
+        };
+        let _ = write_cross_platform_ci_cache(project_root, &cache);
+    }
+    summarize_cross_platform_ci_runs(now, runs)
+}
+
+fn fetch_cross_platform_ci_runs(
+    project_root: &std::path::Path,
+) -> std::result::Result<Vec<GhWorkflowRun>, String> {
+    let output = std::process::Command::new("gh")
+        .args([
+            "run",
+            "list",
+            "--workflow",
+            "cross-platform.yml",
+            "--branch",
+            "main",
+            "--limit",
+            "20",
+            "--json",
+            "status,conclusion,createdAt,databaseId,url",
+        ])
+        .current_dir(project_root)
+        .output()
+        .map_err(|err| err.to_string())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            "gh run list failed".to_string()
+        } else {
+            stderr
+        });
+    }
+    serde_json::from_slice(&output.stdout).map_err(|err| err.to_string())
+}
+
+fn read_cross_platform_ci_cache(project_root: &std::path::Path) -> Option<CrossPlatformCiCache> {
+    let path = cross_platform_ci_cache_path(project_root);
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+fn write_cross_platform_ci_cache(
+    project_root: &std::path::Path,
+    cache: &CrossPlatformCiCache,
+) -> Result<()> {
+    let path = cross_platform_ci_cache_path(project_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    write_atomic(&path, serde_json::to_string_pretty(cache)?.as_bytes())?;
+    Ok(())
+}
+
+fn cross_platform_ci_cache_path(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root
+        .join(".aida")
+        .join("cache")
+        .join("cross-platform-ci-status.json")
+}
+
+fn summarize_cross_platform_ci_runs(
+    now: chrono::DateTime<chrono::Utc>,
+    runs: std::result::Result<Vec<GhWorkflowRun>, String>,
+) -> CrossPlatformCiSummary {
+    let runs = match runs {
+        Ok(runs) => runs,
+        Err(_) => {
+            return CrossPlatformCiSummary {
+                release_gate: CrossPlatformReleaseGate::Unknown,
+                summary: "unknown (gh unreachable)".yellow().to_string(),
+                detail: Some(
+                    "Release readiness cannot be confirmed without GitHub CI status.".to_string(),
+                ),
+            };
+        }
+    };
+
+    let Some(latest) = runs.first() else {
+        return CrossPlatformCiSummary {
+            release_gate: CrossPlatformReleaseGate::Unknown,
+            summary: "unknown (no cross-platform run found)".yellow().to_string(),
+            detail: Some(
+                "Run `gh workflow run cross-platform.yml --ref main` before release prep."
+                    .to_string(),
+            ),
+        };
+    };
+
+    let latest_age = latest
+        .created_at
+        .map(|created| format_ci_age(now, created))
+        .unwrap_or_else(|| "unknown age".to_string());
+    let latest_run = latest
+        .database_id
+        .map(|id| format!(", run {}", id))
+        .unwrap_or_default();
+    let latest_completed_success = latest.status.as_deref() == Some("completed")
+        && latest.conclusion.as_deref() == Some("success");
+    let latest_fresh = latest
+        .created_at
+        .map(|created| now.signed_duration_since(created).num_hours() < 24)
+        .unwrap_or(false);
+
+    if latest_completed_success && latest_fresh {
+        return CrossPlatformCiSummary {
+            release_gate: CrossPlatformReleaseGate::Ready,
+            summary: format!("{} green ({}{})", "✓".green(), latest_age, latest_run),
+            detail: None,
+        };
+    }
+
+    let last_green = runs.iter().find(|run| {
+        run.status.as_deref() == Some("completed") && run.conclusion.as_deref() == Some("success")
+    });
+    let last_green_detail = last_green.and_then(|run| {
+        run.created_at.map(|created| {
+            format!(
+                "Last green: {}. Releases require <24h green.",
+                format_ci_age(now, created)
+            )
+        })
+    });
+
+    let reason = if latest_completed_success {
+        "stale"
+    } else {
+        latest.conclusion.as_deref().unwrap_or("not green")
+    };
+    CrossPlatformCiSummary {
+        release_gate: CrossPlatformReleaseGate::Blocked,
+        summary: format!("{} {} ({}{})", "✗".red(), reason, latest_age, latest_run),
+        detail: last_green_detail.or_else(|| {
+            Some(
+                "No previous green cross-platform run found. Releases require <24h green."
+                    .to_string(),
+            )
+        }),
+    }
+}
+
+fn format_ci_age(
+    now: chrono::DateTime<chrono::Utc>,
+    then: chrono::DateTime<chrono::Utc>,
+) -> String {
+    let seconds = now.signed_duration_since(then).num_seconds().max(0);
+    if seconds < 3600 {
+        let minutes = (seconds / 60).max(1);
+        format!("{}m ago", minutes)
+    } else if seconds < 48 * 3600 {
+        format!("{}h ago", seconds / 3600)
+    } else {
+        format!("{} days ago", seconds / 86_400)
+    }
+}
+
+#[cfg(test)]
+mod task_486_cross_platform_ci_status_tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn run(
+        status: &str,
+        conclusion: Option<&str>,
+        hours_ago: i64,
+        id: u64,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> GhWorkflowRun {
+        GhWorkflowRun {
+            status: Some(status.to_string()),
+            conclusion: conclusion.map(str::to_string),
+            created_at: Some(now - chrono::Duration::hours(hours_ago)),
+            database_id: Some(id),
+            url: None,
+        }
+    }
+
+    #[test]
+    fn green_recent_cross_platform_ci_marks_release_ready() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+        let summary = summarize_cross_platform_ci_runs(
+            now,
+            Ok(vec![run("completed", Some("success"), 6, 26321099991, now)]),
+        );
+
+        assert_eq!(summary.release_gate, CrossPlatformReleaseGate::Ready);
+        assert!(summary.summary.contains("green"));
+        assert!(summary.summary.contains("6h ago"));
+        assert!(summary.detail.is_none());
+    }
+
+    #[test]
+    fn red_cross_platform_ci_blocks_release_and_reports_last_green() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+        let summary = summarize_cross_platform_ci_runs(
+            now,
+            Ok(vec![
+                run("completed", Some("failure"), 14, 26280474891, now),
+                run("completed", Some("success"), 50, 26154859707, now),
+            ]),
+        );
+
+        assert_eq!(summary.release_gate, CrossPlatformReleaseGate::Blocked);
+        assert!(summary.summary.contains("failure"));
+        assert!(summary.summary.contains("14h ago"));
+        assert!(summary.summary.contains("26280474891"));
+        assert_eq!(
+            summary.detail.as_deref(),
+            Some("Last green: 2 days ago. Releases require <24h green.")
+        );
+    }
+
+    #[test]
+    fn stale_green_cross_platform_ci_blocks_release() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+        let summary = summarize_cross_platform_ci_runs(
+            now,
+            Ok(vec![run(
+                "completed",
+                Some("success"),
+                25,
+                26280474891,
+                now,
+            )]),
+        );
+
+        assert_eq!(summary.release_gate, CrossPlatformReleaseGate::Blocked);
+        assert!(summary.summary.contains("stale"));
+        assert!(summary.summary.contains("25h ago"));
+        assert_eq!(
+            summary.detail.as_deref(),
+            Some("Last green: 25h ago. Releases require <24h green.")
+        );
+    }
+
+    #[test]
+    fn unreachable_gh_reports_unknown_without_blocking_status_command() {
+        let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+        let summary = summarize_cross_platform_ci_runs(now, Err("gh unavailable".to_string()));
+
+        assert_eq!(summary.release_gate, CrossPlatformReleaseGate::Unknown);
+        assert!(summary.summary.contains("unknown"));
+        assert!(summary.summary.contains("gh unreachable"));
+        assert!(summary
+            .detail
+            .as_deref()
+            .unwrap()
+            .contains("cannot be confirmed"));
+    }
 }
 
 fn read_workspace_version(root: &std::path::Path) -> Option<String> {
