@@ -1,0 +1,68 @@
+id: 019e5582-b0c1-7e82-9033-aeb02f948e08
+spec_id: BUG-357
+agreed_id: BUG-357
+title: Orchestrator reconcile-against-reality misattributes another spec's merged PR to the dispatched spec
+description: |-
+  Empirical failure observed 2026-05-23 ~08:30 during the TASK-488 drain (recurring through 09:00 with the latest BUG-354 hit). The orchestrator output:
+
+  ```
+  ⓘ phase 1 (implementer session) ended without its usual artifact — reconciled against reality: PR-230 is already merged
+  ✓ TASK-488 shipped (1m 4s, reconciled)
+
+  ✗ batch `batch:overnight-2026-05-23` drain stopped — TASK-488 stayed at the head after a successful run (queue did not advance)
+  ```
+
+  The orchestrator's 'reconcile against reality' logic looked at recent PR state, found PR-230 merged, and concluded 'TASK-488 shipped.' But PR-230 was TASK-492's PR (Codex's brief verb from last night), not TASK-488's. The orchestrator misattributed an unrelated merged PR to the dispatched spec.
+
+  ## Why this is different from BUG-245
+
+  BUG-245 (already shipped) was: 'orchestrator reports the dispatched spec as shipped when phase-1 actually shipped a different spec.' That was about implementer-side work going to the wrong spec.
+
+  This is: 'reconcile-against-reality looks at a wrong PR + claims success.' The implementer didn't ship anything (BUG-354: text-question-and-exit). The orchestrator's RECOVERY logic invented a successful ship by matching the wrong PR.
+
+  The signal is wrong on the same axis (false positive) but the mechanism is different. BUG-245's fix was in implementer-shipping; this needs a fix in reconcile-matching logic.
+
+  ## Likely root cause
+
+  The reconcile-against-reality logic likely:
+  1. Recent PRs merged on main
+  2. Find any PR whose branch / scope was associated with this drain's lease/cwd
+  3. The TASK-492 lease (BUG-352 cluster-misroute) registered TASK-488 against scope TASK-492
+  4. Reconciler matched PR-230 (TASK-492's merged PR) against the TASK-492 scope
+  5. Inferred 'TASK-488 (the dispatched spec) shipped'
+
+  The scope-misattribution from BUG-352 propagates into the reconcile logic. Fixing BUG-352 may close this naturally; OR an independent fix in reconcile-against-reality to verify the matched PR's commit subject contains the dispatched spec ID would close it more robustly (defense in depth).
+
+  ## Acceptance
+
+  - [ ] Orchestrator's reconcile-against-reality logic verifies: a 'reconciled-ship' claim requires the matched PR's commit subject (or PR title trailer) to reference the dispatched spec ID
+  - [ ] If the matched PR references a DIFFERENT spec: don't claim ship; let phase 1 fail normally
+  - [ ] Compose with BUG-352 fix: when scope is correctly attached to the dispatched spec (not cluster-misrouted), this bug may not surface — but the defense-in-depth check above prevents it regardless of BUG-352's state
+  - [ ] Regression test: simulate phase-1 failure with a recently-merged PR on a DIFFERENT spec → orchestrator does NOT claim ship; reports correct failure
+  - [ ] Regression test: simulate phase-1 failure with a recently-merged PR for the SAME spec (true rescue case) → orchestrator correctly reconciles + reports ship
+
+  ## Composes with
+
+  - BUG-245 (sibling — shipped; this is its successor in the reconcile layer)
+  - BUG-352 (cluster-derivation misroute — likely upstream cause)
+  - BUG-354 (text-question-and-exit ceiling — the immediate trigger for phase-1 'failing without artifact')
+  - TASK-474 (scope-detection misroute — the root pattern this all stems from)
+
+  ## Empirical anchor
+
+  The drain that surfaced this is also captured in: '✗ batch drain stopped — TASK-488 stayed at the head after a successful run (queue did not advance)' — the orchestrator's OWN detection that the queue didn't advance is the contradicting signal that should have prevented the 'reconciled-ship' claim. Worth using queue-advancement as the corroborating gate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T15:44:48.833016879Z
+modified_at: 2026-05-23T15:44:48.833016879Z
+req_type: Bug
+tags:
+- bug-245-sibling
+- bug-352-related
+- from-drain-failure
+- from-self-test
+- orchestrator
+- phase-1
+- reconcile-against-reality
