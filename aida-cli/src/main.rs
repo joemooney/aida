@@ -86,7 +86,7 @@ use crate::cli::{
     OrchestratorCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand,
     ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
     ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand,
-    TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
+    SkillCommand, TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -348,6 +348,47 @@ fn run() -> Result<()> {
     } = &cli.command
     {
         return handle_upgrade_command(*check, version.as_deref(), *yes, target.as_deref(), *diff);
+    }
+
+    // Handle skill commands before storage resolution — needs no DB.
+    if let Command::Skill(skill_cmd) = &cli.command {
+        match skill_cmd {
+            SkillCommand::Render { name } => {
+                let project_root = find_project_root()
+                    .or_else(|_| std::env::current_dir())
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "Error: could not find project root or current directory: {}",
+                            e
+                        )
+                    })?;
+                let skills_dir = project_root.join(".claude").join("skills");
+                let stock_path = skills_dir.join(format!("{}.md", name));
+
+                if !stock_path.exists() {
+                    anyhow::bail!("Error: skill '{}' not found under .claude/skills/", name);
+                }
+
+                let stock_content = std::fs::read_to_string(&stock_path)
+                    .map_err(|e| anyhow::anyhow!("Failed to read skill file: {}", e))?;
+
+                let local_path = skills_dir.join(format!("{}.local.md", name));
+                if local_path.exists() {
+                    let local_content = std::fs::read_to_string(&local_path)
+                        .map_err(|e| anyhow::anyhow!("Failed to read local skill file: {}", e))?;
+
+                    let sep = if stock_content.ends_with('\n') {
+                        ""
+                    } else {
+                        "\n"
+                    };
+                    print!("{}{}{}", stock_content, sep, local_content);
+                } else {
+                    print!("{}", stock_content);
+                }
+                return Ok(());
+            }
+        }
     }
 
     // Handle dev commands before storage resolution — most need no DB.
@@ -1050,6 +1091,9 @@ fn run() -> Result<()> {
                  store (run `aida init` to migrate, or this project is on \
                  the deprecated --centralized backend)"
             );
+        }
+        Command::Skill(_) => {
+            unreachable!("Command::Skill dispatched before storage init");
         }
     }
 
@@ -3129,6 +3173,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             );
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
+        Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -56079,6 +56124,41 @@ fn handle_mcp_command(cmd: &McpCommand) -> Result<()> {
         McpCommand::RegisterAgent { name, print, force } => {
             register_mcp_agent(name, *print, *force)
         }
+        McpCommand::Skill(SkillCommand::Render { name }) => {
+            let project_root = find_project_root()
+                .or_else(|_| std::env::current_dir())
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Error: could not find project root or current directory: {}",
+                        e
+                    )
+                })?;
+            let skills_dir = project_root.join(".claude").join("skills");
+            let stock_path = skills_dir.join(format!("{}.md", name));
+
+            if !stock_path.exists() {
+                anyhow::bail!("Error: skill '{}' not found under .claude/skills/", name);
+            }
+
+            let stock_content = std::fs::read_to_string(&stock_path)
+                .map_err(|e| anyhow::anyhow!("Failed to read skill file: {}", e))?;
+
+            let local_path = skills_dir.join(format!("{}.local.md", name));
+            if local_path.exists() {
+                let local_content = std::fs::read_to_string(&local_path)
+                    .map_err(|e| anyhow::anyhow!("Failed to read local skill file: {}", e))?;
+
+                let sep = if stock_content.ends_with('\n') {
+                    ""
+                } else {
+                    "\n"
+                };
+                print!("{}{}{}", stock_content, sep, local_content);
+            } else {
+                print!("{}", stock_content);
+            }
+            Ok(())
+        }
     }
 }
 
@@ -60347,10 +60427,10 @@ mod story_255_discipline_pack_tests {
 
     #[test]
     fn discipline_pack_scaffolds_seven_docs_plus_readme() {
-        // trace:TASK-481 | ai:antigravity — substrate-as-bouncer.md joins the pack.
+        // trace:TASK-479 | ai:antigravity — robust-project-root-resolution.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 8, "expected README + 7 discipline docs");
+        assert_eq!(written, 9, "expected README + 8 discipline docs");
 
         let dir = root.path().join("docs/aida-discipline");
         for f in [
@@ -60362,6 +60442,7 @@ mod story_255_discipline_pack_tests {
             "session-discipline.md",
             "skill-prompt-kinds.md",
             "substrate-as-bouncer.md",
+            "robust-project-root-resolution.md",
         ] {
             assert!(dir.join(f).is_file(), "missing discipline doc: {f}");
         }
@@ -60374,7 +60455,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            8
+            9
         );
     }
 

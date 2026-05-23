@@ -4603,6 +4603,20 @@ pub enum Command {
     /// List all commands (including the less-common ones hidden from
     /// `aida --help`), grouped by topic.
     HelpAll,
+
+    /// Stock and local skill tooling.
+    #[clap(subcommand)]
+    Skill(SkillCommand),
+}
+
+/// Stock and local skill tooling.
+#[derive(Subcommand, Debug)]
+pub enum SkillCommand {
+    /// Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md) to stdout.
+    Render {
+        /// The name of the skill to render (e.g. `agent-contract`).
+        name: String,
+    },
 }
 
 /// Implementation-plan tooling. Plans live in `docs/plans/` and follow
@@ -4804,6 +4818,10 @@ pub enum McpCommand {
         #[clap(long)]
         force: bool,
     },
+
+    /// Manage and render agent skills
+    #[clap(subcommand)]
+    Skill(SkillCommand),
 }
 
 /// Jira integration commands
