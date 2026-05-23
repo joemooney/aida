@@ -25924,6 +25924,38 @@ mod statusline_tests {
         .expect("in-queue non-terminal target should pass the guard");
     }
 
+    /// TASK-491: `--to-top` is an additional visible alias of `--top` so
+    /// the operator can use the spelling the task spec calls out without
+    /// having to remember `--to-front`. The existing `--to-front` alias
+    /// still parses too.
+    /// trace:TASK-491 | ai:claude
+    #[test]
+    fn queue_move_to_top_alias_parses() {
+        let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-top"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Queue(QueueCommand::Move { top: true, .. })
+        ));
+        // Conflict with --to <N> still holds for the new alias.
+        assert!(
+            Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-top", "--to", "2",])
+                .is_err()
+        );
+    }
+
+    /// TASK-491: regression for the spec's worked example — add 5 items in
+    /// order, move the position-5 item to the top, queue ends up as
+    /// `[5, 1, 2, 3, 4]`. Exercises `move_to_absolute_position(slot=1)`,
+    /// which is the same path `--top` falls into after the no-op check.
+    /// trace:TASK-491 | ai:claude
+    #[test]
+    fn queue_move_to_top_promotes_last_item_to_head() {
+        let ids: Vec<uuid::Uuid> = (1..=5).map(|n| uuid::Uuid::from_u128(n)).collect();
+        let (order, slot) = move_to_absolute_position(&ids, ids[4], 1);
+        assert_eq!(slot, 1);
+        assert_eq!(order, vec![ids[4], ids[0], ids[1], ids[2], ids[3]]);
+    }
+
     /// STORY-60: age formatter for the prune candidate list. Resolution
     /// drops as we cross day/week/month/year boundaries; sub-day uses
     /// hours since `--days 30` makes anything finer than that
@@ -51826,6 +51858,35 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     );
                 }
                 return Ok(());
+            }
+            // TASK-491: `--top` (alias `--to-top`/`--to-front`) on a spec
+            // that's already at queue position 1 is a friendly no-op rather
+            // than a position-renumber that prints `Moved`. "Position 1" is
+            // measured among live (non-terminal) entries — the same items
+            // `aida queue list` numbers — so a Completed entry lingering in
+            // the YAML file doesn't mask the real head.
+            // trace:TASK-491 | ai:claude
+            if *top {
+                let already_first = entries
+                    .iter()
+                    .find(|e| {
+                        store
+                            .requirements
+                            .iter()
+                            .find(|r| r.id == e.requirement_id)
+                            .map(|r| !is_terminal_status(&r.status))
+                            .unwrap_or(true)
+                    })
+                    .map(|e| e.requirement_id == req.id)
+                    .unwrap_or(false);
+                if already_first {
+                    println!(
+                        "{} {} is already at queue head",
+                        "·".dimmed(),
+                        move_display_id
+                    );
+                    return Ok(());
+                }
             }
             let new_position = if *top {
                 entries.first().map(|e| e.position - 1000).unwrap_or(0)
