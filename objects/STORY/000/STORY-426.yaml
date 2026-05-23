@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T06:48:24.089440815Z
-modified_at: 2026-05-23T06:48:24.089440815Z
+modified_at: 2026-05-23T06:53:14.379199558Z
 req_type: Story
 tags:
 - brief
@@ -93,3 +93,24 @@ tags:
 - multi-agent
 - parent:STORY-425
 - routing
+comments:
+- id: 019e539c-050b-7722-892c-ed1801295ee5
+  author: |-
+    Sketch for MCP brief surface (Codex)
+
+    1. Tool signatures: add exactly three MCP tools to the coordination cluster: `list_briefs({agent?: string, include_acked?: boolean})`, `read_brief({path: string})`, and `ack_brief({path: string})`. Each gets inputSchema + descriptor-level outputSchema using the existing TASK-440 text-envelope convention; implementations continue returning text `content` envelopes, not structuredContent.
+
+    2. Path model: `list_briefs` returns the path string as project-root-relative when possible, e.g. `.aida/agent-briefs/codex/TASK-492-YYYY-MM-DDTHHMMSSZ.md`, plus `agent`, `spec_id`, `generated_at`, `status`. `read_brief` / `ack_brief` accept either that project-relative path or an absolute path, but resolve/canonicalize and reject anything outside `<project_root>/.aida/agent-briefs/` to avoid arbitrary file reads.
+
+    3. Idempotency: `ack_brief` should be idempotent. If the path already ends in `.acked`, return `already_acked: <path>` as a success text envelope. If the caller passes the pre-ack `.md` path but only `<path>.acked` exists, also treat as already acked and return success. If neither exists, return an MCP error envelope.
+
+    4. Race handling: list→read deletion returns a helpful not-found error. Concurrent ack races converge on success if either caller leaves an `.acked` file; only nonexistence or path-escape is an error. Use TASK-492's convention: update frontmatter `status: pending` → `status: acked`, then rename to `.acked` suffix.
+
+    5. Skill template: implement one canonical Codex pickup guide first, likely under `aida-core/templates/codex-skills/aida-pickup/SKILL.md` if the existing Codex skill scaffold path exists; otherwise add a docs/agents-facing pickup template and wire the scaffolder only if the project already has a Codex skill convention. The skill should instruct Codex to call MCP `list_briefs(agent:"codex")`, read the oldest pending brief, acknowledge after the operator proceeds / work starts, then follow the embedded setup/trailer sections. Antigravity and other agent variants become follow-up TASKs.
+
+    6. Tests: unit tests beside existing MCP tests for descriptor presence/outputSchema; list/read/ack roundtrip against a temp `.aida/agent-briefs/codex/` file; path traversal rejection; idempotent ack; and read-after-delete error. Also docs updates in CLAUDE.md/AGENTS.md alongside TASK-492's CLI brief docs.
+
+    Note: STORY-426's estimate line says "5 MCP tools", but the scoped surface and acceptance name three tools. I will implement the three named tools unless master revises scope.
+  content: mcp
+  created_at: 2026-05-23T06:53:14.379190900Z
+  modified_at: 2026-05-23T06:53:14.379190900Z
