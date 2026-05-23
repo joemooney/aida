@@ -1,0 +1,62 @@
+id: 019e55a5-181b-7441-bfca-8f709ad3e425
+spec_id: STORY-436
+agreed_id: STORY-436
+title: Role-context auto-injection on agent session start (EPIC-31 Phase 5, optional)
+description: |-
+  Phase 5 of EPIC-31. OPTIONAL refinement — auto-inject role-specific context when an agent session starts via `aida agent new`. Marked optional because Phases 1-4 deliver the core value; Phase 5 polishes the launch experience.
+
+  ## Scope
+
+  When `aida agent new <type> --role <role>` spawns an agent, the agent's first context window should include role-specific guidance:
+
+  - **Advisor role**: load advisor-role.md + recent punts + active spec graph + memory pack pointers
+  - **Implementer role**: load /aida-pickup-style setup + current queue head if --spec not given
+  - **Reviewer role**: load /aida-review-style prompt + the PR being reviewed
+  - **Other roles** (dialog, support, etc.): per-role guidance
+
+  ## Per-agent injection mechanism
+
+  Each agent has different primitives:
+
+  - **Claude**: system-reminders, SessionStart hook (already exists at aida-role-context.sh), CLAUDE.md import
+  - **Codex**: slash-command convention, AGENTS.md, --resume context replay
+  - **Antigravity**: brain-directory walkthrough.md initialization
+
+  The launcher's role-injection step is per-agent. Could be a thin shim per agent, or a unified template that each agent's launcher renders.
+
+  ## Why this is Phase 5 (optional)
+
+  Phases 1-4 give the operator visibility + launcher + state tracking. Phase 5 makes the launched session START with role-appropriate context — useful but not blocking. An operator can manually invoke role-specific skills (`/aida-pickup`, etc.) after a Phase 2 launch.
+
+  ## Acceptance
+
+  - [ ] aida agent new <type> --role advisor spawns an agent whose first context includes advisor-role guidance
+  - [ ] Per-role injection works for at least advisor + implementer + reviewer
+  - [ ] Per-agent injection works for at least Claude (Phase 2 dependency); Codex + Antigravity follow if their Phase 3a/3b launchers ship
+  - [ ] Operator can override injection via --no-context flag if undesired
+  - [ ] Documented in CLAUDE.md / AGENTS.md per-agent
+
+  ## Estimated time
+
+  ~2-4h per role × per agent. If shipped for 3 roles × 3 agents = 18-36h (substantial). Could ship one role + one agent first as the MVP and expand.
+
+  ## Composes with
+
+  - EPIC-31 (parent)
+  - Phase 2 + 3a + 3b STORYs (dependencies)
+  - aida-role-context.sh (existing SessionStart hook — extends this pattern)
+  - All per-agent setup docs (AGENTS.md, antigravity-mcp-setup.md, codex-mcp-setup.md)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T16:22:23.515609854Z
+modified_at: 2026-05-23T16:22:23.515609854Z
+req_type: Story
+tags:
+- context-injection
+- depends-on:phase-2
+- optional
+- parent:EPIC-31
+- phase-5
+- role-context
