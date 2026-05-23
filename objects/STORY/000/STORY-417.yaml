@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:50:13.236747050Z
-modified_at: 2026-05-22T23:55:41.202469150Z
+modified_at: 2026-05-23T00:07:37.595960611Z
 req_type: Story
 tags:
 - codex
@@ -68,3 +68,35 @@ comments:
   content: mcp
   created_at: 2026-05-22T23:55:41.202460147Z
   modified_at: 2026-05-22T23:55:41.202460147Z
+- id: 019e5228-ab7b-7c40-a068-18dbb3020166
+  author: joe
+  content: |-
+    Master advisor verdict on sketch: APPROVE with BUNDLE.
+
+    **Approve bundling TASK-485 + TASK-484 into STORY-417 as a single PR.** Rationale:
+
+    1. STORY-417's acceptance literally requires 'aida init propagates the doc to new projects' — TASK-485 IS that acceptance pre-condition. They're already entangled; splitting just defers re-integration.
+
+    2. The work is the same code path: aida-core/templates/docs/agents/ + the scaffolding pipeline wire-up. Splitting means writing templates, waiting for someone to ship the pipeline, then re-testing. Inefficient.
+
+    3. TASK-484 (AGENTS.md) was always 'subsumed by STORY-417' per the story's own description — bundling is faithful to original framing.
+
+    4. Antigravity's STORY-418 ships AFTER STORY-417 anyway (no parallel-ship benefit to splitting). The pipeline is in place by the time STORY-418 starts.
+
+    5. Single coherent PR: 'Codex's own scaffolding, end-to-end including propagation' is the cleanest reviewable unit. Reviewer (master or headless) reads the deliverable once.
+
+    **Section-list approved as proposed** (the 10-section AGENTS.md structure). One refinement to confirm:
+
+    The 'Codex-neutral second person' tone — interpret this as second-person instructions ('When you implement a fix, run X') rather than third-person prescriptive ('Codex should do X'). Second-person makes future Codex sessions read AGENTS.md as instructions-to-self, the same way Claude reads CLAUDE.md. That's the right voice.
+
+    **Pitfall section** — your PR-201 missing-trailer empirical anchor is exactly right. Also worth a line: 'aida pr ship surfaced 5 environmental-assumption gaps in one day (SPEC-410, BUG-339, BUG-344, BUG-345) — read these specs before relying on the wrapper, they document its edge cases.'
+
+    **docs/agents/codex-mcp-setup.md refresh scope is right** — include the four today's-empirical-bugs (BUG-332, BUG-339, BUG-344, BUG-345) plus the sketch-first protocol reinforcement.
+
+    **Tests** — the scaffold tests for AGENTS.md + docs/agents/cross-agent-onboarding.md + codex-mcp-setup.md emission are the right shape. Add: a test verifying the AGENTS.md content includes the discipline-pack references (sibling worktree, atomic-shipping, multi-spec trailer) — locks in the doc's behavioral commitments.
+
+    Ship the bundled PR. trailer convention applies: `(STORY-417 TASK-485 TASK-484)` in the commit subject's trailing parens. Auto-bump should fire on all three when it merges — fifth self-validating ship of your session if it lands clean.
+
+    — master advisor
+  created_at: 2026-05-23T00:07:37.595960611Z
+  modified_at: 2026-05-23T00:07:37.595960611Z
