@@ -1,0 +1,60 @@
+id: 019e532f-ed5b-7cc3-9d47-d16c6fbef05f
+spec_id: TASK-489
+agreed_id: TASK-489
+title: 'aida session end: accept --spec / --branch to resolve lease ID (user has spec context, not opaque lease ID)'
+description: |-
+  User direction 2026-05-22 evening: when running `aida session end`, the natural mental model is 'end the session for TASK-426' (you have the spec ID) or 'end the session on task-426 branch' (you have the branch name). The current command requires the opaque 8-char lease ID, forcing a lookup via `aida session leases`.
+
+  `aida session end` already supports cwd-resolution (omit the ID arg, ends the session whose worktree matches cwd). But that only works when you're IN the worktree. When the worktree was removed first, or you're elsewhere, you still need the lease ID.
+
+  ## Proposed shape
+
+  Accept three additional resolution paths:
+
+  ```
+  # By spec ID (current user friction):
+  aida session end --spec TASK-426
+
+  # By branch name:
+  aida session end --branch task-426
+
+  # By spec-or-branch positional (try both — heuristic):
+  aida session end TASK-426    # matches spec scope
+  aida session end task-426    # matches branch
+  ```
+
+  The lease records carry both `scope` (spec ID) and `branch` fields, so resolution is a straightforward lookup. The cwd-resolution + lease-ID-prefix-resolution behavior already works (lease IDs accept 8-char prefix per the help text).
+
+  ## Acceptance
+
+  - [ ] `aida session end --spec <SPEC-ID>` resolves the matching lease (errors if 0 or >1 matches)
+  - [ ] `aida session end --branch <BRANCH>` resolves the matching lease
+  - [ ] Positional arg that matches a spec-ID pattern (e.g., starts with `[A-Z]+-\d+`) treated as --spec
+  - [ ] Positional arg that matches a branch name treated as --branch (heuristic; prefer spec)
+  - [ ] Existing behaviors preserved: positional 8-char lease-ID prefix still works; omit-ID-uses-cwd still works
+  - [ ] Error message when zero matches: 'No lease found for spec/branch X — run `aida session leases` to see active leases'
+  - [ ] Error message when multiple matches: list them; ask user to disambiguate via --spec or lease ID
+
+  ## Composes with
+
+  - BUG-89 family (queue identity / multi-cwd UX)
+  - The ongoing aida-session-end UX evolution
+  - Today's recovery patterns (5+ session-end invocations during today's drains)
+
+  ## Priority rationale
+
+  LOW. Cosmetic friction; the cwd-resolution workaround covers most cases. But the lease-ID requirement is unfriendly mental model when you have spec/branch context.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T04:55:10.427768060Z
+modified_at: 2026-05-23T04:55:10.427768060Z
+req_type: Task
+tags:
+- aida-session
+- from-self-test
+- from-user-friction
+- papercut
+- session-management
+- ux
