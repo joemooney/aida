@@ -21442,6 +21442,68 @@ mod task_471_stale_base_preflight_tests {
     }
 }
 
+#[cfg(test)]
+mod story_429_auto_rebase_tests {
+    use super::*;
+
+    fn driver(
+        no_human: Option<auto_complete::NoHumanMode>,
+        allow_stale_base: bool,
+        no_auto_rebase: bool,
+    ) -> RealPhaseDriver {
+        RealPhaseDriver::new(
+            std::env::temp_dir().join(format!("aida-story-429-{}", uuid::Uuid::now_v7())),
+            "STORY-429".to_string(),
+            None,
+            true,
+            no_human,
+            "test-run".to_string(),
+            false,
+            allow_stale_base,
+            no_auto_rebase,
+        )
+    }
+
+    #[test]
+    fn opt_out_preserves_story_281_refuse_and_park() {
+        let driver = driver(Some(auto_complete::NoHumanMode::Both), false, true);
+        assert_eq!(driver.should_auto_rebase_stale_base(false), Err("disabled"));
+    }
+
+    #[test]
+    fn allow_stale_base_preempts_auto_rebase() {
+        let driver = driver(Some(auto_complete::NoHumanMode::Both), true, false);
+        assert_eq!(
+            driver.should_auto_rebase_stale_base(false),
+            Err("allow-stale-base")
+        );
+    }
+
+    #[test]
+    fn recursive_stale_base_hits_retry_limit() {
+        let driver = driver(Some(auto_complete::NoHumanMode::Both), false, false);
+        assert_eq!(
+            driver.should_auto_rebase_stale_base(true),
+            Err("retry-limit")
+        );
+    }
+
+    #[test]
+    fn fully_headless_first_stale_base_attempts_auto_rebase() {
+        let driver = driver(Some(auto_complete::NoHumanMode::Both), false, false);
+        assert_eq!(driver.should_auto_rebase_stale_base(false), Ok(()));
+    }
+
+    #[test]
+    fn human_permitted_mode_does_not_auto_rebase() {
+        let driver = driver(Some(auto_complete::NoHumanMode::ReviewerOnly), false, false);
+        assert_eq!(
+            driver.should_auto_rebase_stale_base(false),
+            Err("not-fully-headless")
+        );
+    }
+}
+
 #[cfg(all(test, unix))]
 mod pr_ship_environment_tests {
     use super::*;
@@ -51828,6 +51890,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             calibrate,
             no_calibrate,
             allow_stale_base,
+            no_auto_rebase,
         } => {
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
@@ -52016,6 +52079,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         escalate_mode,
                         *steal,
                         *allow_stale_base,
+                        *no_auto_rebase,
                     );
                 }
                 if let Some(batch_name) = effective_batch {
@@ -52037,6 +52101,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         escalate_mode,
                         *steal,
                         *allow_stale_base,
+                        *no_auto_rebase,
                     );
                 }
                 // TASK-293: `nextN --auto-complete` drains N specs from the
@@ -52061,6 +52126,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             escalate_mode,
                             *steal,
                             *allow_stale_base,
+                            *no_auto_rebase,
                         );
                     }
                 }
@@ -52093,6 +52159,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     escalate_mode,
                     *steal,
                     *allow_stale_base,
+                    *no_auto_rebase,
                 );
             }
             // TASK-293: a multi-spec `nextN` has no coherent single
@@ -55508,6 +55575,8 @@ fn handle_auto_complete(
     // STORY-281: thread the outer `--allow-stale-base` through so phase 3's
     // pre-flight stale-base check warns-only instead of refusing.
     allow_stale_base: bool,
+    // STORY-429: opt out of phase-3 auto-rebase recovery.
+    no_auto_rebase: bool,
 ) -> ! {
     let result = run_auto_complete(
         storage,
@@ -55522,6 +55591,7 @@ fn handle_auto_complete(
         true,
         steal,
         allow_stale_base,
+        no_auto_rebase,
     );
     std::process::exit(result.exit_code);
 }
@@ -55560,6 +55630,10 @@ fn run_auto_complete(
     // stale-base + file-overlap; also propagated to the reviewer subprocess.
     // trace:STORY-281 | ai:claude
     allow_stale_base: bool,
+    // STORY-429: pass-through of the outer `--no-auto-rebase` flag. When
+    // false, fully-headless phase 3 can attempt one clean PR rebase before
+    // falling back to STORY-281 refusal.
+    no_auto_rebase: bool,
 ) -> auto_complete::OrchestrationResult {
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
@@ -55646,6 +55720,7 @@ fn run_auto_complete(
         run_token,
         steal,
         allow_stale_base,
+        no_auto_rebase,
     );
     let started_at = chrono::Utc::now();
     let result = auto_complete::orchestrate(&mut driver, spec, variant, json, escalate_mode);
@@ -55796,6 +55871,8 @@ struct RealBatchDriver<'a> {
     /// member's phase-3 pre-flight check so the stale-base + overlap
     /// signal becomes a warning instead of a refusal.
     allow_stale_base: bool,
+    /// STORY-429: outer `--no-auto-rebase` flag, propagated to every member.
+    no_auto_rebase: bool,
 }
 
 impl auto_complete::BatchDriver for RealBatchDriver<'_> {
@@ -55835,6 +55912,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             false,
             self.steal,
             self.allow_stale_base,
+            self.no_auto_rebase,
         )
     }
 }
@@ -55861,6 +55939,8 @@ fn handle_auto_complete_batch(
     // STORY-281: outer `--allow-stale-base`, threaded to every batch
     // member's phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
+    // STORY-429: outer `--no-auto-rebase`, threaded to every batch member.
+    no_auto_rebase: bool,
 ) -> ! {
     if !json {
         eprintln!();
@@ -55904,6 +55984,7 @@ fn handle_auto_complete_batch(
         escalate_mode,
         steal,
         allow_stale_base,
+        no_auto_rebase,
     };
     let result = auto_complete::drain_batch(&mut driver, max);
     // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
@@ -55948,6 +56029,8 @@ fn handle_auto_complete_batches(
     // STORY-281: outer `--allow-stale-base`, threaded into every member's
     // RealBatchDriver via the per-batch closure below.
     allow_stale_base: bool,
+    // STORY-429: outer `--no-auto-rebase`, threaded into every member.
+    no_auto_rebase: bool,
 ) -> ! {
     if !json {
         eprintln!();
@@ -56012,6 +56095,7 @@ fn handle_auto_complete_batches(
             escalate_mode,
             steal,
             allow_stale_base,
+            no_auto_rebase,
         })
     });
 
@@ -56616,6 +56700,8 @@ struct RealNextNDriver<'a> {
     /// STORY-281: outer `--allow-stale-base`, propagated to every member's
     /// phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
+    /// STORY-429: outer `--no-auto-rebase`, propagated to every member.
+    no_auto_rebase: bool,
 }
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
@@ -56638,6 +56724,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             false,
             self.steal,
             self.allow_stale_base,
+            self.no_auto_rebase,
         )
     }
 }
@@ -56663,6 +56750,8 @@ fn handle_auto_complete_next_n(
     // STORY-281: outer `--allow-stale-base`, threaded to every drained
     // member's phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
+    // STORY-429: outer `--no-auto-rebase`, threaded to every drained member.
+    no_auto_rebase: bool,
 ) -> ! {
     if !json {
         eprintln!();
@@ -56711,6 +56800,7 @@ fn handle_auto_complete_next_n(
         escalate_mode,
         steal,
         allow_stale_base,
+        no_auto_rebase,
     };
     let result = auto_complete::drain_batch(&mut driver, Some(n));
     // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
@@ -57026,6 +57116,7 @@ fn record_auto_complete_run(
         total_ms: result.total_ms as u64,
         drafted_bug: None,
         binary_sha: build_sha_short(),
+        auto_rebase: driver.auto_rebase_events.clone(),
     };
 
     // On a phase failure, attach a Draft BUG. Reuse the BUG from a recent
@@ -58123,6 +58214,10 @@ struct RealPhaseDriver {
     /// reviewer subprocess so its own pre-flight respects the opt-out.
     /// trace:STORY-281 | ai:claude
     allow_stale_base: bool,
+    /// STORY-429: opt out of phase-3 auto-rebase recovery.
+    no_auto_rebase: bool,
+    /// STORY-429: embedded telemetry for phase-3 stale-base auto-rebase.
+    auto_rebase_events: Vec<auto_complete_telemetry::AutoRebaseEvent>,
 }
 
 impl RealPhaseDriver {
@@ -58135,6 +58230,7 @@ impl RealPhaseDriver {
         run_token: String,
         steal: bool,
         allow_stale_base: bool,
+        no_auto_rebase: bool,
     ) -> Self {
         Self {
             project_root,
@@ -58153,6 +58249,8 @@ impl RealPhaseDriver {
             implementer_worktree: None,
             steal,
             allow_stale_base,
+            no_auto_rebase,
+            auto_rebase_events: Vec::new(),
         }
     }
 
@@ -58162,6 +58260,65 @@ impl RealPhaseDriver {
 
     fn aida_exe(&self) -> std::path::PathBuf {
         self.aida_exe.clone()
+    }
+
+    fn record_auto_rebase(&mut self, pr_number: u64, outcome: impl Into<String>) {
+        self.auto_rebase_events
+            .push(auto_complete_telemetry::AutoRebaseEvent {
+                phase: auto_complete::Phase::Reviewer.index() as u8,
+                pr_number,
+                outcome: outcome.into(),
+            });
+    }
+
+    fn should_auto_rebase_stale_base(&self, attempted: bool) -> Result<(), &'static str> {
+        if self.allow_stale_base {
+            return Err("allow-stale-base");
+        }
+        if self.no_auto_rebase {
+            return Err("disabled");
+        }
+        if self.no_human != Some(auto_complete::NoHumanMode::Both) {
+            return Err("not-fully-headless");
+        }
+        if attempted {
+            return Err("retry-limit");
+        }
+        Ok(())
+    }
+
+    fn attempt_phase3_auto_rebase(&mut self, pr_number: u64) -> bool {
+        if !self.json {
+            eprintln!(
+                "  {} stale-base + overlap detected on PR-{pr_number}; attempting one clean auto-rebase…",
+                "↻".cyan()
+            );
+        }
+        let pr_arg = pr_number.to_string();
+        let status = std::process::Command::new(self.aida_exe())
+            .current_dir(&self.project_root)
+            .args(["pr", "rebase", pr_arg.as_str(), "--no-smoke"])
+            .status();
+        match status {
+            Ok(s) if s.success() => {
+                self.record_auto_rebase(pr_number, "clean");
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{pr_number} auto-rebased cleanly; retrying phase 3 pre-flight",
+                        "✓".green().bold()
+                    );
+                }
+                true
+            }
+            Ok(_) => {
+                self.record_auto_rebase(pr_number, "conflict");
+                false
+            }
+            Err(e) => {
+                self.record_auto_rebase(pr_number, format!("failed:{e}"));
+                false
+            }
+        }
     }
 
     fn auto_punt_text_question(
@@ -58829,37 +58986,56 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // logs a warning and proceeds — we never block a drain on
         // transient infrastructure issues, only on confirmed-stale
         // confirmed-overlap. trace:STORY-281 | ai:claude
-        match preflight_stale_base_check(&self.project_root, pr as u64) {
-            Ok(pr_rebase::StaleBaseOutcome::Current) => {}
-            Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                eprintln!(
-                    "  {} {}",
-                    "⚠".yellow().bold(),
-                    pr_rebase::stale_base_warn_message(pr as u64, behind).yellow()
-                );
-            }
-            Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                behind,
-                overlap_files,
-                ..
-            }) => {
-                let msg = pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
-                if self.allow_stale_base {
+        let mut auto_rebase_attempted = false;
+        loop {
+            match preflight_stale_base_check(&self.project_root, pr as u64) {
+                Ok(pr_rebase::StaleBaseOutcome::Current) => break,
+                Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
                     eprintln!(
-                        "  {} stale-base + overlap detected; `--allow-stale-base` is set, \
-                         proceeding with reviewer.\n{}",
+                        "  {} {}",
                         "⚠".yellow().bold(),
-                        msg.yellow()
+                        pr_rebase::stale_base_warn_message(pr as u64, behind).yellow()
                     );
-                } else {
-                    return Err(auto_complete::PhaseFailure::new(msg));
+                    break;
                 }
-            }
-            Err(e) => {
-                eprintln!(
-                    "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",
-                    "⚠".yellow().bold()
-                );
+                Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
+                    behind,
+                    overlap_files,
+                    ..
+                }) => {
+                    let msg =
+                        pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
+                    match self.should_auto_rebase_stale_base(auto_rebase_attempted) {
+                        Ok(()) => {
+                            auto_rebase_attempted = true;
+                            if self.attempt_phase3_auto_rebase(pr as u64) {
+                                continue;
+                            }
+                            return Err(auto_complete::PhaseFailure::new(msg));
+                        }
+                        Err("allow-stale-base") => {
+                            self.record_auto_rebase(pr as u64, "skipped:allow-stale-base");
+                            eprintln!(
+                                "  {} stale-base + overlap detected; `--allow-stale-base` is set, \
+                                 proceeding with reviewer.\n{}",
+                                "⚠".yellow().bold(),
+                                msg.yellow()
+                            );
+                            break;
+                        }
+                        Err(reason) => {
+                            self.record_auto_rebase(pr as u64, format!("skipped:{reason}"));
+                            return Err(auto_complete::PhaseFailure::new(msg));
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",
+                        "⚠".yellow().bold()
+                    );
+                    break;
+                }
             }
         }
 
