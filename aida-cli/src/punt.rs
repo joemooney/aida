@@ -73,11 +73,87 @@ pub struct PuntRecord {
     /// a plain implementer punt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answered_by: Option<String>,
+    /// STORY-325: What was decided — resolved, escalated, deferred.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision: Option<String>,
+    /// STORY-325: Link to the memory entry or recorded principle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principle_link: Option<String>,
+    /// STORY-325: When calibration shadow verdicts ran side-by-side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calibration_pair: Option<String>,
+    /// STORY-325: Timestamp when the design-fork paused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paused_at: Option<DateTime<Utc>>,
+    /// STORY-325: Timestamp when the design-fork resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_at: Option<DateTime<Utc>>,
 }
 
 /// Path to the punt ledger for a project, given its root directory.
 pub fn ledger_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("punts.jsonl")
+}
+
+/// The three empirical design forks of the day, seeded for backfill as a structured corpus.
+pub fn get_backfill_seeds() -> Vec<PuntRecord> {
+    use chrono::TimeZone;
+    vec![
+        PuntRecord {
+            timestamp: Utc.with_ymd_and_hms(2026, 5, 22, 20, 0, 0).unwrap(),
+            spec: "TASK-340".to_string(),
+            category: PuntCategory::DesignFork,
+            detail: "implementer punted on PuntRecord.resolved_at + drain-state persistence design forks".to_string(),
+            lean: None,
+            raised_by: Some("implementer".to_string()),
+            resolution_path: "punted".to_string(),
+            classification: Some("PREREQ-GAP".to_string()),
+            escalation_reason: None,
+            answer: None,
+            answered_by: None,
+            decision: Some("deferred".to_string()),
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 20, 0, 0).unwrap()),
+            resolved_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 21, 30, 0).unwrap()),
+        },
+        PuntRecord {
+            timestamp: Utc.with_ymd_and_hms(2026, 5, 22, 21, 0, 0).unwrap(),
+            spec: "TASK-403".to_string(),
+            category: PuntCategory::Other,
+            detail: "demo-meta-task misrouted to implementer queue".to_string(),
+            lean: None,
+            raised_by: Some("implementer".to_string()),
+            resolution_path: "advisor-resolved".to_string(),
+            classification: Some("SCOPE-MISMATCH".to_string()),
+            escalation_reason: None,
+            answer: Some("route to operator queue".to_string()),
+            answered_by: Some("advisor".to_string()),
+            decision: Some("route-to-operator".to_string()),
+            principle_link: Some("established operator curation tasks".to_string()),
+            calibration_pair: None,
+            paused_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 21, 0, 0).unwrap()),
+            resolved_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 21, 5, 0).unwrap()),
+        },
+        PuntRecord {
+            timestamp: Utc.with_ymd_and_hms(2026, 5, 22, 22, 0, 0).unwrap(),
+            spec: "TASK-440".to_string(),
+            category: PuntCategory::DesignFork,
+            detail: "spec body says 'defer until first MCP client surfaces need' but spec sits Approved".to_string(),
+            lean: None,
+            raised_by: Some("implementer".to_string()),
+            resolution_path: "escalated-to-human".to_string(),
+            classification: Some("DEFER-VS-DO-CONTRADICTION".to_string()),
+            escalation_reason: Some("genuinely-needs-human-judgment".to_string()),
+            answer: None,
+            answered_by: Some("advisor".to_string()),
+            decision: Some("escalated".to_string()),
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 22, 0, 0).unwrap()),
+            resolved_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 22, 45, 0).unwrap()),
+        },
+    ]
 }
 
 /// Append one punt record to `.aida/punts.jsonl`, creating the file (and the
@@ -89,6 +165,10 @@ pub fn ledger_path(project_root: &Path) -> PathBuf {
 /// two concurrent writers could interleave content and newline, producing
 /// a torn JSON line both consumers dropped.) trace:STORY-361
 pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Result<()> {
+    // Check telemetry opt-out
+    if !crate::usage::is_enabled(Some(project_root)) {
+        return Ok(());
+    }
     let path = ledger_path(project_root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -107,7 +187,18 @@ pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Res
 /// (oldest first). Bad or forward-incompatible lines are skipped rather than
 /// aborting the read; an absent ledger reads as empty. trace:STORY-306
 pub fn read_ledger(project_root: &Path) -> Vec<PuntRecord> {
-    let Ok(body) = std::fs::read_to_string(ledger_path(project_root)) else {
+    let path = ledger_path(project_root);
+    if !path.exists() {
+        // Automatically backfill with the empirical seeds if telemetry is allowed
+        let seeds = get_backfill_seeds();
+        if crate::usage::is_enabled(Some(project_root)) {
+            for seed in &seeds {
+                let _ = append_to_ledger(project_root, seed);
+            }
+        }
+        return seeds;
+    }
+    let Ok(body) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
     body.lines()
@@ -394,6 +485,11 @@ mod tests {
             escalation_reason: None,
             answer: None,
             answered_by: None,
+            decision: None,
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: None,
+            resolved_at: None,
         };
         append_to_ledger(dir.path(), &record).unwrap();
         // A second punt appends rather than overwrites.
@@ -493,6 +589,11 @@ mod tests {
             escalation_reason: None,
             answer: Some("use a bare --json bool".to_string()),
             answered_by: Some("advisor".to_string()),
+            decision: None,
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: None,
+            resolved_at: None,
         };
         let json = serde_json::to_string(&record).unwrap();
         assert_eq!(serde_json::from_str::<PuntRecord>(&json).unwrap(), record);
