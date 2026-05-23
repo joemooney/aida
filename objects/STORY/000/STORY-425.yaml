@@ -1,0 +1,94 @@
+id: 019e534c-7d62-7a73-baa3-f004020b30ff
+spec_id: STORY-425
+agreed_id: STORY-425
+title: 'Multi-agent communication model: replace cut-n-paste briefs with substrate-resident agent routing'
+description: |-
+  User direction 2026-05-22 evening: 'I have been doing a lot of cut-n-paste from this session to the other codex/agy agents. We will want to support aida queue work for those agents also at some point soon. We need to think about our communication model.'
+
+  ## The problem
+
+  Today's session shipped 35+ PRs across master + Codex + Antigravity in parallel. The pattern that worked: master (this advisor session) drafts a brief in conversation; operator manually copies the brief to Codex CLI or Antigravity CLI; the other agent acts on the brief. **The operator is the human bridge.** That scales linearly with agent count AND brief size.
+
+  The brief content is mostly REDUNDANT with the spec itself (acceptance, description, composes-with). What's not in the spec:
+  - 'This is your next pickup' routing signal
+  - Sketch-first requirements (often case-by-case)
+  - Composition hints ('composes with what you just shipped')
+  - Discipline reminders (worktree, prefix, trailer)
+
+  First three can live in spec metadata + queue tags. Fourth lives in per-agent setup docs (AGENTS.md for Codex; STORY-418 just shipped Antigravity's parallel).
+
+  ## Three levels of incremental improvement
+
+  ### Level 1 — Brief-as-file (smallest step, biggest immediate ROI)
+
+  Add AIDA verb: `aida brief <agent> <spec>` that:
+  - Generates a brief file at `.aida/agent-briefs/<agent>/<spec>-<timestamp>.md`
+  - Reads spec + composes-with chain + per-agent discipline doc
+  - Optionally `--note 'context'` for master-advisor preamble
+
+  Operator says to Codex: 'check .aida/agent-briefs/codex/ for new briefs.' Codex reads, executes.
+
+  Pros: durable audit trail, no scrollback dependency, ~1 day to ship
+  Cons: still requires operator to 'tell' agent + tell them where to look
+
+  ### Level 2 — Per-agent /aida-pickup skill (medium step)
+
+  Each agent has an equivalent of Claude's /aida-pickup. Operator invokes ONE command in the agent's CLI:
+  - Skill queries MCP for next work tagged `for:agent:<name>` (or unrouted-but-implementer)
+  - Claims via claim_task MCP tool
+  - Reads spec + composes-with via show_requirement
+  - Executes per agent's normal flow
+
+  Pros: one-command operator action; agent self-directs from substrate
+  Cons: each agent needs the skill (Codex via slash command, Antigravity via brain artifacts), and `for:agent:<name>` tag convention needs queue support
+
+  ### Level 3 — aida queue work --agent <name> (full autonomous drain)
+
+  Orchestrator's 6-phase loop with Codex's or Antigravity's CLI as the implementer/reviewer subprocess. Same --auto-complete semantics, different agent binary.
+
+  Pros: full autonomy parity; operator entirely out of the loop
+  Cons: each agent must be wrappable subprocess-style; CLI differences are real (Codex uses different arg format than claude -p); substantial implementation work
+
+  ## Acceptance for this STORY
+
+  This STORY is the strategic container. Sub-decompose into Level 1 / Level 2 / Level 3 TASKs/STORYs.
+
+  - [ ] Level 1 (TASK-NEW-A): `aida brief <agent> <spec>` verb + file convention
+  - [ ] Level 2 (STORY-NEW-B): per-agent /aida-pickup skill + `for:agent:<name>` queue tag
+  - [ ] Level 3 (STORY-NEW-C, post-alpha): `aida queue work --agent <name>` autonomous drain wrapping
+
+  Implementer SHOULD file Level 1 as the immediate ship; Levels 2 and 3 are sequenced after based on empirical use.
+
+  ## Recommended sequencing
+
+  Level 1 FIRST — removes the immediate friction with lowest cost. Sets the substrate convention (.aida/agent-briefs/ per-agent dir) that Levels 2 and 3 build on. Composes with the per-agent setup docs that STORY-417 + STORY-418 just shipped today.
+
+  Level 2 follows naturally once Level 1's brief-content is well-shaped (the brief becomes the input format the /aida-pickup skill renders).
+
+  Level 3 is post-alpha territory — per CLAUDE.md's framing, alpha is Claude-only; non-Claude users come later. This level is the substrate work that makes the agent-agnostic positioning fully operational for autonomous drain (not just for at-keyboard work).
+
+  ## Composes with
+
+  - AGENTS.md (Codex's home doc — STORY-417 shipped)
+  - docs/agents/antigravity-mcp-setup.md (STORY-418 shipped)
+  - aida-core/templates/docs/agents/ propagation pipeline (TASK-485 shipped)
+  - The MCP server's claim_task / show_requirement / list_active_leases tools
+  - Today's 35+ ship empirical evidence of the cut-n-paste pattern being the bottleneck
+
+  ## Strategic framing
+
+  AIDA's positioning is 'substrate any MCP-speaking agent can coordinate against.' The cut-n-paste cost is the gap between that claim and reality. Each level closes more of the gap. Level 3 = positioning is FULLY operational.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T05:26:22.306439170Z
+modified_at: 2026-05-23T05:26:22.306439170Z
+req_type: Story
+tags:
+- brief
+- communication-model
+- from-user-direction
+- multi-agent
+- routing
+- strategic
