@@ -18663,6 +18663,96 @@ fn read_headless_log_for_session(
     None
 }
 
+struct TextQuestionPunt {
+    detail: String,
+    lean: String,
+}
+
+/// BUG-354: classify the headless implementer's final `result` text as the
+/// plain-markdown variant of AskUserQuestion: the model asks the operator to
+/// choose a path, calls no tool, exits success, and opens no PR. We only scan
+/// the terminal result text and require both a question mark and decision-fork
+/// phrasing so normal implementation summaries that mention questions in
+/// passing keep the existing NoPr failure path.
+fn pending_text_question_from_headless_log(content: &str) -> Option<TextQuestionPunt> {
+    let result = reviewer_summary::parse_result_event(content)?;
+    if result.is_error {
+        return None;
+    }
+    let text = result.result_text?;
+    pending_text_question_from_result_text(&text)
+}
+
+fn pending_text_question_from_result_text(text: &str) -> Option<TextQuestionPunt> {
+    let trimmed = text.trim();
+    if !trimmed.contains('?') {
+        return None;
+    }
+    let question = first_question_sentence(trimmed)?;
+    let question_lower = question.to_ascii_lowercase();
+    const QUESTION_FORK_MARKERS: &[&str] = &[
+        "which path",
+        "which option",
+        "which approach",
+        "which one",
+        "do you want me to",
+        "would you like me to",
+        "should i",
+        "should we",
+        "want me to",
+        "how would you like",
+        "need you to choose",
+    ];
+    if !QUESTION_FORK_MARKERS
+        .iter()
+        .any(|marker| question_lower.contains(marker))
+    {
+        return None;
+    }
+    let recommendation = recommendation_line(trimmed).unwrap_or_else(|| {
+        "review the punted analysis and choose the implementation path".to_string()
+    });
+    Some(TextQuestionPunt {
+        detail: format!(
+            "headless implementer exited without opening a PR after asking a plain-text decision question: {}",
+            bounded_text(&question, 220),
+        ),
+        lean: bounded_text(&recommendation, 220),
+    })
+}
+
+fn first_question_sentence(text: &str) -> Option<String> {
+    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let question_idx = collapsed.find('?')?;
+    let start = collapsed[..question_idx]
+        .rfind(['.', '!', '\n'])
+        .map(|i| i + 1)
+        .unwrap_or(0);
+    Some(collapsed[start..=question_idx].trim().to_string()).filter(|s| !s.is_empty())
+}
+
+fn recommendation_line(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .find(|line| {
+            let lower = line.to_ascii_lowercase();
+            lower.contains("recommend") || lower.starts_with("lean:") || lower.contains("my lean")
+        })
+        .map(str::to_string)
+}
+
+fn bounded_text(text: &str, max: usize) -> String {
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.len() <= max {
+        return text;
+    }
+    let mut end = max.saturating_sub(1).min(text.len());
+    while !text.is_char_boundary(end) && end > 0 {
+        end -= 1;
+    }
+    format!("{}…", &text[..end])
+}
+
 /// Look up a single open PR keyed on `branch`. The richer [`PrLookup`]
 /// return shape lets callers print an honest skip reason (no PR yet / gh
 /// missing / gh failed) instead of collapsing every case to `None`.
@@ -27354,6 +27444,60 @@ mod bug_266_anthropic_api_outage_classifier_tests {
             reason.to_ascii_lowercase().contains("api error: 5"),
             "excerpt must include the matched phrase, got: {reason}",
         );
+    }
+}
+
+#[cfg(test)]
+mod bug_354_text_question_classifier_tests {
+    use super::*;
+
+    #[test]
+    fn final_result_with_decision_question_classifies_as_punt() {
+        let log = r#"{"type":"result","subtype":"success","is_error":false,"result":"I found three viable paths.\n\nWhich path do you want me to take? My recommendation is B first because it is lowest-risk."}"#;
+        let punt = pending_text_question_from_headless_log(log).expect("question must classify");
+        assert!(
+            punt.detail.contains("Which path do you want me to take?"),
+            "{}",
+            punt.detail
+        );
+        assert!(
+            punt.lean.contains("recommendation"),
+            "lean should preserve recommendation: {}",
+            punt.lean
+        );
+    }
+
+    #[test]
+    fn final_result_with_should_i_question_classifies_as_punt() {
+        let text = "The fixture can be fixed two ways. Should I update the parser or wait for upstream? I recommend updating the parser.";
+        let punt =
+            pending_text_question_from_result_text(text).expect("should-I fork must classify");
+        assert!(punt.detail.contains("Should I update the parser"));
+        assert!(punt.lean.contains("recommend"));
+    }
+
+    #[test]
+    fn ordinary_summary_question_does_not_classify_without_fork_marker() {
+        let text = "Implemented the change. Tests answer the question: does the parser handle aliases? Yes.";
+        assert!(pending_text_question_from_result_text(text).is_none());
+    }
+
+    #[test]
+    fn recommendation_plus_unrelated_question_does_not_classify() {
+        let text = "I recommend filing a follow-up. Tests answer the question: does the parser handle aliases? Yes.";
+        assert!(pending_text_question_from_result_text(text).is_none());
+    }
+
+    #[test]
+    fn error_result_does_not_classify() {
+        let log = r#"{"type":"result","subtype":"error","is_error":true,"result":"Which path should I take?"}"#;
+        assert!(pending_text_question_from_headless_log(log).is_none());
+    }
+
+    #[test]
+    fn no_question_mark_does_not_classify() {
+        let text = "My recommendation is B first. I will proceed with that path.";
+        assert!(pending_text_question_from_result_text(text).is_none());
     }
 }
 
@@ -58020,6 +58164,44 @@ impl RealPhaseDriver {
         self.aida_exe.clone()
     }
 
+    fn auto_punt_text_question(
+        &self,
+        worktree_path: &std::path::Path,
+        session_uuid: &str,
+    ) -> Option<String> {
+        if !self
+            .no_human
+            .map(|m| m.wants_headless_implementer())
+            .unwrap_or(false)
+        {
+            return None;
+        }
+        let content = read_headless_log_for_session(&self.project_root, session_uuid)?;
+        let punt = pending_text_question_from_headless_log(&content)?;
+        let status = std::process::Command::new(self.aida_exe())
+            .current_dir(worktree_path)
+            .args([
+                "punt",
+                &self.spec,
+                "--category",
+                "design-fork",
+                "--reason",
+                &punt.detail,
+                "--lean",
+                &punt.lean,
+            ])
+            .env("AIDA_SESSION_ROLE", "implementer")
+            .status()
+            .ok()?;
+        if !status.success() {
+            return None;
+        }
+        Some(format!(
+            "[design-fork] {} (lean: {})",
+            punt.detail, punt.lean
+        ))
+    }
+
     /// Locate the session lease `aida queue work --session-id <uuid>` created
     /// for this orchestrator phase, pinned by the `claude_session_id` the
     /// orchestrator minted. Deterministic — unaffected by concurrent leases
@@ -58520,11 +58702,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 self.pr_number = Some(pr.number as u32);
                 Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
-            None => Err(auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::NoPr,
-                "the implementer session exited cleanly but opened no PR — \
-                 run `/aida-pr` inside the session before exiting",
-            )),
+            None => {
+                if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
+                    return Ok(auto_complete::ImplementerOutcome::Punted { reason });
+                }
+                Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::NoPr,
+                    "the implementer session exited cleanly but opened no PR — \
+                     run `/aida-pr` inside the session before exiting",
+                ))
+            }
         }
     }
 
