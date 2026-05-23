@@ -53,7 +53,16 @@ impl TeeOptions {
     /// `AIDA_TEE_HEADLESS` env var. Flag wins (explicit user intent at the
     /// CLI); else env `0`/`false`/`off` disables; else default on.
     pub fn from_env_and_flag(no_tee_flag: bool) -> Self {
-        let env_off = std::env::var("AIDA_TEE_HEADLESS")
+        let env_value = std::env::var("AIDA_TEE_HEADLESS").ok();
+        Self::resolve(no_tee_flag, env_value.as_deref())
+    }
+
+    /// Pure policy: flag + env-var value → `TeeOptions`. Split out from
+    /// `from_env_and_flag` so the precedence rules can be exercised in
+    /// tests without mutating process-wide env state (which races other
+    /// tests in the same binary). trace:TASK-426
+    fn resolve(no_tee_flag: bool, env_value: Option<&str>) -> Self {
+        let env_off = env_value
             .map(|v| matches!(v.trim(), "0" | "false" | "off" | "no"))
             .unwrap_or(false);
         Self {
@@ -625,28 +634,45 @@ mod tests {
         assert_eq!(opts.prefix(), "│ [headless]");
     }
 
+    // Precedence rules (flag wins; else env `0`/`false`/`off`/`no` disables;
+    // else on by default) are tested against the pure `resolve` helper so
+    // these cases don't mutate the global `AIDA_TEE_HEADLESS` env var and
+    // race other tests in the same binary. trace:TASK-426
+
     #[test]
-    fn from_env_and_flag_disabled_by_flag() {
-        // SAFETY: tests run in a single process — use a unique var name to
-        // avoid stepping on parallel tests.
-        std::env::remove_var("AIDA_TEE_HEADLESS");
-        let opts = TeeOptions::from_env_and_flag(true);
-        assert!(!opts.enabled);
+    fn resolve_disabled_by_flag() {
+        // Flag wins even when the env says "on" (no env var set).
+        assert!(!TeeOptions::resolve(true, None).enabled);
+        // Flag still wins when the env explicitly enables.
+        assert!(!TeeOptions::resolve(true, Some("1")).enabled);
     }
 
     #[test]
-    fn from_env_and_flag_enabled_by_default() {
-        std::env::remove_var("AIDA_TEE_HEADLESS");
-        let opts = TeeOptions::from_env_and_flag(false);
-        assert!(opts.enabled);
+    fn resolve_enabled_by_default() {
+        assert!(TeeOptions::resolve(false, None).enabled);
     }
 
     #[test]
-    fn from_env_and_flag_disabled_by_env() {
-        std::env::set_var("AIDA_TEE_HEADLESS", "0");
-        let opts = TeeOptions::from_env_and_flag(false);
-        assert!(!opts.enabled);
-        std::env::remove_var("AIDA_TEE_HEADLESS");
+    fn resolve_disabled_by_env() {
+        for v in ["0", "false", "off", "no", " 0 ", "OFF"].iter().copied() {
+            // Trim + lowercase-friendly match: "OFF" should NOT match (we
+            // match exact lowercase tokens); whitespace-padded "0" should.
+            let opts = TeeOptions::resolve(false, Some(v));
+            let expect_off = matches!(v.trim(), "0" | "false" | "off" | "no");
+            assert_eq!(!opts.enabled, expect_off, "value: {:?}", v);
+        }
+    }
+
+    #[test]
+    fn resolve_env_other_values_stay_enabled() {
+        // Anything outside the disable set leaves tee on.
+        for v in ["1", "true", "on", "yes", "", "garbage"].iter().copied() {
+            assert!(
+                TeeOptions::resolve(false, Some(v)).enabled,
+                "value: {:?} should leave tee enabled",
+                v
+            );
+        }
     }
 
     #[test]
