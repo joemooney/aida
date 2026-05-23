@@ -85,10 +85,11 @@ use crate::cli::{
     AdvisorCommand, BlockCommand, BriefCommand, CacheCommand, Cli, Command, CommentCommand,
     ConfigCommand, DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
     FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand,
-    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, QueueCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
-    RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand,
-    SessionWakeupCommand, SkillCommand, TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
+    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand,
+    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
+    SessionManifestCommand, SessionWakeupCommand, SkillCommand, TraceCommand, TypeCommand,
+    WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -868,6 +869,13 @@ fn run() -> Result<()> {
         return handle_headless_command(headless_cmd);
     }
 
+    // STORY-325: punt ledger CLI command. Dispatched before storage init —
+    // it reads only `.aida/punts.jsonl`, no requirement store.
+    // trace:STORY-325 | ai:antigravity
+    if let Command::Punts(punts_cmd) = &cli.command {
+        return handle_punts_command(punts_cmd.clone());
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -1210,6 +1218,7 @@ fn run() -> Result<()> {
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
+        Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -1423,6 +1432,7 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+
         Command::StateSnapshot { .. } => {
             // The finish-state preamble's Spec row needs git-canonical
             // metadata (spec_id + status). trace:TASK-391 | ai:claude
@@ -2198,6 +2208,11 @@ fn handle_punt_command(
             escalation_reason: None,
             answer: None,
             answered_by: None,
+            decision: None,
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: Some(now),
+            resolved_at: None,
         };
         if let Err(e) = punt::append_to_ledger(&project_root, &record) {
             eprintln!(
@@ -2253,6 +2268,321 @@ fn handle_punt_command(
         )
         .dimmed()
     );
+    Ok(())
+}
+
+fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
+    let project_root = find_project_root()?;
+    let records = punt::read_ledger(&project_root);
+
+    match cmd {
+        PuntsCommand::List {
+            spec,
+            category,
+            resolution,
+        } => {
+            let mut filtered = records;
+            if let Some(s) = spec {
+                filtered.retain(|r| r.spec.eq_ignore_ascii_case(&s));
+            }
+            if let Some(c) = category {
+                filtered.retain(|r| r.category.to_string().eq_ignore_ascii_case(&c));
+            }
+            if let Some(r) = resolution {
+                filtered.retain(|rec| rec.resolution_path.eq_ignore_ascii_case(&r));
+            }
+
+            if filtered.is_empty() {
+                println!("No punt records found matching criteria.");
+                return Ok(());
+            }
+
+            println!(
+                "{:<24} {:<12} {:<20} {:<12} {}",
+                "TIMESTAMP".dimmed(),
+                "SPEC".dimmed(),
+                "RESOLUTION PATH".dimmed(),
+                "DECISION".dimmed(),
+                "DETAIL".dimmed()
+            );
+            println!("{}", "─".repeat(80).dimmed());
+            for r in filtered {
+                let ts = r.timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
+                let dec = r.decision.as_deref().unwrap_or("-");
+                let dec_colored = match dec {
+                    "resolved" => dec.green(),
+                    "escalated" => dec.red(),
+                    "deferred" => dec.yellow(),
+                    _ => dec.normal(),
+                };
+                let res_colored = match r.resolution_path.as_str() {
+                    "advisor-resolved" => r.resolution_path.green(),
+                    "escalated-to-human" => r.resolution_path.red(),
+                    "punted" => r.resolution_path.yellow(),
+                    _ => r.resolution_path.normal(),
+                };
+                println!(
+                    "{:<24} {:<12} {:<20} {:<12} {}",
+                    ts.dimmed(),
+                    r.spec.cyan().bold(),
+                    res_colored,
+                    dec_colored,
+                    r.detail
+                );
+            }
+        }
+        PuntsCommand::Analyze => {
+            let total = records.len();
+            if total == 0 {
+                println!("The punt ledger is empty.");
+                return Ok(());
+            }
+
+            let mut punted_count = 0;
+            let mut resolved_count = 0;
+            let mut escalated_count = 0;
+            let mut total_judged = 0;
+
+            let mut category_counts = std::collections::HashMap::new();
+            let mut classification_counts = std::collections::HashMap::new();
+            let mut durations = Vec::new();
+
+            for r in &records {
+                *category_counts.entry(r.category).or_insert(0) += 1;
+                if let Some(ref cls) = r.classification {
+                    *classification_counts.entry(cls.clone()).or_insert(0) += 1;
+                }
+
+                if r.resolution_path == "punted" {
+                    punted_count += 1;
+                } else if r.resolution_path == "advisor-resolved"
+                    || r.decision.as_deref() == Some("resolved")
+                {
+                    resolved_count += 1;
+                    total_judged += 1;
+                } else if r.resolution_path == "escalated-to-human"
+                    || r.decision.as_deref() == Some("escalated")
+                {
+                    escalated_count += 1;
+                    total_judged += 1;
+                } else {
+                    if r.decision.as_deref() == Some("escalated") {
+                        escalated_count += 1;
+                        total_judged += 1;
+                    } else if r.decision.as_deref() == Some("resolved") {
+                        resolved_count += 1;
+                        total_judged += 1;
+                    } else {
+                        punted_count += 1;
+                    }
+                }
+
+                if let (Some(paused), Some(resolved)) = (r.paused_at, r.resolved_at) {
+                    if resolved >= paused {
+                        durations.push(resolved.signed_duration_since(paused));
+                    }
+                }
+            }
+
+            let escalation_rate = if total_judged > 0 {
+                (escalated_count as f64 / total_judged as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            println!("{}", "◆ AIDA Punt Ledger Analytics ◆".magenta().bold());
+            println!(
+                "{}",
+                "──────────────────────────────────────────────────".dimmed()
+            );
+            println!(
+                "{:<30} {}",
+                "Total Recorded Punts:",
+                total.to_string().bold()
+            );
+            println!(
+                "{:<30} {}",
+                "  Punted (Awaiting Triage):",
+                punted_count.to_string().yellow()
+            );
+            println!(
+                "{:<30} {}",
+                "  Resolved by Advisor:",
+                resolved_count.to_string().green()
+            );
+            println!(
+                "{:<30} {}",
+                "  Escalated to Human:",
+                escalated_count.to_string().red()
+            );
+            println!(
+                "{:<30} {:.1}% ({}/{})",
+                "Escalation Rate (Advisor):", escalation_rate, escalated_count, total_judged
+            );
+
+            if !durations.is_empty() {
+                let total_sec: i64 = durations.iter().map(|d| d.num_seconds()).sum();
+                let avg_sec = total_sec / durations.len() as i64;
+                let avg_duration = chrono::Duration::seconds(avg_sec);
+                println!(
+                    "{:<30} {}m {}s",
+                    "Average Resolution Time:",
+                    avg_duration.num_minutes(),
+                    avg_duration.num_seconds() % 60
+                );
+            }
+
+            println!("\n{}", "Category Breakdown:".bold());
+            let mut categories: Vec<_> = category_counts.into_iter().collect();
+            categories.sort_by(|a, b| b.1.cmp(&a.1));
+            for (cat, count) in categories {
+                println!(
+                    "  {:<28} {}",
+                    cat.to_string().blue(),
+                    count.to_string().bold()
+                );
+            }
+
+            println!(
+                "\n{}",
+                "Classification Triage Patterns (Question Shapes):".bold()
+            );
+            if classification_counts.is_empty() {
+                println!("  No classifications recorded yet.");
+            } else {
+                let mut classes: Vec<_> = classification_counts.into_iter().collect();
+                classes.sort_by(|a, b| b.1.cmp(&a.1));
+                for (cls, count) in classes {
+                    println!("  {:<28} {}", cls.cyan(), count.to_string().bold());
+                }
+            }
+            println!(
+                "{}",
+                "──────────────────────────────────────────────────".dimmed()
+            );
+        }
+        PuntsCommand::Promote { id, memory_name } => {
+            let record = records
+                .iter()
+                .find(|r| r.spec.eq_ignore_ascii_case(&id))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("No punt record found in ledger for spec ID '{}'", id)
+                })?;
+
+            let target_path = if memory_name.starts_with("docs/") {
+                project_root.join(&memory_name)
+            } else if memory_name.starts_with("discipline/") {
+                project_root.join("docs").join(&memory_name)
+            } else {
+                project_root.join(&memory_name)
+            };
+
+            if let Some(parent) = target_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+
+            let title = record.classification.as_deref().unwrap_or(&record.detail);
+            let slug = memory_name
+                .trim_end_matches(".md")
+                .replace('/', "_")
+                .replace(' ', "_")
+                .replace('-', "_");
+            let date_str = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+            let mut content = String::new();
+            if !target_path.exists() {
+                content.push_str(&format!(
+                    "# {}\n\n\
+                     **Last updated**: {}\n\
+                     **Principle Trace**: `feedback_{}` | `{}`\n\n\
+                     ## Context & Design Fork\n\
+                     - **Spec**: {}\n\
+                     - **Category**: {}\n\
+                     - **Raised By**: {}\n\
+                     - **Resolution Path**: {}\n\n\
+                     ## Decision / Principle\n\
+                     {}\n",
+                    title,
+                    date_str,
+                    slug,
+                    record.spec,
+                    record.spec,
+                    record.category,
+                    record.raised_by.as_deref().unwrap_or("unknown"),
+                    record.resolution_path,
+                    record
+                        .answer
+                        .as_deref()
+                        .or(record.classification.as_deref())
+                        .unwrap_or(&record.detail)
+                ));
+                std::fs::write(&target_path, &content)?;
+                println!(
+                    "Created new memory pack entry at: {}",
+                    target_path.display().to_string().cyan()
+                );
+            } else {
+                content.push_str(&format!(
+                    "\n---\n\n\
+                     ## Principle Trace: `feedback_{}` | `{}`\n\
+                     - **Spec**: {}\n\
+                     - **Category**: {}\n\
+                     - **Decision**: {}\n\n\
+                     ### Context\n\
+                     {}\n\n\
+                     ### Resolution\n\
+                     {}\n",
+                    slug,
+                    record.spec,
+                    record.spec,
+                    record.category,
+                    record.decision.as_deref().unwrap_or("-"),
+                    record.detail,
+                    record
+                        .answer
+                        .as_deref()
+                        .or(record.classification.as_deref())
+                        .unwrap_or(&record.detail)
+                ));
+                use std::io::Write;
+                let mut file = std::fs::OpenOptions::new()
+                    .append(true)
+                    .open(&target_path)?;
+                file.write_all(content.as_bytes())?;
+                println!(
+                    "Appended design-fork pattern to existing memory pack entry at: {}",
+                    target_path.display().to_string().cyan()
+                );
+            }
+
+            // Update the record's principle_link in the ledger
+            let mut updated_records = records.clone();
+            let mut found = false;
+            for r in &mut updated_records {
+                if r.spec.eq_ignore_ascii_case(&id) {
+                    r.principle_link = Some(memory_name.clone());
+                    found = true;
+                    break;
+                }
+            }
+
+            if found {
+                let path = punt::ledger_path(&project_root);
+                let mut file = std::fs::File::create(&path)?;
+                for r in &updated_records {
+                    let serialized = serde_json::to_string(r)?;
+                    use std::io::Write;
+                    writeln!(file, "{}", serialized)?;
+                }
+                println!(
+                    "Updated punt record '{}' with principle link to '{}'.",
+                    id.cyan(),
+                    memory_name.green()
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -4836,6 +5166,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             lean,
         } => {
             handle_punt_command(id, category, reason, lean.as_deref(), &backend, store_path)?;
+        }
+        Command::Punts(punts_cmd) => {
+            handle_punts_command(punts_cmd.clone())?;
         }
         Command::Search {
             query,
@@ -58863,6 +59196,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             punt::PuntResolution::Resolved => "advisor-resolved",
             punt::PuntResolution::Escalated => "escalated-to-human",
         };
+        let decision = match response.resolution {
+            punt::PuntResolution::Resolved => Some("resolved".to_string()),
+            punt::PuntResolution::Escalated => Some("escalated".to_string()),
+        };
+        let calibration_pair = if calibration_mode.is_on() {
+            Some(punt_id)
+        } else {
+            None
+        };
         let record = punt::PuntRecord {
             timestamp: chrono::Utc::now(),
             spec: self.spec.clone(),
@@ -58875,6 +59217,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             escalation_reason: response.escalation_reason.clone(),
             answer: response.answer.clone(),
             answered_by: Some("advisor".to_string()),
+            decision,
+            principle_link: None,
+            calibration_pair,
+            paused_at: Some(attention.raised_at),
+            resolved_at: Some(chrono::Utc::now()),
         };
         let _ = punt::append_to_ledger(&self.project_root, &record);
 

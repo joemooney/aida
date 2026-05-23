@@ -3163,6 +3163,38 @@ pub enum CalibrationAction {
     },
 }
 
+/// Browse and analyze the local design-fork punt ledger.
+// trace:STORY-325 | ai:claude
+#[derive(Subcommand, Debug, Clone)]
+pub enum PuntsCommand {
+    /// Browse recent punt records from the ledger
+    List {
+        /// Filter by spec (display ID or UUID)
+        #[clap(long)]
+        spec: Option<String>,
+
+        /// Filter by category (e.g. design-fork, ambiguous-spec, missing-context)
+        #[clap(long, short = 'c')]
+        category: Option<String>,
+
+        /// Filter by resolution path (e.g. punted, advisor-resolved, escalated-to-human)
+        #[clap(long, short = 'r')]
+        resolution: Option<String>,
+    },
+
+    /// Print rolling metrics and stats for recent punts
+    Analyze,
+
+    /// Extract a pattern from a punt into a new memory pack entry
+    Promote {
+        /// The spec ID of the punt record to promote
+        id: String,
+
+        /// The name of the memory file (e.g., 'discipline/operator_curation.md')
+        memory_name: String,
+    },
+}
+
 /// Orchestrator-run introspection. The `--auto-complete` orchestrator passes a
 /// corroboration token to its phase children; these subcommands let a child —
 /// or a skill running inside one — verify whether it is a *genuine* orchestrator
@@ -3710,6 +3742,11 @@ pub enum Command {
         #[clap(long, short = 'l')]
         lean: Option<String>,
     },
+
+    /// Browse and analyze the local design-fork punt ledger.
+    // trace:STORY-325 | ai:claude
+    #[clap(subcommand)]
+    Punts(PuntsCommand),
 
     /// Feature management commands
     #[clap(subcommand, hide = true)]
