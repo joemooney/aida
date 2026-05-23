@@ -58,12 +58,12 @@ description: |-
   ## Origin
 
   2026-05-18: PR-91 (TASK-277 doc) re-review — the headless reviewer fix-forwarded 3 output-accuracy misses (commit \`90fc26cb\`) and approved. A prior reviewer (PR-64) had explicitly refused the same move citing CI desync. The inconsistency is the skill's fault — no documented policy — so reviewers improvise. PR-91's fix-forward was low-risk (doc-only, CI CLEAN), but the next one might not be.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T06:13:10.040246085Z
-modified_at: 2026-05-23T00:32:56.364790014Z
+modified_at: 2026-05-23T00:33:06.169775775Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-22
@@ -86,3 +86,7 @@ comments:
     Test status: 7/7 template tests green (`cargo test -p aida-core --lib templates::tests`); `cargo fmt --all -- --check` clean
   created_at: 2026-05-23T00:32:03.030697695Z
   modified_at: 2026-05-23T00:32:03.030697695Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-23T00:33:06.169775775Z
+  implemented_by: joe
