@@ -1,0 +1,26 @@
+id: 019e572b-e9bb-74b2-a421-71a71516383d
+spec_id: STORY-440
+agreed_id: STORY-440
+title: 'Review PR-253: feat(status): surface In Progress items above Next up in aida status (TASK-490)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e56fb`) for branch `task-490`.
+
+  - PR: <https://github.com/joemooney/aida/pull/253>
+  - Branch: `task-490` → `main`
+
+  ## Covers
+
+  - TASK-490
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 253` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T23:29:16.219373185Z
+modified_at: 2026-05-23T23:29:16.219373185Z
+req_type: Story
