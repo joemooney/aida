@@ -88,7 +88,13 @@ aida goal --spec <ID> --copy           # --copy → clipboard; --invoke → bare
 aida changelog generate                # Print structured CHANGELOG.md to stdout — every release + [Unreleased] (TASK-299)
 aida changelog refresh                 # Rewrite CHANGELOG.md (idempotent — same git state → byte-identical output)
 aida changelog preview                 # Stdout-only preview of the [Unreleased] section
+aida --asciinema queue work --batch overnight-X --auto-complete  # Record a demo/training/audit cast under ~/.aida/casts/
 ```
+
+`aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
+the first-class capture wrapper for demos, training corpus material, and
+autonomous-drain audit trails. It no-ops gracefully when `asciinema` is
+missing or the invocation is not attached to a TTY.
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
 

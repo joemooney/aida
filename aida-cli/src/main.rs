@@ -39,6 +39,7 @@ use clap::Parser;
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::io::IsTerminal;
 use uuid::Uuid;
 
 use aida_core::{
@@ -252,20 +253,340 @@ fn build_sha_short() -> Option<String> {
     }
 }
 
+const ASCIINEMA_WRAPPED_ENV: &str = "AIDA_ASCIINEMA_WRAPPED";
+// Keep generated cast names readable while preventing pathological command
+// lines from becoming filesystem-hostile. Truncated slugs end in "-trunc".
+// trace:STORY-423 | ai:codex
+const ASCIINEMA_SLUG_MAX_CHARS: usize = 80;
+
+fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Result<Option<i32>> {
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        eprintln!(
+            "{} --asciinema requested but stdin/stdout is not a TTY; running without recording.",
+            "ⓘ".cyan()
+        );
+        return Ok(None);
+    }
+
+    if !asciinema_available() {
+        eprintln!(
+            "{} --asciinema requested but `asciinema` is not installed or not on PATH; running without recording.",
+            "ⓘ".cyan()
+        );
+        return Ok(None);
+    }
+
+    let aida_exe = resolve_aida_exe();
+    let inner_args = strip_asciinema_wrapper_args(raw_args);
+    let cast_path = resolve_cast_output_path(cli.cast_out.as_ref(), &inner_args)?;
+    if let Some(parent) = cast_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating cast output directory {}", parent.display()))?;
+    }
+    let title = cli
+        .cast_title
+        .clone()
+        .unwrap_or_else(|| default_cast_title(&inner_args));
+    let command = shell_command_for_asciinema(&aida_exe, &inner_args);
+
+    let status = std::process::Command::new("asciinema")
+        .args(["rec", "--command", &command, "--title", &title])
+        .arg(&cast_path)
+        .env(ASCIINEMA_WRAPPED_ENV, "1")
+        .status()
+        .context("could not invoke `asciinema rec`")?;
+
+    if status.success() {
+        println!("Cast saved: {}", cast_path.display());
+    }
+    Ok(Some(status.code().unwrap_or(1)))
+}
+
+fn asciinema_available() -> bool {
+    std::process::Command::new("asciinema")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn strip_asciinema_wrapper_args(raw_args: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(bin) = raw_args.first() {
+        out.push(bin.clone());
+    }
+    let mut i = 1;
+    while i < raw_args.len() {
+        let arg = &raw_args[i];
+        match arg.as_str() {
+            "--asciinema" => {
+                i += 1;
+            }
+            "--cast-out" | "--cast-title" => {
+                i += 2;
+            }
+            _ if arg.starts_with("--cast-out=") || arg.starts_with("--cast-title=") => {
+                i += 1;
+            }
+            _ => {
+                out.push(arg.clone());
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+fn resolve_cast_output_path(
+    override_path: Option<&std::path::PathBuf>,
+    inner_args: &[String],
+) -> Result<std::path::PathBuf> {
+    if let Some(path) = override_path {
+        return Ok(path.clone());
+    }
+    let home = dirs::home_dir().ok_or_else(|| {
+        anyhow::anyhow!("--asciinema needs $HOME to derive the default cast output path")
+    })?;
+    let stamp = chrono::Utc::now().format("%Y-%m-%dT%H%M%SZ");
+    let slug = asciinema_command_slug(inner_args);
+    Ok(home
+        .join(".aida")
+        .join("casts")
+        .join(format!("{stamp}-{slug}.cast")))
+}
+
+fn default_cast_title(inner_args: &[String]) -> String {
+    let rest = inner_args
+        .iter()
+        .skip(1)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if rest.trim().is_empty() {
+        "aida".to_string()
+    } else {
+        format!("aida {rest}")
+    }
+}
+
+fn asciinema_command_slug(inner_args: &[String]) -> String {
+    let raw = inner_args
+        .iter()
+        .skip(1)
+        .map(|arg| arg.trim_start_matches('-'))
+        .filter(|arg| !arg.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let mut slug = String::new();
+    let mut last_dash = false;
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch);
+            last_dash = false;
+        } else if !last_dash {
+            slug.push('-');
+            last_dash = true;
+        }
+    }
+    let mut slug = slug.trim_matches('-').to_string();
+    if slug.is_empty() {
+        slug = "aida".to_string();
+    }
+    truncate_asciinema_slug(&slug)
+}
+
+fn truncate_asciinema_slug(slug: &str) -> String {
+    let count = slug.chars().count();
+    if count <= ASCIINEMA_SLUG_MAX_CHARS {
+        return slug.to_string();
+    }
+    let keep = ASCIINEMA_SLUG_MAX_CHARS.saturating_sub("-trunc".len());
+    let mut truncated = slug.chars().take(keep).collect::<String>();
+    truncated = truncated.trim_end_matches('-').to_string();
+    format!("{truncated}-trunc")
+}
+
+fn shell_command_for_asciinema(aida_exe: &std::path::Path, inner_args: &[String]) -> String {
+    std::iter::once(aida_exe.to_string_lossy().to_string())
+        .chain(inner_args.iter().skip(1).cloned())
+        .map(|arg| shell_quote(&arg))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn shell_quote(arg: &str) -> String {
+    if arg.is_empty() {
+        return "''".to_string();
+    }
+    if arg
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/' | ':' | '='))
+    {
+        return arg.to_string();
+    }
+    format!("'{}'", arg.replace('\'', "'\"'\"'"))
+}
+
+#[cfg(test)]
+mod story_423_asciinema_tests {
+    use super::*;
+    use crate::cli::{Command, QueueCommand};
+    use chrono::TimeZone;
+    use clap::Parser;
+
+    #[test]
+    fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "--asciinema",
+            "--cast-out",
+            "/tmp/demo.cast",
+            "--cast-title",
+            "Demo: overnight drain",
+            "queue",
+            "work",
+            "--batch",
+            "overnight-X",
+            "--auto-complete",
+        ])
+        .unwrap();
+
+        assert!(cli.asciinema);
+        assert_eq!(
+            cli.cast_out,
+            Some(std::path::PathBuf::from("/tmp/demo.cast"))
+        );
+        assert_eq!(cli.cast_title.as_deref(), Some("Demo: overnight drain"));
+        match cli.command {
+            Command::Queue(QueueCommand::Work {
+                batch,
+                auto_complete,
+                ..
+            }) => {
+                assert_eq!(batch.as_deref(), Some("overnight-X"));
+                assert!(auto_complete.is_some());
+            }
+            other => panic!("expected queue work command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn strip_wrapper_flags_preserves_inner_command() {
+        let raw = vec![
+            "aida".to_string(),
+            "--asciinema".to_string(),
+            "--cast-out".to_string(),
+            "/tmp/demo.cast".to_string(),
+            "--cast-title=with spaces".to_string(),
+            "queue".to_string(),
+            "work".to_string(),
+            "--batch".to_string(),
+            "overnight-X".to_string(),
+            "--auto-complete".to_string(),
+        ];
+
+        assert_eq!(
+            strip_asciinema_wrapper_args(&raw),
+            vec![
+                "aida",
+                "queue",
+                "work",
+                "--batch",
+                "overnight-X",
+                "--auto-complete"
+            ]
+        );
+    }
+
+    #[test]
+    fn default_title_is_inner_aida_command() {
+        let inner = vec![
+            "aida".to_string(),
+            "queue".to_string(),
+            "work".to_string(),
+            "--batch".to_string(),
+            "overnight-X".to_string(),
+            "--auto-complete".to_string(),
+        ];
+
+        assert_eq!(
+            default_cast_title(&inner),
+            "aida queue work --batch overnight-X --auto-complete"
+        );
+    }
+
+    #[test]
+    fn cast_slug_is_windows_safe_and_truncated_visibly() {
+        let inner = vec![
+            "aida".to_string(),
+            "queue".to_string(),
+            "work".to_string(),
+            "--batch".to_string(),
+            "overnight-X".to_string(),
+            "--auto-complete".to_string(),
+        ];
+        assert_eq!(
+            asciinema_command_slug(&inner),
+            "queue-work-batch-overnight-X-auto-complete"
+        );
+
+        let long = "x".repeat(120);
+        let truncated = truncate_asciinema_slug(&long);
+        assert_eq!(truncated.chars().count(), ASCIINEMA_SLUG_MAX_CHARS);
+        assert!(truncated.ends_with("-trunc"));
+        assert!(!truncated.contains(':'));
+    }
+
+    #[test]
+    fn cast_timestamp_format_has_hhmmss_and_no_colons() {
+        let stamp = chrono::Utc
+            .with_ymd_and_hms(2026, 5, 23, 1, 30, 45)
+            .unwrap()
+            .format("%Y-%m-%dT%H%M%SZ")
+            .to_string();
+
+        assert_eq!(stamp, "2026-05-23T013045Z");
+        assert!(!stamp.contains(':'));
+    }
+
+    #[test]
+    fn shell_command_quotes_spaces_and_single_quotes() {
+        let exe = std::path::Path::new("/tmp/aida dev/aida");
+        let inner = vec![
+            "aida".to_string(),
+            "comment".to_string(),
+            "add".to_string(),
+            "TASK-1".to_string(),
+            "with spaces and 'quote'".to_string(),
+        ];
+
+        assert_eq!(
+            shell_command_for_asciinema(exe, &inner),
+            "'/tmp/aida dev/aida' comment add TASK-1 'with spaces and '\"'\"'quote'\"'\"''"
+        );
+    }
+}
+
 fn run() -> Result<()> {
+    let raw_args: Vec<String> = std::env::args().collect();
     // Intercept --version / -V before clap so we can include the build-time
     // banner (build.rs stamps build time + git sha + dirty flag). Clap's
     // built-in #[clap(version)] only knows the package version, which can't
     // distinguish two binaries at the same version built at different times.
-    {
-        let args: Vec<String> = std::env::args().collect();
-        if args.len() == 2 && (args[1] == "--version" || args[1] == "-V") {
-            println!("aida {}", build_banner());
-            return Ok(());
-        }
+    if raw_args.len() == 2 && (raw_args[1] == "--version" || raw_args[1] == "-V") {
+        println!("aida {}", build_banner());
+        return Ok(());
     }
 
     let mut cli = Cli::parse();
+
+    if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
+        if let Some(exit_code) = maybe_run_asciinema_wrapper(&raw_args, &cli)? {
+            std::process::exit(exit_code);
+        }
+    }
 
     // Check for AIDA_SERVER environment variable if --server not specified
     if cli.server.is_none() {
