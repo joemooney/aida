@@ -1,0 +1,112 @@
+id: 019e5576-9e48-7960-87ca-b2fe7b1e10b1
+spec_id: STORY-429
+agreed_id: STORY-429
+title: 'Orchestrator reviewer pre-flight: auto-rebase on stale-base detection (STORY-281 evolution)'
+description: |-
+  Empirical recurrence 2026-05-21 through 2026-05-23: SIX stale-base catches by STORY-281's reviewer pre-flight in 36 hours, each stopping an autonomous drain mid-flight and requiring manual operator recovery (~2 min via aida pr rebase).
+
+  ## The recurrence pattern (empirically documented)
+
+  | # | PR | Spec | Date | Author |
+  |---|---|---|---|---|
+  | 1 | PR-194 | STORY-407 followups | 2026-05-22 | Antigravity |
+  | 2 | PR-196 | TASK-447 | 2026-05-22 | master for-loop |
+  | 3 | PR-198 | TASK-449 | 2026-05-22 | master for-loop |
+  | 4 | PR-220 | TASK-426 | 2026-05-22 | master drain |
+  | 5 | PR-224 | TASK-417 | 2026-05-22 | master drain |
+  | 6 | PR-235 | TASK-448 | 2026-05-23 | master overnight drain |
+
+  ## Cost model
+
+  - STORY-281 correctly DETECTS + REFUSES (working as designed) — this is the structural floor
+  - Each catch is ~2 min operator recovery: aida pr rebase → CI re-run → merge
+  - But each catch STOPS the drain. Subsequent batch members untouched until operator intervenes
+  - For a 7-spec overnight drain, ONE stale-base catch at item 2 means items 3-7 wait for morning recovery
+
+  This is friction in the dimension that matters most for autonomous-overnight workflows: drain throughput. The catches are protecting correctness (good), but interrupting the autonomous loop unnecessarily (when rebase would succeed).
+
+  ## The structural evolution
+
+  STORY-281 today: DETECT + REFUSE (operator recovers).
+
+  This STORY: DETECT + ATTEMPT-AUTO-REBASE + RETRY phase 3 if clean, else fall back to REFUSE-and-park-for-operator.
+
+  The auto-rebase logic already exists (aida pr rebase command, the same the operator runs manually). The change is wiring the orchestrator's phase 3 to invoke it as the first response to stale-base detection.
+
+  ## Decision tree
+
+  ```
+  Phase 3 starts → detect stale-base
+    ├─ stale-base detected
+    │   ├─ attempt aida pr rebase (auto-retry)
+    │   │   ├─ rebase clean (no conflicts)
+    │   │   │   └─ retry phase 3 from top with fresh base
+    │   │   └─ rebase conflict
+    │   │       └─ fall back to current STORY-281 behavior:
+    │   │           refuse + park for operator
+    │   └─ (no auto-retry for the meantime: skip-and-defer
+    │      OR auto-retry once and bail if dirty)
+    └─ no stale-base → proceed with reviewer phase normally
+  ```
+
+  ## Acceptance
+
+  - [ ] When phase 3 detects stale-base, orchestrator FIRST attempts aida pr rebase (no --interactive — clean-only)
+  - [ ] If rebase succeeds with no conflicts: orchestrator re-runs phase 3 from top against the rebased PR
+  - [ ] If rebase has conflicts (would require --interactive): orchestrator falls back to current STORY-281 behavior (refuse + park; operator recovers manually with --interactive)
+  - [ ] Retry limit: at most ONE auto-rebase attempt per phase 3 invocation (no infinite retry loop if main keeps moving)
+  - [ ] Operator can opt-out: --no-auto-rebase flag OR config in .aida/config.toml suppresses auto-rebase, returns to current STORY-281 behavior
+  - [ ] Telemetry: auto-rebase attempts logged with outcome (clean / conflict / skipped). Useful for measuring how often it succeeds.
+  - [ ] Regression test: simulate stale-base with no conflicts → assert orchestrator auto-rebases + completes phase 3. Simulate stale-base with conflicts → assert orchestrator falls back to refuse-and-park.
+
+  ## Safety considerations
+
+  - The auto-rebase is git-clean: aida pr rebase already uses --force-with-lease and refuses dirty trees. Same safety properties apply.
+  - If main moves BETWEEN auto-rebase + retry phase 3, the second phase 3 would catch it (recursive stale-base). The retry-once rule prevents infinite loops; second detection → fall back to refuse.
+  - Auto-rebase ONLY runs in --auto-complete --no-human=both mode. In interactive mode (--zen), the operator may want to see the catch + decide on rebase strategy themselves.
+
+  ## Sketch-first
+
+  YES — this changes orchestrator phase 3 behavior. Sketch on this STORY covering:
+  - Exact phase 3 entry point + where to inject the auto-rebase
+  - Retry semantics (how to re-enter phase 3 after rebase; ensure no double-claim on the lease)
+  - Telemetry shape (logged where? .aida/auto-complete.jsonl?)
+  - Opt-out mechanism (flag vs config)
+  - Test approach (mock stale-base + mock conflict)
+
+  Master verdict within ~30min; then implement.
+
+  ## Composes with
+
+  - STORY-281 (parent — this is its evolution; STORY-281 is the detection floor, this is the recovery layer)
+  - BUG-342 family (the ceiling-pattern arc — same substrate-as-bouncer principle, different surface)
+  - aida pr rebase (existing CLI — the auto-rebase logic this wires into orchestrator)
+  - TASK-403 demo material — when this ships, overnight drains will autonomously recover from stale-base events that today would stop the drain
+
+  ## Priority rationale
+
+  HIGH. The user explicitly flagged this as friction (6 occurrences in 36 hours; each interrupting autonomous drain throughput). The structural fix is ~3-4h. Composes with the autonomy-keystone arc that's the project's defensible niche. Worth shipping before more overnight drains stack up the friction.
+
+  ## Empirical anchor for the writeup
+
+  If this ships, the next overnight drain that would have hit a stale-base catch instead auto-recovers — visible in the cast as one of: 'phase 3 detected stale base; auto-rebased; phase 3 retry succeeded.' That's gold demo material — the substrate self-healing in real time.
+
+  ## Estimated time
+
+  ~3-4h. Bounded change (orchestrator phase 3 wiring + retry semantics + tests + docs). Sketch-first adds ~30min.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-23T15:31:37.672226680Z
+modified_at: 2026-05-23T15:31:37.672226680Z
+req_type: Story
+tags:
+- autonomy-keystone
+- from-self-test
+- from-user-friction
+- orchestrator
+- recurring
+- reviewer
+- stale-base
+- story-281-followup
