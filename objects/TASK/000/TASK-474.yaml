@@ -32,7 +32,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:35:34.316691752Z
-modified_at: 2026-05-23T18:23:22.857063726Z
+modified_at: 2026-05-23T18:24:21.348873618Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-23
@@ -47,6 +47,20 @@ comments:
   content: Commit 9ccc515f references this requirement
   created_at: 2026-05-23T18:23:22.857063726Z
   modified_at: 2026-05-23T18:23:22.857063726Z
+- id: 019e5614-c164-7402-a532-034ce04bfd65
+  author: joe
+  content: |-
+    Implemented via PR-<pending> (commit 9ccc515f):
+
+    - MCP `claim_task` (aida-cli/src/mcp.rs) now accepts an optional `worktree_path` arg; agents that know their cwd pass it explicitly. Absent / empty → the lease records no worktree.
+    - `active_lease_for_cwd` (aida-cli/src/main.rs) delegates to a new `lease_covers_cwd` helper that rejects leases with an empty `worktree_path`, closing the cascade where `Path::starts_with(empty)` would otherwise match every cwd and misroute the "this session owns scope X" hint.
+    - The 5 sibling cwd-matching sites across main.rs are normalized to the same helper for consistent semantics.
+
+    Test status: 1159/1159 aida-cli tests green. New: 5 `lease_covers_cwd_tests` + 3 `mcp::tests::claim_task_*` cases covering exact match, descendant, sibling-with-shared-prefix, empty-worktree, explicit-path round-trip, absent-arg defaulting to empty, whitespace-only normalization.
+
+    Empirical: `aida add` from /tmp produced no scope hint (acceptance #3).
+  created_at: 2026-05-23T18:24:21.348873618Z
+  modified_at: 2026-05-23T18:24:21.348873618Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-23T18:22:52.558195370Z
