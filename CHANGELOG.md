@@ -4,7 +4,45 @@ All notable changes to this project are documented here. Generated
 mechanically from the spec graph (`aida changelog refresh`) — do not edit
 by hand; regenerate after merging.
 
-## [v0.9.0] — 2026-05-23
+## [v0.9.1] — 2026-05-23
+
+Specs merged since v0.9.0 (22):
+
+### Features
+
+- **TASK-496** — Auto-invoke /aida-capture via Claude Code Stop hook to catch missed requirement filings (#245)
+- **TASK-489** — aida session end: accept --spec / --branch to resolve lease ID (user has spec context, not opaque lease ID) (#241)
+- **STORY-429** — Orchestrator reviewer pre-flight: auto-rebase on stale-base detection (STORY-281 evolution) (#240)
+- **STORY-325** — Punt ledger — record every design-fork decision as structured metadata; analyze for patterns that become recorded principles (#233, #239)
+- **STORY-426** — STORY-425 Level 2: MCP brief surface — list_briefs / read_brief / ack_brief + per-agent /aida-pickup skill (#234)
+- **STORY-316** — /aida-recover skill — advisor diagnostic playbook for session/orchestrator/runtime-state divergence (#231)
+- **TASK-492** — aida brief: generate per-agent brief files at .aida/agent-briefs/<agent>/ (STORY-425 Level 1) (#230)
+- **STORY-423** — aida --asciinema: top-level wrapper flag for recording any aida invocation (#228)
+- **TASK-486** — aida status: surface cross-platform CI status so 'ready to cut a release' reflects the actual release gate (#226)
+
+### Fixes
+
+- **BUG-361** — Ceiling variant: agent commits locally + verifies + exits without running aida queue done OR aida pr ship (no lifecycle command invoked) (#246)
+- **BUG-358** — Cross-platform CI: 4 new Windows-only test failures from STORY-426 + TASK-486 + TASK-492 (regression after BUG-346 fix) (#243)
+- **TASK-488** — Pre-commit hook: skip AI-tag/trace warnings on mechanical release-script commits (#238)
+- **BUG-354** — Headless implementer text-question bypass: model asks question in markdown output (no AskUserQuestion tool call), then exits — BUG-342 doesn't catch (#237)
+- **SPEC-411** — aida pr ship post-merge pull assumes aida is on PATH (#227)
+- **BUG-360** — BUG-269 regression: aida queue done allowed dequeue with commits-ahead-of-origin but no open PR (TASK-489 exit-without-PR)
+
+### Documentation
+
+- **TASK-495** — Antigravity /aida-pickup skill — consume STORY-426's MCP brief tools (list_briefs/read_brief/ack_brief) (#236)
+- **TASK-414** — simple-mode-with-more-items State preamble PR row should include 'no PR yet' variant (#232)
+- **TASK-487** — aida-cli/src/cli.rs: 75 other --help doc-comments still embed SPEC-IDs (TASK-268 convention) (#229)
+
+### Internal
+
+- **TASK-448** — auto_claim_summary: drop unused 'lower' local; eq_ignore_ascii_case handles case both sides (#235)
+- **TASK-417** — describe_drain_mode duplicates STATE_QUEUED/STATE_COMPLETED string literals (#224)
+- **TASK-426** — headless_tee env-var tests share global state — comment is misleading (#220)
+- **TASK-497** — aida --asciinema: project-local default directory + spec-aware filename/title derivation (STORY-423 refinement)
+
+## [v0.9.0] — 2026-05-22
 
 Specs merged since v0.8.0 (114):
 
