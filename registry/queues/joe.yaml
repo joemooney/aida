@@ -1,9 +1,26 @@
 - user_id: joe
-  requirement_id: 019e4868-5d8c-77e1-8e84-46341c963332
+  requirement_id: 019e31d1-687d-70d1-97f2-f02a19f093cc
+  position: 1000
+  added_by: joe
+  added_at: 2026-05-16T17:24:32.997019033Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e2f1a-591d-7583-9637-dff9bb7fc89c
+  position: 2000
+  added_by: joe
+  added_at: 2026-05-16T04:45:27.121015196Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e34c9-d23f-7ef1-b543-24ff376fbca8
+  position: 3000
+  added_by: joe
+  added_at: 2026-05-17T07:20:30.319888313Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e36cc-8ab4-77a1-9d7f-f2a41b1dc772
   position: 4000
   added_by: joe
-  note: Promoted from finding TASK-425 via `aida findings promote`
-  added_at: 2026-05-21T04:48:38.952070705Z
+  added_at: 2026-05-17T16:37:18.459637118Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e1a4d-8d9c-7a00-8539-364579481756
@@ -12,6 +29,19 @@
   added_at: 2026-05-12T03:49:21.783878892Z
   for_role: implementer
   for_scope: EPIC-23
+- user_id: joe
+  requirement_id: 019e4115-7ee3-7cd1-a137-9871d589b6a9
+  position: 5000
+  added_by: joe
+  added_at: 2026-05-19T16:33:11.930678391Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e4868-5d8c-77e1-8e84-46341c963332
+  position: 6000
+  added_by: joe
+  note: Promoted from finding TASK-425 via `aida findings promote`
+  added_at: 2026-05-21T04:48:38.952070705Z
+  for_role: implementer
 - user_id: joe
   requirement_id: 019e1af9-a4a3-74a0-a7de-a337983a9c44
   position: 6000
@@ -27,12 +57,25 @@
   for_role: implementer
   for_scope: EPIC-23
 - user_id: joe
+  requirement_id: 019e4848-2ecd-74b3-8e38-cb1806e06458
+  position: 7000
+  added_by: joe
+  note: Promoted from finding TASK-424 via `aida findings promote`
+  added_at: 2026-05-21T04:48:49.259972178Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 019e1ffb-f472-7641-9684-11cd5332553f
   position: 8000
   added_by: joe
   note: auto-queued by `aida pr` (019e1fd1); covers 1 spec
   added_at: 2026-05-13T06:17:50.851180255Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e4d45-128f-79f0-8e79-bb15b6b88b53
+  position: 8000
+  added_by: joe
+  added_at: 2026-05-22T05:00:08.400414367Z
+  for_role: implementer
 - user_id: joe
   requirement_id: 019e2bcb-fa1e-79f1-b150-9a24600af7bb
   position: 9000
@@ -41,10 +84,49 @@
   added_at: 2026-05-15T13:21:15.999623276Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e31d1-687d-70d1-97f2-f02a19f093cc
+  requirement_id: 019e45fe-53b7-7b21-861c-047dd665e22b
   position: 9000
   added_by: joe
-  added_at: 2026-05-16T17:24:32.997019033Z
+  added_at: 2026-05-22T18:01:38.524081637Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e517c-6199-7823-ab95-8207b278cc19
+  position: 10000
+  added_by: joe
+  note: Promoted from finding TASK-476 via `aida findings promote`
+  added_at: 2026-05-22T22:39:21.580819171Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e51ef-ada6-78f1-a545-36e88953d0f6
+  position: 11000
+  added_by: joe
+  note: auto-queued by `session end` (019e51df); covers 1 spec
+  added_at: 2026-05-22T23:05:29.586888729Z
+  for_role: reviewer
+- user_id: joe
+  requirement_id: 019e51f5-b118-7bd3-8e1b-5e3c8cd1f2f3
+  position: 12000
+  added_by: joe
+  note: Promoted from finding TASK-483 via `aida findings promote`
+  added_at: 2026-05-23T00:10:35.971084489Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e5342-c34d-7322-b9f0-0edd720cfb09
+  position: 13000
+  added_by: joe
+  added_at: 2026-05-23T06:50:39.218551140Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e5166-872c-72d2-9c51-11499e6aefe6
+  position: 14000
+  added_by: joe
+  added_at: 2026-05-23T06:50:42.208486908Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e5340-98af-7ee2-a759-6140e0b354d9
+  position: 15000
+  added_by: joe
+  added_at: 2026-05-23T06:50:45.343104604Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e3249-9709-7750-b6ce-440a8887f1f5
@@ -63,12 +145,6 @@
   position: 27000
   added_by: joe
   added_at: 2026-05-16T22:47:49.804407360Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 019e2f1a-591d-7583-9637-dff9bb7fc89c
-  position: 28000
-  added_by: joe
-  added_at: 2026-05-16T04:45:27.121015196Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e325a-9454-7b33-a7da-d3808d6196df
@@ -105,12 +181,6 @@
   added_at: 2026-05-16T21:28:47.586147190Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e34c9-d23f-7ef1-b543-24ff376fbca8
-  position: 35000
-  added_by: joe
-  added_at: 2026-05-17T07:20:30.319888313Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e32f4-d81b-7260-9459-4d4395e4d220
   position: 35000
   added_by: joe
@@ -128,12 +198,6 @@
   position: 41000
   added_by: joe
   added_at: 2026-05-17T16:05:54.894106388Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 019e36cc-8ab4-77a1-9d7f-f2a41b1dc772
-  position: 42000
-  added_by: joe
-  added_at: 2026-05-17T16:37:18.459637118Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e330b-1859-7990-b293-6249e0ff4d0a
@@ -515,12 +579,6 @@
   added_at: 2026-05-19T14:32:45.663396295Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e4115-7ee3-7cd1-a137-9871d589b6a9
-  position: 130000
-  added_by: joe
-  added_at: 2026-05-19T16:33:11.930678391Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e411d-2ed5-79e0-9a0c-318ccbb825df
   position: 131000
   added_by: joe
@@ -737,13 +795,6 @@
   added_at: 2026-05-21T04:48:46.699338872Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019e4848-2ecd-74b3-8e38-cb1806e06458
-  position: 185000
-  added_by: joe
-  note: Promoted from finding TASK-424 via `aida findings promote`
-  added_at: 2026-05-21T04:48:49.259972178Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e4839-2457-7cb3-8a51-b81db16cf9c4
   position: 186000
   added_by: joe
@@ -918,12 +969,6 @@
   added_at: 2026-05-22T04:52:47.963154521Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e4d45-128f-79f0-8e79-bb15b6b88b53
-  position: 219000
-  added_by: joe
-  added_at: 2026-05-22T05:00:08.400414367Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e4e1c-c2d9-7420-9c73-3ab35da93058
   position: 220000
   added_by: joe
@@ -1017,12 +1062,6 @@
   added_at: 2026-05-22T16:50:01.211396851Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e45fe-53b7-7b21-861c-047dd665e22b
-  position: 237000
-  added_by: joe
-  added_at: 2026-05-22T18:01:38.524081637Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e509b-01b4-7eb0-9079-a53c4690c6f4
   position: 238000
   added_by: joe
@@ -1085,20 +1124,6 @@
   added_at: 2026-05-22T21:12:38.031245178Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e517c-6199-7823-ab95-8207b278cc19
-  position: 247000
-  added_by: joe
-  note: Promoted from finding TASK-476 via `aida findings promote`
-  added_at: 2026-05-22T22:39:21.580819171Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 019e51ef-ada6-78f1-a545-36e88953d0f6
-  position: 248000
-  added_by: joe
-  note: auto-queued by `session end` (019e51df); covers 1 spec
-  added_at: 2026-05-22T23:05:29.586888729Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 019e51ea-d52a-7703-adc1-91b0b2205a9e
   position: 249000
   added_by: joe
@@ -1111,13 +1136,6 @@
   added_by: joe
   note: Promoted from finding TASK-482 via `aida findings promote`
   added_at: 2026-05-23T00:10:34.598869774Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 019e51f5-b118-7bd3-8e1b-5e3c8cd1f2f3
-  position: 251000
-  added_by: joe
-  note: Promoted from finding TASK-483 via `aida findings promote`
-  added_at: 2026-05-23T00:10:35.971084489Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e523f-bf55-7042-829b-fc5db380b3de
@@ -1161,24 +1179,6 @@
   note: auto-queued by `session end` (019e5336); covers 1 spec
   added_at: 2026-05-23T05:22:32.030911070Z
   for_role: reviewer
-- user_id: joe
-  requirement_id: 019e5342-c34d-7322-b9f0-0edd720cfb09
-  position: 260000
-  added_by: joe
-  added_at: 2026-05-23T06:50:39.218551140Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 019e5166-872c-72d2-9c51-11499e6aefe6
-  position: 261000
-  added_by: joe
-  added_at: 2026-05-23T06:50:42.208486908Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 019e5340-98af-7ee2-a759-6140e0b354d9
-  position: 262000
-  added_by: joe
-  added_at: 2026-05-23T06:50:45.343104604Z
-  for_role: implementer
 - user_id: joe
   requirement_id: 019e53a2-8680-7530-be26-0fa51dd10f77
   position: 263000
