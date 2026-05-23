@@ -53,7 +53,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T21:20:08.496657542Z
-modified_at: 2026-05-23T01:20:27.870771591Z
+modified_at: 2026-05-23T01:24:34.805303061Z
 req_type: Bug
 tags:
 - aida-review
@@ -84,3 +84,37 @@ comments:
   content: mcp
   created_at: 2026-05-23T01:20:27.870760701Z
   modified_at: 2026-05-23T01:20:27.870760701Z
+- id: 019e526f-1f75-7cb0-abac-37b9c50a368f
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's sketch: SHIP THE AUDIT PR (Option B). Don't close as resolved-by BUG-327.
+
+    **Why not close as resolved-by:** the empirical evidence today contradicts the 'resolved' claim. Two AskUserQuestion ceiling occurrences happened AFTER BUG-327's fix was in main:
+
+    1. PR-208 TASK-339 phase 3 (~14:15 today) — headless reviewer rendered a clean PASS verdict, then called AskUserQuestion to confirm merge. Session bailed before writing the verdict file. Phase 3 failed. PR was manually merged after master verified the verdict comment.
+
+    2. TASK-340 phase 1 (~tonight's overnight drain) — headless implementer did substantive prerequisite-gap analysis, proposed an MVP shape, then called AskUserQuestion ('Confirm pickup of TASK-340?'). Session bailed before opening a PR. Phase 1 failed. The whole batch drain stopped at #2 of 5.
+
+    Both empirical occurrences are in master's logs / asciinema /tmp/aida-overnight-2026-05-22.cast. If the `--disallowed-tools AskUserQuestion` argv was reaching the runtime, neither failure would have happened.
+
+    **Three hypotheses to test in the audit PR:**
+
+    A. **Bypass path exists.** Some headless launch path (implementer? reviewer? advisor? a wrapper around them?) constructs argv without going through `claude_headless_args` / `claude_headless_resume_args`. Audit needs to enumerate EVERY `claude -p` invocation under AIDA_HEADLESS=1 and verify it uses the shared builder.
+
+    B. **Binary staleness.** The running orchestrator binary (`aida-debug` from `target/debug/`) may have been built before BUG-327's fix merged. Operator might have shipped BUG-327 but not rebuilt the binary that's running the drain. This is the same staleness class as the MCP server reload issue Codex noted earlier today. Worth checking + documenting in the audit.
+
+    C. **Edge case in argv passing.** Maybe the flag IS passed but the model still finds a way to surface AskUserQuestion (a different tool name, a UI variant, a JSON-schema bypass). Less likely given the empirical pattern but worth a defensive test.
+
+    **Acceptance for the audit PR:**
+
+    - [ ] Test: every `claude -p` invocation under AIDA_HEADLESS=1 is verified to include `--disallowed-tools AskUserQuestion` in argv. Enumerate: implementer fresh, implementer resume, standalone reviewer, orchestrator reviewer (the phase-3 spawn), advisor cold-boot, advisor fork-resume.
+    - [ ] If a bypass path is found: refactor to use the shared builder; that's the actual fix BUG-342 needs.
+    - [ ] Add regression test that catches any future bypass (e.g., a grep-style test asserting no `claude -p` argv construction exists outside the shared builder helpers).
+    - [ ] Document the binary-staleness caveat: if the orchestrator binary is older than BUG-327's merge, the gate doesn't apply. Recommend operators rebuild after BUG-327-class fixes (composes with TASK-486-style aida status surfacing).
+    - [ ] Ship the audit PR with trailer `(BUG-342)` so auto-bump fires.
+
+    **Scope is bounded:** ~1-2h max. The mechanism exists; this is verification + lock-in + bypass-hunt. If A is the cause, the PR includes the bypass fix. If B is the cause, the audit confirms code-side correctness + the rebuild discipline lands as the operational fix.
+
+    Proceed to implementation. Standard sibling-worktree + aida pr ship. — master advisor
+  created_at: 2026-05-23T01:24:34.805303061Z
+  modified_at: 2026-05-23T01:24:34.805303061Z
