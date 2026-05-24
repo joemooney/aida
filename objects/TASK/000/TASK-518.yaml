@@ -1,0 +1,56 @@
+id: 019e5822-f9c4-73a3-b4ed-f53040962680
+spec_id: TASK-518
+agreed_id: TASK-518
+title: 'aida brief <agent> <PR-N>: resolve PR number to backing spec (parallel to BUG-366 for queue work)'
+description: |-
+  ## Empirical 2026-05-23 evening during /aida-capture session sweep
+
+  Master tried 'aida brief codex PR-270 --note ...' (intent: brief Codex on the CI failure for PR-270, which is STORY-439's PR). Got generic 'no aida store found' error rather than a helpful 'PR-270 backs STORY-439; use that as the spec, or pass --pr instead of positional'.
+
+  The fix: aida brief should accept either a SPEC-ID or a PR-N as the second positional argument. If PR-N, resolve via the same path 'aida show' (or any of the auto-bump heuristics) uses — find the spec referenced by the PR title/trailer + brief on that.
+
+  Operator mental model: 'I want to brief Codex on PR-270's CI failure' -> 'aida brief codex PR-270' should work.
+
+  ## Same family as BUG-366
+
+  BUG-366 was filed earlier this session for 'aida queue list Next: hint suggests aida queue work PR-N but the command rejects PR numbers'. Same friction class: PR# vs SPEC-ID mismatch across commands that conceptually accept both.
+
+  ## Fix direction
+
+  A. Detect 'PR-N' / '#N' patterns in positional arg; resolve via gh API or cache; warn 'briefing on STORY-XXX which backs PR-N'.
+  B. Generic 'aida resolve-pr-to-spec PR-N' helper used by brief + queue work + similar.
+
+  Lean B (one helper, many callers).
+
+  ## Acceptance
+
+  - [ ] aida brief <agent> PR-N succeeds when PR-N has an unambiguous backing spec
+  - [ ] Output indicates the resolution: 'briefing on STORY-XXX (backs PR-N)'
+  - [ ] Error if PR-N has multiple backing specs (multi-spec PR) or none
+  - [ ] Same PR-N resolution available to: aida queue work, aida show, aida edit (consistent API surface)
+  - [ ] Composes with BUG-366 (same fix mechanism could resolve both)
+
+  ## Composes with
+
+  - BUG-366 (aida queue work PR-N — same friction)
+  - TASK-506 (aida brief read CLI verb — same operator-UX cleanup family)
+  - feedback_failed_flag_attempts_are_ux_signals — operator's reach for the obvious is the design signal
+
+  ## Origin
+
+  2026-05-23 /aida-capture session sweep; observed during master's PR-270 CI-fix brief attempt.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T03:59:07.716532125Z
+modified_at: 2026-05-24T03:59:07.716532125Z
+req_type: Task
+tags:
+- brief
+- cli-ux
+- from-self-test
+- operator-mental-model
+- papercut
+- sibling-of-BUG-366
+- sibling-of-TASK-506
