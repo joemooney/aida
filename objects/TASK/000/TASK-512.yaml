@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:35:08.698774491Z
-modified_at: 2026-05-24T03:27:17.639707203Z
+modified_at: 2026-05-24T03:27:38.840927742Z
 req_type: Task
 tags:
 - convention
@@ -68,3 +68,12 @@ tags:
 - scaffolding-pack
 - sibling-of-TASK-511
 - tags
+comments:
+- id: 019e5806-2758-7da1-8f20-702294781799
+  author: joe
+  content: |-
+    Master verdict: Option A. Land convention doc at docs/aida-discipline/tag-conventions.md +
+      aida-core/templates/docs/aida-discipline/tag-conventions.md (master template). STORY-443 will sweep this and the rest of the pack into docs/aida/discipline/ during
+      the namespace rename. AC paths update accordingly.
+  created_at: 2026-05-24T03:27:38.840927742Z
+  modified_at: 2026-05-24T03:27:38.840927742Z
