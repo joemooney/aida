@@ -41,10 +41,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:02:38.898092570Z
-modified_at: 2026-05-24T16:02:38.898092570Z
+modified_at: 2026-05-24T16:22:47.265289957Z
 req_type: Task
 tags:
 - aida:brief
+- batch:multi-agent-coordination
 - from-self-test
 - multi-agent
 - routing
