@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use super::cache::{Cache, ListFilter, RequirementSummary};
+use super::cache::{ArchiveFilter, Cache, ListFilter, RequirementSummary};
 use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
 use crate::models::{QueueEntry, Requirement, RequirementsStore, User};
@@ -105,9 +105,15 @@ impl CachedGitBackend {
     }
 
     /// Cache-backed FTS5 search across spec_id, agreed_id, title, description.
-    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<RequirementSummary>> {
+    /// `archive` controls the archive axis — STORY-441.
+    pub fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        archive: ArchiveFilter,
+    ) -> Result<Vec<RequirementSummary>> {
         self.ensure_cache_fresh()?;
-        self.cache.search(query, limit)
+        self.cache.search(query, limit, archive)
     }
 
     /// Force a full cache rebuild, regardless of staleness. Used by the

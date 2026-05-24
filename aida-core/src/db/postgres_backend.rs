@@ -349,6 +349,9 @@ impl PostgresBackend {
         let comments_json: serde_json::Value = row.get("comments");
         let history_json: serde_json::Value = row.get("history");
         let archived: bool = row.get("archived");
+        // STORY-441 | ai:claude — archived_at is nullable in postgres.
+        let archived_at: Option<chrono::DateTime<chrono::Utc>> =
+            row.try_get("archived_at").unwrap_or(None);
         let custom_status: Option<String> = row.get("custom_status");
         let custom_priority: Option<String> = row.get("custom_priority");
         let custom_fields_json: serde_json::Value = row.get("custom_fields");
@@ -404,6 +407,7 @@ impl PostgresBackend {
             comments,
             history,
             archived,
+            archived_at,
             custom_status,
             custom_priority,
             custom_fields,
@@ -445,9 +449,9 @@ impl PostgresBackend {
             "INSERT INTO requirements
              (id, spec_id, prefix_override, title, description, status, priority, owner, feature,
               created_at, created_by, modified_at, req_type, dependencies, tags, relationships,
-              comments, history, archived, custom_status, custom_priority, custom_fields, urls,
+              comments, history, archived, archived_at, custom_status, custom_priority, custom_fields, urls,
               trace_links, implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
              ON CONFLICT (id) DO UPDATE SET
               spec_id = EXCLUDED.spec_id,
               prefix_override = EXCLUDED.prefix_override,
@@ -467,6 +471,7 @@ impl PostgresBackend {
               comments = EXCLUDED.comments,
               history = EXCLUDED.history,
               archived = EXCLUDED.archived,
+              archived_at = EXCLUDED.archived_at,
               custom_status = EXCLUDED.custom_status,
               custom_priority = EXCLUDED.custom_priority,
               custom_fields = EXCLUDED.custom_fields,
@@ -498,6 +503,7 @@ impl PostgresBackend {
                 &Self::to_json(&req.comments)?,
                 &Self::to_json(&req.history)?,
                 &req.archived,
+                &req.archived_at,
                 &req.custom_status,
                 &req.custom_priority,
                 &Self::to_json(&req.custom_fields)?,
@@ -603,7 +609,7 @@ impl PostgresBackend {
         let rows = client.query(
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
-                    dependencies, tags, relationships, comments, history, archived,
+                    dependencies, tags, relationships, comments, history, archived, archived_at,
                     custom_status, custom_priority, custom_fields, urls, trace_links,
                     implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version
              FROM requirements ORDER BY created_at",
@@ -1221,7 +1227,7 @@ impl DatabaseBackend for PostgresBackend {
         let row = client.query_opt(
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
-                    dependencies, tags, relationships, comments, history, archived,
+                    dependencies, tags, relationships, comments, history, archived, archived_at,
                     custom_status, custom_priority, custom_fields, urls, trace_links,
                     implementation_info, ai_evaluation, version
              FROM requirements WHERE id = $1",
@@ -1244,7 +1250,7 @@ impl DatabaseBackend for PostgresBackend {
         let row = client.query_opt(
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
-                    dependencies, tags, relationships, comments, history, archived,
+                    dependencies, tags, relationships, comments, history, archived, archived_at,
                     custom_status, custom_priority, custom_fields, urls, trace_links,
                     implementation_info, ai_evaluation, version
              FROM requirements WHERE spec_id = $1",

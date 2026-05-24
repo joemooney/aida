@@ -3266,6 +3266,13 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub archived: bool,
 
+    /// Timestamp when this requirement was archived (None when not archived).
+    /// Cleared on unarchive. Used by `aida archive --older-than` sweeps and
+    /// the auto-sweep on `aida pull` to compute spec age.
+    /// trace:STORY-441 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<DateTime<Utc>>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3375,6 +3382,7 @@ impl Requirement {
             comments: Vec::new(),
             history: Vec::new(),
             archived: false,
+            archived_at: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),

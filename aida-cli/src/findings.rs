@@ -345,6 +345,7 @@ mod tests {
             created_at: String::new(),
             modified_at: String::new(),
             archived: false,
+            archived_at: None,
             yaml_path: String::new(),
         }
     }
