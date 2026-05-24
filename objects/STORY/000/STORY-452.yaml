@@ -1,0 +1,97 @@
+id: 019e5850-e7e7-7063-9b4f-0680c54107b4
+spec_id: STORY-452
+agreed_id: STORY-452
+title: 'Remote-aware agent registry: cloud /ultraplan sessions + cross-machine sessions visible in aida status (re-filed after STORY-448 ID-allocation race)'
+description: |-
+  ## Re-filing context
+
+  Originally filed earlier 2026-05-23 as STORY-448. Lost in orphan-store rebase ID-allocation race — origin's STORY-448 became the EPIC-28 shelve-on-failure spec. This is the re-file under a fresh ID.
+
+  ## Why
+
+  STORY-431's agent registry tracks LOCAL processes that touch the MCP server (or launcher-spawned). Per the operator's mental model + multi-source workflow observed 2026-05-23 (Codex on this machine via CLI, Antigravity on this machine via CLI, web /ultraplan in cloud), the operator-relevant 'agent' set is broader:
+
+  - Local processes (covered by STORY-431 / TASK-515 lease-fallback)
+  - Cloud Claude Code sessions (web /ultraplan, web Claude Code) — execute work, open PRs, never appear locally
+  - Cross-machine sessions (sibling agents on a different machine working the same project)
+
+  For the operator coordinating multi-source work, all three categories should be visible in aida status — otherwise the operator becomes the manual aggregator (as master was throughout the 2026-05-23 multi-agent session).
+
+  ## Mechanism options
+
+  ### A. Commit-tag / PR-presence inference (cheapest)
+
+  Recent commits/PRs with [AI:antigravity] or [AI:codex] trailers on branches without local lease imply remote agent activity. aida status shows 'Recent remote activity' section.
+
+  Pro: no protocol; reads existing git data.
+  Con: lossy — post-hoc; live work invisible.
+
+  ### B. Explicit remote registration
+
+  aida agent register --remote --type <kind> --scope <SPEC> --by <handle> — operator marks remote session as in-flight. aida agent end --remote <handle> when done.
+
+  Pro: precise; works for cloud + cross-machine.
+  Con: manual.
+
+  ### C. Branch-presence + lease-absence detection
+
+  For each open PR on origin: if no local lease covers it AND active in last N minutes, mark as 'remote agent (inferred)'. Composes with STORY-435 heartbeat (when shipped) for freshness.
+
+  Pro: zero manual overhead.
+  Con: false-positives on stale PRs.
+
+  ### D. Multi-node registry sync via aida-store branch
+
+  Each node writes .aida/agents/ contents to agents-by-node/<hostname>/. aida status reads all nodes'.
+
+  Pro: full multi-machine visibility.
+  Con: heavier — store writes per agent activity.
+
+  ## Recommended composition
+
+  Phase 1 (this STORY): Options A + B combined. Cheap inference + explicit registration. C/D defer until necessary.
+
+  ## Acceptance
+
+  - [ ] aida agent register --remote / --end --remote commands
+  - [ ] aida status shows 'Recent remote activity' section via commit-tag inference
+  - [ ] Section omits cleanly when no remote signal
+  - [ ] Documentation: docs/aida/multi-source-coordination.md (or docs/aida-discipline/ pre-STORY-443) explaining limitations honestly
+  - [ ] Test: register a fake remote agent, confirm visible; end it, confirm gone
+  - [ ] Compose with TASK-515 (lease fallback) and STORY-435 (heartbeat) cleanly
+
+  ## Out of scope
+
+  - Multi-machine registry sync via aida-store (Option D) — defer
+  - Real-time push notifications
+  - Cross-project remote agents
+
+  ## Composes with
+
+  - STORY-431 (agent registry baseline)
+  - TASK-515 (lease-derived agent visibility — local case)
+  - STORY-435 (MCP heartbeat — freshness for inferred remote activity)
+  - EPIC-31 (full agent-lifecycle keystone)
+
+  ## Origin
+
+  2026-05-23 user: 'aida status needs to show agent status' — extended via design discussion. Re-filed after orphan-store rebase lost the original STORY-448.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:49:17.799198527Z
+modified_at: 2026-05-24T04:49:17.799198527Z
+req_type: Story
+tags:
+- agents
+- aida:status
+- cloud
+- from-self-test
+- from-user-direction
+- multi-machine
+- parent:EPIC-31
+- phase-followup
+- re-filed-from-rebase-loss
+- registry
+- remote
