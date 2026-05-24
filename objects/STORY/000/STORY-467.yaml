@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-24T20:48:40.808975005Z
+modified_at: 2026-05-24T21:33:07.291263437Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -117,3 +117,25 @@ comments:
     — master observation 2026-05-24
   created_at: 2026-05-24T20:48:40.808975005Z
   modified_at: 2026-05-24T20:48:40.808975005Z
+- id: 019e5be7-ef5b-7963-879c-8cf600fda2c5
+  author: joe
+  content: |-
+    OBSERVATION 2026-05-24 (captured via comment-carrier until aida findings add ships):
+
+    Pattern: pre-STORY-463-aware long-running processes hold SQLite locks without writing the .aida/cache.db.lock-info sidecar. Doctor's 'stale-locks' category therefore CANNOT detect them — they're not stale lock-info files; they're locks held by binaries that pre-date the sidecar mechanism.
+
+    Empirical case 2026-05-24: agy2 (integrator) hit 'database is locked' while running cargo test --workspace during PR-309 merge cascade. Manually traced to PID 1274661 (a stuck aida-server background process). Terminated it manually to unblock.
+
+    Why doctor missed it: aida-server PID 1274661 was spawned BEFORE STORY-463 shipped (PR-306, ~3h before this case). Its binary didn't have the lock-info-writer code; no sidecar exists for doctor to evaluate. The OS-held SQLite lock is real, but there's no metadata signal doctor can use.
+
+    Recurrence count: 1 (first observation of this specific failure mode).
+
+    Promotion trigger: if 2+ more occurrences within 30 days OR if any user-impacting workflow blocks on it, promote to TASK: 'aida doctor stale-locks: also scan running aida-* processes for ones older than STORY-463 deployment date + holding cache lock' (PID-based detection that doesn't require sidecar metadata).
+
+    Mitigating fact: this only persists during the transition period — once all running aida-* processes are restarted to pick up STORY-463's lock-info writer, the gap closes naturally. Probably 24-48h decay window. May never recur as actionable.
+
+    Linked specs: STORY-463 (the lock-info writer + stale-locks doctor handoff), STORY-462 (doctor framework that catches this category), TASK-543 (agent register — same long-running-process-without-registry-entry friction class, sibling).
+
+    — master observation 2026-05-24
+  created_at: 2026-05-24T21:33:07.291263437Z
+  modified_at: 2026-05-24T21:33:07.291263437Z
