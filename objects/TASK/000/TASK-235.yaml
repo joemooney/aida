@@ -64,14 +64,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:31:03.578198534Z
-modified_at: 2026-05-14T14:31:03.578198534Z
+modified_at: 2026-05-24T06:38:56.041506477Z
 req_type: Task
 tags:
+- aida:session:end
 - auto-queue
 - backlog
 - covers
 - reviewer
-- session-end
 - verify-later
 relationships:
 - rel_type: Child
