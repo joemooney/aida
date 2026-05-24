@@ -19298,6 +19298,27 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
     CiProbe::NoSignal("--wait-ci gave up after 30m".to_string())
 }
 
+/// BUG-273: `gh run watch` is an interactive terminal renderer. When stdout
+/// is piped to tee, or when an auto-complete drain is explicitly headless, its
+/// redraw frames become hundreds of repeated log blocks. Stream only for the
+/// true interactive case; otherwise use the quiet poller.
+/// trace:BUG-273
+fn should_stream_ci_watch(stdout_is_tty: bool, no_human_active: bool) -> bool {
+    stdout_is_tty && !no_human_active
+}
+
+fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiProbe {
+    if should_stream_ci_watch(std::io::stdout().is_terminal(), no_human_active) {
+        watch_ci_terminal(branch)
+    } else {
+        eprintln!(
+            "  {} stdout is non-interactive or headless mode is active — using quiet CI polling.",
+            "ⓘ".cyan()
+        );
+        wait_for_ci_terminal(branch)
+    }
+}
+
 /// TASK-233: extract the most-recent workflow run id from `gh run list
 /// --json databaseId` JSON output. Pure — unit-testable independent of
 /// the `gh` subprocess. trace:TASK-233 | ai:claude
@@ -20115,10 +20136,10 @@ fn session_end(
             CiAction::Wait => {
                 let final_probe = if watch_ci {
                     eprintln!(
-                        "{} CI in progress — streaming live progress (Ctrl+C to stop watching)",
+                        "{} CI in progress — watching until terminal state (Ctrl+C to stop watching)",
                         "→".cyan()
                     );
-                    watch_ci_terminal(&target.branch)
+                    watch_ci_for_context(&target.branch, false)
                 } else {
                     eprintln!(
                         "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
@@ -44916,6 +44937,17 @@ mod ci_action_tests {
         ));
     }
 
+    /// BUG-273: live `gh run watch` output is only safe in an interactive
+    /// terminal. Headless drains and tee-captured logs must use quiet polling.
+    /// trace:BUG-273
+    #[test]
+    fn ci_watch_streams_only_for_interactive_non_headless_context() {
+        assert!(should_stream_ci_watch(true, false));
+        assert!(!should_stream_ci_watch(false, false));
+        assert!(!should_stream_ci_watch(true, true));
+        assert!(!should_stream_ci_watch(false, true));
+    }
+
     /// TASK-233: run-id extraction from `gh run list --json databaseId`.
     /// trace:TASK-233 | ai:claude
     #[test]
@@ -62565,7 +62597,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             probe = if self.json {
                 wait_for_ci_terminal(&branch)
             } else {
-                watch_ci_terminal(&branch)
+                watch_ci_for_context(&branch, self.no_human.is_some())
             };
         }
 
