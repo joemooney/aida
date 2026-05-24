@@ -1,0 +1,33 @@
+id: 019e582b-bfd7-75b3-98cc-0ec90ab739a3
+spec_id: STORY-448
+agreed_id: STORY-448
+title: Shelve-on-orchestrator-failure into NeedsAttention with FailureReason
+description: |-
+  EPIC-28 STORY 3 (first vertical — IMPLEMENTED in the same PR as EPIC-28). On a shelvable phase failure, the auto-complete orchestrator parks the spec in NeedsAttention with a structured FailureReason so the batch drain can continue past it instead of halting.
+
+  Scope (delivered):
+  - aida-core/src/models.rs: new FailureReason { phase, phase_index, kind, detail, recovery_hint, shelved_by, shelved_at } as a sibling to AttentionReason (intentionally NOT a PuntCategory variant — the punt taxonomy stays obstacle-shaped per its existing doc).
+  - New Requirement.failure_reason field, populated by the orchestrator, cleared on triage out of NeedsAttention (along with attention_reason).
+  - aida-cli/src/auto_complete.rs: PhaseDriver::shelve_on_failure trait method (defaulted to Ok(None) — pure layer stays pure); FailureKind::is_shelvable() rules (NoPr/CiRed/CiTimeout/NoVerdict/Failed shelve; Spawn/MissingTool/Internal don't — the environment-broken case).
+  - aida-cli/src/main.rs: RealPhaseDriver::shelve_on_failure implementation — opens the cached git backend at call time, flips status (respecting forbidden_attention_transition), populates failure_reason, appends a shelved-by-failure record to .aida/punts.jsonl (D4 design decision), records role activity.
+  - aida-cli/src/punt.rs: append_failure_to_ledger helper + RESOLUTION_SHELVED_FAILURE const.
+  - aida findings list renders Failures awaiting triage as a sibling section to Punts awaiting triage (different column shape: failure:<phase> + recovery hint).
+  - Command::Edit triage clears failure_reason on the way out of NeedsAttention.
+
+  Tests (delivered):
+  - failure_reason_round_trips, failure_reason_absent_on_fresh_requirement, failure_reason_skip_serialise_when_none
+  - append_failure_to_ledger_writes_shelved_marker, append_failure_to_ledger_preserves_punt_category_other
+  - shelve_result helper + MockBatchDriver.shelving builder used by STORY 4's tests
+status: InProgress
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:08:42.711612539Z
+modified_at: 2026-05-24T04:08:42.711612539Z
+req_type: Story
+tags:
+- autonomous-drain
+- batch
+- needs-attention
+- resilient-drain
+- shelving
