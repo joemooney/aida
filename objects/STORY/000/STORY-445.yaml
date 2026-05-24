@@ -1,0 +1,26 @@
+id: 019e57d0-4004-7a21-9c44-b45cb4f77332
+spec_id: STORY-445
+agreed_id: STORY-445
+title: 'Review PR-262: docs(multi-node): use symbol-ref for current_user_id (TASK-476)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e57ce`) for branch `task-476`.
+
+  - PR: <https://github.com/joemooney/aida/pull/262>
+  - Branch: `task-476` → `main`
+
+  ## Covers
+
+  - TASK-476
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 262` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:28:46.212143141Z
+modified_at: 2026-05-24T02:28:46.212143141Z
+req_type: Story
