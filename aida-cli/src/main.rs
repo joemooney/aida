@@ -17508,6 +17508,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             name,
             permission_mode,
             role,
+            force_claim,
         } => {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
@@ -17524,6 +17525,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 name.clone(),
                 permission_mode,
                 role.clone(),
+                *force_claim,
             )
         }
         SessionCommand::End {
@@ -17805,6 +17807,7 @@ fn prepare_agent_launch(
                 /* launch_name */ None,
                 /* launch_permission_mode */ "bypassPermissions",
                 role.clone(),
+                /* force_claim */ false,
             );
             let restore_result = std::env::set_current_dir(&previous_cwd);
             restore_result
@@ -20393,6 +20396,153 @@ mod session_start_args_tests {
     }
 }
 
+/// BUG-379: pre-flight spec-status gate tests. trace:BUG-379 | ai:claude
+#[cfg(test)]
+mod preflight_spec_status_tests {
+    use super::{preflight_spec_status, PreflightDecision, RequirementStatus};
+
+    #[test]
+    fn no_spec_match_just_allows() {
+        // Scope isn't a SPEC-ID (path glob, EPIC name, etc.) — gate is a no-op.
+        assert_eq!(
+            preflight_spec_status("src/scaffolding/**", None, false),
+            PreflightDecision::Allow
+        );
+        assert_eq!(
+            preflight_spec_status("feature:auth", None, true),
+            PreflightDecision::Allow
+        );
+    }
+
+    #[test]
+    fn approved_bumps_to_in_progress() {
+        // The headline case: a fresh Approved spec auto-bumps.
+        assert_eq!(
+            preflight_spec_status("BUG-379", Some(&RequirementStatus::Approved), false),
+            PreflightDecision::AllowAndBump
+        );
+        // --force-claim doesn't change Approved's behavior.
+        assert_eq!(
+            preflight_spec_status("BUG-379", Some(&RequirementStatus::Approved), true),
+            PreflightDecision::AllowAndBump
+        );
+    }
+
+    #[test]
+    fn planned_allows_without_bumping() {
+        assert_eq!(
+            preflight_spec_status("STORY-99", Some(&RequirementStatus::Planned), false),
+            PreflightDecision::Allow
+        );
+    }
+
+    #[test]
+    fn done_refuses() {
+        let d = preflight_spec_status("STORY-86", Some(&RequirementStatus::Done), false);
+        match d {
+            PreflightDecision::Refuse(m) => {
+                assert!(m.contains("STORY-86"), "{m}");
+                assert!(m.contains("Done") || m.contains("shipped"), "{m}");
+            }
+            other => panic!("expected Refuse, got {:?}", other),
+        }
+        // --force-claim does NOT override Done.
+        assert!(matches!(
+            preflight_spec_status("STORY-86", Some(&RequirementStatus::Done), true),
+            PreflightDecision::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn completed_refuses_even_with_force_claim() {
+        assert!(matches!(
+            preflight_spec_status("STORY-86", Some(&RequirementStatus::Completed), false),
+            PreflightDecision::Refuse(_)
+        ));
+        assert!(matches!(
+            preflight_spec_status("STORY-86", Some(&RequirementStatus::Completed), true),
+            PreflightDecision::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn rejected_refuses() {
+        let d = preflight_spec_status("TASK-1", Some(&RequirementStatus::Rejected), false);
+        match d {
+            PreflightDecision::Refuse(m) => assert!(m.contains("Rejected"), "{m}"),
+            other => panic!("expected Refuse, got {:?}", other),
+        }
+        // No force-claim escape.
+        assert!(matches!(
+            preflight_spec_status("TASK-1", Some(&RequirementStatus::Rejected), true),
+            PreflightDecision::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn draft_refuses() {
+        let d = preflight_spec_status("BUG-2", Some(&RequirementStatus::Draft), false);
+        match d {
+            PreflightDecision::Refuse(m) => {
+                assert!(m.contains("Draft"), "{m}");
+                assert!(m.contains("approved"), "{m}");
+            }
+            other => panic!("expected Refuse, got {:?}", other),
+        }
+        // No force-claim escape — Draft means "not ready", not "ambiguous".
+        assert!(matches!(
+            preflight_spec_status("BUG-2", Some(&RequirementStatus::Draft), true),
+            PreflightDecision::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn in_progress_without_force_claim_refuses() {
+        let d = preflight_spec_status("BUG-379", Some(&RequirementStatus::InProgress), false);
+        match d {
+            PreflightDecision::Refuse(m) => {
+                assert!(m.contains("In Progress") || m.contains("InProgress"), "{m}");
+                assert!(m.contains("--force-claim"), "{m}");
+            }
+            other => panic!("expected Refuse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn in_progress_with_force_claim_warns_and_allows() {
+        match preflight_spec_status("BUG-379", Some(&RequirementStatus::InProgress), true) {
+            PreflightDecision::AllowWithWarning(m) => {
+                assert!(m.contains("BUG-379"), "{m}");
+                assert!(m.contains("--force-claim"), "{m}");
+            }
+            other => panic!("expected AllowWithWarning, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn needs_attention_without_force_claim_refuses() {
+        let d = preflight_spec_status("BUG-9", Some(&RequirementStatus::NeedsAttention), false);
+        match d {
+            PreflightDecision::Refuse(m) => {
+                assert!(
+                    m.contains("NeedsAttention") || m.contains("Needs Attention"),
+                    "{m}"
+                );
+                assert!(m.contains("--force-claim"), "{m}");
+            }
+            other => panic!("expected Refuse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn needs_attention_with_force_claim_warns_and_allows() {
+        assert!(matches!(
+            preflight_spec_status("BUG-9", Some(&RequirementStatus::NeedsAttention), true),
+            PreflightDecision::AllowWithWarning(_)
+        ));
+    }
+}
+
 /// Walk a candidate list of branch names and return the first that's free
 /// locally and on origin. STORY-65: auto for slug → slug-2..-10 →
 /// slug-YYYY-MM-DD → slug-YYYY-MM-DD-2..-10; date for slug-YYYY-MM-DD
@@ -20457,6 +20607,76 @@ fn creator_shell_pid() -> Option<u32> {
     sys.process(me)?.parent().map(|p| p.as_u32())
 }
 
+/// BUG-379: decision returned by the `aida session start` pre-flight
+/// spec-status gate. Pure-data so the gate is unit-testable without
+/// spinning up a worktree / store fixture. trace:BUG-379 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum PreflightDecision {
+    /// Status is Approved — proceed and bump to InProgress after lease save.
+    AllowAndBump,
+    /// Status is fine as-is (Planned, or scope is not a SPEC-ID) — proceed.
+    Allow,
+    /// Status is ambiguous but `--force-claim` was passed — proceed; show
+    /// the message to the user as a warning.
+    AllowWithWarning(String),
+    /// Refuse with the given message.
+    Refuse(String),
+}
+
+/// BUG-379: decide whether `aida session start --owns <scope>` is allowed
+/// given the spec's current status. Pure function — takes the looked-up
+/// status (None when the scope isn't a SPEC-ID) and the `--force-claim`
+/// flag, returns the decision. trace:BUG-379 | ai:claude
+fn preflight_spec_status(
+    owns: &str,
+    status: Option<&RequirementStatus>,
+    force_claim: bool,
+) -> PreflightDecision {
+    let Some(status) = status else {
+        // Scope isn't a SPEC-ID (e.g. EPIC-name, path glob, freeform tag) —
+        // status gate doesn't apply.
+        return PreflightDecision::Allow;
+    };
+    match status {
+        RequirementStatus::Done | RequirementStatus::Completed => {
+            PreflightDecision::Refuse(format!(
+                "spec `{}` is {:?} — work already shipped, refusing to start a new session. \
+                 Use a different scope, or reopen the spec first.",
+                owns, status
+            ))
+        }
+        RequirementStatus::Rejected => PreflightDecision::Refuse(format!(
+            "spec `{}` is Rejected — refusing to start a session against work that's been dropped.",
+            owns
+        )),
+        RequirementStatus::Draft => PreflightDecision::Refuse(format!(
+            "spec `{}` is Draft — not ready for implementation. \
+             Transition it to Approved first (`aida edit {} --status approved`).",
+            owns, owns
+        )),
+        RequirementStatus::InProgress if !force_claim => PreflightDecision::Refuse(format!(
+            "spec `{}` is already In Progress but no local lease holds it — another \
+             worktree or machine likely owns it. Re-run with --force-claim if you intend \
+             to take over.",
+            owns
+        )),
+        RequirementStatus::NeedsAttention if !force_claim => PreflightDecision::Refuse(format!(
+            "spec `{}` is in NeedsAttention — punted by an autonomous agent for advisor \
+             triage. Triage it first (`aida findings list`), or re-run with --force-claim \
+             to claim anyway.",
+            owns
+        )),
+        RequirementStatus::InProgress | RequirementStatus::NeedsAttention => {
+            PreflightDecision::AllowWithWarning(format!(
+                "spec `{}` is {:?} — proceeding under --force-claim",
+                owns, status
+            ))
+        }
+        RequirementStatus::Approved => PreflightDecision::AllowAndBump,
+        RequirementStatus::Planned => PreflightDecision::Allow,
+    }
+}
+
 fn session_start(
     owns: &str,
     branch: Option<&str>,
@@ -20470,6 +20690,10 @@ fn session_start(
     launch_name: Option<String>,
     launch_permission_mode: &str,
     launch_role: Option<String>,
+    // BUG-379: claim a spec stuck in InProgress (no local lease) or
+    // NeedsAttention. Done/Completed/Rejected/Draft still refuse.
+    // trace:BUG-379 | ai:claude
+    force_claim: bool,
 ) -> Result<()> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -20576,6 +20800,30 @@ fn session_start(
                 existing.id
             );
         }
+    }
+
+    // BUG-379: pre-flight spec-status gate. When `owns` is a SPEC-ID,
+    // refuse states that mean "not work for me" (Done/Completed/Rejected/
+    // Draft) and require --force-claim for ambiguous ones (already
+    // InProgress with no local lease, or NeedsAttention awaiting advisor
+    // triage). The Approved → InProgress bump itself happens after lease
+    // save below, atomic-enough with the lease creation.
+    // trace:BUG-379 | ai:claude
+    let preflight_status: Option<RequirementStatus> =
+        Storage::new(project_root.join(".aida-store"))
+            .load()
+            .ok()
+            .and_then(|store| {
+                store
+                    .get_requirement_by_spec_id(owns)
+                    .map(|r| r.status.clone())
+            });
+    match preflight_spec_status(owns, preflight_status.as_ref(), force_claim) {
+        PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),
+        PreflightDecision::AllowWithWarning(msg) => {
+            eprintln!("{} {}", "⚠".yellow().bold(), msg);
+        }
+        PreflightDecision::AllowAndBump | PreflightDecision::Allow => {}
     }
 
     // STORY-71: PR metadata captured from `gh`/`glab` for review sessions.
@@ -21077,6 +21325,42 @@ fn session_start(
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
 
+    // BUG-379: atomic-enough with the lease just persisted, bump
+    // Approved → InProgress. Idempotent — if the spec already moved
+    // (manual edit, doctor heal, another path) we leave the status alone.
+    // Failure is logged, not fatal — the doctor's spec-status-drift
+    // category is the backstop. trace:BUG-379 | ai:claude
+    let bumped_to_in_progress = if matches!(preflight_status, Some(RequirementStatus::Approved)) {
+        let storage = Storage::new(project_root.join(".aida-store"));
+        match storage.load().and_then(|mut store| {
+            let mut bumped = false;
+            if let Some(req) = store.get_requirement_by_spec_id_mut(owns) {
+                if matches!(req.status, RequirementStatus::Approved) {
+                    req.status = RequirementStatus::InProgress;
+                    req.modified_at = chrono::Utc::now();
+                    bumped = true;
+                }
+            }
+            if bumped {
+                storage.save(&store)?;
+            }
+            Ok::<bool, anyhow::Error>(bumped)
+        }) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!(
+                    "{} couldn't bump spec status for `{}` (stays at Approved): {} — `aida doctor` will heal",
+                    "⚠".yellow(),
+                    owns,
+                    e
+                );
+                false
+            }
+        }
+    } else {
+        false
+    };
+
     // STORY-73: human output to stderr, eval-friendly export to stdout when
     // stdout is captured (i.e., the shell wrapper's `eval "$(...)"` is
     // running). Direct invocation (TTY stdout) prints only the human output
@@ -21097,6 +21381,14 @@ fn session_start(
             "role".bold(),
             r.cyan(),
             format!("({})", role_origin).dimmed()
+        );
+    }
+    if bumped_to_in_progress {
+        eprintln!(
+            "  {}: {} → {}",
+            "spec".bold(),
+            "Approved".dimmed(),
+            "In Progress".magenta()
         );
     }
 
@@ -63432,6 +63724,7 @@ fn handle_queue_work(
         /* launch_name */ None,
         /* permission_mode */ &permission_mode,
         /* role */ Some(role.clone()),
+        /* force_claim */ false,
     )?;
 
     // Look up the lease we just minted: by scope, by owner=us, freshest.
