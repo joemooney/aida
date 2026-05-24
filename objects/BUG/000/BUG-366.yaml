@@ -42,12 +42,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:58:41.300890035Z
-modified_at: 2026-05-23T22:58:41.300890035Z
+modified_at: 2026-05-24T06:38:12.798237154Z
 req_type: Bug
 tags:
+- aida:queue:list
 - cli-ux
 - from-self-test
 - from-user-friction
 - hint-accuracy
 - papercut
-- queue-display
