@@ -40,12 +40,12 @@ description: |-
 
   - TASK-503 (just-shipped fmt auto-run section — not the source of DEBUG echoes but the discovery context)
   - FR-0226 (original hook spec — the technical-debt source)
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T00:58:56.413102025Z
-modified_at: 2026-05-24T02:57:53.198614656Z
+modified_at: 2026-05-24T05:49:48.709597024Z
 req_type: Task
 tags:
 - cleanup
@@ -77,3 +77,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-24T02:57:53.198614656Z
   implemented_by: joe
+  completed_at: 2026-05-24T05:49:48.709597024Z
+  completion_sha: 3cff83da85c34cfd9f2cd3b20792e4147e498fcb
