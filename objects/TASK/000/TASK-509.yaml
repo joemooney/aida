@@ -1,0 +1,54 @@
+id: 019e577e-31bf-7242-affc-37bacb3f6783
+spec_id: TASK-509
+agreed_id: TASK-509
+title: 'aida-validate-commit hook: accept multi-agent attribution like [AI:antigravity+claude]'
+description: |-
+  ## Empirical 2026-05-23 during TASK-503 commit
+
+  Master committed Antigravity's substantial TASK-503 work with [AI:antigravity+claude] tag to preserve Antigravity's authorship while acknowledging Master's regression-test contribution. The aida-validate-commit hook rejected the format:
+
+    Commit message must follow conventional format: [AI:tool]? type(scope): description
+    Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+
+  The commit was allowed (permissive mode warned but did not block), but in strict mode (AIDA_COMMIT_STRICT=true) it would have been blocked. Multi-agent attribution is a real pattern that's emerging — STORY-417/418 (cross-agent scaffolding tree) made AIDA officially agent-agnostic, and EPIC-31 just shipped three agent launchers. As multi-agent work continues, mixed-authorship commits will recur.
+
+  ## Proposed fix
+
+  Extend the validator's [AI:tool] regex to accept tool combinations separated by '+':
+
+    [AI:claude]                   → ok (current)
+    [AI:antigravity]              → ok (current)
+    [AI:antigravity+claude]       → accept (new)
+    [AI:codex+antigravity+claude] → accept (new — three-way is conceivable)
+    [AI:claude:med]               → ok (current)
+    [AI:antigravity+claude:med]   → accept (confidence applies to whole commit)
+
+  ## Acceptance
+
+  - [ ] aida-validate-commit accepts multi-tool format [AI:T1+T2[+T3...]][:confidence]
+  - [ ] Permissive mode no longer warns on this format
+  - [ ] Strict mode (AIDA_COMMIT_STRICT=true) accepts
+  - [ ] Test: each combination above is accepted
+  - [ ] Documentation: CLAUDE.md commit-format section adds multi-agent example
+
+  ## Composes with
+
+  - TASK-503 (the empirical case)
+  - FR-0226 (commit validation framework)
+  - EPIC-31 (multi-agent layer that increases the need)
+  - feedback_one_master_advisor_until_subsystems memory (multi-agent coordination patterns)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T00:59:08.607760537Z
+modified_at: 2026-05-24T00:59:08.607760537Z
+req_type: Task
+tags:
+- attribution
+- commit-validation
+- from-self-test
+- from-task-503
+- hooks
+- multi-agent
+- papercut
