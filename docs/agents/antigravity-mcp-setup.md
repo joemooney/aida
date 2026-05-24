@@ -53,6 +53,27 @@ antigravity
 
 The MCP server is spawned over stdio by Antigravity as a child process. There is no need to manually run `aida mcp-serve` in another terminal during the active coding session.
 
+## Launch Antigravity Through AIDA
+
+For AIDA projects, prefer the supervised launcher:
+
+```bash
+aida agent new antigravity --role implementer
+aida agent new antigravity --spec STORY-434 --role implementer
+```
+
+The launcher uses the Antigravity agent CLI binary `agy`, not the `/usr/bin/antigravity` IDE wrapper. It runs from the project root, sets `AIDA_AGENT_TYPE=antigravity`, propagates `AIDA_SESSION_ROLE` and `AIDA_SESSION_SCOPE`, registers the process in `.aida/agents/`, and deregisters it on exit. When `--spec` is supplied, it first creates the standard sibling worktree + lease and launches Antigravity from that worktree.
+
+Keep the unsafe autonomous flag explicit:
+
+```bash
+aida agent new antigravity --spec STORY-434 --role implementer --bypass-sandbox
+```
+
+`--bypass-sandbox` passes Antigravity CLI's `--dangerously-skip-permissions`; it is not the interactive default.
+
+Antigravity also writes per-session brain artifacts under `~/.gemini/antigravity-cli/brain/<session-id>/`. Treat those as local scratch space; durable coordination, architectural decisions, and shipped-work status belong in AIDA specs, comments, leases, PRs, and commit trailers.
+
 ## Verify Tool Discovery
 
 The expected tool count is **24**, matching the canonical tools advertised by MCP `tools/list`:
