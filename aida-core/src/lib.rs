@@ -53,9 +53,10 @@ pub use block_allocation::{BlockAllocationConfig, BlockAllocationTypeConfig};
 pub use db::PostgresBackend;
 #[cfg(feature = "native")]
 pub use db::{
-    create_backend, export_to_json, import_from_json, migrate_sqlite_to_yaml,
-    migrate_yaml_to_sqlite, open_or_create, ArchiveFilter, Cache, CachedGitBackend, GitBackend,
-    ListFilter, RequirementSummary, SqliteBackend, YamlBackend,
+    cache_lock_info_path, create_backend, export_to_json, import_from_json, migrate_sqlite_to_yaml,
+    migrate_yaml_to_sqlite, open_or_create, read_cache_lock_info, ArchiveFilter, Cache,
+    CacheLockInfo, CachedGitBackend, GitBackend, ListFilter, RequirementSummary, SqliteBackend,
+    YamlBackend,
 };
 #[cfg(all(feature = "native", feature = "postgres"))]
 pub use db::{migrate_from_postgres, migrate_to_postgres};
