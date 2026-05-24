@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T06:41:30.840459709Z
-modified_at: 2026-05-24T06:41:30.840459709Z
+modified_at: 2026-05-24T06:41:46.019890066Z
 req_type: Task
 tags:
 - aida:list
@@ -42,3 +42,8 @@ tags:
 - papercut
 - prefix-glob
 - tags
+relationships:
+- rel_type: Child
+  target_id: 019e57d6-044d-77d2-a817-240a89f767e5
+  created_at: 2026-05-24T06:41:46.019881787Z
+  created_by: joe
