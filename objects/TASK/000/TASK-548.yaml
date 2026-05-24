@@ -48,12 +48,12 @@ description: |-
   2026-05-24 operator: 'why did it pause to ask this question?' after running 'aida queue work BUG-376' with explicit SPEC-ID.
 
   trace:TASK-X
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T18:01:38.864883637Z
-modified_at: 2026-05-24T21:09:27.358202339Z
+modified_at: 2026-05-24T21:19:27.736178447Z
 req_type: Task
 tags:
 - batch:ceiling-pattern
@@ -81,3 +81,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-24T20:51:07.655668209Z
   implemented_by: joe
+  completed_at: 2026-05-24T21:19:27.736178447Z
+  completion_sha: e26580b6d4f3ef9c590ae5718bc70f69c93a824a
