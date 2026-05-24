@@ -1,0 +1,82 @@
+id: 019e5800-e0ad-7192-82b9-2517ada29af8
+spec_id: BUG-369
+agreed_id: BUG-369
+title: Implementer cannot punt when spec is still Approved during early phase 1 (forces clean exit, drain counts as failure)
+description: |-
+  ## Empirical 2026-05-23 evening during TASK-512 drain
+
+  The implementer correctly identified a design fork early in phase 1 (TASK-512's acceptance referenced docs/aida/ but the discipline pack is at docs/aida-discipline/ + docs/aida/ is already owned by aida docs build). Recommended option A to master. Tried to /aida-punt.
+
+  Got: 'Error: TASK-512 is Approved — only an In Progress spec can be punted'
+
+  Implementer then exited cleanly without opening a PR. The orchestrator detected 'exited cleanly but no PR' and treated it as phase 1 failure:
+
+    ✗ phase 1 (implementer session) failed: the implementer session exited cleanly but opened no PR
+
+  This is double-wrong:
+  1. The implementer did the RIGHT thing (identified a fork before committing to a wrong direction)
+  2. The substrate refused the right escape hatch (punt) on a technicality (status transition order)
+  3. The orchestrator then misclassified the punt-via-clean-exit as a failure
+
+  ## Root cause
+
+  aida queue work --auto-complete should transition the spec to In Progress as the FIRST step of phase 1 setup, before the implementer session opens. Today it appears to either:
+  - Transition at a later point in phase 1 (after the implementer has already started)
+  - OR not transition at all in some code path
+  Either way, there's a window where the implementer is running but the spec is still Approved, and punt is refused.
+
+  ## Fix direction
+
+  Two options:
+
+  A. **Transition to In Progress as the first step of phase 1 setup** — before spawning the implementer session. Spec is In Progress while implementer runs; punt works any time during phase 1.
+
+  B. **Allow punt from Approved too** — relax the punt-status precondition. Approved + active drain context = same operational state as In Progress for punt purposes.
+
+  Lean A — keeps punt semantics clean (punt = 'I was working this'), fixes the transition-order gap.
+
+  ## Bonus orchestrator fix: distinguish punt-via-clean-exit from genuine failure
+
+  When implementer exits cleanly with no PR AND the spec is In Progress (or punt-equivalent state), the orchestrator should:
+  - Check for punt artifacts (AIDA_PUNT_SIGNAL_FILE per STORY-306, or a sentinel)
+  - If punt detected: route through advisor tier (per STORY-306), not 'phase 1 failed'
+  - If no punt artifact: then yes, treat as failure
+
+  Today the clean-exit-no-PR case here was actually a failed-punt-by-substrate-refusal — should be detected and surfaced as such ('punt attempted but refused due to status precondition; spec stays Approved').
+
+  ## Acceptance
+
+  - [ ] aida queue work --auto-complete transitions spec to In Progress as first step of phase 1
+  - [ ] Punt works from any phase-1 state (including very early window)
+  - [ ] OR (Option B): aida punt accepts Approved status when within active drain context
+  - [ ] Orchestrator distinguishes punt-via-clean-exit from genuine phase-1 failure (per STORY-306 punt handshake)
+  - [ ] Refused-punt case explicitly surfaced ('punt refused because X; spec remains in Y status')
+  - [ ] Regression test: simulate early-phase-1 punt attempt, confirm it succeeds + routes correctly
+  - [ ] Composes with BUG-360/361/362/364/367 (ceiling-pattern family — substrate refuses what implementer correctly did)
+
+  ## Composes with
+
+  - STORY-306 (headless advisor / punt routing — this BUG extends its protection to early phase 1)
+  - TASK-512 (the empirical case — implementer's punt refused, drain misclassified as failure)
+  - BUG-360 family (ceiling-pattern variants — substrate refusing correct discipline)
+  - feedback_substrate_as_bouncer_not_rules — the substrate should accept correct moves and refuse incorrect ones, not reverse the polarity
+
+  ## Origin
+
+  2026-05-23 user during TASK-512 drain. Implementer's recommendation (A) was correct + their attempt to punt was correct. The substrate refused on a status-transition technicality. Master had to intervene with manual aida edit --status in-progress workaround.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T03:21:53.069073935Z
+modified_at: 2026-05-24T03:21:53.069073935Z
+req_type: Bug
+tags:
+- ceiling-pattern
+- design-fork-detection
+- from-self-test
+- from-task-512
+- orchestrator
+- phase-1
+- punt
+- status-transition
