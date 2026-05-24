@@ -1,0 +1,29 @@
+id: 019e58ec-b34a-76c3-9861-81df31bf9b3c
+spec_id: TASK-536
+agreed_id: TASK-536
+title: 'backlog: drop redundant !is_terminal_status filter on Approved candidates'
+description: |
+  Raised in review of PR-282: https://github.com/joemooney/aida/pull/282#issuecomment-4527739506
+
+  `aida-cli/src/backlog.rs:159-178` `collect_backlog_candidates` does:
+
+    .filter(|r| matches!(r.status, RequirementStatus::Approved))
+    .filter(|r| !is_terminal_status(&r.status))
+
+  The second filter is dead code: `Approved` is non-terminal by definition
+  (terminal statuses are Completed / Rejected / Released). Either drop the
+  second filter, or — if the intent was defense-in-depth against future status
+  enum changes — leave a comment naming that.
+
+  Pure refactor, no behavior change. One-line delete.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:39:27.946340980Z
+modified_at: 2026-05-24T07:39:27.946340980Z
+req_type: Task
+tags:
+- dead-code
+- from-review:PR-282
+- severity:cosmetic
