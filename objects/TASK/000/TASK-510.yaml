@@ -1,0 +1,77 @@
+id: 019e57c3-29f2-7912-ac9c-2731a6e208de
+spec_id: TASK-510
+agreed_id: TASK-510
+title: 'aida init: enqueue an ''initial commit'' TASK so new users know the next step is to commit the scaffolded files'
+description: |-
+  ## Empirical 2026-05-23
+
+  User ran 'aida init' in a new project and saw a bunch of untracked files (.aida/, .claude/, .codex/, .mcp.json, AGENTS.md, CLAUDE.md, docs/) plus a modified-unstaged .gitignore. Their question: 'is that expected? what do I do?'
+
+  The answer is 'git add . && git commit -m chore: scaffold AIDA' (the .gitignore's deny-by-default rules ensure only the right files get committed). But there was no signal in the substrate telling the user that — they had to ask externally.
+
+  ## Proposed shape
+
+  At the end of 'aida init', enqueue ONE task into the user's queue:
+
+  | Field | Value |
+  |---|---|
+  | Title | Commit AIDA scaffolding (initial setup) |
+  | Type | task |
+  | Status | approved |
+  | Priority | high |
+  | Tags | from-aida-init, first-task, scaffolding |
+  | Description | After 'aida init', the scaffolded files are untracked. Run: 'git add . && git commit -m chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + !.aida/config.toml) ensure only the right files get committed. Run 'aida queue done <this-task-id>' after the commit lands. |
+
+  The task appears immediately in 'aida queue list'. Self-documents the next step. Uses AIDA's own queue surface to onboard new users TO AIDA's queue surface (dogfood). When user commits + runs 'aida queue done', the task disappears and the project is clean.
+
+  ## Why a queue task, not a printed instruction
+
+  - Persistent: stays visible across shell sessions until done
+  - Self-documenting: 'aida queue list' is the natural next command for any AIDA user
+  - Onboards by use: new user's first 'aida queue list' returns a real task with a concrete next step
+  - Subscribes to AIDA's lifecycle: same 'queue done' verb as every other task
+
+  ## Implementation
+
+  In 'aida init' (probably aida-cli/src/main.rs in the init flow, or aida-core/src/scaffolding/mod.rs), after the scaffolding artifacts are written + cache rebuilt + orphan branch initialized, enqueue the task via the standard 'aida add' code path. The task is for the SHELL user (current_user_id()).
+
+  ## Out of scope (defer to follow-ups)
+
+  - Sibling task: 'push branch + scaffold remote' — only useful if remote is missing; nice-to-have, separate TASK if wanted
+  - Sibling task: 'add your first requirement' — gets user actively using AIDA but adds onboarding friction; defer
+  - Auto-run the git commit itself — overstep; user should review the diff before committing
+
+  ## Acceptance
+
+  - [ ] 'aida init' enqueues the initial-commit task into the current shell user's queue
+  - [ ] Task carries enough description that 'aida queue work <id>' (or just 'aida show <id>') tells the user exactly what to do
+  - [ ] Task is removed cleanly via 'aida queue done <id>' (standard verb)
+  - [ ] Idempotency: 'aida init --force' re-running doesn't enqueue a duplicate (check if a from-aida-init task already exists; skip if yes)
+  - [ ] Test: scaffold a new project, run 'aida queue list', assert the initial-commit task appears with the right shape
+  - [ ] Scaffolding-pack: every new AIDA project gets this onboarding signal
+
+  ## Composes with
+
+  - STORY-441 (archive concept rethink) — this task should NOT be auto-archived; it lives until acked
+  - TASK-507 (aida history --shipped) — sibling 'show me what just happened' surface
+  - Onboarding UX broadly (no parent EPIC yet; could file an onboarding EPIC if a pattern emerges)
+
+  ## Origin
+
+  2026-05-23 user: 'for aida init in a new project I want it to add an initial task to the queue to commit the files that were added during aida init.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:14:28.594251825Z
+modified_at: 2026-05-24T02:14:28.594251825Z
+req_type: Task
+tags:
+- dogfood
+- first-time-user
+- from-self-test
+- from-user-direction
+- init
+- onboarding
+- queue
+- scaffolding
