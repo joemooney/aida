@@ -40,6 +40,10 @@ pub struct PrShipOptions {
     /// captured against every spec the PR credits.
     /// trace:STORY-439 | ai:claude
     pub complexity: Option<crate::complexity_calibration::ComplexityLevel>,
+    /// STORY-451: implementer's actual effort spent at ship time.
+    /// Captured per credited spec in `.aida/effort-calibration/`.
+    /// trace:STORY-451 | ai:codex
+    pub effort: Option<crate::effort_calibration::EffortBucket>,
 }
 
 /// One ordered step in the `aida pr ship` sequence. The variants drive
@@ -341,6 +345,11 @@ pub fn format_dry_run_plan(opts: &PrShipOptions, steps: &[ShipStep]) -> String {
     if let Some(level) = opts.complexity {
         out.push_str(&format!(
             "  · --complexity {level}: capture implementer self-assessment + punt count to .aida/complexity-calibration/\n"
+        ));
+    }
+    if let Some(effort) = opts.effort {
+        out.push_str(&format!(
+            "  · --effort {effort}: capture implementation effort to .aida/effort-calibration/\n"
         ));
     }
     out
@@ -674,6 +683,7 @@ mod tests {
             no_cleanup: false,
             dry_run: true,
             complexity: None,
+            effort: None,
         };
         let steps = vec![
             ShipStep::ResolvePr {
@@ -702,6 +712,7 @@ mod tests {
             no_cleanup: false,
             dry_run: true,
             complexity: None,
+            effort: None,
         };
         let steps = vec![ShipStep::ResolvePr {
             create_if_needed: false,
@@ -719,6 +730,7 @@ mod tests {
             no_cleanup: true,
             dry_run: true,
             complexity: None,
+            effort: None,
         };
         let plan = format_dry_run_plan(&opts, &[]);
         assert!(plan.contains("--no-pull"), "{plan}");
@@ -733,6 +745,7 @@ mod tests {
             no_cleanup: false,
             dry_run: true,
             complexity: None,
+            effort: None,
         };
         let steps = vec![ShipStep::Merge {
             delete_branch: false,
@@ -750,6 +763,7 @@ mod tests {
             no_cleanup: false,
             dry_run: true,
             complexity: Some(crate::complexity_calibration::ComplexityLevel::High),
+            effort: None,
         };
         let plan = format_dry_run_plan(&opts, &[]);
         assert!(plan.contains("--complexity high"), "{plan}");
@@ -764,9 +778,25 @@ mod tests {
             no_cleanup: false,
             dry_run: true,
             complexity: None,
+            effort: None,
         };
         let plan = format_dry_run_plan(&opts, &[]);
         assert!(!plan.contains("complexity"), "{plan}");
+    }
+
+    #[test]
+    fn dry_run_plan_includes_effort_capture_when_set() {
+        let opts = PrShipOptions {
+            pr_number: Some(7),
+            no_pull: false,
+            no_cleanup: false,
+            dry_run: true,
+            complexity: None,
+            effort: Some(crate::effort_calibration::EffortBucket::OneDay),
+        };
+        let plan = format_dry_run_plan(&opts, &[]);
+        assert!(plan.contains("--effort 1d"), "{plan}");
+        assert!(plan.contains(".aida/effort-calibration/"), "{plan}");
     }
 
     #[test]

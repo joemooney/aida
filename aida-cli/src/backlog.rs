@@ -267,6 +267,9 @@ pub(crate) fn handle_backlog_command(cmd: &BacklogCommand, storage: &Storage) ->
                 user.as_deref(),
             )
         }
+        BacklogCommand::Load => {
+            anyhow::bail!("`aida backlog load` is handled by the load-report dispatcher")
+        }
     }
 }
 

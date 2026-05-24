@@ -203,6 +203,24 @@ complexity calibration surfaces — both feed the maturity trend.
 Set at pickup with `aida queue work <SPEC> --assist-est
 {none|advisor|human}`.
 
+### effort buckets (tag convention)
+
+`effort:<touchpoint>:<bucket>` — quantitative effort estimates captured
+at four lifecycle touchpoints: `open`, `plan`, `impl`, and `review`.
+Buckets are `15m`, `1h`, `4h`, `1d`, and `1w`.
+
+Conversion convention: `1d` means **8 work-hours**, not a 24-hour
+calendar day; `1w` means **5 work-days / 40 work-hours**, not seven
+calendar days. `aida load` uses those conversions when summing queue and
+backlog load.
+
+Set at open time with `aida add --effort <bucket>`, at pickup/plan time
+with `aida queue work <SPEC> --effort <bucket>`, at ship time with
+`aida pr ship --effort <bucket>`, and at review time via
+`implementation_effort` in `.aida/review-verdicts/PR-N.json`.
+Each capture point also writes a per-spec record to
+`.aida/effort-calibration/<SPEC>.yaml`.
+
 ## Adjacent terms (defined elsewhere)
 
 These show up in the same sentences but live in other pages:
