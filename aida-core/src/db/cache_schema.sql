@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     created_at TEXT NOT NULL,
     modified_at TEXT NOT NULL,
     archived INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,                      -- ISO RFC3339; NULL when not archived (STORY-441)
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 
@@ -29,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_cache_modified ON requirements_cache(modified_at)
 CREATE INDEX IF NOT EXISTS idx_cache_type ON requirements_cache(req_type);
 CREATE INDEX IF NOT EXISTS idx_cache_feature ON requirements_cache(feature);
 CREATE INDEX IF NOT EXISTS idx_cache_archived ON requirements_cache(archived);
+CREATE INDEX IF NOT EXISTS idx_cache_archived_at ON requirements_cache(archived_at);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS requirements_fts USING fts5(
     id UNINDEXED,

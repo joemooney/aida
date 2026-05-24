@@ -1759,6 +1759,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
             created_at: r.created_at.to_rfc3339(),
             modified_at: r.modified_at.to_rfc3339(),
             archived: r.archived,
+            // trace:STORY-441 | ai:claude
+            archived_at: r.archived_at.map(|dt| dt.to_rfc3339()),
             yaml_path: String::new(),
         })
         .collect()

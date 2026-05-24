@@ -48,6 +48,30 @@ Punting is a discipline, not a failure: a punted fork is a recorded decision
 point. Guessing past it produces a silent wrong implementation; punting keeps
 the wrong call from being made at all.
 
+## The view axis: archive / unarchive / archive-sweep
+
+**Archive** is *orthogonal* to the lifecycle above — every state can be
+archived or non-archived, and archive doesn't change the status. It's a
+view-level flag for "no longer current context."
+
+- **archive** (verb) — `aida archive <SPEC-ID>` sets `archived = true` and
+  stamps `archived_at` with the current wall clock. The spec drops out of
+  default `aida list` / `aida history` / `aida search`. It still appears
+  in graph traversals (parent/child) and in `--all` views.
+- **unarchive** (verb) — `aida unarchive <SPEC-ID>` clears the flag.
+- **archive-sweep** (verb / phase) — `aida archive --older-than 30d
+  --status completed,rejected` archives in bulk. Pair with `--dry-run` to
+  preview. The same sweep runs automatically on `aida pull` when
+  `[archive] auto_after_days = N` is configured (clamped to ≥7 days so a
+  ship is never archived before the human sees it).
+
+Why this exists: status `Completed` is the lifecycle end-state; archive is
+the "is this still on my mind?" axis. A freshly-Completed spec stays
+visible in the default view (so the "did my ship register?" sanity check
+works without flags); a year-old Completed spec is archived and doesn't
+drown out current activity. **Archive ≠ deletion** — the YAML, the
+commit history, and the requirement graph all survive.
+
 ## How to apply
 
 - Default **"ship"** to mean **merged to the main branch** — the

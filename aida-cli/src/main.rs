@@ -1748,6 +1748,14 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+        Command::Archive { .. } | Command::Unarchive { .. } => {
+            // STORY-441: archive uses the git-canonical write path.
+            anyhow::bail!(
+                "aida archive/unarchive requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
 
         Command::StateSnapshot { .. } => {
             // The finish-state preamble's Spec row needs git-canonical
@@ -2640,6 +2648,205 @@ fn handle_punt_command(
         .dimmed()
     );
     Ok(())
+}
+
+/// STORY-441: `aida archive <ID>` and `aida archive --older-than <DUR>`.
+/// Single-id form mutates one spec; bulk form sweeps every spec whose
+/// status is in `status` (default `completed,rejected`) and whose
+/// `modified_at` is older than the cutoff. `--dry-run` prints the plan
+/// and exits. trace:STORY-441 | ai:claude
+fn handle_archive_command(
+    id: Option<&str>,
+    older_than: Option<&str>,
+    status_csv: Option<&str>,
+    dry_run: bool,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    match (id, older_than) {
+        (Some(id), None) => archive_single(id, backend, store_path),
+        (None, Some(dur)) => archive_sweep(dur, status_csv, dry_run, backend),
+        (Some(_), Some(_)) => {
+            // Clap's `conflicts_with` should catch this — but defend in depth.
+            anyhow::bail!("--older-than cannot be used with a positional SPEC-ID");
+        }
+        (None, None) => anyhow::bail!(
+            "either pass a SPEC-ID (`aida archive FR-1`) or `--older-than <DURATION>` \
+             for a bulk sweep (e.g. `--older-than 30d`)"
+        ),
+    }
+}
+
+fn archive_single(
+    id: &str,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    if req.archived {
+        println!(
+            "{} {display_id} is already archived (since {})",
+            "Note:".dimmed(),
+            req.archived_at
+                .map(|t| t.format("%Y-%m-%d").to_string())
+                .unwrap_or_else(|| "unknown".into())
+        );
+        return Ok(());
+    }
+    let now = chrono::Utc::now();
+    req.archived = true;
+    req.archived_at = Some(now);
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+    record_role_activity(&display_id, "archive");
+    println!("{} {display_id}", "Archived:".cyan().bold());
+    Ok(())
+}
+
+fn archive_sweep(
+    duration: &str,
+    status_csv: Option<&str>,
+    dry_run: bool,
+    backend: &aida_core::CachedGitBackend,
+) -> Result<()> {
+    let cutoff = parse_since_arg(duration)
+        .map_err(|e| anyhow::anyhow!("invalid --older-than `{duration}`: {e}"))?;
+    let statuses: Vec<String> = status_csv
+        .unwrap_or("completed,rejected")
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if statuses.is_empty() {
+        anyhow::bail!("--status must list at least one status (default: completed,rejected)");
+    }
+
+    // Pull all non-archived rows matching any of the requested statuses,
+    // then post-filter by modified_at < cutoff. The cache's status filter
+    // is single-value so we do one query per status and merge.
+    let mut candidates: Vec<aida_core::RequirementSummary> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for s in &statuses {
+        let filter = aida_core::ListFilter {
+            status: Some(s.clone()),
+            archive: aida_core::ArchiveFilter::NonArchivedOnly,
+            ..Default::default()
+        };
+        for row in backend.list_summaries(&filter)? {
+            if seen.insert(row.id) {
+                candidates.push(row);
+            }
+        }
+    }
+
+    // Filter by age. `modified_at` is RFC3339; parse and compare.
+    let eligible: Vec<aida_core::RequirementSummary> = candidates
+        .into_iter()
+        .filter(|s| {
+            chrono::DateTime::parse_from_rfc3339(&s.modified_at)
+                .map(|dt| dt.with_timezone(&chrono::Utc) < cutoff)
+                .unwrap_or(false)
+        })
+        .collect();
+
+    if eligible.is_empty() {
+        println!(
+            "{} no specs match --older-than {duration} --status {} (nothing to archive)",
+            "Note:".dimmed(),
+            statuses.join(",")
+        );
+        return Ok(());
+    }
+
+    if dry_run {
+        println!(
+            "{} {} spec(s) older than {duration} with status in {} (--dry-run, no writes):",
+            "Would archive:".cyan().bold(),
+            eligible.len(),
+            statuses.join(",")
+        );
+        for s in &eligible {
+            let display_id = s
+                .agreed_id
+                .as_deref()
+                .or(s.spec_id.as_deref())
+                .unwrap_or("?");
+            println!(
+                "  {:<14} {:<10} {}",
+                display_id,
+                s.status,
+                shorten_text(&s.title, 60)
+            );
+        }
+        return Ok(());
+    }
+
+    let now = chrono::Utc::now();
+    let mut archived_count = 0usize;
+    for s in &eligible {
+        let display_id = s
+            .agreed_id
+            .as_deref()
+            .or(s.spec_id.as_deref())
+            .unwrap_or_default()
+            .to_string();
+        let Some(mut req) = backend.get_requirement(&s.id)? else {
+            continue;
+        };
+        if req.archived {
+            continue;
+        }
+        req.archived = true;
+        req.archived_at = Some(now);
+        req.modified_at = now;
+        backend.update_requirement(&req)?;
+        archived_count += 1;
+        record_role_activity(&display_id, "archive");
+    }
+    println!(
+        "{} {archived_count} spec(s) (older than {duration}, status in {})",
+        "Archived:".cyan().bold(),
+        statuses.join(",")
+    );
+    Ok(())
+}
+
+/// trace:STORY-441 | ai:claude
+fn handle_unarchive_command(
+    id: &str,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    if !req.archived {
+        anyhow::bail!(
+            "{display_id} is not archived — nothing to unarchive. \
+             Use `aida archive {display_id}` if you meant to archive it."
+        );
+    }
+    let now = chrono::Utc::now();
+    req.archived = false;
+    req.archived_at = None;
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+    record_role_activity(&display_id, "unarchive");
+    println!("{} {display_id}", "Unarchived:".cyan().bold());
+    Ok(())
+}
+
+/// Local truncate helper for archive listings; mirrors `history::shorten`.
+fn shorten_text(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..max.saturating_sub(1)])
+    }
 }
 
 fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
@@ -4514,6 +4721,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             parent,
             sync,
             all,
+            archived,
             json,
             ..
         } => {
@@ -4557,11 +4765,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 None => (cli_tags, status.clone()),
             };
+            // STORY-441: three-way archive axis. Default hides archived rows;
+            // `--archived` shows only archived; `--all` shows both. The
+            // pre-STORY-441 terminal-status hide is gone — Completed/Rejected
+            // specs stay visible until archived.
+            // trace:STORY-441 | ai:claude
+            let archive = if *all {
+                aida_core::ArchiveFilter::Both
+            } else if *archived {
+                aida_core::ArchiveFilter::ArchivedOnly
+            } else {
+                aida_core::ArchiveFilter::NonArchivedOnly
+            };
             let filter = aida_core::ListFilter {
                 status: effective_status.clone(),
                 req_type: r#type.clone(),
                 feature: feature.clone(),
                 tags: effective_tags,
+                archive,
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
@@ -4601,23 +4822,21 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
             }
 
-            // Hide terminal-status (Completed/Rejected) by default — see
-            // TASK-64 for the rationale (day-to-day `aida list` should
-            // surface actionable work, not the archive). Skip the filter
-            // when:
-            //   - `--all` was passed,
-            //   - the user explicitly filtered by status (their pick wins,
-            //     even if it is one of the terminal values), or
-            //   - the active role scope set the status (scope wins).
-            // trace:TASK-64 | ai:claude
-            let hide_terminal = !*all && effective_status.is_none();
-            let hidden_terminal_count = if hide_terminal {
-                let before = reqs.len();
-                reqs.retain(|r| !is_terminal_status_str(&r.status));
-                before - reqs.len()
-            } else {
-                0
-            };
+            // STORY-441: count of archived rows that would have surfaced if
+            // `--all` was set. Cheap second query, used only to render the
+            // "(N archived hidden — pass --all …)" footer hint. Skipped when
+            // the user explicitly asked for archived or all rows.
+            // trace:STORY-441 | ai:claude
+            let archived_hidden_count =
+                if matches!(archive, aida_core::ArchiveFilter::NonArchivedOnly) {
+                    let archived_filter = aida_core::ListFilter {
+                        archive: aida_core::ArchiveFilter::ArchivedOnly,
+                        ..filter.clone()
+                    };
+                    backend.list_summaries(&archived_filter)?.len()
+                } else {
+                    0
+                };
 
             // STORY-244: internal JSON output for the TUI launcher's
             // Backlog / History panes. Hidden from --help; schema is
@@ -4654,11 +4873,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
 
             if reqs.is_empty() {
                 println!("No requirements found.");
-                if hidden_terminal_count > 0 {
+                if archived_hidden_count > 0 {
                     println!(
                         "  {}",
                         format!(
-                            "({hidden_terminal_count} hidden — pass --all to see Completed/Rejected items)"
+                            "({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
                         )
                         .dimmed()
                     );
@@ -4731,11 +4950,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                 }
                 println!("\n{} requirements", reqs.len());
-                if hidden_terminal_count > 0 {
+                if archived_hidden_count > 0 {
                     println!(
                         "{}",
                         format!(
-                            "  ({hidden_terminal_count} hidden — pass --all to see Completed/Rejected items)"
+                            "  ({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
                         )
                         .dimmed()
                     );
@@ -5889,21 +6108,53 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Autonomy(autonomy_cmd) => {
             handle_autonomy_command(autonomy_cmd)?;
         }
+        Command::Archive {
+            id,
+            older_than,
+            status,
+            dry_run,
+        } => {
+            // STORY-441: archive a single spec OR bulk-sweep over closed
+            // work matching the duration + status filter. trace:STORY-441
+            handle_archive_command(
+                id.as_deref(),
+                older_than.as_deref(),
+                status.as_deref(),
+                *dry_run,
+                &backend,
+                store_path,
+            )?;
+        }
+        Command::Unarchive { id } => {
+            // STORY-441: inverse of `aida archive`. trace:STORY-441 | ai:claude
+            handle_unarchive_command(id, &backend, store_path)?;
+        }
         Command::Search {
             query,
             status,
             limit,
             sync,
+            all,
+            archived,
             ..
         } => {
             // STORY-78: opt-in sync-pull before search. trace:STORY-78 | ai:claude
             if *sync {
                 maybe_sync_pull(store_path)?;
             }
+            // STORY-441: same three-way archive axis as `aida list`.
+            // trace:STORY-441 | ai:claude
+            let archive = if *all {
+                aida_core::ArchiveFilter::Both
+            } else if *archived {
+                aida_core::ArchiveFilter::ArchivedOnly
+            } else {
+                aida_core::ArchiveFilter::NonArchivedOnly
+            };
             // Cache-backed FTS5 search (EPIC-1-001 Phase 2). Replaces a
             // full-store load + in-memory substring scan.
             // trace:EPIC-1-001 | ai:claude
-            let mut results = backend.search(query, *limit)?;
+            let mut results = backend.search(query, *limit, archive)?;
             if let Some(s) = status {
                 let needle = s.clone();
                 results.retain(|r| r.status.eq_ignore_ascii_case(&needle));
@@ -6700,6 +6951,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             comments,
             oneline,
             all,
+            archived,
         } => {
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
@@ -6707,6 +6959,47 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // to git per file per commit (expensive, scan shallow).
             let default_max = if *events { (*limit * 5).max(50) } else { 250 };
             let max = max_commits.unwrap_or(default_max);
+            // STORY-441: archive axis replaces TASK-64's terminal-status
+            // hide. Default surfaces non-archived rows; `--all` widens to
+            // the union; `--archived` narrows to archived-only. When
+            // `--id <ID>` was passed, the user named a single spec so we
+            // bypass archive filtering for that spec's timeline.
+            // trace:STORY-441 | ai:claude
+            let archive = if id.is_some() || *all {
+                aida_core::ArchiveFilter::Both
+            } else if *archived {
+                aida_core::ArchiveFilter::ArchivedOnly
+            } else {
+                aida_core::ArchiveFilter::NonArchivedOnly
+            };
+            // Build the set of archived spec_ids the caller's archive filter
+            // should hide. Cheap: one indexed SELECT. Empty when archive is
+            // Both (nothing to hide) or ArchivedOnly (handled by the
+            // include-set below). trace:STORY-441 | ai:claude
+            let archived_specs: std::collections::HashSet<String> = match archive {
+                aida_core::ArchiveFilter::NonArchivedOnly => backend
+                    .list_summaries(&aida_core::ListFilter {
+                        archive: aida_core::ArchiveFilter::ArchivedOnly,
+                        ..Default::default()
+                    })?
+                    .into_iter()
+                    .filter_map(|s| s.spec_id)
+                    .collect(),
+                _ => std::collections::HashSet::new(),
+            };
+            let archived_only_specs: Option<std::collections::HashSet<String>> = match archive {
+                aida_core::ArchiveFilter::ArchivedOnly => Some(
+                    backend
+                        .list_summaries(&aida_core::ListFilter {
+                            archive: aida_core::ArchiveFilter::ArchivedOnly,
+                            ..Default::default()
+                        })?
+                        .into_iter()
+                        .filter_map(|s| s.spec_id)
+                        .collect(),
+                ),
+                _ => None,
+            };
             let opts = history::HistoryOpts {
                 limit: *limit,
                 max_commits: max.max(*limit),
@@ -6719,11 +7012,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 status_changes_only: *status_changes,
                 comments_only: *comments,
                 oneline: *oneline,
-                // TASK-64: hide terminal-status (Completed/Rejected) rows
-                // unless --all (or --id <ID>) overrides. --id is treated as
-                // an opt-in to that spec's full timeline regardless of
-                // status, since the user already named what they want.
-                include_terminal: *all || id.is_some(),
+                archived_specs,
+                archived_only_specs,
             };
             history::run(store_path, &opts)?;
         }
@@ -6766,6 +7056,8 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
         | Command::Doc(_)
         | Command::Docs(_)
         | Command::Punt { .. }
+        | Command::Archive { .. }
+        | Command::Unarchive { .. }
         | Command::Rework { .. } => true,
         Command::Queue(cmd) => matches!(
             cmd,
@@ -7841,6 +8133,191 @@ fn push_store_after_id_allocation(
         }
     }
     Ok(())
+}
+
+/// STORY-441: read `[archive] auto_after_days` from `.aida/config.toml`.
+/// Returns `Some(days)` when the user has opted in, `None` when the key is
+/// absent (auto-sweep stays off). Clamps below 7 to 7 with a stderr warning
+/// — auto-archiving a freshly-shipped spec defeats the whole point.
+/// Missing config file or unparseable TOML returns `None` silently (the
+/// optional auto-sweep is a soft feature, not load-bearing).
+/// trace:STORY-441 | ai:claude
+fn read_archive_auto_after_days(project_root: &std::path::Path) -> Option<u64> {
+    let path = config_path_for_project(project_root);
+    let body = std::fs::read_to_string(&path).ok()?;
+    let value: toml::Value = toml::from_str(&body).ok()?;
+    let raw = value
+        .get("archive")
+        .and_then(|t| t.get("auto_after_days"))
+        .and_then(|v| v.as_integer())?;
+    let days = u64::try_from(raw).ok()?;
+    if days < 7 {
+        eprintln!(
+            "{} [archive] auto_after_days = {days} clamped to minimum of 7 days \
+             (archiving sooner hides freshly-shipped specs)",
+            "Warning:".yellow().bold()
+        );
+        Some(7)
+    } else {
+        Some(days)
+    }
+}
+
+/// STORY-441: opt-out env var matching the `AIDA_AUTO_BUMP` shape.
+fn auto_archive_enabled() -> bool {
+    match std::env::var("AIDA_AUTO_ARCHIVE") {
+        Ok(v) => !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "false" | "0" | "no" | "off"
+        ),
+        Err(_) => true,
+    }
+}
+
+/// STORY-441: run the same `--older-than N days --status completed,rejected`
+/// sweep that `aida archive --older-than` exposes, but as a side-effect of
+/// `aida pull` once the auto-bump has finished. Off by default — gated on
+/// `[archive] auto_after_days` being set. Best-effort: any error is printed
+/// as a warning, never fails the pull. trace:STORY-441 | ai:claude
+fn maybe_auto_archive_sweep(
+    project_root: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+    quiet: bool,
+) {
+    if !auto_archive_enabled() {
+        return;
+    }
+    let Some(days) = read_archive_auto_after_days(project_root) else {
+        return;
+    };
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+    let statuses = ["Completed", "Rejected"];
+    let mut to_archive: Vec<aida_core::Requirement> = Vec::new();
+    for s in &statuses {
+        let filter = aida_core::ListFilter {
+            status: Some((*s).to_string()),
+            archive: aida_core::ArchiveFilter::NonArchivedOnly,
+            ..Default::default()
+        };
+        let Ok(rows) = backend.list_summaries(&filter) else {
+            continue;
+        };
+        for row in rows {
+            let stale = chrono::DateTime::parse_from_rfc3339(&row.modified_at)
+                .map(|dt| dt.with_timezone(&chrono::Utc) < cutoff)
+                .unwrap_or(false);
+            if !stale {
+                continue;
+            }
+            if let Ok(Some(req)) = backend.get_requirement(&row.id) {
+                if !req.archived {
+                    to_archive.push(req);
+                }
+            }
+        }
+    }
+    if to_archive.is_empty() {
+        return;
+    }
+    let now = chrono::Utc::now();
+    let mut count = 0usize;
+    for mut req in to_archive {
+        req.archived = true;
+        req.archived_at = Some(now);
+        req.modified_at = now;
+        if backend.update_requirement(&req).is_ok() {
+            count += 1;
+        }
+    }
+    if !quiet && count > 0 {
+        println!(
+            "  {} {count} spec(s) older than {days}d (auto-sweep, opt out via AIDA_AUTO_ARCHIVE=0)",
+            "auto-archived:".cyan()
+        );
+    }
+}
+
+#[cfg(test)]
+mod story_441_archive_config_tests {
+    use super::*;
+
+    fn write_config(root: &std::path::Path, body: &str) {
+        let config_dir = root.join(".aida");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("config.toml"), body).unwrap();
+    }
+
+    /// trace:STORY-441 | ai:claude
+    #[test]
+    fn read_archive_config_absent_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(read_archive_auto_after_days(tmp.path()), None);
+    }
+
+    /// trace:STORY-441 | ai:claude
+    #[test]
+    fn read_archive_config_returns_configured_days() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[archive]\nauto_after_days = 30\n");
+        assert_eq!(read_archive_auto_after_days(tmp.path()), Some(30));
+    }
+
+    /// Clamps below 7 to 7 with a stderr warning (warning is fire-and-
+    /// forget; we just verify the return value). trace:STORY-441 | ai:claude
+    #[test]
+    fn read_archive_config_clamps_below_seven_days() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[archive]\nauto_after_days = 1\n");
+        assert_eq!(read_archive_auto_after_days(tmp.path()), Some(7));
+    }
+
+    /// trace:STORY-441 | ai:claude
+    #[test]
+    fn read_archive_config_at_seven_passes_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[archive]\nauto_after_days = 7\n");
+        assert_eq!(read_archive_auto_after_days(tmp.path()), Some(7));
+    }
+
+    /// trace:STORY-441 | ai:claude
+    #[test]
+    fn read_archive_config_missing_section_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[store.sync]\nauto_push = \"manual\"\n");
+        assert_eq!(read_archive_auto_after_days(tmp.path()), None);
+    }
+
+    /// Mirrors `auto_bump_env_flag_respects_opt_out` shape — one test that
+    /// saves/restores the env var so parallel tests don't race on it.
+    /// trace:STORY-441 | ai:claude
+    #[test]
+    fn auto_archive_enabled_env_flag_respects_opt_out() {
+        let saved = std::env::var("AIDA_AUTO_ARCHIVE").ok();
+
+        // Unset → on (default).
+        std::env::remove_var("AIDA_AUTO_ARCHIVE");
+        assert!(auto_archive_enabled());
+
+        for off in &["false", "0", "no", "off", "FALSE", "Off"] {
+            std::env::set_var("AIDA_AUTO_ARCHIVE", off);
+            assert!(
+                !auto_archive_enabled(),
+                "AIDA_AUTO_ARCHIVE={off:?} should disable"
+            );
+        }
+        for on in &["true", "1", "", "yes", "anything-else"] {
+            std::env::set_var("AIDA_AUTO_ARCHIVE", on);
+            assert!(
+                auto_archive_enabled(),
+                "AIDA_AUTO_ARCHIVE={on:?} should stay on"
+            );
+        }
+
+        match saved {
+            Some(v) => std::env::set_var("AIDA_AUTO_ARCHIVE", v),
+            None => std::env::remove_var("AIDA_AUTO_ARCHIVE"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -43073,6 +43550,18 @@ fn handle_pull_command(
                             e
                         );
                     }
+
+                    // STORY-441: opt-in auto-archive sweep after the auto-bump
+                    // settles. Reads `[archive] auto_after_days` from
+                    // `.aida/config.toml`; absent → no-op. AIDA_AUTO_ARCHIVE=0
+                    // disables it. Best-effort: errors are warnings.
+                    // trace:STORY-441 | ai:claude
+                    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+                    if let Ok(sweep_backend) =
+                        aida_core::CachedGitBackend::open(store_path, &cache_path)
+                    {
+                        maybe_auto_archive_sweep(&project_root, &sweep_backend, quiet);
+                    }
                 }
                 Ok(s) => {
                     // BUG-254: surface the recovery hint and an explicit
@@ -47854,9 +48343,10 @@ fn handle_status_command_distributed(
     println!("  Store path:   {}", store_path.display());
     println!();
 
-    // Requirement counts grouped by status.
+    // Requirement counts grouped by status — count everything including
+    // archived rows so the project total reflects all on-disk specs.
     let summaries = backend.list_summaries(&aida_core::ListFilter {
-        include_archived: true,
+        archive: aida_core::ArchiveFilter::Both,
         ..Default::default()
     })?;
     let total = summaries.len();
