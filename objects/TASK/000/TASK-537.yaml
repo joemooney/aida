@@ -1,0 +1,55 @@
+id: 019e5a6b-67bd-70e1-a12e-0557ebcc6162
+spec_id: TASK-537
+agreed_id: TASK-537
+title: 'aida queue prune --orphaned: detect + remove queue entries whose backing spec was deleted'
+description: |-
+  ## Empirical 2026-05-24
+
+  aida queue list shows orphan entries:
+
+    13. ??? (deleted)  [· Unknown]  [for:reviewer]  'auto-queued by aida pr (019e57e7); covers 1 spec'
+    14. ??? (deleted)  [· Unknown]  [for:reviewer]  'auto-queued by session end (019e581f); covers 1 spec'
+
+  These are reviewer-queue entries that auto-fired when a PR opened, but the spec backing them was later deleted (likely via reject during tag migration or similar cleanup). The queue entries remain, displaying as '??? (deleted)' — noise that the operator can't easily remove because there's no SPEC-ID to target with aida queue remove.
+
+  ## Proposed fix
+
+  aida queue prune --orphaned — walks the queue, identifies entries whose covered_spec doesn't exist in the store, removes them. With --dry-run for preview.
+
+    aida queue prune --orphaned --dry-run    # preview
+    aida queue prune --orphaned              # remove
+    aida queue prune --orphaned --for-role reviewer    # scope to one role
+
+  ## Acceptance
+
+  - [ ] aida queue prune --orphaned implemented
+  - [ ] --dry-run flag previews without removal
+  - [ ] --for-role flag scopes the prune
+  - [ ] Output names each pruned entry (the auto-queued-by session ID + position)
+  - [ ] Test: seed a queue with a spec, delete the spec, run prune --orphaned, confirm entry removed
+  - [ ] Idempotent: re-running on a clean queue is a no-op
+
+  ## Composes with
+
+  - aida queue list (the surface that displays the orphans)
+  - aida queue remove (the primitive; prune wraps it for the orphan case)
+  - TASK-518 (sibling queue-hygiene work)
+
+  ## Origin
+
+  2026-05-24 user friction: queue list shows 2 ??? deleted entries; no clean way to remove. Master recommended aida queue prune which doesn't exist — recurring feedback_run_help_before_suggesting_flags discipline gap.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T14:37:28.893482007Z
+modified_at: 2026-05-24T14:37:28.893482007Z
+req_type: Task
+tags:
+- aida:queue
+- cleanup
+- from-self-test
+- from-user-friction
+- papercut
+- queue-hygiene
+- zombies
