@@ -1,0 +1,35 @@
+id: 019e58ec-8b9f-78b3-b01d-7288ca1b8f5d
+spec_id: TASK-535
+agreed_id: TASK-535
+title: 'backlog: replace literal STORY-444 in user-facing error with generic placeholder'
+description: |
+  Raised in review of PR-282: https://github.com/joemooney/aida/pull/282#issuecomment-4527739506
+
+  `aida-cli/src/backlog.rs:496` and `:604` both contain the error message:
+
+    spec `{raw}` not found — pass a SPEC-ID (`STORY-444`), agreed id, or UUID
+
+  Per TASK-268's "SPEC-IDs stay in developer artifacts, never in user-facing
+  output" rule, embedding the literal `STORY-444` in CLI error text leaks an
+  AIDA-internal SPEC-ID to downstream-project users who have no idea what
+  STORY-444 means. Canonical placeholder per the convention is `<SPEC-ID>`,
+  `STORY-N`, or `TASK-N`.
+
+  Suggested fix: change both call sites to
+
+    spec `{raw}` not found — pass a SPEC-ID (e.g. `STORY-N`), agreed id, or UUID
+
+  (Or drop the example entirely — `pass a SPEC-ID, agreed id, or UUID` is clear.)
+
+  Two lines, mechanical edit.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:39:17.791193039Z
+modified_at: 2026-05-24T07:39:17.791193039Z
+req_type: Task
+tags:
+- from-review:PR-282
+- severity:cosmetic
+- user-facing-text
