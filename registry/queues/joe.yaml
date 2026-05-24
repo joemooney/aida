@@ -1241,3 +1241,10 @@
   note: auto-queued by `aida pr` (019e57e7); covers 1 spec
   added_at: 2026-05-24T02:57:39.080975457Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e5824-9ffd-7b70-b9d8-e465a5533107
+  position: 277000
+  added_by: joe
+  note: auto-queued by `session end` (019e581f); covers 1 spec
+  added_at: 2026-05-24T04:01:34.310291078Z
+  for_role: reviewer
