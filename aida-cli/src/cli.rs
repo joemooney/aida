@@ -4751,6 +4751,10 @@ pub enum Command {
         #[clap(long)]
         note: Option<String>,
 
+        /// SPEC-ID this brief must be picked up after.
+        #[clap(long = "depends-on")]
+        depends_on: Option<String>,
+
         #[clap(subcommand)]
         cmd: Option<BriefCommand>,
     },
