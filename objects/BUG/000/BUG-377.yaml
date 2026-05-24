@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T19:10:56.557219921Z
-modified_at: 2026-05-24T20:13:41.572489350Z
+modified_at: 2026-05-24T20:28:38.544462646Z
 req_type: Bug
 tags:
 - aida-chat-blocker
@@ -82,3 +82,31 @@ comments:
     — master (responding to aida-chat advisor cross-project question)
   created_at: 2026-05-24T20:13:41.572489350Z
   modified_at: 2026-05-24T20:13:41.572489350Z
+- id: 019e5bac-e710-7dd0-a2e8-d988b7d78bd1
+  author: joe
+  content: |-
+    TASK-550 inventory before fix:
+
+    Tested MCP write surface in aida-cli/src/mcp.rs.
+
+    Broken field mapping:
+    - add_comment(id,text): BROKEN. Handler calls Comment::new(text, "mcp"), but Comment::new(author, content). Actual persisted author=<text>, content="mcp". This is BUG-377's silent data-loss symptom.
+    - triage_finding(id,action,reason): BROKEN when reason is supplied. promote/dismiss comments call Comment::new("promoted/dismissed via MCP: <reason>", "mcp"). Actual persisted author=<reason text>, content="mcp". Same inversion class as add_comment.
+
+    Verified OK / no inversion found:
+    - add_requirement(title,description,type,status,priority,tags): direct field mapping; existing BUG-332 tests cover canonical type prefix. Needs an explicit multi-field roundtrip regression in BUG-377 PR.
+    - update_requirement(id,status,description): advertised fields map correctly. title/tags/priority are not exposed in the descriptor and are ignored/no-op if sent; not a field inversion, but worth a later enhancement if MCP parity requires those fields.
+    - post_punt(spec_id,detail,category,lean,raised_by): direct mapping to PuntRecord.
+    - resolve_punt(spec_id,answer,reasoning,classification): direct mapping to PuntResponse.
+    - escalate_punt(spec_id,reasoning,escalation_reason,classification): direct mapping to PuntResponse.
+    - file_finding(title,description,source,spec_id/pr,kind,severity): direct mapping; existing TASK-437 tests cover pr/spec_id typing and canonical tags.
+    - claim_task(spec_id,role,worktree_path), release_task(lease_id): existing roundtrip and canonicalization tests cover persisted fields.
+    - post_directive(verb,args), ack_directive(index): existing roundtrip tests cover file contents.
+    - ack_brief(path): existing roundtrip/idempotency tests cover status/path behavior.
+
+    Not exposed:
+    - add_relationship: no MCP tool descriptor or handler branch exists; show_requirement only renders relationships.
+
+    Fix scope for BUG-377: repair add_comment + triage_finding comment construction, then add explicit MCP write-field roundtrip tests for add_requirement, update_requirement, add_comment, triage_finding comments, and a descriptor assertion that add_relationship is absent rather than untested.
+  created_at: 2026-05-24T20:28:38.544462646Z
+  modified_at: 2026-05-24T20:28:38.544462646Z
