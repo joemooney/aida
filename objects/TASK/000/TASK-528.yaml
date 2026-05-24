@@ -1,0 +1,12 @@
+id: 019e58e2-25d0-70e1-b9cc-1dbbce5a9da5
+spec_id: TASK-528
+agreed_id: TASK-528
+title: 'TASK: `aida backlog groom`: file-overlap source from `git log --grep "(SPEC-ID)"` so already-committed code joins the conflict set (currently trace+plan only)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:27:56.368743657Z
+modified_at: 2026-05-24T07:27:56.368743657Z
+req_type: Task
