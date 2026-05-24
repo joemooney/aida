@@ -25,7 +25,23 @@ if [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || 
     exit 0
 fi
 
-# 3. Get staged files (Added/Copied/Modified)
+# 3. Auto-fmt staged Rust files before commit so cargo fmt --check (in CI)
+# never catches drift after a local commit lands.
+# Emergency skip: pass --no-verify to git commit.
+# trace:TASK-503 | ai:antigravity
+staged_rs=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)
+if [ -n "$staged_rs" ]; then
+    # Cheap check first
+    if ! cargo fmt --all -- --check >/dev/null 2>&1; then
+        echo 'pre-commit: cargo fmt --all detected drift, applying…'
+        cargo fmt --all
+        # Re-stage anything fmt touched
+        echo "$staged_rs" | xargs git add
+        echo 'pre-commit: drift fixed and re-staged'
+    fi
+fi
+
+# 4. Get staged files (Added/Copied/Modified)
 # Using git status --porcelain is completely safe and works on unborn branches (first commit)
 STAGED_FILES=$(git status --porcelain 2>/dev/null | grep -E '^[AMRC]' | awk '{print $NF}')
 
