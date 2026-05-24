@@ -1,0 +1,52 @@
+id: 019e5aae-7e63-7ea2-ad1c-beaf69bb7cfe
+spec_id: STORY-457
+agreed_id: STORY-457
+title: 'aida status: surface working-tree state + untracked heuristics + persistence (STORY-385 follow-up)'
+description: |-
+  Refinement deferred from STORY-385. Add a working-tree-state section to 'aida status'.
+
+  ## Three categories (show when non-empty)
+
+  ### Modified tracked (M)
+  Path + age. **Heuristic: if working content matches HEAD exactly (no real diff), surface as '(content matches HEAD — safe  to clear).** Catches worktree-isolation leftovers. Otherwise show '(N additions / M deletions)'.
+
+  ### Untracked — recent (< 1h)
+  Files with mtime fresher than last 'aida status' invocation (per .aida/last-status.toml). Surface; don't flag stale.
+
+  ### Untracked — stale (≥ 1d AND first-observed in .aida/untracked-history.toml)
+  Two sub-classes:
+  - **Auto-flag safe-to-remove**: *.bak, *.tmp, *.swp/swo, .DS_Store, __pycache__/, *.pyc, *.orig, empty-content files
+  - **Surface but don't auto-flag**: docs/plans/*.md, docs/writeups/*.md, scripts/*
+
+  Show count + first 3 paths per heuristic class with recommended action ('rm' for auto-flagged, 'aida plans organize' or commit-or-remove decision for ambiguous).
+
+  ### Staged (in index)
+  Informational: 'staged (N files); use git diff --cached to review'.
+
+  ## Persistence
+  - .aida/last-status.toml — timestamp of last 'aida status' per cwd (drives recent-vs-stale)
+  - .aida/untracked-history.toml — first-observation timestamp per untracked path (drives stale category)
+  Both gitignored.
+
+  ## Why this matters
+  The 'untracked-file blocks aida pull after worktree-isolated PR merges' pattern hit 7x in 24h on 2026-05-22 (each cost 1-2min of manual recovery). Status-with-this-section would either warn before the pull OR integrate move-pull-diff-cleanup into 'aida status --resolve'.
+
+  Composes with the worktree-and-PR section follow-up.
+
+  Source: STORY-385 comments at 2026-05-22 10:51 + 10:59 (priority-bumped, recurring pattern).
+
+  trace:STORY-385
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T15:50:45.603434149Z
+modified_at: 2026-05-24T15:50:45.603434149Z
+req_type: Story
+tags:
+- aida:status
+- batch:aida-status
+- from-self-test
+- heuristics
+- story-385-followup
+- working-tree
