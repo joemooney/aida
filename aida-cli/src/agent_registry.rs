@@ -1,10 +1,17 @@
-//! Phase-1 agent process registry.
+//! Agent process registry.
 //!
-//! STORY-431 deliberately keeps process liveness separate from session leases:
-//! leases describe scope ownership, while `.aida/agents/*.toml` describes an
-//! observable process. Phase 1 only registers MCP-serving processes because
-//! AIDA does not yet launch every agent; Phase 2/3 launchers will widen
-//! coverage to interactive sessions that never call MCP tools.
+//! STORY-431 (Phase 1) deliberately keeps process liveness separate from
+//! session leases: leases describe scope ownership, while `.aida/agents/*.toml`
+//! describes an observable process. Phase 1 only registers MCP-serving
+//! processes because AIDA does not yet launch every agent; Phase 2/3 launchers
+//! will widen coverage to interactive sessions that never call MCP tools.
+//!
+//! STORY-435 (Phase 4) adds heartbeat-driven busy/idle: every MCP tool call
+//! bumps `last_active_at`, and `classify_status` flips Busy → Idle once that
+//! timestamp is older than the configurable `[agent_registry]
+//! busy_threshold_secs` (default 30s). An active Live session lease covering
+//! the agent's worktree pins the entry to Busy regardless of recency, so a
+//! parked-but-running agent attached to scope still reads as occupied.
 
 use std::path::{Path, PathBuf};
 
@@ -78,6 +85,108 @@ impl AgentBinaryIdentity {
     pub(crate) fn new(version: String, sha: String) -> Self {
         Self { version, sha }
     }
+}
+
+/// Inputs the status classifier needs that aren't on the registry entry
+/// itself. Built once per `list_agent_views` call so every entry is
+/// classified against the same wall-clock and the same lease snapshot.
+/// trace:STORY-435 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct AgentClassifyContext {
+    pub(crate) now: DateTime<Utc>,
+    pub(crate) threshold_secs: u64,
+    pub(crate) live_lease_worktrees: Vec<PathBuf>,
+}
+
+impl AgentClassifyContext {
+    pub(crate) fn new(
+        now: DateTime<Utc>,
+        threshold_secs: u64,
+        live_lease_worktrees: Vec<PathBuf>,
+    ) -> Self {
+        Self {
+            now,
+            threshold_secs,
+            live_lease_worktrees,
+        }
+    }
+}
+
+/// `[agent_registry]` section in `.aida/config.toml`. Sensible default
+/// (30s) means a project that never writes the section gets reasonable
+/// busy/idle behaviour for free; missing file / section / keys all fall
+/// through to defaults — a config error never blocks `aida status`.
+/// trace:STORY-435 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Config {
+    pub(crate) busy_threshold_secs: u64,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            busy_threshold_secs: 30,
+        }
+    }
+}
+
+impl Config {
+    pub(crate) fn load(project_root: &Path) -> Self {
+        let Ok(content) = std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+        else {
+            return Self::default();
+        };
+        Self::from_toml_str(&content)
+    }
+
+    pub(crate) fn from_toml_str(content: &str) -> Self {
+        let mut cfg = Self::default();
+        for (key, val) in scan_agent_registry_section(content) {
+            if key == "busy_threshold_secs" {
+                if let Ok(n) = val.parse::<u64>() {
+                    cfg.busy_threshold_secs = n;
+                }
+            }
+        }
+        cfg
+    }
+}
+
+/// Hand-rolled `[agent_registry]` scanner — mirrors `OrchestratorConfig`
+/// so we don't pull a serde-toml dependency for one scalar.
+fn scan_agent_registry_section(content: &str) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    let mut in_section = false;
+    for raw in content.lines() {
+        let line = strip_inline_comment(raw).trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(stripped) = line.strip_prefix('[') {
+            in_section = stripped.trim_end_matches(']').trim() == "agent_registry";
+            continue;
+        }
+        if in_section {
+            if let Some((k, v)) = line.split_once('=') {
+                let v = v.trim().trim_matches('"').trim_matches('\'').trim();
+                pairs.push((k.trim().to_string(), v.to_string()));
+            }
+        }
+    }
+    pairs
+}
+
+fn strip_inline_comment(s: &str) -> &str {
+    let (mut dq, mut sq) = (false, false);
+    for (i, c) in s.char_indices() {
+        match c {
+            '"' if !sq => dq = !dq,
+            '\'' if !dq => sq = !sq,
+            '#' if !dq && !sq => return &s[..i],
+            _ => {}
+        }
+    }
+    s
 }
 
 pub(crate) fn agents_dir(project_root: &Path) -> PathBuf {
@@ -188,7 +297,10 @@ pub(crate) fn remove_agent(project_root: &Path, agent_type: &str, pid: u32) -> R
     }
 }
 
-pub(crate) fn list_agent_views(project_root: &Path) -> Vec<AgentRegistryView> {
+pub(crate) fn list_agent_views(
+    project_root: &Path,
+    ctx: &AgentClassifyContext,
+) -> Vec<AgentRegistryView> {
     let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) else {
         return Vec::new();
     };
@@ -204,7 +316,7 @@ pub(crate) fn list_agent_views(project_root: &Path) -> Vec<AgentRegistryView> {
         let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) else {
             continue;
         };
-        out.push(view_for(record));
+        out.push(view_for(record, ctx));
     }
     out.sort_by(|a, b| {
         a.agent_type
@@ -216,15 +328,18 @@ pub(crate) fn list_agent_views(project_root: &Path) -> Vec<AgentRegistryView> {
 }
 
 pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<String> {
+    let now = Utc::now();
     agents
         .iter()
         .map(|agent| {
+            let elapsed = humanize_elapsed(elapsed_secs_clamped(now, agent.last_active_at));
             format!(
-                "  {:<15} {:<11} {:<12} {:<5} {}",
+                "  {:<15} {:<11} {:<12} {:<5} {:<8} {}",
                 format!("{}#{}", agent.agent_type, agent.pid),
                 agent.role.as_deref().unwrap_or("(none)"),
                 agent.current_spec.as_deref().unwrap_or("(none)"),
                 agent.status.as_str(),
+                format!("({elapsed})"),
                 agent.worktree_path.display()
             )
         })
@@ -242,8 +357,9 @@ fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
         .with_context(|| format!("writing agent registry entry {}", path.display()))
 }
 
-fn view_for(entry: AgentRegistryEntry) -> AgentRegistryView {
-    let status = classify_status(&entry, crate::process_probe::pid_is_alive(entry.pid));
+fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegistryView {
+    let pid_alive = crate::process_probe::pid_is_alive(entry.pid);
+    let status = classify_status(&entry, pid_alive, ctx);
     AgentRegistryView {
         id: entry.id,
         agent_type: entry.agent_type,
@@ -261,13 +377,60 @@ fn view_for(entry: AgentRegistryEntry) -> AgentRegistryView {
     }
 }
 
-fn classify_status(entry: &AgentRegistryEntry, pid_alive: bool) -> AgentStatus {
+// STORY-435 busy/idle: freshness signal from the MCP heartbeat. The lease-
+// correlation branch deliberately keeps a parked-but-running agent attached
+// to a Live lease as Busy — an idle process still "occupies" active scope
+// from an operator's POV. trace:STORY-435 | ai:claude
+fn classify_status(
+    entry: &AgentRegistryEntry,
+    pid_alive: bool,
+    ctx: &AgentClassifyContext,
+) -> AgentStatus {
     if !pid_alive {
-        AgentStatus::Stale
-    } else if entry.current_spec.is_some() {
-        AgentStatus::Busy
+        return AgentStatus::Stale;
+    }
+    let elapsed = elapsed_secs_clamped(ctx.now, entry.last_active_at);
+    if elapsed < ctx.threshold_secs as i64 {
+        return AgentStatus::Busy;
+    }
+    if covers(&ctx.live_lease_worktrees, &entry.worktree_path) {
+        return AgentStatus::Busy;
+    }
+    AgentStatus::Idle
+}
+
+/// Elapsed seconds between `now` and `at`, clamped to `>= 0` so a clock
+/// that ticked backwards (NTP step, suspend/resume) doesn't prematurely
+/// flip a fresh entry to Idle. trace:STORY-435 | ai:claude
+fn elapsed_secs_clamped(now: DateTime<Utc>, at: DateTime<Utc>) -> i64 {
+    now.signed_duration_since(at).num_seconds().max(0)
+}
+
+/// `agent` is covered by `worktrees` iff some entry is exactly `agent` or
+/// `agent` lives under that entry. Mirrors `lease_covers_cwd` in
+/// `aida-cli/src/main.rs` — empty paths are intentionally treated as
+/// non-covering, since `Path::starts_with("")` is true for every path and
+/// would otherwise let an advisory MCP lease silently match every agent.
+/// trace:STORY-435 trace:TASK-474 | ai:claude
+fn covers(worktrees: &[PathBuf], agent: &Path) -> bool {
+    worktrees.iter().any(|w| {
+        if w.as_os_str().is_empty() {
+            return false;
+        }
+        agent == w.as_path() || agent.starts_with(w)
+    })
+}
+
+fn humanize_elapsed(secs: i64) -> String {
+    let secs = secs.max(0);
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m", secs / 60)
+    } else if secs < 86_400 {
+        format!("{}h", secs / 3600)
     } else {
-        AgentStatus::Idle
+        format!("{}d", secs / 86_400)
     }
 }
 
@@ -326,23 +489,28 @@ fn current_tty() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Duration;
     use tempfile::TempDir;
 
-    fn entry(pid: u32, spec: Option<&str>) -> AgentRegistryEntry {
+    fn entry_with(pid: u32, last_active_at: DateTime<Utc>) -> AgentRegistryEntry {
         AgentRegistryEntry {
             id: agent_id("codex", pid),
             agent_type: "codex".to_string(),
             pid,
             tty: Some("/dev/pts/1".to_string()),
-            started_at: Utc::now(),
-            last_active_at: Utc::now(),
+            started_at: last_active_at,
+            last_active_at,
             role: Some("implementer".to_string()),
-            current_spec: spec.map(str::to_string),
+            current_spec: None,
             worktree_path: PathBuf::from("/tmp/aida-story"),
             source: "mcp".to_string(),
             binary_version: Some("0.9.1".to_string()),
             build_sha: Some("abc123".to_string()),
         }
+    }
+
+    fn ctx(now: DateTime<Utc>, threshold_secs: u64, leases: Vec<PathBuf>) -> AgentClassifyContext {
+        AgentClassifyContext::new(now, threshold_secs, leases)
     }
 
     #[test]
@@ -354,40 +522,137 @@ mod tests {
         );
     }
 
+    // STORY-435: dead pid wins over every other signal.
     #[test]
-    fn status_classification_marks_stale_before_busy() {
-        assert_eq!(
-            classify_status(&entry(42, Some("STORY-431")), false),
-            AgentStatus::Stale
-        );
-        assert_eq!(
-            classify_status(&entry(42, Some("STORY-431")), true),
-            AgentStatus::Busy
-        );
-        assert_eq!(classify_status(&entry(42, None), true), AgentStatus::Idle);
+    fn classify_status_dead_pid_is_stale() {
+        let now = Utc::now();
+        let e = entry_with(42, now);
+        let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+        assert_eq!(classify_status(&e, false, &c), AgentStatus::Stale);
+    }
+
+    // STORY-435: fresh activity (within threshold) → Busy.
+    #[test]
+    fn classify_status_fresh_activity_is_busy() {
+        let now = Utc::now();
+        let e = entry_with(42, now - Duration::seconds(5));
+        let c = ctx(now, 30, vec![]);
+        assert_eq!(classify_status(&e, true, &c), AgentStatus::Busy);
+    }
+
+    // STORY-435: stale activity + no lease → Idle.
+    #[test]
+    fn classify_status_stale_activity_is_idle() {
+        let now = Utc::now();
+        let e = entry_with(42, now - Duration::minutes(5));
+        let c = ctx(now, 30, vec![]);
+        assert_eq!(classify_status(&e, true, &c), AgentStatus::Idle);
+    }
+
+    // STORY-435: stale activity but a Live lease covers the worktree → Busy.
+    #[test]
+    fn classify_status_live_lease_is_busy_despite_stale_activity() {
+        let now = Utc::now();
+        let e = entry_with(42, now - Duration::minutes(5));
+        let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+        assert_eq!(classify_status(&e, true, &c), AgentStatus::Busy);
+    }
+
+    // STORY-435: lease worktree that's an ancestor of the agent worktree
+    // also counts (operator working in a subdir of the lease's root).
+    #[test]
+    fn classify_status_live_lease_covers_ancestor() {
+        let now = Utc::now();
+        let mut e = entry_with(42, now - Duration::minutes(5));
+        e.worktree_path = PathBuf::from("/tmp/aida-story/subdir");
+        let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+        assert_eq!(classify_status(&e, true, &c), AgentStatus::Busy);
+    }
+
+    // STORY-435: empty lease worktree (advisory lock) must NOT match every
+    // agent — mirrors TASK-474's lease_covers_cwd short-circuit.
+    #[test]
+    fn classify_status_ignores_empty_lease_worktree() {
+        let now = Utc::now();
+        let e = entry_with(42, now - Duration::minutes(5));
+        let c = ctx(now, 30, vec![PathBuf::from("")]);
+        assert_eq!(classify_status(&e, true, &c), AgentStatus::Idle);
+    }
+
+    // STORY-435: a clock that ticked backwards (NTP step, suspend/resume)
+    // must not prematurely flip a fresh entry to Idle.
+    #[test]
+    fn classify_status_clamps_negative_elapsed() {
+        let now = Utc::now();
+        let e = entry_with(42, now + Duration::seconds(1));
+        let c = ctx(now, 30, vec![]);
+        assert_eq!(classify_status(&e, true, &c), AgentStatus::Busy);
+    }
+
+    // STORY-435: spec-mandated regression — three agents with different
+    // activity patterns each classify correctly off the same context.
+    #[test]
+    fn three_agents_with_different_activity_patterns_classify_correctly() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+
+        // (1) live pid + fresh activity → Busy.
+        let mut busy = entry_with(std::process::id(), now - Duration::seconds(2));
+        busy.id = agent_id("codex", busy.pid);
+        write_entry(tmp.path(), &busy).unwrap();
+
+        // (2) live pid + stale activity + no lease → Idle.
+        let mut idle = entry_with(std::process::id(), now - Duration::minutes(5));
+        idle.agent_type = "claude".to_string();
+        idle.id = agent_id("claude", idle.pid);
+        write_entry(tmp.path(), &idle).unwrap();
+
+        // (3) dead pid → Stale (regardless of last_active_at).
+        let mut stale = entry_with(u32::MAX - 1, now - Duration::seconds(1));
+        stale.agent_type = "antigravity".to_string();
+        stale.id = agent_id("antigravity", stale.pid);
+        write_entry(tmp.path(), &stale).unwrap();
+
+        let c = ctx(now, 30, vec![]);
+        let views = list_agent_views(tmp.path(), &c);
+        assert_eq!(views.len(), 3);
+
+        // Sorted alphabetically by agent_type: antigravity, claude, codex.
+        let by_type: std::collections::HashMap<_, _> = views
+            .iter()
+            .map(|v| (v.agent_type.as_str(), v.status))
+            .collect();
+        assert_eq!(by_type["codex"], AgentStatus::Busy);
+        assert_eq!(by_type["claude"], AgentStatus::Idle);
+        assert_eq!(by_type["antigravity"], AgentStatus::Stale);
     }
 
     #[test]
     fn list_agent_views_reads_toml_and_computes_stale_status() {
         let tmp = TempDir::new().unwrap();
-        let record = entry(u32::MAX - 1, Some("STORY-431"));
+        let now = Utc::now();
+        let record = entry_with(u32::MAX - 1, now);
         write_entry(tmp.path(), &record).unwrap();
 
-        let views = list_agent_views(tmp.path());
+        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]));
         assert_eq!(views.len(), 1);
         assert_eq!(views[0].agent_type, "codex");
         assert_eq!(views[0].status, AgentStatus::Stale);
     }
 
     #[test]
-    fn format_agent_status_lines_matches_status_section_columns() {
+    fn format_agent_status_lines_appends_freshness_hint() {
+        let now = Utc::now();
         let view = AgentRegistryView {
             id: "codex-42".to_string(),
             agent_type: "codex".to_string(),
             pid: 42,
             tty: None,
-            started_at: Utc::now(),
-            last_active_at: Utc::now(),
+            started_at: now,
+            // Freshness column is computed relative to `Utc::now()` inside
+            // `format_agent_status_lines`. Anchor it at "now - 0s" so the
+            // rendered hint is "(0s)" deterministically.
+            last_active_at: now,
             role: Some("implementer".to_string()),
             current_spec: Some("STORY-431".to_string()),
             worktree_path: PathBuf::from("/tmp/aida-story-431"),
@@ -398,10 +663,72 @@ mod tests {
         };
 
         let lines = format_agent_status_lines(&[view]);
-        assert_eq!(
-            lines,
-            vec!["  codex#42        implementer STORY-431    busy  /tmp/aida-story-431"]
+        assert_eq!(lines.len(), 1);
+        let line = &lines[0];
+        // Strict column-shape assertion for the static part; the (Xs)
+        // trailing hint is loose because Utc::now() inside the formatter
+        // can tick a second on a slow runner.
+        assert!(
+            line.starts_with("  codex#42        implementer STORY-431    busy  ("),
+            "unexpected line: {line:?}"
         );
+        assert!(
+            line.ends_with(" /tmp/aida-story-431"),
+            "unexpected line: {line:?}"
+        );
+        assert!(line.contains("s)"), "expected (Xs) hint, got: {line:?}");
+    }
+
+    #[test]
+    fn humanize_elapsed_thresholds() {
+        assert_eq!(humanize_elapsed(0), "0s");
+        assert_eq!(humanize_elapsed(59), "59s");
+        assert_eq!(humanize_elapsed(60), "1m");
+        assert_eq!(humanize_elapsed(90), "1m");
+        assert_eq!(humanize_elapsed(3599), "59m");
+        assert_eq!(humanize_elapsed(3600), "1h");
+        assert_eq!(humanize_elapsed(7200), "2h");
+        assert_eq!(humanize_elapsed(86_399), "23h");
+        assert_eq!(humanize_elapsed(86_400), "1d");
+        assert_eq!(humanize_elapsed(90_000), "1d");
+        // Negative inputs clamp to 0s.
+        assert_eq!(humanize_elapsed(-5), "0s");
+    }
+
+    #[test]
+    fn config_load_defaults_when_section_missing() {
+        let cfg = Config::from_toml_str("");
+        assert_eq!(cfg, Config::default());
+        assert_eq!(cfg.busy_threshold_secs, 30);
+
+        let cfg = Config::from_toml_str("[other]\nfoo = 1\n");
+        assert_eq!(cfg.busy_threshold_secs, 30);
+    }
+
+    #[test]
+    fn config_parses_busy_threshold_secs() {
+        let cfg = Config::from_toml_str("[agent_registry]\nbusy_threshold_secs = 90\n");
+        assert_eq!(cfg.busy_threshold_secs, 90);
+    }
+
+    #[test]
+    fn config_ignores_unknown_keys() {
+        let body = "[agent_registry]\nbusy_threshold_secs = 45\nunknown = \"x\"\n";
+        let cfg = Config::from_toml_str(body);
+        assert_eq!(cfg.busy_threshold_secs, 45);
+    }
+
+    #[test]
+    fn config_load_reads_from_disk() {
+        let tmp = TempDir::new().unwrap();
+        let aida = tmp.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(
+            aida.join("config.toml"),
+            "[agent_registry]\nbusy_threshold_secs = 7\n",
+        )
+        .unwrap();
+        assert_eq!(Config::load(tmp.path()).busy_threshold_secs, 7);
     }
 
     #[test]
