@@ -229,7 +229,29 @@ impl Scaffolder {
                  - `/aida-queue` — read-only queue inspection (counterpart to `/aida-pickup`)\n\
                  - `/aida-search` — unified search across requirements + code\n\
                  \n\
-                 Run `ls .claude/skills/` for the full skill catalog.\n",
+                 Run `ls .claude/skills/` for the full skill catalog.\n\
+                 \n\
+                 ### Per-project skill extensions (STORY-305)\n\
+                 \n\
+                 Two mechanisms let a project extend skills without forking them.\n\
+                 AIDA never overwrites either, and `make sync-templates` never\n\
+                 touches them:\n\
+                 \n\
+                 1. **Project-owned new skills** live under\n\
+                 \x20  `.claude/skills/local/<my-skill>.md`. Claude Code discovers\n\
+                 \x20  them the same way it discovers stock skills.\n\
+                 2. **Stock-skill extensions** live alongside the stock skill as\n\
+                 \x20  `.claude/skills/<name>.local.md`. When `/aida-<name>` is\n\
+                 \x20  invoked, treat the stock skill as the base and **append**\n\
+                 \x20  the `<name>.local.md` content as project-specific guidance\n\
+                 \x20  with last-word authority (later instructions override\n\
+                 \x20  earlier ones — normal markdown precedence).\n\
+                 \n\
+                 **For Claude Code**: whenever you load a stock skill from\n\
+                 `.claude/skills/<name>.md`, also read `.claude/skills/<name>.local.md`\n\
+                 if it exists in the same directory and treat its contents as\n\
+                 appended to the stock skill. Both files together are the\n\
+                 effective skill. See `docs/extending-skills.md` for examples.\n",
             );
         }
 

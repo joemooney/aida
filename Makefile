@@ -338,10 +338,17 @@ web-install: ## Install React dashboard npm dependencies
 
 sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 	@echo "Syncing .claude/ templates to use symlinks..."
-	@mkdir -p .claude/skills .claude/commands
-	@# Remove existing files and create symlinks for skills
+	@mkdir -p .claude/skills .claude/commands .claude/skills/local
+	@# STORY-305: per-project skill extensions are deny-by-default for sync.
+	@# We never enter .claude/skills/local/ and never touch *.local.md files.
+	@# The master glob below only walks aida-core/templates/skills/*.md, and
+	@# any *.local.md is explicitly skipped as a belt-and-braces guard so a
+	@# stray master never overwrites a project's local extension.
 	@for f in aida-core/templates/skills/*.md; do \
 		name=$$(basename "$$f"); \
+		case "$$name" in \
+			*.local.md) echo "  Skip: $$name (STORY-305: .local.md never synced)"; continue ;; \
+		esac; \
 		rm -f ".claude/skills/$$name"; \
 		ln -sf "../../aida-core/templates/skills/$$name" ".claude/skills/$$name"; \
 		echo "  Linked: .claude/skills/$$name -> aida-core/templates/skills/$$name"; \
@@ -360,6 +367,9 @@ check-templates: ## Check if .claude/ templates are properly linked
 	@errors=0; \
 	for f in aida-core/templates/skills/*.md; do \
 		name=$$(basename "$$f"); \
+		case "$$name" in \
+			*.local.md) continue ;; \
+		esac; \
 		target=".claude/skills/$$name"; \
 		if [ -L "$$target" ]; then \
 			echo "  OK: $$target (symlink)"; \
