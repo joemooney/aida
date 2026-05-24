@@ -408,6 +408,10 @@ impl<'a> McpServer<'a> {
         let id = req.id.clone().unwrap_or(Value::Null);
 
         let running = McpBinaryIdentity::current();
+        // STORY-435: heartbeat — every JSON-RPC request (tools/call,
+        // tools/list, ping, …) bumps the registry entry's last_active_at
+        // so `aida status` can compute busy/idle off recency.
+        // trace:STORY-435 | ai:claude
         let _ = agent_registry::touch_mcp_agent(
             &self.project_root,
             &AgentBinaryIdentity::new(running.version, running.sha),
@@ -2783,12 +2787,43 @@ mod tests {
         let response = server.handle_request(&request);
 
         assert!(response.is_some());
-        let agents = agent_registry::list_agent_views(dir.path());
+        let ctx = agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]);
+        let agents = agent_registry::list_agent_views(dir.path(), &ctx);
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].source, "mcp");
         assert_eq!(
             agents[0].binary_version.as_deref(),
             Some(env!("CARGO_PKG_VERSION"))
+        );
+    }
+
+    // STORY-435: every handled JSON-RPC request must push `last_active_at`
+    // forward. This locks the heartbeat that powers busy/idle freshness.
+    // trace:STORY-435 | ai:claude
+    #[test]
+    fn handle_request_advances_last_active_at() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "ping".to_string(),
+            params: json!({}),
+            id: Some(json!(1)),
+        };
+
+        let _ = server.handle_request(&request);
+        let ctx = agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]);
+        let t0 = agent_registry::list_agent_views(dir.path(), &ctx)[0].last_active_at;
+
+        // chrono is microsecond-resolution; 5ms is comfortably above the
+        // tick so the second touch will strictly advance the timestamp.
+        thread::sleep(std::time::Duration::from_millis(5));
+        let _ = server.handle_request(&request);
+        let t1 = agent_registry::list_agent_views(dir.path(), &ctx)[0].last_active_at;
+
+        assert!(
+            t1 > t0,
+            "expected last_active_at to advance: t0={t0} t1={t1}"
         );
     }
 

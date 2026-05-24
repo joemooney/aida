@@ -16550,7 +16550,13 @@ mod agent_launcher_tests {
             argv.contains("--dangerously-bypass-approvals-and-sandbox"),
             "{argv}"
         );
-        assert!(agent_registry::list_agent_views(&project).is_empty());
+        assert!(agent_registry::list_agent_views(
+            &project,
+            &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
+        )
+        .is_empty());
+        std::env::remove_var("AIDA_TEST_ENV_OUT");
+        std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
 
     #[cfg(unix)]
@@ -16602,7 +16608,13 @@ mod agent_launcher_tests {
         assert!(env.contains("AIDA_SESSION_SCOPE=STORY-434"), "{env}");
         assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
         assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
-        assert!(agent_registry::list_agent_views(&project).is_empty());
+        assert!(agent_registry::list_agent_views(
+            &project,
+            &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
+        )
+        .is_empty());
+        std::env::remove_var("AIDA_TEST_ENV_OUT");
+        std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
 
     #[test]
@@ -46351,7 +46363,10 @@ fn collect_user_context(
 
     let (queue_head, queue_total) =
         collect_queue_snapshot(backend, store, role.as_deref(), &leases);
-    let agents = agent_registry::list_agent_views(project_root);
+    let agents = agent_registry::list_agent_views(
+        project_root,
+        &build_agent_classify_context(project_root, &leases),
+    );
 
     UserStatusContext {
         session,
@@ -46362,6 +46377,38 @@ fn collect_user_context(
         queue_total,
         agents,
     }
+}
+
+/// STORY-435: assemble the `AgentClassifyContext` `list_agent_views` needs
+/// to compute busy/idle. The live-lease snapshot reuses the same
+/// `probe_live_claude_sessions` that `aida session leases` shows under the
+/// ● live glyph so the two views agree about which scopes are "being
+/// worked." trace:STORY-435 | ai:claude
+fn build_agent_classify_context(
+    project_root: &std::path::Path,
+    leases: &[SessionLease],
+) -> agent_registry::AgentClassifyContext {
+    let now = chrono::Utc::now();
+    let cfg = agent_registry::Config::load(project_root);
+    let live_sessions = process_probe::probe_live_claude_sessions();
+    let live_lease_worktrees: Vec<std::path::PathBuf> = leases
+        .iter()
+        .filter_map(|l| {
+            if l.worktree_path.as_os_str().is_empty() {
+                return None;
+            }
+            let worktree_exists = l.worktree_path.exists();
+            let live_in_worktree = live_sessions.iter().any(|s| {
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            });
+            let age_hours = now.signed_duration_since(l.started_at).num_hours();
+            match classify_lease_state(worktree_exists, live_in_worktree, age_hours) {
+                LeaseState::Live => Some(l.worktree_path.clone()),
+                _ => None,
+            }
+        })
+        .collect();
+    agent_registry::AgentClassifyContext::new(now, cfg.busy_threshold_secs, live_lease_worktrees)
 }
 
 fn collect_branch_facts(project_root: &std::path::Path) -> Option<BranchFacts> {
