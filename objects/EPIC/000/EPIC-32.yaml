@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T17:31:02.682757847Z
-modified_at: 2026-05-24T17:33:27.792141144Z
+modified_at: 2026-05-24T17:33:29.118619778Z
 req_type: Epic
 tags:
 - batch:user-driven-substrate
@@ -109,3 +109,71 @@ tags:
 - from-user-direction
 - substrate-evolution
 - user-driven-vectors
+comments:
+- id: 019e5b0c-8a9e-7242-81cd-033ae3fcc084
+  author: joe
+  content: |-
+    Architectural reframe 2026-05-24 — operator's strategic refinement:
+
+    EPIC-32's ORIGINAL framing (hardcode query/canned-answer/skill-prompt entity types in AIDA core) was the wrong shape. It would couple AIDA core to specific aida-chat concerns and force every new consumer to wait on master's schema dispatch.
+
+    CORRECTED framing: AIDA provides a **defined extension mechanism** for consumer-driven vectors. Consumers (aida-chat, future projects) build their own internal storage first (aida-chat: local SQLite per EPIC-26 Option 1), and OPTIONALLY publish records INTO the substrate via this mechanism when their schema stabilizes.
+
+    ## The mechanism: 'observation' entity type
+
+    A single new entity type carrying:
+
+    **Structured common fields** (AIDA-owned, queryable):
+    - id (the standard AIDA SPEC-ID — but in OBSERVATION namespace, e.g. OBS-1, OBS-2)
+    - kind: string discriminator — consumer-declared (e.g., 'aida-chat:query', 'aida-chat:canned-answer', 'aida-chat:skill-prompt', 'web-ultraplan:session', 'future-consumer:event')
+    - consumer: string ('aida-chat', 'web-ultraplan', ...) — which project/tool produced this
+    - created_at: timestamp
+    - linked_specs: list of SPEC-IDs this observation references (the substrate-grounding signal)
+    - tags: free-form string list
+    - starred: optional boolean (operator-driven 'this is important' flag)
+
+    **Free-form payload** (consumer-owned, opaque to AIDA):
+    - payload: arbitrary JSON/YAML map
+
+    ## The extension surface
+
+    - 'aida add --type observation --kind aida-chat:query --consumer aida-chat --payload @file.json --linked-specs SPEC-1,SPEC-2'
+    - 'aida list --type observation --kind aida-chat:query [--consumer ...] [--starred] [--linked-spec SPEC-N]'
+    - 'aida show OBS-N' (renders structured fields + dumps payload)
+    - MCP tools: add_observation, list_observations (with kind/consumer/linked-spec filters), get_observation
+
+    Consumers MAY register an optional schema (TOML/JSON Schema) for their kind, which AIDA validates payloads against. Schema-less kinds work too (no validation, opaque payload).
+
+    ## Sequencing relative to aida-chat
+
+    - aida-chat EPIC-26 Option 1: ships local SQLite NOW. Doesn't wait. Master's extension mechanism is parallel-track.
+    - After EPIC-32 ships: aida-chat OPTIONALLY adds a 'publish to substrate' verb that converts local records to observations. Migration is consumer-driven and reversible.
+    - Other future consumers (e.g., web /ultraplan session capture, telemetry aggregators) plug into the same mechanism with different 'kind' values.
+
+    ## Acceptance (EPIC-level)
+
+    - AIDA core grows 'observation' entity type with structured common fields + free-form payload
+    - CLI surface: 'aida add --type observation', 'aida list --type observation' with kind/consumer/linked-spec filters
+    - MCP surface: add_observation, list_observations, get_observation
+    - Optional schema registration mechanism (consumer can declare a schema for their kind; AIDA validates on write)
+    - Documentation: 'How to publish from a consumer project' guide in docs/
+    - Test: aida-chat's three intended kinds (query/canned-answer/skill-prompt) can be written + queried roundtrip without AIDA core knowing their specific shapes
+
+    ## Composes with
+
+    - aida-chat EPIC-26 (the first consumer; demonstrates the pattern)
+    - EPIC-31 (agent-lifecycle keystone — agent registry observations could use the same mechanism, or stay separate based on integrity needs)
+    - ADR-7 in aida-chat (tool-call surface decision — observation tools are part of the surface)
+    - feedback_substrate_as_bouncer_not_rules — the schema-validation option preserves the substrate-as-bouncer principle for consumers that opt in
+
+    ## Why this beats hardcoded entity types
+
+    1. Decoupled ships — consumers don't wait on master schema dispatch
+    2. Future-proof — new consumers add new kinds; no AIDA core changes
+    3. Smallest valuable slice — one entity type instead of three (or N)
+    4. Substrate richness preserved — every observation joins the web of knowledge; cross-project queries work because 'kind' is the discriminator
+    5. Reversible — kinds that prove load-bearing can graduate to hardcoded entity types later (with migration); kinds that prove ephemeral stay as observations
+
+    — master (architectural reframe per operator)
+  created_at: 2026-05-24T17:33:29.118619778Z
+  modified_at: 2026-05-24T17:33:29.118619778Z
