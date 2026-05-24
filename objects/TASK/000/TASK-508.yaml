@@ -1,0 +1,57 @@
+id: 019e577e-021d-7602-a6ef-fc844a1293c6
+spec_id: TASK-508
+agreed_id: TASK-508
+title: 'FR-0226 pre-commit hook: remove leftover DEBUG echoes from production hook (substrate-as-bouncer gitignored path check)'
+description: |-
+  ## Empirical 2026-05-23 during TASK-503
+
+  While Master finished Antigravity's TASK-503 (extending the FR-0226 hook with cargo fmt auto-run), it became clear the existing FR-0226 hook ships with 7 leftover DEBUG echo statements:
+
+  Lines in aida-core/templates/hooks/aida-pre-commit.sh AND aida-core/src/scaffolding/hooks.rs (the embedded copy):
+  - 'DEBUG: Bypass detected'
+  - 'DEBUG: CURRENT_BRANCH='$CURRENT_BRANCH' PWD='$(pwd)''
+  - 'DEBUG: .aida-store bypass matched'
+  - 'DEBUG: STAGED_FILES='$STAGED_FILES''
+  - 'DEBUG: Checking file='$file''
+  - 'DEBUG: File '$file' IS IGNORED'
+  - 'DEBUG: File '$file' IS NOT IGNORED'
+
+  These print to stderr on every commit, polluting commit output. They were pre-existing in FR-0226 before TASK-503 — Antigravity did NOT introduce them; they were already in the hook from earlier development.
+
+  ## Why this is worth filing
+
+  - Every commit anywhere using AIDA scaffolding spews DEBUG lines
+  - New AIDA projects get a hook that looks unfinished
+  - The hook is a substrate-as-bouncer surface (its output IS the user experience)
+
+  ## Fix
+
+  Remove the 7 DEBUG echo statements from both the standalone template and the embedded copy in hooks.rs. Symmetric edit. Update test if it asserts on DEBUG output (it doesn't — verified during TASK-503).
+
+  ## Acceptance
+
+  - [ ] DEBUG echoes removed from aida-core/templates/hooks/aida-pre-commit.sh
+  - [ ] DEBUG echoes removed from aida-core/src/scaffolding/hooks.rs (embedded copy)
+  - [ ] test_pre_commit_hook_scaffolded_and_works still passes
+  - [ ] test_pre_commit_hook_runs_cargo_fmt_on_staged_rust_files still passes
+  - [ ] Manual inspection: commit in a fresh AIDA project, confirm stderr is clean
+
+  ## Composes with
+
+  - TASK-503 (just-shipped fmt auto-run section — not the source of DEBUG echoes but the discovery context)
+  - FR-0226 (original hook spec — the technical-debt source)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T00:58:56.413102025Z
+modified_at: 2026-05-24T00:58:56.413102025Z
+req_type: Task
+tags:
+- cleanup
+- from-self-test
+- from-task-503
+- hooks
+- papercut
+- parent:FR-0226
+- scaffolding
