@@ -95,12 +95,12 @@ description: |-
   User question 2026-05-21 ~03:00 after a long recovery session: *"should any of those states be reported in \`aida status\`? Should we have an \`aida status --cleanup\`?"*
 
   The recovery-session experience surfaced eight distinct categories of cleanup-actionable state in one night. Surfacing them in \`aida status\` would have saved the user (and the advisor) repeated manual archaeology.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:49:19.704186488Z
-modified_at: 2026-05-24T15:52:31.248937188Z
+modified_at: 2026-05-24T16:24:18.737197197Z
 req_type: Story
 tags:
 - aida:status
@@ -282,3 +282,7 @@ comments:
   content: 'Additional empirical evidence 2026-05-22: gh pr checks <N> --watch can show STALE check status — the displayed checks may reflect an OLD CI run (the one originally triggered by the PR''s first commit) while a newer commit''s CI has passed but isn''t yet reflected in the display. Concrete case: PR-193''s first commit (0bba5f9d) failed CI; pushed a fix (13542492); then pushed an empty commit (7ed20c14) to force fresh CI. The ''gh pr checks 193 --watch'' continued to display the original FAILED run as ''currently failing'' while the newer CI on the empty commit had passed and the PR was merged. STORY-385''s status-surface should distinguish: (a) the LATEST CI run on origin''s HEAD, (b) historical runs on prior commits, (c) the merge-mergeability state independent of CI. Today the three are conflated in ''gh pr checks --watch''s'' single view; a clearer aida status section would split them. Also captures the lesson that ''check status is failing'' does NOT necessarily mean ''PR cannot merge'' — the PR might be mergeable via branch-protection-bypass / admin-merge / ''Merge anyway''.'
   created_at: 2026-05-22T19:17:10.960855374Z
   modified_at: 2026-05-22T19:17:10.960855374Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-24T16:24:18.737197197Z
+  implemented_by: joe
