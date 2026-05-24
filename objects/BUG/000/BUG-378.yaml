@@ -1,0 +1,71 @@
+id: 019e5b67-15d5-7710-8508-67a726e55d0f
+spec_id: BUG-378
+agreed_id: BUG-378
+title: 'Antigravity/Codex scratchpad drift: agent re-reads its local task.md and reports ''done'' while ignoring AIDA brief queue'
+description: |-
+  ## Symptom
+
+  When an Antigravity (or Codex, or any agent with its own internal scratchpad) finishes a batch of work, it tends to LOOP on re-reading its local state file ('task.md', 'walkthrough.md', or equivalent) and re-rendering completion summaries — even though the AIDA brief surface has new pending work for that agent type.
+
+  Reproduced 2026-05-24:
+  - agy1 (Antigravity instance) finished the 6-ship sweep (TASK-518, TASK-510, TASK-514, BUG-375, TASK-515, etc.)
+  - agy1's local '~/.gemini/antigravity-cli/brain/<session-id>/task.md' contained the original sweep instruction
+  - New TASK-542 brief was filed in AIDA's brief surface for the 'antigravity' agent type
+  - agy1 did NOT detect the new brief. Instead, agy1 kept re-reading its own task.md and reporting 'all tasks in tonight's sweep sequence have successfully shipped'
+  - Operator pasted the same recap 3+ times in succession trying to figure out what to do
+  - Resolution required an OVERRIDE directive: 'STOP reading your local task.md, poll AIDA brief surface'
+
+  ## Root cause
+
+  Coding agents (Antigravity, Codex CLI, Claude Code) maintain their own internal state files for the current session. These are private scratchpads — they don't auto-sync with AIDA's brief queue / substrate. When the agent thinks 'my work is done' (per its local scratchpad), it loops on the same output instead of polling the substrate for new work.
+
+  AIDA's brief surface (.aida/agent-briefs/<agent-type>/) is the canonical pickup queue. Today, agents have to be TOLD to poll it. There's no substrate-enforcement that polls happen at the right boundaries.
+
+  ## Fix directions (compose)
+
+  1. **Skill template directive**: aida-pickup.md and the agent role-context snapshot must include an explicit 'YOUR INTERNAL TASK.MD IS A SCRATCHPAD, NOT GROUND TRUTH. Always poll \ at the start of each work cycle. Your local state file does NOT auto-sync with AIDA.' Per feedback_substrate_as_bouncer_not_rules, this is necessary but probably not sufficient (LLMs ignore confident rules in their own context).
+
+  2. **Brief-arrival notification**: when 'aida brief <agent> <SPEC>' is called, write a sentinel file at '.aida/notifications/<agent>/' (or use system notifications). The agent's role-context tells it to check the sentinel at every turn boundary.
+
+  3. **Auto-prepend brief poll to every agent invocation**: 'aida agent new <type>' could install a shell wrapper that always runs 'aida brief list --for-agent <type>' before passing control to the agent CLI. Agent-launcher-level enforcement.
+
+  4. **Substrate-as-bouncer (the strongest fix)**: when an agent runs 'aida edit <SPEC> --status completed' or 'aida queue done <SPEC>', if there's an unacked brief for that agent type, AIDA emits a loud 'NEW BRIEF PENDING — read .aida/agent-briefs/<type>/<file>.md before exiting' message. Catches the exit-with-pending-brief case.
+
+  Option 4 is the highest leverage — agent that's about to declare 'done' gets told 'no, you have new work waiting.' Substrate enforces; agent can't loop on stale local state.
+
+  ## Acceptance
+
+  - [ ] Pickup/finish-checkpoint skill templates include the 'local state ≠ AIDA substrate' directive
+  - [ ] 'aida queue done' / 'aida edit --status completed' detects pending briefs for the agent's type and prints a loud 'NEW BRIEF PENDING — read this before exiting' banner
+  - [ ] Optional: sentinel notification file at brief-creation time, polled by the agent role-context
+  - [ ] Test: file a brief for agent type X, run 'aida queue done' on an unrelated spec from an agent of type X, confirm the pending-brief banner fires
+  - [ ] Documentation: 'How agents should poll AIDA briefs' in the discipline pack
+
+  ## Composes with
+
+  - BUG-376 (ship-then-linger ceiling — sibling: 'agent doesn't exit when it should')
+  - TASK-548 (skip pickup confirmation when explicit — sibling: 'agent doesn't start when it should')
+  - STORY-462 (aida doctor — heals the resulting drift; this BUG addresses the source)
+  - TASK-541 (brief --depends-on — same brief-surface domain)
+  - feedback_substrate_as_bouncer_not_rules — the canonical principle: substrate enforces, not rules
+
+  ## Origin
+
+  2026-05-24 multi-agent dispatch session: agy1 (Antigravity) reported the same 'six-ship sweep complete' summary 3+ times in succession despite a new TASK-542 brief sitting pending in AIDA's brief surface. Operator pasted the recap repeatedly trying to surface the friction. Resolution required a manual override directive instructing agy1 to STOP reading its local task.md and poll AIDA's brief surface.
+
+  trace:BUG-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T19:12:22.997890688Z
+modified_at: 2026-05-24T19:12:22.997890688Z
+req_type: Bug
+tags:
+- batch:ceiling-pattern
+- batch:multi-agent-coordination
+- brief-surface
+- ceiling-pattern
+- from-self-test
+- multi-agent
+- substrate-as-bouncer
