@@ -41,8 +41,8 @@ aida show <SPEC-ID>
 Prefer MCP tools for spec graph and coordination operations:
 `show_requirement`, `list_requirements`, `claim_task`, `release_task`,
 `file_finding`, `post_punt`, `list_briefs`, `read_brief`, `ack_brief`,
-and `add_comment`. Use shell commands for build, test, git inspection,
-and cross-surface verification.
+`add_comment`, and `add_relationship`. Use shell commands for build,
+test, git inspection, and cross-surface verification.
 
 When adding requirements through MCP, pass a valid lowercase `type`.
 AIDA derives the canonical ID prefix from that type, for example
