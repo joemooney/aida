@@ -121,10 +121,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:18:18.917955429Z
-modified_at: 2026-05-17T02:14:49.313085125Z
+modified_at: 2026-05-24T06:38:09.396595682Z
 req_type: Epic
 tags:
-- aida-tui
+- aida:tui
 - architectural-pivot
 - companion-project
 - monorepo-split
