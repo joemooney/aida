@@ -81,12 +81,12 @@ description: |-
   ## Origin
 
   2026-05-23 user direction. Re-filed after orphan-store rebase lost the original STORY-447 to ID-allocation race.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:49:13.746865359Z
-modified_at: 2026-05-24T07:13:58.571781778Z
+modified_at: 2026-05-24T07:51:04.381735384Z
 req_type: Story
 tags:
 - backlog-load
@@ -172,3 +172,7 @@ comments:
     — master advisor
   created_at: 2026-05-24T07:13:58.571781778Z
   modified_at: 2026-05-24T07:13:58.571781778Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T07:51:04.381735384Z
+  completion_sha: d21c6d7178c7413c1a21487c9b72d3e00db1035e
