@@ -1,0 +1,95 @@
+id: 019e57d6-044d-77d2-a817-240a89f767e5
+spec_id: TASK-511
+agreed_id: TASK-511
+title: 'Migrate aida-* flat tags to aida:* colon-namespaced convention (matches batch: lifecycle: severity: pattern)'
+description: |-
+  ## Why
+
+  Tag conventions in this project are inconsistent. Non-flat tags use colon-namespacing (batch:NAME, lifecycle:trivial, severity:cosmetic, parent:EPIC-31, from-review:PR-N, depends-on:phase-1, subsumes:TASK-N, kind:bug-spotted). But subcommand-identifying tags use hyphen-flat (aida-status, aida-session, queue-display).
+
+  User direction 2026-05-23: standardize. Move aida-* flat tags to aida:* colon-namespaced form, matching the rest of the colon-namespaced convention.
+
+  ## Proposed rename map
+
+  aida-status -> aida:status
+  aida-session -> aida:session
+  queue-display -> aida:queue:list (when about the list command specifically)
+  session-end -> aida:session:end (where appropriate)
+  session-discipline -> stays (cross-cutting behavioral; not a specific subcommand)
+
+  ## What stays flat (not subcommand-identifying)
+
+  - orchestrator: behavior, not command -> stays
+  - cli-ux: cross-cutting CLI surface concern -> stays
+  - papercut: severity-style observation -> stays
+  - from-self-test: provenance -> stays
+  - scaffolding: subsystem -> stays
+  - ceiling-pattern: pattern-name -> stays
+
+  The rule: flat tags describe behaviors/patterns/provenance/severity. Colon-namespaced tags identify specific subcommand surfaces or hierarchical relationships.
+
+  ## Proposed full convention
+
+  aida:<subcommand>[:<verb>][:<sub-verb>]
+
+  Examples:
+  - aida:status
+  - aida:queue
+  - aida:queue:work
+  - aida:queue:add
+  - aida:queue:list
+  - aida:session
+  - aida:session:start
+  - aida:session:end
+  - aida:db:sync
+  - aida:db:sync:pull
+  - aida:pr:ship
+  - aida:brief
+  - aida:brief:read
+  - aida:cache:rebuild
+  - aida:init
+  - aida:agent:new
+  - aida:mcp-serve (hyphen because mcp-serve is the binary name itself)
+
+  A spec touching multiple subcommands gets multiple tags.
+
+  ## Acceptance
+
+  - [ ] Identify all aida-* and queue-* and session-* tags in the cache that should migrate
+  - [ ] Bulk rename via aida-cli (write a one-off script, or extend aida tag rename if missing)
+  - [ ] Verify aida list --tags 'aida:queue:*' prefix-matching works; if not, file a follow-up TASK to add prefix-glob support
+  - [ ] Update CLAUDE.md tag-conventions section (composes with docs/aida/ scaffolding per STORY-443)
+  - [ ] No remaining aida-* flat tags except where the hyphenated form IS the binary name (aida:mcp-serve)
+  - [ ] Test on cache: query by 'aida:queue:*' returns expected specs
+
+  ## Composes with
+
+  - STORY-443 (docs/aida/ namespace reshape) — convention docs land there
+  - TASK-512 (just-filed sibling) — documents the convention
+  - STORY-444 (aida-backlog-groom) — conflict-detection uses tag-namespace overlap as heuristic
+  - Existing colon-namespaced tags — same shape, just extending
+
+  ## Out of scope
+
+  - Renaming tag SCHEMA (the cache column stays as today; just the values change)
+  - Adding aida tag-namespace lint / pre-commit gate — separate TASK if desired
+
+  ## Origin
+
+  2026-05-23 user: 'for stories/tasks etc about aida subcommands like aida status should we tag them like aida:status or aida:queue:work?' Answer: yes, both. This TASK migrates existing flat tags.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:35:04.141728639Z
+modified_at: 2026-05-24T02:35:04.141728639Z
+req_type: Task
+tags:
+- bulk-rename
+- convention
+- from-self-test
+- from-user-direction
+- namespace
+- no-existing-users-window
+- substrate-cleanup
+- tags
