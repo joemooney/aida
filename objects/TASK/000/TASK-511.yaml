@@ -77,12 +77,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'for stories/tasks etc about aida subcommands like aida status should we tag them like aida:status or aida:queue:work?' Answer: yes, both. This TASK migrates existing flat tags.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:35:04.141728639Z
-modified_at: 2026-05-24T06:41:47.293183419Z
+modified_at: 2026-05-24T06:43:07.569238833Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-24
@@ -99,3 +99,7 @@ relationships:
   target_id: 019e58b7-a4d8-7e90-9ed4-834308da85f2
   created_at: 2026-05-24T06:41:47.293173758Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-24T06:43:07.569238833Z
+  implemented_by: joe
