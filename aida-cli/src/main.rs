@@ -291,6 +291,14 @@ const ASCIINEMA_WRAPPED_ENV: &str = "AIDA_ASCIINEMA_WRAPPED";
 // trace:STORY-423 | ai:codex
 const ASCIINEMA_SLUG_MAX_CHARS: usize = 80;
 
+// EPIC-28: default safety cap for `--auto-complete --batch` drains — after
+// this many phase failures shelve in one batch the drain stops rather than
+// keep parking innocent specs because the environment is broken. The user
+// can override per-invocation with `--max-failures N`, and `--max-failures 0`
+// turns the cap off (falls back to the historical "first failure stops"
+// behaviour). trace:EPIC-28 | ai:claude
+const DEFAULT_MAX_FAILURES: usize = 5;
+
 fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Result<Option<i32>> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         eprintln!(
@@ -1843,13 +1851,18 @@ fn handle_findings_command(
             let sections = findings::build_findings_view(&summaries, &view_filter);
             let findings_total = findings::count_findings(&sections);
 
-            // STORY-332: a NeedsAttention spec is a punt awaiting triage —
-            // compose it into the same surface. `--pr`/`--source`/`--kind`
-            // are findings-specific axes; when any is set the caller asked
-            // for a specific finding source, so punts are left out.
-            let show_punts = pr.is_none() && source.is_none() && kind.is_none();
+            // STORY-332 / EPIC-28: a NeedsAttention spec is either a punt
+            // (design-fork raised by an agent) or a shelving (phase failure
+            // parked by the orchestrator). Triage both alongside findings;
+            // sort each into its own section so the human-readable shape
+            // matches the triage action. `--pr`/`--source`/`--kind` are
+            // findings-specific axes — when any is set the caller asked
+            // for a specific finding source, so punts and shelvings are
+            // left out. trace:EPIC-28 | ai:claude
+            let show_attention = pr.is_none() && source.is_none() && kind.is_none();
             let mut punts: Vec<aida_core::Requirement> = Vec::new();
-            if show_punts {
+            let mut shelved: Vec<aida_core::Requirement> = Vec::new();
+            if show_attention {
                 let na_filter = aida_core::ListFilter {
                     status: Some("needs-attention".to_string()),
                     ..Default::default()
@@ -1857,13 +1870,22 @@ fn handle_findings_command(
                 for s in backend.list_summaries(&na_filter)? {
                     if let Some(did) = s.agreed_id.as_deref().or(s.spec_id.as_deref()) {
                         if let Some(r) = backend.get_requirement_by_spec_id(did)? {
-                            punts.push(r);
+                            // EPIC-28: if both reasons are populated (a
+                            // re-shelving of a previously-punted spec), the
+                            // shelve wins — the failure is the most recent
+                            // reason a human needs to act on.
+                            if r.failure_reason.is_some() {
+                                shelved.push(r);
+                            } else {
+                                punts.push(r);
+                            }
                         }
                     }
                 }
                 punts.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+                shelved.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
             }
-            let total = findings_total + punts.len();
+            let total = findings_total + punts.len() + shelved.len();
 
             if *count {
                 println!("{total}");
@@ -1943,6 +1965,37 @@ fn handle_findings_command(
                     }
                 }
             }
+            // EPIC-28: failures the orchestrator shelved — phase failures the
+            // batch drain parked rather than halting the whole batch. Shown
+            // in a sibling section so the triage action (look at the recovery
+            // hint, fix the failure, re-queue) is distinct from the punt
+            // triage (decide the design-fork). trace:EPIC-28 | ai:claude
+            if !shelved.is_empty() {
+                println!();
+                println!("{}", "Failures awaiting triage".magenta().bold());
+                for r in &shelved {
+                    let did = r
+                        .agreed_id
+                        .as_deref()
+                        .or(r.spec_id.as_deref())
+                        .unwrap_or("?");
+                    match &r.failure_reason {
+                        Some(fr) => {
+                            let prefix = format!("failure:{}", fr.phase);
+                            println!("  {:<20} {:<14} {}", prefix, did, fr.detail);
+                            if let Some(hint) = &fr.recovery_hint {
+                                println!(
+                                    "  {:<20} {:<14} {}",
+                                    "",
+                                    "",
+                                    format!("↳ hint: {hint}").dimmed()
+                                );
+                            }
+                        }
+                        None => println!("  {:<20} {:<14} {}", "(no reason)", did, r.title),
+                    }
+                }
+            }
 
             println!();
             if findings_total > 0 {
@@ -1958,6 +2011,16 @@ fn handle_findings_command(
                     "{}",
                     "Punts: `aida show <ID>` for the fork · resume with \
                      `aida edit <ID> --status in-progress` · drop with \
+                     `--status rejected`"
+                        .dimmed()
+                );
+            }
+            // EPIC-28 trace:EPIC-28 | ai:claude
+            if !shelved.is_empty() {
+                println!(
+                    "{}",
+                    "Failures: read the recovery hint · fix the underlying issue · \
+                     re-queue with `aida edit <ID> --status approved` · drop with \
                      `--status rejected`"
                         .dimmed()
                 );
@@ -5614,11 +5677,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 let was_needs_attention = matches!(req.status, RequirementStatus::NeedsAttention);
                 req.set_status_from_str(canonical);
-                // STORY-332: a spec triaged out of NeedsAttention is no longer
-                // paused — drop the now-stale punt metadata. The punt ledger
-                // (`.aida/punts.jsonl`) keeps the durable history.
+                // STORY-332 / EPIC-28: a spec triaged out of NeedsAttention is
+                // no longer paused — drop the now-stale punt metadata AND any
+                // orchestrator-shelving metadata. The punt ledger
+                // (`.aida/punts.jsonl`) keeps the durable history for both.
+                // trace:EPIC-28 | ai:claude
                 if was_needs_attention && !matches!(req.status, RequirementStatus::NeedsAttention) {
                     req.attention_reason = None;
+                    req.failure_reason = None;
                     left_needs_attention = true;
                 }
                 changed = true;
@@ -25408,6 +25474,99 @@ fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, spec_id: &s
             if cleaned == 1 { "" } else { "s" },
         );
     }
+}
+
+/// EPIC-28: park a spec in `NeedsAttention` with a structured
+/// [`aida_core::FailureReason`] so a batch drain can continue past a phase
+/// failure rather than halting. Called from
+/// `RealPhaseDriver::shelve_on_failure` (which the orchestrator's
+/// `finish_failure` invokes for every shelvable phase failure).
+///
+/// Returns the populated `FailureReason` on success (the orchestrator
+/// stamps it on `OrchestrationResult::shelved_reason`); returns `Ok(None)`
+/// when the spec cannot be safely shelved (e.g. it is already in a
+/// terminal status). Best-effort: ledger-write failures are logged but
+/// never undo the status flip, mirroring `aida punt`.
+/// trace:EPIC-28 | ai:claude
+fn shelve_spec_on_failure(
+    project_root: &std::path::Path,
+    spec: &str,
+    phase_slug: &str,
+    phase_index: u8,
+    kind_slug: &str,
+    detail: &str,
+    recovery_hint: &str,
+) -> anyhow::Result<Option<aida_core::FailureReason>> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        // No distributed store at this root → nothing to update. The
+        // orchestrator only runs in git-canonical projects today; this is
+        // defensive for the legacy centralized-SQLite layout where
+        // shelving is not supported.
+        return Ok(None);
+    };
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    let Some(mut req) = backend.get_requirement_by_spec_id(spec)? else {
+        // Spec not in the store — orchestrator was driving a stale id.
+        // Best-effort: log and skip rather than crash the failure path.
+        eprintln!(
+            "  {} could not load spec {} for shelving — store has no matching id",
+            "ⓘ".cyan(),
+            spec,
+        );
+        return Ok(None);
+    };
+    let display_id = req.display_id();
+
+    let now = chrono::Utc::now();
+    let fr = aida_core::FailureReason {
+        phase: phase_slug.to_string(),
+        phase_index,
+        kind: kind_slug.to_string(),
+        detail: detail.to_string(),
+        recovery_hint: if recovery_hint.is_empty() {
+            None
+        } else {
+            Some(recovery_hint.to_string())
+        },
+        shelved_by: std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|r| !r.is_empty()),
+        shelved_at: now,
+    };
+
+    // Honor the STORY-332 transition guard. The common case is
+    // `InProgress → NeedsAttention` (orchestrator drove the spec through
+    // phase 1 pickup, which set InProgress). Edge cases where the spec
+    // never reached InProgress (a phase-0 setup failure) still record the
+    // FailureReason so the operator sees it, but skip the status flip so
+    // we don't fight the guard.
+    let flip_status = aida_core::forbidden_attention_transition(
+        &req.status,
+        &aida_core::RequirementStatus::NeedsAttention,
+    )
+    .is_none();
+    if flip_status {
+        req.status = aida_core::RequirementStatus::NeedsAttention;
+    }
+    req.failure_reason = Some(fr.clone());
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+
+    // Best-effort ledger append + role activity record. A failure here
+    // must not undo the spec update, which is the load-bearing part.
+    if let Err(e) = punt::append_failure_to_ledger(project_root, &display_id, &fr) {
+        eprintln!(
+            "  {} could not write shelving record to .aida/punts.jsonl: {e}",
+            "Note:".dimmed()
+        );
+    }
+    record_role_activity(&display_id, "shelve");
+
+    Ok(Some(fr))
 }
 
 /// TASK-358 tests — the `--escalate-blocks` worktree cleanup.
@@ -57330,6 +57489,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             auto_complete,
             json,
             max,
+            max_failures,
             no_human,
             escalate_blocks,
             escalate_defaults,
@@ -57547,6 +57707,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         permission_mode.as_deref(),
                         role.as_deref(),
                         *max,
+                        *max_failures,
                         no_human_mode,
                         escalate_mode,
                         *steal,
@@ -57569,6 +57730,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         permission_mode.as_deref(),
                         role.as_deref(),
                         *max,
+                        *max_failures,
                         no_human_mode,
                         escalate_mode,
                         *steal,
@@ -57599,6 +57761,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             *steal,
                             *allow_stale_base,
                             *no_auto_rebase,
+                            *max_failures,
                         );
                     }
                 }
@@ -61572,6 +61735,36 @@ fn resolve_batch_members(
         if is_terminal_status(&req.status) {
             continue;
         }
+        // STORY-332 / EPIC-28: a NeedsAttention spec is paused awaiting
+        // triage — either a design-fork punt or an orchestrator-shelved
+        // phase failure. The orchestrator must never re-pick it; doing so
+        // would either loop on the same failure (the shelve case) or
+        // commit a guess (the punt case). Mirrors `queue next`'s
+        // STORY-332 filter so every batch surface gets the same skip.
+        // The dropped member is reported to stderr so the operator sees
+        // the batch shrank and why. trace:STORY-332 EPIC-28 | ai:claude
+        if matches!(req.status, RequirementStatus::NeedsAttention) {
+            let reason_label = match req
+                .failure_reason
+                .as_ref()
+                .map(|fr| format!("shelved (failure:{})", fr.phase))
+            {
+                Some(label) => label,
+                None => req
+                    .attention_reason
+                    .as_ref()
+                    .map(|ar| format!("punted ({})", ar.category))
+                    .unwrap_or_else(|| "needs attention".to_string()),
+            };
+            eprintln!(
+                "  {} batch:{} — skipping {} ({})",
+                "ℹ".cyan(),
+                batch_name,
+                req.display_id(),
+                reason_label,
+            );
+            continue;
+        }
         // STORY-333: skip un-pickable members so the batch drain never
         // spawns a doomed phase-1 implementer on a blocked-by /
         // human-only spec. The dropped members are reported to stderr
@@ -61685,6 +61878,11 @@ fn handle_auto_complete_batch(
     permission_mode: Option<&str>,
     role: Option<&str>,
     max: Option<usize>,
+    // EPIC-28: outer `--max-failures` cap — after this many phase failures
+    // shelve in a single batch, stop the drain entirely (the env is
+    // probably broken). `None` falls back to the built-in default (5).
+    // trace:EPIC-28 | ai:claude
+    max_failures: Option<usize>,
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
     // BUG-311: outer `--steal`, threaded to every batch member's phase 1.
@@ -61739,7 +61937,11 @@ fn handle_auto_complete_batch(
         allow_stale_base,
         no_auto_rebase,
     };
-    let result = auto_complete::drain_batch(&mut driver, max);
+    // EPIC-28: a `None` `--max-failures` from the CLI means "use the
+    // built-in default cap" — set here so the orchestrator never runs
+    // with an unbounded failure budget. trace:EPIC-28 | ai:claude
+    let max_failures = max_failures.or(Some(DEFAULT_MAX_FAILURES));
+    let result = auto_complete::drain_batch(&mut driver, max, max_failures);
     // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
     // user error — the named batch tag matched no queued work. Surface it with
     // a non-zero exit so scripts notice, even though `drain_batch` calls it
@@ -61776,6 +61978,9 @@ fn handle_auto_complete_batches(
     permission_mode: Option<&str>,
     role: Option<&str>,
     max: Option<usize>,
+    // EPIC-28: per-batch `--max-failures` cap — see `handle_auto_complete_batch`.
+    // trace:EPIC-28 | ai:claude
+    max_failures: Option<usize>,
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
@@ -61813,7 +62018,9 @@ fn handle_auto_complete_batches(
 
     let drain_root = find_main_worktree_root().ok();
     let mut batch_index = 0usize;
-    let result = auto_complete::drain_batch_chain(batch_names, max, |batch_name| {
+    // EPIC-28: same default as the single-batch path. trace:EPIC-28 | ai:claude
+    let max_failures = max_failures.or(Some(DEFAULT_MAX_FAILURES));
+    let result = auto_complete::drain_batch_chain(batch_names, max, max_failures, |batch_name| {
         batch_index += 1;
         let members_for_state = resolve_batch_members(storage, user_id, batch_name, role);
         if !json
@@ -61883,6 +62090,8 @@ fn emit_batch_chain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            // EPIC-28 trace:EPIC-28 | ai:claude
+            BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         };
         let mut obj = serde_json::Map::new();
         obj.insert(
@@ -61943,6 +62152,25 @@ fn emit_batch_chain_summary(
         obj.insert(
             "escalated_count".to_string(),
             serde_json::Value::Number((result.escalated.len() as u64).into()),
+        );
+        // EPIC-28: chain-wide shelved + skipped totals. trace:EPIC-28
+        obj.insert(
+            "shelved".to_string(),
+            serde_json::Value::Array(
+                result
+                    .shelved
+                    .iter()
+                    .map(|s| serde_json::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+        obj.insert(
+            "shelved_count".to_string(),
+            serde_json::Value::Number((result.shelved.len() as u64).into()),
+        );
+        obj.insert(
+            "skipped_count".to_string(),
+            serde_json::Value::Number((result.skipped.len() as u64).into()),
         );
         obj.insert(
             "stopped_batch".to_string(),
@@ -62057,8 +62285,41 @@ fn emit_batch_chain_summary(
             );
             eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
         }
+        // EPIC-28: every batch drained, but at least one member shelved
+        // or was skipped. trace:EPIC-28 | ai:claude
+        BatchDrainOutcome::DrainedWithShelved => {
+            eprintln!(
+                "{} batch chain drained — {n} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+        }
     }
 
+    if !result.shelved.is_empty() {
+        let sn = result.shelved.len();
+        eprintln!(
+            "  {} {sn} spec{} shelved on phase failure: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if sn == 1 { "" } else { "s" },
+            result.shelved.join(", ")
+        );
+    }
+    if !result.skipped.is_empty() {
+        let kn = result.skipped.len();
+        let render: Vec<String> = result
+            .skipped
+            .iter()
+            .map(|(spec, reason)| format!("{spec} ({reason})"))
+            .collect();
+        eprintln!(
+            "  {} {kn} dependent spec{} skipped: {}",
+            "⤳".yellow(),
+            if kn == 1 { "" } else { "s" },
+            render.join(", ")
+        );
+    }
     if !result.punted.is_empty() {
         let pn = result.punted.len();
         eprintln!(
@@ -62102,6 +62363,9 @@ fn emit_batch_drain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            // EPIC-28: a clean drain that shelved at least one member —
+            // the operator still has triage to do. trace:EPIC-28
+            BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         };
         let mut obj = serde_json::Map::new();
         obj.insert(
@@ -62290,6 +62554,18 @@ fn emit_batch_drain_summary(
                 "→".dimmed()
             );
         }
+        // EPIC-28: the batch drained but parked at least one spec. The
+        // top line stays green-ish — independents shipped — and the
+        // shelved/skipped summary below points the operator at the
+        // triage surface. trace:EPIC-28 | ai:claude
+        BatchDrainOutcome::DrainedWithShelved => {
+            eprintln!(
+                "{} batch `batch:{batch_name}` drained with shelved members — \
+                 {n} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+        }
     }
     // STORY-276: name the members a headless implementer punted — the drain
     // advanced past them, but they parked in Needs Attention rather than
@@ -62315,6 +62591,33 @@ fn emit_batch_drain_summary(
             "⏸".yellow(),
             if en == 1 { "" } else { "s" },
             result.escalated.join(", ")
+        );
+    }
+    // EPIC-28: shelved + skipped members. Shelved are the failures the
+    // drain tolerated; skipped are the dependents we never even tried
+    // because their blocker had been shelved. trace:EPIC-28 | ai:claude
+    if !result.shelved.is_empty() {
+        let sn = result.shelved.len();
+        eprintln!(
+            "  {} {sn} spec{} shelved on phase failure: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if sn == 1 { "" } else { "s" },
+            result.shelved.join(", ")
+        );
+    }
+    if !result.skipped.is_empty() {
+        let kn = result.skipped.len();
+        let render: Vec<String> = result
+            .skipped
+            .iter()
+            .map(|(spec, reason)| format!("{spec} ({reason})"))
+            .collect();
+        eprintln!(
+            "  {} {kn} dependent spec{} skipped: {}",
+            "⤳".yellow(),
+            if kn == 1 { "" } else { "s" },
+            render.join(", ")
         );
     }
 }
@@ -62505,6 +62808,8 @@ fn handle_auto_complete_next_n(
     allow_stale_base: bool,
     // STORY-429: outer `--no-auto-rebase`, threaded to every drained member.
     no_auto_rebase: bool,
+    // EPIC-28: outer `--max-failures` cap. trace:EPIC-28 | ai:claude
+    max_failures: Option<usize>,
 ) -> ! {
     if !json {
         eprintln!();
@@ -62555,7 +62860,10 @@ fn handle_auto_complete_next_n(
         allow_stale_base,
         no_auto_rebase,
     };
-    let result = auto_complete::drain_batch(&mut driver, Some(n));
+    // EPIC-28: apply the same default failure cap as the batch path.
+    // trace:EPIC-28 | ai:claude
+    let max_failures = max_failures.or(Some(DEFAULT_MAX_FAILURES));
+    let result = auto_complete::drain_batch(&mut driver, Some(n), max_failures);
     // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
     // user error — surface it with a non-zero exit even though `drain_batch`
     // reports it as a clean `Drained`, matching the `--batch` drain. A drain
@@ -62597,6 +62905,8 @@ fn emit_next_n_drain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            // EPIC-28 trace:EPIC-28 | ai:claude
+            BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         };
         let mut obj = serde_json::Map::new();
         obj.insert(
@@ -62794,6 +63104,15 @@ fn emit_next_n_drain_summary(
                 "→".dimmed()
             );
         }
+        // EPIC-28 trace:EPIC-28 | ai:claude
+        BatchDrainOutcome::DrainedWithShelved => {
+            eprintln!(
+                "{} next {n} drained with shelved members — \
+                 {count} spec{plural} shipped: {}",
+                "✓".green().bold(),
+                shipped_list.bold()
+            );
+        }
     }
     // STORY-276: name the members a headless implementer punted — the drain
     // advanced past them, but they parked in Needs Attention rather than
@@ -62817,6 +63136,31 @@ fn emit_next_n_drain_summary(
             "⏸".yellow(),
             if en == 1 { "" } else { "s" },
             result.escalated.join(", ")
+        );
+    }
+    // EPIC-28: shelved + skipped members. trace:EPIC-28 | ai:claude
+    if !result.shelved.is_empty() {
+        let sn = result.shelved.len();
+        eprintln!(
+            "  {} {sn} spec{} shelved on phase failure: {} — triage with \
+             `aida findings list`",
+            "⏸".yellow(),
+            if sn == 1 { "" } else { "s" },
+            result.shelved.join(", ")
+        );
+    }
+    if !result.skipped.is_empty() {
+        let kn = result.skipped.len();
+        let render: Vec<String> = result
+            .skipped
+            .iter()
+            .map(|(spec, reason)| format!("{spec} ({reason})"))
+            .collect();
+        eprintln!(
+            "  {} {kn} dependent spec{} skipped: {}",
+            "⤳".yellow(),
+            if kn == 1 { "" } else { "s" },
+            render.join(", ")
         );
     }
 }
@@ -65793,6 +66137,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 lease_id,
             );
         }
+    }
+
+    // EPIC-28: park the spec in NeedsAttention with a structured FailureReason
+    // so the batch drain can continue past this failure. trace:EPIC-28 | ai:claude
+    fn shelve_on_failure(
+        &mut self,
+        spec: &str,
+        phase: auto_complete::Phase,
+        failure: &auto_complete::PhaseFailure,
+        recovery_hint: &str,
+    ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+        shelve_spec_on_failure(
+            &self.project_root,
+            spec,
+            phase.slug(),
+            phase.index() as u8,
+            failure.kind.slug(),
+            &failure.reason,
+            recovery_hint,
+        )
     }
 }
 

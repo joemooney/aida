@@ -156,6 +156,49 @@ pub fn get_backfill_seeds() -> Vec<PuntRecord> {
     ]
 }
 
+/// `resolution_path` slug for an orchestrator shelving on phase failure
+/// (EPIC-28). The punt ledger is the project's "paused decisions" corpus —
+/// a phase failure that parked a spec in `NeedsAttention` belongs in the
+/// same file as a design-fork punt, distinguished by this slug.
+/// trace:EPIC-28 | ai:claude
+pub const RESOLUTION_SHELVED_FAILURE: &str = "shelved-by-failure";
+
+/// Append a `shelved-by-failure` record to `.aida/punts.jsonl` derived from
+/// the structured [`aida_core::FailureReason`] the orchestrator just wrote
+/// onto the spec. Reuses the punt ledger (rather than a sibling file) so
+/// STORY-325 analysis sees one corpus of "paused decisions"; the discriminator
+/// is `PuntRecord::resolution_path == RESOLUTION_SHELVED_FAILURE`.
+///
+/// Best-effort: a ledger-write failure here must not undo the spec's status
+/// flip, which is the load-bearing part. trace:EPIC-28 | ai:claude
+pub fn append_failure_to_ledger(
+    project_root: &Path,
+    spec: &str,
+    fr: &aida_core::FailureReason,
+) -> anyhow::Result<()> {
+    let record = PuntRecord {
+        timestamp: fr.shelved_at,
+        spec: spec.to_string(),
+        category: PuntCategory::Other,
+        detail: fr.detail.clone(),
+        lean: None,
+        raised_by: fr.shelved_by.clone(),
+        resolution_path: RESOLUTION_SHELVED_FAILURE.to_string(),
+        classification: None,
+        escalation_reason: None,
+        answer: None,
+        answered_by: None,
+        // The phase slug rides on `decision` so consumers can filter by
+        // `failure:ci` etc. without parsing `detail`.
+        decision: Some(format!("failure:{}", fr.phase)),
+        principle_link: None,
+        calibration_pair: None,
+        paused_at: Some(fr.shelved_at),
+        resolved_at: None,
+    };
+    append_to_ledger(project_root, &record)
+}
+
 /// Append one punt record to `.aida/punts.jsonl`, creating the file (and the
 /// `.aida/` directory) if needed. One JSON object per line.
 ///
@@ -502,6 +545,59 @@ mod tests {
         assert_eq!(parsed, record);
         // Category serialises kebab-case so the ledger is human-readable.
         assert!(lines[0].contains("\"design-fork\""), "{}", lines[0]);
+    }
+
+    /// EPIC-28: the shelving helper writes one ledger line with the
+    /// `shelved-by-failure` discriminator + a `failure:<phase>` slug on
+    /// `decision`, so STORY-325 analysis can filter punts out of failures.
+    /// trace:EPIC-28 | ai:claude
+    #[test]
+    fn append_failure_to_ledger_writes_shelved_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let fr = aida_core::FailureReason {
+            phase: "ci".into(),
+            phase_index: 2,
+            kind: "ci-red".into(),
+            detail: "Linux CI red — 3 tests panicked".into(),
+            recovery_hint: Some("gh run view 12345".into()),
+            shelved_by: Some("implementer".into()),
+            shelved_at: Utc::now(),
+        };
+        append_failure_to_ledger(dir.path(), "STORY-99", &fr).unwrap();
+
+        let contents = std::fs::read_to_string(ledger_path(dir.path())).unwrap();
+        let line = contents.lines().next().expect("one line written");
+        let rec: PuntRecord = serde_json::from_str(line).unwrap();
+        assert_eq!(rec.spec, "STORY-99");
+        assert_eq!(rec.resolution_path, RESOLUTION_SHELVED_FAILURE);
+        assert_eq!(rec.decision.as_deref(), Some("failure:ci"));
+        assert_eq!(rec.detail, "Linux CI red — 3 tests panicked");
+        assert_eq!(rec.raised_by.as_deref(), Some("implementer"));
+        assert_eq!(rec.paused_at, Some(fr.shelved_at));
+        assert!(rec.resolved_at.is_none());
+    }
+
+    /// EPIC-28: shelving records sit in the same ledger as punts but use
+    /// `category = Other`. STORY-325 punt-frequency views can subtract
+    /// shelved records by the `resolution_path` discriminator without
+    /// having to special-case the category. trace:EPIC-28 | ai:claude
+    #[test]
+    fn append_failure_to_ledger_preserves_punt_category_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let fr = aida_core::FailureReason {
+            phase: "build".into(),
+            phase_index: 6,
+            kind: "build-failed".into(),
+            detail: "cargo build exit 101".into(),
+            recovery_hint: None,
+            shelved_by: None,
+            shelved_at: Utc::now(),
+        };
+        append_failure_to_ledger(dir.path(), "TASK-1", &fr).unwrap();
+        let contents = std::fs::read_to_string(ledger_path(dir.path())).unwrap();
+        let rec: PuntRecord = serde_json::from_str(contents.lines().next().unwrap()).unwrap();
+        assert_eq!(rec.category, PuntCategory::Other);
+        assert_eq!(rec.decision.as_deref(), Some("failure:build"));
     }
 
     #[test]
