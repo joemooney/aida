@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:19.620624859Z
-modified_at: 2026-05-23T16:22:19.620624859Z
+modified_at: 2026-05-24T01:53:13.549035495Z
 req_type: Story
 tags:
 - busy-idle
@@ -53,3 +53,19 @@ tags:
 - mcp
 - parent:EPIC-31
 - phase-4
+comments:
+- id: 019e57af-b54d-75f2-83e4-8973a2aaa029
+  author: codex
+  content: |-
+    STORY-435 implementation sketch (Codex):
+
+    1. Identity/correlation: use launcher-issued registry tokens, not MCP initialize params or /proc parent guessing. `aida agent new <agent>` will generate an opaque UUID-ish `registry_token`, store it as an optional field on the `.aida/agents/<agent>-<pid>.toml` entry, and pass it to the spawned agent as `AIDA_AGENT_REGISTRY_TOKEN`. Any MCP server the agent launches inherits that env var, so MCP tool calls can update the real launched-agent registry record rather than creating a separate `mcp-<pid>` record. Existing unmanaged MCP clients keep the current fallback: `touch_mcp_agent()` creates/updates an MCP-process entry.
+    2. Schema/back-compat: add optional `registry_token: Option<String>` to `AgentRegistryEntry`. Existing registry files deserialize unchanged. Token lookup scans `.aida/agents/*.toml`; if missing/unknown, fallback to current behavior.
+    3. Heartbeat granularity: v1 updates on every MCP request that reaches `handle_request` (including `tools/call`, `tools/list`, `ping`). No debounce initially; writes are tiny TOML files and acceptance says every call. If this chatters later, add a debounce follow-up after measuring.
+    4. Busy/idle/stale: keep stale strongest (`pid` dead => stale). Otherwise busy if `last_active_at` is within configured freshness window OR `current_spec` is set (proxy for active scoped lease in Phase 1-4). Otherwise idle. This preserves long-running tool-silent scoped agents as busy and lets unscoped launched agents age to idle.
+    5. Config: add `[agents] heartbeat_busy_secs = 30` in `.aida/config.toml`, default 30. Clamp invalid/zero/malformed values back to 30 rather than failing `aida status`.
+    6. Status display: keep existing `status` column text (`busy|idle|stale`) so the section remains script-friendly. Optional color can be display-only later; no column-shape churn.
+    7. Tests: agent_registry unit test for three records: recent/no-spec => busy, old/no-spec => idle, dead/current_spec => stale; config parse test; MCP test that `AIDA_AGENT_REGISTRY_TOKEN` causes `handle_request` to update the pre-existing launched-agent record instead of creating an `mcp-*` record; launcher test that spawned agents receive the token env.
+    8. Scope boundary: no new MCP tools, no explicit register_agent handshake, no cross-machine identity, no heartbeat daemon. This is implicit tool-call heartbeat only.
+  created_at: 2026-05-24T01:53:13.549035495Z
+  modified_at: 2026-05-24T01:53:13.549035495Z
