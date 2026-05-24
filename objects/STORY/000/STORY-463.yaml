@@ -1,0 +1,45 @@
+id: 019e5b7c-7270-74c3-9f06-b1926380f77b
+spec_id: STORY-463
+agreed_id: STORY-463
+title: 'SQLite cache lock: retry with backoff + lock-holder visibility + stale-lock → aida doctor heal path'
+description: |-
+  Multi-process writers contend on .aida/cache.db SQLite. With N agents writing concurrently, 'database is locked' errors fail hard on first conflict. Today empirically hit twice in a multi-agent session.
+
+  Three-part fix:
+
+  1. RETRY WITH BACKOFF: wrap SQLite acquire in retry loop (default 3 × 50/200/500ms exponential). Configurable via AIDA_CACHE_RETRY_MS / AIDA_CACHE_RETRY_COUNT. AIDA_CACHE_RETRY_COUNT=0 disables for tests.
+
+  2. LOCK-HOLDER VISIBILITY: write .aida/cache.db.lock-info on acquire with {pid, command, started_at, user, optional session_id}; remove on release. On lock-failure-after-retries, error message reads the file and reports 'locked by pid=N (cmd), held since T (Xm ago)'. Turns confusing error into actionable one.
+
+  3. STALE-LOCK → DOCTOR: when lock-info file is older than threshold (5min default) AND PID is dead, it's a stale lock-info file. aida doctor (STORY-462) gains 'stale-locks' as 11th category. Heal: remove the orphan lock-info file (OS already released the SQLite lock when PID died).
+
+  Acceptance:
+  - [ ] SQLite cache acquire wraps in retry loop, configurable backoff
+  - [ ] .aida/cache.db.lock-info file written on acquire, removed on release
+  - [ ] Lock-failure error includes lock-holder info (pid, command, age)
+  - [ ] aida doctor 'stale-locks' category
+  - [ ] Test: two writers, second waits + succeeds
+  - [ ] Test: stale lock-info file → doctor detects + heals
+  - [ ] AIDA_CACHE_RETRY_COUNT=0 disable for tests
+
+  Composes with STORY-462 (doctor), STORY-385 (status surfaces), BUG-378 (same substrate-as-bouncer principle).
+
+  Origin: 2026-05-24 operator hit cache lock during multi-agent session; proposed 3-part design master agreed with. Ironically the filing of this STORY itself hit the lock — perfect proof point.
+
+  trace:STORY-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T19:35:42.960896468Z
+modified_at: 2026-05-24T19:35:42.960896468Z
+req_type: Story
+tags:
+- aida:cache
+- batch:multi-agent-coordination
+- from-self-test
+- from-user-direction
+- multi-agent
+- observability
+- resilience
+- sqlite
