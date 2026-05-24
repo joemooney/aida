@@ -44,15 +44,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:15:53.972861010Z
-modified_at: 2026-05-24T06:38:36.252500214Z
+modified_at: 2026-05-24T06:39:13.650995807Z
 req_type: Bug
 tags:
 - DP-2
 - aida:queue:work
+- aida:session:manifest
 - deep-pass-finding
 - first-only
 - plan-file
-- session-manifest
 relationships:
 - rel_type: Child
   target_id: 019e1f98-72d0-7d02-9c08-7b3d52001a22
