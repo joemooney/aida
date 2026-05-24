@@ -1,0 +1,70 @@
+id: 019e57d6-161a-7bb0-aa7a-07420deedfba
+spec_id: TASK-512
+agreed_id: TASK-512
+title: Document aida:<subcommand> tag-namespace convention in docs/aida/ + CLAUDE.md + scaffolding-pack
+description: |-
+  ## Why
+
+  The just-filed TASK-511 standardizes flat aida-* tags into aida:* colon-namespaced form. That migration is mechanical (rename); this TASK is the documentation that ensures every contributor and every new AIDA project understands the convention from the start.
+
+  ## What to document
+
+  A short section in CLAUDE.md (or the new docs/aida/ namespace per STORY-443) covering:
+
+  ### Tag convention rules
+
+  1. **Subcommand-identifying tags use aida:<subcommand>[:<verb>][:<sub-verb>] colon-namespaced form.**
+     - aida:status, aida:queue:work, aida:db:sync:pull, etc.
+     - Allows prefix-glob filtering: aida list --tags 'aida:queue:*'
+
+  2. **Behavior / pattern / provenance / severity tags stay flat.**
+     - orchestrator, cli-ux, papercut, from-self-test, scaffolding, ceiling-pattern
+     - These describe characteristics, not surfaces
+
+  3. **Existing colon-namespaced conventions continue.**
+     - batch:NAME, lifecycle:trivial, severity:cosmetic, parent:EPIC-31, depends-on:phase-1, subsumes:TASK-N, from-review:PR-N, kind:bug-spotted
+
+  4. **Multi-touch specs get multiple subcommand tags.**
+     - A spec touching aida status and aida queue list rendering: tags aida:status, aida:queue:list
+
+  ## Where to document
+
+  Primary location: docs/aida/tag-conventions.md (new file, composes with STORY-443's docs/aida/ namespace)
+  CLAUDE.md: short pointer + the most important rules inline
+  Scaffolding-pack: includes docs/aida/tag-conventions.md in the standard guide set
+
+  ## Acceptance
+
+  - [ ] docs/aida/tag-conventions.md written
+  - [ ] CLAUDE.md tag-conventions section updated
+  - [ ] aida-core/templates/docs/aida/tag-conventions.md (the master template) added
+  - [ ] build.rs embeds the new template
+  - [ ] ensure_discipline_pack_scaffold registers the new doc
+  - [ ] aida init scaffolds the convention doc into new projects
+  - [ ] This repo's docs reflect the convention (dogfood)
+
+  ## Composes with
+
+  - TASK-511 (the rename migration)
+  - STORY-443 (docs/aida/ namespace — where the convention doc lives)
+  - STORY-444 (aida-backlog-groom — uses tag namespace for conflict-detection)
+  - CLAUDE.md and machinery-glossary.md cross-references
+
+  ## Origin
+
+  Same as TASK-511. Convention documentation must ship alongside the rename so contributors understand the new pattern from the moment they encounter it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:35:08.698774491Z
+modified_at: 2026-05-24T02:35:08.698774491Z
+req_type: Task
+tags:
+- convention
+- docs
+- from-user-direction
+- namespace
+- scaffolding-pack
+- sibling-of-TASK-511
+- tags
