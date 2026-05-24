@@ -3,13 +3,16 @@ spec_id: TASK-544
 agreed_id: TASK-544
 title: Findings tally on default `aida status` + Findings category in the
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:24:27.232366354Z
-modified_at: 2026-05-24T16:24:27.232366354Z
+modified_at: 2026-05-24T16:31:15.462435619Z
 req_type: Task
+tags:
+- duplicate
+- superseded-by:TASK-539
 relationships:
 - rel_type: Child
   target_id: 019e4b03-2c58-7e40-9e5c-cdeb45a902aa
