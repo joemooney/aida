@@ -36978,6 +36978,80 @@ mod in_flight_linkage_integration_tests {
         assert!(!l.shipped, "commit is not on main");
         assert_eq!(l.branch.as_deref(), Some("feature/y"));
     }
+
+    /// A fresh repo with `--initial-branch=<name>` and one initial
+    /// commit — used for the BUG-380 master-default coverage.
+    fn init_repo_on(branch: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path().to_path_buf();
+        git(
+            &root,
+            &["init", &format!("--initial-branch={}", branch), "--quiet"],
+        );
+        git(&root, &["config", "user.email", "t@example.com"]);
+        git(&root, &["config", "user.name", "Test"]);
+        std::fs::write(root.join("README.md"), "init\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "chore: init"]);
+        (tmp, root)
+    }
+
+    /// BUG-380: a repo whose default branch is `master` (no `main`
+    /// exists). The ancestor check must use `master`, not splice
+    /// `fatal: Not a valid object name 'main'` to stderr — and the
+    /// shipped commit must still be detected.
+    #[test]
+    fn linkage_for_shipped_spec_on_master_default_repo() {
+        let (_tmp, root) = init_repo_on("master");
+        commit(
+            &root,
+            "touched.rs",
+            "// trace:BUG-380\nfn ship() {}\n",
+            "fix: master default branch (BUG-380) (#380)",
+        );
+
+        let l = collect_git_linkage(&root, &["BUG-380".to_string()]);
+        assert_eq!(l.commits.len(), 1, "one referencing commit");
+        assert!(
+            l.shipped,
+            "commit on master should be shipped when master is the default branch"
+        );
+        assert_eq!(l.shipped_pr, Some(380));
+    }
+
+    /// BUG-380: regression — a `main`-default repo must keep working
+    /// the way it did before the resolver landed.
+    #[test]
+    fn linkage_for_shipped_spec_on_main_default_repo_unchanged() {
+        let (_tmp, root) = init_repo_on("main");
+        commit(
+            &root,
+            "touched.rs",
+            "// trace:BUG-380\nfn ship() {}\n",
+            "fix: main default still works (BUG-380) (#381)",
+        );
+
+        let l = collect_git_linkage(&root, &["BUG-380".to_string()]);
+        assert_eq!(l.commits.len(), 1);
+        assert!(l.shipped);
+        assert_eq!(l.shipped_pr, Some(381));
+    }
+
+    /// BUG-380: the resolver picks the master ref when only master
+    /// exists, so the caller never passes a literal `"main"` to
+    /// `git merge-base --is-ancestor`.
+    #[test]
+    fn resolve_default_branch_picks_master_when_main_absent() {
+        let (_tmp, root) = init_repo_on("master");
+        assert_eq!(resolve_default_branch_ref(&root).as_deref(), Some("master"));
+    }
+
+    /// BUG-380: the resolver picks `main` on a main-default repo.
+    #[test]
+    fn resolve_default_branch_picks_main_when_present() {
+        let (_tmp, root) = init_repo_on("main");
+        assert_eq!(resolve_default_branch_ref(&root).as_deref(), Some("main"));
+    }
 }
 
 /// TASK-241: coverage for the squash-merge PR-number parser that
@@ -39700,20 +39774,20 @@ fn classify_in_flight_specs(
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
     };
+    // BUG-380: capture stderr via output() so an invalid `target` ref
+    // cannot leak `fatal: Not a valid object name <X>` to the user's
+    // terminal — paired with `resolve_default_branch_ref`, which
+    // returns a refname known to exist (or None to skip the check).
     let is_ancestor = |sha: &str, target: &str| -> bool {
         PCmd::new("git")
             .arg("-C")
             .arg(project_root)
             .args(["merge-base", "--is-ancestor", sha, target])
-            .status()
-            .map(|s| s.success())
+            .output()
+            .map(|o| o.status.success())
             .unwrap_or(false)
     };
-    let main_ref = if git(&["rev-parse", "--verify", "--quiet", "origin/main"]).is_some() {
-        "origin/main"
-    } else {
-        "main"
-    };
+    let main_ref = resolve_default_branch_ref(project_root);
 
     let mut stuck: Vec<(String, Option<u64>, String)> = Vec::new();
     let mut awaiting: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -39747,7 +39821,11 @@ fn classify_in_flight_specs(
             no_commit.push(id);
             continue;
         };
-        if is_ancestor(full, main_ref) {
+        let on_default = main_ref
+            .as_deref()
+            .map(|m| is_ancestor(full, m))
+            .unwrap_or(false);
+        if on_default {
             stuck.push((id, parse_squash_pr_number(subject), ago.to_string()));
         } else {
             let contains = git(&[
@@ -40527,6 +40605,65 @@ fn render_in_flight_grouped(
 /// matches degrades to a dim note rather than failing the show.
 /// `--no-git` skips the whole section; `--verbose` un-caps the commit
 /// list and adds per-commit diff stats. trace:TASK-241 | ai:claude
+/// Resolve a refname for the default branch that is **known to exist**
+/// in `project_root`, so callers can pass it to `git merge-base
+/// --is-ancestor` without risking a `fatal: Not a valid object name <X>`
+/// stderr splice when the repo's default branch is not `main`.
+///
+/// Resolution order:
+///   1. `origin/HEAD` symbolic ref (the actual default branch on origin)
+///   2. `init.defaultBranch` config — `origin/<name>` then bare `<name>`
+///   3. The `"main"` / `"master"` literals — `origin/<name>` then bare
+///
+/// Returns `None` when no candidate ref exists; callers should then
+/// skip the ancestor check rather than guess (the prior code passed
+/// `"main"` as a literal, which leaked stderr on master-default repos).
+/// trace:BUG-380 | ai:claude
+fn resolve_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
+    use std::process::Command as PCmd;
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+            .filter(|s| !s.is_empty())
+    };
+
+    if let Some(short) = git(&[
+        "symbolic-ref",
+        "--quiet",
+        "--short",
+        "refs/remotes/origin/HEAD",
+    ]) {
+        return Some(short);
+    }
+
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(cfg) = git(&["config", "--get", "init.defaultBranch"]) {
+        candidates.push(cfg);
+    }
+    for lit in ["main", "master"] {
+        if !candidates.iter().any(|c| c == lit) {
+            candidates.push(lit.to_string());
+        }
+    }
+
+    for name in candidates {
+        let origin = format!("origin/{}", name);
+        if git(&["rev-parse", "--verify", "--quiet", &origin]).is_some() {
+            return Some(origin);
+        }
+        if git(&["rev-parse", "--verify", "--quiet", &name]).is_some() {
+            return Some(name);
+        }
+    }
+    None
+}
+
 /// TASK-241: the git-linkage data for a spec — extracted from
 /// [`print_git_linkage`] so the collection (git-only, never gh) is
 /// unit-testable against a temp repo. trace:TASK-241 | ai:claude
@@ -40563,13 +40700,17 @@ fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLin
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
     };
+    // BUG-380: capture stderr via output() so an invalid `target` ref
+    // cannot leak `fatal: Not a valid object name <X>` to the user's
+    // terminal — belt-and-braces alongside `resolve_default_branch_ref`,
+    // which already filters `target` to a ref that exists.
     let is_ancestor = |sha: &str, target: &str| -> bool {
         PCmd::new("git")
             .arg("-C")
             .arg(project_root)
             .args(["merge-base", "--is-ancestor", sha, target])
-            .status()
-            .map(|s| s.success())
+            .output()
+            .map(|o| o.status.success())
             .unwrap_or(false)
     };
 
@@ -40619,12 +40760,13 @@ fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLin
     let mut worktree: Option<String> = None;
     let mut shipped_pr: Option<u64> = None;
     if let Some((full, _, _)) = commits.first() {
-        let main_ref = if git(&["rev-parse", "--verify", "--quiet", "origin/main"]).is_some() {
-            "origin/main"
-        } else {
-            "main"
-        };
-        shipped = is_ancestor(full, main_ref);
+        // BUG-380: resolve a ref that exists rather than passing a
+        // literal "main"; on master-default repos the literal leaks
+        // `fatal: Not a valid object name 'main'` from git through
+        // is_ancestor's inherited stderr.
+        shipped = resolve_default_branch_ref(project_root)
+            .map(|main_ref| is_ancestor(full, &main_ref))
+            .unwrap_or(false);
         if shipped {
             // A squash-merge subject ends with `(#NN)` — the cheapest,
             // most reliable PR pointer for shipped work.
