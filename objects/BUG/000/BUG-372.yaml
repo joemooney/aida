@@ -72,7 +72,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:49:22.248303714Z
-modified_at: 2026-05-24T04:49:22.248303714Z
+modified_at: 2026-05-24T06:14:41.271030349Z
 req_type: Bug
 tags:
 - block-claim
@@ -85,3 +85,28 @@ tags:
 - re-filed-from-rebase-loss
 - reliability
 - sibling-of-TASK-281
+comments:
+- id: 019e589f-1577-7973-8b65-badf47d51b62
+  author: joe
+  content: |-
+    Sketch for BUG-372:
+
+    Recommendation: ship a v1 hybrid of A + C around the existing block model, not full UUID-first in this PR. B is the end-state I agree with architecturally, but making UUID-primary object paths/spec resolution safe cuts across object_store paths, queue/session refs, MCP return shapes, trace parsing, and docs. Treat B as the follow-on EPIC once the immediate data-loss race is closed.
+
+    Root code path to harden: git-backed add in aida-cli/src/main.rs around ensure_block_capacity -> BlockRegistry::dispense -> backend.update_atomically/write_object, plus aida-core GitBackend::add_requirement/BulkWriter for non-CLI creation surfaces. TASK-281 already CAS-pushes new block claims, but add still trusts the local blocks.yaml and local get_requirement_by_spec_id(candidate); if the store is stale or the auto-claim push failed, it can still write a colliding global SPEC-ID.
+
+    Proposed v1:
+    1. Add a shared git-canonical creation helper: pull/rebase the store before ID allocation, dispense candidate from fresh blocks/metadata, write object + registry changes in one commit, push immediately when origin exists. If push is rejected, reset only that creation commit, pull/rebase, re-dispatch allocation with the same UUID but a fresh spec_id, retry max 3. If still rejected, fail before printing Added.
+    2. Stop treating TASK-281 auto-claim push failure as harmless when creation is about to consume an unsafe/low block. If the fresh claim was required to make allocation safe, fail loudly instead of continuing with a stale local block.
+    3. Add a collision guard after store pull/rebase: scan for duplicate spec_id with different UUID and abort with an actionable recovery message. Automated renumber is acceptable if small, but rejection is enough for v1 acceptance because the regression permits 'renumbers/rejects'. No more rebase --skip cascades that silently drop specs.
+    4. Add a node/writer sanity check while investigating: if the current node id is unregistered or appears inconsistent with registry/blocks provenance, fail with a node-acquire hint. If the incident was actually two clones sharing one node_id, file D as a separate required follow-up; do not hide it behind block math.
+
+    Migration: existing shipped SPEC-IDs stay immutable. On startup/pull/check, report any existing duplicate spec_id collisions and require manual repair or a later db-check --repair path; do not bulk-renumber historical objects in this PR.
+
+    Regression test: temp bare origin + two cloned stores seeded with the same remaining STORY block. Both create a story from the stale base. First push succeeds. Second path must either retry and land a different STORY-N with the original UUID/content preserved, or reject before push with no lost object. Add coverage for the non-CLI GitBackend::add_requirement path so MCP add_requirement inherits the same guarantee.
+
+    Docs: update docs/aida/discipline or storage docs to state the v1 guarantee precisely: global SPEC-ID allocation is push-serialized for git-canonical stores when online; offline work remains block-based but collision detection on next sync prevents silent data loss.
+
+    Open question for master: do you want v1 to prefer automatic retry+renumber on push rejection, or fail-fast with a recovery command? I lean automatic retry for normal add/MCP paths, fail-fast only when collision scan finds pre-existing divergent objects after rebase.
+  created_at: 2026-05-24T06:14:41.271030349Z
+  modified_at: 2026-05-24T06:14:41.271030349Z
