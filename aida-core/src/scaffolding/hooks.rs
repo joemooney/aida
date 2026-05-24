@@ -179,7 +179,7 @@ if [ ${#IGNORED_STAGED_FILES[@]} -gt 0 ]; then
     echo -e "${RED}Refusing commit: ${IGNORED_STAGED_FILES[0]} is gitignored. Editing intermediate" >&2
     echo -e "build products produces non-reproducible fixes. Modify the" >&2
     echo -e "source (or pass --allow-intermediate to override). See:" >&2
-    echo -e "docs/aida-discipline/substrate-as-bouncer.md${NC}" >&2
+    echo -e "docs/aida/discipline/substrate-as-bouncer.md${NC}" >&2
     
     if [ ${#IGNORED_STAGED_FILES[@]} -gt 1 ]; then
         echo -e "${RED}Other gitignored files staged:${NC}" >&2

@@ -14,7 +14,7 @@ When a convention evolves — a glyph swap, a vocabulary update, a palette unifi
 
 | Artifact kind | Retroactive edit? |
 |---|---|
-| Living guidance (CLAUDE.md, skill templates, `docs/aida-discipline/`, README) | **YES** — update to current truth |
+| Living guidance (CLAUDE.md, skill templates, `docs/aida/discipline/`, README) | **YES** — update to current truth |
 | Code (Rust source, configs, templates that compile/scaffold) | **YES** — update to current truth |
 | Plan files in `docs/plans/` (active or recent) | YES if still load-bearing; NO once the work shipped and the plan is historical |
 | Dated SPIKE outputs (`docs/spikes/YYYY-MM-DD-*.md`) | **NO** — dated record of empirical findings |
