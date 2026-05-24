@@ -1,0 +1,53 @@
+id: 019e5b65-c42d-7d62-a99d-478a0ecfb790
+spec_id: BUG-377
+agreed_id: BUG-377
+title: MCP add_comment misroutes text arg to author field; silent data loss
+description: |-
+  Discovered 2026-05-24 by aida-chat advisor + Codex implementer while implementing aida-chat's STORY-21 (chat → spec comment loop).
+
+  ## Symptom
+
+  AIDA's MCP server advertises `add_comment(id, text)` via `tools/list`. Calling it succeeds (returns 200, no error response). However the comment is NOT persisted as visible content: subsequent `aida show <ID>` and `aida comment list <ID>` do not show the added comment text.
+
+  ## Root cause (from Codex's local AIDA source inspection)
+
+  The MCP server's `add_comment` handler appears to wire the `text` argument into the comment record's `author` field, with a hardcoded `body="mcp"`. So the comment IS created in the DB, but the field mapping is inverted — the human-meaningful comment text ends up in author metadata where no one reads it, and the body is the literal string "mcp".
+
+  ## Impact
+
+  Silent data loss for any MCP-driven write path. aida-chat would have shipped a 'capture chat as comment' button that returns success in the UI but loses the comment text. Generalizes: any consumer using AIDA MCP for comment writes is broken in the same way.
+
+  ## Workaround in aida-chat
+
+  aida-chat's `aida_comment_add` tool falls back to the CLI (`aida comment add <ID> <text>`) instead of MCP. Tracked in src/server/tools/aida.rs trace:STORY-21. When this bug is fixed and the MCP path is verified safe, the CLI fallback can be removed.
+
+  ## Reproduce
+
+  ```
+  # Start a temp test EPIC, then:
+  echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_comment","arguments":{"id":"EPIC-1","text":"test comment via MCP"}}}' | aida mcp-serve
+  # Then verify the comment IS missing from:
+  aida comment list EPIC-1
+  aida show EPIC-1
+  ```
+
+  ## Acceptance
+
+  - MCP `add_comment` persists `text` as comment body, not author
+  - `aida comment list <ID>` after MCP add shows the new comment with the supplied text
+  - Add an integration test that asserts MCP-added comment is CLI-visible
+  - After fix, aida-chat will be notified to drop its CLI fallback (re-test against fresh MCP)
+
+  Surfaced-by: aida-chat advisor (cross-project filing per coordination protocol)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T19:10:56.557219921Z
+modified_at: 2026-05-24T19:10:56.557219921Z
+req_type: Bug
+tags:
+- aida-chat-blocker
+- mcp
+- silent-data-loss
+- write-path
