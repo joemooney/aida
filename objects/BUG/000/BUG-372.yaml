@@ -1,0 +1,87 @@
+id: 019e5850-f948-7c90-93cf-b5c269b38120
+spec_id: BUG-372
+agreed_id: BUG-372
+title: Two clones claimed STORY-446 independently (ID-allocation race despite TASK-281 block-claim) — re-file after orphan-store rebase lost BUG-1-085
+description: |-
+  ## Empirical 2026-05-23 evening
+
+  PR-270 merge triggered aida pull. Store leg rebase failed: STORY-446 claimed by BOTH local AND origin with completely different content:
+
+  - LOCAL STORY-446: 'Review PR-265' auto-filed by aida pr auto-queue-review on PR-265 ship (TASK-508), Status: Completed
+  - ORIGIN STORY-446: 'Add --blocked-by / --depends-on flag' substantive EPIC-28 STORY 1 filed by web /ultraplan during EPIC-28 plan execution
+
+  Different UUIDs, different agreed_ids, same SPEC-ID. ID-allocation race across clones.
+
+  Same race happened on STORY-447, 448, 449, 450 — full cascade. Recovery via git rebase --skip lost master-filed STORY-447 + STORY-448 substantive content (re-filed separately).
+
+  ## Why TASK-281 did not prevent
+
+  TASK-281 (auto-claim block on spec creation) ensures each WRITER claims a block range before allocating IDs. But:
+  - Local clone (master's machine) and web /ultraplan's cloud session are DIFFERENT writers
+  - Both claimed overlapping block ranges OR didn't sync the block registry before claiming
+  - The registry/blocks.yaml conflicts in the same rebase confirm block-claim divergence
+
+  ## Root cause hypothesis
+
+  Cross-clone block-claim sync isn't atomic. Sequence:
+  1. Both clones pulled the orphan store, saw block X with N IDs available
+  2. Both clones claimed block X for next N specs
+  3. Both clones wrote spec STORY-446 (first ID in their block claim)
+  4. First clone pushed; second clone push fails on rebase
+
+  ## Fix direction
+
+  A. Atomic block-claim via push-with-lease: before claiming, force-push the block registry; if rejected, refresh + retry.
+
+  B. UUID-first, agreed-id-second: every spec gets a UUID at creation. agreed_id (STORY-XXX) assigned at PUSH time via merge-gate. Avoids the race because human-readable ID is assigned only when write lands.
+
+  C. Detect-and-renumber: on rebase conflict in objects/<TYPE>/000/<ID>.yaml, the merger renumbers one side using next available block, preserves both specs. Automated conflict resolution.
+
+  D. Block-claim per writer-identity: each clone has unique writer identity (per BUG-89); block-claims partitioned by writer.
+
+  Lean B (UUID-first) for most-robust fix. C is nice-to-have automated-recovery layer.
+
+  ## Acceptance
+
+  - [ ] Investigate exact code path that allowed two clones to claim same SPEC-ID
+  - [ ] Decide A/B/C/D (or hybrid)
+  - [ ] Implementation
+  - [ ] Regression test: simulate two clones, both file a spec same-time, exactly one gets SPEC-ID + other renumbers/rejects
+  - [ ] Documentation update in docs/aida-discipline (or docs/aida per STORY-443) explaining ID-allocation guarantees
+  - [ ] Migration path for existing collisions (if any others lurk)
+
+  ## Composes with
+
+  - TASK-281 (auto-claim blocks — previous fix layer; this BUG extends it)
+  - BUG-89 (queue identity — relevant to Option D)
+  - STORY-431 / EPIC-31 (agent registry — per-writer identity surface for Option D)
+  - feedback_substrate_as_bouncer_not_rules — programmatic gate vs implicit assumption
+
+  ## Recovery cost (this incident)
+
+  - Operator + master spent ~30 min triaging via git rebase --skip cascade
+  - Master's local STORY-447 + STORY-448 substantive specs dropped + re-filed under fresh IDs
+  - Auto-filed review stories (STORY-446 + 449 local) dropped (acceptable)
+  - BUG itself was filed mid-rebase + got dropped + re-filed (this one)
+
+  ## Origin
+
+  2026-05-23 evening: PR-270 merge -> aida pull store leg rebase failure on STORY-446. Cascade through STORY-447, 448, 449, 450. Re-filed after rebase recovery lost the original BUG-1-085 (filed mid-rebase, lost in the cascade).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:49:22.248303714Z
+modified_at: 2026-05-24T04:49:22.248303714Z
+req_type: Bug
+tags:
+- block-claim
+- clones
+- from-self-test
+- from-task-281
+- id-allocation
+- orphan-store
+- race-condition
+- re-filed-from-rebase-loss
+- reliability
+- sibling-of-TASK-281
