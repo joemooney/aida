@@ -1,0 +1,37 @@
+id: 019e582b-7527-7de0-82f0-eafc5e9f67db
+spec_id: STORY-447
+agreed_id: STORY-447
+title: aida deps sweep — infer likely dependencies from trace graph + file overlap
+description: |-
+  EPIC-28 STORY 2: a *population* mechanism for the dependency graph. STORY 1 lets a human declare blocked-by; this STORY lets the advisor (or a one-shot CLI run) surface likely dependencies the human can confirm.
+
+  Scope:
+  - New command `aida deps sweep [--apply] [--for-spec SPEC]` — walks the requirement graph and harvests likely dependency signals:
+    - **File overlap** — specs whose `// trace:` comments touch the same files (high-confidence signal).
+    - **Trace graph** — specs that share function/symbol targets (medium-confidence; similar to `aida plan helpers`).
+    - **Same parent (EPIC/STORY)** — siblings in a feature cluster (low-confidence; often spurious — surface but mark as weak).
+    - **Plan content** — specs whose plans reference each other's spec IDs explicitly (high-confidence).
+  - Default output: a per-spec ranked list of 'Likely depends on: TASK-N (high)' suggestions.
+  - `--apply` prompts `[y/N/skip]` per suggestion and uses the STORY-1 `--blocked-by` flag under the hood.
+  - Scheduled-task variant: `aida deps sweep --as-advisor-activity` (composes with STORY-262 if/when scheduled tasks land) — runs on a 14d cadence and files the suggestions to the advisor's findings list rather than prompting interactively.
+
+  Out of scope: full graph-walk visualization (that's a  future feature).
+
+  Acceptance:
+  - [ ] `aida deps sweep` lists likely dependencies without writing anything.
+  - [ ] `aida deps sweep --apply` interactively confirms each suggestion.
+  - [ ] File-overlap signal correctly identifies overlap from `trace_links` even when the touched files exist outside the spec's stated 'feature'.
+  - [ ] Same-parent suggestions are marked 'weak' so they don't drown out the high-confidence signals.
+  - [ ] Integration test: file two specs touching the same file, run `aida deps sweep`, assert the suggestion surfaces with confidence 'high'.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:08:23.591115949Z
+modified_at: 2026-05-24T04:08:23.591115949Z
+req_type: Story
+tags:
+- advisor
+- autonomous-drain
+- batch
+- dependency-inference
