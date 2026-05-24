@@ -96,8 +96,7 @@ pub fn load(project_root: &Path) -> StackGraph {
 pub fn save(project_root: &Path, graph: &StackGraph) -> Result<()> {
     let p = path(project_root);
     if let Some(parent) = p.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("create {}", parent.display()))?;
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
     let body = serde_json::to_string_pretty(graph).context("serialize stack graph")?;
     aida_core::write_atomic(&p, body).with_context(|| format!("write {}", p.display()))?;
@@ -123,6 +122,18 @@ pub fn repoint(graph: &mut StackGraph, old_parent: &str, new_parent: &str, new_p
         if entry.parent_branch == old_parent {
             entry.parent_branch = new_parent.to_string();
             entry.parent_branch_sha = new_parent_sha.to_string();
+        }
+    }
+}
+
+/// Update only the recorded SHA for entries whose parent is `parent` —
+/// used after rebasing an intermediate stacked branch (its branch name
+/// is unchanged, but its HEAD moved, so dependents' recorded SHA is
+/// stale). Caller must pass the new HEAD SHA of `parent`.
+pub fn update_parent_sha(graph: &mut StackGraph, parent: &str, new_sha: &str) {
+    for entry in graph.entries.values_mut() {
+        if entry.parent_branch == parent {
+            entry.parent_branch_sha = new_sha.to_string();
         }
     }
 }
@@ -195,10 +206,7 @@ fn walk_paths<'a>(
 /// base just merged into main and needs rebasing onto main. Returned in
 /// bottom-up order (chain-root-adjacent first) so the cascade can rebase
 /// dependencies before dependents.
-pub fn parents_merged_in(
-    graph: &StackGraph,
-    merged_branches: &HashSet<String>,
-) -> Vec<StackEntry> {
+pub fn parents_merged_in(graph: &StackGraph, merged_branches: &HashSet<String>) -> Vec<StackEntry> {
     let mut hits: Vec<StackEntry> = graph
         .entries
         .values()
@@ -308,6 +316,17 @@ mod tests {
         // task-z still references task-y as parent — that's intentional;
         // the caller is responsible for repoint() if it wants to fix that.
         assert_eq!(g.get("task-z").unwrap().parent_branch, "task-y");
+    }
+
+    #[test]
+    fn update_parent_sha_touches_only_matching_parent() {
+        let mut g = StackGraph::default();
+        add(&mut g, entry("task-y", "task-x", "old-x"));
+        add(&mut g, entry("task-z", "task-y", "old-y"));
+        update_parent_sha(&mut g, "task-y", "new-y");
+        assert_eq!(g.get("task-z").unwrap().parent_branch_sha, "new-y");
+        // task-y's own parent_branch_sha (which points at task-x) is unchanged.
+        assert_eq!(g.get("task-y").unwrap().parent_branch_sha, "old-x");
     }
 
     #[test]

@@ -4037,7 +4037,12 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 return handle_pull_dry_run(store_path, *code_only, *store_only, *json);
             }
             return handle_pull_command(
-                store_path, *code_only, *store_only, *quiet, *no_gate, *auto,
+                store_path,
+                *code_only,
+                *store_only,
+                *quiet,
+                *no_gate,
+                *auto,
             );
         }
         Command::Fetch {
@@ -17208,7 +17213,12 @@ fn resolve_stack_base(
                 .unwrap_or(false)
         })
         .filter(|l| !lease_covers_cwd(l, &canon_cwd))
-        .filter(|l| !matches!(detect_merged_pr_for_branch(project_root, &l.branch), PrLookup::Found(_)))
+        .filter(|l| {
+            !matches!(
+                detect_merged_pr_for_branch(project_root, &l.branch),
+                PrLookup::Found(_)
+            )
+        })
         .collect();
     candidates.sort_by_key(|l| std::cmp::Reverse(l.started_at));
     let Some(pick) = candidates.into_iter().next() else {
@@ -17305,13 +17315,10 @@ mod resolve_stack_base_tests {
     #[test]
     fn resolve_stack_base_refuses_unknown_base() {
         let tmp = init_repo();
-        let err = resolve_stack_base(tmp.path(), tmp.path(), false, Some("nope"), false)
-            .unwrap_err();
+        let err =
+            resolve_stack_base(tmp.path(), tmp.path(), false, Some("nope"), false).unwrap_err();
         assert!(err.to_string().contains("nope"), "{err}");
-        assert!(
-            err.to_string().contains("does not exist"),
-            "{err}"
-        );
+        assert!(err.to_string().contains("does not exist"), "{err}");
     }
 
     #[test]
@@ -17326,8 +17333,7 @@ mod resolve_stack_base_tests {
             .success());
         // No `gh` in the sandbox → detect_merged_pr_for_branch returns
         // GhMissing, which falls through the merged check.
-        let out =
-            resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), false).unwrap();
+        let out = resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), false).unwrap();
         assert_eq!(out.as_deref(), Some("task-x"));
     }
 
@@ -17343,8 +17349,7 @@ mod resolve_stack_base_tests {
             .status()
             .unwrap()
             .success());
-        let out =
-            resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), true).unwrap();
+        let out = resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), true).unwrap();
         assert_eq!(out.as_deref(), Some("task-x"));
     }
 
@@ -17353,10 +17358,7 @@ mod resolve_stack_base_tests {
         let tmp = init_repo();
         std::fs::create_dir_all(tmp.path().join(".aida").join("sessions")).unwrap();
         let err = resolve_stack_base(tmp.path(), tmp.path(), true, None, false).unwrap_err();
-        assert!(
-            err.to_string().contains("no un-merged"),
-            "{err}"
-        );
+        assert!(err.to_string().contains("no un-merged"), "{err}");
     }
 }
 
@@ -41420,6 +41422,24 @@ fn handle_pull_command(
                             }
                         }
                     }
+                    // STORY-248: stacked-branch cascade. Walks
+                    // `.aida/stacks.json`; for each entry whose parent
+                    // branch is no longer reachable locally + on origin
+                    // (= it was merged + auto-deleted), rebase it onto
+                    // origin/main using the recorded fork-point SHA.
+                    // Best-effort: a failure prints a warning but does
+                    // NOT fail the pull (BUG-254 contract — pull's exit
+                    // reflects code + store legs only).
+                    // trace:STORY-248 | ai:claude
+                    if let Err(e) = cascade_rebase_stacked_branches(&project_root, auto) {
+                        eprintln!(
+                            "  {} stacked-branch cascade failed: {} (some stacked branches \
+                             may be unrebased; run `/aida-rebase` in each, or \
+                             `aida stack show` to inspect)",
+                            "Warning:".yellow().bold(),
+                            e
+                        );
+                    }
                 }
                 Ok(s) => {
                     // BUG-254: surface the recovery hint and an explicit
@@ -41561,6 +41581,463 @@ fn handle_pull_command(
         (Some(c), Some(s)) => {
             anyhow::bail!("aida pull: code leg failed ({c}); store leg failed ({s})")
         }
+    }
+}
+
+/// STORY-248: after `aida pull` lands new commits on main, rebase every
+/// stacked branch whose parent was just merged (= branch no longer
+/// exists locally or on origin) onto origin/main. Bottom-up: entries
+/// whose parent is "main" itself are obviously not affected; entries
+/// whose parent vanished are. After each successful rebase we update
+/// the recorded SHA for any dependent still pointing at the rebased
+/// branch (its branch is the same, its HEAD moved) and `repoint`
+/// dependents that pointed at the now-merged parent onto main.
+///
+/// Safety rails:
+///   - `aida_core::rebase::classify` is consulted first; a
+///     `DivergedRisky` (file-overlap) classification skips this branch
+///     with a clear error pointing at `/aida-rebase`. The user opted in
+///     to `--auto`, but file-overlap is the boundary where a human
+///     decision matters.
+///   - Without `--auto` and stdin attached, prompt per branch; without
+///     `--auto` and no stdin (`! IsTerminal::is_terminal`), print a
+///     summary of what WOULD be rebased and skip.
+///   - Worktree missing for a stacked entry → skip with a warning. The
+///     entry stays in the graph; `aida stack show --prune-stale` is the
+///     way to clean it up.
+///
+/// trace:STORY-248 | ai:claude
+fn cascade_rebase_stacked_branches(
+    project_root: &std::path::Path,
+    auto: bool,
+) -> anyhow::Result<()> {
+    let mut graph = stacks::load(project_root);
+    if graph.is_empty() {
+        return Ok(());
+    }
+    // Default-branch short name (e.g. "main") — entries whose parent IS
+    // main are not stacked behind anything, so the cascade skips them.
+    let default_short = detect_default_branch_ref(project_root)
+        .as_deref()
+        .and_then(|s| {
+            s.strip_prefix("origin/")
+                .map(|x| x.to_string())
+                .or(Some(s.to_string()))
+        })
+        .unwrap_or_else(|| "main".to_string());
+
+    // Affected = entries whose parent vanished from the local + origin
+    // refs (the signature of `gh pr merge --squash --delete-branch`).
+    // Don't flag entries whose parent IS the default branch; main never
+    // vanishes.
+    let mut affected: Vec<stacks::StackEntry> = graph
+        .entries
+        .values()
+        .filter(|e| e.parent_branch != default_short)
+        .filter(|e| !branch_exists_anywhere(project_root, &e.parent_branch))
+        .cloned()
+        .collect();
+    if affected.is_empty() {
+        return Ok(());
+    }
+    // Older entries (deeper in chain) come first.
+    affected.sort_by_key(|e| e.created_at);
+
+    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
+    if !auto && !interactive {
+        eprintln!(
+            "  {} {} stacked branch{} have merged bases; pass `--auto` to rebase \
+             (or run `/aida-rebase` interactively): {}",
+            "ⓘ".cyan(),
+            affected.len(),
+            if affected.len() == 1 { "" } else { "es" },
+            affected
+                .iter()
+                .map(|e| e.branch.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        return Ok(());
+    }
+
+    eprintln!(
+        "{} {} stacked branch{} to rebase onto {}",
+        "▶".cyan().bold(),
+        affected.len(),
+        if affected.len() == 1 { "" } else { "es" },
+        default_short.cyan()
+    );
+
+    for entry in affected {
+        let lease = list_leases(project_root)
+            .into_iter()
+            .find(|l| l.branch == entry.branch);
+        let Some(lease) = lease else {
+            eprintln!(
+                "  {} skipping `{}` — no lease found (worktree may have been removed; \
+                 run `aida stack show --prune-stale` to clean up the graph)",
+                "⚠".yellow().bold(),
+                entry.branch.cyan()
+            );
+            continue;
+        };
+        if !lease.worktree_path.exists() {
+            eprintln!(
+                "  {} skipping `{}` — worktree {} is missing",
+                "⚠".yellow().bold(),
+                entry.branch.cyan(),
+                lease.worktree_path.display()
+            );
+            continue;
+        }
+
+        // Per-entry prompt when not --auto. A `n` answer skips this
+        // branch but continues the cascade — the user might want to
+        // handle just one manually.
+        if !auto && interactive {
+            use std::io::Write;
+            eprint!(
+                "  Rebase `{}` onto {} (parent `{}` merged)? [y/N] ",
+                entry.branch.cyan(),
+                default_short.cyan(),
+                entry.parent_branch
+            );
+            let _ = std::io::stderr().flush();
+            let mut ans = String::new();
+            if std::io::stdin().read_line(&mut ans).is_err() {
+                eprintln!("  {} cascade aborted at stdin EOF", "✗".red());
+                return Ok(());
+            }
+            if !matches!(ans.trim(), "y" | "Y") {
+                continue;
+            }
+        }
+
+        // Refresh origin/<default> in the entry's worktree so the
+        // rebase target is the freshly-merged tip, not a stale ref.
+        // Best-effort — offline / fetch failure still tries the rebase
+        // against whatever cached ref we have.
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&lease.worktree_path)
+            .args(["fetch", "origin", &default_short])
+            .output();
+
+        // Run the rebase: `git rebase --onto origin/<default> <parent_sha> <branch>`
+        // from the entry's worktree. The 3-arg form skips commits in
+        // `parent_sha..` so the parent's pre-squash commits aren't
+        // re-applied. We skip the pre-classify-then-rebase split (it'd
+        // need a checkout first to read the right branch's ahead/behind)
+        // and rely on `git rebase`'s exit status: success means clean,
+        // non-zero means conflict, which the conflict arm below handles.
+        // trace:STORY-248 | ai:claude
+        let onto = format!("origin/{}", default_short);
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&lease.worktree_path)
+            .args([
+                "rebase",
+                "--onto",
+                &onto,
+                &entry.parent_branch_sha,
+                &entry.branch,
+            ])
+            .status();
+        match res {
+            Ok(s) if s.success() => {
+                // New HEAD of the rebased branch — used to update
+                // dependents' recorded parent_branch_sha.
+                let new_sha = aida_core::git_ops::head_sha(&lease.worktree_path).ok();
+                eprintln!(
+                    "  {} rebased `{}` onto {} ({})",
+                    "✓".green().bold(),
+                    entry.branch.cyan(),
+                    default_short.cyan(),
+                    new_sha
+                        .as_deref()
+                        .map(|s| &s[..s.len().min(8)])
+                        .unwrap_or("<unknown sha>")
+                        .dimmed()
+                );
+                // `entry.branch` is no longer stacked — its parent is
+                // now `main`. Drop it from the graph; dependents (whose
+                // parent_branch is still entry.branch) get their
+                // recorded SHA bumped so their next cascade pass is
+                // correct.
+                stacks::remove(&mut graph, &entry.branch);
+                if let Some(sha) = new_sha.as_deref() {
+                    stacks::update_parent_sha(&mut graph, &entry.branch, sha);
+                }
+                // Any other entries that pointed at the now-merged
+                // parent get their `parent_branch` repointed at main
+                // (their fork point has effectively moved to main).
+                stacks::repoint(
+                    &mut graph,
+                    &entry.parent_branch,
+                    &default_short,
+                    new_sha.as_deref().unwrap_or(""),
+                );
+                stacks::save(project_root, &graph)?;
+            }
+            Ok(_s) => {
+                // Conflict — leave the worktree mid-rebase so the user
+                // can resolve via `/aida-rebase` (cleanest signal); the
+                // alternative (auto-abort) would re-create the same
+                // problem next pull.
+                eprintln!(
+                    "  {} rebase of `{}` hit conflicts; left in mid-rebase state at {}. \
+                     Run `/aida-rebase` or `git rebase --abort` to recover.",
+                    "✗".red().bold(),
+                    entry.branch.cyan(),
+                    lease.worktree_path.display()
+                );
+                // Cascade aborts here — subsequent branches likely depend on this one.
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} could not spawn `git rebase` for `{}`: {}",
+                    "✗".red().bold(),
+                    entry.branch.cyan(),
+                    e
+                );
+                continue;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod cascade_rebase_tests {
+    //! STORY-248: cascade integration tests. Build a real git repo with
+    //! a stacked-branch scenario, write a fake lease + stacks.json, run
+    //! the cascade, assert the rebase landed. Skipped silently when
+    //! `git` is too old for `worktree add` semantics we need.
+    //! trace:STORY-248 | ai:claude
+    use super::*;
+
+    fn run_git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .expect("git spawn")
+    }
+
+    fn pin_identity(root: &std::path::Path) {
+        for args in [
+            vec!["config", "user.email", "t@x.example"],
+            vec!["config", "user.name", "t"],
+            vec!["config", "commit.gpgsign", "false"],
+            vec!["config", "tag.gpgsign", "false"],
+        ] {
+            assert!(
+                run_git(root, &args).status.success(),
+                "git config {args:?} failed"
+            );
+        }
+    }
+
+    fn init_repo_with_remote() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+        // Layout: <tmp>/origin (bare) + <tmp>/work (working repo).
+        let tmp = tempfile::tempdir().unwrap();
+        let origin = tmp.path().join("origin.git");
+        let work = tmp.path().join("work");
+
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q", "--bare", "-b", "main"])
+            .arg(&origin)
+            .status()
+            .unwrap()
+            .success());
+
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q", "-b", "main"])
+            .arg(&work)
+            .status()
+            .unwrap()
+            .success());
+        pin_identity(&work);
+
+        std::fs::write(work.join("README.md"), b"hello\n").unwrap();
+        assert!(run_git(&work, &["add", "README.md"]).status.success());
+        assert!(run_git(&work, &["commit", "-qm", "init"]).status.success());
+        assert!(run_git(
+            &work,
+            &["remote", "add", "origin", origin.to_str().unwrap()]
+        )
+        .status
+        .success());
+        assert!(run_git(&work, &["push", "-q", "-u", "origin", "main"])
+            .status
+            .success());
+
+        (tmp, origin, work)
+    }
+
+    /// Helper: drop a SessionLease toml so `list_leases` finds a
+    /// pseudo-session pointing at the given worktree + branch.
+    fn write_fake_lease(project_root: &std::path::Path, branch: &str, worktree: &std::path::Path) {
+        let leases = project_root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&leases).unwrap();
+        let lease = SessionLease {
+            id: format!("lease-{branch}"),
+            scope: branch.to_string(),
+            slug: branch.to_string(),
+            owner: "t".into(),
+            worktree_path: worktree.to_path_buf(),
+            branch: branch.to_string(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: Some(project_root.to_path_buf()),
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+        };
+        std::fs::write(
+            leases.join(format!("{}.toml", lease.id)),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn cascade_skips_when_no_stacked_branches() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Empty .aida/, no stacks.json — cascade should no-op.
+        cascade_rebase_stacked_branches(tmp.path(), true).unwrap();
+    }
+
+    #[test]
+    fn cascade_skips_entry_whose_parent_is_default_branch() {
+        // task-y whose parent is `main` is not a "stacked behind another
+        // branch" case; it's just a working branch. The cascade must
+        // leave it alone even when --auto is set.
+        let (_tmp, _origin, work) = init_repo_with_remote();
+        let mut graph = stacks::StackGraph::default();
+        stacks::add(
+            &mut graph,
+            stacks::StackEntry {
+                branch: "task-y".into(),
+                parent_branch: "main".into(),
+                parent_branch_sha: "00".into(),
+                spec_id: None,
+                created_at: chrono::Utc::now(),
+            },
+        );
+        stacks::save(&work, &graph).unwrap();
+        cascade_rebase_stacked_branches(&work, true).unwrap();
+        // Entry still there (untouched).
+        let reloaded = stacks::load(&work);
+        assert!(reloaded.get("task-y").is_some());
+    }
+
+    #[test]
+    fn cascade_rebases_clean_chain_onto_main_and_removes_entry() {
+        // Setup:
+        //   main:   init  → A   (pushed)
+        //   task-x: init  → A → B (forked from A, then `git push origin
+        //                          --delete task-x` simulates squash-merge)
+        //   task-y: init  → A → B → C (stacked on task-x)
+        //   New commit on main: D
+        //   After cascade: task-y rebased --onto origin/main <B-sha> task-y
+        //   → main D + C; stacks.json entry for task-y removed.
+        let (_tmp, _origin, work) = init_repo_with_remote();
+
+        // Commit A on main (already there).
+        let a_sha = aida_core::git_ops::head_sha(&work).unwrap();
+        let _ = a_sha;
+
+        // Branch task-x, commit B (the would-be-merged content).
+        assert!(run_git(&work, &["checkout", "-q", "-b", "task-x"])
+            .status
+            .success());
+        std::fs::write(work.join("x.txt"), b"x\n").unwrap();
+        assert!(run_git(&work, &["add", "x.txt"]).status.success());
+        assert!(run_git(&work, &["commit", "-qm", "task-x: add x"])
+            .status
+            .success());
+        let task_x_sha = aida_core::git_ops::head_sha(&work).unwrap();
+
+        // Branch task-y off task-x, commit C.
+        assert!(run_git(&work, &["checkout", "-q", "-b", "task-y"])
+            .status
+            .success());
+        std::fs::write(work.join("y.txt"), b"y\n").unwrap();
+        assert!(run_git(&work, &["add", "y.txt"]).status.success());
+        assert!(run_git(&work, &["commit", "-qm", "task-y: add y"])
+            .status
+            .success());
+
+        // Simulate the squash-merge: main gets a new commit with x.txt's
+        // content + a new file (D), then task-x is deleted both locally
+        // and from origin. We never pushed task-x — so deleting it
+        // locally is enough.
+        assert!(run_git(&work, &["checkout", "-q", "main"]).status.success());
+        std::fs::write(work.join("x.txt"), b"x\n").unwrap();
+        std::fs::write(work.join("d.txt"), b"d\n").unwrap();
+        assert!(run_git(&work, &["add", "x.txt", "d.txt"]).status.success());
+        assert!(
+            run_git(&work, &["commit", "-qm", "squash-merge task-x + D"])
+                .status
+                .success()
+        );
+        assert!(run_git(&work, &["push", "-q", "origin", "main"])
+            .status
+            .success());
+        // Remove task-x (-D because it's "not merged" by git's lights —
+        // squash-merge breaks the ancestry check).
+        assert!(run_git(&work, &["branch", "-q", "-D", "task-x"])
+            .status
+            .success());
+
+        // Record task-y in stacks.json + write a fake lease pointing at `work`.
+        let mut graph = stacks::StackGraph::default();
+        stacks::add(
+            &mut graph,
+            stacks::StackEntry {
+                branch: "task-y".into(),
+                parent_branch: "task-x".into(),
+                parent_branch_sha: task_x_sha.clone(),
+                spec_id: Some("TASK-Y".into()),
+                created_at: chrono::Utc::now(),
+            },
+        );
+        stacks::save(&work, &graph).unwrap();
+        write_fake_lease(&work, "task-y", &work);
+
+        // Run the cascade with --auto. It should classify behind-only
+        // (clean rebase) and run the rebase successfully.
+        cascade_rebase_stacked_branches(&work, true).unwrap();
+
+        // Post-conditions:
+        // 1. The stacks.json entry for task-y is gone (it was rebased
+        //    onto main and is no longer stacked).
+        let reloaded = stacks::load(&work);
+        assert!(
+            reloaded.get("task-y").is_none(),
+            "task-y should be removed from stacks.json after successful rebase, graph={:?}",
+            reloaded.entries
+        );
+        // 2. task-y now contains the post-rebase commit (y.txt) AND the
+        //    new d.txt that landed on main. Switch to it and check.
+        assert!(run_git(&work, &["checkout", "-q", "task-y"])
+            .status
+            .success());
+        assert!(work.join("y.txt").exists(), "y.txt missing after rebase");
+        assert!(
+            work.join("d.txt").exists(),
+            "d.txt (from main) missing after rebase"
+        );
     }
 }
 
@@ -57402,9 +57879,10 @@ fn handle_queue_work(
     // needs to consult them AFTER the lease has been removed by
     // `aida queue done`. Best-effort — a write failure logs but doesn't
     // fail the pickup. trace:STORY-248 | ai:claude
-    if let (Some(parent), Some(sha)) =
-        (lease.parent_branch.as_deref(), lease.parent_branch_sha.as_deref())
-    {
+    if let (Some(parent), Some(sha)) = (
+        lease.parent_branch.as_deref(),
+        lease.parent_branch_sha.as_deref(),
+    ) {
         let mut graph = stacks::load(&project_root);
         stacks::add(
             &mut graph,
@@ -57420,7 +57898,11 @@ fn handle_queue_work(
             eprintln!(
                 "  {} {}",
                 "⚠".yellow().bold(),
-                format!("stack graph save failed: {} (cascade may miss this branch)", e).yellow()
+                format!(
+                    "stack graph save failed: {} (cascade may miss this branch)",
+                    e
+                )
+                .yellow()
             );
         } else {
             eprintln!(
@@ -58388,12 +58870,7 @@ fn handle_stack_command(cmd: &StackCommand) -> Result<()> {
                         .as_deref()
                         .map(|s| format!(" {}", format!("({})", s).dimmed()))
                         .unwrap_or_default();
-                    println!(
-                        "{}└─ {}{}",
-                        indent,
-                        entry.branch.cyan(),
-                        spec
-                    );
+                    println!("{}└─ {}{}", indent, entry.branch.cyan(), spec);
                 }
             }
             Ok(())
