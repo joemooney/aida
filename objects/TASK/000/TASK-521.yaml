@@ -50,12 +50,12 @@ description: |-
   ## Origin
 
   2026-05-23 /aida-capture sweep. Codex's BUG-371 fix exposed the anti-pattern; this TASK is the broader audit.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:33:10.822701627Z
-modified_at: 2026-05-24T06:18:31.062451273Z
+modified_at: 2026-05-24T06:18:51.199348321Z
 req_type: Task
 tags:
 - aida-cli
@@ -93,3 +93,7 @@ comments:
     PR: https://github.com/joemooney/aida/pull/277
   created_at: 2026-05-24T06:18:23.800095314Z
   modified_at: 2026-05-24T06:18:23.800095314Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-24T06:18:51.199348321Z
+  implemented_by: joe
