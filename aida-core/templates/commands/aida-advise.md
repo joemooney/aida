@@ -22,7 +22,7 @@ Follow the workflow in `.claude/skills/aida-advise.md`:
    options, the implementer's lean, and an ultraplan-grade context brief)
 2. Classify the fork — Type A (recorded principle), B (recorded preference),
    or C (synthesized in-flight context)
-3. Consult the recorded corpus — `docs/aida-discipline/`, `docs/plans/`, the
+3. Consult the recorded corpus — `docs/aida/discipline/`, `docs/plans/`, the
    spec graph, memories, existing codebase conventions
 4. Decide — **resolve** only a Type A or recorded-B fork; **escalate**
    everything else. The default bias is escalate: if you would be guessing,

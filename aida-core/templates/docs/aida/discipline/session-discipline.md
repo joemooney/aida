@@ -71,7 +71,7 @@ The discriminator when classifying a file mid-refactor:
 
 | Artifact kind | Retroactive edit? |
 |---|---|
-| Living guidance (CLAUDE.md, skill templates, `docs/aida-discipline/`, README) | **YES** |
+| Living guidance (CLAUDE.md, skill templates, `docs/aida/discipline/`, README) | **YES** |
 | Code (source, configs, templates that compile/scaffold) | **YES** |
 | Plan files in `docs/plans/` | YES if active/load-bearing; NO once historical |
 | Dated SPIKE outputs (`docs/spikes/YYYY-MM-DD-*.md`) | **NO** |

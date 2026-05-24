@@ -1,0 +1,56 @@
+# AIDA reserved namespaces and project conventions.
+# Add project-specific entries when a path or filename becomes owned by a
+# tool, generator, or agent convention so planning prompts can avoid
+# collisions up front.
+
+[[reservations]]
+path = "docs/aida/"
+reason = "reserved by `aida docs build` for requirement-layer projection"
+
+[[reservations]]
+path = "docs/plans/"
+reason = "reserved by AIDA plan archival convention (`YYYY-MM-DD-<slug>.md`)"
+
+[[reservations]]
+path = ".aida/"
+reason = "reserved for AIDA runtime state; deny-by-default gitignore"
+
+[[reservations]]
+path = ".aida-store/"
+reason = "reserved for the AIDA orphan-store worktree"
+
+[[reservations]]
+path = ".claude/"
+reason = "reserved for Claude Code project-local config, skills, commands, and hooks"
+
+[[reservations]]
+path = ".codex/"
+reason = "reserved for Codex CLI scaffolding"
+
+[[reservations]]
+path = ".mcp.json"
+reason = "reserved for MCP server configuration"
+
+[[reservations]]
+path = "CLAUDE.md"
+reason = "reserved for Claude Code project context"
+
+[[reservations]]
+path = "AGENTS.md"
+reason = "reserved for Codex-compatible agent project context"
+
+[[reservations]]
+path = "aida-cli/"
+reason = "workspace crate: AIDA CLI"
+
+[[reservations]]
+path = "aida-core/"
+reason = "workspace crate: AIDA core library"
+
+[[reservations]]
+path = "aida-tui/"
+reason = "workspace crate: AIDA TUI"
+
+[[reservations]]
+path = "target/"
+reason = "Cargo build output"

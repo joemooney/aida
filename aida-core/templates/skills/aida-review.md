@@ -56,7 +56,7 @@ A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen` — see the *Headless mode contract* below for the full
 ordering invariant and the AskUserQuestion ban. An un-annotated prompt
 defaults to `design-fork` (pause-safe). Author guidance:
-`docs/aida-discipline/skill-prompt-kinds.md`. trace:STORY-287
+`docs/aida/discipline/skill-prompt-kinds.md`. trace:STORY-287
 
 ## Headless mode contract (`AIDA_HEADLESS=1`) — trace:BUG-280
 
@@ -556,6 +556,42 @@ EOF
   migration, a release tag), genuine strategic uncertainty. The code review
   still stands: write your real `verdict` (`Approved` if the code passed)
   **and** `"merge": "escalated-to-human"`.
+- `implementation_complexity` — **advisory, not graded** (STORY-439).
+  The diff-grounded complexity the changes actually demanded, one of
+  `low` / `med` / `high`. Captured to
+  `.aida/complexity-calibration/<SPEC>.yaml` for the three-way
+  calibration view (`aida autonomy calibration mismatches`). The
+  reviewer is the most objective of the three measurement points
+  (pickup → ship → review) because you see the full diff. Never part
+  of the PASS / FAIL decision; the field is omitted on older verdict
+  files.
+- `complexity_agreement` — **advisory, not graded** (STORY-439). Your
+  call on whether the implementer's ship-side complexity estimate
+  matched the diff: `matched` / `implementer-underestimated` /
+  `implementer-overestimated`. Omit when there was no ship-side
+  estimate to compare against — `aida` will derive the field
+  mechanically from the pickup/ship slot if you skip it.
+- `implementation_effort` — **advisory, not graded** (STORY-451).
+  Your effort estimate from the observed diff, one of `15m` / `1h` /
+  `4h` / `1d` / `1w`. `1d` means 8 work-hours; `1w` means 5
+  work-days / 40 work-hours. Captured to
+  `.aida/effort-calibration/<SPEC>.yaml` as the review touchpoint.
+
+Example with the STORY-439 fields filled in (`--no-human=both`,
+diff was bigger than the implementer claimed):
+
+```bash
+cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
+{
+  "verdict": "Approved",
+  "summary": "ships cleanly",
+  "mode": "orchestrator-phase-3",
+  "implementation_complexity": "high",
+  "complexity_agreement": "implementer-underestimated",
+  "implementation_effort": "1d"
+}
+EOF
+```
 
 **Escalating the merge decision.** Escalating is the honest move when you
 would otherwise be *guessing* whether to merge — it is distinct from
@@ -729,7 +765,7 @@ orchestrator-headless reviewer's verdict is read by phase 4. trace:BUG-280
   ```
 
   In default interactive mode leave the sentinel untouched and let the user
-  press Ctrl+D. Full protocol: `docs/aida-discipline/skill-prompt-kinds.md`.
+  press Ctrl+D. Full protocol: `docs/aida/discipline/skill-prompt-kinds.md`.
   trace:TASK-329 | ai:claude
 
 ### 7b. File non-blocking findings as draft TASKs (headless drain) — trace:STORY-278

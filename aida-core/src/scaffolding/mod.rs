@@ -236,7 +236,7 @@ fn generate_aida_header_shell(content: &str) -> String {
 /// Header form depends on file type:
 /// - `.json`             → no header (JSON has no comment syntax; an HTML
 ///   comment breaks parsers like Claude Code's settings reader).
-/// - shell scripts (`.sh`) → `# AIDA Generated: ...` shell-comment header
+/// - shell scripts (`.sh`) and TOML files → `# AIDA Generated: ...`
 ///   prepended.
 /// - markdown with YAML frontmatter (starts with `---\n` and has a
 ///   closing `---\n`) → header inserted *after* the frontmatter so YAML
@@ -256,10 +256,11 @@ pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> Strin
         || path_str.starts_with(".claude/hooks/")
         || raw_content.starts_with("#!");
     let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
+    let is_toml = path.extension().and_then(|e| e.to_str()) == Some("toml");
 
     if is_json {
         raw_content.to_string()
-    } else if is_shell {
+    } else if is_shell || is_toml {
         // The shebang (if present) must remain on line 1 or the OS won't
         // honor it. Inject the AIDA-Generated comment block AFTER the
         // shebang line. trace:BUG-21 | ai:claude
@@ -489,6 +490,9 @@ pub struct ScaffoldConfig {
     /// Include aida-digest skill for advisor-curated narrative work reports.
     /// trace:STORY-252
     pub include_aida_digest_skill: bool,
+    /// Include aida-backlog-groom skill for curating Approved work onto the
+    /// queue with risk + conflict heuristics. trace:STORY-444
+    pub include_aida_backlog_groom_skill: bool,
     /// Generate git hooks for traceability validation
     pub generate_git_hooks: bool,
     /// Include commit-msg hook for AI attribution validation
@@ -549,6 +553,8 @@ impl Default for ScaffoldConfig {
             include_aida_import_plan_skill: true,
             // trace:STORY-252
             include_aida_digest_skill: true,
+            // trace:STORY-444
+            include_aida_backlog_groom_skill: true,
             generate_git_hooks: true,
             include_commit_msg_hook: true,
             include_pre_commit_hook: true, // Enabled by default
@@ -863,6 +869,28 @@ impl Scaffolder {
                     FileStatus::New
                 },
             });
+        }
+
+        // .aida/reserved-paths.toml — hand-curated project reservations
+        // injected into `aida ultraplan` prompts. trace:TASK-517 | ai:codex
+        if let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get("reserved-paths.toml") {
+            new_dirs.insert(PathBuf::from(".aida"));
+            let path = PathBuf::from(".aida/reserved-paths.toml");
+            let artifact = self.create_artifact(
+                path.clone(),
+                body.to_string(),
+                "Project reserved namespaces for /ultraplan collision avoidance".to_string(),
+                false,
+            );
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+            artifacts.push(artifact);
         }
 
         // .claude/AIDA.md — single source of truth for AIDA conventions.
@@ -1376,6 +1404,30 @@ impl Scaffolder {
 
                 artifacts.push(artifact);
             }
+
+            // Add aida-backlog-groom skill. trace:STORY-444
+            if self.config.include_aida_backlog_groom_skill {
+                let path = PathBuf::from(".claude/skills/aida-backlog-groom.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_backlog_groom_skill(),
+                    "Skill for curating the Approved backlog onto the queue".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
         }
 
         // .codex/skills/ directory
@@ -1409,6 +1461,11 @@ impl Scaffolder {
                 ),
                 // trace:STORY-252
                 ("aida-digest", self.config.include_aida_digest_skill),
+                // trace:STORY-444
+                (
+                    "aida-backlog-groom",
+                    self.config.include_aida_backlog_groom_skill,
+                ),
             ];
 
             for (name, enabled) in codex_skill_defs {
@@ -1943,6 +2000,12 @@ impl Scaffolder {
                 "aida-digest",
                 "Curated narrative work digest for a time window",
             ),
+            // trace:STORY-444
+            (
+                "commands/aida-backlog-groom.md",
+                "aida-backlog-groom",
+                "Curate Approved backlog into the queue with risk + conflict analysis",
+            ),
         ];
 
         command_defs
@@ -2204,6 +2267,16 @@ Use this skill when:
             .unwrap_or_else(|| "# AIDA Digest Skill\n\n(template not found)".to_string())
     }
 
+    /// Generate aida-backlog-groom skill content (loads from embedded
+    /// template). trace:STORY-444
+    fn generate_aida_backlog_groom_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-backlog-groom.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Backlog Groom Skill\n\n(template not found)".to_string())
+    }
+
     /// Generate Codex skill content from an embedded Claude skill template.
     /// Converts frontmatter-style skill files into plain SKILL.md content.
     fn generate_codex_skill(&self, skill_name: &str) -> String {
@@ -2360,6 +2433,11 @@ mod tests {
         // Check that CLAUDE.md was created
         assert!(temp_dir.path().join("CLAUDE.md").exists());
         assert!(temp_dir.path().join("AGENTS.md").exists());
+        assert!(temp_dir.path().join(".aida/reserved-paths.toml").exists());
+        let reserved_paths =
+            std::fs::read_to_string(temp_dir.path().join(".aida/reserved-paths.toml")).unwrap();
+        toml::from_str::<toml::Value>(&reserved_paths)
+            .expect("scaffolded reserved-paths.toml must be valid TOML");
 
         // Check that .claude directories were created
         assert!(temp_dir.path().join(".claude/commands").exists());
@@ -2400,6 +2478,7 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-brief-pickup.md")));
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
+        assert!(paths.contains(&PathBuf::from(".aida/reserved-paths.toml")));
     }
 
     #[test]

@@ -92,7 +92,7 @@ Under `$AIDA_ZEN`, the runtime auto-resolves every `kind:confirmation` to
 option 1 (its first / recommended choice) and still surfaces every
 `kind:design-fork`. The classification rules — and the **option-1
 convention** (option 1 is always the smallest-valuable-slice / lowest-risk
-default) — live in `docs/aida-discipline/skill-prompt-kinds.md`. An
+default) — live in `docs/aida/discipline/skill-prompt-kinds.md`. An
 un-annotated prompt defaults to `design-fork` (pause-safe).
 
 This means the *mode* is one bit of state; the *behaviour* is encoded in the
@@ -651,7 +651,7 @@ designed at the edges of STORY-306 but not formalized.
 
 | Concept | Code / docs |
 |---------|-------------|
-| Three-mode taxonomy | `docs/autonomous-drain.md`, `docs/aida-discipline/skill-prompt-kinds.md`, STORY-287 |
+| Three-mode taxonomy | `docs/autonomous-drain.md`, `docs/aida/discipline/skill-prompt-kinds.md`, STORY-287 |
 | Provenance corroboration | `aida zen status`, `aida orchestrator status`, BUG-233, BUG-237 |
 | Punt mechanics | `aida-cli/src/punt.rs`, `.claude/skills/aida-punt.md`, STORY-332 |
 | Advisor tier | `aida-cli/src/auto_complete.rs::run_advisor`, `.claude/skills/aida-advise.md`, STORY-306 |
@@ -664,7 +664,7 @@ designed at the edges of STORY-306 but not formalized.
 
 For machinery vocabulary — orchestrator, phase, drain, lease, role, scope,
 session, worktree, sentinel, batch, autonomy mode — see
-`aida-core/templates/docs/aida-discipline/machinery-glossary.md`. For
+`aida-core/templates/docs/aida/discipline/machinery-glossary.md`. For
 spec-state verbs (Approved / Planned / In Progress / Done / Completed /
 Released) see `docs/lifecycle.md`. For the practical user-facing guide to
 `--auto-complete` and `--no-human`, see `docs/autonomous-drain.md`.
