@@ -23536,6 +23536,7 @@ mod story_429_auto_rebase_tests {
             false,
             allow_stale_base,
             no_auto_rebase,
+            auto_complete::LifecycleSkip::none(),
         )
     }
 
@@ -33646,6 +33647,32 @@ mod queue_tag_tests {
     }
 
     #[test]
+    fn tag_chip_hoists_lifecycle_tags_after_batch_tags() {
+        let chip = format_tag_chip(&tags(&[
+            "ux",
+            "lifecycle:no-review",
+            "batch:overnight",
+            "lifecycle:no-build",
+        ]))
+        .unwrap();
+        assert_eq!(
+            chip,
+            "batch:overnight, lifecycle:no-build, lifecycle:no-review, ux"
+        );
+    }
+
+    #[test]
+    fn tag_chip_always_shows_lifecycle_tags_before_plain_overflow() {
+        let chip = format_tag_chip(&tags(&["lifecycle:trivial", "a", "b", "c", "d", "e"])).unwrap();
+        assert!(
+            chip.starts_with("lifecycle:trivial"),
+            "lifecycle tag first: {chip}"
+        );
+        assert!(chip.ends_with("+2"), "plain overflow marker: {chip}");
+        assert_eq!(chip.split(", ").count(), 5, "{chip}");
+    }
+
+    #[test]
     fn batch_tag_of_finds_the_batch_tag() {
         assert_eq!(
             batch_tag_of(&tags(&["ux", "batch:plan-tooling", "queue"])),
@@ -36100,28 +36127,33 @@ fn parse_squash_pr_number(subject: &str) -> Option<u64> {
         .and_then(|n| n.parse::<u64>().ok())
 }
 
-/// TASK-238: the inline tag-chip body for an `aida queue list` row.
-/// `batch:*` tags come first and are always shown (they are the
-/// load-bearing grouping tags); plain tags are sorted, capped at 3, and
-/// any remainder collapses to a `+N` overflow marker. Returns None when
-/// the requirement carries no tags. trace:TASK-238 | ai:claude
+/// TASK-238/STORY-442: the inline tag-chip body for an `aida queue list`
+/// row. `batch:*` and `lifecycle:*` tags come first and are always shown
+/// (they alter pickup/routing behavior); plain tags are sorted, capped at
+/// 3, and any remainder collapses to a `+N` overflow marker. Returns None
+/// when the requirement carries no tags. trace:TASK-238 STORY-442
 fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
     if tags.is_empty() {
         return None;
     }
     const MAX_PLAIN: usize = 3;
     let mut batch_tags: Vec<&str> = Vec::new();
+    let mut lifecycle_tags: Vec<&str> = Vec::new();
     let mut plain_tags: Vec<&str> = Vec::new();
     for t in tags {
         if t.to_ascii_lowercase().starts_with("batch:") {
             batch_tags.push(t.as_str());
+        } else if t.to_ascii_lowercase().starts_with("lifecycle:") {
+            lifecycle_tags.push(t.as_str());
         } else {
             plain_tags.push(t.as_str());
         }
     }
     batch_tags.sort_unstable();
+    lifecycle_tags.sort_unstable();
     plain_tags.sort_unstable();
     let mut shown: Vec<String> = batch_tags.iter().map(|s| s.to_string()).collect();
+    shown.extend(lifecycle_tags.iter().map(|s| s.to_string()));
     shown.extend(plain_tags.iter().take(MAX_PLAIN).map(|s| s.to_string()));
     if plain_tags.len() > MAX_PLAIN {
         shown.push(format!("+{}", plain_tags.len() - MAX_PLAIN));
@@ -58666,6 +58698,13 @@ fn run_auto_complete(
         eprintln!("{} {}", "✗".red().bold(), e);
         std::process::exit(1);
     }
+    let lifecycle_skip = match resolve_lifecycle_skip(storage, spec) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{} {}", "✗".red().bold(), e);
+            std::process::exit(1);
+        }
+    };
 
     let project_root = match find_main_worktree_root() {
         Ok(p) => p,
@@ -58745,9 +58784,17 @@ fn run_auto_complete(
         steal,
         allow_stale_base,
         no_auto_rebase,
+        lifecycle_skip,
     );
     let started_at = chrono::Utc::now();
-    let result = auto_complete::orchestrate(&mut driver, spec, variant, json, escalate_mode);
+    let result = auto_complete::orchestrate_with_lifecycle_skip(
+        &mut driver,
+        spec,
+        variant,
+        json,
+        escalate_mode,
+        lifecycle_skip,
+    );
     let completed_at = chrono::Utc::now();
     // TASK-336: the run-UUID is no longer needed once `orchestrate` has
     // returned — every phase child has been spawned and reaped. Clear it on
@@ -60447,6 +60494,18 @@ fn prepare_auto_complete_phase1_status(
     Ok(Some((display_id, current)))
 }
 
+fn resolve_lifecycle_skip(storage: &Storage, spec: &str) -> Result<auto_complete::LifecycleSkip> {
+    let store = storage.load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, spec))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
+    Ok(auto_complete::LifecycleSkip::from_tags(
+        req.tags.iter().map(String::as_str),
+    ))
+}
+
 /// Best-effort lookup of the most recent workflow run id for `branch`, used
 /// to enrich the CI-failure recovery hint. trace:STORY-246 | ai:claude
 fn latest_run_id_for_branch(branch: &str) -> Option<String> {
@@ -61351,6 +61410,10 @@ struct RealPhaseDriver {
     no_auto_rebase: bool,
     /// STORY-429: embedded telemetry for phase-3 stale-base auto-rebase.
     auto_rebase_events: Vec<auto_complete_telemetry::AutoRebaseEvent>,
+    /// STORY-442: opt-in lifecycle short-circuit tags for non-integrity
+    /// phases. Phase 2 owns CI waiting; phases 3/6 are sequenced in
+    /// `auto_complete.rs`.
+    lifecycle_skip: auto_complete::LifecycleSkip,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -61370,6 +61433,7 @@ impl RealPhaseDriver {
         steal: bool,
         allow_stale_base: bool,
         no_auto_rebase: bool,
+        lifecycle_skip: auto_complete::LifecycleSkip,
     ) -> Self {
         Self {
             project_root,
@@ -61390,6 +61454,7 @@ impl RealPhaseDriver {
             allow_stale_base,
             no_auto_rebase,
             auto_rebase_events: Vec::new(),
+            lifecycle_skip,
         }
     }
 
@@ -62068,10 +62133,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })?;
 
-        // Probe, then block until CI is terminal. `PrNoChecks` is treated as
-        // "proceed" — matches `aida session end`'s CI semantics.
+        // Probe, then block until CI is terminal unless the spec opted into
+        // lifecycle:no-ci-wait / lifecycle:trivial. The non-waiting path still
+        // records the PR number and still ends the implementer lease below;
+        // it just lets CI finish in parallel with review/merge. trace:STORY-442
         let mut probe = probe_ci_state_for_branch(&branch);
-        if matches!(probe, CiProbe::InProgress { .. }) {
+        if matches!(probe, CiProbe::InProgress { .. }) && self.lifecycle_skip.no_ci_wait {
+            eprintln!(
+                "  {} CI still running on `{}` — skipping wait per lifecycle tag.",
+                "↷".cyan(),
+                branch
+            );
+        } else if matches!(probe, CiProbe::InProgress { .. }) {
             eprintln!(
                 "  {} waiting for CI on `{}` to finish…",
                 "◐".yellow(),
@@ -62107,10 +62180,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 );
             }
             CiProbe::InProgress { pr_number } => {
-                return Err(auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::CiTimeout,
-                    format!("CI on PR-{pr_number} did not reach a terminal state in time"),
-                ));
+                self.pr_number = Some(pr_number);
+                if !self.lifecycle_skip.no_ci_wait {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::CiTimeout,
+                        format!("CI on PR-{pr_number} did not reach a terminal state in time"),
+                    ));
+                }
             }
             CiProbe::NoSignal(reason) => {
                 // We confirmed a PR in phase 1, so this is an environment

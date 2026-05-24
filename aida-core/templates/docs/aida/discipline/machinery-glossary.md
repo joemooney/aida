@@ -49,6 +49,22 @@ launches phase 1 only and exits; with it, phases 1–6 run in sequence.
 Variants compose: `--auto-complete=through-ci` stops after phase 2;
 `--auto-complete=through-merge` stops after phase 4.
 
+### lifecycle short-circuit tags
+
+`lifecycle:*` tags are per-spec switches for deliberately skipping expensive
+non-integrity phases during `aida queue work --auto-complete`:
+
+- `lifecycle:no-ci-wait` — do not wait for CI to become terminal after the PR
+  opens. CI still runs on GitHub; the orchestrator just continues while it is
+  in progress.
+- `lifecycle:no-review` — skip the phase-3 reviewer model session.
+- `lifecycle:no-build` — skip the final local build verification.
+- `lifecycle:trivial` — shorthand for all three skips.
+
+Merge and pull/auto-bump never short-circuit. These tags are for small,
+low-blast-radius specs where the saved latency is worth the reduced
+redundancy; they are not a substitute for review discipline on risky changes.
+
 ### drain
 
 Working a queue (or a [batch](#batch)) of specs through to completion,
