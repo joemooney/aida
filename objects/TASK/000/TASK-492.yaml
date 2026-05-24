@@ -80,10 +80,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:30:38.859366257Z
-modified_at: 2026-05-23T05:48:22.858725830Z
+modified_at: 2026-05-24T06:36:41.885355500Z
 req_type: Task
 tags:
-- aida-brief
+- aida:brief
 - communication-model
 - multi-agent
 - parent:STORY-425
