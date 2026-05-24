@@ -40,12 +40,12 @@ description: |-
 
   - TASK-503 (just-shipped fmt auto-run section — not the source of DEBUG echoes but the discovery context)
   - FR-0226 (original hook spec — the technical-debt source)
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T00:58:56.413102025Z
-modified_at: 2026-05-24T02:57:37.209126300Z
+modified_at: 2026-05-24T02:57:53.198614656Z
 req_type: Task
 tags:
 - cleanup
@@ -73,3 +73,7 @@ comments:
     Test status: test_pre_commit_hook_scaffolded_and_works + test_pre_commit_hook_runs_cargo_fmt_on_staged_rust_files both green; manual scaffolded-fresh-repo commit produces clean stderr.
   created_at: 2026-05-24T02:57:06.845530383Z
   modified_at: 2026-05-24T02:57:06.845530383Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-24T02:57:53.198614656Z
+  implemented_by: joe
