@@ -59544,7 +59544,7 @@ fn parse_added_spec_id(stdout: &str) -> Option<String> {
 
 #[cfg(test)]
 mod task_266_tests {
-    use super::parse_added_spec_id;
+    use super::{auto_complete_queue_add_args, parse_added_spec_id};
 
     #[test]
     fn parses_spec_id_from_aida_add_output() {
@@ -59564,6 +59564,29 @@ mod task_266_tests {
     fn returns_none_for_empty_id_value() {
         assert_eq!(parse_added_spec_id("ID:   \n"), None);
     }
+
+    #[test]
+    fn auto_complete_preflight_queue_add_disables_cwd_scope_derivation() {
+        // BUG-352: `aida queue work <SPEC> --auto-complete` auto-queues
+        // an explicit spec as standalone work. It must not inherit a
+        // stale/misattributed cwd lease via queue-add's normal scope
+        // derivation path.
+        assert_eq!(
+            auto_complete_queue_add_args("TASK-488"),
+            vec![
+                "queue",
+                "add",
+                "TASK-488",
+                "--for",
+                "implementer",
+                "--no-scope"
+            ]
+        );
+    }
+}
+
+fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
+    vec!["queue", "add", spec, "--for", "implementer", "--no-scope"]
 }
 
 /// Queue `spec` for the implementer role if it isn't already queued for the
@@ -59590,11 +59613,11 @@ fn ensure_queued_for_implementer(storage: &Storage, user_id: &str, spec: &str) -
     );
     let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
     let status = std::process::Command::new(exe)
-        .args(["queue", "add", spec, "--for", "implementer"])
+        .args(auto_complete_queue_add_args(spec))
         .status()
         .context("failed to run `aida queue add`")?;
     if !status.success() {
-        anyhow::bail!("`aida queue add {spec} --for implementer` failed");
+        anyhow::bail!("`aida queue add {spec} --for implementer --no-scope` failed");
     }
     Ok(())
 }
