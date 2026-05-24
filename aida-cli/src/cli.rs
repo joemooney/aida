@@ -553,6 +553,16 @@ pub enum SessionCommand {
         // trace:TASK-67 | ai:claude
         #[clap(long)]
         role: Option<String>,
+
+        /// Claim a spec whose status is ambiguous: already In Progress
+        /// with no local lease (another worktree or machine holds it),
+        /// or NeedsAttention (punted by an autonomous agent and awaiting
+        /// advisor triage). Without this flag those states refuse and
+        /// ask you to triage first. Done / Completed / Rejected / Draft
+        /// always refuse — `--force-claim` does NOT override them.
+        // trace:BUG-379 | ai:claude
+        #[clap(long)]
+        force_claim: bool,
     },
 
     /// End a scoped session: remove the worktree, delete the lease,
