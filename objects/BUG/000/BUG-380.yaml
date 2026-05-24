@@ -1,0 +1,67 @@
+id: 019e5b9d-80ea-7413-89b3-42372f6e66ef
+spec_id: BUG-380
+agreed_id: BUG-380
+title: 'aida show <ID> emits ''fatal: Not a valid object name main'' inline on repos with non-main default branch'
+description: |-
+  ## Symptom
+
+  'aida show <SPEC-ID>' git-linkage section hardcodes 'main' as the default branch. On repos with a different default (e.g., 'master'), the git command underlying the linkage section fails with:
+
+    fatal: Not a valid object name main
+
+  This error text gets spliced inline into the rendered output — every 'aida show' invocation in such a repo shows the error mid-render. Cosmetic but noisy, particularly in agent contexts where the output text is consumed by another LLM (the error becomes context-pollution).
+
+  ## Reproduced 2026-05-24
+
+  aida-chat repo (default branch: 'master'). Every 'aida show <ID>' the aida-chat advisor ran today emitted the fatal-main error in the git-linkage section. Surfaced in the earlier STORY-21 and STORY-22 readouts.
+
+  ## Fix
+
+  Replace the hardcoded 'main' with default-branch resolution:
+
+  Preferred (handles both local and remote defaults):
+
+    git symbolic-ref refs/remotes/origin/HEAD --short
+      # output: origin/master OR origin/main, etc.
+      # then strip 'origin/' prefix
+
+  Fallback (when origin/HEAD is unset):
+
+    git config --get init.defaultBranch  → maps to whatever git config has
+    # or fall back to literal 'main' if all else fails
+
+  Cache the resolved value per-invocation; don't re-resolve on every git command.
+
+  ## Acceptance
+
+  - [ ] 'aida show <SPEC>' git-linkage section uses dynamically-resolved default branch
+  - [ ] No 'fatal: Not a valid object name main' splice on repos with non-main default
+  - [ ] Resolves origin/HEAD first, falls back to init.defaultBranch, falls back to 'main' literal
+  - [ ] Test: run 'aida show' on a repo with 'master' as default — clean output
+  - [ ] Test: run 'aida show' on a repo with 'main' as default — same output as today (no regression)
+
+  ## Composes with
+
+  - aida-chat (the consumer that surfaced this — its default is 'master')
+  - Future cross-project deployment (any project AIDA hasn't been dogfooded in may have non-main defaults)
+  - General agent-context hygiene (errors spliced into LLM-consumed output are higher-cost than human-consumed errors)
+
+  ## Origin
+
+  2026-05-24 aida-chat advisor cross-project report: 'Every aida show <ID> I've run today emits fatal: Not a valid object name main inline... Suggest defaulting to the actual default branch via git symbolic-ref refs/remotes/origin/HEAD or git config --get init.defaultBranch rather than literal main.'
+
+  trace:BUG-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T20:11:49.354533197Z
+modified_at: 2026-05-24T20:11:49.354533197Z
+req_type: Bug
+tags:
+- agent-context-hygiene
+- aida:show
+- cross-project
+- first-user-papercut
+- from-aida-chat
+- git-linkage
