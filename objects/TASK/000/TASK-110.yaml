@@ -58,10 +58,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:20:03.365833533Z
-modified_at: 2026-05-14T07:27:24.770668638Z
+modified_at: 2026-05-24T06:37:07.227142435Z
 req_type: Task
 tags:
-- aida-pr
+- aida:pr
 - ordering
 - session-lifecycle
 - skill
