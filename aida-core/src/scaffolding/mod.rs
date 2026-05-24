@@ -1428,6 +1428,34 @@ impl Scaffolder {
 
                 artifacts.push(artifact);
             }
+
+            // .claude/skills/local/README.md — per-project skill extensions
+            // (STORY-305). The `local/` directory hosts project-owned skills
+            // AIDA never manages; sibling `<skill>.local.md` files extend a
+            // stock skill via append-merge. Both survive `aida scaffold
+            // apply` and `make sync-templates` because neither path enters
+            // `local/` and no stock skill's filename ends in `.local.md`.
+            // The README is template-class so its explanation stays
+            // canonical across upgrades. trace:STORY-305 | ai:claude
+            new_dirs.insert(PathBuf::from(".claude/skills/local"));
+            let local_readme_path = PathBuf::from(".claude/skills/local/README.md");
+            let local_readme_artifact = self.create_artifact(
+                local_readme_path.clone(),
+                generate_local_skills_readme(),
+                "Per-project skill extensions (STORY-305)".to_string(),
+                false,
+            );
+            match &local_readme_artifact.file_status {
+                FileStatus::New => new_files.push(local_readme_path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(local_readme_artifact.path.clone())
+                }
+                FileStatus::OlderVersion { .. } => {
+                    upgradeable_files.push(local_readme_artifact.path.clone())
+                }
+                FileStatus::Unmodified => overwrites.push(local_readme_artifact.path.clone()),
+            }
+            artifacts.push(local_readme_artifact);
         }
 
         // .codex/skills/ directory
@@ -2292,6 +2320,67 @@ Use this skill when:
     }
 }
 
+/// README scaffolded into `.claude/skills/local/` so a new project sees the
+/// per-project skill-extension contract the first time it pokes around in
+/// `.claude/skills/`. Kept verbatim in sync with `docs/extending-skills.md`
+/// so the README is a TL;DR pointer, not a competing source of truth.
+/// trace:STORY-305 | ai:claude
+fn generate_local_skills_readme() -> String {
+    String::from(
+        "# Per-project skill extensions\n\
+         \n\
+         This directory and the `*.local.md` convention let a project extend\n\
+         AIDA's stock skills without forking them. AIDA never writes inside\n\
+         `local/`, never writes a `*.local.md` file, and `make sync-templates`\n\
+         never touches either — both survive every upgrade and re-scaffold.\n\
+         \n\
+         ## Two mechanisms, one rule\n\
+         \n\
+         1. **New skill** — drop `local/<my-skill>.md` here. Claude Code\n\
+            discovers it the same way it discovers stock skills. AIDA will\n\
+            never overwrite it.\n\
+         2. **Extend a stock skill** — alongside `.claude/skills/<name>.md`\n\
+            (one level up from this directory), add `<name>.local.md`. When\n\
+            `/aida-<name>` is invoked, the stock skill runs first and the\n\
+            `.local.md` content is **appended** as project-specific guidance\n\
+            with last-word authority — later instructions override earlier\n\
+            ones in normal markdown precedence.\n\
+         \n\
+         ## Tracked, not ignored\n\
+         \n\
+         Both `local/<my-skill>.md` and `<name>.local.md` are project assets:\n\
+         they are intentionally **checked into git** so the whole team picks\n\
+         up the project's skill customizations on `git pull`. The scaffolded\n\
+         `.gitignore` makes no exception for them; they fall under `.claude/`\n\
+         which is tracked by default.\n\
+         \n\
+         ## Worked example\n\
+         \n\
+         See `docs/extending-skills.md` for two end-to-end examples (a\n\
+         brand-new project-owned skill, and a `<skill>.local.md` extension\n\
+         to `/aida-pr`). trace:STORY-305\n",
+    )
+}
+
+fn strip_yaml_frontmatter(content: &str) -> String {
+    if !content.starts_with("---\n") && !content.starts_with("---\r\n") {
+        return content.to_string();
+    }
+
+    let after_open = if content.starts_with("---\r\n") { 5 } else { 4 };
+    let rest = &content[after_open..];
+    if let Some(close_pos) = rest.find("\n---\n") {
+        let body_start = after_open + close_pos + 5;
+        return content[body_start..].to_string();
+    }
+    if let Some(close_pos) = rest.find("\n---\r\n") {
+        let body_start = after_open + close_pos + 6;
+        return content[body_start..].to_string();
+    }
+
+    content.to_string()
+}
+
 /// Errors that can occur during scaffolding
 #[derive(Debug)]
 pub enum ScaffoldError {
@@ -2477,6 +2566,143 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-brief-pickup.md")));
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
         assert!(paths.contains(&PathBuf::from(".aida/reserved-paths.toml")));
+    }
+
+    /// STORY-305: `aida scaffold apply` must create `.claude/skills/local/`
+    /// with a README so the project sees the per-project skill-extension
+    /// surface the first time they look at `.claude/skills/`.
+    /// trace:STORY-305 | ai:claude
+    #[test]
+    fn test_local_skills_dir_and_readme_scaffolded() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).expect("scaffolding apply");
+
+        let local_dir = temp_dir.path().join(".claude/skills/local");
+        let readme = local_dir.join("README.md");
+        assert!(local_dir.is_dir(), ".claude/skills/local/ should be a dir");
+        assert!(readme.is_file(), "README.md should be scaffolded");
+
+        let body = std::fs::read_to_string(&readme).unwrap();
+        // The README must teach both mechanisms and the append-merge rule.
+        assert!(
+            body.contains("local/<my-skill>.md"),
+            "README should document the project-owned new-skill path"
+        );
+        assert!(
+            body.contains("<name>.local.md"),
+            "README should document the stock-skill extension path"
+        );
+        assert!(
+            body.to_lowercase().contains("append"),
+            "README should document append-merge semantics"
+        );
+    }
+
+    /// STORY-305: applying the scaffolder a second time MUST NOT touch a
+    /// pre-existing project-owned local skill under `.claude/skills/local/`,
+    /// nor a pre-existing `<name>.local.md` extension alongside a stock
+    /// skill. They're project assets — AIDA never overwrites them.
+    /// trace:STORY-305 | ai:claude
+    #[test]
+    fn test_resync_preserves_local_skill_extensions() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config.clone());
+        let store = create_test_store();
+
+        // First apply lays down the skills + the local/ dir + README.
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).expect("first apply");
+
+        // Project drops in two extensions: a brand-new project-owned skill
+        // and an extension to the (stock) aida-pr skill.
+        let project_skill = temp_dir.path().join(".claude/skills/local/my-deploy.md");
+        let project_skill_body = "# /my-deploy\n\nProject-owned skill body.\n";
+        std::fs::write(&project_skill, project_skill_body).unwrap();
+
+        let pr_local = temp_dir.path().join(".claude/skills/aida-pr.local.md");
+        let pr_local_body = "## Project addendum\n\nTitle must start with [SPEC-ID].\n";
+        std::fs::write(&pr_local, pr_local_body).unwrap();
+
+        // Second apply (the "re-sync" path). Must leave both files alone.
+        let mut scaffolder2 = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let preview2 = scaffolder2.preview(&store);
+        scaffolder2.apply(&preview2).expect("second apply");
+
+        // Neither file should have been deleted, renamed, or rewritten.
+        assert!(
+            project_skill.is_file(),
+            "project-owned local/ skill must survive re-apply"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&project_skill).unwrap(),
+            project_skill_body,
+            "project-owned local/ skill body must be byte-identical after re-apply"
+        );
+        assert!(
+            pr_local.is_file(),
+            "<skill>.local.md extension must survive re-apply"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&pr_local).unwrap(),
+            pr_local_body,
+            "<skill>.local.md extension body must be byte-identical after re-apply"
+        );
+
+        // The preview must not even *list* these files as artifacts —
+        // structurally proving the apply loop never had them to touch.
+        assert!(
+            !preview2
+                .artifacts
+                .iter()
+                .any(|a| a.path == PathBuf::from(".claude/skills/local/my-deploy.md")),
+            "scaffolder must never own a project-owned local/ skill"
+        );
+        assert!(
+            !preview2
+                .artifacts
+                .iter()
+                .any(|a| a.path == PathBuf::from(".claude/skills/aida-pr.local.md")),
+            "scaffolder must never own a *.local.md extension"
+        );
+    }
+
+    /// STORY-305: the always-imported `.claude/AIDA.md` conventions file
+    /// MUST teach Claude Code the append-merge rule for `<name>.local.md`,
+    /// so the merge happens for every session without per-skill changes.
+    /// trace:STORY-305 | ai:claude
+    #[test]
+    fn test_aida_md_documents_local_extension_rule() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+
+        let preview = scaffolder.preview(&store);
+        let aida_md = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == PathBuf::from(".claude/AIDA.md"))
+            .expect(".claude/AIDA.md should be scaffolded");
+
+        let body = &aida_md.content;
+        assert!(
+            body.contains("Per-project skill extensions"),
+            "AIDA.md should document the per-project extension section"
+        );
+        assert!(
+            body.contains(".local.md"),
+            "AIDA.md should name the .local.md convention so Claude Code reads it"
+        );
+        assert!(
+            body.to_lowercase().contains("append"),
+            "AIDA.md should specify append-merge semantics"
+        );
     }
 
     #[test]
