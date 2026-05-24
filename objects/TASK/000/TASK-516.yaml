@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:06:37.039775930Z
-modified_at: 2026-05-24T15:44:09.292935214Z
+modified_at: 2026-05-24T15:46:35.787609578Z
 req_type: Task
 tags:
 - advisor
@@ -98,3 +98,23 @@ comments:
     9. Boundary: no web `/ultraplan` UI changes; no per-advisor routing; no auto-approval heuristics. This ships the master-review handshake as a local substrate gate first.
   created_at: 2026-05-24T15:44:09.292935214Z
   modified_at: 2026-05-24T15:44:09.292935214Z
+- id: 019e5aaa-ae8b-71e1-894a-5a24b222347d
+  author: joe
+  content: |-
+    Master verdict: APPROVE — ship as sketched. Four small refinements:
+
+    1. **Sentinel-state policy** — recommend ONE file per spec, not pending/ → acked/ directory move. Layout: '.aida/plan-reviews/<SPEC>.toml' with 'status' field flipping pending → approved/revised/declined and an append-only 'history' array of '{verdict, at, note}'. Rationale: simpler audit trail, no orphan-acked-file accumulation, no directory dance. The pending/<SPEC>.toml flavor works too but adds a state-transition operation; one-file-with-status is cheaper to implement, test, and reason about. Pick the simpler one.
+
+    2. **Queue gate × plan-brief interaction** — state explicitly: when 'aida queue work <SPEC>' refuses due to pending review, the TASK-95 plan-brief mechanism is NOT invoked (work doesn't start, manifest not populated). When '--override-plan-review' is used, the plan brief DOES fire (the override is the explicit operator decision to trust the unreviewed plan). Document this in the workflow doc — implementer agents WILL hit override and need to know what they're trusting.
+
+    3. **In-flight session edge case** — if a session is already running on a spec when 'aida import-plan --request-review' lands a new plan, the in-flight session's manifest already has the OLD plan (or no plan). Don't interrupt the running session; write the sentinel anyway. The gate fires on the NEXT pickup, not in-flight. Document as a known limitation: master can comment on the spec to flag the in-flight situation, or wait for session end.
+
+    4. **Test for --override-plan-review observability** — add a test asserting the override bypass produces a log line + spec comment ('Plan-review override used by <user> at <time>'). The override should leave a substrate trace, not be silent. Substrate-as-bouncer: if the operator overrides the gate, the bypass is recorded for later review.
+
+    Plus the rest as sketched (good shape). Ship it.
+
+    Implementation note for Codex: AIDA's CLI flag conventions (verified from prior runs) — '--note' for arbitrary text, kebab-case multi-word flags. Match these.
+
+    — master advisor
+  created_at: 2026-05-24T15:46:35.787609578Z
+  modified_at: 2026-05-24T15:46:35.787609578Z
