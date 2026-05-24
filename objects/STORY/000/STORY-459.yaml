@@ -1,0 +1,68 @@
+id: 019e5ab5-dd9f-71f1-979c-924f04afaf66
+spec_id: STORY-459
+agreed_id: STORY-459
+title: 'aida queue: add --for-agent routing to complement --for-role (per-agent queue dispatch)'
+description: |-
+  ## Substrate gap
+
+  Today AIDA has two parallel routing surfaces:
+
+  - 'aida queue add <SPEC> --for-role implementer' — role-level routing (any implementer picks up)
+  - 'aida brief <agent> <SPEC>' — agent-level routing (specifically targeted at Codex / Antigravity / etc.)
+
+  When the operator runs multiple agents in parallel under the same role (e.g., Codex AND Antigravity both as implementers), the queue can't distinguish 'this is for Codex' vs 'this is for Antigravity'. Today's workaround is 'file a brief instead', which works but lives in a parallel surface from 'aida queue work'.
+
+  ## Proposed shape
+
+  1. 'aida queue add <SPEC> --for-agent <agent-name>' — agent-specific queue entry. Composes with --for-role (defaulting to that agent's known role). Pattern: 'aida queue add BUG-375 --for-agent codex' is shorthand for 'route to codex, who is an implementer'.
+
+  2. 'aida queue list --for-agent <agent>' — filter view. Default 'aida queue list' shows the current shell's agent identity (via AIDA_AGENT_TYPE env var or 'codex'/'claude' resolved from process tree).
+
+  3. 'aida queue work <SPEC>' — refuse if the spec's queue entry is routed to a DIFFERENT agent; suggest 'aida queue work <SPEC> --override-agent' for the operator to claim it manually.
+
+  4. 'aida queue next' — picks the highest-priority entry matching (role, agent) — agent-specific work first, then role-level work if no agent-specific work pending.
+
+  ## Agent identity resolution
+
+  Reuse the existing AIDA_AGENT_TYPE convention (set by 'aida agent new' supervised launchers). Add --agent <name> override for manual invocations. Default: shell USER if no agent identity detected (matches today's queue user_id resolution).
+
+  ## Integration with briefs
+
+  The brief surface stays — briefs carry richer context (note, role-context snapshot, operator framing). Queue routing is the lightweight 'this work belongs to that agent' marker. Briefs reference queue entries; queue entries reference briefs (bidirectional cross-link).
+
+  ## Empirical motivation
+
+  2026-05-24 during parallel dispatch (master, Codex-1 in aida, Codex-2 in aida-chat, Antigravity in aida): operator wants to say 'Codex-1 takes BUG-375 next' without conflicting with master's at-keyboard work or Antigravity's pickup loop. Today the operator must choose between role-routing (collision-prone) or brief-routing (parallel surface). Per-agent queue routing closes the gap with one unified surface.
+
+  ## Acceptance
+
+  - [ ] 'aida queue add --for-agent <name>' flag (composes with --for-role)
+  - [ ] 'aida queue list --for-agent <name>' filter
+  - [ ] 'aida queue list' defaults to current-agent view (env-resolved)
+  - [ ] 'aida queue work' refuses cross-agent pickup without --override-agent
+  - [ ] 'aida queue next' prioritizes agent-specific work before role-level work
+  - [ ] Cross-link with brief surface (brief writes queue entry with --for-agent)
+  - [ ] Docs: agent-routing decision guide (when to brief vs when to queue --for-agent)
+  - [ ] Tests: agent-routing roundtrip, cross-agent refusal, override path
+
+  ## Composes with
+
+  - EPIC-31 (agent-lifecycle keystone — identity resolution mechanics)
+  - TASK-502 (aida brief --notify sentinel — same routing context)
+  - BUG-89 (queue user_id resolution — extends the same model)
+  - feedback_one_master_advisor_until_subsystems — the master-tier dispatch this enables
+
+  trace:STORY-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T15:58:48.735617683Z
+modified_at: 2026-05-24T15:58:48.735617683Z
+req_type: Story
+tags:
+- aida:queue
+- from-self-test
+- multi-agent
+- routing
+- scaling-pattern
