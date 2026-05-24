@@ -66,11 +66,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T02:48:03.560841139Z
-modified_at: 2026-05-15T02:48:03.560841139Z
+modified_at: 2026-05-24T06:38:41.343206535Z
 req_type: Task
 tags:
+- aida:queue:work
 - merge
-- queue-work
 - solo-dev
 - status-aware-error
 - task-217-followup
