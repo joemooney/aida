@@ -90,12 +90,12 @@ description: |-
   2026-05-24 master walked the multi-agent state recovery dance manually twice (TASK-515 + TASK-542 abandonment patterns). User: 'this is maybe an advisor clean up skill that you can invoke when we get in this situations'. Master agrees — recipe is well-defined; skill-formalize it. User naming proposals: 'heal or doctor or remedy'.
 
   trace:STORY-X
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T18:09:33.894802381Z
-modified_at: 2026-05-24T19:35:09.578940059Z
+modified_at: 2026-05-24T19:48:36.199178984Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -133,3 +133,7 @@ comments:
   content: 'Composes with STORY-463 (SQLite cache lock retry + observability + stale-lock heal). Doctor gains 11th category ''stale-locks'' — orphan .aida/cache.db.lock-info file with dead PID. Heal: remove the lock-info file (OS already released the SQLite lock when PID died; only the metadata file lingers). STORY-463 ships the lock-info writer; doctor consumes it for stale detection.'
   created_at: 2026-05-24T19:35:09.578940059Z
   modified_at: 2026-05-24T19:35:09.578940059Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T19:48:36.199178984Z
+  completion_sha: d9075325a4330ae68d78a23a80f1663db550a329
