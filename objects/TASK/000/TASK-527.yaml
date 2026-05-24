@@ -1,0 +1,44 @@
+id: 019e58b7-a4d8-7e90-9ed4-834308da85f2
+spec_id: TASK-527
+agreed_id: TASK-527
+title: 'aida list --tags: support prefix-glob filtering (aida:queue:* → all subcommand tags under that surface)'
+description: |-
+  TASK-511 standardised tag values onto the colon-namespaced aida:<subcommand>[:<verb>] form so subcommand-touching specs cluster by surface. The payoff documented in CLAUDE.md and docs/aida/discipline/tag-conventions.md is:
+
+  ```bash
+  aida list --tags 'aida:queue:*'    # every spec touching the queue subcommand
+  aida list --tags 'aida:db:*'       # every spec touching db plumbing
+  ```
+
+  That filter does not work today — verified 2026-05-23 right after the TASK-511 migration: \`aida list --tags 'aida:queue:*'\` returns nothing, while \`aida list --tags 'aida:queue:work'\` (exact match) returns the 6 specs.
+
+  The substrate is now ready (33 distinct aida:* tags, hierarchically clean), but the consumer side hasn't caught up. Until it does, the documented value proposition for the migration is aspirational — operators have to enumerate each leaf tag by hand.
+
+  ## Acceptance
+
+  - [ ] \`aida list --tags 'aida:queue:*'\` returns every spec carrying any tag starting with the literal prefix \`aida:queue:\` (or exactly \`aida:queue\`)
+  - [ ] \`aida list --tags 'aida:queue:*,aida:status'\` composes (glob + exact, joined by the existing comma OR semantics)
+  - [ ] Documented in \`aida list --help\` and \`docs/aida/discipline/tag-conventions.md\`'s "The payoff" callout
+  - [ ] Test coverage in the cache filter layer (multi-spec corpus seeded with aida:queue:work + aida:queue:list + aida:status, query asserts the right subset)
+
+  ## Scope
+
+  Just the prefix-glob form (\`prefix:*\` and bare-prefix \`prefix\` which is the existing exact match). Not full glob syntax (\`*foo*\`, \`?\`, character classes) — that's a separate ask if it ever surfaces.
+
+  ## Origin
+
+  Discovered immediately after the TASK-511 migration when sanity-checking the new namespace. The migration shipped because the substrate consistency + downstream tooling (STORY-444 backlog-groom uses namespace overlap as heuristic) have standalone value, but the prefix-glob is the headline payoff and needs to land for the convention to feel complete.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T06:41:30.840459709Z
+modified_at: 2026-05-24T06:41:30.840459709Z
+req_type: Task
+tags:
+- aida:list
+- filter
+- from-self-test
+- papercut
+- prefix-glob
+- tags
