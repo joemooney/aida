@@ -21179,12 +21179,12 @@ struct TextQuestionPunt {
     lean: String,
 }
 
-/// BUG-354: classify the headless implementer's final `result` text as the
-/// plain-markdown variant of AskUserQuestion: the model asks the operator to
-/// choose a path, calls no tool, exits success, and opens no PR. We only scan
-/// the terminal result text and require both a question mark and decision-fork
-/// phrasing so normal implementation summaries that mention questions in
-/// passing keep the existing NoPr failure path.
+/// BUG-354 / BUG-374: classify the headless implementer's final `result` text
+/// as the plain-markdown variant of AskUserQuestion: the model asks the
+/// operator to choose/confirm a path, calls no tool, exits success, and opens
+/// no PR. We only scan the terminal result text and require both a question
+/// mark and decision-fork phrasing so normal implementation summaries that
+/// mention questions in passing keep the existing NoPr failure path.
 fn pending_text_question_from_headless_log(content: &str) -> Option<TextQuestionPunt> {
     let result = reviewer_summary::parse_result_event(content)?;
     if result.is_error {
@@ -21213,6 +21213,14 @@ fn pending_text_question_from_result_text(text: &str) -> Option<TextQuestionPunt
         "want me to",
         "how would you like",
         "need you to choose",
+        "please confirm",
+        "confirm and i'll proceed",
+        "confirm and i’ll proceed",
+        "confirm and i will proceed",
+        "confirm this path",
+        "confirm the path",
+        "confirm option",
+        "confirm approach",
     ];
     if !QUESTION_FORK_MARKERS
         .iter()
@@ -30330,6 +30338,20 @@ mod bug_354_text_question_classifier_tests {
             pending_text_question_from_result_text(text).expect("should-I fork must classify");
         assert!(punt.detail.contains("Should I update the parser"));
         assert!(punt.lean.contains("recommend"));
+    }
+
+    #[test]
+    fn final_result_with_confirm_and_proceed_question_classifies_as_punt() {
+        // BUG-374: STORY-444's headless implementer described a real fork,
+        // recommended a path, then ended with a confirmation question. The
+        // pre-BUG-374 marker list missed this wording and let the run fall
+        // through to a generic phase-1 NoPr failure instead of advisor-tier
+        // routing.
+        let text = "There are two implementation paths: A all-in-one, or B split into two passes.\n\nRecommendation: take A because the changes are tightly coupled.\n\nConfirm and I'll proceed?";
+        let punt = pending_text_question_from_result_text(text)
+            .expect("confirm-and-proceed fork must classify");
+        assert!(punt.detail.contains("Confirm and I'll proceed?"));
+        assert!(punt.lean.contains("Recommendation: take A"));
     }
 
     #[test]
