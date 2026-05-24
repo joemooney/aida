@@ -53,12 +53,12 @@ description: |-
   ## Origin
 
   Same as TASK-511. Convention documentation must ship alongside the rename so contributors understand the new pattern from the moment they encounter it.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:35:08.698774491Z
-modified_at: 2026-05-24T03:54:13.686426443Z
+modified_at: 2026-05-24T03:57:29.184961843Z
 req_type: Task
 tags:
 - convention
@@ -90,3 +90,7 @@ comments:
       the namespace rename. AC paths update accordingly.
   created_at: 2026-05-24T03:54:13.686426443Z
   modified_at: 2026-05-24T03:54:13.686426443Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-24T03:57:29.184961843Z
+  implemented_by: joe
