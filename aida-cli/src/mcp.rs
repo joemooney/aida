@@ -352,6 +352,19 @@ fn mcp_claim_path(dir: &Path, spec_id: &str) -> PathBuf {
     dir.join(format!("mcp-claim.{}.toml", spec_id.to_ascii_lowercase()))
 }
 
+fn canonicalize_worktree_arg(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    Path::new(trimmed)
+        .canonicalize()
+        .unwrap_or_else(|_| PathBuf::from(trimmed))
+        .to_string_lossy()
+        .to_string()
+}
+
 fn list_leases(project_root: &Path) -> Vec<LightLease> {
     let dir = leases_dir(project_root);
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -1255,11 +1268,13 @@ impl<'a> McpServer<'a> {
         // in `aida add` to unrelated shells in the parent worktree.
         // Empty / absent → record an empty `worktree_path` (advisory lock
         // only; `lease_covers_cwd` skip-matches it so no cwd-based
-        // inference attaches to the lease). trace:TASK-474 | ai:claude
+        // inference attaches to the lease). Non-empty paths are canonicalized
+        // at record-time so cwd comparisons don't drift on relative paths,
+        // symlinks, or `..` segments. trace:TASK-474 TASK-504 | ai:claude
         let worktree_path_arg = args
             .get("worktree_path")
             .and_then(|v| v.as_str())
-            .map(|s| s.trim().to_string())
+            .map(canonicalize_worktree_arg)
             .unwrap_or_default();
 
         // First pass: surface non-MCP leases (e.g. `aida session start`) that
@@ -3364,19 +3379,22 @@ mod tests {
         assert!(!listed_after.contains("STORY-CLAIM"), "{}", listed_after);
     }
 
-    /// TASK-474: when the agent passes `worktree_path`, the lease records it
-    /// verbatim. Consumers (`active_lease_for_cwd` in main.rs) can then tell
-    /// that the lease covers the agent's sibling worktree and route hints
-    /// correctly — instead of misattributing the agent's scope to every
-    /// shell in the parent (which is what happened before the arg existed:
-    /// `worktree_path` was hardcoded to `self.project_root`).
-    /// trace:TASK-474 | ai:claude
+    /// TASK-474: when the agent passes `worktree_path`, the lease records
+    /// that explicit sibling worktree so consumers (`active_lease_for_cwd`
+    /// in main.rs) route hints correctly — instead of misattributing the
+    /// agent's scope to every shell in the parent (which is what happened
+    /// before the arg existed: `worktree_path` was hardcoded to
+    /// `self.project_root`). TASK-504 canonicalizes the path at write-time
+    /// so later cwd comparisons are stable.
+    /// trace:TASK-474 TASK-504 | ai:claude
     #[test]
     fn claim_task_records_explicit_worktree_path() {
         let dir = tempdir().unwrap();
         let srv = mk_server(dir.path());
 
-        let sibling = "/home/joe/ai/aida-task-310";
+        let sibling_dir = dir.path().join("aida-task-310");
+        std::fs::create_dir_all(&sibling_dir).unwrap();
+        let sibling = sibling_dir.to_string_lossy().to_string();
         let claim = srv
             .tool_claim_task(&json!({
                 "spec_id": "TASK-310",
@@ -3394,6 +3412,41 @@ mod tests {
             .find(|l| l.scope == "TASK-310")
             .expect("the claim should have written a lease");
         assert_eq!(l.worktree_path, sibling);
+    }
+
+    /// TASK-504: claim_task canonicalizes the recorded `worktree_path` so a
+    /// non-canonical input path (for example, containing `..`) still matches
+    /// the canonical cwd used by `lease_covers_cwd`.
+    /// trace:TASK-504 | ai:codex
+    #[test]
+    fn claim_task_canonicalizes_explicit_worktree_path() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+        let real_worktree = dir.path().join("worktrees").join("task-504");
+        std::fs::create_dir_all(&real_worktree).unwrap();
+        let raw_worktree = real_worktree
+            .parent()
+            .unwrap()
+            .join("..")
+            .join("worktrees")
+            .join("task-504");
+
+        srv.tool_claim_task(&json!({
+            "spec_id": "TASK-504",
+            "role": "implementer",
+            "worktree_path": raw_worktree.to_string_lossy(),
+        }))
+        .unwrap();
+
+        let leases = list_leases(dir.path());
+        let l = leases
+            .iter()
+            .find(|l| l.scope == "TASK-504")
+            .expect("the claim should have written a lease");
+        assert_eq!(
+            l.worktree_path,
+            real_worktree.canonicalize().unwrap().to_string_lossy()
+        );
     }
 
     /// TASK-474: when `worktree_path` is omitted, the lease's worktree field
