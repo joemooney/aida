@@ -100,15 +100,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:49:19.704186488Z
-modified_at: 2026-05-22T19:17:10.960855374Z
+modified_at: 2026-05-24T02:32:26.122912009Z
 req_type: Story
 tags:
-- attention
-- cleanup
-- cli-ux
-- discoverability
-- from-user-question
-- status
+- aida-status
+- batch:aida-status
+- cleanup-surface
+- from-self-test
+- operator-ux
 comments:
 - id: 019e4b03-9534-79d3-8e11-3cb925dc6f8a
   author: joe
