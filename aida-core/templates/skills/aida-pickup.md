@@ -87,10 +87,17 @@ the discipline is to poll first.
 
 ## Argument forms
 
-`/aida-pickup` takes an optional argument:
+`/aida-pickup` takes an optional argument. **Step 2's confirm fires only
+on the bare no-argument form** — every other form below carries an
+explicit consent signal in the argument and skips the confirm (TASK-548):
 
 - **(no argument)** — pick up the queue head routed to the active role.
-- **`<SPEC-ID>`** — confirm and pick up that specific spec.
+  This is the *only* form that pauses to confirm.
+- **`<SPEC-ID>`** — pick up that specific spec straight away. The
+  SPEC-ID IS the commitment; the Step 3c spec card is the verification
+  surface, not a confirmation prompt. trace:TASK-548
+- **`--auto-first`** — launched by `aida queue work` (no-arg head mode
+  or cluster mode) after its pre-flight consent summary. trace:TASK-86
 - **`--batch <NAME>`** — *batch continuation*: pick up the next queued
   member of `batch:NAME` as additional commits on the **current branch**,
   without spawning a new worktree. Use it from inside an active batch
@@ -210,22 +217,32 @@ Show the user the item and ask whether to start. Examples:
 If the user says no (wants to skip, prioritize differently, etc.), stop
 here. Don't auto-skip to the next item — the queue order encodes priority.
 
-**Skip the confirm when invoked with `--auto-first`** (TASK-86). When
-`aida queue work` launches the skill in cluster mode (drain a parent
-scope) or head mode (no-arg, top of queue), it passes `--auto-first` to
-signal that the user has already authorized draining via the queue-work
-pre-flight summary. In that case, skip the "want me to start?" prompt
-and proceed straight to Step 3a/3b — re-asking inside the launched
-session is friction-without-value.
+**Skip the confirm whenever ANY argument was passed** (TASK-548,
+generalising TASK-86). The argument IS the consent signal. Three forms
+reach this skill with an argument, and all three skip the Step 2 confirm:
+
+- **`/aida-pickup <SPEC-ID>`** — operator explicitly typed the SPEC-ID
+  (either `aida queue work <SPEC-ID>`, which derives this prompt, or a
+  direct `/aida-pickup <SPEC-ID>` from the conversation). The SPEC-ID IS
+  the commitment; re-asking *"Confirm pickup of <SPEC-ID>?"* is the
+  friction-without-value TASK-548 was filed against. The spec card
+  (Step 3c) is the verification surface — if the operator picked the
+  wrong spec they Ctrl+C and roll back with `aida edit <SPEC-ID>
+  --status approved`. trace:TASK-548
+- **`/aida-pickup --auto-first`** (TASK-86) — `aida queue work` (no-arg
+  head mode, or cluster mode) launched the skill after its pre-flight
+  summary, which IS the consent point.
+- **`/aida-pickup --batch <NAME>`** — batch continuation; the batch
+  itself is the consent record (see *Batch continuation* above).
 
 Also skip it under `$AIDA_ZEN` (STORY-287) — this is a `kind:confirmation`
 prompt, so advisor-on-standby mode auto-resolves it: take "start" and
 proceed straight to Step 3a/3b, printing the one-line `↳ zen:` note.
 
-Keep the confirm for:
-- Direct `/aida-pickup` invocation (no upstream consent), in default mode
-- `aida queue work <ITEM-ID>` (item mode — user named one item, may
-  want to verify it's the right pickup)
+Keep the confirm **only** for the bare `/aida-pickup` invocation (no
+argument, no upstream consent, default mode) — that's the one form where
+the operator hasn't named anything and the skill is picking the head of
+the queue on their behalf.
 
 After the first item, you can also skip the per-item confirm when
 walking a planned cluster — the manifest IS the consent record. Surface
