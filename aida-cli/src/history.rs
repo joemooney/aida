@@ -29,10 +29,14 @@ pub struct HistoryOpts {
     pub status_changes_only: bool,
     pub comments_only: bool,
     pub oneline: bool,
-    /// Include rows whose current status is Completed/Rejected. Default
-    /// false: day-to-day `aida history` should surface live work, not the
-    /// archive. trace:TASK-64 | ai:claude
-    pub include_terminal: bool,
+    /// Spec-IDs currently archived. The default `aida history` view hides
+    /// rows whose spec_id is in this set. Empty when `--all` or `--archived`
+    /// was passed (no hiding needed). trace:STORY-441 | ai:claude
+    pub archived_specs: std::collections::HashSet<String>,
+    /// When `Some`, only rows whose spec_id is in this set are shown.
+    /// Used by `--archived` to narrow the view to the archive itself.
+    /// trace:STORY-441 | ai:claude
+    pub archived_only_specs: Option<std::collections::HashSet<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -180,32 +184,11 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         }
     }
 
-    // TASK-64: precompute terminal-status spec_ids to hide their events.
-    // One YAML read per surfaced spec; in events mode the limit is small
-    // (default 20) so we usually touch ~5-20 files. trace:TASK-64 | ai:claude
-    let terminal_specs: std::collections::HashSet<String> = if opts.include_terminal {
-        std::collections::HashSet::new()
-    } else {
-        let mut seen = std::collections::HashSet::new();
-        let mut out = std::collections::HashSet::new();
-        for e in &events {
-            if !seen.insert(e.spec_id.clone()) {
-                continue;
-            }
-            let yaml_path = store_path
-                .join("objects")
-                .join(&e.req_type)
-                .join("000")
-                .join(format!("{}.yaml", e.spec_id));
-            let (status, _, _) = read_current(&yaml_path);
-            if is_terminal_status_str(&status) {
-                out.insert(e.spec_id.clone());
-            }
-        }
-        out
-    };
-
     // Apply filters not handled by `git log` itself.
+    // STORY-441: archive filtering replaces the older terminal-status hide.
+    // `archived_specs` (non-empty when default `--non-archived`) hides those
+    // spec events; `archived_only_specs` (Some(...) when `--archived`)
+    // narrows to only those. trace:STORY-441 | ai:claude
     let filtered: Vec<&Event> = events
         .iter()
         .filter(|e| match &opts.id_filter {
@@ -232,18 +215,22 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
             }
             matches!(e.kind, EventKind::CommentsAdded { .. })
         })
-        .filter(|e| !terminal_specs.contains(&e.spec_id))
+        .filter(|e| !opts.archived_specs.contains(&e.spec_id))
+        .filter(|e| match &opts.archived_only_specs {
+            Some(only) => only.contains(&e.spec_id),
+            None => true,
+        })
         .take(opts.limit)
         .collect();
 
     if filtered.is_empty() {
         eprintln!("{}", "(no events match the filter)".dimmed());
-        if !terminal_specs.is_empty() {
+        if !opts.archived_specs.is_empty() {
             eprintln!(
                 "{}",
                 format!(
-                    "({} spec(s) hidden — pass --all to include events for Completed/Rejected items)",
-                    terminal_specs.len()
+                    "({} archived spec(s) hidden — pass --all to include archived events, or --archived for the archive only)",
+                    opts.archived_specs.len()
                 )
                 .dimmed()
             );
@@ -433,16 +420,18 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         true
     });
 
-    // TASK-64: hide terminal-status (Completed/Rejected) rows by default.
-    // Count what gets dropped so we can print a "(N hidden — pass --all …)"
-    // hint that mirrors `aida list`. trace:TASK-64 | ai:claude
-    let hidden_terminal = if opts.include_terminal {
-        0
-    } else {
+    // STORY-441: hide archived rows in the default view; count drops so we
+    // can print a "(N archived hidden — pass --all …)" hint that mirrors
+    // `aida list`. With `--archived`, narrow to the archive itself.
+    // trace:STORY-441 | ai:claude
+    let archived_hidden = {
         let before = entries.len();
-        entries.retain(|e| !is_terminal_status_str(&e.status));
+        entries.retain(|e| !opts.archived_specs.contains(&e.spec_id));
         before - entries.len()
     };
+    if let Some(only) = &opts.archived_only_specs {
+        entries.retain(|e| only.contains(&e.spec_id));
+    }
 
     // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
     entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
@@ -450,11 +439,13 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 
     if entries.is_empty() {
         eprintln!("{}", "(no recent activity)".dimmed());
-        if hidden_terminal > 0 {
+        if archived_hidden > 0 {
             eprintln!(
                 "{}",
-                format!("({hidden_terminal} hidden — pass --all to see Completed/Rejected items)")
-                    .dimmed()
+                format!(
+                    "({archived_hidden} archived hidden — pass --all or --archived to see them)"
+                )
+                .dimmed()
             );
         }
         return Ok(());
@@ -521,10 +512,10 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         );
     }
 
-    if hidden_terminal > 0 {
+    if archived_hidden > 0 {
         println!(
             "{}",
-            format!("  ({hidden_terminal} hidden — pass --all to see Completed/Rejected items)")
+            format!("  ({archived_hidden} archived hidden — pass --all or --archived to see them)")
                 .dimmed()
         );
     }
@@ -628,17 +619,6 @@ fn looks_like_spec_id(s: &str) -> bool {
 
 fn pick_author_email(email: &str) -> String {
     email.split('@').next().unwrap_or(email).to_string()
-}
-
-/// Whether a stringified status is terminal (Completed/Rejected). Local
-/// twin of `main::is_terminal_status` so this module stays self-contained
-/// (history.rs is consumed by integration tests without pulling in main).
-/// STORY-86: `Done` is NOT terminal — it's the gate between branch and
-/// main, and auto-bumps to Completed once the referencing commit merges.
-/// trace:TASK-64 STORY-86 | ai:claude
-fn is_terminal_status_str(s: &str) -> bool {
-    let t = s.trim();
-    t.eq_ignore_ascii_case("completed") || t.eq_ignore_ascii_case("rejected")
 }
 
 /// HH:MM if today (in the user's local tz), else "MM-DD HH:MM". Always

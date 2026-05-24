@@ -221,6 +221,31 @@ with `aida queue work <SPEC> --effort <bucket>`, at ship time with
 Each capture point also writes a per-spec record to
 `.aida/effort-calibration/<SPEC>.yaml`.
 
+### archived
+
+A view-level flag on a spec, orthogonal to its lifecycle **status**.
+Archived specs are hidden from default `aida list` / `aida history` /
+`aida search` views, but stay reachable via `--archived` (archive-only)
+and `--all` (everything-escape-hatch), and they still appear in graph
+traversals (parent/child/relationship walks). **Archive is not deletion:**
+the YAML stays on disk, the audit trail is intact, the graph stays
+coherent. Three triggers:
+
+- **manual:** `aida archive <SPEC-ID>` / `aida unarchive <SPEC-ID>` flip
+  the flag explicitly.
+- **on-demand sweep:** `aida archive --older-than 30d --status
+  completed,rejected --dry-run` previews; drop `--dry-run` to apply.
+- **auto-sweep:** with `[archive] auto_after_days = N` in
+  `.aida/config.toml`, `aida pull` archives every Completed/Rejected spec
+  whose `modified_at` is older than N days (clamped to ≥7).
+  `AIDA_AUTO_ARCHIVE=0` disables.
+
+Distinguishes "still active context, even if Completed" from "shelved,
+not part of today's view." Why this matters: a freshly Completed ship
+stays visible in the default view (so "did my ship register?" works
+without flags); a Completed spec from six months ago doesn't drown out
+current activity.
+
 ## Adjacent terms (defined elsewhere)
 
 These show up in the same sentences but live in other pages:

@@ -562,6 +562,9 @@ impl SqliteBackend {
                 comments,
                 history,
                 archived,
+                // STORY-441: legacy centralized SQLite backend is deprecated
+                // and does not persist archived_at; treat reads as unset.
+                archived_at: None,
                 custom_status,
                 custom_priority,
                 custom_fields,
@@ -1489,6 +1492,8 @@ impl DatabaseBackend for SqliteBackend {
                     comments,
                     history,
                     archived,
+                    // STORY-441: legacy centralized backend — not persisted.
+                    archived_at: None,
                     custom_status,
                     custom_priority,
                     custom_fields,

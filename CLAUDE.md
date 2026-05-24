@@ -59,9 +59,14 @@ When adding a new generic discipline memory, tag it `propagation: scaffolding-pa
 ### Daily-use commands
 
 ```bash
-aida list                              # Cache-backed (sub-ms vs full-store load)
+aida list                              # Cache-backed (sub-ms vs full-store load); default excludes archived
 aida list --status draft               # Filter by status
-aida search "<query>"                  # Cache-backed FTS5 search
+aida list --archived                   # Only archived rows; --all = both (STORY-441)
+aida search "<query>"                  # Cache-backed FTS5 search (same archive filter as list)
+aida history                           # Recent activity, incl. freshly-Completed; archive hides long-tail (STORY-441)
+aida archive <ID>                      # Mark a spec archived (hidden from default views, audit trail preserved)
+aida archive --older-than 30d --dry-run   # Preview bulk sweep; drop --dry-run to apply
+aida unarchive <ID>                    # Restore an archived spec
 aida show <ID>                         # Show requirement details + git linkage (commits/files/branch/PR — TASK-241)
 aida show <ID> --no-git                # Skip the git-linkage section; --verbose expands it
 aida add --title "..." --type story --status draft --tags "tag1,tag2"
@@ -286,6 +291,7 @@ Always verify CLI arguments with `aida <command> --help`. Common parameters:
 - `--status`: `draft`, `approved`, `planned`, `in-progress`, `done`, `completed`, `rejected`
   - The full state machine — Draft → Approved → Planned → In Progress → Done → Completed → Released, with the precise verb for each transition and the edge cases (cluster PRs, parallel pipelining, autonomous drains) — is documented in `docs/lifecycle.md` and the README's "Spec lifecycle" section. trace:TASK-273
   - **`done` vs `completed` (STORY-86)**: `done` means "work finished on a branch" (set by `aida queue done`). `completed` means "merged to the default branch." `aida pull` and `aida db sync --pull` auto-bump `done → completed` when a commit referencing the spec lands on main, so you typically don't set `--status completed` manually — let the merge promote it. **When the auto-bump misses** (BUG-96 made the YAML unreadable at pull time, or the spec flipped to Done after the referencing commit was already on local main), recover with `aida db reconcile-status` — a manual replay of the same scan over a wider window. Add `--spec SPEC-ID` for a targeted replay, `--since REF` to bound the range, `--dry-run` to preview without writing. trace:TASK-226
+  - **archive ≠ status (STORY-441)**: `archived` is a view-level flag orthogonal to `status`. `aida list` / `aida history` / `aida search` hide archived rows by default; `--archived` shows only archived; `--all` shows both. A freshly-Completed spec is *not* archived — it stays visible in the default view until an explicit `aida archive <ID>`, a bulk `aida archive --older-than 30d --dry-run` (default csv: completed,rejected), or the opt-in auto-sweep on `aida pull` (gated on `[archive] auto_after_days = N` in `.aida/config.toml`, clamped to ≥7 days; opt-out with `AIDA_AUTO_ARCHIVE=0`). Archive ≠ deletion: the YAML, the audit trail, and the requirement graph all survive. trace:STORY-441
 - `--priority`: `high`, `medium`, `low`
 
 ### Requirement types
