@@ -64,12 +64,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'docs seems like it is in the wrong place, maybe they should go under .aida and not conflict with any of the projects own docs.' Refined via design discussion: Option F (docs/aida/ for AIDA content + docs/plans/ for project content) is architecturally correct given no-existing-users window.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:20:54.935228214Z
-modified_at: 2026-05-24T05:04:18.327675613Z
+modified_at: 2026-05-24T05:48:27.411959956Z
 req_type: Story
 tags:
 - architecture
@@ -104,3 +104,7 @@ comments:
     — master advisor
   created_at: 2026-05-24T05:04:18.327675613Z
   modified_at: 2026-05-24T05:04:18.327675613Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T05:48:27.411959956Z
+  completion_sha: c59e14e262d190a1b724545e385a23b1f4cb1885
