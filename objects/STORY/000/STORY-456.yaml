@@ -1,0 +1,42 @@
+id: 019e5aae-60b5-70f2-a09b-01250aa9e6bf
+spec_id: STORY-456
+agreed_id: STORY-456
+title: 'aida status: surface worktrees + open PRs in unified view (STORY-385 follow-up)'
+description: |-
+  Refinement deferred from STORY-385. Add two sections to 'aida status' merging git worktree, session lease, and gh PR state into a single pane.
+
+  ## Worktree section
+  For each 'git worktree list' entry: path, branch, tied spec (from lease/branch-name/recent-commits), lease state, working-tree clean/dirty + N modified, commits ahead of origin/main, open PR link+state, obsolescence verdict.
+
+  Obsolescence verdict logic — TIED if any: active lease w/ live PID, uncommitted mods, branch has un-merged commits ahead, drain currently in worktree. OBSOLETE if all: dormant/no lease, clean tree, all commits merged or branch gone. Show marker: ✓ in flight / ⚠ obsolete — <recovery command>.
+
+  ## Open PRs section
+  'gh pr list --state open' with: number+title, branch+worktree, CI status, mergeability, linked spec, recommended next step per state.
+
+  ## Recently merged section
+  Last N (default 5) merged PRs for orientation.
+
+  ## Stale-CI handling (refinement from comment 019e511e-...)
+  Distinguish: latest CI on origin's HEAD vs historical runs on prior commits vs mergeability independent of CI. Don't conflate; today 'gh pr checks --watch' does conflate them, causing 'check failing but PR merged' confusion.
+
+  Composes with STORY-307 (worktree-as-substrate), BUG-307 (dormant lease auto-clean), TASK-458 (aida pr ship), STORY-405 (advisor activity).
+
+  Empirical motivation: user has been mental-merging 'git worktree list' + 'aida session leases' + 'gh pr list' across many recovery flows. Single pane saves minutes per recovery.
+
+  Source: STORY-385 comments at 2026-05-22 10:45 + 12:17.
+
+  trace:STORY-385
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T15:50:38.005547744Z
+modified_at: 2026-05-24T15:50:38.005547744Z
+req_type: Story
+tags:
+- aida:status
+- batch:aida-status
+- from-self-test
+- multi-agent
+- story-385-followup
+- worktree
