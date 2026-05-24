@@ -39,12 +39,12 @@ description: |-
   - After fix, aida-chat will be notified to drop its CLI fallback (re-test against fresh MCP)
 
   Surfaced-by: aida-chat advisor (cross-project filing per coordination protocol)
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T19:10:56.557219921Z
-modified_at: 2026-05-24T20:28:38.544462646Z
+modified_at: 2026-05-24T20:41:46.298325075Z
 req_type: Bug
 tags:
 - aida-chat-blocker
@@ -110,3 +110,7 @@ comments:
     Fix scope for BUG-377: repair add_comment + triage_finding comment construction, then add explicit MCP write-field roundtrip tests for add_requirement, update_requirement, add_comment, triage_finding comments, and a descriptor assertion that add_relationship is absent rather than untested.
   created_at: 2026-05-24T20:28:38.544462646Z
   modified_at: 2026-05-24T20:28:38.544462646Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T20:41:46.298325075Z
+  completion_sha: 54b8125c2ec70f8c572c0498b4006dd3df5a75f0
