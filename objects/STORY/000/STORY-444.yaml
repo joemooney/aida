@@ -1,0 +1,100 @@
+id: 019e57c9-7141-7643-8f66-e13c77ccd99c
+spec_id: STORY-444
+agreed_id: STORY-444
+title: '/aida-backlog-groom skill + aida backlog CLI: curate Approved items into queue with risk + conflict analysis'
+description: |-
+  ## Why
+
+  User direction 2026-05-23: agile terminology has settled in for AIDA (backlog, queue, sprint, epic, story, task). The backlog (Approved items not yet queued) needs a grooming workflow to move items into the queue for batch or parallel processing.
+
+  User's framing: 'I can imagine I want to move very low risk/non conflicting items so that I can process in a batch or in parallel.'
+
+  Currently there is no purpose-built grooming surface. Operators manually scan aida list --status approved + manually decide what to enqueue. Tedious and error-prone for large backlogs.
+
+  ## Proposed shape
+
+  Two surfaces: a CLI verb + a Claude Code skill that wraps it for interactive use.
+
+  ### aida backlog CLI
+
+    aida backlog list                     -- show non-queued Approved items
+    aida backlog list --risk low          -- filter to low-risk (heuristic from tags + type + priority)
+    aida backlog list --type task --tag papercut  -- filter by spec metadata
+    aida backlog groom                    -- interactive selection -> queue insertion
+    aida backlog groom --batch NAME       -- selected items tagged batch:NAME for batch drain
+    aida backlog groom --dry-run          -- preview without modifying
+    aida backlog analyze --pair SPEC SPEC -- conflict report between two specs (file overlap, trace graph)
+
+  ### /aida-backlog-groom skill
+
+    .claude/skills/aida-backlog-groom.md (template) + .claude/commands/aida-backlog-groom.md (slash command).
+
+    Interactive workflow: present non-queued Approved items with risk + conflict assessment, AskUserQuestion to multi-select, then bulk aida queue add + apply batch tag.
+
+  ## Risk-assessment heuristics (initial)
+
+  - Low risk: TYPE in {task, doc} + Priority in {low} + tags contain any of {papercut, cosmetic, severity:cosmetic, lifecycle:trivial, docs-only, fmt}
+  - Medium risk: TYPE in {task, bug} + Priority in {medium} OR has a plan file in docs/plans/
+  - High risk: TYPE in {story, epic, spike} OR Priority in {high} OR has dependencies / parent specs
+
+  Heuristics are HINTS, not gates. Operator can override during groom.
+
+  ## Conflict-detection (advisory, not blocking)
+
+  For each pair of candidate specs, identify file overlap via:
+  1. Existing trace comments referencing the spec (// trace:SPEC-N)
+  2. Plan files in docs/plans/ that reference the spec
+  3. Recent commits referencing the spec via standard trailer format
+
+  Pairs touching the SAME files cannot run in parallel safely (parallel branches would conflict at merge). Report as 'pair X and Y both touch aida-cli/src/main.rs -- serialize, do not parallelize.'
+
+  Non-overlapping pairs are flagged as 'safe parallel candidates.'
+
+  ## Composes with
+
+  - batch:NAME convention -- groomed items get a batch tag for batch drain
+  - aida queue work --batch NAME -- consumes the groomed batch
+  - lifecycle:trivial tag family (just-filed STORY) -- groom can auto-suggest lifecycle:trivial for low-risk items
+  - STORY-248 (stacked-branch awareness for parallel pipelining) -- conflict detection feeds into parallel-safety determination
+  - STORY-441 (archive concept) -- archived specs excluded from grooming by default
+
+  ## Acceptance
+
+  - [ ] aida backlog list / groom / analyze CLI verbs implemented
+  - [ ] Risk-assessment heuristics applied (with override)
+  - [ ] Conflict-detection from trace graph + plan files (advisory output)
+  - [ ] groom workflow supports interactive selection + batch tagging
+  - [ ] /aida-backlog-groom skill template + slash command scaffolded
+  - [ ] Scaffolding-pack: every AIDA project gets both surfaces
+  - [ ] Docs in docs/aida/ (per Option F naming) explaining the workflow
+  - [ ] Test: groom on a synthetic backlog with known conflict pairs returns correct pair classification
+
+  ## Out of scope
+
+  - Auto-grooming (cron-based or pull-triggered) -- too opinionated for v1
+  - Cross-machine queue rebalancing -- different problem
+  - Sprint-planning UI (assigning groomed items to a sprint label) -- composable later via tags
+  - Machine-learning-based risk prediction -- heuristics first, evidence-based later via STORY-439's calibration data
+
+  ## Origin
+
+  2026-05-23 user: 'we are using agile terminology now ... I wonder if we want an /aida-backlog-groom command/skill to move items into the queue. I can imagine I want to move very low risk/non conflicting items so that I can process in a batch or in parallel.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:21:20.065824954Z
+modified_at: 2026-05-24T02:21:20.065824954Z
+req_type: Story
+tags:
+- agile
+- backlog
+- batch
+- cli
+- conflict-detection
+- from-user-direction
+- grooming
+- parallel-pipelining
+- queue
+- risk-analysis
+- skill
