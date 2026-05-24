@@ -1,0 +1,12 @@
+id: 019e5acd-8af0-7393-925a-6db9763c190d
+spec_id: TASK-545
+agreed_id: TASK-545
+title: Full Worktrees section in `aida status` — every worktree, obsolescence
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T16:24:40.432363492Z
+modified_at: 2026-05-24T16:24:40.432363492Z
+req_type: Task
