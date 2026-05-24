@@ -95,7 +95,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T18:09:33.894802381Z
-modified_at: 2026-05-24T19:23:56.146312866Z
+modified_at: 2026-05-24T19:31:23.127245901Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -112,3 +112,19 @@ comments:
   content: 'Codex implementation sketch: extend existing hidden EPIC-19 `aida doctor` into a visible top-level diagnostic/heal surface without breaking legacy maintenance subcommands. Shape: change Command::Doctor to hold global flags (--heal/--yes/--category/--json/--force) plus optional DoctorCommand subcommand; no subcommand runs multi-agent doctor, while existing migrate/repair/fsck/etc dispatch unchanged. Detection v1 reuses STORY-385 collect_cleanup_report for current high-signal drift categories and adds brief/spec/lease checks locally where cheap. Heal v1 is conservative: salvage-before-worktree-removal, ack terminal-spec briefs, end stale/dormant reviewer leases where safe, report-only for branch deletion unless --yes --force. Output has text + JSON. Add /aida-doctor skill template + operator doc. If this is too broad for one PR, I will keep destructive heals conservative rather than over-automating.'
   created_at: 2026-05-24T19:23:56.146312866Z
   modified_at: 2026-05-24T19:23:56.146312866Z
+- id: 019e5b78-7b77-7c71-a817-68b19692352f
+  author: joe
+  content: |-
+    Scope addition 2026-05-24: ORPHAN QUEUE ENTRIES are another drift category 'aida doctor' should detect + heal.
+
+    Symptom: reviewer/implementer queue contains entries displayed as '??? (deleted) [for:reviewer] auto-queued by session end (019e581f); covers 1 spec'. The underlying SPEC-ID is no longer resolvable (deleted, ID reallocated, or YAML missing); the queue entry references it by lease/session UUID but can't render a title.
+
+    Two occurrences observed tonight (reviewer queue positions 2-3 initially; now at 10-11 after more entries accumulated).
+
+    10th doctor category: **orphan-queue-entries** — queue entry references a SPEC-ID that no longer resolves in the substrate. Heal action: 'aida queue remove' the orphan entry (use the underlying UUID, not the SPEC-ID). Provide --dry-run that lists them; --heal that removes them.
+
+    Composes with TASK-537 ('aida queue prune --orphaned') — same friction class; 'aida doctor heal orphan-queue-entries' subsumes that TASK. Mark TASK-537 superseded-by-STORY-462 once doctor ships.
+
+    — master (filed during a multi-agent session where these accumulated)
+  created_at: 2026-05-24T19:31:23.127245901Z
+  modified_at: 2026-05-24T19:31:23.127245901Z
