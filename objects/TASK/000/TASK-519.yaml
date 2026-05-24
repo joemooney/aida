@@ -1,0 +1,61 @@
+id: 019e5823-102e-70e2-a03a-f7a5958c4071
+spec_id: TASK-519
+agreed_id: TASK-519
+title: 'aida edit --tags: replace-only is a footgun; add --tags-add / --tags-remove for non-clobbering tag edits'
+description: |-
+  ## Empirical multiple sessions
+
+  aida edit <spec> --tags 'a,b,c' REPLACES the spec's full tag set with [a, b, c]. Existing tags not listed are dropped silently. From the prior session summary: '--tags REPLACE-ONLY clobbered specs; clobbered 6 specs' tag contexts. Recovered via re-applying full tag lists from spec descriptions.'
+
+  Even within this session: when applying batch tags, master had to re-enumerate ALL existing tags + add the batch tag to preserve context (e.g., aida edit STORY-385 --tags batch:aida-status,from-self-test,cleanup-surface,operator-ux,aida-status — note the re-listing).
+
+  This is a footgun. Operator mental model is 'add a tag' or 'remove a tag'; the substrate does 'set the tag list'.
+
+  ## Proposed fix
+
+  Two new flags that compose with --tags:
+
+    aida edit <spec> --tags 'a,b,c'           # current: REPLACE behavior (preserved for explicit reset)
+    aida edit <spec> --tags-add 'd,e'         # NEW: append d + e to existing; don't touch others
+    aida edit <spec> --tags-remove 'a'        # NEW: drop a from existing; don't touch others
+    aida edit <spec> --tags-add 'd' --tags-remove 'a'   # both compose
+
+  Or alternatively: --tags becomes the append-behavior + --tags-set forces replace. Less safe because it CHANGES existing semantics. Stick with three explicit verbs.
+
+  ## Acceptance
+
+  - [ ] --tags-add <CSV> flag implemented; appends to existing tags
+  - [ ] --tags-remove <CSV> flag implemented; removes from existing tags
+  - [ ] --tags (existing) behavior unchanged for back-compat
+  - [ ] All three compose in single invocation
+  - [ ] Error if --tags-add tag already present (silent no-op? or warn? — operator-debate)
+  - [ ] Error if --tags-remove tag not present (silent no-op? or warn? — operator-debate)
+  - [ ] Help text on --tags explicitly warns 'REPLACES all tags; use --tags-add for non-clobbering' (transparency at point of use)
+  - [ ] Documentation update in CLAUDE.md / machinery-glossary
+  - [ ] Regression test: aida edit X --tags-add y on a spec with existing tags preserves all existing
+
+  ## Composes with
+
+  - feedback_no_partial_force_overwrite (same clobber-on-partial-spec family)
+  - feedback_failed_flag_attempts_are_ux_signals (operator's reach for --tags-add is the design signal)
+  - TASK-511 (tag migration -- migration script can use --tags-add / --tags-remove cleanly)
+
+  ## Origin
+
+  Multiple sessions including 2026-05-23 /aida-capture sweep. The replace-only footgun has bitten the master + sibling agents repeatedly; codifying the fix prevents recurrence.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T03:59:13.454679134Z
+modified_at: 2026-05-24T03:59:13.454679134Z
+req_type: Task
+tags:
+- aida:edit
+- cli-ux
+- clobber-risk
+- from-self-test
+- from-user-friction
+- operator-mental-model
+- papercut
+- tags
