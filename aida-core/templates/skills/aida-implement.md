@@ -81,7 +81,7 @@ aida zen status
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen`. An un-annotated prompt defaults to `design-fork`
-(pause-safe). Author guidance: `docs/aida-discipline/skill-prompt-kinds.md`.
+(pause-safe). Author guidance: `docs/aida/discipline/skill-prompt-kinds.md`.
 trace:STORY-287
 
 **Graceful exit under the orchestrator (TASK-329).** If this skill runs
@@ -97,7 +97,7 @@ and comment is done and there is no hand-off to another skill — the
 The orchestrator polls for that file and reaps the otherwise-idle REPL (a
 skill cannot synthesize the Ctrl+D it would press interactively — BUG-230).
 Touch it **once, last**; skip it entirely in default interactive mode. Full
-protocol: `docs/aida-discipline/skill-prompt-kinds.md`. trace:TASK-329
+protocol: `docs/aida/discipline/skill-prompt-kinds.md`. trace:TASK-329
 
 Key this off `$AIDA_EXIT_SENTINEL` being set — a per-session absolute path
 the orchestrator minted — not the bare `AIDA_AUTO_COMPLETE` env var. If you
@@ -238,7 +238,7 @@ aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
    next user-action is not acceptable: a closing summary must name
    *"→ Press Ctrl+D to advance the orchestrator"* or *"→ session will
    auto-exit; nothing else needed"* explicitly. Full rubric:
-   `docs/aida-discipline/session-discipline.md` § *Finish-state
+   `docs/aida/discipline/session-discipline.md` § *Finish-state
    communication rubric*. The worked templates live in `/aida-pickup`
    Step 6 (menu) and `/aida-pr` orchestrator-mode (closing block).
    trace:TASK-359

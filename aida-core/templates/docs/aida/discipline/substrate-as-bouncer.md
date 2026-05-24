@@ -38,7 +38,7 @@ Upon running `git commit`, the pre-commit bouncer:
    Refusing commit: target/debug/build/... is gitignored. Editing intermediate
    build products produces non-reproducible fixes. Modify the
    source (or pass --allow-intermediate to override). See:
-   docs/aida-discipline/substrate-as-bouncer.md
+   docs/aida/discipline/substrate-as-bouncer.md
    ```
 
 ### The Deliberate Escape Hatch
