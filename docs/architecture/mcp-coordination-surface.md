@@ -61,10 +61,11 @@ client support.
 `aida mcp-serve` runs a JSON-RPC 2.0 server over stdio that exposes two
 surfaces:
 
-### Surface 1 — Spec graph (original 7 tools)
+### Surface 1 — Spec graph (9 tools)
 
 `list_requirements`, `show_requirement`, `add_requirement`,
-`update_requirement`, `search_requirements`, `add_comment`, `list_features`.
+`update_requirement`, `search_requirements`, `add_comment`,
+`add_relationship`, `list_features`, `history`.
 These read/write the AIDA requirement store — the same data `aida list` /
 `aida show` / `aida edit` operate on.
 

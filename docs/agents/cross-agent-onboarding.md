@@ -18,11 +18,11 @@ The strategic positioning: the IDE-embedded coding assistants (Cursor, Cline, Ai
 
 ## What you can do via MCP today
 
-AIDA's MCP server exposes **25 tools** in two clusters:
+AIDA's MCP server exposes **26 tools** in two clusters:
 
 **Important:** the canonical argument names come from `tools/list` over MCP. The list below mirrors what the server actually advertises (verified via `aida-cli/src/mcp.rs` inputSchema descriptors). If a future edit to this doc drifts from the source, **trust `tools/list`**, file a finding, and `aida` will fix the doc.
 
-### Cluster 1 — Spec graph (8 tools)
+### Cluster 1 — Spec graph (9 tools)
 
 - `list_requirements({status})` → list specs (optionally filtered)
 - `show_requirement({id})` → full spec content, relationships, comments
@@ -30,6 +30,7 @@ AIDA's MCP server exposes **25 tools** in two clusters:
 - `update_requirement({id, ...})` → edit
 - `search_requirements({query})` → FTS5 search
 - `add_comment({id, text})` → comment on a spec  *(arg is `text`, not `body`)*
+- `add_relationship({spec_id, relationship_type, target_spec_id, bidirectional?, force_parent?})` → add a typed relationship between existing specs. Built-ins include `parent`, `child`, `duplicate`, `verifies`, `verified-by`, `references`, `blocked-by`, and `blocks`; `depends-on` aliases to `blocked-by`, and custom non-empty names are accepted for CLI parity.
 - `list_features()` → list project features
 - `history({spec_id?, since?})` → structured event ledger, equivalent to `aida history --events`
 
@@ -66,7 +67,7 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
 
 These are the **agent-coordination primitives**. They're how multiple agents (you, a human, another agent) coordinate on the same spec graph without stepping on each other.
 
-> **Schemas:** all 25 tools advertise `inputSchema` and descriptor-level `outputSchema`. Runtime responses still use MCP text content envelopes; structured emission of `structuredContent` is the Path B follow-up (**STORY-399**). Treat `outputSchema` as descriptor metadata until that ships.
+> **Schemas:** all 26 tools advertise `inputSchema` and descriptor-level `outputSchema`. Runtime responses still use MCP text content envelopes; structured emission of `structuredContent` is the Path B follow-up (**STORY-399**). Treat `outputSchema` as descriptor metadata until that ships.
 
 ## How to connect (minimum viable)
 
@@ -161,7 +162,7 @@ In priority order for an agent boarding the project:
 
 AIDA's bet is that the next phase of agent collaboration isn't "smarter agents" but "shared substrate that all agents can coordinate against." Today every coding agent runs in its own isolated context window with its own scratchpads and its own private notes. Switching agents — or running multiple in parallel — means losing context.
 
-The MCP server is the **substrate-as-shared-coordination-surface** made operational. When you (Codex / Cursor / future agent) attach to an AIDA project and use these 25 tools, you're not running on AIDA's island; you're contributing to a graph that Claude Code, the human, and any other agent are also working in. Findings filed via MCP show up in `aida findings list`. Punts you raise route to the same advisor tier human punts route to. Briefs routed to you can be listed, read, and acknowledged through MCP. Specs you implement get traced via the same `trace:SPEC-ID` convention any other agent uses.
+The MCP server is the **substrate-as-shared-coordination-surface** made operational. When you (Codex / Cursor / future agent) attach to an AIDA project and use these 26 tools, you're not running on AIDA's island; you're contributing to a graph that Claude Code, the human, and any other agent are also working in. Findings filed via MCP show up in `aida findings list`. Punts you raise route to the same advisor tier human punts route to. Briefs routed to you can be listed, read, and acknowledged through MCP. Specs you implement get traced via the same `trace:SPEC-ID` convention any other agent uses.
 
 This is what makes the "agent-agnostic" positioning real rather than rhetorical. Your participation evidences it.
 

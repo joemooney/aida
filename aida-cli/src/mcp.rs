@@ -5,10 +5,10 @@
 //!
 //! Implements JSON-RPC 2.0 over stdio. Exposes two surfaces:
 //!
-//! 1. **Spec graph** (8 tools) — read/write the requirement
+//! 1. **Spec graph** (9 tools) — read/write the requirement
 //!    store: `list_requirements`, `show_requirement`, `add_requirement`,
 //!    `update_requirement`, `search_requirements`, `add_comment`,
-//!    `list_features`, `history`.
+//!    `add_relationship`, `list_features`, `history`.
 //! 2. **Coordination** (STORY-361) — read/write the file substrate the
 //!    AIDA orchestrator and skills already use:
 //!    - **Punts** (`.aida/punts.jsonl` + `.aida/punts/`): `list_punts`,
@@ -57,8 +57,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use aida_core::{
-    Comment, PuntCategory, Requirement, RequirementPriority, RequirementStatus, RequirementType,
-    Storage,
+    Comment, PuntCategory, RelationshipType, Requirement, RequirementPriority, RequirementStatus,
+    RequirementType, Storage,
 };
 
 use crate::agent_registry::{self, AgentBinaryIdentity};
@@ -482,6 +482,7 @@ impl<'a> McpServer<'a> {
             "update_requirement" => self.tool_update_requirement(&arguments),
             "search_requirements" => self.tool_search_requirements(&arguments),
             "add_comment" => self.tool_add_comment(&arguments),
+            "add_relationship" => self.tool_add_relationship(&arguments),
             "list_features" => self.tool_list_features(),
             "history" => self.tool_history(&arguments),
 
@@ -917,6 +918,77 @@ impl<'a> McpServer<'a> {
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
         Ok(format!("Comment added to {}", id))
+    }
+
+    // trace:TASK-551 | ai:codex
+    fn tool_add_relationship(&self, args: &Value) -> Result<String, String> {
+        let spec_id = args
+            .get("spec_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id")?;
+        let target_spec_id = args
+            .get("target_spec_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: target_spec_id")?;
+        let relationship_type_raw = args
+            .get("relationship_type")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: relationship_type")?;
+        let bidirectional = args
+            .get("bidirectional")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let force_parent = args
+            .get("force_parent")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let rel_type = parse_mcp_relationship_type(relationship_type_raw)?;
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        let source_req = store
+            .get_requirement_by_spec_id(spec_id)
+            .ok_or_else(|| format!("Requirement '{}' not found", spec_id))?;
+        let target_req = store
+            .get_requirement_by_spec_id(target_spec_id)
+            .ok_or_else(|| format!("Requirement '{}' not found", target_spec_id))?;
+
+        let source_id = source_req.id;
+        let target_id = target_req.id;
+        let source_title = source_req.title.clone();
+        let target_title = target_req.title.clone();
+
+        if !force_parent {
+            let parent_for_guard = match &rel_type {
+                RelationshipType::Child => Some(target_req),
+                RelationshipType::Parent => Some(source_req),
+                _ => None,
+            };
+            if let Some(parent) = parent_for_guard {
+                if crate::is_terminal_status(&parent.status) {
+                    return Err(format!(
+                        "parent {} is {} — adding new children to a closed parent is usually a mistake. Pass `force_parent: true` to override.",
+                        parent.spec_id.as_deref().unwrap_or("?"),
+                        parent.status,
+                    ));
+                }
+            }
+        }
+
+        store
+            .add_relationship(&source_id, rel_type.clone(), &target_id, bidirectional)
+            .map_err(|e| e.to_string())?;
+        self.storage.save(&store).map_err(|e| e.to_string())?;
+
+        let mut out = format!(
+            "Relationship added: {} ({}) --[{}]--> {} ({})",
+            spec_id, source_title, rel_type, target_spec_id, target_title
+        );
+        if bidirectional {
+            if let Some(inverse) = rel_type.inverse() {
+                out.push_str(&format!("; inverse added as {}", inverse));
+            }
+        }
+        Ok(out)
     }
 
     fn tool_list_features(&self) -> Result<String, String> {
@@ -1754,6 +1826,34 @@ fn parse_requirement_type(s: &str) -> Option<RequirementType> {
     }
 }
 
+// trace:TASK-551 | ai:codex
+fn parse_mcp_relationship_type(s: &str) -> Result<RelationshipType, String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return Err(
+            "relationship_type must be non-empty (examples: parent, child, blocked-by, references)"
+                .to_string(),
+        );
+    }
+
+    let lowered = trimmed.to_ascii_lowercase();
+    Ok(match lowered.as_str() {
+        "parent" => RelationshipType::Parent,
+        "child" => RelationshipType::Child,
+        "duplicate" => RelationshipType::Duplicate,
+        "verifies" => RelationshipType::Verifies,
+        "verified-by" | "verified_by" | "verifiedby" => RelationshipType::VerifiedBy,
+        "references" | "related" | "relates-to" | "relates_to" | "relatesto" => {
+            RelationshipType::References
+        }
+        "blocked-by" | "blocked_by" | "blockedby" | "depends-on" | "depends_on" | "dependson" => {
+            RelationshipType::BlockedBy
+        }
+        "blocks" => RelationshipType::Blocks,
+        custom => RelationshipType::Custom(custom.to_string()),
+    })
+}
+
 /// Read the current git branch under `project_root`. `None` on detached HEAD
 /// or git failure.
 fn current_branch_at(project_root: &Path) -> Option<String> {
@@ -2075,6 +2175,46 @@ pub fn tool_descriptors() -> Value {
             },
             "outputSchema": text_envelope_output_schema(
                 "a confirmation line `Comment added to <SPEC-ID>`."
+            )
+        },
+        {
+            "name": "add_relationship",
+            "description": "Add a typed relationship between two existing requirements, mirroring `aida rel add` for MCP consumers. Built-in types include parent, child, duplicate, verifies, verified-by, references, blocked-by, and blocks; non-empty custom names are accepted for CLI parity. `depends-on` is accepted as an alias for blocked-by.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec_id": {
+                        "type": "string",
+                        "description": "Source requirement SPEC-ID.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "TASK-551"
+                    },
+                    "relationship_type": {
+                        "type": "string",
+                        "description": "Relationship type to add. Built-ins: parent, child, duplicate, verifies, verified-by, references, blocked-by, blocks. Aliases: depends-on → blocked-by; related / relates-to → references. Non-empty custom names are accepted for CLI parity.",
+                        "example": "blocked-by"
+                    },
+                    "target_spec_id": {
+                        "type": "string",
+                        "description": "Target requirement SPEC-ID.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "STORY-398"
+                    },
+                    "bidirectional": {
+                        "type": "boolean",
+                        "description": "When true, also add the relationship inverse when the type has one.",
+                        "example": true
+                    },
+                    "force_parent": {
+                        "type": "boolean",
+                        "description": "Override the terminal-parent guard for parent/child edges, matching `aida rel add --force-parent`.",
+                        "example": false
+                    }
+                },
+                "required": ["spec_id", "relationship_type", "target_spec_id"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Relationship added: <SOURCE> (<title>) --[<type>]--> <TARGET> (<title>)`, with an inverse note when `bidirectional` added one."
             )
         },
         {
@@ -2999,9 +3139,10 @@ mod tests {
             .iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
             .collect();
-        // 8 spec-graph + 17 coordination = 25 total.
-        assert!(names.len() >= 25, "expected ≥25 tools, got {}", names.len());
+        // 9 spec-graph + 17 coordination = 26 total.
+        assert!(names.len() >= 26, "expected ≥26 tools, got {}", names.len());
         for required in [
+            "add_relationship",
             "history",
             "list_punts",
             "read_punt",
@@ -3036,8 +3177,8 @@ mod tests {
         let desc = tool_descriptors();
         let arr = desc.as_array().expect("tool_descriptors must be an array");
         assert!(
-            arr.len() >= 25,
-            "expected ≥25 tool descriptors (8 spec-graph + 17 coordination), got {}",
+            arr.len() >= 26,
+            "expected ≥26 tool descriptors (9 spec-graph + 17 coordination), got {}",
             arr.len()
         );
 
@@ -3395,9 +3536,108 @@ mod tests {
         );
     }
 
-    // trace:TASK-550 | ai:codex
+    // trace:TASK-551 | ai:codex
     #[test]
-    fn mcp_write_inventory_has_no_add_relationship_tool() {
+    fn mcp_add_relationship_roundtrips_to_show_requirement() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let parent = server
+            .tool_add_requirement(&json!({
+                "title": "Parent epic",
+                "description": "relationship target",
+                "type": "epic",
+            }))
+            .unwrap();
+        let parent_id = added_spec_id(&parent).to_string();
+        let child = server
+            .tool_add_requirement(&json!({
+                "title": "Child task",
+                "description": "relationship source",
+                "type": "task",
+            }))
+            .unwrap();
+        let child_id = added_spec_id(&child).to_string();
+
+        let response = server
+            .tool_add_relationship(&json!({
+                "spec_id": child_id,
+                "relationship_type": "child",
+                "target_spec_id": parent_id,
+                "bidirectional": true,
+            }))
+            .unwrap();
+        assert!(response.contains("Relationship added"), "{response}");
+        assert!(response.contains("inverse added as parent"), "{response}");
+
+        let shown_child = server
+            .tool_show_requirement(&json!({ "id": child_id }))
+            .unwrap();
+        assert!(
+            shown_child.contains(&format!("- child → {parent_id}")),
+            "{shown_child}"
+        );
+        let shown_parent = server
+            .tool_show_requirement(&json!({ "id": parent_id }))
+            .unwrap();
+        assert!(
+            shown_parent.contains(&format!("- parent → {child_id}")),
+            "{shown_parent}"
+        );
+    }
+
+    // trace:TASK-551 | ai:codex
+    #[test]
+    fn mcp_add_relationship_validates_missing_specs_and_empty_type() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let req = server
+            .tool_add_requirement(&json!({
+                "title": "Source",
+                "description": "source exists",
+                "type": "task",
+            }))
+            .unwrap();
+        let source_id = added_spec_id(&req).to_string();
+
+        let missing_source = server
+            .tool_add_relationship(&json!({
+                "spec_id": "TASK-999999",
+                "relationship_type": "references",
+                "target_spec_id": source_id,
+            }))
+            .expect_err("missing source should fail");
+        assert!(missing_source.contains("Requirement 'TASK-999999' not found"));
+
+        let empty_type = server
+            .tool_add_relationship(&json!({
+                "spec_id": source_id,
+                "relationship_type": " ",
+                "target_spec_id": "TASK-999999",
+            }))
+            .expect_err("empty type should fail before target lookup");
+        assert!(empty_type.contains("relationship_type must be non-empty"));
+    }
+
+    // trace:TASK-551 | ai:codex
+    #[test]
+    fn mcp_add_relationship_aliases_dependency_vocabulary() {
+        assert_eq!(
+            parse_mcp_relationship_type("depends-on").unwrap(),
+            RelationshipType::BlockedBy
+        );
+        assert_eq!(
+            parse_mcp_relationship_type("related").unwrap(),
+            RelationshipType::References
+        );
+        assert_eq!(
+            parse_mcp_relationship_type("subsumes").unwrap(),
+            RelationshipType::Custom("subsumes".to_string())
+        );
+    }
+
+    // trace:TASK-551 | ai:codex
+    #[test]
+    fn mcp_add_relationship_descriptor_is_advertised() {
         let desc = tool_descriptors();
         let names: Vec<&str> = desc
             .as_array()
@@ -3405,9 +3645,42 @@ mod tests {
             .iter()
             .filter_map(|tool| tool.get("name").and_then(|name| name.as_str()))
             .collect();
+        assert!(names.contains(&"add_relationship"));
+    }
+
+    // trace:TASK-551 | ai:codex
+    #[test]
+    fn mcp_add_relationship_preserves_terminal_parent_guard() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let parent = server
+            .tool_add_requirement(&json!({
+                "title": "Closed parent",
+                "description": "terminal parent",
+                "type": "epic",
+                "status": "completed",
+            }))
+            .unwrap();
+        let parent_id = added_spec_id(&parent).to_string();
+        let child = server
+            .tool_add_requirement(&json!({
+                "title": "Child task",
+                "description": "new child",
+                "type": "task",
+            }))
+            .unwrap();
+        let child_id = added_spec_id(&child).to_string();
+
+        let err = server
+            .tool_add_relationship(&json!({
+                "spec_id": child_id,
+                "relationship_type": "child",
+                "target_spec_id": parent_id,
+            }))
+            .expect_err("closed parent should require force_parent");
         assert!(
-            !names.contains(&"add_relationship"),
-            "TASK-550 inventory: add_relationship is not exposed over MCP"
+            err.contains("adding new children to a closed parent"),
+            "{err}"
         );
     }
 
