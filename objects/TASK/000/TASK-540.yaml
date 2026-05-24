@@ -12,12 +12,12 @@ description: |-
   Verification: 'diff docs/agents/codex-mcp-setup.md aida-core/templates/docs/agents/codex-mcp-setup.md' should be empty after fix.
 
   trace:TASK-X
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:52:04.679911753Z
-modified_at: 2026-05-24T15:52:04.679911753Z
+modified_at: 2026-05-24T15:53:53.173260163Z
 req_type: Task
 tags:
 - docs
