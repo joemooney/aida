@@ -51,12 +51,12 @@ description: |-
   2026-05-24 aida-chat advisor cross-project report: 'Every aida show <ID> I've run today emits fatal: Not a valid object name main inline... Suggest defaulting to the actual default branch via git symbolic-ref refs/remotes/origin/HEAD or git config --get init.defaultBranch rather than literal main.'
 
   trace:BUG-X
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:11:49.354533197Z
-modified_at: 2026-05-24T20:29:27.700082546Z
+modified_at: 2026-05-24T21:17:10.593826351Z
 req_type: Bug
 tags:
 - agent-context-hygiene
@@ -84,3 +84,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-24T20:29:27.700082546Z
   implemented_by: joe
+  completed_at: 2026-05-24T21:17:10.593826351Z
+  completion_sha: c999d51b9d8d58fea5b609f85cafe1fe62ed0ad2
