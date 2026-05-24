@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::models::{Requirement, RequirementsStore};
@@ -121,10 +122,235 @@ const SCHEMA_VERSION: &str = "2";
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
 const META_KEY_BUILT_AT: &str = "built_at";
+const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[50, 200, 500];
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+pub struct CacheLockInfo {
+    pub pid: u32,
+    pub command: String,
+    pub started_at: String,
+    pub user: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+impl CacheLockInfo {
+    fn current() -> Self {
+        let command = std::env::args().collect::<Vec<_>>().join(" ");
+        Self {
+            pid: std::process::id(),
+            command,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            user: current_user(),
+            session_id: std::env::var("AIDA_SESSION_ID")
+                .ok()
+                .filter(|s| !s.is_empty()),
+        }
+    }
+
+    pub fn started_at_utc(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        chrono::DateTime::parse_from_rfc3339(&self.started_at)
+            .ok()
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+    }
+}
+
+pub fn cache_lock_info_path(cache_path: &Path) -> PathBuf {
+    cache_path.with_file_name(format!(
+        "{}.lock-info",
+        cache_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("cache.db")
+    ))
+}
+
+pub fn read_cache_lock_info(cache_path: &Path) -> Result<Option<CacheLockInfo>> {
+    let path = cache_lock_info_path(cache_path);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read cache lock info at {}", path.display()))?;
+    let info = serde_json::from_str(&body)
+        .with_context(|| format!("Failed to parse cache lock info at {}", path.display()))?;
+    Ok(Some(info))
+}
+
+fn open_connection_with_retry(path: &Path) -> Result<Connection> {
+    with_cache_retry(path, "open cache", || {
+        let conn = Connection::open(path)
+            .with_context(|| format!("Failed to open cache at {:?}", path))?;
+        // AIDA owns retry/backoff timing; rusqlite's default busy handler can
+        // otherwise block inside a single attempt and hide the lock holder.
+        conn.busy_timeout(Duration::from_millis(0))?;
+        Ok(conn)
+    })
+}
+
+fn with_cache_write<T, F>(cache_path: &Path, action: &str, mut f: F) -> Result<T>
+where
+    F: FnMut() -> Result<T>,
+{
+    write_cache_lock_info(cache_path)?;
+    let result = with_cache_retry(cache_path, action, || f());
+    remove_cache_lock_info(cache_path);
+    result
+}
+
+fn with_cache_retry<T, F>(cache_path: &Path, action: &str, mut f: F) -> Result<T>
+where
+    F: FnMut() -> Result<T>,
+{
+    let delays = cache_retry_delays();
+    let mut attempts = 0usize;
+    loop {
+        match f() {
+            Ok(value) => return Ok(value),
+            Err(err) if is_sqlite_lock_error(&err) && attempts < delays.len() => {
+                std::thread::sleep(delays[attempts]);
+                attempts += 1;
+            }
+            Err(err) if is_sqlite_lock_error(&err) => {
+                return Err(enrich_cache_lock_error(cache_path, action, err));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+fn cache_retry_delays() -> Vec<Duration> {
+    let count = std::env::var("AIDA_CACHE_RETRY_COUNT")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(DEFAULT_CACHE_RETRY_DELAYS_MS.len());
+    if count == 0 {
+        return Vec::new();
+    }
+    let env_delays = std::env::var("AIDA_CACHE_RETRY_MS")
+        .ok()
+        .map(|raw| {
+            raw.split(',')
+                .filter_map(|part| part.trim().parse::<u64>().ok())
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| DEFAULT_CACHE_RETRY_DELAYS_MS.to_vec());
+    (0..count)
+        .map(|idx| {
+            let ms = env_delays
+                .get(idx)
+                .copied()
+                .unwrap_or_else(|| *env_delays.last().unwrap_or(&500));
+            Duration::from_millis(ms)
+        })
+        .collect()
+}
+
+fn is_sqlite_lock_error(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<rusqlite::Error>()
+            .is_some_and(|sqlite| match sqlite {
+                rusqlite::Error::SqliteFailure(code, _) => matches!(
+                    code.code,
+                    rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+                ),
+                _ => false,
+            })
+    })
+}
+
+fn enrich_cache_lock_error(cache_path: &Path, action: &str, err: anyhow::Error) -> anyhow::Error {
+    match read_cache_lock_info(cache_path) {
+        Ok(Some(info)) if info.pid != std::process::id() => anyhow::anyhow!(
+            "database is locked while trying to {action} by pid={} ({}) held since {} ({} ago). \
+             Try again or check that process. If it's stuck, run `aida doctor heal stale-locks`.\ncaused by: {}",
+            info.pid,
+            if info.command.trim().is_empty() {
+                "unknown command"
+            } else {
+                info.command.as_str()
+            },
+            info.started_at,
+            humanize_cache_lock_age(&info),
+            err
+        ),
+        _ => anyhow::anyhow!(
+            "database is locked while trying to {action}. \
+             Try again. If this persists, run `aida doctor heal stale-locks`.\ncaused by: {}",
+            err
+        ),
+    }
+}
+
+fn humanize_cache_lock_age(info: &CacheLockInfo) -> String {
+    let Some(started_at) = info.started_at_utc() else {
+        return "unknown age".to_string();
+    };
+    let secs = chrono::Utc::now()
+        .signed_duration_since(started_at)
+        .num_seconds()
+        .max(0);
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m {}s", secs / 60, secs % 60)
+    } else {
+        format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+    }
+}
+
+fn write_cache_lock_info(cache_path: &Path) -> Result<()> {
+    use std::io::Write;
+
+    let path = cache_lock_info_path(cache_path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create cache lock-info parent {}",
+                parent.display()
+            )
+        })?;
+    }
+    let body = serde_json::to_string_pretty(&CacheLockInfo::current())?;
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+    {
+        Ok(mut file) => file
+            .write_all(body.as_bytes())
+            .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(err) => Err(err)
+            .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
+    }
+}
+
+fn remove_cache_lock_info(cache_path: &Path) {
+    let path = cache_lock_info_path(cache_path);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let Ok(info) = serde_json::from_str::<CacheLockInfo>(&body) else {
+        return;
+    };
+    if info.pid == std::process::id() {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+fn current_user() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown".to_string())
+}
 
 pub struct Cache {
     conn: Mutex<Connection>,
     path: PathBuf,
+    lock_info_path: PathBuf,
 }
 
 impl Cache {
@@ -142,8 +368,7 @@ impl Cache {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create cache parent dir: {:?}", parent))?;
         }
-        let conn = Connection::open(&path)
-            .with_context(|| format!("Failed to open cache at {:?}", path))?;
+        let conn = open_connection_with_retry(&path)?;
         // Check the recorded schema version BEFORE applying the schema —
         // if the table doesn't exist yet, the meta read silently returns
         // None which falls through to "no migration needed".
@@ -159,17 +384,22 @@ impl Cache {
                 // Drop the cache tables — the next stale-check will rebuild
                 // from git. `cache_meta` survives so the source HEAD SHA
                 // tracking continues to work after the rebuild stamps it.
-                conn.execute_batch(
-                    "DROP TABLE IF EXISTS requirements_cache;
-                     DROP TABLE IF EXISTS requirements_fts;",
-                )
-                .context("Failed to drop cache tables for schema migration")?;
+                with_cache_write(&path, "drop cache tables for schema migration", || {
+                    conn.execute_batch(
+                        "DROP TABLE IF EXISTS requirements_cache;
+                         DROP TABLE IF EXISTS requirements_fts;",
+                    )
+                    .context("Failed to drop cache tables for schema migration")
+                })?;
             }
         }
-        conn.execute_batch(SCHEMA_SQL)
-            .context("Failed to apply cache schema")?;
+        with_cache_write(&path, "apply cache schema", || {
+            conn.execute_batch(SCHEMA_SQL)
+                .context("Failed to apply cache schema")
+        })?;
         let cache = Cache {
             conn: Mutex::new(conn),
+            lock_info_path: cache_lock_info_path(&path),
             path,
         };
         cache.set_meta(META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
@@ -192,15 +422,22 @@ impl Cache {
         &self.path
     }
 
+    pub fn lock_info_path(&self) -> &Path {
+        &self.lock_info_path
+    }
+
     // ------------------------------------------------------------------ meta
 
     fn set_meta(&self, key: &str, value: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute(
-            "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![key, value],
-        )?;
+        with_cache_write(&self.path, "set cache metadata", || {
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![key, value],
+            )?;
+            Ok(())
+        })?;
         Ok(())
     }
 
@@ -242,7 +479,10 @@ impl Cache {
     /// Wipe all cached rows. Schema and meta survive. Use before a rebuild.
     pub fn truncate(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
+        with_cache_write(&self.path, "truncate cache", || {
+            conn.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
+            Ok(())
+        })?;
         Ok(())
     }
 
@@ -256,15 +496,17 @@ impl Cache {
     ) -> Result<usize> {
         let count = {
             let conn = self.conn.lock().unwrap();
-            let tx = conn.unchecked_transaction()?;
-            tx.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
-            let mut count = 0usize;
-            for req in &store.requirements {
-                insert_one(&tx, req)?;
-                count += 1;
-            }
-            tx.commit()?;
-            count
+            with_cache_write(&self.path, "rebuild cache", || {
+                let tx = conn.unchecked_transaction()?;
+                tx.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
+                let mut count = 0usize;
+                for req in &store.requirements {
+                    insert_one(&tx, req)?;
+                    count += 1;
+                }
+                tx.commit()?;
+                Ok(count)
+            })?
         };
         self.set_source_head_sha(source_head_sha)?;
         self.set_meta(META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
@@ -274,15 +516,20 @@ impl Cache {
     /// Single-row upsert called after a write-through git mutation succeeds.
     pub fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        delete_one_uncommitted(&conn, &req.id)?;
-        insert_one(&conn, req)?;
+        with_cache_write(&self.path, "upsert cached requirement", || {
+            delete_one_uncommitted(&conn, &req.id)?;
+            insert_one(&conn, req)?;
+            Ok(())
+        })?;
         Ok(())
     }
 
     /// Single-row delete called after a write-through git delete succeeds.
     pub fn delete_requirement(&self, id: &Uuid) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        delete_one_uncommitted(&conn, id)
+        with_cache_write(&self.path, "delete cached requirement", || {
+            delete_one_uncommitted(&conn, id)
+        })
     }
 
     // ----------------------------------------------------------------- query
@@ -521,7 +768,13 @@ fn yaml_path_for(req: &Requirement) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex as StdMutex, OnceLock};
     use tempfile::tempdir;
+
+    fn env_lock() -> &'static StdMutex<()> {
+        static LOCK: OnceLock<StdMutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| StdMutex::new(()))
+    }
 
     fn sample_req(spec_id: &str, title: &str) -> Requirement {
         let mut r = Requirement::new(title.into(), "desc".into());
@@ -803,5 +1056,116 @@ mod tests {
         let mut r2 = sample_req("BUG-7", "y");
         r2.spec_id = Some("BUG-7".into());
         assert_eq!(yaml_path_for(&r2), "objects/BUG/000/BUG-7.yaml");
+    }
+
+    #[test]
+    fn cache_lock_info_round_trips_sidecar_path() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        write_cache_lock_info(&cache_path).unwrap();
+
+        let info = read_cache_lock_info(&cache_path)
+            .unwrap()
+            .expect("lock info should exist");
+        assert_eq!(info.pid, std::process::id());
+        assert!(!info.started_at.is_empty());
+        assert_eq!(
+            cache_lock_info_path(&cache_path),
+            dir.path().join("cache.db.lock-info")
+        );
+
+        remove_cache_lock_info(&cache_path);
+        assert!(read_cache_lock_info(&cache_path).unwrap().is_none());
+    }
+
+    #[test]
+    fn cache_lock_info_cleanup_preserves_other_process_sidecar() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = cache_lock_info_path(&cache_path);
+        let other = CacheLockInfo {
+            pid: std::process::id().saturating_add(1),
+            command: "other aida".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            user: "tester".to_string(),
+            session_id: None,
+        };
+        std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
+
+        remove_cache_lock_info(&cache_path);
+
+        assert!(path.exists(), "must not remove another process's sidecar");
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn cache_open_retries_sqlite_lock_then_succeeds() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "3");
+        std::env::set_var("AIDA_CACHE_RETRY_MS", "50,200,500");
+
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        Cache::open(&cache_path).unwrap();
+        let locker = Connection::open(&cache_path).unwrap();
+        locker.execute_batch("BEGIN EXCLUSIVE").unwrap();
+
+        let path_for_thread = cache_path.clone();
+        let handle = std::thread::spawn(move || Cache::open(path_for_thread));
+        std::thread::sleep(Duration::from_millis(100));
+        locker.execute_batch("COMMIT").unwrap();
+
+        let opened = handle.join().unwrap();
+        if let Err(err) = opened {
+            panic!("second cache open should wait for the lock: {err}");
+        }
+        assert!(
+            !cache_lock_info_path(&cache_path).exists(),
+            "successful write should remove sidecar"
+        );
+
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+    }
+
+    #[test]
+    fn cache_retry_count_zero_fails_fast_with_lock_holder_hint() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
+
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = cache_lock_info_path(&cache_path);
+        let other = CacheLockInfo {
+            pid: std::process::id().saturating_add(1),
+            command: "aida pr ship".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            user: "tester".to_string(),
+            session_id: None,
+        };
+        std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
+
+        let mut attempts = 0usize;
+        let err = match with_cache_retry(&cache_path, "test cache write", || {
+            attempts += 1;
+            Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error {
+                    code: rusqlite::ErrorCode::DatabaseBusy,
+                    extended_code: 5,
+                },
+                None,
+            )))
+        }) {
+            Ok(()) => panic!("lock should fail without retries"),
+            Err(err) => err,
+        };
+        assert_eq!(attempts, 1);
+        let msg = err.to_string();
+        assert!(msg.contains("database is locked"), "{msg}");
+        assert!(msg.contains("pid="), "{msg}");
+        assert!(msg.contains("aida doctor heal stale-locks"), "{msg}");
+        remove_cache_lock_info(&cache_path);
+
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
     }
 }
