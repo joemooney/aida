@@ -38,7 +38,7 @@ Upon running `git commit`, the pre-commit bouncer:
    Refusing commit: target/debug/build/... is gitignored. Editing intermediate
    build products produces non-reproducible fixes. Modify the
    source (or pass --allow-intermediate to override). See:
-   docs/aida-discipline/substrate-as-bouncer.md
+   docs/aida/discipline/substrate-as-bouncer.md
    ```
 
 ### The Deliberate Escape Hatch
@@ -79,6 +79,28 @@ The sibling gate (**TASK-480**) operates at the **Reviewer phase**:
 - During `aida pr ship` or CI/CD execution, a reviewer-phase bouncer scans the commit range of the incoming branch.
 - If any commit in the range touched a gitignored file without explicit bouncer bypass metadata, the reviewer **refuses to approve the PR**.
 - This ensures that local shortcuts never reach the main branch.
+
+---
+
+## Headless Text-Question Gate (BUG-354 / BUG-374)
+
+Headless implementers must not ask a plain-text confirmation question and
+exit with no PR. In `--no-human=both` there is no operator waiting inside
+the subprocess, so "A or B? Please confirm" is equivalent to a design-fork
+punt.
+
+The orchestrator treats this as substrate, not etiquette:
+
+1. It inspects the terminal headless JSONL `result` event when phase 1 exits
+   cleanly with no PR.
+2. If the final answer contains decision-fork question wording such as
+   "which path", "should I", or "confirm and I'll proceed?", it files a
+   design-fork punt instead of returning a generic `NoPr` phase failure.
+3. The existing STORY-306 advisor tier then resolves or escalates the fork.
+
+The `/aida-pickup` instructions still tell agents to punt explicitly; this
+gate is the bouncer for the recurring ceiling-pattern case where prompt
+discipline fails.
 
 ---
 

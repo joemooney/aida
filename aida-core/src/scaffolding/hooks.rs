@@ -30,8 +30,10 @@ GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
 # Check if commit message contains AI attribution tag [AI:tool] or [AI:tool:conf]
-# [AI:tool] implies high confidence, [AI:tool:med] or [AI:tool:low] for others
-AI_TAG_PATTERN='\[AI:[a-zA-Z]+(:(med|low))?\]'
+# [AI:tool] implies high confidence, [AI:tool:med] or [AI:tool:low] for others.
+# TASK-509: accept multi-agent attribution like [AI:codex+claude].
+AI_TOOL_PATTERN='[a-zA-Z]+(\+[a-zA-Z]+)*'
+AI_TAG_PATTERN="\[AI:${AI_TOOL_PATTERN}(:(med|low))?\]"
 
 # Check for files with trace comments in this commit
 STAGED_FILES=$(git diff --cached --name-only)
@@ -63,7 +65,7 @@ done
 if [ "$HAS_TRACE_FILES" = true ]; then
     if ! echo "$COMMIT_MSG" | grep -qE "$AI_TAG_PATTERN"; then
         echo -e "${YELLOW}⚠ Warning: Commit includes files with AI trace comments but no [AI:tool] tag in commit message.${NC}"
-        echo -e "${YELLOW}  Consider using format: [AI:claude] feat: description${NC}"
+        echo -e "${YELLOW}  Consider using format: [AI:claude] feat: description or [AI:claude+codex] feat: description${NC}"
         echo -e "${YELLOW}  Confidence: [AI:tool] = high (implied), [AI:tool:med] = medium, [AI:tool:low] = low${NC}"
         echo ""
     fi
@@ -137,15 +139,12 @@ NC='\033[0m' # No Color
 
 # 1. Environment and argument bypass check
 if [ "$AIDA_ALLOW_INTERMEDIATE" = "1" ] || ( [ -f "/proc/$PPID/cmdline" ] && grep -q -z -- "--allow-intermediate" "/proc/$PPID/cmdline" 2>/dev/null ); then
-    echo "DEBUG: Bypass detected" >&2
     exit 0
 fi
 
 # 2. Special-case bypass for .aida-store worktree/branch (deliberate gitignored path commits)
 CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
-echo "DEBUG: CURRENT_BRANCH='$CURRENT_BRANCH' PWD='$(pwd)'" >&2
 if [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || [[ "$(pwd)" == *"/.aida-store"* ]]; then
-    echo "DEBUG: .aida-store bypass matched" >&2
     exit 0
 fi
 
@@ -169,16 +168,10 @@ fi
 # Using git status --porcelain is completely safe and works on unborn branches (first commit)
 STAGED_FILES=$(git status --porcelain 2>/dev/null | grep -E '^[AMRC]' | awk '{print $NF}')
 
-echo "DEBUG: STAGED_FILES='$STAGED_FILES'" >&2
-
 IGNORED_STAGED_FILES=()
 for file in $STAGED_FILES; do
-    echo "DEBUG: Checking file='$file'" >&2
     if git check-ignore --no-index -q "$file" 2>/dev/null; then
-        echo "DEBUG: File '$file' IS IGNORED" >&2
         IGNORED_STAGED_FILES+=("$file")
-    else
-        echo "DEBUG: File '$file' IS NOT IGNORED" >&2
     fi
 done
 
@@ -186,7 +179,7 @@ if [ ${#IGNORED_STAGED_FILES[@]} -gt 0 ]; then
     echo -e "${RED}Refusing commit: ${IGNORED_STAGED_FILES[0]} is gitignored. Editing intermediate" >&2
     echo -e "build products produces non-reproducible fixes. Modify the" >&2
     echo -e "source (or pass --allow-intermediate to override). See:" >&2
-    echo -e "docs/aida-discipline/substrate-as-bouncer.md${NC}" >&2
+    echo -e "docs/aida/discipline/substrate-as-bouncer.md${NC}" >&2
     
     if [ ${#IGNORED_STAGED_FILES[@]} -gt 1 ]; then
         echo -e "${RED}Other gitignored files staged:${NC}" >&2

@@ -289,12 +289,15 @@ enabled = true
 
     #[test]
     fn is_enabled_respects_env_kill_switch() {
-        // SAFETY: single-threaded test; we restore the var at the end.
-        std::env::set_var("AIDA_TELEMETRY", "0");
+        // TASK-521: serialise AIDA_TELEMETRY swaps under the shared
+        // ENV_LOCK so a parallel test that emits telemetry doesn't
+        // observe the kill-switch we set here. The guard restores the
+        // prior value on drop. trace:TASK-521 | ai:claude
+        let mut guard = crate::test_env::EnvVarGuard::set("AIDA_TELEMETRY", "0");
         assert!(!is_enabled(None));
-        std::env::set_var("AIDA_TELEMETRY", "off");
+        guard.reset("off");
         assert!(!is_enabled(None));
-        std::env::remove_var("AIDA_TELEMETRY");
+        guard.reset_unset();
         // No env, no project dir → default enabled.
         assert!(is_enabled(None));
     }

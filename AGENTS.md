@@ -56,6 +56,8 @@ codex --cd /home/joe/ai/aida
 aida show <SPEC-ID>
 aida list --status approved
 aida queue work <SPEC-ID>
+aida agent new codex --role implementer --spec <SPEC-ID>
+aida agent new codex --role advisor --show-context
 aida pr ship
 aida brief list --for-agent <agent>
 aida brief ack .aida/agent-briefs/<agent>/<brief>.md
@@ -71,6 +73,15 @@ runtime state. After reading one, run `aida brief ack <path>` so the
 default list stays focused on pending work. If MCP is available, prefer
 the MCP trio `list_briefs({agent: "<agent>"})`, `read_brief({path})`, and
 `ack_brief({path})` so pickup works without shelling out.
+
+Prefer `aida agent new <type>` for supervised agent launches. It
+registers the spawned process, writes a point-in-time launch context to
+`.aida/agents/context/`, and passes its path as `AIDA_AGENT_CONTEXT_FILE`.
+The context includes role guidance, active lease/spec details, pending
+brief paths with titles, and queue-head hints. Use `--show-context` to
+print the snapshot before spawning, or `--no-context` when the operator
+intentionally wants a bare launch. The snapshot is not live-updating; keep
+polling briefs/MCP after startup.
 
 Use `aida --asciinema <subcommand>` for first-class terminal capture when
 you need demo, training, or audit material. By default casts are written

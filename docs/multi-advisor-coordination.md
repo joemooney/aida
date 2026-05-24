@@ -119,7 +119,7 @@ The four gaps interact:
 - Template under `aida-core/templates/advisor-handoff.md` (embedded via build.rs).
 - Sections: parent identity (auto), vision (operator), decided things (auto-suggested + operator-pruned), substrate slice (auto-filtered by --focus), latitude (operator).
 - `--update` regenerates against current parent state, marks diffs.
-- Document the workflow in `docs/multi-advisor-coordination.md` (this file) and `docs/aida-discipline/`.
+- Document the workflow in `docs/multi-advisor-coordination.md` (this file) and `docs/aida/discipline/`.
 
 ### Track B (file now, lower priority — implement when second project exists)
 

@@ -56,6 +56,11 @@ the wrong call from being made at all.
   is reviewed, waiting on merge", "TASK-12's PR merged".
 - For "out to users with a version number," say **released** — distinct from
   merged, because a merge does not auto-release.
+- `lifecycle:*` tags change which orchestrator phases run; they do not change
+  the spec-state vocabulary. A spec still becomes **Done** when the PR opens
+  and **Completed** when a referenced commit lands on main. See
+  [`machinery-glossary.md`](machinery-glossary.md#lifecycle-short-circuit-tags)
+  for the phase-skip contract.
 
 Better phrasing:
 

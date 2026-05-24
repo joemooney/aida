@@ -64,7 +64,7 @@ aida zen status
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen`. An un-annotated prompt defaults to `design-fork`
-(pause-safe). Author guidance: `docs/aida-discipline/skill-prompt-kinds.md`.
+(pause-safe). Author guidance: `docs/aida/discipline/skill-prompt-kinds.md`.
 trace:STORY-287
 
 ## Workflow
@@ -498,7 +498,7 @@ naming the user-action (the recommendation in summary form), a per-option
 **downstream consequence + reversibility**, an **advise escape** row,
 and decoupled coupled decisions (the reviewer-queue story is filed
 independently in step 11, not bundled into the exit row). Full rubric:
-`docs/aida-discipline/session-discipline.md` § *Finish-state communication
+`docs/aida/discipline/session-discipline.md` § *Finish-state communication
 rubric*. Print the State preamble verbatim above the table — silence is
 not an acceptable signal, especially on the conclusion surface.
 
@@ -570,7 +570,7 @@ zen annotation and stop:
 
 In default (non-`$AIDA_ZEN`) interactive mode, do **not** touch the sentinel
 — render the table and let the user press Ctrl+D. Full protocol:
-`docs/aida-discipline/skill-prompt-kinds.md`.
+`docs/aida/discipline/skill-prompt-kinds.md`.
 
 **Loud closing block — name the next user-action (TASK-359).** After the
 table (interactive) or in place of it (auto-resolved zen / headless), the
@@ -667,6 +667,13 @@ Print exactly one block — don't dump all four templates.
 ## Composes With
 
 - `/aida-commit` — commit first, then PR. Skill chain: commit → pr.
+- `aida pr ship` — collapses the post-PR sequence (watch CI → squash-merge
+  → `aida pull` → `aida session end`) into one command. STORY-439 adds
+  `aida pr ship --complexity {low|med|high}` for the ship-side capture
+  of the implementer's self-assessed actual complexity; the punt count
+  is read automatically from `.aida/punts.jsonl`. Both feed the
+  three-way calibration view (`aida autonomy calibration mismatches`).
+  Best-effort, not graded — never a merge gate.
 - `/aida-code-review` — sister skill on the reviewer side; opens automatically once `aida pr auto-queue-review` (step 11) fires.
 - STORY-66 / STORY-90 (auto-queue PR for reviewer) — primary trigger is step 11 here; `aida session end` re-fires the same logic as an idempotent backup so a forgotten /aida-pr (or a raw `gh pr create`) still ends up routed to the reviewer.
 - BUG-74 — gh detection uses an explicit PATH walk + absolute-path fallback so the auto-queue isn't fooled by a stripped child-process PATH. `AIDA_DEBUG_GH=1` prints the search trace when gh ends up not found.

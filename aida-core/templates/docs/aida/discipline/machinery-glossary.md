@@ -49,6 +49,22 @@ launches phase 1 only and exits; with it, phases 1–6 run in sequence.
 Variants compose: `--auto-complete=through-ci` stops after phase 2;
 `--auto-complete=through-merge` stops after phase 4.
 
+### lifecycle short-circuit tags
+
+`lifecycle:*` tags are per-spec switches for deliberately skipping expensive
+non-integrity phases during `aida queue work --auto-complete`:
+
+- `lifecycle:no-ci-wait` — do not wait for CI to become terminal after the PR
+  opens. CI still runs on GitHub; the orchestrator just continues while it is
+  in progress.
+- `lifecycle:no-review` — skip the phase-3 reviewer model session.
+- `lifecycle:no-build` — skip the final local build verification.
+- `lifecycle:trivial` — shorthand for all three skips.
+
+Merge and pull/auto-bump never short-circuit. These tags are for small,
+low-blast-radius specs where the saved latency is worth the reduced
+redundancy; they are not a substitute for review discipline on risky changes.
+
 ### drain
 
 Working a queue (or a [batch](#batch)) of specs through to completion,
@@ -151,6 +167,60 @@ Without a sentinel the orchestrator can't tell *"session paused for human
 input"* from *"session finished its work cleanly"* — both look like an
 idle Claude Code process. The sentinel is the explicit "I'm done" signal.
 
+### complexity (tag convention)
+
+`complexity:low | complexity:med | complexity:high` — a spec tag the
+operator (or implementer) sets at pickup time and the reviewer may
+override based on the diff. Surfaces in `aida queue list --tag-prefix
+complexity:` and feeds the three-way calibration view
+(`aida autonomy calibration mismatches`).
+
+**Best-effort, not graded.** The point of capturing this is *substrate
+self-knowledge* — when pickup-predicted complexity consistently
+diverges from reviewer-assessed complexity, that gap names a class of
+work the agents systematically misjudge (a memory candidate). The tag
+is never an approval criterion and never blocks a pickup or a merge.
+
+Set at pickup with `aida queue work <SPEC> --complexity {low|med|high}`;
+at ship time with `aida pr ship --complexity {low|med|high}`; at
+review time via `implementation_complexity` in the
+`.aida/review-verdicts/PR-N.json` file the `/aida-review` skill writes.
+Each capture point also writes a per-spec record to
+`.aida/complexity-calibration/<SPEC>.yaml`.
+
+### estimated-assistance (tag convention)
+
+`estimated-assistance:none | estimated-assistance:advisor |
+estimated-assistance:human` — pickup-time prediction of how much help
+the spec is expected to need. Companion to `complexity:` and same
+"best-effort, not graded" framing.
+
+The *actual* intervention count comes from the punt ledger
+(`.aida/punts.jsonl`); this tag captures only the prediction. The gap
+between predicted and actual is the same kind of substrate signal the
+complexity calibration surfaces — both feed the maturity trend.
+
+Set at pickup with `aida queue work <SPEC> --assist-est
+{none|advisor|human}`.
+
+### effort buckets (tag convention)
+
+`effort:<touchpoint>:<bucket>` — quantitative effort estimates captured
+at four lifecycle touchpoints: `open`, `plan`, `impl`, and `review`.
+Buckets are `15m`, `1h`, `4h`, `1d`, and `1w`.
+
+Conversion convention: `1d` means **8 work-hours**, not a 24-hour
+calendar day; `1w` means **5 work-days / 40 work-hours**, not seven
+calendar days. `aida load` uses those conversions when summing queue and
+backlog load.
+
+Set at open time with `aida add --effort <bucket>`, at pickup/plan time
+with `aida queue work <SPEC> --effort <bucket>`, at ship time with
+`aida pr ship --effort <bucket>`, and at review time via
+`implementation_effort` in `.aida/review-verdicts/PR-N.json`.
+Each capture point also writes a per-spec record to
+`.aida/effort-calibration/<SPEC>.yaml`.
+
 ## Adjacent terms (defined elsewhere)
 
 These show up in the same sentences but live in other pages:
@@ -185,6 +255,6 @@ machinery concept:
 5. **Keep it terse.** One paragraph plus optional bullets. Long-form
    discussion belongs in a dedicated doc, not the glossary.
 
-The master template is `aida-core/templates/docs/aida-discipline/machinery-glossary.md`
+The master template is `aida-core/templates/docs/aida/discipline/machinery-glossary.md`
 (embedded via `build.rs`, scaffolded by `aida init`). Edit the master, not
 a project-local copy — the latter is yours to tailor after init.

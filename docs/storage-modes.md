@@ -49,6 +49,14 @@ aida init
 - A SQLite read cache at `.aida/cache.db` (gitignored, auto-rebuilt) projects summary fields for fast list/filter/search
 - Writes go to git first, then the cache (write-through). Stale-detection compares the cache's HEAD SHA against the orphan branch's HEAD; mismatch triggers rebuild on next read.
 - IDs are node-namespaced (`FR-1-001`); short agreed IDs (`FR-1`) get assigned at merge-to-trunk via `aida db merge-gate`
+- When using pre-allocated short-ID blocks, `aida add` pulls the store before
+  allocation and pushes the newly allocated ID immediately when an `origin`
+  remote is available. `aida pull` / `aida db sync --pull` also scan for
+  duplicate `SPEC-ID` claims. If two clones already wrote different objects
+  with the same `SPEC-ID`, AIDA refuses to continue with paste-ready recovery
+  guidance instead of letting a rebase-skip cascade silently drop one side.
+  The online retry budget defaults to 3 and can be raised with
+  `[store.allocation] retry_max = N` in `.aida/config.toml`.
 
 **Files**:
 ```

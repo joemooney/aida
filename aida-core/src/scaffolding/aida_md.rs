@@ -109,6 +109,7 @@ impl Scaffolder {
              ```\n\
              [AI:claude] feat(auth): add login validation (FR-0042)\n\
              [AI:claude:med] fix(api): handle null response (BUG-0023)\n\
+             [AI:antigravity+claude] test(hooks): accept mixed authorship (TASK-509)\n\
              chore(deps): update dependencies        # no REQ-ID needed\n\
              docs: update README                     # no REQ-ID needed\n\
              ```\n\
@@ -116,7 +117,9 @@ impl Scaffolder {
              Rules:\n\
              \n\
              - `[AI:tool]` required when commit includes AI-assisted code (any file with a\n\
-             \x20  `// trace:... | ai:tool` comment changed).\n\
+             \x20  `// trace:... | ai:tool` comment changed). Use `[AI:tool1+tool2]` for\n\
+             \x20  mixed-agent authorship, with optional confidence on the whole commit\n\
+             \x20  (`[AI:tool1+tool2:med]`).\n\
              - `type` required: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,\n\
              \x20  `build`, `ci`, `chore`, `revert`.\n\
              - `(scope)` optional — component or area affected.\n\

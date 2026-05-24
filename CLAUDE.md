@@ -8,7 +8,7 @@ AIDA = AI Design Assistant. The defensible niche is the **agent-collaboration la
 
 **Strategic positioning** (Trojan-horse, 2026-05-14): the visible product is intentionally simple — a TUI wrapping Claude Code sessions (EPIC-26). The *"so what? I could do this in 20 lines of bash"* reaction on first sight is the *intended* impression. The actual value — graph, IDs, traces, MCP, queue, lifecycle — surfaces through use, not the surface. When adding features or polish, the test is **"does this make the TUI's quiet depth stronger when someone digs in?"** Surface complexity in the TUI itself is anti-pattern. See `OVERVIEW.md` "Public face: the TUI is the product" section for the full framing.
 
-For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For the path-forward audit and current direction see `docs/plans/2026-05-02-git-canonical-storage.md`. For the **autonomy + escalation + inter-agent comms architecture** — the three-mode autonomy ladder, the implementer → advisor → human escalation cascade, the advisor's Type A/B/C calibration, and the file-based handshake substrate — see `docs/architecture/autonomy-and-escalation.md` (paired with `docs/autonomous-drain.md` for the practical user guide). For wider market landscape comparisons and refresh signals see `docs/competitive-analysis/`. For the *"should I use AIDA or X?"* question in any of its forms see `docs/positioning/` (one focused comparison per neighbor tool: `vs-ultrareview.md`, `vs-ultraplan.md`, `vs-claude-code-subagents.md`, `vs-karpathy-md.md`, `vs-saas-pm.md`). For precise definitions of AIDA's machinery vocabulary — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode — see `aida-core/templates/docs/aida-discipline/machinery-glossary.md` (the scaffolded discipline-pack glossary; companions: `lifecycle-vocabulary.md` for spec-state verbs). For the TUI — keybindings, status overlay, autonomous drains, crash recovery — see `docs/tui/README.md` (`aida tui`, shipped default-on since STORY-137).
+For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For the path-forward audit and current direction see `docs/plans/2026-05-02-git-canonical-storage.md`. For the **autonomy + escalation + inter-agent comms architecture** — the three-mode autonomy ladder, the implementer → advisor → human escalation cascade, the advisor's Type A/B/C calibration, and the file-based handshake substrate — see `docs/architecture/autonomy-and-escalation.md` (paired with `docs/autonomous-drain.md` for the practical user guide). For wider market landscape comparisons and refresh signals see `docs/competitive-analysis/`. For the *"should I use AIDA or X?"* question in any of its forms see `docs/positioning/` (one focused comparison per neighbor tool: `vs-ultrareview.md`, `vs-ultraplan.md`, `vs-claude-code-subagents.md`, `vs-karpathy-md.md`, `vs-saas-pm.md`). For precise definitions of AIDA's machinery vocabulary — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode — see `aida-core/templates/docs/aida/discipline/machinery-glossary.md` (the scaffolded discipline-pack glossary; companions: `lifecycle-vocabulary.md` for spec-state verbs). For the TUI — keybindings, status overlay, autonomous drains, crash recovery — see `docs/tui/README.md` (`aida tui`, shipped default-on since STORY-137).
 
 **Workspace** (6 crates): `aida-core` (engine), `aida-cli` (`aida` binary + MCP server), `aida-crate` (published `aida` crate metadata), `aida-server` (REST + gRPC, port 8080), `aida-generate-types` (Rust → TypeScript), `aida-tui` (the `aida tui` terminal shell, EPIC-26). React dashboard at `aida-web-react/` (port 5173 dev). Native desktop and WASM clients were extracted to a separate repo on 2026-05-02.
 
@@ -44,13 +44,13 @@ aida init --with-memories --refresh   # Overlay updated pack files, keep your ed
 aida init --force              # Overwrite existing files
 ```
 
-`aida init` creates: orphan branch `aida-store` + worktree at `.aida-store/`, `.aida/config.toml`, `.aida/cache.db`, META requirements seeded into the orphan store, `.mcp.json`, `CLAUDE.md`, `AGENTS.md` (Codex), `.claude/skills/` + `commands/` + `hooks/`, `docs/plans/`, `docs/aida-discipline/`.
+`aida init` creates: orphan branch `aida-store` + worktree at `.aida-store/`, `.aida/config.toml`, `.aida/cache.db`, META requirements seeded into the orphan store, `.mcp.json`, `CLAUDE.md`, `AGENTS.md` (Codex), `.claude/skills/` + `commands/` + `hooks/`, `docs/plans/`, `docs/aida/discipline/`.
 
 ### Starter discipline pack (STORY-255)
 
 `aida init` ships AIDA-using *discipline* — the habits and vocabulary that make an AIDA project run well — as scaffolding, so a new project inherits it instead of re-discovering the same friction. Three channels:
 
-- **`docs/aida-discipline/`** (always) — nine canonical guides (`README.md`, `advisor-role.md`, `lifecycle-vocabulary.md`, `machinery-glossary.md`, `workflow-patterns.md`, `session-discipline.md`, `skill-prompt-kinds.md`, `substrate-as-bouncer.md`, `robust-project-root-resolution.md`). Master templates: `aida-core/templates/docs/aida-discipline/`, embedded via `build.rs`, scaffolded by `ensure_discipline_pack_scaffold` (idempotent — `--force` to overwrite). `advisor-role.md` documents the **advisor** seat — the user-facing identity of the `dialog` role. The role identifier stays `dialog` everywhere internal (config, env vars, queue routing, status line); only the rendered identity (`aida role list`/`show`) and prose call it "advisor". trace:TASK-279
+- **`docs/aida/discipline/`** (always) — nine canonical guides (`README.md`, `advisor-role.md`, `lifecycle-vocabulary.md`, `machinery-glossary.md`, `workflow-patterns.md`, `session-discipline.md`, `skill-prompt-kinds.md`, `substrate-as-bouncer.md`, `robust-project-root-resolution.md`). Master templates: `aida-core/templates/docs/aida/discipline/`, embedded via `build.rs`, scaffolded by `ensure_discipline_pack_scaffold` (idempotent — `--force` to overwrite). `advisor-role.md` documents the **advisor** seat — the user-facing identity of the `dialog` role. The role identifier stays `dialog` everywhere internal (config, env vars, queue routing, status line); only the rendered identity (`aida role list`/`show`) and prose call it "advisor". trace:TASK-279
 - **CLAUDE.md discipline section** (always) — `generate_claude_md` appends a "Discipline for AIDA-using sessions" section pointing at the pack.
 - **Starter memory pack** (`--with-memories`, opt-in) — the generic discipline memories under `aida-core/templates/memories/` written to `~/.claude/projects/<slug>/memory/`. The pack is **marker-driven**: every memory file carrying `propagation: scaffolding-pack` in frontmatter ships, so the set grows just by tagging new generic memories. Scaffolded files get `originSessionId: aida-scaffold` + a `scaffoldChecksum` (FNV-1a of the body). `aida init --with-memories --refresh` overlays newer versions of files the user has *not* edited (body checksum still matches) and leaves edited or unmarked files alone. `MEMORY.md`'s `<!-- aida:scaffold-pack -->` block is regenerated; user content outside the markers is preserved.
 
@@ -91,6 +91,8 @@ aida changelog preview                 # Stdout-only preview of the [Unreleased]
 aida brief <agent> TASK-492 --note "why this, why now"  # Write a local pickup brief under .aida/agent-briefs/
 aida brief list --for-agent <agent>      # List pending briefs for a target agent; add --include-acked for audit
 aida brief ack .aida/agent-briefs/<agent>/<file>.md  # Mark a brief acknowledged
+aida agent new claude --role implementer --spec <SPEC-ID>  # Supervised launcher with registry + role context
+aida agent new claude --role advisor --show-context        # Print the generated launch-context snapshot
 aida --asciinema queue work --batch overnight-X --auto-complete  # Record a demo/training/audit cast under project-local .aida/casts/ (falls back to ~/.aida/casts/)
 ```
 
@@ -102,6 +104,16 @@ to route work without scrollback and `brief ack` after the agent has read
 the file. MCP-speaking agents should use the equivalent brief tools:
 `list_briefs`, `read_brief`, and `ack_brief`.
 
+`aida agent new <type>` is the supervised launch path for Claude, Codex,
+and Antigravity. It registers the child process under `.aida/agents/`,
+writes a point-in-time role-context snapshot under
+`.aida/agents/context/`, and passes that path as
+`AIDA_AGENT_CONTEXT_FILE`. The snapshot includes role guidance, the active
+lease/spec, pending brief paths with titles, and queue-head hints. Use
+`--show-context` to print it before spawn, or `--no-context` for a bare
+launch. The file is a startup snapshot only; keep polling briefs/MCP for
+work filed after launch.
+
 `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
 the first-class capture wrapper for demos, training corpus material, and
 autonomous-drain audit trails. It no-ops gracefully when `asciinema` is
@@ -109,7 +121,11 @@ missing or the invocation is not attached to a TTY. By default, casts are writte
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
 
+**Tag conventions** (TASK-512): subcommand-identifying tags use the `aida:<subcommand>[:<verb>][:<sub-verb>]` colon-namespaced form (`aida:status`, `aida:queue:work`, `aida:db:sync:pull`) so `aida list --tags 'aida:queue:*'` returns every spec touching that surface. Behavior / pattern / provenance / severity tags stay flat (`orchestrator`, `papercut`, `from-self-test`, `ceiling-pattern`). Existing colon namespaces continue unchanged — `batch:NAME`, `lifecycle:trivial`, `severity:cosmetic`, `parent:EPIC-31`, `depends-on:phase-1`, `subsumes:TASK-N`, `from-review:PR-N`, `kind:bug-spotted`. Multi-touch specs get multiple subcommand tags. TASK-511 swept the historic flat forms (`aida-*`, `queue-*`, `session-*`) onto this namespace — re-runnable via `scripts/migrate-tag-namespace.sh` when new flat hyphen-form tags slip in. Full rules + anti-patterns: `docs/aida/discipline/tag-conventions.md`. trace:TASK-512 trace:TASK-511
+
 **Batch tag convention** (TASK-229): items sharing a `batch:NAME` tag (set via `aida edit <id> --tags batch:NAME`) compose with two commands. `aida queue list --batch NAME` filters both the queued and in-flight sections to that batch. `aida queue work --batch NAME` picks the head queued member of that batch (head-pickup loop — re-run after each session exits to drain the next one); `--dry-run --batch NAME` lists the pickup order without acting. `aida queue progress --batch NAME` (TASK-232) shows the bucketed view of the batch's lifecycle (Shipped / In flight / Working now / Remaining). `aida queue work --batch NAME --auto-complete` (TASK-285) drains the whole batch autonomously — one full implementer→CI→reviewer→merge→pull→build lifecycle per member, advancing the head after each — until the batch is empty, `--max N` is reached, or a phase fails (which stops the drain at that spec with the queue intact for retry). The `--auto-complete=through-ci` / `through-merge` variants compose too.
+
+**Lifecycle short-circuit tags** (STORY-442): specs tagged `lifecycle:no-ci-wait`, `lifecycle:no-review`, or `lifecycle:no-build` skip only that non-integrity phase during `aida queue work --auto-complete`; `lifecycle:trivial` is shorthand for all three. CI still runs remotely when `no-ci-wait` is set; the orchestrator just does not block on it. Merge and pull/auto-bump never skip, so completed-state hygiene is preserved. Use these tags only for low-risk, small-blast-radius work where lower latency is worth less redundancy.
 
 **Calibration mode** (STORY-347): with `[advisor] calibration_mode = "on"` in `.aida/config.toml` (or `--calibrate` per-drain) every advisor-tier punt produces **two** verdicts side-by-side — cold-boot (drives the drain) plus fork-from-live (shadow only). Recorded to `.aida/punts/<punt-id>/calibration.yaml`; review with `aida findings calibration` (default shows disagreements — the substrate-gap signal), `--stats` for the rolling agreement rate, `aida findings calibration annotate <punt-id> "gap → wrote memory <name>"` to record the closing memory. Cost is real (both runs fire); turn it on to mine substrate gaps, off when you trust the substrate. Full guidance in `docs/autonomous-drain.md`.
 
@@ -220,12 +236,13 @@ Format: `// trace:<SPEC-ID> | ai:<tool>[:<confidence>]` where confidence is high
 Examples:
   [AI:claude] feat(auth): add login validation (FR-0042)
   [AI:claude:med] fix(api): handle null response (BUG-0023)
+  [AI:antigravity+claude] test(hooks): accept mixed authorship (TASK-509)
   chore(deps): update dependencies          (no REQ-ID needed)
   docs: update README                       (no REQ-ID needed)
 ```
 
 Rules:
-- `[AI:tool]` required when commit includes AI-assisted code (files with `trace:` comments)
+- `[AI:tool]` required when commit includes AI-assisted code (files with `trace:` comments); use `[AI:tool1+tool2]` for mixed-agent authorship, with optional confidence on the whole commit (`[AI:tool1+tool2:med]`)
 - `type` required: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
 - `(scope)` optional: component or area affected
 - `(REQ-ID)` required for feat/fix; optional for chore/docs

@@ -1019,6 +1019,26 @@ pub enum PrCommand {
         /// Print the resolved sequence without executing any of it.
         #[clap(long)]
         dry_run: bool,
+
+        /// Implementer's self-assessed actual complexity at ship time:
+        /// `low` / `med` / `high`. Captured to
+        /// `.aida/complexity-calibration/<SPEC>.yaml` alongside the
+        /// punt count from `.aida/punts.jsonl` — feeds the three-way
+        /// calibration view (`aida autonomy calibration mismatches`).
+        /// Best-effort, not graded: estimate is a substrate-knowledge
+        /// signal, never an approval criterion. Absent ⇒ ship slot
+        /// records only the punt count.
+        // trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_enum, value_name = "LEVEL")]
+        complexity: Option<crate::complexity_calibration::ComplexityLevel>,
+
+        /// Implementer's actual effort spent: 15m, 1h, 4h, 1d, or 1w.
+        /// Captured to `.aida/effort-calibration/<SPEC>.yaml` as the
+        /// ship/implementation touchpoint. `1d` is 8 work-hours; `1w`
+        /// is 40 work-hours.
+        // trace:STORY-451 | ai:codex
+        #[clap(long, value_enum, value_name = "BUCKET")]
+        effort: Option<crate::effort_calibration::EffortBucket>,
     },
 }
 
@@ -2331,6 +2351,89 @@ pub enum GitLabCommand {
     },
 }
 
+/// Curate Approved-but-not-queued work into the queue with risk + conflict
+/// heuristics. The "backlog" is the Approved pile that nobody has yet
+/// committed to working — `aida backlog list` filters it, `analyze` reports
+/// pairwise file-overlap, `groom` moves a curated selection onto the queue
+/// (optionally under a single `batch:NAME` tag for `aida queue work
+/// --batch NAME`).
+// trace:STORY-444 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum BacklogCommand {
+    /// Show Approved items that are not currently in any user's queue.
+    /// Risk chips (low / medium / high / unknown) are advisory only.
+    List {
+        /// Filter to a single risk level (low, medium, high, unknown).
+        #[clap(long, value_name = "LEVEL")]
+        risk: Option<String>,
+        /// Filter by requirement type (e.g. task, story, bug, doc).
+        #[clap(long, value_name = "TYPE")]
+        r#type: Option<String>,
+        /// Filter by priority (high, medium, low).
+        #[clap(long, value_name = "PRIORITY")]
+        priority: Option<String>,
+        /// Require this exact tag (case-insensitive).
+        #[clap(long, value_name = "TAG")]
+        tag: Option<String>,
+        /// Require any tag with this prefix (case-insensitive).
+        #[clap(long, value_name = "PREFIX")]
+        tag_prefix: Option<String>,
+        /// Cap the number of rows shown.
+        #[clap(long, default_value = "50")]
+        limit: usize,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+        /// User ID for queue-membership scan (defaults to AIDA_USER /
+        /// system user — same resolution as `aida queue list`).
+        #[clap(long)]
+        user: Option<String>,
+    },
+    /// Report pairwise file-overlap between selected backlog candidates.
+    /// File sets come from inline spec-id trace markers in source plus the
+    /// `## Critical Files` section of any owning plan in `docs/plans/`.
+    Analyze {
+        /// Comma-separated list of spec IDs to analyze (≥ 2 required).
+        #[clap(long, value_name = "CSV")]
+        specs: Option<String>,
+        /// Shorthand for `--specs A,B` — analyzes exactly one pair.
+        #[clap(long, value_names = ["A", "B"], num_args = 2)]
+        pair: Option<Vec<String>>,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Move selected backlog items onto the queue. Optionally tags every
+    /// groomed item with `batch:NAME` so `aida queue work --batch NAME`
+    /// can drain them as one cluster.
+    Groom {
+        /// Comma-separated list of spec IDs to groom into the queue.
+        #[clap(long, value_name = "CSV")]
+        specs: Option<String>,
+        /// Read newline-separated spec IDs from stdin (mutually exclusive
+        /// with --specs).
+        #[clap(long, conflicts_with = "specs")]
+        from_stdin: bool,
+        /// Tag every groomed item with `batch:NAME` (composes with
+        /// `aida queue work --batch NAME`).
+        #[clap(long, value_name = "NAME")]
+        batch: Option<String>,
+        /// Print what would happen without writing.
+        #[clap(long)]
+        dry_run: bool,
+        /// Optional note recorded on every produced queue entry.
+        #[clap(long)]
+        note: Option<String>,
+        /// Override the queue user (defaults to AIDA_USER / system user).
+        #[clap(long)]
+        user: Option<String>,
+    },
+    /// Sum latest effort estimates for approved/planned/draft backlog items
+    /// that are not currently queued.
+    // trace:STORY-451 | ai:codex
+    Load,
+}
+
 /// Personal work queue commands.
 // trace:STORY-368 | ai:claude
 // trace:TASK-487 | ai:claude
@@ -2503,6 +2606,13 @@ pub enum QueueCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long)]
         force: bool,
+    },
+    /// Sum latest effort estimates for queued items.
+    // trace:STORY-451 | ai:codex
+    Load {
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
     },
     /// Remove a requirement from your queue
     Remove {
@@ -2719,6 +2829,32 @@ pub enum QueueCommand {
         /// `aida session start --path`.
         #[clap(long)]
         path: Option<String>,
+        /// Stack this session's branch atop the most recent un-merged
+        /// in-flight implementer branch instead of forking from
+        /// `origin/main`. Lets the user start spec Y while spec X's PR is
+        /// still in CI/review — when X merges, `aida pull` auto-rebases Y
+        /// onto the new main (slice 3). The resolver picks the freshest
+        /// implementer lease whose branch is not yet merged; the lease
+        /// covering cwd is skipped so a session can't stack on itself.
+        /// Mutually exclusive with `--base`.
+        // trace:STORY-248 | ai:claude
+        #[clap(long, conflicts_with = "base")]
+        stack: bool,
+        /// Explicit base branch for this session — fork from `BRANCH`
+        /// instead of `origin/main`. The branch must exist locally or on
+        /// origin. Refuses if the branch's PR has already merged
+        /// (suggests `aida pull` + a fresh `--base main`); pass
+        /// `--force-base` to override.
+        // trace:STORY-248 | ai:claude
+        #[clap(long, value_name = "BRANCH", conflicts_with = "stack")]
+        base: Option<String>,
+        /// Bypass the `--base BRANCH` safety check that refuses an
+        /// already-merged base. Use when you know the rebase will still
+        /// apply cleanly (e.g. base merged but branch tip hasn't been
+        /// reused). Only meaningful with `--base`.
+        // trace:STORY-248 | ai:claude
+        #[clap(long = "force-base")]
+        force_base: bool,
         /// Override the In-Progress guard when the target scope is already
         /// held by another active lease. Without --steal, `aida queue work`
         /// refuses and names the holding lease. With --steal, the holding
@@ -2947,6 +3083,34 @@ pub enum QueueCommand {
         // trace:STORY-429 | ai:claude
         #[clap(long)]
         no_auto_rebase: bool,
+        /// Implementer's pickup-time complexity estimate:
+        /// `low` / `med` / `high`. Captured to
+        /// `.aida/complexity-calibration/<SPEC>.yaml` AND stamped onto
+        /// the spec as a `complexity:<level>` tag so existing tag
+        /// tooling (e.g. `aida queue list --tag-prefix complexity:`)
+        /// works on the new dimension. Best-effort, not graded — feeds
+        /// the three-way calibration view, never an approval gate.
+        /// Absent ⇒ no pickup slot is captured.
+        // trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_enum, value_name = "LEVEL")]
+        complexity: Option<crate::complexity_calibration::ComplexityLevel>,
+        /// Implementer's pickup-time assistance estimate:
+        /// `none` / `advisor` / `human` — how much help the spec is
+        /// expected to need. Captured alongside `--complexity` and
+        /// stamped as `estimated-assistance:<level>`. The actual
+        /// intervention count comes from the punt ledger
+        /// (`.aida/punts.jsonl`); this flag captures only the
+        /// prediction.
+        // trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long = "assist-est", value_enum, value_name = "LEVEL")]
+        assist_est: Option<crate::complexity_calibration::AssistanceLevel>,
+        /// Pickup-time effort estimate: 15m, 1h, 4h, 1d, or 1w.
+        /// Captured as the `plan` touchpoint for queued work pickup
+        /// (post-plan/implementation-brief estimate). `1d` is 8
+        /// work-hours; `1w` is 40 work-hours.
+        // trace:STORY-451 | ai:codex
+        #[clap(long, value_enum, value_name = "BUCKET")]
+        effort: Option<crate::effort_calibration::EffortBucket>,
     },
     /// Show what an active session has shipped so far alongside what
     /// remains. Bucketed view (Shipped / In flight / Working now /
@@ -3189,6 +3353,71 @@ pub enum CalibrationAction {
     },
 }
 
+/// Three-way complexity-calibration views (pickup vs ship vs reviewer)
+/// — STORY-439. The parent `aida autonomy` namespace is shared with
+/// TASK-340's eventual `report` subcommand; this PR adds only the
+/// calibration surface so the two land cleanly side-by-side.
+// trace:STORY-439 | ai:claude
+#[derive(Subcommand, Debug, Clone)]
+pub enum AutonomyCommand {
+    /// Calibration views over `.aida/complexity-calibration/`.
+    // trace:STORY-439 | ai:claude
+    #[clap(subcommand)]
+    Calibration(CalibrationSubcommand),
+}
+
+/// Subcommands under `aida autonomy calibration`.
+// trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
+#[derive(Subcommand, Debug, Clone)]
+pub enum CalibrationSubcommand {
+    /// Surface specs where pickup-predicted complexity diverged most
+    /// from reviewer-assessed implementation complexity. The
+    /// substrate-gap signal — a class of work the agents systematically
+    /// misjudge. Records ranked by biggest gap first; ties broken by
+    /// recency.
+    // trace:STORY-439 | ai:claude
+    Mismatches {
+        /// Restrict to records within the window. Form: `<N>{d,h,w,m}`
+        /// — e.g. `7d`, `12h`, `2w`, `30m`. Filters by the newest
+        /// timestamp across the three slots.
+        #[clap(long, value_name = "WINDOW")]
+        since: Option<String>,
+        /// Cap the rows printed. Default 50.
+        #[clap(long, value_name = "N", default_value_t = 50)]
+        last: usize,
+        /// Emit a machine-readable JSON array instead of the human table.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
+/// Quantitative effort/load views over `.aida/effort-calibration/`.
+// trace:STORY-451 | ai:codex
+#[derive(Subcommand, Debug, Clone)]
+pub enum LoadCommand {
+    /// Sum latest effort estimates for queued items.
+    Queue,
+    /// Sum latest effort estimates for approved/planned/draft backlog items
+    /// that are not currently queued.
+    Backlog,
+    /// Queue + backlog + in-flight effort summary.
+    Report,
+    /// Estimate-vs-actual effort deltas. `1d` is 8 work-hours; `1w`
+    /// is 5 work-days / 40 work-hours.
+    Calibration {
+        /// Restrict to records within the window. Form: `<N>{d,h,w,m}`
+        /// — e.g. `7d`, `12h`, `2w`, `30m`.
+        #[clap(long, value_name = "WINDOW")]
+        since: Option<String>,
+        /// Group deltas by requirement type.
+        #[clap(long)]
+        by_type: bool,
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 /// Browse and analyze the local design-fork punt ledger.
 // trace:STORY-325 | ai:claude
 #[derive(Subcommand, Debug, Clone)]
@@ -3406,6 +3635,35 @@ pub enum DrainCommand {
     },
 }
 
+/// Stack-graph introspection for STORY-248. `aida queue work --stack /
+/// --base` records each stacked branch's parent in `.aida/stacks.json`;
+/// `aida stack show` renders the chain tree; `aida stack list` prints one
+/// chain per line for scripting.
+// trace:STORY-248 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum StackCommand {
+    /// Render the stack tree — one indented line per branch, grouped by
+    /// chain. Stale entries (branch missing locally + on origin) are
+    /// suffixed with `(stale)` and can be cleaned by passing
+    /// `--prune-stale`.
+    Show {
+        /// Emit the chains as JSON instead of the indented tree.
+        #[clap(long)]
+        json: bool,
+        /// Remove stack entries whose branch no longer exists locally or
+        /// on origin. Idempotent — safe to re-run.
+        #[clap(long)]
+        prune_stale: bool,
+    },
+    /// One line per chain in the form `bottom → mid → top`. Quieter than
+    /// `show`; useful for scripts and the statusline.
+    List {
+        /// Emit the chains as JSON instead of the arrow form.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum BriefCommand {
     /// List pending brief files.
@@ -3423,6 +3681,16 @@ pub enum BriefCommand {
     Ack {
         /// Brief file path, either absolute or relative to the current directory.
         brief_file: PathBuf,
+    },
+
+    /// Read a brief file and print its contents to stdout.
+    Read {
+        /// Brief file path, shortcut (<agent>/<filename>), or agent name.
+        brief_file: String,
+
+        /// Read the most recent unacked brief for the given agent.
+        #[clap(long)]
+        latest: bool,
     },
 }
 
@@ -3457,6 +3725,14 @@ pub enum AgentNewCommand {
         /// Claude Code permission mode passed through to `claude`.
         #[clap(long, default_value = "bypassPermissions")]
         permission_mode: String,
+
+        /// Do not write/inject the AIDA launch-context snapshot.
+        #[clap(long)]
+        no_context: bool,
+
+        /// Print the generated launch-context snapshot before spawning.
+        #[clap(long)]
+        show_context: bool,
     },
 
     /// Spawn Codex CLI with project-correct cwd/env and registry tracking.
@@ -3481,6 +3757,14 @@ pub enum AgentNewCommand {
         /// the empirical autonomous-drain posture used in prior dogfood runs.
         #[clap(long)]
         bypass_sandbox: bool,
+
+        /// Do not write/inject the AIDA launch-context snapshot.
+        #[clap(long)]
+        no_context: bool,
+
+        /// Print the generated launch-context snapshot before spawning.
+        #[clap(long)]
+        show_context: bool,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.
@@ -3505,6 +3789,14 @@ pub enum AgentNewCommand {
         /// asks for autonomous-drain posture.
         #[clap(long)]
         bypass_sandbox: bool,
+
+        /// Do not write/inject the AIDA launch-context snapshot.
+        #[clap(long)]
+        no_context: bool,
+
+        /// Print the generated launch-context snapshot before spawning.
+        #[clap(long)]
+        show_context: bool,
     },
 }
 
@@ -3577,6 +3869,14 @@ pub enum Command {
         /// Use interactive mode (prompts)
         #[clap(long)]
         interactive: bool,
+
+        /// Open-time effort estimate: 15m, 1h, 4h, 1d, or 1w. Captured
+        /// to `.aida/effort-calibration/<SPEC>.yaml` and stamped as an
+        /// `effort:open:<value>` tag. `1d` means 8 work-hours; `1w`
+        /// means 5 work-days / 40 work-hours.
+        // trace:STORY-451 | ai:codex
+        #[clap(long, value_enum, value_name = "BUCKET")]
+        effort: Option<crate::effort_calibration::EffortBucket>,
     },
 
     /// List all requirements
@@ -3856,6 +4156,20 @@ pub enum Command {
     #[clap(subcommand)]
     Punts(PuntsCommand),
 
+    /// Autonomy + calibration views. Today this carries the three-way
+    /// complexity-calibration surface from `aida autonomy calibration
+    /// mismatches`; the broader autonomy-report views land alongside
+    /// the autonomy-metric work that owns them.
+    // trace:STORY-439 | ai:claude
+    #[clap(subcommand)]
+    Autonomy(AutonomyCommand),
+
+    /// Quantitative effort/load views. Effort buckets are 15m, 1h, 4h,
+    /// 1d (8 work-hours), and 1w (5 work-days / 40 work-hours).
+    // trace:STORY-451 | ai:codex
+    #[clap(subcommand)]
+    Load(LoadCommand),
+
     /// Feature management commands
     #[clap(subcommand, hide = true)]
     Feature(FeatureCommand),
@@ -4129,6 +4443,18 @@ pub enum Command {
         // trace:TASK-108 | ai:claude
         #[clap(long)]
         json: bool,
+        /// Auto-rebase tracked stacked branches whose base merged in this
+        /// pull. Walks `.aida/stacks.json` bottom-up; for each chain whose
+        /// `parent_branch` was just deleted on origin, runs
+        /// `git rebase --onto origin/main <recorded-parent-sha> <branch>`
+        /// in that branch's worktree. Without `--auto`, prompts
+        /// interactively and refuses non-interactively. Refuses to execute
+        /// any rebase the `aida_core::rebase::classify` pure classifier
+        /// flags as `diverged-risky` — drops the user into `/aida-rebase`
+        /// for those.
+        // trace:STORY-248 | ai:claude
+        #[clap(long)]
+        auto: bool,
     },
 
     /// Detect, classify, and (optionally) execute a rebase of the
@@ -4230,6 +4556,14 @@ pub enum Command {
     // trace:STORY-301 | ai:claude
     #[clap(subcommand)]
     Drain(DrainCommand),
+
+    /// Inspect the stacked-branch graph: `aida queue work --stack` records
+    /// each stacked branch's parent in `.aida/stacks.json`; `aida stack
+    /// show` / `list` render the chains. Pairs with the auto-rebase
+    /// cascade that `aida pull --auto` runs when a base merges.
+    // trace:STORY-248 | ai:claude
+    #[clap(subcommand)]
+    Stack(StackCommand),
 
     /// Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the
     /// non-obvious jq filter (assistant content blocks, text-only by default,
@@ -4634,6 +4968,12 @@ pub enum Command {
     /// Personal work queue commands
     #[clap(subcommand, hide = true)]
     Queue(QueueCommand),
+
+    /// Curate Approved-but-not-queued work into the queue with risk and
+    /// file-overlap heuristics. See `aida backlog --help`.
+    // trace:STORY-444 | ai:claude
+    #[clap(subcommand)]
+    Backlog(BacklogCommand),
 
     /// Top-level alias for `aida queue rework SPEC` — single verb for the
     /// recurring implementer → reviewer → fixup recovery sequence
