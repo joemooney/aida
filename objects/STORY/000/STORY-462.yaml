@@ -1,0 +1,108 @@
+id: 019e5b2d-92c6-7e41-be44-062f94b45804
+spec_id: STORY-462
+agreed_id: STORY-462
+title: aida doctor — diagnostic + heal command for multi-agent state drift (orphan leases, brief/spec/lease disconnects, stale branches)
+description: |-
+  ## Strategic context
+
+  Multi-agent dispatch surfaces a recurring state-drift class:
+  - Lease exists but agent abandoned it (branch behind main; uncommitted work; nobody acked brief)
+  - Brief is pending but lease already exists (someone started; nobody claimed)
+  - Lease ended but branch retained without PR (forever-stale branch class)
+  - Worktree exists but lease was force-ended (orphan worktree)
+  - Spec status is Approved but lease exists (or Done but lease still active) — stale status
+  - Brief points at spec already in Completed status (brief is OBE)
+  - Reviewer lease points at PR that's already merged
+
+  Today (2026-05-24) master has manually walked this recovery dance twice — TASK-515 abandoned with stale branch + uncommitted work, TASK-542 same pattern hours later. Each recovery: ~5 min of diagnose + decide + 'aida session end --force' + brief refile. With N agents in parallel, the friction scales linearly.
+
+  This recurring pattern needs to become a skill the advisor invokes, not a recipe master re-derives each time.
+
+  ## Proposed shape: 'aida doctor' command + matching '/aida-doctor' skill
+
+  ### CLI surface
+
+    aida doctor                       # default: scan + report (read-only diagnostic)
+    aida doctor --heal                # scan + apply safe fixes (with confirmation per category)
+    aida doctor --heal --yes          # scan + apply safe fixes without confirmation (batch mode)
+    aida doctor --heal --category leases    # heal only one category
+    aida doctor --json                # machine-readable output
+
+    aida doctor check <category>      # focused per-category diagnostic
+    aida doctor heal <category>       # focused per-category heal
+
+  ### Categories to detect
+
+  1. **stale-leases**: lease's recorded PID is dead OR worktree is gone OR branch was merged
+  2. **abandoned-leases**: lease exists, worktree has uncommitted changes, branch is N commits behind main (configurable threshold; default 100). Heuristic for 'agent forked from old main + lost context'.
+  3. **brief-lease-drift**: brief is 'pending' but lease exists for same spec — someone started without acking
+  4. **brief-spec-drift**: brief is pending but spec status is already Completed/Rejected — brief is OBE
+  5. **spec-status-drift**: spec is Approved but lease exists (should be In Progress) OR spec is Done but lease still active (should be ended)
+  6. **orphan-worktrees**: worktree directory exists but no lease references it
+  7. **orphan-branches**: branches retained after lease end, no PR open, no merge to main
+  8. **stale-reviewer-leases**: reviewer lease points at PR that's no longer in 'gh pr list --state open'
+  9. **OBE-briefs**: brief targets a spec already Completed/Rejected/Released
+
+  ### Heal actions per category
+
+  | Category | Heal action |
+  |---|---|
+  | stale-leases | End lease (save patch first if uncommitted work) |
+  | abandoned-leases | Save patch to .aida/salvage/, end lease, remove worktree, brief: 'restart with salvage reference' |
+  | brief-lease-drift | Print actionable hint: 'aida brief ack <path>' for the agent OR 'session end + new brief' |
+  | brief-spec-drift | Ack the OBE brief automatically |
+  | spec-status-drift | Bump spec status to match lease state (Approved+lease → In Progress; Done+lease → confirm + end) |
+  | orphan-worktrees | git worktree remove (with confirmation) |
+  | orphan-branches | List for operator decision; auto-delete only when --yes --force given |
+  | stale-reviewer-leases | End lease (PR already merged) |
+  | OBE-briefs | Ack the brief |
+
+  ### Salvage-first discipline
+
+  Per the TASK-515 + TASK-542 recovery pattern: ALWAYS save uncommitted-work patches to '.aida/salvage/<spec-id>-<agent>-attempt-<date>.patch' before discarding a worktree. The patch is the breadcrumb the next agent uses to recover design intent without inheriting bad rebase state.
+
+  ## Acceptance
+
+  - [ ] 'aida doctor' command (read-only diagnostic) — prints categorized findings + recommended actions
+  - [ ] 'aida doctor --heal' applies safe fixes with per-category confirmation
+  - [ ] 'aida doctor --heal --yes' batch heal without prompts (for advisor cleanup skill)
+  - [ ] '--category <name>' filter
+  - [ ] 'aida doctor heal/check <category>' focused sub-verbs
+  - [ ] '--json' emission for machine consumers
+  - [ ] Salvage-first discipline: any worktree-removing heal saves the diff first to .aida/salvage/
+  - [ ] /aida-doctor skill template that the advisor can invoke when multi-agent drift is suspected
+  - [ ] Composes with STORY-385 (aida status --cleanup surfaces drift; aida doctor heals it)
+  - [ ] Documentation: 'Operator guide: when to run aida doctor'
+
+  ## Naming
+
+  User proposed three options: heal / doctor / remedy. Master recommends 'doctor' as the primary command name (matches npm doctor / brew doctor / flutter doctor / cargo check idioms — universal 'diagnostic + remedy' mental model in the dev-tools space). 'heal' lives as a sub-verb. 'remedy' is less idiomatic in CLI.
+
+  ## Composes with
+
+  - STORY-385 (aida status --cleanup — the diagnostic surface; this story adds the action layer)
+  - STORY-456 + STORY-457 (worktree + working-tree surfaces — doctor heals what they show)
+  - BUG-376 + TASK-548 (ceiling-pattern fixes — reduce drift FROM the source by preventing implementer lingering / unnecessary pauses; doctor heals drift AFTER the fact)
+  - batch:multi-agent-coordination (this is the action-layer companion to the routing-surface layer)
+
+  ## Origin
+
+  2026-05-24 master walked the multi-agent state recovery dance manually twice (TASK-515 + TASK-542 abandonment patterns). User: 'this is maybe an advisor clean up skill that you can invoke when we get in this situations'. Master agrees — recipe is well-defined; skill-formalize it. User naming proposals: 'heal or doctor or remedy'.
+
+  trace:STORY-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T18:09:33.894802381Z
+modified_at: 2026-05-24T18:09:33.894802381Z
+req_type: Story
+tags:
+- advisor-discipline
+- aida:doctor
+- batch:multi-agent-coordination
+- from-self-test
+- from-user-direction
+- multi-agent
+- recovery
+- state-drift
