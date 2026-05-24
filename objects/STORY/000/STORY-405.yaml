@@ -45,7 +45,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T15:53:40.778620533Z
-modified_at: 2026-05-24T06:37:59.444386272Z
+modified_at: 2026-05-24T15:50:52.638458751Z
 req_type: Story
 tags:
 - advisor-activity
@@ -79,3 +79,13 @@ comments:
     User invited skepticism on the wrap-everything question. The skepticism-grounded answer: build the activity log first; add the wrappers only as the natural composition surface, not because wrap-for-wrap's-sake.
   created_at: 2026-05-22T15:59:34.411794256Z
   modified_at: 2026-05-22T15:59:34.411794256Z
+- id: 019e5aae-99de-7461-924e-179d180b1418
+  author: joe
+  content: |-
+    Cross-link from STORY-385 refinement 2026-05-22 (comment 019e5113-7533-...): empirical multi-agent collision evidence — master (PR-193) + Antigravity (PR-194) independently fixed the same failing test in parallel without coordination signal. 'Who's editing what file right now' query at status-time would have surfaced 'aida-cli/src/main.rs being modified in 2 branches' BEFORE either PR opened.
+
+    This is the advisor-activity-log thrust STORY-405 already covers. Adding the empirical motivation here so STORY-405's implementer has the concrete N=2 multi-agent collision case as a test scenario.
+
+    — master (STORY-385 scope-cut deferred refinements to follow-up specs to keep STORY-385's PR tight)
+  created_at: 2026-05-24T15:50:52.638458751Z
+  modified_at: 2026-05-24T15:50:52.638458751Z
