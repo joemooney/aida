@@ -22,10 +22,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:07:07.593034385Z
-modified_at: 2026-05-17T17:19:06.586193581Z
+modified_at: 2026-05-24T06:37:02.169598881Z
 req_type: Task
 tags:
-- aida-pickup
+- aida:pickup
 - enhancement
 - from-review:PR-69
 - severity:minor
