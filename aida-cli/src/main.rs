@@ -33,6 +33,7 @@ mod session;
 mod session_manifest;
 mod stacks;
 mod state_snapshot;
+mod status_cleanup;
 mod status_display;
 #[cfg(test)]
 mod test_env;
@@ -1438,6 +1439,8 @@ fn run() -> Result<()> {
             queue: _,
             ci: _,
             no_ci: _,
+            cleanup: _,
+            verbose: _,
         } => {
             handle_status_command(*no_dev_context, None, &storage)?;
         }
@@ -4549,6 +4552,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             queue,
             ci,
             no_ci,
+            cleanup,
+            verbose,
         } => {
             return handle_status_command_distributed(
                 *no_dev_context,
@@ -4557,6 +4562,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *queue,
                 *ci,
                 *no_ci,
+                *cleanup,
+                *verbose,
                 store_path,
                 &backend,
             );
@@ -48268,6 +48275,837 @@ mod task_490_status_in_progress_tests {
     }
 }
 
+/// One record from `git worktree list --porcelain`. The main worktree is
+/// always the first record; linked worktrees follow. Detached worktrees
+/// produce `None` for `branch`.
+/// trace:STORY-385 | ai:claude
+#[derive(Debug, Clone)]
+struct WorktreeRecord {
+    path: std::path::PathBuf,
+    branch: Option<String>,
+}
+
+/// Parse `git worktree list --porcelain` output. One record per worktree,
+/// separated by blank lines.
+fn list_worktrees(project_root: &std::path::Path) -> Vec<WorktreeRecord> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let mut records = Vec::new();
+    let mut cur_path: Option<std::path::PathBuf> = None;
+    let mut cur_branch: Option<String> = None;
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        if let Some(p) = line.strip_prefix("worktree ") {
+            // Flush previous record if any.
+            if let Some(path) = cur_path.take() {
+                records.push(WorktreeRecord {
+                    path,
+                    branch: cur_branch.take(),
+                });
+            }
+            cur_path = Some(std::path::PathBuf::from(p));
+        } else if let Some(b) = line.strip_prefix("branch refs/heads/") {
+            cur_branch = Some(b.to_string());
+        }
+    }
+    if let Some(path) = cur_path {
+        records.push(WorktreeRecord {
+            path,
+            branch: cur_branch,
+        });
+    }
+    records
+}
+
+/// Open-PR snapshot keyed by head branch — one `gh` invocation feeds the
+/// "open PRs" and "branches ahead with no PR" detectors. Empty when gh is
+/// missing or the call fails (every dependent detector silently
+/// degrades).
+/// trace:STORY-385 | ai:claude
+#[derive(Debug, Clone, Default)]
+struct OpenPrSnapshot {
+    by_branch: std::collections::HashMap<String, status_cleanup::OpenPrItem>,
+}
+
+fn collect_open_prs(project_root: &std::path::Path) -> OpenPrSnapshot {
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return OpenPrSnapshot::default(),
+    };
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "50",
+            "--json",
+            "number,title,headRefName,statusCheckRollup,mergeable",
+        ])
+        .output();
+    let Ok(out) = out else {
+        return OpenPrSnapshot::default();
+    };
+    if !out.status.success() {
+        return OpenPrSnapshot::default();
+    }
+    let parsed: serde_json::Value = match serde_json::from_slice(&out.stdout) {
+        Ok(v) => v,
+        Err(_) => return OpenPrSnapshot::default(),
+    };
+    let mut by_branch = std::collections::HashMap::new();
+    for pr in parsed.as_array().cloned().unwrap_or_default() {
+        let number = pr.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        if number == 0 {
+            continue;
+        }
+        let title = pr
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let head_branch = pr
+            .get("headRefName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let mergeable = pr
+            .get("mergeable")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let ci_rollup = pr
+            .get("statusCheckRollup")
+            .and_then(|v| v.as_array())
+            .map(|arr| summarize_status_check_rollup(arr));
+        by_branch.insert(
+            head_branch.clone(),
+            status_cleanup::OpenPrItem {
+                number,
+                title,
+                head_branch,
+                ci_rollup,
+                mergeable,
+            },
+        );
+    }
+    OpenPrSnapshot { by_branch }
+}
+
+/// Every branch that has ever been a PR head, across all states
+/// (open / closed / merged). Used by the branches-ahead-no-PR detector
+/// to distinguish "never PR'd" branches from squash-merged ones that
+/// git still considers ahead. Empty when gh is missing or the call
+/// fails. trace:STORY-385 | ai:claude
+fn collect_all_pr_head_branches(
+    project_root: &std::path::Path,
+) -> std::collections::HashSet<String> {
+    let mut set = std::collections::HashSet::new();
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return set,
+    };
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "500",
+            "--json",
+            "headRefName",
+        ])
+        .output();
+    let Ok(out) = out else { return set };
+    if !out.status.success() {
+        return set;
+    }
+    let parsed: serde_json::Value = match serde_json::from_slice(&out.stdout) {
+        Ok(v) => v,
+        Err(_) => return set,
+    };
+    for pr in parsed.as_array().cloned().unwrap_or_default() {
+        if let Some(b) = pr.get("headRefName").and_then(|v| v.as_str()) {
+            set.insert(b.to_string());
+        }
+    }
+    set
+}
+
+/// Roll up `statusCheckRollup` into one of `pass`, `fail`, `pending`, or
+/// `?`. Counts FAILURE/CANCELLED/TIMED_OUT/ACTION_REQUIRED as fail,
+/// IN_PROGRESS/QUEUED/PENDING as pending; SUCCESS only when every check
+/// reports success.
+fn summarize_status_check_rollup(checks: &[serde_json::Value]) -> String {
+    if checks.is_empty() {
+        return "?".to_string();
+    }
+    let mut has_fail = false;
+    let mut has_pending = false;
+    let mut total = 0usize;
+    let mut passed = 0usize;
+    for c in checks {
+        total += 1;
+        let conclusion = c
+            .get("conclusion")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_uppercase();
+        let status = c
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_uppercase();
+        match conclusion.as_str() {
+            "SUCCESS" => passed += 1,
+            "FAILURE" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" => has_fail = true,
+            _ => {
+                if matches!(status.as_str(), "IN_PROGRESS" | "QUEUED" | "PENDING") {
+                    has_pending = true;
+                }
+            }
+        }
+    }
+    if has_fail {
+        "fail".to_string()
+    } else if has_pending {
+        "pending".to_string()
+    } else if passed == total {
+        "pass".to_string()
+    } else {
+        "?".to_string()
+    }
+}
+
+/// Walk recent default-branch commits and recover the `spec_id → sha`
+/// pairs that would auto-bump a Done spec to Completed. Returns the
+/// flips that *would* land — the caller filters them against current
+/// store state. Cheaper than `auto_bump_done_to_completed` because it
+/// doesn't require being checked out on main.
+/// trace:STORY-385 | ai:claude
+fn scan_default_branch_for_spec_landings(
+    project_root: &std::path::Path,
+    limit: u32,
+) -> Vec<(String, String)> {
+    let default = match detect_default_branch_ref(project_root) {
+        Some(r) => r,
+        None => return Vec::new(),
+    };
+    let log = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "log",
+            "--pretty=format:%H%x09%s",
+            &format!("--max-count={limit}"),
+            &default,
+        ])
+        .output();
+    let Ok(log) = log else { return Vec::new() };
+    if !log.status.success() {
+        return Vec::new();
+    }
+    let text = String::from_utf8_lossy(&log.stdout);
+    // Spec → first-seen sha (matches auto-bump "earliest landing wins").
+    let mut seen: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    for line in text.lines() {
+        let mut parts = line.splitn(2, '\t');
+        let sha = parts.next().unwrap_or("").trim();
+        let subject = parts.next().unwrap_or("").trim();
+        if sha.is_empty() || subject.is_empty() {
+            continue;
+        }
+        for spec_id in extract_spec_ids_from_commit(subject) {
+            seen.entry(spec_id).or_insert_with(|| sha.to_string());
+        }
+    }
+    seen.into_iter().collect()
+}
+
+/// True when `branch` is ahead of `target_ref` (defaults to the project's
+/// detected default ref).
+fn branch_ahead_of(project_root: &std::path::Path, branch: &str, target_ref: &str) -> Option<u32> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-list",
+            "--count",
+            &format!("{}..{}", target_ref, branch),
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// `git for-each-ref refs/heads/` — just the branch names.
+fn list_local_branches(project_root: &std::path::Path) -> Vec<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["for-each-ref", "--format=%(refname:short)", "refs/heads/"])
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Look up a PR's merge state via `gh pr view <N>`. Returns `Some(true)`
+/// when merged, `Some(false)` when open/closed-without-merge, `None` when
+/// gh is missing or the call fails.
+fn gh_pr_is_merged(project_root: &std::path::Path, n: u64) -> Option<bool> {
+    let gh_bin = resolve_gh_binary()?;
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "view",
+            &n.to_string(),
+            "--json",
+            "state",
+            "-q",
+            ".state",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .to_ascii_lowercase();
+    Some(s == "merged")
+}
+
+/// Scan `~/.claude/projects/` for project dirs whose recorded cwd no
+/// longer exists. Re-derived from the same detection logic as
+/// `session_prune_orphans` so the cleanup surface stays consistent with
+/// the cleanup command.
+/// trace:STORY-385 | ai:claude
+fn collect_orphan_project_dirs() -> Vec<status_cleanup::OrphanProjectDirItem> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    let projects = home.join(".claude/projects");
+    if !projects.is_dir() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let Ok(read) = std::fs::read_dir(&projects) else {
+        return out;
+    };
+    for entry in read.filter_map(|e| e.ok()) {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let mut found_cwd: Option<String> = None;
+        let mut jsonl_count = 0;
+        if let Ok(read) = std::fs::read_dir(&dir) {
+            for jsonl in read.filter_map(|e| e.ok()) {
+                if jsonl.path().extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                jsonl_count += 1;
+                if found_cwd.is_none() {
+                    if let Ok(text) = std::fs::read_to_string(jsonl.path()) {
+                        for line in text.lines().take(20) {
+                            if let Some(idx) = line.find("\"cwd\":\"") {
+                                let after = &line[idx + 7..];
+                                if let Some(end) = after.find('"') {
+                                    found_cwd = Some(after[..end].to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let cwd_str = found_cwd.unwrap_or_else(|| {
+            let name = dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            name.replace('-', "/")
+        });
+        if cwd_str.is_empty() {
+            continue;
+        }
+        if std::path::Path::new(&cwd_str).is_dir() {
+            continue;
+        }
+        out.push(status_cleanup::OrphanProjectDirItem {
+            path: dir,
+            decoded_cwd: cwd_str,
+            jsonl_count,
+        });
+    }
+    out
+}
+
+/// Parse a lease scope of the form `PR-<n>` (or `MR-<n>`) into its PR
+/// number. Used to cross-reference reviewer leases against `gh pr view`
+/// for the stale-on-merged detector.
+fn parse_pr_scope(scope: &str) -> Option<u64> {
+    let rest = scope
+        .strip_prefix("PR-")
+        .or_else(|| scope.strip_prefix("MR-"))?;
+    rest.parse().ok()
+}
+
+/// True when `branch` matches the AIDA *work-branch* naming convention:
+/// `<type>-<n>` for spec types that drive an implementer session
+/// (`task`, `story`, `bug`, `epic`, `spike`, `spec`, `fr`, `nfr`,
+/// `user`, `sr`), optionally with a `-suffix` or `.suffix`. PR/MR
+/// branches (reviewer worktrees) are excluded — they surface via the
+/// stale-reviewer-on-merged detector.
+/// trace:STORY-385 | ai:claude
+fn is_work_spec_branch_name(branch: &str) -> bool {
+    const PREFIXES: &[&str] = &[
+        "task-", "story-", "bug-", "epic-", "spike-", "spec-", "fr-", "nfr-", "user-", "sr-",
+    ];
+    let lower = branch.to_ascii_lowercase();
+    for p in PREFIXES {
+        if let Some(rest) = lower.strip_prefix(p) {
+            let mut chars = rest.chars();
+            let first = match chars.next() {
+                Some(c) => c,
+                None => continue,
+            };
+            if !first.is_ascii_digit() {
+                continue;
+            }
+            return chars.all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.');
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod is_work_spec_branch_name_tests {
+    use super::is_work_spec_branch_name;
+
+    #[test]
+    fn matches_canonical_work_branches() {
+        assert!(is_work_spec_branch_name("task-281"));
+        assert!(is_work_spec_branch_name("TASK-281"));
+        assert!(is_work_spec_branch_name("story-86"));
+        assert!(is_work_spec_branch_name("bug-100"));
+        assert!(is_work_spec_branch_name("epic-20-batch7"));
+        assert!(is_work_spec_branch_name("spec-409"));
+        assert!(is_work_spec_branch_name("spike-7"));
+    }
+
+    #[test]
+    fn rejects_pr_and_mr_branches() {
+        // pr-N / mr-N are reviewer worktrees — surfaced elsewhere.
+        assert!(!is_work_spec_branch_name("pr-271"));
+        assert!(!is_work_spec_branch_name("mr-9"));
+    }
+
+    #[test]
+    fn rejects_non_spec_branches() {
+        assert!(!is_work_spec_branch_name("main"));
+        assert!(!is_work_spec_branch_name("feature/login"));
+        assert!(!is_work_spec_branch_name("claude/plan-archive-filtering"));
+        assert!(!is_work_spec_branch_name("aida-store"));
+        assert!(!is_work_spec_branch_name("task"));
+        assert!(!is_work_spec_branch_name("task-"));
+        assert!(!is_work_spec_branch_name("taskX"));
+    }
+}
+
+/// Build the full `CleanupReport` from the live project state. Each
+/// detector is independent — when one fails (gh missing, git invocation
+/// broken, store unreadable) it returns an empty vec rather than
+/// aborting the whole report. trace:STORY-385 | ai:claude
+fn collect_cleanup_report(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    _backend: &aida_core::CachedGitBackend,
+) -> status_cleanup::CleanupReport {
+    let leases = list_leases(project_root);
+    let now = chrono::Utc::now();
+    let live_sessions = process_probe::probe_live_claude_sessions();
+
+    // Per-lease state classification — reused by sticky-in-progress,
+    // dormant, and stale-reviewer detectors.
+    let lease_states: Vec<(SessionLease, LeaseState)> = leases
+        .iter()
+        .map(|l| {
+            let worktree_exists = l.worktree_path.exists();
+            let has_live = live_sessions.iter().any(|s| {
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            });
+            let age_hours = now.signed_duration_since(l.started_at).num_hours();
+            let state = classify_lease_state(worktree_exists, has_live, age_hours);
+            (l.clone(), state)
+        })
+        .collect();
+
+    // ── Detector 1: Uncommitted WIP across every worktree ──
+    // Skip the orphan-store worktree (`.aida-store`) — it's AIDA-managed,
+    // dirty state there is the normal mid-write moment between
+    // `aida add`/`aida edit` and the next `aida push`, not lost work.
+    // trace:STORY-385 | ai:claude
+    let worktrees = list_worktrees(project_root);
+    let mut uncommitted_wip = Vec::new();
+    for wt in &worktrees {
+        if !wt.path.exists() {
+            continue;
+        }
+        if wt.branch.as_deref() == Some("aida-store") {
+            continue;
+        }
+        let dirty = worktree_dirty_entries(&wt.path);
+        if dirty.is_empty() {
+            continue;
+        }
+        let canon_path = wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone());
+        let scope = lease_states
+            .iter()
+            .find(|(l, _)| {
+                let lp = l
+                    .worktree_path
+                    .canonicalize()
+                    .unwrap_or_else(|_| l.worktree_path.clone());
+                lp == canon_path
+            })
+            .map(|(l, _)| l.scope.clone());
+        let branch = wt.branch.clone().unwrap_or_else(|| "(detached)".into());
+        let age_hours = lease_states
+            .iter()
+            .find(|(l, _)| l.worktree_path == canon_path || l.worktree_path == wt.path)
+            .map(|(l, _)| now.signed_duration_since(l.started_at).num_hours())
+            .unwrap_or(0);
+        uncommitted_wip.push(status_cleanup::UncommittedWipItem {
+            worktree_path: wt.path.clone(),
+            branch,
+            scope,
+            modified_files: dirty.len(),
+            age_hours,
+        });
+    }
+    uncommitted_wip.sort_by(|a, b| b.age_hours.cmp(&a.age_hours));
+
+    // ── Detector 2: Sticky In-Progress specs (no Live/Dormant lease) ──
+    let active_scopes: std::collections::HashSet<String> = lease_states
+        .iter()
+        .filter(|(_, s)| matches!(s, LeaseState::Live | LeaseState::Dormant))
+        .map(|(l, _)| l.scope.clone())
+        .collect();
+    let mut sticky_in_progress = Vec::new();
+    for req in &store.requirements {
+        if !matches!(req.status, RequirementStatus::InProgress) {
+            continue;
+        }
+        let Some(spec_id) = req.spec_id.as_deref() else {
+            continue;
+        };
+        if active_scopes.contains(spec_id) {
+            continue;
+        }
+        // STORY-385: parent EPICs / Visions / Folders flip to In Progress
+        // when their children are working — the parent itself has no
+        // branch and isn't "stuck". Skip these so the category surfaces
+        // only specs that actually need a recovery action.
+        // trace:STORY-385 | ai:claude
+        if matches!(
+            req.req_type,
+            aida_core::RequirementType::Epic
+                | aida_core::RequirementType::Vision
+                | aida_core::RequirementType::Folder
+                | aida_core::RequirementType::Meta
+                | aida_core::RequirementType::Sprint
+        ) {
+            continue;
+        }
+        // STORY-385: derive the spec branch by convention (kebab-cased
+        // spec id) and check whether it carries unpushed work. Branches
+        // are typed `<type>-<num>` (e.g. `task-281`). Missing branches
+        // are reported with `unpushed_commits == 0`.
+        // trace:STORY-385 | ai:claude
+        let branch_name = spec_id.to_ascii_lowercase();
+        let local_exists = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["rev-parse", "--verify", "--quiet", &branch_name])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        let (unpushed, pushed) = if local_exists {
+            let upstream = format!("origin/{}", branch_name);
+            let upstream_exists = std::process::Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["rev-parse", "--verify", "--quiet", &upstream])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            if upstream_exists {
+                let ahead_upstream =
+                    branch_ahead_of(project_root, &branch_name, &upstream).unwrap_or(0);
+                let pushed_count = std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(project_root)
+                    .args(["rev-list", "--count", &format!("origin/main..{}", upstream)])
+                    .output()
+                    .ok()
+                    .and_then(|o| {
+                        if o.status.success() {
+                            String::from_utf8_lossy(&o.stdout).trim().parse().ok()
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(0);
+                (ahead_upstream, pushed_count)
+            } else {
+                let ahead = branch_ahead_of(project_root, &branch_name, "origin/main")
+                    .or_else(|| branch_ahead_of(project_root, &branch_name, "main"))
+                    .unwrap_or(0);
+                (ahead, 0)
+            }
+        } else {
+            (0, 0)
+        };
+        sticky_in_progress.push(status_cleanup::StickyInProgressItem {
+            spec_id: spec_id.to_string(),
+            title: req.title.clone(),
+            branch: if local_exists {
+                Some(branch_name)
+            } else {
+                None
+            },
+            unpushed_commits: unpushed,
+            pushed_commits: pushed,
+            age_hours: None,
+        });
+    }
+
+    // ── Detector 3 + 5: Open PRs + branches-ahead-no-PR (gh calls) ──
+    let open_prs_snapshot = collect_open_prs(project_root);
+    let open_pr_branches: std::collections::HashSet<String> =
+        open_prs_snapshot.by_branch.keys().cloned().collect();
+    // Every branch that has EVER had a PR — used to filter out
+    // squash-merged branches whose local tip looks "ahead" of main but
+    // already shipped. trace:STORY-385 | ai:claude
+    let ever_pr_branches = collect_all_pr_head_branches(project_root);
+
+    // STORY-385: branches-ahead-no-PR scans all local branches, which
+    // becomes noisy in long-lived repos that accumulate hundreds of
+    // historical branches. Filter to branches with a commit in the
+    // recent window (default 30 days) AND skip the orphan store
+    // branch — those carry archived history, not in-flight work.
+    // trace:STORY-385 | ai:claude
+    let recent_branch_window_secs: i64 = 30 * 24 * 3600;
+    let now_secs = chrono::Utc::now().timestamp();
+    let mut branches_ahead_no_pr = Vec::new();
+    let default_ref = detect_default_branch_ref(project_root);
+    if let Some(default_ref) = default_ref.as_deref() {
+        for branch in list_local_branches(project_root) {
+            // Skip the default branch itself + the orphan store branch.
+            if branch == "main" || branch == "master" || branch == "aida-store" {
+                continue;
+            }
+            // Skip branches already in an open PR.
+            if open_pr_branches.contains(&branch) {
+                continue;
+            }
+            // Skip branches that have EVER had a PR (closed or merged).
+            // A squash-merged branch's local tip remains "ahead" of main
+            // because the squash gave its commits a different SHA; the
+            // ever-PR set is the most reliable "this already shipped"
+            // signal.
+            if ever_pr_branches.contains(&branch) {
+                continue;
+            }
+            // STORY-385: only flag branches whose name matches the
+            // SPEC-ID convention for *work* branches — `task-<n>`,
+            // `story-<n>`, `bug-<n>`, `epic-<n>`, `spike-<n>`, `spec-<n>`,
+            // optionally with a `-suffix` like `-batch7`. The canonical
+            // motivating example in the spec is `task-281`; long-lived
+            // feature branches and ad-hoc agent-tool branches (e.g.
+            // `claude/plan-...`) are not what this category is for.
+            // `pr-<n>` / `mr-<n>` branches are reviewer-worktree state
+            // and surface elsewhere (stale-reviewer-on-merged), so
+            // exclude them here to avoid double-counting.
+            // trace:STORY-385 | ai:claude
+            if !is_work_spec_branch_name(&branch) {
+                continue;
+            }
+            // Skip branches with no recent activity — the cleanup section
+            // is for in-flight work, not historical archaeology.
+            let last_commit_ts = std::process::Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["log", "-1", "--format=%ct", &branch])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        String::from_utf8_lossy(&o.stdout)
+                            .trim()
+                            .parse::<i64>()
+                            .ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
+            if now_secs - last_commit_ts > recent_branch_window_secs {
+                continue;
+            }
+            let ahead = match branch_ahead_of(project_root, &branch, default_ref) {
+                Some(n) if n > 0 => n,
+                _ => continue,
+            };
+            // Skip branches already surfaced as sticky-in-progress —
+            // those are visible in their own category and double-listing
+            // them is noise.
+            let already_sticky = sticky_in_progress
+                .iter()
+                .any(|s| s.branch.as_deref() == Some(branch.as_str()));
+            if already_sticky {
+                continue;
+            }
+            let upstream_exists = std::process::Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args([
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    &format!("origin/{}", branch),
+                ])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            branches_ahead_no_pr.push(status_cleanup::BranchAheadItem {
+                branch,
+                commits_ahead: ahead,
+                has_upstream: upstream_exists,
+            });
+        }
+    }
+    branches_ahead_no_pr.sort_by(|a, b| b.commits_ahead.cmp(&a.commits_ahead));
+
+    let mut open_prs: Vec<status_cleanup::OpenPrItem> =
+        open_prs_snapshot.by_branch.values().cloned().collect();
+    open_prs.sort_by_key(|p| p.number);
+
+    // ── Detector 4: Missed auto-bump ──
+    let landings = scan_default_branch_for_spec_landings(project_root, 200);
+    let mut missed_auto_bump = Vec::new();
+    for (spec_id, sha) in landings {
+        let Some(req) = store.get_requirement_by_spec_id(&spec_id) else {
+            continue;
+        };
+        if !matches!(req.status, RequirementStatus::Done) {
+            continue;
+        }
+        missed_auto_bump.push(status_cleanup::MissedAutoBumpItem {
+            spec_id,
+            title: req.title.clone(),
+            landing_sha: sha,
+        });
+    }
+
+    // ── Detector 7: Stale reviewer leases on merged PRs ──
+    // (Detected first so we can dedupe these out of the Dormant category
+    // below — a reviewer lease on a merged PR is recoverable but the
+    // merged-PR signal is more actionable.)
+    // trace:STORY-385 | ai:claude
+    let mut stale_reviewer_leases = Vec::new();
+    let mut stale_reviewer_lease_ids: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    for (l, _state) in &lease_states {
+        if l.role.as_deref() != Some("reviewer") {
+            continue;
+        }
+        let Some(pr_n) = parse_pr_scope(&l.scope) else {
+            continue;
+        };
+        // Skip if the PR is still open — those show up under "Open PRs".
+        if open_prs_snapshot
+            .by_branch
+            .values()
+            .any(|p| p.number == pr_n)
+        {
+            continue;
+        }
+        let merged = gh_pr_is_merged(project_root, pr_n).unwrap_or(false);
+        if !merged {
+            continue;
+        }
+        let age_hours = now.signed_duration_since(l.started_at).num_hours();
+        stale_reviewer_lease_ids.insert(l.id.clone());
+        stale_reviewer_leases.push(status_cleanup::StaleReviewerLeaseItem {
+            lease_id: l.id.clone(),
+            pr_number: pr_n,
+            worktree_path: l.worktree_path.clone(),
+            age_hours,
+        });
+    }
+    stale_reviewer_leases.sort_by(|a, b| b.age_hours.cmp(&a.age_hours));
+
+    // ── Detector 6: Dormant leases ──
+    let mut dormant_leases = Vec::new();
+    for (l, state) in &lease_states {
+        if !matches!(state, LeaseState::Dormant) {
+            continue;
+        }
+        // STORY-385: stale-reviewer-on-merged is a strict refinement of
+        // dormant — show the more actionable signal, suppress here.
+        if stale_reviewer_lease_ids.contains(&l.id) {
+            continue;
+        }
+        let age_hours = now.signed_duration_since(l.started_at).num_hours();
+        dormant_leases.push(status_cleanup::DormantLeaseItem {
+            lease_id: l.id.clone(),
+            scope: l.scope.clone(),
+            role: l.role.clone(),
+            worktree_path: l.worktree_path.clone(),
+            age_hours,
+        });
+    }
+    dormant_leases.sort_by(|a, b| b.age_hours.cmp(&a.age_hours));
+
+    // ── Detector 8: Orphan Claude Code project dirs ──
+    let orphan_project_dirs = collect_orphan_project_dirs();
+
+    status_cleanup::CleanupReport {
+        uncommitted_wip,
+        sticky_in_progress,
+        branches_ahead_no_pr,
+        missed_auto_bump,
+        open_prs,
+        dormant_leases,
+        stale_reviewer_leases,
+        orphan_project_dirs,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_status_command_distributed(
     no_dev_context: bool,
@@ -48276,6 +49114,8 @@ fn handle_status_command_distributed(
     queue_only: bool,
     ci_only: bool,
     no_ci: bool,
+    cleanup: bool,
+    verbose: bool,
     store_path: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
@@ -48283,6 +49123,21 @@ fn handle_status_command_distributed(
 
     let store = backend.load()?;
     let project_root = std::env::current_dir()?;
+
+    // STORY-385: `--cleanup` focuses on the "Needs attention" section.
+    // `--cleanup --json` emits the structured report; otherwise we render
+    // the text version and exit, skipping the rest of the status surface.
+    // trace:STORY-385 | ai:claude
+    if cleanup {
+        let report = collect_cleanup_report(&project_root, &store, backend);
+        if json {
+            println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+        } else {
+            let stdout = std::io::stdout();
+            let _ = report.render(verbose, stdout.lock());
+        }
+        return Ok(());
+    }
 
     // TASK-220: gather the unified-view facts once. Each section
     // graceful-degrades on its own data — missing PR or missing session
@@ -48443,6 +49298,16 @@ fn handle_status_command_distributed(
     // AIDA-self developer context — only when this project IS the aida repo.
     if !no_dev_context && is_aida_repo(&project_root) {
         print_aida_dev_context(&project_root);
+    }
+
+    // STORY-385: one-line summary at the bottom of default `aida status`
+    // when the cleanup report is non-empty — silent otherwise. Points the
+    // operator at `--cleanup` for details.
+    // trace:STORY-385 | ai:claude
+    let cleanup_report = collect_cleanup_report(&project_root, &store, backend);
+    if let Some(line) = cleanup_report.summary_line() {
+        println!("  {}", line);
+        println!();
     }
 
     Ok(())
