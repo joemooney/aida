@@ -8,10 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:10:49.568278564Z
-modified_at: 2026-05-23T16:22:29.249331561Z
+modified_at: 2026-05-24T06:38:06.948679082Z
 req_type: Task
 tags:
-- aida-status
+- aida:status
 - from-self-test
 - from-user-friction
 - operator-visibility
