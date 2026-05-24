@@ -2381,7 +2381,6 @@ fn strip_yaml_frontmatter(content: &str) -> String {
     content.to_string()
 }
 
->>>>>>> f6e8db9f ([AI:claude] feat(scaffolding): per-project skill extensions via local/ + .local.md (STORY-305))
 /// Errors that can occur during scaffolding
 #[derive(Debug)]
 pub enum ScaffoldError {
