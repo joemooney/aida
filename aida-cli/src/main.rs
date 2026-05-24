@@ -20250,6 +20250,98 @@ fn pr_credited_spec_id_with_sink(
     pick_credited_spec(stdout.as_ref(), dispatched)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PrCreditMatch {
+    Dispatched,
+    Other(String),
+    Unknown,
+}
+
+/// BUG-357: classify whether PR metadata credits the dispatched spec before a
+/// reconcile step treats a merged PR as out-of-band success. Commit trailers
+/// are strongest; a different commit trailer is an explicit mismatch. PR title
+/// trailers are accepted when commits carry no SPEC-ID, matching `aida pr ship`
+/// and manual squash flows where the PR title is the only durable trailer.
+fn classify_pr_credit(
+    commit_subjects: &str,
+    pr_title: Option<&str>,
+    dispatched: &str,
+) -> PrCreditMatch {
+    match pick_credited_spec(commit_subjects, dispatched) {
+        Some(id) if id.eq_ignore_ascii_case(dispatched) => return PrCreditMatch::Dispatched,
+        Some(id) => return PrCreditMatch::Other(id),
+        None => {}
+    }
+
+    if let Some(title) = pr_title {
+        let mut first_other: Option<String> = None;
+        for id in extract_spec_ids_from_commit(title) {
+            if id.eq_ignore_ascii_case(dispatched) {
+                return PrCreditMatch::Dispatched;
+            }
+            if first_other.is_none() {
+                first_other = Some(id);
+            }
+        }
+        if let Some(id) = first_other {
+            return PrCreditMatch::Other(id);
+        }
+    }
+
+    PrCreditMatch::Unknown
+}
+
+fn pr_credit_match_with_sink(
+    project_root: &std::path::Path,
+    pr: u32,
+    dispatched: &str,
+    pr_title: Option<&str>,
+    sink: &mut dyn network_retry::RetrySink,
+) -> PrCreditMatch {
+    let initial_title_match = pr_title
+        .map(|title| classify_pr_credit("", Some(title), dispatched))
+        .unwrap_or(PrCreditMatch::Unknown);
+    if matches!(initial_title_match, PrCreditMatch::Dispatched) {
+        return PrCreditMatch::Dispatched;
+    }
+
+    let gh = match resolve_gh_binary() {
+        Some(gh) => gh,
+        None => return PrCreditMatch::Unknown,
+    };
+    let pr_str = pr.to_string();
+    let cfg = network_retry::RetryConfig::load(project_root);
+    let label = format!("gh pr view {pr} --json title,commits");
+    let out = match network_retry::run_with_retry(&label, &cfg, sink, || {
+        let mut c = std::process::Command::new(&gh);
+        c.current_dir(project_root).args([
+            "pr",
+            "view",
+            &pr_str,
+            "--json",
+            "title,commits",
+            "-q",
+            r#"[.title, (.commits[].messageHeadline)] | @tsv"#,
+        ]);
+        c
+    }) {
+        Ok(out) if out.status.success() => out,
+        _ => return PrCreditMatch::Unknown,
+    };
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut fields = stdout.trim_end().split('\t');
+    let title = fields.next().filter(|s| !s.trim().is_empty());
+    let subjects = fields.collect::<Vec<_>>().join("\n");
+    match classify_pr_credit(&subjects, None, dispatched) {
+        PrCreditMatch::Dispatched => PrCreditMatch::Dispatched,
+        PrCreditMatch::Other(id) => PrCreditMatch::Other(id),
+        PrCreditMatch::Unknown => match classify_pr_credit("", title, dispatched) {
+            PrCreditMatch::Unknown => initial_title_match,
+            title_match => title_match,
+        },
+    }
+}
+
 /// Pure selector for the credited spec id, given newline-separated commit
 /// subjects (one per commit on the PR) and the dispatched id. Split out so
 /// the precedence rules are unit-testable without spawning `gh`.
@@ -27970,6 +28062,49 @@ cargo test -p aida-cli
         assert_eq!(pick_credited_spec(subjects, "STORY-276"), None);
         // Empty PR — defensive, shouldn't happen in practice.
         assert_eq!(pick_credited_spec("", "STORY-276"), None);
+    }
+
+    /// BUG-357: a reconcile rescue may only trust a merged PR when the PR
+    /// metadata credits the dispatched spec. An unrelated merged PR on a
+    /// misattributed branch must not turn a phase-1 failure into success.
+    #[test]
+    fn classify_pr_credit_rejects_unrelated_merged_pr_metadata() {
+        assert_eq!(
+            classify_pr_credit(
+                "[AI:codex] feat(brief): agent briefs (TASK-492)",
+                None,
+                "TASK-488"
+            ),
+            PrCreditMatch::Other("TASK-492".to_string())
+        );
+    }
+
+    #[test]
+    fn classify_pr_credit_accepts_dispatched_commit_or_title_trailer() {
+        assert_eq!(
+            classify_pr_credit(
+                "[AI:codex] fix(orchestrator): guard reconcile (BUG-357)",
+                None,
+                "BUG-357"
+            ),
+            PrCreditMatch::Dispatched
+        );
+        assert_eq!(
+            classify_pr_credit(
+                "chore: branch commit without trailer",
+                Some("[AI:codex] fix(orchestrator): guard reconcile (BUG-357)"),
+                "BUG-357",
+            ),
+            PrCreditMatch::Dispatched
+        );
+        assert_eq!(
+            classify_pr_credit(
+                "[AI:codex] fix(orchestrator): guard reconcile (BUG-357)",
+                Some("[AI:codex] docs: unrelated title (TASK-492)"),
+                "BUG-357",
+            ),
+            PrCreditMatch::Dispatched
+        );
     }
 
     /// BUG-102: title-to-PR parser used to match Done review stories
@@ -59796,20 +59931,23 @@ fn spec_status(project_root: &std::path::Path, spec: &str) -> Option<Requirement
 }
 
 /// Pure decision for the BUG-241 reconcile (`RealPhaseDriver::reconcile_failure`):
-/// given the two ground-truth signals — a merged PR number, if one was found,
-/// and whether the spec reached Completed — decide whether a phase failure is
-/// genuine or an out-of-band success. Either signal alone is proof the spec
-/// shipped; needing both would miss instance A (the status auto-bump lags a
-/// human's out-of-band merge) and instance B (a no-work spec never gets a PR).
-/// Split out so the rule is unit-testable without `gh` or a store.
+/// given the two ground-truth signals — a verified merged PR number, if one
+/// was found, and whether the spec reached Completed — decide whether a phase
+/// failure is genuine or an out-of-band success. A merged PR reaches this
+/// helper only after the caller verifies that the PR credits the dispatched
+/// spec; that guard prevents BUG-357's wrong-spec reconcile false positive.
+/// Either verified signal alone is proof the spec shipped; needing both would
+/// miss instance A (the status auto-bump lags a human's out-of-band merge) and
+/// instance B (a no-work spec never gets a PR). Split out so the rule is
+/// unit-testable without `gh` or a store.
 /// trace:BUG-241 | ai:claude
 fn reconcile_verdict(
-    merged_pr: Option<u32>,
+    verified_merged_pr: Option<u32>,
     spec_completed: bool,
     spec: &str,
 ) -> auto_complete::PhaseReconcile {
     use auto_complete::PhaseReconcile;
-    match (merged_pr, spec_completed) {
+    match (verified_merged_pr, spec_completed) {
         (Some(pr), true) => PhaseReconcile::ShippedOutOfBand {
             reason: format!("PR-{pr} is merged and {spec} is Completed"),
         },
@@ -59842,9 +59980,10 @@ mod reconcile_verdict_tests {
     }
 
     #[test]
-    fn merged_pr_alone_is_shipped() {
+    fn verified_merged_pr_alone_is_shipped() {
         // Instance A: the human merged out-of-band; the status auto-bump may
-        // lag, so a merged PR alone is proof enough.
+        // lag, so a merged PR that credits the dispatched spec is proof
+        // enough.
         assert!(matches!(
             reconcile_verdict(Some(94), false, "BUG-233"),
             PhaseReconcile::ShippedOutOfBand { .. }
@@ -60531,14 +60670,15 @@ impl RealPhaseDriver {
         })
     }
 
-    /// Ground-truth check for the BUG-241 reconcile: find a *merged* PR for
-    /// this spec. Prefers the PR number an earlier phase already discovered
-    /// (checked directly with [`pr_is_merged_with_sink`]); otherwise looks one
-    /// up by branch. `None` when no merged PR exists, or `gh` can't answer —
-    /// both resolve to "cannot confirm a merge", which leaves the failure
-    /// standing. As of BUG-286, the direct PR-number check retries transient
-    /// network errors before classifying as "cannot confirm."
-    /// trace:BUG-241, BUG-286 | ai:claude
+    /// Ground-truth check for the BUG-241 reconcile: find a *merged* PR that
+    /// credits the dispatched spec. BUG-357 makes the spec-credit check
+    /// mandatory: an unrelated merged PR on the same/misattributed branch is
+    /// not evidence that this spec shipped. Prefers the PR number an earlier
+    /// phase already discovered (checked directly with
+    /// [`pr_is_merged_with_sink`]); otherwise looks one up by branch.
+    /// `None` when no merged PR exists, the PR credits a different spec, or
+    /// `gh` can't answer — all leave the original failure standing.
+    /// trace:BUG-241, BUG-286, BUG-357 | ai:claude
     fn detect_merged_pr(&self) -> Option<u32> {
         // BUG-286: route the orchestrator's reconcile-time `gh pr view`
         // through the retry helper with stderr + drain-state sinks. A
@@ -60561,8 +60701,14 @@ impl RealPhaseDriver {
         };
         if let Some(pr) = self.pr_number {
             // We already know the PR — `gh pr view` is the direct check.
-            return (pr_is_merged_with_sink(&self.project_root, pr, &mut sink) == Some(true))
-                .then_some(pr);
+            if pr_is_merged_with_sink(&self.project_root, pr, &mut sink) != Some(true) {
+                return None;
+            }
+            return matches!(
+                pr_credit_match_with_sink(&self.project_root, pr, &self.spec, None, &mut sink),
+                PrCreditMatch::Dispatched
+            )
+            .then_some(pr);
         }
         // Phase 1 never resolved a PR — try a branch-keyed merged-PR lookup.
         // `detect_merged_pr_for_branch` already classifies network errors
@@ -60573,7 +60719,17 @@ impl RealPhaseDriver {
             .as_deref()
             .map(|b| detect_merged_pr_for_branch(&self.project_root, b))
         {
-            Some(PrLookup::Found(pr)) => Some(pr.number as u32),
+            Some(PrLookup::Found(pr)) => matches!(
+                pr_credit_match_with_sink(
+                    &self.project_root,
+                    pr.number as u32,
+                    &self.spec,
+                    Some(&pr.title),
+                    &mut sink,
+                ),
+                PrCreditMatch::Dispatched
+            )
+            .then_some(pr.number as u32),
             _ => None,
         }
     }
