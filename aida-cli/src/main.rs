@@ -144,6 +144,29 @@ impl Default for StoreSyncConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct StoreAllocationConfig {
+    retry_max: usize,
+}
+
+impl Default for StoreAllocationConfig {
+    fn default() -> Self {
+        Self { retry_max: 3 }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SpecIdCollision {
+    spec_id: String,
+    claimants: Vec<SpecIdClaimant>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SpecIdClaimant {
+    uuid: Uuid,
+    title: String,
+}
+
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
 /// Format recommendation: "ai:claude:username" for AI-assisted work
 fn get_default_author() -> String {
@@ -4640,6 +4663,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             }
 
             let project_dir = std::env::current_dir().unwrap_or_default();
+            // BUG-372: before allocating a human-readable global SPEC-ID,
+            // refresh the git-canonical store and refuse known duplicate
+            // spec_ids. TASK-281 protects block refill commits, but the
+            // creation path also has to start from fresh store state.
+            pull_store_before_id_allocation(store_path, &project_dir)?;
             let id_policy = read_id_format_policy(&project_dir);
             if id_policy.uses_blocks() {
                 let node_id = load_node_id(store_path);
@@ -4664,10 +4692,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     // aggregate remaining drops below the configured threshold.
                     // Skips when auto-claim is disabled, when there's no active
                     // block yet (bootstrap is owned by `aida node acquire`), and
-                    // when we're still above threshold. A push failure is a
-                    // soft failure — the existing block still has SOME IDs, so
-                    // continue with the dispense rather than aborting the add.
-                    // trace:TASK-281 | ai:claude
+                    // when we're still above threshold. BUG-372 makes a
+                    // refill push failure fatal for add: continuing with a
+                    // stale local block can recreate the cross-clone
+                    // duplicate SPEC-ID race.
+                    // trace:TASK-281 BUG-372 | ai:claude
                     match ensure_block_capacity(store_path, &project_dir, &node_id, &type_prefix) {
                         Ok(Some(outcome)) => {
                             eprintln!(
@@ -4680,9 +4709,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         }
                         Ok(None) => {}
                         Err(e) => {
-                            eprintln!(
-                                "{} auto-claim failed ({}) — continuing with existing block",
-                                "Warning:".yellow().bold(),
+                            anyhow::bail!(
+                                "auto-claim failed before dispensing a new {} id: {}\n\
+                                 Refusing to continue with a potentially stale local block. \
+                                 Run `aida db sync --pull` and retry.",
+                                type_prefix,
                                 e
                             );
                         }
@@ -4930,6 +4961,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         parent_req.spec_id.as_deref().unwrap_or("?"),
                         last.spec_id.as_deref().unwrap_or("?")
                     );
+                }
+                if let Some(spec_id) = last.spec_id.as_deref() {
+                    // BUG-372: make newly allocated SPEC-IDs visible to the
+                    // remote orphan store immediately when online, so a
+                    // sibling clone that files next pulls the allocation
+                    // before dispensing from its own block.
+                    push_store_after_id_allocation(store_path, &project_dir, spec_id)?;
                 }
             }
         }
@@ -5959,6 +5997,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
                     Ok(()) => {
                         println!("  Pull complete.");
+                        ensure_no_spec_id_collisions(store_path)?;
 
                         // Detect conflicts with remote changes
                         let remote_reqs =
@@ -7096,6 +7135,29 @@ fn read_store_sync_config(project_root: &std::path::Path) -> Result<StoreSyncCon
     })
 }
 
+fn read_store_allocation_config(project_root: &std::path::Path) -> Result<StoreAllocationConfig> {
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return Ok(StoreAllocationConfig::default());
+    };
+    let value: toml::Value =
+        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?;
+    let Some(allocation) = value
+        .get("store")
+        .and_then(|s| s.get("allocation"))
+        .and_then(|v| v.as_table())
+    else {
+        return Ok(StoreAllocationConfig::default());
+    };
+    let retry_max = allocation
+        .get("retry_max")
+        .and_then(|v| v.as_integer())
+        .and_then(|n| usize::try_from(n).ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(StoreAllocationConfig::default().retry_max);
+    Ok(StoreAllocationConfig { retry_max })
+}
+
 fn warn_if_periodic_auto_push(project_root: &std::path::Path) {
     if let Ok(cfg) = read_store_sync_config(project_root) {
         if cfg.auto_push == StoreAutoPushMode::Periodic {
@@ -7105,6 +7167,176 @@ fn warn_if_periodic_auto_push(project_root: &std::path::Path) {
             );
         }
     }
+}
+
+fn find_spec_id_collisions(store: &RequirementsStore) -> Vec<SpecIdCollision> {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut by_spec: BTreeMap<String, Vec<SpecIdClaimant>> = BTreeMap::new();
+    for req in &store.requirements {
+        let Some(spec_id) = req.spec_id.as_deref() else {
+            continue;
+        };
+        by_spec
+            .entry(spec_id.to_ascii_uppercase())
+            .or_default()
+            .push(SpecIdClaimant {
+                uuid: req.id,
+                title: req.title.clone(),
+            });
+    }
+
+    by_spec
+        .into_iter()
+        .filter_map(|(spec_id, mut claimants)| {
+            let unique_uuids: BTreeSet<Uuid> = claimants.iter().map(|c| c.uuid).collect();
+            if unique_uuids.len() <= 1 {
+                return None;
+            }
+            claimants.sort_by(|a, b| a.uuid.cmp(&b.uuid));
+            Some(SpecIdCollision { spec_id, claimants })
+        })
+        .collect()
+}
+
+fn spec_id_collision_recovery_message(
+    collisions: &[SpecIdCollision],
+    store_path: &std::path::Path,
+) -> String {
+    let mut out = String::new();
+    out.push_str("duplicate AIDA spec IDs detected after syncing the git-canonical store\n");
+    out.push_str(
+        "AIDA is refusing to continue before a divergent SPEC-ID silently drops content.\n\n",
+    );
+    for collision in collisions.iter().take(5) {
+        out.push_str(&format!("  {} is claimed by:\n", collision.spec_id));
+        for claimant in &collision.claimants {
+            out.push_str(&format!("    - {} — {}\n", claimant.uuid, claimant.title));
+        }
+    }
+    if collisions.len() > 5 {
+        out.push_str(&format!(
+            "  ... plus {} more duplicate id(s)\n",
+            collisions.len() - 5
+        ));
+    }
+    out.push_str("\nPaste-ready recovery:\n");
+    out.push_str(&format!("  cd {}\n", store_path.display()));
+    out.push_str("  git status\n");
+    out.push_str("  # inspect the duplicate object(s), then preserve both contents manually\n");
+    out.push_str("  # planned tooling: aida db check --collisions --show-conflict\n");
+    out.push_str("  # planned tooling: aida db check --collisions --repair\n");
+    out.push_str(
+        "\nDo not use `git rebase --skip` unless you intentionally want to drop one side.\n",
+    );
+    out
+}
+
+fn ensure_no_spec_id_collisions(store_path: &std::path::Path) -> Result<()> {
+    let backend = aida_core::GitBackend::new(store_path)?;
+    let store = backend.load()?;
+    let collisions = find_spec_id_collisions(&store);
+    if collisions.is_empty() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "{}",
+        spec_id_collision_recovery_message(&collisions, store_path)
+    );
+}
+
+fn pull_store_before_id_allocation(
+    store_path: &std::path::Path,
+    project_root: &std::path::Path,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    if !git_ops::is_git_repo(store_path) || !git_ops::has_remote(store_path, "origin") {
+        ensure_no_spec_id_collisions(store_path)?;
+        return Ok(());
+    }
+    if git_ops::has_changes(store_path).unwrap_or(false) {
+        let _ = git_ops::add(store_path, &["."]);
+        let _ = git_ops::commit(
+            store_path,
+            "chore: sync pending changes before id allocation",
+        );
+    }
+
+    let cfg = read_store_allocation_config(project_root)?;
+    let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+    for attempt in 0..cfg.retry_max {
+        match git_ops::pull_rebase(store_path, "origin", &branch) {
+            Ok(()) => return ensure_no_spec_id_collisions(store_path),
+            Err(e) if attempt + 1 < cfg.retry_max => {
+                eprintln!(
+                    "{} store allocation pull failed ({}) — retrying ({}/{})",
+                    "Warning:".yellow().bold(),
+                    e,
+                    attempt + 1,
+                    cfg.retry_max
+                );
+            }
+            Err(e) => {
+                anyhow::bail!(
+                    "store allocation pull failed after {} attempt(s): {}\n\
+                     To recover:\n  cd {} && git rebase --abort\n  aida db sync --pull",
+                    cfg.retry_max,
+                    e,
+                    store_path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn push_store_after_id_allocation(
+    store_path: &std::path::Path,
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    if !git_ops::is_git_repo(store_path) || !git_ops::has_remote(store_path, "origin") {
+        return Ok(());
+    }
+
+    let cfg = read_store_allocation_config(project_root)?;
+    let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+    for attempt in 0..cfg.retry_max {
+        ensure_no_spec_id_collisions(store_path)?;
+        match git_ops::push(store_path, "origin", &branch) {
+            Ok(true) => return Ok(()),
+            Ok(false) if attempt + 1 < cfg.retry_max => {
+                eprintln!(
+                    "{} store push rejected after allocating {} — pulling/retrying ({}/{})",
+                    "Warning:".yellow().bold(),
+                    spec_id,
+                    attempt + 1,
+                    cfg.retry_max
+                );
+                git_ops::pull_rebase(store_path, "origin", &branch)?;
+                ensure_no_spec_id_collisions(store_path)?;
+            }
+            Ok(false) => {
+                anyhow::bail!(
+                    "store push rejected after allocating {} and {} attempt(s) were exhausted.\n\
+                     Your local store still has the new spec commit; do not re-file blindly.\n\
+                     To recover:\n  aida db sync --pull\n  aida db sync --push",
+                    spec_id,
+                    cfg.retry_max
+                );
+            }
+            Err(e) => anyhow::bail!(
+                "store push failed after allocating {}: {}\n\
+                 Your local store still has the new spec commit; retry with `aida db sync --push` after the network recovers.",
+                spec_id,
+                e
+            ),
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -7160,6 +7392,81 @@ mod story_284_store_sync_tests {
             err.contains("manual, session-end, per-write, periodic"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn allocation_retry_max_defaults_to_three() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = read_store_allocation_config(tmp.path()).unwrap();
+        assert_eq!(cfg.retry_max, 3);
+    }
+
+    #[test]
+    fn allocation_retry_max_reads_store_allocation_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[store.allocation]\nretry_max = 7\n");
+        let cfg = read_store_allocation_config(tmp.path()).unwrap();
+        assert_eq!(cfg.retry_max, 7);
+    }
+
+    #[test]
+    fn allocation_retry_max_ignores_zero_and_negative_values() {
+        for raw in ["0", "-2"] {
+            let tmp = tempfile::tempdir().unwrap();
+            write_config(
+                tmp.path(),
+                &format!("[store.allocation]\nretry_max = {raw}\n"),
+            );
+            let cfg = read_store_allocation_config(tmp.path()).unwrap();
+            assert_eq!(cfg.retry_max, 3);
+        }
+    }
+
+    #[test]
+    fn spec_id_collision_scan_detects_same_id_different_uuid() {
+        let mut a = Requirement::new("local review story".to_string(), String::new());
+        a.spec_id = Some("STORY-446".to_string());
+        let mut b = Requirement::new("origin deps story".to_string(), String::new());
+        b.spec_id = Some("story-446".to_string());
+        let store = RequirementsStore {
+            requirements: vec![a, b],
+            ..RequirementsStore::new()
+        };
+
+        let collisions = find_spec_id_collisions(&store);
+        assert_eq!(collisions.len(), 1);
+        assert_eq!(collisions[0].spec_id, "STORY-446");
+        assert_eq!(collisions[0].claimants.len(), 2);
+    }
+
+    #[test]
+    fn spec_id_collision_scan_ignores_single_claimant() {
+        let mut req = Requirement::new("single".to_string(), String::new());
+        req.spec_id = Some("TASK-1".to_string());
+        let store = RequirementsStore {
+            requirements: vec![req],
+            ..RequirementsStore::new()
+        };
+        assert!(find_spec_id_collisions(&store).is_empty());
+    }
+
+    #[test]
+    fn collision_recovery_message_is_paste_ready() {
+        let collision = SpecIdCollision {
+            spec_id: "STORY-446".to_string(),
+            claimants: vec![SpecIdClaimant {
+                uuid: Uuid::new_v4(),
+                title: "origin deps story".to_string(),
+            }],
+        };
+        let msg = spec_id_collision_recovery_message(&[collision], std::path::Path::new("/tmp/s"));
+        assert!(msg.contains("cd /tmp/s"), "{msg}");
+        assert!(msg.contains("git status"), "{msg}");
+        assert!(
+            msg.contains("aida db check --collisions --show-conflict"),
+            "{msg}"
+        );
+        assert!(msg.contains("Do not use `git rebase --skip`"), "{msg}");
     }
 
     #[test]
@@ -11548,10 +11855,10 @@ struct AutoClaimOutcome {
 /// - `Ok(None)` — no action taken (auto-claim disabled OR above threshold).
 /// - `Ok(Some(outcome))` — a fresh block was claimed; caller should print
 ///   the info notice.
-/// - `Err(e)` — the claim's push failed after retries. Callers should treat
-///   this as a soft failure (warn, fall through to dispense from existing
-///   block) per TASK-281 acceptance: "Network failure during claim: surface
-///   clear error, fall back to existing block".
+/// - `Err(e)` — the claim's push failed after retries. BUG-372 upgraded the
+///   `aida add` caller to fail loud instead of dispensing from a potentially
+///   stale local block, because continuing there can recreate the cross-clone
+///   ID collision that lost specs during the PR-270 pull.
 ///
 /// trace:TASK-281 | ai:claude
 fn ensure_block_capacity(
@@ -41521,8 +41828,12 @@ fn handle_pull_command(
         match git_ops::pull_rebase(store_path, "origin", &branch) {
             Ok(()) => {
                 println!("  {}", "store pull complete".green());
+                if let Err(e) = ensure_no_spec_id_collisions(store_path) {
+                    eprintln!("  {} {}", "Warning:".yellow().bold(), e);
+                    store_failed = Some(format!("store collision scan failed: {}", e));
+                }
                 // TASK-73 — summarize the delta unless --quiet.
-                if !quiet {
+                if store_failed.is_none() && !quiet {
                     if let Some(pre) = pre_sha.as_deref() {
                         print_pull_summary(store_path, pre);
                     }
@@ -41534,7 +41845,7 @@ fn handle_pull_command(
                 // Skipped by `--no-gate` or `AIDA_AUTO_MERGE_GATE=false`.
                 // Idempotent (no-op when there's nothing pending) and
                 // cheap. trace:TASK-78 | ai:claude
-                if !no_gate && auto_merge_gate_enabled() {
+                if store_failed.is_none() && !no_gate && auto_merge_gate_enabled() {
                     match git_ops::merge_gate(store_path) {
                         Ok(assignments) if assignments.is_empty() => {
                             // Stay silent when nothing was promoted — pull
