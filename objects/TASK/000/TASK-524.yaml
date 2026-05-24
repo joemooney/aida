@@ -1,0 +1,12 @@
+id: 019e589c-22d6-79e1-a599-b085fee3c624
+spec_id: TASK-524
+agreed_id: TASK-524
+title: aida edit warn on unrecognized lifecycle:* tag spellings (typo guard)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T06:11:28.086248901Z
+modified_at: 2026-05-24T06:11:28.086248901Z
+req_type: Task
