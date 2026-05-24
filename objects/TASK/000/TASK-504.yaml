@@ -26,12 +26,12 @@ description: |
   Severity: minor — symptom is "no hint when one was expected" (graceful degradation, the same UX as the original bug pre-fix). No correctness or data-loss risk.
 
   Raised in review of PR-250: https://github.com/joemooney/aida/pull/250#issuecomment-4526762836
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T23:07:35.916556503Z
-modified_at: 2026-05-23T23:07:35.916556503Z
+modified_at: 2026-05-24T06:52:21.286984501Z
 req_type: Task
 tags:
 - canonicalization
