@@ -46,14 +46,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:43:32.733116866Z
-modified_at: 2026-05-16T16:45:16.731728501Z
+modified_at: 2026-05-24T06:39:15.525581449Z
 req_type: Task
 tags:
+- aida:session:prune
 - alpha-readiness
 - cleanup
 - failed-flag-signal
 - returning-user
-- session-prune
 comments:
 - id: 019e31ac-4a01-74c0-82eb-6e158afc282f
   author: joe
