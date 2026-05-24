@@ -1,0 +1,100 @@
+id: 019e57da-e1fc-7ac3-ad7e-3e468b4e00c1
+spec_id: TASK-513
+agreed_id: TASK-513
+title: 'aida burn-credits / /aida-credit-burn: suggest tonight''s ultrareview + ultraplan picks given a credit budget'
+description: |-
+  ## Why
+
+  User noted 2026-05-23 late evening: 'we can go heavy on ultraplan or ultrareview tonight while I still have credits that will reset in the morning.' The pattern of 'spend a credit window on high-leverage substrate work' is a real workflow that the substrate should support, not improvise.
+
+  Today's manual burn-down was a 9-PR ultrareview list + 8-spec ultraplan list, ordered by foundation-importance and blast radius. Producing this list required scanning recent ships (git log + aida list) and the backlog (aida list --status approved), filtering by 'is review valuable here' / 'does plan add load-bearing structure'. ~15 minutes of advisor time to assemble; should be ~30 seconds when this verb exists.
+
+  ## Proposed shape
+
+  A skill + matching advisor command that, given an optional credit budget (or 'unlimited'), suggests:
+
+  ### Ultrareview picks (substrate audit of recent ships)
+
+    aida burn-credits ultrareview [--since 24h] [--max N]
+
+  Source: recent PRs that auto-bumped a spec to Completed. Rank by blast radius heuristics:
+  - Files-touched count (>3 files = higher rank)
+  - Whether the spec is parent of an EPIC or referenced by other in-flight specs
+  - Whether the PR touches load-bearing code (orchestrator, MCP server, scaffolding, registry, lifecycle)
+  - Whether the PR is from a sibling agent (multi-agent code path, more eyes valuable)
+
+  Skip:
+  - Docs-only changes (low return on multi-agent review)
+  - Trivial papercut fixes (cosmetic tag, lifecycle:trivial tag if STORY-442 ships)
+  - Single-line config changes
+
+  Output: ordered list of /ultrareview <PR#> commands, paste-ready.
+
+  ### Ultraplan picks (substrate growth via planning)
+
+    aida burn-credits ultraplan [--max N]
+
+  Source: Approved specs in backlog that are STORY/EPIC/SPIKE-shaped or have high blast radius. Rank by:
+  - Type weight: EPIC > STORY > SPIKE > TASK > BUG (planning helps bigger shapes more)
+  - Priority: high > medium > low
+  - Already-has-plan-file detection (skip if docs/plans/<spec-id>* exists)
+  - Cross-spec dependencies (specs with many incoming refs benefit from canonical plan)
+
+  Skip:
+  - Bugs (typically bounded; plan adds little)
+  - TASKs with concrete acceptance + low blast radius
+  - Anything currently in-flight (active lease)
+  - Anything currently in review (open PR)
+
+  Output: ordered list of aida ultraplan <SPEC> --copy commands + matching /ultraplan invocation guidance, paste-ready.
+
+  ### Combined mode
+
+    aida burn-credits [--budget '~0 of ultra*']
+
+  Returns BOTH ultrareview + ultraplan lists, interleaved by suggested order (reviews first for time-sensitivity; plans in parallel since they're advisor-only).
+
+  ## Out of scope
+
+  - Actual /ultrareview / /ultraplan execution (user-triggered + billed; advisor cannot launch them per CLAUDE.md note)
+  - Credit-balance API integration (just suggest; user knows their balance)
+  - Auto-generation of summary writeups from review findings (separate workflow)
+
+  ## Acceptance
+
+  - [ ] aida burn-credits subcommand with ultrareview, ultraplan, and combined modes
+  - [ ] Heuristics documented (rank-by-X for each mode)
+  - [ ] Output is paste-ready commands
+  - [ ] /aida-credit-burn slash command + skill template scaffolded
+  - [ ] Skill template embeds the heuristics + an explanation 'this is what you'd otherwise hand-curate'
+  - [ ] Test: invoke on this repo's recent ships, verify output is sane
+  - [ ] Scaffolding-pack — every AIDA project gets the same workflow
+
+  ## Composes with
+
+  - STORY-444 (aida-backlog-groom) — sibling 'curate work' advisor surface
+  - STORY-439 (assistance + complexity calibration) — credit-burn evidence feeds calibration
+  - SPIKE-8 (/ultraplan output quality empirical comparison) — burn nights produce evidence corpus
+  - CLAUDE.md note about /ultrareview being user-triggered + billed (this command doesn't violate that)
+
+  ## Origin
+
+  2026-05-23 user: 'we can go heavy on ultraplan or ultrareview tonight while I still have credits that will reset in the morning' + master's manual curation of tonight's 9-PR + 8-spec burn list. Pattern observed -> codify as substrate verb.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:40:23.036367547Z
+modified_at: 2026-05-24T02:40:23.036367547Z
+req_type: Task
+tags:
+- advisor
+- cli
+- credit-management
+- from-self-test
+- from-user-direction
+- sibling-of-SPIKE-8
+- skill
+- ultraplan
+- ultrareview
+- workflow
