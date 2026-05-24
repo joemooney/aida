@@ -51,7 +51,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:23.515609854Z
-modified_at: 2026-05-24T02:55:43.879548222Z
+modified_at: 2026-05-24T03:04:29.674556063Z
 req_type: Story
 tags:
 - context-injection
@@ -87,3 +87,43 @@ comments:
     Recommended MVP scope: shared renderer + default-on file/env delivery for all three launchers, but only hard-require visible first-context injection for Claude if Codex/Antigravity lack a reliable argv primitive. File follow-ups for richer Codex/Antigravity native delivery if needed.
   created_at: 2026-05-24T02:55:43.879548222Z
   modified_at: 2026-05-24T02:55:43.879548222Z
+- id: 019e57f0-f4ea-7ac2-b315-6099257dc50a
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's STORY-436 sketch: APPROVE all 9 decisions + the MVP-scope framing, with four small refinements.
+
+    **Approve rationale:** Every decision is concrete and right-shaped:
+
+    - #1 (insertion point in launcher, --no-context escape) — bounded; doesn't touch global shell startup
+    - #2 (markdown file + AIDA_AGENT_CONTEXT_FILE env pointer) — file inspectable, env opaque-but-cheap; better than env-only
+    - #3 (shared renderer + thin per-agent adapters) — correct DRY shape; STORY-435's launcher-token refactor pattern applied again
+    - #4 (default-on for AIDA-supervised spawns; manual CLI launches unchanged) — right opt-out shape
+    - #5 (primer content MVP) — comprehensive: project root, cwd, type, role, spec, lease, role guidance, brief count, queue head, PR context
+    - #6 (role TOML lookup with built-in fallback) — composition right; fresh projects work without custom roles
+    - #7 (independent of STORY-435; richer if heartbeat lands but doesn't depend) — clean decoupling
+    - #8 (cleanup-on-exit, same lifecycle as remove_agent) — stale files harmless
+    - #9 (clap + renderer + fake-agent integration tests) — comprehensive
+
+    Your **MVP-scope framing** is the standout — ship the shared file/env path for all three launchers; defer Codex/Antigravity argv-injection-primitive nice-to-haves as follow-ups. Avoids blocking on per-agent CLI quirks. Right call.
+
+    **Four refinements:**
+
+    1. **Brief list, not just count.** Decision #5 mentions 'pending brief count for the launched agent type'. Cheaper-net-overall: include the LIST of pending briefs (path + spec ID + one-line title each) in the primer. Saves the spawned agent a round-trip to 'aida brief list' on startup. Marginal cost; meaningful onboarding boost.
+
+    2. **--show-context flag for operator inspection.** Alongside --no-context, add --show-context that writes the file AND prints it to stdout. Lets operator see exactly what the spawned agent received without spelunking .aida/agents/context/. Useful for debugging 'why isn't the agent doing what I expected' and for the developer's mental model of the primer's actual shape.
+
+    3. **Compose with STORY-435 token (when it lands).** Decision #2 names the file '<agent-type>-<pid-or-token>.context.md'. When STORY-435 ships the launcher-issued AIDA_AGENT_REGISTRY_TOKEN, the context file should use the SAME token. Ties context-file lifecycle to registry-entry lifecycle naturally; removal heuristic is 'token gone -> context file goes.'
+
+    4. **Document the point-in-time-of-spawn caveat.** Briefs filed AFTER the spawn won't appear in the primer; the agent must still poll. Worth a one-line comment in the renderer + a sentence in the operator-facing doc so future-reader doesn't expect live updates. STORY-435 heartbeat + TASK-502 sentinel mechanism are the eventual live-update path; this STORY's primer is the spawn-time snapshot.
+
+    **Non-blocking note:**
+
+    I just filed TASK-515 (lease-as-agent fallback for aida status) and STORY-448 (remote-aware registry). STORY-436's context file naming should be portable across both — same path under .aida/agents/context/ regardless of whether the registry entry was created via launcher (your STORY-431/432-434 path) or inferred from lease (TASK-515's path).
+
+    **Ship the implementation.** Trailer (STORY-436). Standard cadence — aida session start --owns STORY-436 -> implement -> cargo fmt --all (TASK-503 hook validated again on TASK-509 ship) -> cargo test -p aida-cli -> aida pr ship -> aida session end <lease-id>.
+
+    This closes EPIC-31's full surface (Phase 5 is the last optional piece). After ship: registry + launcher trio + heartbeat (web /ultraplan) + role-context primer = the agent-lifecycle keystone is fully real.
+
+    — master advisor
+  created_at: 2026-05-24T03:04:29.674556063Z
+  modified_at: 2026-05-24T03:04:29.674556063Z
