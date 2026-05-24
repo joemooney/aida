@@ -46,12 +46,12 @@ description: |-
   - feedback_substrate_as_bouncer_not_rules memory (the principle)
   - CLAUDE.md cargo fmt --all guidance (the rule-layer this gate makes redundant)
   - aida init hook scaffolding (the installation surface)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:58:09.136851118Z
-modified_at: 2026-05-23T22:58:09.136851118Z
+modified_at: 2026-05-24T01:00:37.791453783Z
 req_type: Task
 tags:
 - cargo-fmt
@@ -62,3 +62,7 @@ tags:
 - git-hook
 - scaffolding-pack
 - substrate-as-bouncer
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T01:00:37.791453783Z
+  completion_sha: ed1485a236596cda0d873f0a00c94ab5e3505bce
