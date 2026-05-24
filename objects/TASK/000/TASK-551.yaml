@@ -3,12 +3,12 @@ spec_id: TASK-551
 agreed_id: TASK-551
 title: 'MCP server: expose ''add_relationship'' tool (CLI parity gap surfaced by BUG-377 blast-radius mapping)'
 description: "## Origin\n\nBUG-377 / TASK-550 (2026-05-24) systematically tested every AIDA MCP write tool for field-mapping inversions. During that inventory, Codex discovered: 'add_relationship' is NOT currently exposed over MCP at all. CLI has it ('aida add --type ...' creates specs; 'aida edit <ID>' modifies relationships via --parent / --depends-on / etc.) but no equivalent MCP tool surface.\n\n## Why this matters\n\naida-chat (and future MCP consumers) cannot programmatically create or modify spec relationships through the MCP surface. They must shell out to 'aida edit' via CLI. The CLI-fallback path works (per the resilience-vs-workaround distinction), but pure MCP-first consumers (like aida-chat's EPIC-16 PR-1 design) lose the primary-path option.\n\nComposes with TASK-538 (recently-added 'history' tool — same parity-gap class) and BUG-377 (recently-fixed write-path inversion — same write-surface family).\n\n## Proposed shape\n\nAdd an 'add_relationship' MCP tool to aida-cli/src/mcp.rs:\n\n  add_relationship(spec_id, relationship_type, target_spec_id)\n  \n  - spec_id: source SPEC-ID\n  - relationship_type: 'parent', 'child', 'depends-on', 'related', 'subsumes', etc. (match aida edit's vocabulary)\n  - target_spec_id: target SPEC-ID\n\nReturns success/failure with the resulting relationship state.\n\n## Acceptance\n\n- [ ] 'add_relationship' MCP tool exposed via tools/list\n- [ ] Wraps the same logic as 'aida edit <ID> --parent <PID>' and siblings\n- [ ] Validates source + target SPEC-IDs exist; refuses if either missing\n- [ ] Validates relationship type is in the supported vocabulary\n- [ ] Test: roundtrip MCP add_relationship → 'aida show <ID>' shows the relationship correctly\n- [ ] Document in MCP tool reference\n\n## Composes with\n\n- BUG-377 / TASK-550 (blast-radius mapping that surfaced this gap)\n- TASK-538 (MCP history tool — same parity gap pattern)\n- aida-chat EPIC-16 + 5 feedback loops (consumers of the MCP write surface)\n\n## Origin\n\n2026-05-24 Codex's BUG-377 inventory: 'add_relationship is not currently exposed over MCP.' Master files for follow-up.\n\ntrace:TASK-X"
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:45:45.042799845Z
-modified_at: 2026-05-24T20:45:45.042799845Z
+modified_at: 2026-05-24T21:37:55.655640949Z
 req_type: Task
 tags:
 - from-aida-chat
@@ -16,3 +16,7 @@ tags:
 - mcp
 - mcp-surface
 - parity-gap
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T21:37:55.655640949Z
+  completion_sha: 0853b555f74f782203b779b4651a19c134ab2da6
