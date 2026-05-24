@@ -35,16 +35,17 @@ description: |-
   - STORY-276 / STORY-306 / STORY-332 / STORY-333 / BUG-257 / STORY-347 — the keystone arc the demo showcases.
   - Memory \`feedback_advocate_not_be_passive\` — this task IS the advocacy in operational form.
   - Memory \`feedback_competitive_analysis_is_living_doc\` — the writeup is a chance to refresh the public-facing comparative positioning.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:25:56.023469640Z
-modified_at: 2026-05-23T06:38:04.578195531Z
+modified_at: 2026-05-24T06:52:28.428807036Z
 req_type: Task
 tags:
 - autonomy-keystone
 - demo
+- human-only,not-implementer-pickup
 - marketing
 - needs-human
 - visibility
