@@ -65151,9 +65151,10 @@ mod story_255_discipline_pack_tests {
     #[test]
     fn discipline_pack_scaffolds_seven_docs_plus_readme() {
         // trace:TASK-479 | ai:antigravity — robust-project-root-resolution.md joins the pack.
+        // trace:TASK-512 | ai:claude — tag-conventions.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 9, "expected README + 8 discipline docs");
+        assert_eq!(written, 10, "expected README + 9 discipline docs");
 
         let dir = root.path().join("docs/aida-discipline");
         for f in [
@@ -65161,6 +65162,7 @@ mod story_255_discipline_pack_tests {
             "advisor-role.md",
             "lifecycle-vocabulary.md",
             "machinery-glossary.md",
+            "tag-conventions.md",
             "workflow-patterns.md",
             "session-discipline.md",
             "skill-prompt-kinds.md",
@@ -65178,7 +65180,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            9
+            10
         );
     }
 
