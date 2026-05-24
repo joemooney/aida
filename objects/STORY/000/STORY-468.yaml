@@ -1,0 +1,26 @@
+id: 019e5bd1-f807-7292-a2ea-27a5ac759a59
+spec_id: STORY-468
+agreed_id: STORY-468
+title: 'Review PR-309: TASK-548: /aida-pickup skips confirm when SPEC-ID is explicit'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e5bbb`) for branch `task-548`.
+
+  - PR: <https://github.com/joemooney/aida/pull/309>
+  - Branch: `task-548` → `main`
+
+  ## Covers
+
+  - TASK-548
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 309` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T21:09:07.719963113Z
+modified_at: 2026-05-24T21:09:07.719963113Z
+req_type: Story
