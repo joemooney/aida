@@ -2975,6 +2975,16 @@ pub enum QueueCommand {
         // trace:TASK-285 | ai:claude
         #[clap(long, value_name = "N", requires = "auto_complete")]
         max: Option<usize>,
+        /// With `--auto-complete`: after this many phase failures shelve in
+        /// a single batch, stop the drain entirely rather than continue
+        /// past the wreck (the environment is probably broken — gh
+        /// rate-limited, CI infra down, etc.). Default is 5. Set to 0 to
+        /// fall back to the historical "first failure stops" behaviour.
+        /// Per-batch — a `--batches A,B,C` chain gets an independent budget
+        /// for each.
+        // trace:EPIC-28 | ai:claude
+        #[clap(long, value_name = "N", requires = "auto_complete")]
+        max_failures: Option<usize>,
         /// Run `--auto-complete` phases headless (`claude -p`) so the drain
         /// needs no Ctrl+D.
         ///
@@ -3944,14 +3954,19 @@ pub enum Command {
         #[clap(long)]
         sync: bool,
 
-        /// Include terminal-status (Completed/Rejected) requirements.
-        /// Default behavior hides them so day-to-day `aida list` shows
-        /// only actionable work; pass `--all` to see the archive too.
-        /// An explicit `--status completed`/`--status rejected` always
-        /// wins (the user already asked for that view).
-        // trace:TASK-64 | ai:claude
-        #[clap(long, alias = "include-terminal")]
+        /// Include archived requirements (the everything-escape-hatch).
+        /// By default `aida list` hides archived rows; archived ≠ status,
+        /// so freshly-Completed specs stay visible until archived.
+        /// Mutually exclusive with `--archived` (only-archived view).
+        // trace:STORY-441 | ai:claude — supersedes TASK-64's terminal-status hide.
+        #[clap(long, conflicts_with = "archived")]
         all: bool,
+
+        /// Show only archived requirements. Use this to audit the archive
+        /// itself; `--all` shows the union of archived + non-archived.
+        // trace:STORY-441 | ai:claude
+        #[clap(long, conflicts_with = "all")]
+        archived: bool,
 
         /// Emit `[{spec_id,title,req_type,status,tags}]` as JSON instead
         /// of the human table. Internal-use surface for the TUI launcher
@@ -4178,6 +4193,44 @@ pub enum Command {
     #[clap(subcommand)]
     Load(LoadCommand),
 
+    /// Mark one or more requirements as archived (hidden from default
+    /// views but preserved in graph traversals and the audit trail).
+    ///
+    /// Archive is a view-level flag distinct from status — a freshly
+    /// Completed spec stays visible until archived. Use `--older-than`
+    /// for bulk sweeps over closed work; the default csv targets
+    /// completed and rejected statuses.
+    // trace:STORY-441 | ai:claude
+    Archive {
+        /// SPEC-ID to archive (mutually exclusive with --older-than).
+        id: Option<String>,
+
+        /// Bulk-archive every spec last touched before this duration
+        /// (e.g. `30d`, `12h`, or RFC3339). Pairs with `--status`.
+        // trace:STORY-441 | ai:claude
+        #[clap(long, value_name = "DURATION", conflicts_with = "id")]
+        older_than: Option<String>,
+
+        /// Restrict the --older-than sweep to specs with one of these
+        /// statuses (comma-separated). Default: completed,rejected.
+        // trace:STORY-441 | ai:claude
+        #[clap(long, value_name = "CSV", requires = "older_than")]
+        status: Option<String>,
+
+        /// Print the sweep plan without writing — pairs with --older-than.
+        // trace:STORY-441 | ai:claude
+        #[clap(long)]
+        dry_run: bool,
+    },
+
+    /// Inverse of `aida archive` — clears the archive flag on a spec so
+    /// it reappears in default `aida list` / `aida history` views.
+    // trace:STORY-441 | ai:claude
+    Unarchive {
+        /// SPEC-ID or UUID to unarchive.
+        id: String,
+    },
+
     /// Feature management commands
     #[clap(subcommand, hide = true)]
     Feature(FeatureCommand),
@@ -4245,6 +4298,20 @@ pub enum Command {
         // trace:TASK-220 | ai:claude
         #[clap(long)]
         no_ci: bool,
+        /// Focus on the cleanup section only — print just "Needs attention"
+        /// (sticky In-Progress specs, missed auto-bumps, dormant leases,
+        /// stale-on-merged reviewer leases, branches ahead with no PR,
+        /// worktrees with uncommitted work, orphan project dirs, open PRs
+        /// awaiting merge). Default `aida status` adds a one-line summary
+        /// at the bottom when the section is non-empty.
+        // trace:STORY-385 | ai:claude
+        #[clap(long, conflicts_with_all = ["queue", "ci", "short"])]
+        cleanup: bool,
+        /// With `--cleanup`: list every item per category instead of the
+        /// first 3. No-op without `--cleanup`.
+        // trace:STORY-385 | ai:claude
+        #[clap(long, requires = "cleanup")]
+        verbose: bool,
     },
 
     /// Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl`
@@ -5066,6 +5133,17 @@ pub enum Command {
         // trace:STORY-78 | ai:claude
         #[clap(long)]
         sync: bool,
+
+        /// Include archived requirements in the search (everything-escape-hatch).
+        /// Default excludes archived rows for consistency with `aida list`.
+        // trace:STORY-441 | ai:claude
+        #[clap(long, conflicts_with = "archived")]
+        all: bool,
+
+        /// Show only archived requirements.
+        // trace:STORY-441 | ai:claude
+        #[clap(long, conflicts_with = "all")]
+        archived: bool,
     },
 
     /// Project activity — what's been touched and how it stands now.
@@ -5131,13 +5209,18 @@ pub enum Command {
         #[clap(long)]
         oneline: bool,
 
-        /// Include terminal-status (Completed/Rejected) requirements.
-        /// Symmetric with `aida list --all`: by default `aida history`
-        /// surfaces the "what's been touched recently and is still live"
-        /// view; `--all` brings the archive back.
-        // trace:TASK-64 | ai:claude
-        #[clap(long, alias = "include-terminal")]
+        /// Include archived requirements (everything-escape-hatch).
+        /// Symmetric with `aida list --all`. By default `aida history`
+        /// surfaces every non-archived spec (including freshly-Completed
+        /// ships); `--all` widens to the full archive.
+        // trace:STORY-441 | ai:claude — supersedes TASK-64's terminal-status hide.
+        #[clap(long, conflicts_with = "archived")]
         all: bool,
+
+        /// Show only archived requirements.
+        // trace:STORY-441 | ai:claude
+        #[clap(long, conflicts_with = "all")]
+        archived: bool,
     },
 
     /// Work with implementation plans archived under `docs/plans/`.

@@ -9,6 +9,8 @@
 
 use anyhow::{Context, Result};
 use colored::Colorize;
+use serde::Serialize;
+use serde_json::{json, Value as JsonValue};
 use serde_yaml::Value;
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -29,10 +31,14 @@ pub struct HistoryOpts {
     pub status_changes_only: bool,
     pub comments_only: bool,
     pub oneline: bool,
-    /// Include rows whose current status is Completed/Rejected. Default
-    /// false: day-to-day `aida history` should surface live work, not the
-    /// archive. trace:TASK-64 | ai:claude
-    pub include_terminal: bool,
+    /// Spec-IDs currently archived. The default `aida history` view hides
+    /// rows whose spec_id is in this set. Empty when `--all` or `--archived`
+    /// was passed (no hiding needed). trace:STORY-441 | ai:claude
+    pub archived_specs: std::collections::HashSet<String>,
+    /// When `Some`, only rows whose spec_id is in this set are shown.
+    /// Used by `--archived` to narrow the view to the archive itself.
+    /// trace:STORY-441 | ai:claude
+    pub archived_only_specs: Option<std::collections::HashSet<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +112,22 @@ struct Event {
     kind: EventKind,
 }
 
+/// Structured event record for MCP and other programmatic consumers.
+/// It is derived from the same orphan-branch decoder used by `aida history`
+/// so CLI and MCP history views cannot drift.
+/// trace:TASK-538 | ai:codex
+#[derive(Debug, Clone, Serialize)]
+pub struct HistoryEventRecord {
+    pub sha: String,
+    pub timestamp: String,
+    pub author: String,
+    pub spec_id: String,
+    pub req_type: String,
+    pub kind: String,
+    pub summary: String,
+    pub detail: JsonValue,
+}
+
 pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     if !store_path.is_dir() {
         anyhow::bail!(
@@ -120,6 +142,70 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         return run_digest(store_path, opts);
     }
 
+    let (filtered, hidden_archived) = collect_filtered_events(store_path, opts)?;
+
+    if filtered.is_empty() {
+        eprintln!("{}", "(no events match the filter)".dimmed());
+        if hidden_archived > 0 {
+            eprintln!(
+                "{}",
+                format!(
+                    "({hidden_archived} archived spec(s) hidden — pass --all to include archived events, or --archived for the archive only)"
+                )
+                .dimmed()
+            );
+        }
+        return Ok(());
+    }
+
+    if opts.oneline {
+        for e in &filtered {
+            println!("{}", format_oneline(e));
+        }
+    } else {
+        // Group by sha so commits with multiple events get one header.
+        let mut last_sha: Option<String> = None;
+        for e in &filtered {
+            if Some(&e.sha) != last_sha.as_ref() {
+                if last_sha.is_some() {
+                    println!();
+                }
+                println!(
+                    "{} {}  {}",
+                    "commit".yellow(),
+                    e.sha[..8].yellow(),
+                    format!("({}, by {})", e.timestamp, e.author).dimmed()
+                );
+                last_sha = Some(e.sha.clone());
+            }
+            println!("  {}", format_event_body(e));
+        }
+    }
+
+    Ok(())
+}
+
+/// Collect structured event records using the same filters as
+/// `aida history --events`. Intended for MCP and other non-TTY consumers.
+/// trace:TASK-538 | ai:codex
+pub fn collect_event_records(
+    store_path: &Path,
+    opts: &HistoryOpts,
+) -> Result<Vec<HistoryEventRecord>> {
+    if !store_path.is_dir() {
+        anyhow::bail!(
+            "Not a git-canonical AIDA store: {}\n\
+             aida history walks the orphan branch's git log; the legacy SQLite\n\
+             backend has no per-edit history surface.",
+            store_path.display()
+        );
+    }
+
+    let (events, _) = collect_filtered_events(store_path, opts)?;
+    Ok(events.iter().map(event_record).collect())
+}
+
+fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec<Event>, usize)> {
     // Build a `git log` command bounded by --since / --until / --max_commits.
     let mut log_args: Vec<String> = vec![
         "log".into(),
@@ -180,34 +266,13 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         }
     }
 
-    // TASK-64: precompute terminal-status spec_ids to hide their events.
-    // One YAML read per surfaced spec; in events mode the limit is small
-    // (default 20) so we usually touch ~5-20 files. trace:TASK-64 | ai:claude
-    let terminal_specs: std::collections::HashSet<String> = if opts.include_terminal {
-        std::collections::HashSet::new()
-    } else {
-        let mut seen = std::collections::HashSet::new();
-        let mut out = std::collections::HashSet::new();
-        for e in &events {
-            if !seen.insert(e.spec_id.clone()) {
-                continue;
-            }
-            let yaml_path = store_path
-                .join("objects")
-                .join(&e.req_type)
-                .join("000")
-                .join(format!("{}.yaml", e.spec_id));
-            let (status, _, _) = read_current(&yaml_path);
-            if is_terminal_status_str(&status) {
-                out.insert(e.spec_id.clone());
-            }
-        }
-        out
-    };
-
     // Apply filters not handled by `git log` itself.
-    let filtered: Vec<&Event> = events
-        .iter()
+    // STORY-441: archive filtering replaces the older terminal-status hide.
+    // `archived_specs` (non-empty when default `--non-archived`) hides those
+    // spec events; `archived_only_specs` (Some(...) when `--archived`)
+    // narrows to only those. trace:STORY-441 | ai:claude
+    let filtered: Vec<Event> = events
+        .into_iter()
         .filter(|e| match &opts.id_filter {
             Some(id) => e.spec_id.eq_ignore_ascii_case(id),
             None => true,
@@ -232,50 +297,15 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
             }
             matches!(e.kind, EventKind::CommentsAdded { .. })
         })
-        .filter(|e| !terminal_specs.contains(&e.spec_id))
+        .filter(|e| !opts.archived_specs.contains(&e.spec_id))
+        .filter(|e| match &opts.archived_only_specs {
+            Some(only) => only.contains(&e.spec_id),
+            None => true,
+        })
         .take(opts.limit)
         .collect();
 
-    if filtered.is_empty() {
-        eprintln!("{}", "(no events match the filter)".dimmed());
-        if !terminal_specs.is_empty() {
-            eprintln!(
-                "{}",
-                format!(
-                    "({} spec(s) hidden — pass --all to include events for Completed/Rejected items)",
-                    terminal_specs.len()
-                )
-                .dimmed()
-            );
-        }
-        return Ok(());
-    }
-
-    if opts.oneline {
-        for e in &filtered {
-            println!("{}", format_oneline(e));
-        }
-    } else {
-        // Group by sha so commits with multiple events get one header.
-        let mut last_sha: Option<String> = None;
-        for e in &filtered {
-            if Some(&e.sha) != last_sha.as_ref() {
-                if last_sha.is_some() {
-                    println!();
-                }
-                println!(
-                    "{} {}  {}",
-                    "commit".yellow(),
-                    e.sha[..8].yellow(),
-                    format!("({}, by {})", e.timestamp, e.author).dimmed()
-                );
-                last_sha = Some(e.sha.clone());
-            }
-            println!("  {}", format_event_body(e));
-        }
-    }
-
-    Ok(())
+    Ok((filtered, opts.archived_specs.len()))
 }
 
 /// Digest mode (default): one row per recently-touched requirement, sorted
@@ -433,16 +463,18 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         true
     });
 
-    // TASK-64: hide terminal-status (Completed/Rejected) rows by default.
-    // Count what gets dropped so we can print a "(N hidden — pass --all …)"
-    // hint that mirrors `aida list`. trace:TASK-64 | ai:claude
-    let hidden_terminal = if opts.include_terminal {
-        0
-    } else {
+    // STORY-441: hide archived rows in the default view; count drops so we
+    // can print a "(N archived hidden — pass --all …)" hint that mirrors
+    // `aida list`. With `--archived`, narrow to the archive itself.
+    // trace:STORY-441 | ai:claude
+    let archived_hidden = {
         let before = entries.len();
-        entries.retain(|e| !is_terminal_status_str(&e.status));
+        entries.retain(|e| !opts.archived_specs.contains(&e.spec_id));
         before - entries.len()
     };
+    if let Some(only) = &opts.archived_only_specs {
+        entries.retain(|e| only.contains(&e.spec_id));
+    }
 
     // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
     entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
@@ -450,11 +482,13 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 
     if entries.is_empty() {
         eprintln!("{}", "(no recent activity)".dimmed());
-        if hidden_terminal > 0 {
+        if archived_hidden > 0 {
             eprintln!(
                 "{}",
-                format!("({hidden_terminal} hidden — pass --all to see Completed/Rejected items)")
-                    .dimmed()
+                format!(
+                    "({archived_hidden} archived hidden — pass --all or --archived to see them)"
+                )
+                .dimmed()
             );
         }
         return Ok(());
@@ -521,10 +555,10 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         );
     }
 
-    if hidden_terminal > 0 {
+    if archived_hidden > 0 {
         println!(
             "{}",
-            format!("  ({hidden_terminal} hidden — pass --all to see Completed/Rejected items)")
+            format!("  ({archived_hidden} archived hidden — pass --all or --archived to see them)")
                 .dimmed()
         );
     }
@@ -628,17 +662,6 @@ fn looks_like_spec_id(s: &str) -> bool {
 
 fn pick_author_email(email: &str) -> String {
     email.split('@').next().unwrap_or(email).to_string()
-}
-
-/// Whether a stringified status is terminal (Completed/Rejected). Local
-/// twin of `main::is_terminal_status` so this module stays self-contained
-/// (history.rs is consumed by integration tests without pulling in main).
-/// STORY-86: `Done` is NOT terminal — it's the gate between branch and
-/// main, and auto-bumps to Completed once the referencing commit merges.
-/// trace:TASK-64 STORY-86 | ai:claude
-fn is_terminal_status_str(s: &str) -> bool {
-    let t = s.trim();
-    t.eq_ignore_ascii_case("completed") || t.eq_ignore_ascii_case("rejected")
 }
 
 /// HH:MM if today (in the user's local tz), else "MM-DD HH:MM". Always
@@ -983,6 +1006,108 @@ fn format_oneline(e: &Event) -> String {
     format!("{}  {}", head, format_event_body(e))
 }
 
+fn event_record(e: &Event) -> HistoryEventRecord {
+    let (kind, summary, detail) = event_kind_record(&e.kind);
+    HistoryEventRecord {
+        sha: e.sha.clone(),
+        timestamp: e.timestamp.clone(),
+        author: e.author.clone(),
+        spec_id: e.spec_id.clone(),
+        req_type: e.req_type.clone(),
+        kind,
+        summary,
+        detail,
+    }
+}
+
+fn event_kind_record(kind: &EventKind) -> (String, String, JsonValue) {
+    match kind {
+        EventKind::Added {
+            title,
+            req_type,
+            priority,
+        } => (
+            "added".to_string(),
+            format!("added ({req_type}, {priority}) {}", shorten(title, 80)),
+            json!({
+                "title": title,
+                "req_type": req_type,
+                "priority": priority,
+            }),
+        ),
+        EventKind::Deleted { title } => (
+            "deleted".to_string(),
+            format!("deleted {}", shorten(title, 80)),
+            json!({ "title": title }),
+        ),
+        EventKind::StatusChange { from, to } => (
+            "status_change".to_string(),
+            format!("status: {from} -> {to}"),
+            json!({ "from": from, "to": to }),
+        ),
+        EventKind::PriorityChange { from, to } => (
+            "priority_change".to_string(),
+            format!("priority: {from} -> {to}"),
+            json!({ "from": from, "to": to }),
+        ),
+        EventKind::TitleChange { from, to } => (
+            "title_change".to_string(),
+            format!("title: {} -> {}", shorten(from, 40), shorten(to, 40)),
+            json!({ "from": from, "to": to }),
+        ),
+        EventKind::DescriptionEdited => (
+            "description_edited".to_string(),
+            "description edited".to_string(),
+            json!({}),
+        ),
+        EventKind::OwnerChange { from, to } => (
+            "owner_change".to_string(),
+            format!("owner: {} -> {}", maybe_dash(from), maybe_dash(to)),
+            json!({ "from": from, "to": to }),
+        ),
+        EventKind::FeatureChange { from, to } => (
+            "feature_change".to_string(),
+            format!("feature: {} -> {}", maybe_dash(from), maybe_dash(to)),
+            json!({ "from": from, "to": to }),
+        ),
+        EventKind::TypeChange { from, to } => (
+            "type_change".to_string(),
+            format!("type: {from} -> {to}"),
+            json!({ "from": from, "to": to }),
+        ),
+        EventKind::TagsChange { added, removed } => {
+            let mut parts: Vec<String> = added.iter().map(|t| format!("+{t}")).collect();
+            parts.extend(removed.iter().map(|t| format!("-{t}")));
+            (
+                "tags_change".to_string(),
+                format!("tags: {}", parts.join(" ")),
+                json!({ "added": added, "removed": removed }),
+            )
+        }
+        EventKind::CommentsAdded { count, author } => {
+            let noun = if *count == 1 {
+                "comment added"
+            } else {
+                "comments added"
+            };
+            let summary = match author {
+                Some(a) => format!("{noun} {count} by {a}"),
+                None => format!("{noun} {count}"),
+            };
+            (
+                "comments_added".to_string(),
+                summary,
+                json!({ "count": count, "author": author }),
+            )
+        }
+        EventKind::RelationshipsChange { added, removed } => (
+            "relationships_change".to_string(),
+            format!("relationships: +{added} added, -{removed} removed"),
+            json!({ "added": added, "removed": removed }),
+        ),
+    }
+}
+
 fn format_event_body(e: &Event) -> String {
     match &e.kind {
         EventKind::Added {
@@ -1162,6 +1287,28 @@ mod tests {
         diff_modified(&before, &after, &mk, &mut out);
         assert_eq!(out.len(), 1);
         assert!(matches!(out[0].kind, EventKind::StatusChange { .. }));
+    }
+
+    #[test]
+    fn event_record_exposes_structured_status_change() {
+        let event = Event {
+            sha: "abcdef123456".into(),
+            timestamp: "2026-05-24 10:00".into(),
+            author: "codex".into(),
+            spec_id: "TASK-538".into(),
+            req_type: "TASK".into(),
+            kind: EventKind::StatusChange {
+                from: "Approved".into(),
+                to: "Completed".into(),
+            },
+        };
+
+        let record = event_record(&event);
+        assert_eq!(record.kind, "status_change");
+        assert_eq!(record.spec_id, "TASK-538");
+        assert_eq!(record.detail["from"], "Approved");
+        assert_eq!(record.detail["to"], "Completed");
+        assert!(record.summary.contains("Approved -> Completed"));
     }
 
     #[test]

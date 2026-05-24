@@ -340,6 +340,28 @@ impl FailureKind {
             Self::Failed => "failed",
         }
     }
+
+    /// EPIC-28: should an `--auto-complete` batch drain shelve a spec
+    /// on this failure kind, or stop the batch entirely?
+    ///
+    /// - **Shelvable** — the spec's work itself failed in a way a human
+    ///   should look at: `NoPr`, `CiRed`, `CiTimeout`, `NoVerdict`,
+    ///   `Failed`. The drain parks the spec in `NeedsAttention` and
+    ///   continues to the next batch member.
+    /// - **Not shelvable** — the local environment is broken in a way
+    ///   that has nothing to do with the spec: `Spawn` (no PATH for the
+    ///   subprocess), `MissingTool` (no `gh` / `cargo`), `Internal`
+    ///   (orchestrator bug). Parking innocent specs because the
+    ///   environment is broken would be worse than stopping — every
+    ///   future member would hit the same wall. Historical
+    ///   `BatchDrainOutcome::Failed` stop applies.
+    /// trace:EPIC-28 | ai:claude
+    pub(crate) fn is_shelvable(self) -> bool {
+        matches!(
+            self,
+            Self::NoPr | Self::CiRed | Self::CiTimeout | Self::NoVerdict | Self::Failed
+        )
+    }
 }
 
 /// A reviewer's verdict, read from `.aida/review-verdicts/PR-N.json`.
@@ -607,6 +629,15 @@ pub(crate) struct OrchestrationResult {
     /// next drain to retry. A batch drain stops at the spec without claiming
     /// it shipped, punted, or failed. trace:BUG-257 | ai:claude
     pub(crate) inconclusive_reason: Option<String>,
+    /// EPIC-28: set when [`finish_failure`] shelved the spec — flipped its
+    /// status to `NeedsAttention` and wrote the structured `FailureReason`.
+    /// A shelved run is still an exit-non-zero *failure* at the
+    /// per-orchestration level (its `exit_code`/`failed_phase` are
+    /// unchanged), but the *batch drain* uses this field to decide
+    /// "the failure is recoverable — shelve, skip dependents, continue"
+    /// vs "the failure could not be shelved — stop the batch". `None`
+    /// on every non-failure path. trace:EPIC-28 | ai:claude
+    pub(crate) shelved_reason: Option<aida_core::FailureReason>,
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -701,6 +732,35 @@ pub(crate) trait PhaseDriver {
     /// stay simple; `RealPhaseDriver` implements it.
     /// trace:TASK-358 | ai:claude
     fn mark_implementer_lease_escalated(&mut self) {}
+
+    /// EPIC-28: park a failed spec in `NeedsAttention` with a structured
+    /// `FailureReason` so a batch drain can continue past the failure
+    /// rather than halting the whole batch. Called from `finish_failure`
+    /// for every *shelvable* failure kind (see
+    /// [`FailureKind::is_shelvable`]); pre-orchestration failures
+    /// (`Spawn` / `MissingTool` / `Internal`) bypass the shelve path so
+    /// a broken local environment does not park innocent specs.
+    ///
+    /// Returns `Ok(Some(fr))` when the shelve succeeded — the orchestrator
+    /// stamps `OrchestrationResult::shelved_reason` with this value and
+    /// `drain_batch` treats it as a recoverable failure. `Ok(None)` means
+    /// the driver chose not to shelve (e.g. spec already terminal) and
+    /// the historical "failure stops the batch" semantics apply.
+    /// `Err(_)` propagates a shelve-side failure (rare); the caller logs
+    /// it and falls back to the un-shelved path.
+    ///
+    /// The default impl is `Ok(None)` so test drivers without a real
+    /// store stay simple; `RealPhaseDriver` implements it.
+    /// trace:EPIC-28 | ai:claude
+    fn shelve_on_failure(
+        &mut self,
+        _spec: &str,
+        _phase: Phase,
+        _failure: &PhaseFailure,
+        _recovery_hint: &str,
+    ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+        Ok(None)
+    }
 }
 
 /// Build a `--json` phase-transition event line. Pure — unit-tested directly.
@@ -995,6 +1055,7 @@ fn finish_success(
         shipped_spec_id,
         escalation: None,
         inconclusive_reason: None,
+        shelved_reason: None,
     }
 }
 
@@ -1069,6 +1130,7 @@ fn finish_punted(
         shipped_spec_id: None,
         escalation: None,
         inconclusive_reason: None,
+        shelved_reason: None,
     }
 }
 
@@ -1153,6 +1215,7 @@ fn finish_escalated(
             reason: reason.to_string(),
         }),
         inconclusive_reason: None,
+        shelved_reason: None,
     }
 }
 
@@ -1231,13 +1294,21 @@ fn finish_inconclusive(
         shipped_spec_id: None,
         escalation: None,
         inconclusive_reason: Some(reason.to_string()),
+        shelved_reason: None,
     }
 }
 
 /// Print the failure epilogue (reason + recovery hint) and build the
 /// failure [`OrchestrationResult`] (exit code = the phase's 1-based index).
+///
+/// EPIC-28: when `failure.kind.is_shelvable()`, calls
+/// [`PhaseDriver::shelve_on_failure`] before building the result and
+/// stamps `shelved_reason` with the structured `FailureReason` the driver
+/// wrote onto the spec. A non-shelvable kind (`Spawn` / `MissingTool` /
+/// `Internal`) skips the hook — those describe a broken environment, not
+/// a spec-level failure, and shelving them would park innocent specs.
 fn finish_failure(
-    driver: &dyn PhaseDriver,
+    driver: &mut dyn PhaseDriver,
     phase: Phase,
     spec: &str,
     json: bool,
@@ -1248,6 +1319,30 @@ fn finish_failure(
     let code = phase.index();
     let elapsed = start.elapsed().as_millis();
     let hint = recovery_hint(phase, failure.kind, &driver.hint_context());
+
+    // EPIC-28: shelve the spec into `NeedsAttention` so a batch drain can
+    // continue past the failure. Best-effort — a shelve-side error is
+    // logged but never replaces the original phase failure (we want the
+    // real diagnostic on stderr, not a meta-failure about the shelving).
+    // trace:EPIC-28 | ai:claude
+    let shelved_reason: Option<aida_core::FailureReason> = if failure.kind.is_shelvable() {
+        match driver.shelve_on_failure(spec, phase, failure, &hint) {
+            Ok(fr) => fr,
+            Err(e) => {
+                eprintln!(
+                    "  {} could not shelve {} into Needs Attention: {} \
+                     — the batch drain will treat the failure as un-shelvable",
+                    "ⓘ".cyan(),
+                    spec,
+                    e
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     if json {
         println!(
             "{}",
@@ -1297,6 +1392,7 @@ fn finish_failure(
         shipped_spec_id: None,
         escalation: None,
         inconclusive_reason: None,
+        shelved_reason,
     }
 }
 
@@ -1365,6 +1461,7 @@ fn finish_reconciled(
         shipped_spec_id: None,
         escalation: None,
         inconclusive_reason: None,
+        shelved_reason: None,
     }
 }
 
@@ -1842,6 +1939,15 @@ pub(crate) enum BatchDrainOutcome {
     /// `0`: a network blip is not a phase failure, so the batch summary does
     /// not crash with a false "shipped 0". trace:BUG-257 | ai:claude
     Inconclusive,
+    /// EPIC-28: the batch *fully drained* (no member remained pickable),
+    /// but at least one member was shelved by a phase failure or skipped
+    /// because its blocker had been shelved earlier in the drain. The
+    /// drain did its job — failures were tolerated, dependents skipped,
+    /// independents shipped — and the summary points the operator at
+    /// `aida findings list` for triage. Exit code is **2** (distinct
+    /// from `0` clean drain, `1` stall, and `3..=8` phase failures).
+    /// trace:EPIC-28 | ai:claude
+    DrainedWithShelved,
 }
 
 /// Outcome of a [`drain_batch`] run — what shipped, where it stopped, and the
@@ -1862,12 +1968,29 @@ pub(crate) struct BatchDrainResult {
     /// resolve a punted design-fork. Like `punted`, an escalation advances the
     /// drain but did not ship; kept apart so the batch summary is honest.
     pub(crate) escalated: Vec<String>,
+    /// EPIC-28: spec-ids the drain *shelved* on a phase failure, in drain
+    /// order. The orchestrator flipped each to `NeedsAttention` with a
+    /// structured `FailureReason`; the drain continued past them rather
+    /// than halting the whole batch. Kept apart from `shipped` / `punted`
+    /// / `escalated` so the summary points the operator at the right
+    /// triage path. trace:EPIC-28 | ai:claude
+    pub(crate) shelved: Vec<String>,
+    /// EPIC-28: members the drain skipped because they were blocked by a
+    /// just-shelved (or already-`NeedsAttention`) spec. Each entry is
+    /// `(display_id, reason_label)` where `reason_label` is the same
+    /// `pickability_reason_label` the queue UI uses. The pure
+    /// [`drain_batch`] cannot fill this — the mock has no relationship
+    /// graph — so it stays empty here; the real CLI surface
+    /// (`resolve_batch_members`) records skips and populates this field
+    /// after the fact. trace:EPIC-28 | ai:claude
+    pub(crate) skipped: Vec<(String, String)>,
     /// The spec the drain stopped on — set for `Failed` / `Stalled`, `None`
     /// for a clean `Drained` / `MaxReached`.
     pub(crate) stopped_at: Option<String>,
     /// Why the drain stopped.
     pub(crate) outcome: BatchDrainOutcome,
-    /// Process exit code: `0` on a clean stop, else the failed-phase index
+    /// Process exit code: `0` on a clean stop or `DrainedWithShelved`
+    /// (no, EPIC-28: that one is `2`), else the failed-phase index
     /// (per STORY-246's exit codes) or `1` for a stall.
     pub(crate) exit_code: i32,
 }
@@ -1889,6 +2012,12 @@ pub(crate) struct BatchChainDrainResult {
     pub(crate) shipped: Vec<String>,
     pub(crate) punted: Vec<String>,
     pub(crate) escalated: Vec<String>,
+    /// EPIC-28: spec-ids shelved across every batch in the chain, in chain
+    /// order. trace:EPIC-28 | ai:claude
+    pub(crate) shelved: Vec<String>,
+    /// EPIC-28: dependents the chain skipped across every batch, in chain
+    /// order. trace:EPIC-28 | ai:claude
+    pub(crate) skipped: Vec<(String, String)>,
     pub(crate) stopped_batch: Option<String>,
     pub(crate) stopped_at: Option<String>,
     pub(crate) outcome: BatchDrainOutcome,
@@ -1909,34 +2038,69 @@ pub(crate) trait BatchDriver {
 }
 
 /// Drain a batch: run `orchestrate` per member until the batch is empty, the
-/// `--max` cap is hit, or a phase fails. A phase failure stops the drain at
-/// that spec — the remaining members stay queued, intact for a retry. Pure
-/// sequencing; the I/O lives in the [`BatchDriver`]. trace:TASK-285 | ai:claude
-pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> BatchDrainResult {
+/// `--max` cap is hit, or a phase fails un-shelvably. EPIC-28 changes the
+/// failure rule: a *shelvable* phase failure (the implementer/CI/reviewer
+/// part — `result.shelved_reason.is_some()`) parks the spec in
+/// `NeedsAttention` and the drain *continues* to the next member, with
+/// dependents skipped naturally because they show up as un-pickable to
+/// the next `next_head()` call. The drain stops only when either:
+/// (a) `max_failures` shelves have already happened — the environment is
+///     probably broken, do not park an entire batch of innocent specs;
+/// (b) an un-shelvable failure (env-level: `Spawn`/`MissingTool`/`Internal`)
+///     hit — every future member would hit the same wall.
+///
+/// Pure sequencing; the I/O lives in the [`BatchDriver`].
+/// trace:TASK-285 EPIC-28 | ai:claude
+pub(crate) fn drain_batch(
+    driver: &mut dyn BatchDriver,
+    max: Option<usize>,
+    max_failures: Option<usize>,
+) -> BatchDrainResult {
     let mut shipped: Vec<String> = Vec::new();
     let mut punted: Vec<String> = Vec::new();
     let mut escalated: Vec<String> = Vec::new();
+    let mut shelved: Vec<String> = Vec::new();
+    let skipped: Vec<(String, String)> = Vec::new();
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
         let Some(head) = driver.next_head() else {
+            // EPIC-28: clean drain or drained-with-shelved. The latter
+            // wins whenever any failure shelved a spec, regardless of how
+            // many independents shipped after — the operator still has to
+            // triage the parked set.
+            let outcome = if shelved.is_empty() && skipped.is_empty() {
+                BatchDrainOutcome::Drained
+            } else {
+                BatchDrainOutcome::DrainedWithShelved
+            };
+            let exit_code = if matches!(outcome, BatchDrainOutcome::DrainedWithShelved) {
+                2
+            } else {
+                0
+            };
             return BatchDrainResult {
                 shipped,
                 punted,
                 escalated,
+                shelved,
+                skipped,
                 stopped_at: None,
-                outcome: BatchDrainOutcome::Drained,
-                exit_code: 0,
+                outcome,
+                exit_code,
             };
         };
         // `--max` bounds how many members the drain *acts on* — shipped,
-        // punted, or escalated, each consumed a slot (a full phase attempt).
+        // punted, escalated, or shelved each consumed a slot (a full phase
+        // attempt).
         if let Some(limit) = max {
-            if shipped.len() + punted.len() + escalated.len() >= limit {
+            if shipped.len() + punted.len() + escalated.len() + shelved.len() >= limit {
                 return BatchDrainResult {
                     shipped,
                     punted,
                     escalated,
+                    shelved,
+                    skipped,
                     stopped_at: None,
                     outcome: BatchDrainOutcome::MaxReached,
                     exit_code: 0,
@@ -1946,14 +2110,16 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
         // A spec we already acted on resurfacing as the head means the queue
         // did not advance — its run reported success but it never left the
         // queue, so it was not really shipped. Drop it from `shipped` and
-        // stop rather than loop forever on it. (A punted / escalated spec
-        // leaves the queue, so it cannot resurface this way.)
+        // stop rather than loop forever on it. (A punted / escalated /
+        // shelved spec leaves the queue, so it cannot resurface this way.)
         if shipped.iter().any(|s| s == &head) {
             shipped.retain(|s| s != &head);
             return BatchDrainResult {
                 shipped,
                 punted,
                 escalated,
+                shelved,
+                skipped,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Stalled,
                 exit_code: 1,
@@ -1962,10 +2128,24 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
         let result = driver.run_spec(&head);
         if result.exit_code != 0 {
             let phase = result.failed_phase.unwrap_or(Phase::Implementer);
+            // EPIC-28: a shelvable failure parks the spec and the drain
+            // continues — unless we have already shelved `max_failures`
+            // specs (probably a broken environment) in which case fall
+            // back to the historical `Failed` stop.
+            // trace:EPIC-28 | ai:claude
+            let over_failure_budget = max_failures
+                .map(|cap| shelved.len() + 1 > cap)
+                .unwrap_or(false);
+            if result.shelved_reason.is_some() && !over_failure_budget {
+                shelved.push(head);
+                continue;
+            }
             return BatchDrainResult {
                 shipped,
                 punted,
                 escalated,
+                shelved,
+                skipped,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Failed(phase),
                 exit_code: result.exit_code,
@@ -1982,6 +2162,8 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
                 shipped,
                 punted,
                 escalated,
+                shelved,
+                skipped,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Inconclusive,
                 exit_code: 0,
@@ -1999,6 +2181,8 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
                 shipped,
                 punted,
                 escalated,
+                shelved,
+                skipped,
                 stopped_at: Some(head.clone()),
                 outcome: BatchDrainOutcome::Mismatched {
                     dispatched: head,
@@ -2027,11 +2211,14 @@ pub(crate) fn drain_batch(driver: &mut dyn BatchDriver, max: Option<usize>) -> B
 /// `Drained` steps and are skipped by the caller's UI.
 ///
 /// `max` is total work across the whole chain. Because [`drain_batch`] counts
-/// shipped + punted + escalated members toward its cap, this helper carries
-/// the remaining allowance into each subsequent batch. trace:TASK-310
+/// shipped + punted + escalated + shelved members toward its cap, this helper
+/// carries the remaining allowance into each subsequent batch.
+/// `max_failures` is **per-batch** (not per-chain) — a chain `A,B,C` keeps an
+/// independent failure budget for each batch. trace:TASK-310 EPIC-28
 pub(crate) fn drain_batch_chain<'a, F>(
     batch_names: &[String],
     max: Option<usize>,
+    max_failures: Option<usize>,
     mut make_driver: F,
 ) -> BatchChainDrainResult
 where
@@ -2041,16 +2228,24 @@ where
     let mut shipped = Vec::new();
     let mut punted = Vec::new();
     let mut escalated = Vec::new();
+    let mut shelved: Vec<String> = Vec::new();
+    let mut skipped: Vec<(String, String)> = Vec::new();
+    let mut any_shelved_or_skipped = false;
 
     for batch_name in batch_names {
-        let consumed = shipped.len() + punted.len() + escalated.len();
+        let consumed = shipped.len() + punted.len() + escalated.len() + shelved.len();
         let remaining = max.map(|limit| limit.saturating_sub(consumed));
         let mut driver = make_driver(batch_name);
-        let result = drain_batch(driver.as_mut(), remaining);
+        let result = drain_batch(driver.as_mut(), remaining, max_failures);
 
         shipped.extend(result.shipped.iter().cloned());
         punted.extend(result.punted.iter().cloned());
         escalated.extend(result.escalated.iter().cloned());
+        shelved.extend(result.shelved.iter().cloned());
+        skipped.extend(result.skipped.iter().cloned());
+        if !result.shelved.is_empty() || !result.skipped.is_empty() {
+            any_shelved_or_skipped = true;
+        }
 
         let step = BatchChainStep {
             batch_name: batch_name.clone(),
@@ -2059,13 +2254,15 @@ where
         steps.push(step);
 
         match result.outcome {
-            BatchDrainOutcome::Drained => continue,
+            BatchDrainOutcome::Drained | BatchDrainOutcome::DrainedWithShelved => continue,
             BatchDrainOutcome::MaxReached => {
                 return BatchChainDrainResult {
                     steps,
                     shipped,
                     punted,
                     escalated,
+                    shelved,
+                    skipped,
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
                     outcome: BatchDrainOutcome::MaxReached,
@@ -2078,6 +2275,8 @@ where
                     shipped,
                     punted,
                     escalated,
+                    shelved,
+                    skipped,
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
                     outcome: BatchDrainOutcome::Failed(phase),
@@ -2090,6 +2289,8 @@ where
                     shipped,
                     punted,
                     escalated,
+                    shelved,
+                    skipped,
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
                     outcome: BatchDrainOutcome::Stalled,
@@ -2105,6 +2306,8 @@ where
                     shipped,
                     punted,
                     escalated,
+                    shelved,
+                    skipped,
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
                     outcome: BatchDrainOutcome::Mismatched {
@@ -2120,6 +2323,8 @@ where
                     shipped,
                     punted,
                     escalated,
+                    shelved,
+                    skipped,
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
                     outcome: BatchDrainOutcome::Inconclusive,
@@ -2129,15 +2334,25 @@ where
         }
     }
 
+    // Every batch drained cleanly. EPIC-28: if any individual batch reported
+    // a shelve/skip, the chain summary is `DrainedWithShelved` (exit 2) so the
+    // operator still sees the parked set.
+    let (outcome, exit_code) = if any_shelved_or_skipped {
+        (BatchDrainOutcome::DrainedWithShelved, 2)
+    } else {
+        (BatchDrainOutcome::Drained, 0)
+    };
     BatchChainDrainResult {
         steps,
         shipped,
         punted,
         escalated,
+        shelved,
+        skipped,
         stopped_batch: None,
         stopped_at: None,
-        outcome: BatchDrainOutcome::Drained,
-        exit_code: 0,
+        outcome,
+        exit_code,
     }
 }
 
@@ -2806,6 +3021,7 @@ mod tests {
                     shipped_spec_id: None,
                     escalation: None,
                     inconclusive_reason: Some("GH API unreachable — cannot confirm PR".to_string()),
+                    shelved_reason: None,
                 }
             }
         }
@@ -2813,7 +3029,7 @@ mod tests {
             queue: vec!["BUG-257".to_string(), "TASK-260".to_string()],
             ran: Vec::new(),
         };
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 0, "inconclusive is a clean exit");
         assert_eq!(result.outcome, BatchDrainOutcome::Inconclusive);
         assert_eq!(result.stopped_at.as_deref(), Some("BUG-257"));
@@ -3783,6 +3999,7 @@ mod tests {
             shipped_spec_id: None,
             escalation: None,
             inconclusive_reason: None,
+            shelved_reason: None,
         }
     }
 
@@ -3797,6 +4014,7 @@ mod tests {
             shipped_spec_id: None,
             escalation: None,
             inconclusive_reason: None,
+            shelved_reason: None,
         }
     }
 
@@ -3813,6 +4031,7 @@ mod tests {
             shipped_spec_id: None,
             escalation: None,
             inconclusive_reason: None,
+            shelved_reason: None,
         }
     }
 
@@ -3830,6 +4049,36 @@ mod tests {
             shipped_spec_id: Some(shipped.to_string()),
             escalation: None,
             inconclusive_reason: None,
+            shelved_reason: None,
+        }
+    }
+
+    /// EPIC-28: a *shelved* failure [`OrchestrationResult`] — the failure
+    /// fields stay set (exit code = phase index, `failed_phase` populated),
+    /// but `shelved_reason` is `Some` so `drain_batch` recognises it as a
+    /// recoverable failure and continues to the next member.
+    /// trace:EPIC-28 | ai:claude
+    fn shelve_result(phase: Phase) -> OrchestrationResult {
+        let fr = aida_core::FailureReason {
+            phase: phase.slug().to_string(),
+            phase_index: phase.index() as u8,
+            kind: "failed".to_string(),
+            detail: format!("mock shelved failure at {phase:?}"),
+            recovery_hint: None,
+            shelved_by: None,
+            shelved_at: chrono::Utc::now(),
+        };
+        OrchestrationResult {
+            exit_code: phase.index(),
+            failed_phase: Some(phase),
+            failure: Some(PhaseFailure::new(format!("mock failure at {phase:?}"))),
+            phase_durations: Vec::new(),
+            total_ms: 0,
+            punt_reason: None,
+            shipped_spec_id: None,
+            escalation: None,
+            inconclusive_reason: None,
+            shelved_reason: Some(fr),
         }
     }
 
@@ -3849,6 +4098,7 @@ mod tests {
                 reason: "mock escalation: merge decision".to_string(),
             }),
             inconclusive_reason: None,
+            shelved_reason: None,
         }
     }
 
@@ -3869,6 +4119,20 @@ mod tests {
         /// shipped spec, not the dispatched one). trace:BUG-245 | ai:claude
         mismatch: Option<(String, String)>,
         escalate_spec: Option<String>,
+        /// EPIC-28: specs that should return a shelvable failure (the
+        /// orchestrator wrote a `FailureReason` to the store). A drain that
+        /// hits one in this set parks it and continues to the next head
+        /// (mirroring the punt path) rather than stopping. The mock
+        /// consumes the head on shelving, mirroring the
+        /// `resolve_batch_members` filter that would skip the freshly-
+        /// shelved spec on the next iteration. trace:EPIC-28 | ai:claude
+        shelve_at: Vec<(String, Phase)>,
+        /// EPIC-28: specs the *test* wants treated as blocked-by a
+        /// just-shelved spec. The mock drops them from `heads` *after* the
+        /// named blocker is shelved, and records each as a skipped row.
+        /// trace:EPIC-28 | ai:claude
+        skip_dependent_of: Vec<(String, String, String)>, // (dependent, blocker, reason)
+        skipped: Vec<(String, String)>,
         runs: Vec<String>,
     }
 
@@ -3881,6 +4145,9 @@ mod tests {
                 punt_spec: None,
                 mismatch: None,
                 escalate_spec: None,
+                shelve_at: Vec::new(),
+                skip_dependent_of: Vec::new(),
+                skipped: Vec::new(),
                 runs: Vec::new(),
             }
         }
@@ -3914,6 +4181,27 @@ mod tests {
             self.escalate_spec = Some(spec.to_string());
             self
         }
+
+        /// EPIC-28: mark `spec` so its run returns a shelvable failure.
+        /// The mock consumes the head (the real `resolve_batch_members`
+        /// would filter the freshly-NeedsAttention spec out next call).
+        fn shelving(mut self, spec: &str, phase: Phase) -> Self {
+            self.shelve_at.push((spec.to_string(), phase));
+            self
+        }
+
+        /// EPIC-28: when `blocker` is shelved, also drop `dependent` from
+        /// the head queue and record the skip with `reason`. Simulates
+        /// `resolve_batch_members`'s pickability filter: a member with
+        /// `BlockedBy → <shelved>` becomes un-pickable on the next round.
+        fn dependent(mut self, dependent: &str, blocker: &str, reason: &str) -> Self {
+            self.skip_dependent_of.push((
+                dependent.to_string(),
+                blocker.to_string(),
+                reason.to_string(),
+            ));
+            self
+        }
     }
 
     impl BatchDriver for MockBatchDriver {
@@ -3927,6 +4215,28 @@ mod tests {
                 if fail_spec == spec {
                     // Failure leaves the spec queued — head does not advance.
                     return fail_result(*phase);
+                }
+            }
+            // EPIC-28: a *shelvable* failure parks the spec in NeedsAttention
+            // (the orchestrator wrote the FailureReason), and the next head
+            // pickup would skip it. Mirror that here by consuming the head.
+            // Dependents of this spec drop off too. trace:EPIC-28 | ai:claude
+            for (shelve_spec, phase) in self.shelve_at.clone() {
+                if shelve_spec == spec {
+                    self.heads.retain(|h| h != spec);
+                    let to_skip: Vec<(String, String, String)> = self
+                        .skip_dependent_of
+                        .iter()
+                        .filter(|(_, blocker, _)| blocker == spec)
+                        .cloned()
+                        .collect();
+                    for (dep, _blocker, reason) in to_skip {
+                        if self.heads.iter().any(|h| h == &dep) {
+                            self.heads.retain(|h| h != &dep);
+                            self.skipped.push((dep, reason));
+                        }
+                    }
+                    return shelve_result(phase);
                 }
             }
             if self.stall_spec.as_deref() == Some(spec) {
@@ -3965,7 +4275,7 @@ mod tests {
     #[test]
     fn drain_batch_three_green_ships_all_three() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]);
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 0);
         assert_eq!(result.outcome, BatchDrainOutcome::Drained);
         assert_eq!(result.shipped, vec!["TASK-1", "TASK-2", "TASK-3"]);
@@ -3979,7 +4289,7 @@ mod tests {
     fn drain_batch_phase1_failure_on_item2_leaves_item3_untouched() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"])
             .failing("TASK-2", Phase::Implementer);
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 1, "phase 1 → exit code 1");
         assert_eq!(
             result.outcome,
@@ -3996,7 +4306,7 @@ mod tests {
     fn drain_batch_failure_carries_failed_phase_exit_code() {
         let mut driver =
             MockBatchDriver::new(&["TASK-1", "TASK-2"]).failing("TASK-1", Phase::Reviewer);
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 3);
         assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Reviewer));
         assert!(result.shipped.is_empty());
@@ -4006,7 +4316,7 @@ mod tests {
     #[test]
     fn drain_batch_max_caps_the_drain() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3", "TASK-4"]);
-        let result = drain_batch(&mut driver, Some(2));
+        let result = drain_batch(&mut driver, Some(2), None);
         assert_eq!(result.exit_code, 0);
         assert_eq!(result.outcome, BatchDrainOutcome::MaxReached);
         assert_eq!(result.shipped, vec!["TASK-1", "TASK-2"]);
@@ -4018,7 +4328,7 @@ mod tests {
     #[test]
     fn drain_batch_max_equal_to_size_reports_drained() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]);
-        let result = drain_batch(&mut driver, Some(2));
+        let result = drain_batch(&mut driver, Some(2), None);
         assert_eq!(result.outcome, BatchDrainOutcome::Drained);
         assert_eq!(result.shipped, vec!["TASK-1", "TASK-2"]);
     }
@@ -4027,7 +4337,7 @@ mod tests {
     #[test]
     fn drain_batch_empty_batch_is_a_clean_drain() {
         let mut driver = MockBatchDriver::new(&[]);
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 0);
         assert_eq!(result.outcome, BatchDrainOutcome::Drained);
         assert!(result.shipped.is_empty());
@@ -4038,7 +4348,7 @@ mod tests {
     #[test]
     fn drain_batch_chain_drains_two_batches_in_order() {
         let names = vec!["alpha".to_string(), "beta".to_string()];
-        let result = drain_batch_chain(&names, None, |name| match name {
+        let result = drain_batch_chain(&names, None, None, |name| match name {
             "alpha" => Box::new(MockBatchDriver::new(&["TASK-A1", "TASK-A2"])),
             "beta" => Box::new(MockBatchDriver::new(&["TASK-B1"])),
             other => panic!("unexpected batch {other}"),
@@ -4062,7 +4372,7 @@ mod tests {
     #[test]
     fn drain_batch_chain_skips_empty_middle_batch() {
         let names = vec!["alpha".to_string(), "empty".to_string(), "beta".to_string()];
-        let result = drain_batch_chain(&names, None, |name| match name {
+        let result = drain_batch_chain(&names, None, None, |name| match name {
             "alpha" => Box::new(MockBatchDriver::new(&["TASK-A1"])),
             "empty" => Box::new(MockBatchDriver::new(&[])),
             "beta" => Box::new(MockBatchDriver::new(&["TASK-B1"])),
@@ -4080,7 +4390,7 @@ mod tests {
     #[test]
     fn drain_batch_chain_failure_stops_before_next_batch() {
         let names = vec!["alpha".to_string(), "beta".to_string()];
-        let result = drain_batch_chain(&names, None, |name| match name {
+        let result = drain_batch_chain(&names, None, None, |name| match name {
             "alpha" => Box::new(
                 MockBatchDriver::new(&["TASK-A1", "TASK-A2"]).failing("TASK-A2", Phase::Reviewer),
             ),
@@ -4101,7 +4411,7 @@ mod tests {
     #[test]
     fn drain_batch_chain_max_caps_across_batches() {
         let names = vec!["alpha".to_string(), "beta".to_string()];
-        let result = drain_batch_chain(&names, Some(3), |name| match name {
+        let result = drain_batch_chain(&names, Some(3), None, |name| match name {
             "alpha" => Box::new(MockBatchDriver::new(&["TASK-A1", "TASK-A2"])),
             "beta" => Box::new(MockBatchDriver::new(&["TASK-B1", "TASK-B2"])),
             other => panic!("unexpected batch {other}"),
@@ -4119,7 +4429,7 @@ mod tests {
     #[test]
     fn drain_batch_punted_member_advances_the_drain() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]).punting("TASK-2");
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 0, "a punt does not fail the drain");
         assert_eq!(result.outcome, BatchDrainOutcome::Drained);
         assert_eq!(result.shipped, vec!["TASK-1", "TASK-3"]);
@@ -4134,7 +4444,7 @@ mod tests {
     #[test]
     fn drain_batch_escalated_member_advances_the_drain() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]).escalating("TASK-2");
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 0, "an escalation does not fail the drain");
         assert_eq!(result.outcome, BatchDrainOutcome::Drained);
         assert_eq!(result.shipped, vec!["TASK-1", "TASK-3"]);
@@ -4143,12 +4453,133 @@ mod tests {
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
     }
 
+    // --- EPIC-28: shelve on failure + dependency-aware skip --------------
+
+    /// EPIC-28: a shelvable phase failure parks the spec in NeedsAttention
+    /// and the drain continues — independents after the failure still ship.
+    /// trace:EPIC-28 | ai:claude
+    #[test]
+    fn drain_batch_shelves_failure_and_continues_to_next_member() {
+        let mut driver =
+            MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]).shelving("TASK-2", Phase::Ci);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(
+            result.exit_code, 2,
+            "a drain with shelved members exits 2, not the phase code"
+        );
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-3"]);
+        assert_eq!(result.shelved, vec!["TASK-2"]);
+        // TASK-3 must have actually run — the whole point of EPIC-28.
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
+    }
+
+    /// EPIC-28: when a shelving event also makes a downstream member
+    /// un-pickable (BlockedBy → shelved), the dependent is skipped — never
+    /// run — and shows up in `skipped`, while independents after it still
+    /// ship. trace:EPIC-28 | ai:claude
+    #[test]
+    fn drain_batch_skips_dependent_when_blocker_shelved() {
+        let mut driver = MockBatchDriver::new(&["TASK-A", "TASK-B", "TASK-D", "TASK-E"])
+            .shelving("TASK-B", Phase::Ci)
+            .dependent("TASK-D", "TASK-B", "blocked-by TASK-B (Needs Attention)");
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.exit_code, 2);
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.shipped, vec!["TASK-A", "TASK-E"]);
+        assert_eq!(result.shelved, vec!["TASK-B"]);
+        // TASK-D must NOT appear in `runs` — it never reached `run_spec`.
+        assert!(
+            !driver.runs.iter().any(|s| s == "TASK-D"),
+            "dependent TASK-D should have been skipped, not run: {:?}",
+            driver.runs
+        );
+        // And it should show up in the mock's skipped list (a real CLI surface
+        // would surface the same via `result.skipped`, but that's populated
+        // by `resolve_batch_members`, not `drain_batch` itself).
+        assert_eq!(
+            driver.skipped,
+            vec![(
+                "TASK-D".to_string(),
+                "blocked-by TASK-B (Needs Attention)".to_string()
+            )]
+        );
+    }
+
+    /// EPIC-28: the `max_failures` safety cap stops the drain when too
+    /// many specs shelve in a row — the environment is probably broken.
+    /// `max_failures = 2` means the third shelvable failure flips back
+    /// to the historical `Failed(phase)` stop. trace:EPIC-28 | ai:claude
+    #[test]
+    fn drain_batch_caps_at_max_failures_and_stops() {
+        let mut driver = MockBatchDriver::new(&["A", "B", "C", "D", "E"])
+            .shelving("A", Phase::Ci)
+            .shelving("B", Phase::Ci)
+            .shelving("C", Phase::Ci);
+        let result = drain_batch(&mut driver, None, Some(2));
+        // First two shelve and the drain continues; the third trips the cap.
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.exit_code, Phase::Ci.index());
+        assert_eq!(result.shelved, vec!["A", "B"]);
+        assert_eq!(result.stopped_at, Some("C".to_string()));
+        // D and E were never attempted — the cap stops the drain.
+        assert!(!driver.runs.iter().any(|s| s == "D"));
+        assert!(!driver.runs.iter().any(|s| s == "E"));
+    }
+
+    /// EPIC-28: regression — a clean drain (nothing shelved, nothing
+    /// skipped) keeps the historical `Drained` outcome + exit 0, even
+    /// though `DrainedWithShelved` is now reachable. trace:EPIC-28
+    #[test]
+    fn drain_batch_clean_drain_without_shelved_still_returns_drained_exit_0() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]);
+        let result = drain_batch(&mut driver, None, Some(5));
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert!(result.shelved.is_empty());
+        assert!(result.skipped.is_empty());
+    }
+
+    /// EPIC-28: punts and shelvings can both happen in one drain, and the
+    /// summary keeps them sorted — neither leaks into `shipped`.
+    /// trace:EPIC-28 | ai:claude
+    #[test]
+    fn drain_batch_punt_and_shelve_in_same_drain_both_counted_separately() {
+        let mut driver = MockBatchDriver::new(&["P", "S", "Q", "R"])
+            .punting("P")
+            .shelving("S", Phase::Ci);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.exit_code, 2);
+        assert_eq!(result.punted, vec!["P"]);
+        assert_eq!(result.shelved, vec!["S"]);
+        assert_eq!(result.shipped, vec!["Q", "R"]);
+    }
+
+    /// EPIC-28: an un-shelvable failure (the mock's default `failing` path —
+    /// `shelved_reason: None`) still stops the drain at the historical
+    /// `Failed(phase)` outcome. Confirms the routing rule: only shelvable
+    /// failures continue. trace:EPIC-28 | ai:claude
+    #[test]
+    fn drain_batch_unshelvable_failure_still_stops_the_drain() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"])
+            .failing("TASK-2", Phase::Implementer);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::Failed(Phase::Implementer)
+        );
+        assert_eq!(result.exit_code, 1);
+        assert!(result.shelved.is_empty());
+        assert_eq!(result.shipped, vec!["TASK-1"]);
+    }
+
     /// A "successful" run that leaves the head in place is caught by the
     /// non-advancing-queue guard rather than looping forever.
     #[test]
     fn drain_batch_stall_guard_stops_a_non_advancing_queue() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).stalling("TASK-2");
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 1);
         assert_eq!(result.outcome, BatchDrainOutcome::Stalled);
         assert_eq!(result.shipped, vec!["TASK-1"]);
@@ -4234,7 +4665,7 @@ mod tests {
     fn drain_batch_credits_actual_shipped_on_mismatch() {
         let mut driver =
             MockBatchDriver::new(&["STORY-276", "TASK-99"]).mismatching("STORY-276", "BUG-244");
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         assert_eq!(result.exit_code, 0, "a mismatch is not a failure");
         assert_eq!(
             result.outcome,
@@ -4262,7 +4693,7 @@ mod tests {
     #[test]
     fn drain_batch_mismatch_summary_is_self_consistent() {
         let mut driver = MockBatchDriver::new(&["STORY-276"]).mismatching("STORY-276", "BUG-244");
-        let result = drain_batch(&mut driver, None);
+        let result = drain_batch(&mut driver, None, None);
         // The dispatched head appears in `stopped_at` (queue did not
         // advance) — it must NOT also appear in `shipped`.
         let dispatched = result.stopped_at.as_deref().unwrap();

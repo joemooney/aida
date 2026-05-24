@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS requirements (
     comments JSONB NOT NULL DEFAULT '[]',
     history JSONB NOT NULL DEFAULT '[]',
     archived BOOLEAN NOT NULL DEFAULT FALSE,
+    archived_at TIMESTAMPTZ,
     custom_status TEXT,
     custom_priority TEXT,
     custom_fields JSONB NOT NULL DEFAULT '{}',
@@ -54,6 +55,9 @@ CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status);
 
 -- Index for archived filtering
 CREATE INDEX IF NOT EXISTS idx_requirements_archived ON requirements(archived);
+
+-- Index for archived_at filtering (STORY-441 archive sweep)
+CREATE INDEX IF NOT EXISTS idx_requirements_archived_at ON requirements(archived_at);
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (

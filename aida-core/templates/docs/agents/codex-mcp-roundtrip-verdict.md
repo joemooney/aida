@@ -51,7 +51,7 @@ PASS MCP stdio compatibility suite
 This covers:
 
 - Codex-style JSON-RPC stdio startup through `initialize`.
-- Discovery of the 21 MCP tools through `tools/list`.
+- Discovery of the MCP tools through `tools/list`.
 - `inputSchema` and `outputSchema` presence.
 - CLI-created spec visible through MCP.
 - MCP-created spec visible through CLI.
@@ -65,9 +65,9 @@ The separate doc consistency gate also passes:
 
 ```text
 $ tests/test_mcp_doc_consistency.sh
-TEST parse docs/agents/cross-agent-onboarding.md ... ok (21 tools mentioned)
+TEST parse docs/agents/cross-agent-onboarding.md ... ok (25 tools mentioned)
 TEST start aida mcp-serve in scratch project ... ok
-TEST tools/list ... ok (21 tools advertised)
+TEST tools/list ... ok (25 tools advertised)
 TEST doc-vs-MCP consistency ... ok
 PASS doc-vs-MCP consistency
 ```
@@ -91,7 +91,7 @@ Current stage: alpha, operational with documented constraints.
 What works:
 
 - Local stdio MCP server startup through `aida mcp-serve`.
-- 21 MCP tools advertised.
+- 25 MCP tools advertised.
 - `inputSchema` and descriptor-level `outputSchema` on the tool descriptors.
 - Text-envelope tool results.
 - CLI to MCP read consistency.

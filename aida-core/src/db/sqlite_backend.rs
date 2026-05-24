@@ -562,6 +562,9 @@ impl SqliteBackend {
                 comments,
                 history,
                 archived,
+                // STORY-441: legacy centralized SQLite backend is deprecated
+                // and does not persist archived_at; treat reads as unset.
+                archived_at: None,
                 custom_status,
                 custom_priority,
                 custom_fields,
@@ -574,6 +577,10 @@ impl SqliteBackend {
                 // STORY-332: the legacy centralized SQLite backend is
                 // deprecated and does not persist punt metadata.
                 attention_reason: None,
+                // EPIC-28: the legacy centralized SQLite backend is
+                // deprecated and does not persist orchestrator-shelving
+                // metadata. trace:EPIC-28 | ai:claude
+                failure_reason: None,
                 // STORY-333: the legacy centralized SQLite backend is
                 // deprecated and does not persist the human-only marker;
                 // un-pickability is a git-canonical concern.
@@ -1485,6 +1492,8 @@ impl DatabaseBackend for SqliteBackend {
                     comments,
                     history,
                     archived,
+                    // STORY-441: legacy centralized backend — not persisted.
+                    archived_at: None,
                     custom_status,
                     custom_priority,
                     custom_fields,
@@ -1496,6 +1505,9 @@ impl DatabaseBackend for SqliteBackend {
                     ai_evaluation,
                     // STORY-332: legacy centralized backend — not persisted.
                     attention_reason: None,
+                    // EPIC-28: legacy centralized backend — not persisted.
+                    // trace:EPIC-28 | ai:claude
+                    failure_reason: None,
                     // STORY-333: legacy centralized backend — not persisted.
                     // trace:STORY-333 | ai:claude
                     human_only: false,

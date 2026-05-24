@@ -153,6 +153,46 @@ pub struct AttentionReason {
     pub raised_at: DateTime<Utc>,
 }
 
+/// Why a spec was shelved by the `--auto-complete` orchestrator after a
+/// phase failure — the structured record that lets `aida findings list`
+/// surface the failure with the same triage affordances as a punt.
+///
+/// A sibling of [`AttentionReason`]: both inhabit `NeedsAttention` and both
+/// answer "why is this spec currently paused", but they record different
+/// causes. `AttentionReason` is the agent-raised obstacle (a design-fork
+/// punt); `FailureReason` is the orchestrator-raised phase failure. They
+/// stay distinct because [`PuntCategory`] is documented as
+/// **obstacle-shape, not failure-shape** — widening it to carry phase
+/// failures would break that invariant and pollute STORY-325's punt
+/// frequency analysis. trace:EPIC-28 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct FailureReason {
+    /// Stable slug for the phase that failed — `implementer`, `ci`,
+    /// `review`, `merge`, `pull`, or `build`. A string (not an enum)
+    /// keeps `aida-core` free of orchestrator concepts: the source of
+    /// truth for phase identities lives in `aida-cli::auto_complete`.
+    pub phase: String,
+    /// 1-based phase index (1..=6) for sorting / display.
+    pub phase_index: u8,
+    /// Stable slug for the failure kind — `no-pr`, `ci-red`,
+    /// `request-changes`, `merge-conflict`, etc. Mirrors the orchestrator's
+    /// existing `PhaseFailureKind::slug()`.
+    pub kind: String,
+    /// One-line human description of what went wrong.
+    pub detail: String,
+    /// Pre-rendered recovery hint — what the orchestrator would tell a
+    /// human standing in front of the broken phase. Cached here so
+    /// triage doesn't have to rebuild it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery_hint: Option<String>,
+    /// Role / agent that shelved the spec (the active session role,
+    /// `None` when no role context was available).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shelved_by: Option<String>,
+    /// When the spec was shelved.
+    pub shelved_at: DateTime<Utc>,
+}
+
 /// Validate a status transition against the STORY-332 NeedsAttention rules.
 ///
 /// Returns `Some(error message)` when the transition is forbidden, `None`
@@ -3226,6 +3266,13 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub archived: bool,
 
+    /// Timestamp when this requirement was archived (None when not archived).
+    /// Cleared on unarchive. Used by `aida archive --older-than` sweeps and
+    /// the auto-sweep on `aida pull` to compute spec age.
+    /// trace:STORY-441 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<DateTime<Utc>>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3279,6 +3326,14 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attention_reason: Option<AttentionReason>,
 
+    /// Set by the `--auto-complete` orchestrator when it shelves a spec
+    /// after a phase failure (sibling to `attention_reason` — see
+    /// [`FailureReason`]). Sticks until the spec is triaged out of
+    /// `NeedsAttention`; the punt ledger keeps the durable history.
+    /// trace:EPIC-28 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_reason: Option<FailureReason>,
+
     /// Marks this spec as work no agent can do — a person-in-the-room task,
     /// a sign-off, a physical activity. The pre-pickup gate
     /// (`crate::pickability`) skips any spec with this flag set so the
@@ -3327,10 +3382,13 @@ impl Requirement {
             comments: Vec::new(),
             history: Vec::new(),
             archived: false,
+            archived_at: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
             attention_reason: None,
+            // trace:EPIC-28 | ai:claude
+            failure_reason: None,
             // trace:STORY-333 | ai:claude
             human_only: false,
             urls: Vec::new(),
@@ -6461,6 +6519,53 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// EPIC-28: a fresh requirement has no failure_reason.
+    /// trace:EPIC-28 | ai:claude
+    #[test]
+    fn failure_reason_absent_on_fresh_requirement() {
+        let r = Requirement::new("t".into(), "d".into());
+        assert!(r.failure_reason.is_none());
+    }
+
+    /// EPIC-28: FailureReason round-trips through serde JSON cleanly so
+    /// the cache + git-canonical store agree on its shape.
+    /// trace:EPIC-28 | ai:claude
+    #[test]
+    fn failure_reason_round_trips() {
+        let now = chrono::Utc::now();
+        let fr = FailureReason {
+            phase: "ci".into(),
+            phase_index: 2,
+            kind: "ci-red".into(),
+            detail: "CI run 12345 failed — 3 tests panicked".into(),
+            recovery_hint: Some("gh run view 12345".into()),
+            shelved_by: Some("implementer".into()),
+            shelved_at: now,
+        };
+        let j = serde_json::to_string(&fr).unwrap();
+        let back: FailureReason = serde_json::from_str(&j).unwrap();
+        assert_eq!(back, fr);
+    }
+
+    /// EPIC-28: optional fields drop out when None so the on-disk YAML
+    /// stays minimal for the common case.
+    /// trace:EPIC-28 | ai:claude
+    #[test]
+    fn failure_reason_skip_serialise_when_none() {
+        let fr = FailureReason {
+            phase: "build".into(),
+            phase_index: 6,
+            kind: "build-failed".into(),
+            detail: "cargo build --release exit 101".into(),
+            recovery_hint: None,
+            shelved_by: None,
+            shelved_at: chrono::Utc::now(),
+        };
+        let j = serde_json::to_string(&fr).unwrap();
+        assert!(!j.contains("recovery_hint"));
+        assert!(!j.contains("shelved_by"));
     }
 
     /// STORY-332: PuntCategory parses its kebab form and is tolerant of

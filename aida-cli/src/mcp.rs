@@ -5,10 +5,10 @@
 //!
 //! Implements JSON-RPC 2.0 over stdio. Exposes two surfaces:
 //!
-//! 1. **Spec graph** (the original 7 tools) — read/write the requirement
+//! 1. **Spec graph** (8 tools) — read/write the requirement
 //!    store: `list_requirements`, `show_requirement`, `add_requirement`,
 //!    `update_requirement`, `search_requirements`, `add_comment`,
-//!    `list_features`.
+//!    `list_features`, `history`.
 //! 2. **Coordination** (STORY-361) — read/write the file substrate the
 //!    AIDA orchestrator and skills already use:
 //!    - **Punts** (`.aida/punts.jsonl` + `.aida/punts/`): `list_punts`,
@@ -66,6 +66,7 @@ use crate::findings::{
     build_findings_view, count_findings, finding_source, FindingsFilter, FROM_IMPLEMENTER_PREFIX,
     FROM_REVIEW_PREFIX,
 };
+use crate::history::{self, HistoryOpts};
 use crate::punt::{
     self, append_to_ledger, ledger_path, punt_response_path, read_ledger, PuntRecord,
     PuntResolution, PuntResponse,
@@ -474,7 +475,7 @@ impl<'a> McpServer<'a> {
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
 
         let result = match tool_name {
-            // Spec-graph tools (original 7)
+            // Spec-graph tools
             "list_requirements" => self.tool_list_requirements(&arguments),
             "show_requirement" => self.tool_show_requirement(&arguments),
             "add_requirement" => self.tool_add_requirement(&arguments),
@@ -482,6 +483,7 @@ impl<'a> McpServer<'a> {
             "search_requirements" => self.tool_search_requirements(&arguments),
             "add_comment" => self.tool_add_comment(&arguments),
             "list_features" => self.tool_list_features(),
+            "history" => self.tool_history(&arguments),
 
             // Coordination tools — STORY-361
             // Punt channel (.aida/punts.jsonl + .aida/punts/)
@@ -584,7 +586,7 @@ impl<'a> McpServer<'a> {
     }
 
     // ========================================================================
-    // Spec-graph tool implementations (original 7)
+    // Spec-graph tool implementations
     // ========================================================================
 
     fn tool_list_requirements(&self, args: &Value) -> Result<String, String> {
@@ -852,6 +854,47 @@ impl<'a> McpServer<'a> {
             output.push_str(&format!("- [{}] {} ({})\n", spec_id(r), r.title, r.status));
         }
         Ok(output)
+    }
+
+    // TASK-538: MCP parity with `aida history --events`.
+    fn tool_history(&self, args: &Value) -> Result<String, String> {
+        let spec_id = args
+            .get("spec_id")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        let since = args
+            .get("since")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+
+        let opts = HistoryOpts {
+            limit: 100,
+            max_commits: 500,
+            events_mode: true,
+            id_filter: spec_id,
+            type_filter: None,
+            author_filter: None,
+            since,
+            until: None,
+            status_changes_only: false,
+            comments_only: false,
+            oneline: false,
+            // MCP consumers expect an event ledger, not the CLI's
+            // day-to-day archived-work filter.
+            archived_specs: std::collections::HashSet::new(),
+            archived_only_specs: None,
+        };
+        let events = history::collect_event_records(self.storage.path(), &opts)
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string_pretty(&json!({
+            "count": events.len(),
+            "events": events,
+        }))
+        .map_err(|e| e.to_string())
     }
 
     fn tool_add_comment(&self, args: &Value) -> Result<String, String> {
@@ -1759,6 +1802,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
             created_at: r.created_at.to_rfc3339(),
             modified_at: r.modified_at.to_rfc3339(),
             archived: r.archived,
+            // trace:STORY-441 | ai:claude
+            archived_at: r.archived_at.map(|dt| dt.to_rfc3339()),
             yaml_path: String::new(),
         })
         .collect()
@@ -1858,7 +1903,7 @@ fn text_envelope_output_schema(payload_description: &str) -> Value {
 /// the JSON-RPC loop.
 pub fn tool_descriptors() -> Value {
     json!([
-        // ---- Spec graph (original 7) ----
+        // ---- Spec graph ----
         {
             "name": "list_requirements",
             "description": "List requirements from the AIDA database, optionally filtered by status, type, or feature category. Returns a summarized list of matching requirements.",
@@ -2038,6 +2083,29 @@ pub fn tool_descriptors() -> Value {
             "inputSchema": { "type": "object", "properties": {} },
             "outputSchema": text_envelope_output_schema(
                 "either `Features (N):` followed by `- <name> (prefix: <prefix>)` lines, or `No features defined in this project.` when empty."
+            )
+        },
+        {
+            "name": "history",
+            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history --events` for MCP consumers. Returns pretty-printed JSON with structured event records.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec_id": {
+                        "type": "string",
+                        "description": "Optional SPEC-ID filter for a single requirement's event history.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "TASK-538"
+                    },
+                    "since": {
+                        "type": "string",
+                        "description": "Optional lower time bound, passed through to git just like `aida history --since` (RFC3339 or relative expressions supported by git).",
+                        "example": "24 hours ago"
+                    }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "pretty-printed JSON `{ count, events }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields."
             )
         },
 
@@ -2931,9 +2999,10 @@ mod tests {
             .iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
             .collect();
-        // 7 spec-graph + 17 coordination = 24 total.
-        assert!(names.len() >= 24, "expected ≥24 tools, got {}", names.len());
+        // 8 spec-graph + 17 coordination = 25 total.
+        assert!(names.len() >= 25, "expected ≥25 tools, got {}", names.len());
         for required in [
+            "history",
             "list_punts",
             "read_punt",
             "post_punt",
@@ -2967,8 +3036,8 @@ mod tests {
         let desc = tool_descriptors();
         let arr = desc.as_array().expect("tool_descriptors must be an array");
         assert!(
-            arr.len() >= 24,
-            "expected ≥24 tool descriptors (7 spec-graph + 17 coordination), got {}",
+            arr.len() >= 25,
+            "expected ≥25 tool descriptors (8 spec-graph + 17 coordination), got {}",
             arr.len()
         );
 

@@ -70,13 +70,40 @@ codex --cd /path/to/aida-project
 
 The MCP server is launched by Codex over stdio. You do not need to run `aida mcp-serve` in a separate terminal for the Codex integration. Running it manually is still useful for debugging JSON-RPC framing or the black-box stdio tests.
 
+## Launch Codex Through AIDA
+
+For AIDA projects, prefer the supervised launcher:
+
+```bash
+aida agent new codex --role implementer
+aida agent new codex --spec STORY-433 --role implementer
+```
+
+The launcher runs Codex from the project root, sets `AIDA_AGENT_TYPE=codex`, propagates `AIDA_SESSION_ROLE` and `AIDA_SESSION_SCOPE`, registers the process in `.aida/agents/`, and deregisters it on exit. When `--spec` is supplied, it first creates the standard sibling worktree + lease and launches Codex from that worktree.
+
+By default it also writes a point-in-time launch-context snapshot under
+`.aida/agents/context/` and passes the path as `AIDA_AGENT_CONTEXT_FILE`.
+The snapshot includes role guidance, active lease/spec details, pending
+brief paths with one-line titles, and queue-head hints. Use
+`--show-context` to print the generated snapshot before Codex starts, or
+`--no-context` to launch without it. The snapshot is not live-updating;
+continue polling briefs/MCP for work filed after startup.
+
+Keep the unsafe autonomous flag explicit:
+
+```bash
+aida agent new codex --spec STORY-433 --role implementer --bypass-sandbox
+```
+
+`--bypass-sandbox` passes Codex's `--dangerously-bypass-approvals-and-sandbox`; it is not the interactive default.
+
 ## Verify Tool Discovery
 
 Inside a Codex session with the MCP server connected, the AIDA tools are exposed as MCP tools. In this environment they were available under the `mcp__aida__` namespace.
 
-The expected tool count is 24:
+The expected tool count is 25:
 
-- Spec graph: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`.
+- Spec graph: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`, `history`.
 - Punt channel: `list_punts`, `read_punt`, `post_punt`, `resolve_punt`, `escalate_punt`.
 - Findings channel: `list_findings`, `file_finding`, `triage_finding`.
 - Task claims: `claim_task`, `release_task`, `list_active_leases`.
@@ -115,9 +142,9 @@ tests/test_mcp_doc_consistency.sh
 Expected result:
 
 ```text
-TEST parse docs/agents/cross-agent-onboarding.md ... ok (24 tools mentioned)
+TEST parse docs/agents/cross-agent-onboarding.md ... ok (25 tools mentioned)
 TEST start aida mcp-serve in scratch project ... ok
-TEST tools/list ... ok (24 tools advertised)
+TEST tools/list ... ok (25 tools advertised)
 TEST doc-vs-MCP consistency ... ok
 PASS doc-vs-MCP consistency
 ```
