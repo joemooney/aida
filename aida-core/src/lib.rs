@@ -123,6 +123,7 @@ pub use models::{
     // Custom type definition types
     CustomFieldType,
     CustomTypeDefinition,
+    FailureReason,
     FeatureDefinition,
     FieldChange,
     // GitLab integration types
