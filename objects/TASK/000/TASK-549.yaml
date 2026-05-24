@@ -1,0 +1,58 @@
+id: 019e5b96-839c-7eb1-969e-4d6c83d1c12c
+spec_id: TASK-549
+agreed_id: TASK-549
+title: 'Integrate orphan-worktree salvage patch: MCP stdio test additions (resources/list, resources/read, isError envelopes)'
+description: |-
+  ## Origin
+
+  'aida doctor --heal --category orphan-worktrees' on 2026-05-24 healed 4 orphan worktrees, one of which ('.worktrees/mcp-stdio-suite') had uncommitted work. Per doctor's salvage-first discipline, the dirty diff was saved to:
+
+    .aida/salvage/orphan-worktree-unknown-attempt-2026-05-24T200111Z.patch
+
+  ## What's in the patch
+
+  Test additions to tests/test_mcp_stdio.py covering:
+  - JSON-RPC initialize / tools/list / tools/call framing (existing)
+  - MCP resources/list and resources/read framing (NEW)
+  - All tools expose inputSchema and outputSchema descriptors (existing)
+  - Tool calls return MCP-compatible content envelopes (existing)
+  - Tool errors return MCP isError envelopes instead of crashing the server (NEW)
+  - Local CLI writes visible to MCP reads (existing)
+  - MCP writes visible to local CLI reads (existing)
+
+  The TWO new test coverage areas — MCP resources framing + MCP isError envelopes — are load-bearing for MCP-correctness validation. aida-chat's EPIC-16 PR-1 exercises both these areas; integrating these tests guards regressions.
+
+  ## Action
+
+  1. Review the salvage patch against current tests/test_mcp_stdio.py
+  2. If the new test cases are still relevant (which they should be — aida-chat's MCP work just shipped), apply them
+  3. Run the suite to confirm green
+  4. Commit + ship
+
+  ## Acceptance
+
+  - [ ] tests/test_mcp_stdio.py covers MCP resources/list + resources/read framing
+  - [ ] tests/test_mcp_stdio.py covers MCP isError envelopes (tool failures don't crash server)
+  - [ ] Full test suite green
+  - [ ] Salvage patch file moved to .aida/salvage/applied/ or deleted
+
+  ## Composes with
+
+  - aida-chat EPIC-16 (the MCP work this validates)
+  - TASK-538 (MCP history tool — same MCP surface this guards)
+  - STORY-462 (aida doctor — surfaced this via salvage-first)
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T20:04:11.292264458Z
+modified_at: 2026-05-24T20:04:11.292264458Z
+req_type: Task
+tags:
+- from-doctor-salvage
+- from-self-test
+- mcp
+- test-coverage
+- tests
