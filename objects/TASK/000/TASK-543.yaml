@@ -1,0 +1,58 @@
+id: 019e5ac9-a584-7a73-bfce-5b3f1a2e527b
+spec_id: TASK-543
+agreed_id: TASK-543
+title: 'aida agent register <pid> [--type <type>] [--role <role>]: backfill registry for already-running raw-launched agents'
+description: |-
+  ## Substrate gap
+
+  Today 'aida agent new <type>' is the only registry-population path. Agents launched RAW ('codex' in a terminal, 'antigravity' directly, 'claude' without supervised launcher) leave .aida/agents/ empty. No 'aida agent register' verb for already-running processes.
+
+  Empirical 2026-05-24: operator launched aida-chat advisor + Antigravity-integrator raw (terminal-spawned), realized retroactively 'aida agent new' would have been preferred. Restarting working agents to use the supervised path is wasteful. A 'register' verb would let them backfill into the registry without disruption.
+
+  ## Proposed shape
+
+  'aida agent register <pid> --type <type> --role <role> [--spec <SPEC-ID>] [--name <name>]'
+
+  - <pid>: numeric PID of the already-running process (default: most-recent shell ancestor matching <type>'s executable name?)
+  - --type: codex / claude / antigravity / web (required; can't auto-detect reliably)
+  - --role: implementer / advisor / reviewer / integrator (required for routing)
+  - --spec: SPEC-ID this agent owns (optional; matches 'aida session start --owns' semantics)
+  - --name: explicit instance name (optional; composes with TASK-542's auto-naming)
+
+  Behavior: writes a .aida/agents/<pid>.toml registration entry equivalent to what 'aida agent new' would have written, minus the process-spawn step. Heartbeat / liveness check via PID polling (the process exists; further liveness via MCP heartbeat if applicable per STORY-435).
+
+  ## Acceptance
+
+  - [ ] 'aida agent register <pid>' command with --type / --role / --spec / --name flags
+  - [ ] Validates pid exists + is a process owned by current user (don't allow registering arbitrary system processes)
+  - [ ] Writes .aida/agents/<pid>.toml matching the 'aida agent new' shape
+  - [ ] 'aida status' Active Agents section picks up the entry on next render
+  - [ ] Test: launch process manually, register it, confirm aida status shows it
+  - [ ] On registered-process death (PID gone), registry entry transitions to stale (matches normal lifecycle)
+
+  ## Composes with
+
+  - EPIC-31 (agent-lifecycle keystone — completes the entry-points dimension)
+  - STORY-431 (registry + aida status — already shipped, gains coverage)
+  - TASK-515 (lease-as-agent fallback — when register hasn't been called, lease still surfaces; complementary)
+  - TASK-542 (--name + auto-seq — same naming convention applies)
+  - STORY-459 (queue --for-agent — needs the agent to be registered to route to it)
+
+  ## Origin
+
+  2026-05-24 user during multi-agent dispatch: 'I have an agy implementer running and the aida-chat advisor but I did not use aida new agent commands, I guess I should have done that?' Without register-existing, the workaround is restart-with-supervised-launcher (disruptive) or accept registry-gap (loses status visibility). Register fills the gap cleanly.
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T16:20:25.092899708Z
+modified_at: 2026-05-24T16:20:25.092899708Z
+req_type: Task
+tags:
+- aida:agent
+- from-self-test
+- multi-agent
+- registry
+- substrate-gap
