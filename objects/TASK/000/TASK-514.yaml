@@ -1,0 +1,71 @@
+id: 019e57e0-5e42-71b1-b2b6-a6b0b85f6eaf
+spec_id: TASK-514
+agreed_id: TASK-514
+title: 'aida ultraplan: accept --copy as no-op alias (clipboard is the default; flag explicitly affirms the action)'
+description: |-
+  ## Empirical 2026-05-23 evening
+
+  Master recommended 'aida ultraplan <SPEC> --copy' as paste-ready commands for tonight's credit-burn batch. Operator pasted the first one and got:
+
+    error: unexpected argument '--copy' found
+      tip: to pass '--copy' as a value, use '-- --copy'
+
+  The actual behavior: 'aida ultraplan <SPEC>' (no flag) already copies to clipboard by default. '--stdout' and '--json' are alternative output flags. There is no '--copy' flag because it would be redundant.
+
+  But the operator's mental model is exactly 'copy to clipboard' -> reach for '--copy'. Master ALSO assumed --copy existed when constructing the paste-ready commands. The discoverability gap: default-copy behavior is invisible until you read the help.
+
+  Per feedback_failed_flag_attempts_are_ux_signals memory — operator flag-attempt errors are diagnostic UX signals. Default to filing them.
+
+  ## Two-part fix
+
+  ### 1. Accept --copy as no-op alias
+
+    aida ultraplan <SPEC>          # copies (current default)
+    aida ultraplan <SPEC> --copy   # same; flag explicitly affirms the action
+    aida ultraplan <SPEC> --stdout # alternative: print to stdout
+    aida ultraplan <SPEC> --json   # alternative: JSON output
+
+  The --copy flag is redundant but matches operator mental model. Cost: 2 lines in the clap definition. Value: operator no longer hits the error when reaching for the obvious flag name.
+
+  ### 2. Improve the success message to surface alternatives
+
+  Currently 'aida ultraplan <SPEC>' likely prints a short confirmation. Extend to:
+
+    Copied to clipboard (use --stdout to print, --json for machine consumption)
+
+  So the discoverability happens at first use, not after reading help.
+
+  ## Acceptance
+
+  - [ ] aida ultraplan <SPEC> --copy works identically to no-flag invocation
+  - [ ] Success message mentions --stdout and --json alternatives
+  - [ ] aida ultraplan --help documents --copy as 'explicit alias for the default'
+  - [ ] Test: --copy flag accepted; output identical to no-flag
+  - [ ] Test: success message text contains '--stdout' hint
+
+  ## Composes with
+
+  - TASK-499 (aida session start --spec alias for --owns) — same operator-mental-model-driven flag-alias pattern
+  - BUG-366 (aida queue list 'Next:' hint inconsistency) — same operator-friction-as-UX-signal family
+  - TASK-113 (aida ultraplan original spec)
+  - feedback_failed_flag_attempts_are_ux_signals — the principle
+  - feedback_run_help_before_suggesting_flags — master's discipline gap that produced this friction
+
+  ## Origin
+
+  2026-05-23 user friction: 'aida ultraplan STORY-244 --copy' -> error. Master had recommended --copy in paste-ready commands without verifying the actual flag surface — a recurrence of the pattern in feedback_run_help_before_suggesting_flags.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:46:22.530604784Z
+modified_at: 2026-05-24T02:46:22.530604784Z
+req_type: Task
+tags:
+- cli-ux
+- flag-discoverability
+- from-self-test
+- from-user-friction
+- operator-mental-model
+- papercut
+- ultraplan
