@@ -2808,9 +2808,9 @@ fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
                     println!(
                         "  {}",
                         "captures live under .aida/complexity-calibration/ — \
-                         set --complexity at pickup/ship and add \
-                         `implementation_complexity` to the reviewer's verdict \
-                         file to populate them"
+                          set --complexity at pickup/ship and add \
+                          `implementation_complexity` to the reviewer's verdict \
+                          file to populate them"
                             .dimmed()
                     );
                     return Ok(());
@@ -2868,7 +2868,7 @@ fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
                 println!(
                     "  {}",
                     "each row names a class of work the agents misjudged at pickup time; \
-                     a recurring gap is a memory candidate (the substrate-gap signal)"
+                      a recurring gap is a memory candidate (the substrate-gap signal)"
                         .dimmed()
                 );
                 Ok(())
@@ -2876,7 +2876,6 @@ fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
         },
     }
 }
-
 /// Add a promoted finding to a role's work queue.
 ///
 /// Findings are follow-ups that usually need an implementer, so the default
