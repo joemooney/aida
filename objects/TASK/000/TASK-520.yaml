@@ -28,15 +28,21 @@ description: |
   Recommend (1) — small one-line edit, zero risk, removes the recurring confusion.
 
   Raised in review of PR-271: https://github.com/joemooney/aida/pull/271#issuecomment-4527346838
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:08:34.127370979Z
-modified_at: 2026-05-24T04:08:34.127370979Z
+modified_at: 2026-05-24T06:52:18.597793869Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-271
 - kind:ac-text-drift
 - severity:cosmetic
+comments:
+- id: 019e58c1-8725-7713-b749-146a97b0be38
+  author: joe
+  content: Dismissed by advisor during findings triage.
+  created_at: 2026-05-24T06:52:18.597793869Z
+  modified_at: 2026-05-24T06:52:18.597793869Z
