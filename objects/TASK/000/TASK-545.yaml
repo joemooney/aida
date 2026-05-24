@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:24:40.432363492Z
-modified_at: 2026-05-24T16:31:27.887232384Z
+modified_at: 2026-05-24T16:31:41.365971088Z
 req_type: Task
 tags:
 - duplicate
@@ -17,3 +17,12 @@ relationships:
 - rel_type: Child
   target_id: 019e4b03-2c58-7e40-9e5c-cdeb45a902aa
   created_at: 2026-05-24T16:24:50.041215562Z
+comments:
+- id: 019e5ad3-f735-7730-9ad0-5b21fe3c497f
+  author: joe
+  content: |-
+    Superseded by STORY-456 (full description, acceptance criteria, stale-CI handling, composition links). Filed by STORY-385 implementer via 'aida queue done' followups path; master had already filed STORY-456 with more detail. Closing as duplicate.
+
+    — master
+  created_at: 2026-05-24T16:31:41.365971088Z
+  modified_at: 2026-05-24T16:31:41.365971088Z
