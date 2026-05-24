@@ -1710,11 +1710,40 @@ pub enum StoreCommand {
     },
 }
 
-/// Maintenance + migration ops on the AIDA store. Hidden from `aida
-/// --help`; surface via `aida doctor --help`.
+/// Maintenance + migration ops on the AIDA store.
 // trace:EPIC-19 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DoctorCommand {
+    /// Focused multi-agent drift diagnostic for one category.
+    // trace:STORY-462 | ai:codex
+    Check {
+        /// Category to check, e.g. stale-leases, orphan-branches, OBE-briefs.
+        category: String,
+
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Focused multi-agent drift heal for one category.
+    // trace:STORY-462 | ai:codex
+    Heal {
+        /// Category to heal, e.g. stale-leases, orphan-branches, OBE-briefs.
+        category: String,
+
+        /// Skip confirmation prompts.
+        #[clap(long, short = 'y')]
+        yes: bool,
+
+        /// Permit riskier destructive fixes such as branch deletion.
+        #[clap(long)]
+        force: bool,
+
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Migrate this project from per-type counters (each type counts
     /// independently — every type starts back at 1) to a single global
     /// counter (one shared sequence — IDs increment across types).
@@ -4594,12 +4623,33 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
 
-    /// Maintenance and migration operations on the AIDA store. Hidden from
-    /// `aida --help` because these aren't daily-driver commands; they're
-    /// for repairing or migrating an existing project.
-    // trace:EPIC-19
-    #[clap(subcommand, hide = true)]
-    Doctor(DoctorCommand),
+    /// Diagnose and heal AIDA multi-agent state drift.
+    // trace:EPIC-19 trace:STORY-462
+    Doctor {
+        /// Apply safe fixes after scanning. Without this, doctor is read-only.
+        #[clap(long)]
+        heal: bool,
+
+        /// Skip per-category confirmation prompts while healing.
+        #[clap(long, short = 'y')]
+        yes: bool,
+
+        /// Restrict scan/heal to one category.
+        #[clap(long, value_name = "CATEGORY")]
+        category: Option<String>,
+
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+
+        /// Permit riskier destructive fixes such as branch deletion.
+        #[clap(long)]
+        force: bool,
+
+        /// Legacy maintenance subcommand or focused doctor action.
+        #[clap(subcommand)]
+        cmd: Option<DoctorCommand>,
+    },
 
     /// Inspect and align the orphan-store SHA against code commits.
     /// Pairs with the prepare-commit-msg hook (`aida-store-pair.sh`)

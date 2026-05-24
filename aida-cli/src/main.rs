@@ -987,8 +987,23 @@ fn run() -> Result<()> {
 
     // Doctor commands run before storage init — they may need to operate
     // on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
-    if let Command::Doctor(doctor_cmd) = &cli.command {
-        return handle_doctor_command(doctor_cmd);
+    if let Command::Doctor {
+        heal,
+        yes,
+        category,
+        json,
+        force,
+        cmd,
+    } = &cli.command
+    {
+        return handle_doctor_command(
+            *heal,
+            *yes,
+            category.as_deref(),
+            *json,
+            *force,
+            cmd.as_ref(),
+        );
     }
 
     // Store commands inspect git state, no AIDA storage needed.
@@ -1506,7 +1521,7 @@ fn run() -> Result<()> {
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
-        Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
+        Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
@@ -4696,7 +4711,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
-        Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
+        Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
@@ -14939,8 +14954,43 @@ fn store_install_hook(force: bool) -> Result<()> {
 // EPIC-19 — `aida doctor`: maintenance + migration commands.
 // ----------------------------------------------------------------------------
 
-fn handle_doctor_command(cmd: &cli::DoctorCommand) -> Result<()> {
+fn handle_doctor_command(
+    heal: bool,
+    yes: bool,
+    category: Option<&str>,
+    json: bool,
+    force: bool,
+    cmd: Option<&cli::DoctorCommand>,
+) -> Result<()> {
+    let Some(cmd) = cmd else {
+        return doctor_multi_agent(DoctorRunOptions {
+            heal,
+            yes,
+            category: category.map(str::to_string),
+            json,
+            force,
+        });
+    };
     match cmd {
+        cli::DoctorCommand::Check { category, json } => doctor_multi_agent(DoctorRunOptions {
+            heal: false,
+            yes,
+            category: Some(category.clone()),
+            json: *json,
+            force,
+        }),
+        cli::DoctorCommand::Heal {
+            category,
+            yes,
+            force,
+            json,
+        } => doctor_multi_agent(DoctorRunOptions {
+            heal: true,
+            yes: *yes,
+            category: Some(category.clone()),
+            json: *json,
+            force: *force,
+        }),
         cli::DoctorCommand::MigrateCounterScope {
             to,
             dry_run,
@@ -14961,6 +15011,815 @@ fn handle_doctor_command(cmd: &cli::DoctorCommand) -> Result<()> {
         } => doctor_validate_trace_comments(*strip_dangling, *dry_run, *yes),
         cli::DoctorCommand::Fsck => doctor_fsck(),
         cli::DoctorCommand::ConventionCheck { quiet } => doctor_convention_check(*quiet),
+    }
+}
+
+// ----------------------------------------------------------------------------
+// STORY-462 — `aida doctor`: multi-agent state drift diagnostics + healing.
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+struct DoctorRunOptions {
+    heal: bool,
+    yes: bool,
+    category: Option<String>,
+    json: bool,
+    force: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct DoctorFinding {
+    category: String,
+    id: String,
+    summary: String,
+    action: String,
+    safe_heal: bool,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+struct DoctorHealResult {
+    category: String,
+    id: String,
+    action: String,
+    status: String,
+    detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+struct DoctorReport {
+    total: usize,
+    findings: Vec<DoctorFinding>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    healed: Vec<DoctorHealResult>,
+}
+
+impl DoctorReport {
+    fn from_findings(findings: Vec<DoctorFinding>) -> Self {
+        Self {
+            total: findings.len(),
+            findings,
+            healed: Vec::new(),
+        }
+    }
+}
+
+fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
+    let project_root = main_worktree_root_from(&find_project_root()?);
+    let store_path = project_root.join(".aida-store");
+    let store = Storage::new(&store_path)
+        .load()
+        .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
+    let mut report = DoctorReport::from_findings(collect_doctor_findings(
+        &project_root,
+        &store,
+        opts.category.as_deref(),
+    )?);
+
+    if opts.heal {
+        report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
+    }
+
+    if opts.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        render_doctor_report(&report, opts.heal)?;
+    }
+    Ok(())
+}
+
+fn collect_doctor_findings(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    category_filter: Option<&str>,
+) -> Result<Vec<DoctorFinding>> {
+    let filter = category_filter.map(normalize_doctor_category).transpose()?;
+    let mut out = Vec::new();
+    let cleanup = collect_cleanup_report(project_root, store);
+    let leases = list_leases(project_root);
+    let live_sessions = process_probe::probe_live_claude_sessions();
+    let now = chrono::Utc::now();
+
+    let mut push = |finding: DoctorFinding| {
+        if filter
+            .as_deref()
+            .map_or(true, |want| want == finding.category)
+        {
+            out.push(finding);
+        }
+    };
+
+    for lease in &leases {
+        let worktree_exists = lease.worktree_path.exists();
+        let live_in_worktree = live_sessions.iter().any(|s| {
+            !s.stale_cwd
+                && (s.cwd == lease.worktree_path || s.cwd.starts_with(&lease.worktree_path))
+        });
+        let age_hours = now.signed_duration_since(lease.started_at).num_hours();
+        let state = classify_lease_state(worktree_exists, live_in_worktree, age_hours);
+        let pid_dead = lease
+            .creator_pid
+            .is_some_and(|pid| !process_probe::pid_is_alive(pid));
+        let branch_merged = matches!(
+            detect_merged_pr_for_branch(project_root, &lease.branch),
+            PrLookup::Found(_)
+        );
+        if matches!(state, LeaseState::Stale) || pid_dead || branch_merged {
+            push(DoctorFinding {
+                category: "stale-leases".to_string(),
+                id: lease.id.clone(),
+                summary: format!(
+                    "{} owns {} on branch `{}` ({})",
+                    lease.id,
+                    lease.scope,
+                    lease.branch,
+                    if !worktree_exists {
+                        "worktree missing".to_string()
+                    } else if pid_dead {
+                        "creator pid dead".to_string()
+                    } else if branch_merged {
+                        "branch merged".to_string()
+                    } else {
+                        state.label().to_string()
+                    }
+                ),
+                action: format!("save patch if dirty, then end lease {}", lease.id),
+                safe_heal: true,
+            });
+        }
+
+        if matches!(
+            store
+                .get_requirement_by_spec_id(&lease.scope)
+                .map(|req| &req.status),
+            Some(RequirementStatus::Approved)
+        ) {
+            push(DoctorFinding {
+                category: "spec-status-drift".to_string(),
+                id: lease.scope.clone(),
+                summary: format!(
+                    "{} is Approved but lease {} is active",
+                    lease.scope, lease.id
+                ),
+                action: "bump spec to In Progress".to_string(),
+                safe_heal: true,
+            });
+        }
+        if matches!(
+            store
+                .get_requirement_by_spec_id(&lease.scope)
+                .map(|req| &req.status),
+            Some(RequirementStatus::Done)
+        ) {
+            push(DoctorFinding {
+                category: "spec-status-drift".to_string(),
+                id: lease.id.clone(),
+                summary: format!(
+                    "{} is Done but lease {} is still active",
+                    lease.scope, lease.id
+                ),
+                action: format!("confirm and end lease {}", lease.id),
+                safe_heal: true,
+            });
+        }
+    }
+
+    for item in &cleanup.uncommitted_wip {
+        let Some(scope) = item.scope.as_ref() else {
+            continue;
+        };
+        let behind = branch_behind_main(project_root, &item.branch)
+            .map(|(n, _)| n)
+            .unwrap_or(0);
+        if behind >= 100 {
+            push(DoctorFinding {
+                category: "abandoned-leases".to_string(),
+                id: scope.clone(),
+                summary: format!(
+                    "{} has {} modified file(s) on `{}` {} commits behind main",
+                    scope, item.modified_files, item.branch, behind
+                ),
+                action: "save salvage patch, end lease, remove worktree, re-brief from salvage"
+                    .to_string(),
+                safe_heal: true,
+            });
+        }
+    }
+
+    for item in &cleanup.branches_ahead_no_pr {
+        push(DoctorFinding {
+            category: "orphan-branches".to_string(),
+            id: item.branch.clone(),
+            summary: format!(
+                "`{}` is {} commit(s) ahead of main with no open PR",
+                item.branch, item.commits_ahead
+            ),
+            action: "operator decision: open PR, keep, or delete with --yes --force".to_string(),
+            safe_heal: false,
+        });
+    }
+
+    for item in &cleanup.stale_reviewer_leases {
+        push(DoctorFinding {
+            category: "stale-reviewer-leases".to_string(),
+            id: item.lease_id.clone(),
+            summary: format!(
+                "reviewer lease {} points at merged PR-{}",
+                item.lease_id, item.pr_number
+            ),
+            action: format!("end lease {}", item.lease_id),
+            safe_heal: true,
+        });
+    }
+
+    let lease_worktrees: std::collections::HashSet<std::path::PathBuf> = leases
+        .iter()
+        .map(|lease| {
+            lease
+                .worktree_path
+                .canonicalize()
+                .unwrap_or_else(|_| lease.worktree_path.clone())
+        })
+        .collect();
+    let project_canon = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    for wt in list_worktrees(project_root) {
+        let wt_canon = wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone());
+        if wt_canon == project_canon || wt.branch.as_deref() == Some("aida-store") {
+            continue;
+        }
+        if !lease_worktrees.contains(&wt_canon) {
+            push(DoctorFinding {
+                category: "orphan-worktrees".to_string(),
+                id: wt.path.display().to_string(),
+                summary: format!("worktree {} has no active lease", wt.path.display()),
+                action: "save patch if dirty, then git worktree remove".to_string(),
+                safe_heal: true,
+            });
+        }
+    }
+
+    let pending_briefs = collect_agent_briefs(project_root, None, false)?;
+    let lease_scopes: std::collections::HashSet<String> =
+        leases.iter().map(|lease| lease.scope.clone()).collect();
+    for brief in pending_briefs {
+        if lease_scopes.contains(&brief.spec_id) {
+            push(DoctorFinding {
+                category: "brief-lease-drift".to_string(),
+                id: brief.path.display().to_string(),
+                summary: format!(
+                    "pending brief for {} exists while a lease is active",
+                    brief.spec_id
+                ),
+                action: format!(
+                    "ack brief or end/re-brief: aida brief ack {}",
+                    brief.path.display()
+                ),
+                safe_heal: false,
+            });
+        }
+        if matches!(
+            store
+                .get_requirement_by_spec_id(&brief.spec_id)
+                .map(|req| &req.status),
+            Some(RequirementStatus::Completed | RequirementStatus::Rejected)
+        ) {
+            push(DoctorFinding {
+                category: "brief-spec-drift".to_string(),
+                id: brief.path.display().to_string(),
+                summary: format!("pending brief targets terminal spec {}", brief.spec_id),
+                action: format!("ack OBE brief {}", brief.path.display()),
+                safe_heal: true,
+            });
+            push(DoctorFinding {
+                category: "OBE-briefs".to_string(),
+                id: brief.path.display().to_string(),
+                summary: format!("brief for {} is obsolete", brief.spec_id),
+                action: format!("ack OBE brief {}", brief.path.display()),
+                safe_heal: true,
+            });
+        }
+    }
+
+    out.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    Ok(out)
+}
+
+fn normalize_doctor_category(raw: &str) -> Result<String> {
+    let s = raw.trim().to_ascii_lowercase().replace('_', "-");
+    let normalized = match s.as_str() {
+        "stale-lease" | "stale-leases" | "leases" => "stale-leases",
+        "abandoned-lease" | "abandoned-leases" | "abandoned" => "abandoned-leases",
+        "brief-lease" | "brief-lease-drift" => "brief-lease-drift",
+        "brief-spec" | "brief-spec-drift" => "brief-spec-drift",
+        "spec-status" | "spec-status-drift" => "spec-status-drift",
+        "orphan-worktree" | "orphan-worktrees" | "worktrees" => "orphan-worktrees",
+        "orphan-branch" | "orphan-branches" | "branches" => "orphan-branches",
+        "stale-reviewer" | "stale-reviewer-lease" | "stale-reviewer-leases" => {
+            "stale-reviewer-leases"
+        }
+        "obe-brief" | "obe-briefs" | "obsolete-briefs" => "OBE-briefs",
+        other => anyhow::bail!(
+            "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
+             brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
+             orphan-branches, stale-reviewer-leases, OBE-briefs)",
+            other
+        ),
+    };
+    Ok(normalized.to_string())
+}
+
+fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
+    println!("{}", "─── AIDA doctor ───".bold());
+    if report.findings.is_empty() {
+        println!("  {} no multi-agent state drift detected", "✓".green());
+    } else {
+        let mut current = "";
+        for finding in &report.findings {
+            if current != finding.category {
+                current = &finding.category;
+                println!();
+                println!("{} {}", "•".cyan(), current.bold());
+            }
+            let safety = if finding.safe_heal { "safe" } else { "manual" };
+            println!("  - {} [{}]", finding.summary, safety.dimmed());
+            println!("    → {}", finding.action.dimmed());
+        }
+        println!();
+        println!(
+            "  Total: {} finding{}",
+            report.findings.len(),
+            if report.findings.len() == 1 { "" } else { "s" }
+        );
+    }
+
+    if healed {
+        println!();
+        println!("{}", "─── Heal results ───".bold());
+        if report.healed.is_empty() {
+            println!("  (no heal actions applied)");
+        }
+        for result in &report.healed {
+            println!(
+                "  - {} {}: {}",
+                result.status.as_str().bold(),
+                result.id,
+                result.action
+            );
+            if let Some(detail) = &result.detail {
+                println!("    {}", detail.dimmed());
+            }
+        }
+    } else if !report.findings.is_empty() {
+        println!("  Re-run with {} to apply safe fixes.", "--heal".cyan());
+    }
+    Ok(())
+}
+
+fn heal_doctor_findings(
+    project_root: &std::path::Path,
+    findings: &[DoctorFinding],
+    opts: &DoctorRunOptions,
+) -> Result<Vec<DoctorHealResult>> {
+    let mut out = Vec::new();
+    let mut by_category: std::collections::BTreeMap<String, Vec<&DoctorFinding>> =
+        std::collections::BTreeMap::new();
+    for finding in findings {
+        by_category
+            .entry(finding.category.clone())
+            .or_default()
+            .push(finding);
+    }
+    for (category, items) in by_category {
+        let safe = items.iter().all(|item| item.safe_heal);
+        if !safe && !(opts.force && opts.yes) {
+            out.push(DoctorHealResult {
+                category: category.clone(),
+                id: category.clone(),
+                action: "skipped category requiring manual decision".to_string(),
+                status: "skipped".to_string(),
+                detail: Some(
+                    "pass --yes --force only when you want destructive branch cleanup".into(),
+                ),
+            });
+            continue;
+        }
+        if !opts.yes && !confirm_doctor_category(&category, items.len())? {
+            out.push(DoctorHealResult {
+                category: category.clone(),
+                id: category.clone(),
+                action: "operator declined".to_string(),
+                status: "skipped".to_string(),
+                detail: None,
+            });
+            continue;
+        }
+        for finding in items {
+            out.push(heal_doctor_finding(project_root, finding, opts)?);
+        }
+    }
+    Ok(out)
+}
+
+fn confirm_doctor_category(category: &str, count: usize) -> Result<bool> {
+    use std::io::Write;
+    print!("Heal {} finding(s) in {}? [y/N] ", count, category);
+    std::io::stdout().flush()?;
+    let mut ans = String::new();
+    std::io::stdin().read_line(&mut ans)?;
+    Ok(matches!(
+        ans.trim().to_ascii_lowercase().as_str(),
+        "y" | "yes"
+    ))
+}
+
+fn heal_doctor_finding(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+    opts: &DoctorRunOptions,
+) -> Result<DoctorHealResult> {
+    match finding.category.as_str() {
+        "stale-leases" | "abandoned-leases" | "stale-reviewer-leases" => {
+            heal_doctor_lease(project_root, finding)
+        }
+        "brief-spec-drift" | "OBE-briefs" => heal_doctor_brief(finding),
+        "spec-status-drift" if finding.action.starts_with("confirm and end lease") => {
+            heal_doctor_lease(project_root, finding)
+        }
+        "spec-status-drift" => heal_doctor_spec_status(project_root, finding),
+        "orphan-worktrees" => heal_doctor_orphan_worktree(project_root, finding),
+        "orphan-branches" if opts.force && opts.yes => {
+            heal_doctor_orphan_branch(project_root, finding)
+        }
+        _ => Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some("diagnostic-only category; follow the printed action".to_string()),
+        }),
+    }
+}
+
+fn heal_doctor_lease(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let lease = list_leases(project_root)
+        .into_iter()
+        .find(|lease| lease.id == finding.id)
+        .ok_or_else(|| anyhow::anyhow!("lease {} no longer exists", finding.id))?;
+    let salvage = salvage_worktree_patch(
+        project_root,
+        &lease.scope,
+        lease.role.as_deref(),
+        &lease.worktree_path,
+    )?;
+    let removed = force_cleanup_lease(project_root, &lease);
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "ended lease with salvage-first cleanup".to_string(),
+        status: if removed { "healed" } else { "partial" }.to_string(),
+        detail: salvage.map(|p| format!("salvage patch: {}", p.display())),
+    })
+}
+
+fn heal_doctor_brief(finding: &DoctorFinding) -> Result<DoctorHealResult> {
+    let path = std::path::Path::new(&finding.id);
+    if !path.exists() {
+        let acked = path.with_file_name(format!(
+            "{}.acked",
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+        ));
+        if acked.exists() {
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: "brief already acked".to_string(),
+                status: "skipped".to_string(),
+                detail: Some(acked.display().to_string()),
+            });
+        }
+    }
+    ack_agent_brief(path)?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "acked obsolete brief".to_string(),
+        status: "healed".to_string(),
+        detail: None,
+    })
+}
+
+fn heal_doctor_spec_status(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let mut store = storage.load()?;
+    let mut changed = false;
+    for req in &mut store.requirements {
+        if req.spec_id.as_deref() != Some(finding.id.as_str()) {
+            continue;
+        }
+        if matches!(req.status, RequirementStatus::Approved) {
+            req.status = RequirementStatus::InProgress;
+            req.modified_at = chrono::Utc::now();
+            changed = true;
+        }
+    }
+    if changed {
+        storage.save(&store)?;
+    }
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: if changed {
+            "bumped Approved spec to In Progress".to_string()
+        } else {
+            "no automatic status change applied".to_string()
+        },
+        status: if changed { "healed" } else { "skipped" }.to_string(),
+        detail: None,
+    })
+}
+
+fn heal_doctor_orphan_worktree(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let worktree = std::path::PathBuf::from(&finding.id);
+    let salvage = salvage_worktree_patch(project_root, "orphan-worktree", None, &worktree)?;
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "remove", "--force"])
+        .arg(&worktree)
+        .status()
+        .with_context(|| format!("removing worktree {}", worktree.display()))?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "removed orphan worktree".to_string(),
+        status: if status.success() { "healed" } else { "failed" }.to_string(),
+        detail: salvage.map(|p| format!("salvage patch: {}", p.display())),
+    })
+}
+
+fn heal_doctor_orphan_branch(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["branch", "-D", &finding.id])
+        .status()
+        .with_context(|| format!("deleting branch {}", finding.id))?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "deleted orphan branch".to_string(),
+        status: if status.success() { "healed" } else { "failed" }.to_string(),
+        detail: None,
+    })
+}
+
+fn salvage_worktree_patch(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    agent: Option<&str>,
+    worktree: &std::path::Path,
+) -> Result<Option<std::path::PathBuf>> {
+    if !worktree.exists() || worktree_dirty_entries(worktree).is_empty() {
+        return Ok(None);
+    }
+    let stamp = chrono::Utc::now().format("%Y-%m-%dT%H%M%SZ");
+    let agent = agent.unwrap_or("unknown");
+    let filename = format!(
+        "{}-{}-attempt-{}.patch",
+        sanitize_salvage_component(spec_id),
+        sanitize_salvage_component(agent),
+        stamp
+    );
+    let dir = project_root.join(".aida").join("salvage");
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(filename);
+    let mut body = String::new();
+    body.push_str(&format!(
+        "# AIDA salvage patch\n# worktree: {}\n\n",
+        worktree.display()
+    ));
+    body.push_str(&git_output_lossy(worktree, &["diff", "--binary", "HEAD"]));
+    body.push_str(&git_output_lossy(
+        worktree,
+        &["diff", "--binary", "--cached"],
+    ));
+    let untracked = git_output_lossy(worktree, &["ls-files", "--others", "--exclude-standard"]);
+    if !untracked.trim().is_empty() {
+        body.push_str("\n# Untracked files present at salvage time:\n");
+        for line in untracked.lines() {
+            body.push_str("#   ");
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    if body.trim().is_empty() {
+        return Ok(None);
+    }
+    std::fs::write(&path, body)?;
+    Ok(Some(path))
+}
+
+fn git_output_lossy(worktree: &std::path::Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(args)
+        .output();
+    match out {
+        Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
+        Err(_) => String::new(),
+    }
+}
+
+fn sanitize_salvage_component(s: &str) -> String {
+    let mut out: String = s
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    while out.contains("--") {
+        out = out.replace("--", "-");
+    }
+    out.trim_matches('-').to_string()
+}
+
+#[cfg(test)]
+mod story_462_doctor_tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn doctor_default_flags_parse_without_subcommand() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "doctor",
+            "--heal",
+            "--yes",
+            "--category",
+            "stale-leases",
+            "--json",
+        ])
+        .unwrap();
+        let Command::Doctor {
+            heal,
+            yes,
+            category,
+            json,
+            force,
+            cmd,
+        } = cli.command
+        else {
+            panic!("expected doctor command");
+        };
+        assert!(heal);
+        assert!(yes);
+        assert_eq!(category.as_deref(), Some("stale-leases"));
+        assert!(json);
+        assert!(!force);
+        assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn doctor_check_and_heal_subcommands_parse() {
+        let check =
+            Cli::try_parse_from(["aida", "doctor", "check", "OBE-briefs", "--json"]).unwrap();
+        let Command::Doctor {
+            cmd: Some(cli::DoctorCommand::Check { category, json }),
+            ..
+        } = check.command
+        else {
+            panic!("expected doctor check");
+        };
+        assert_eq!(category, "OBE-briefs");
+        assert!(json);
+
+        let heal = Cli::try_parse_from([
+            "aida",
+            "doctor",
+            "heal",
+            "orphan-branches",
+            "--yes",
+            "--force",
+        ])
+        .unwrap();
+        let Command::Doctor {
+            cmd:
+                Some(cli::DoctorCommand::Heal {
+                    category,
+                    yes,
+                    force,
+                    json,
+                }),
+            ..
+        } = heal.command
+        else {
+            panic!("expected doctor heal");
+        };
+        assert_eq!(category, "orphan-branches");
+        assert!(yes);
+        assert!(force);
+        assert!(!json);
+    }
+
+    #[test]
+    fn legacy_doctor_subcommands_still_parse() {
+        let cli = Cli::try_parse_from(["aida", "doctor", "fsck"]).unwrap();
+        let Command::Doctor {
+            cmd: Some(cli::DoctorCommand::Fsck),
+            ..
+        } = cli.command
+        else {
+            panic!("expected legacy doctor fsck");
+        };
+    }
+
+    #[test]
+    fn doctor_category_aliases_normalize() {
+        assert_eq!(normalize_doctor_category("leases").unwrap(), "stale-leases");
+        assert_eq!(
+            normalize_doctor_category("OBE_briefs").unwrap(),
+            "OBE-briefs"
+        );
+        assert!(normalize_doctor_category("not-a-category").is_err());
+    }
+
+    #[test]
+    fn salvage_component_sanitizes_path_like_values() {
+        assert_eq!(sanitize_salvage_component("TASK-515/../x"), "TASK-515-x");
+        assert_eq!(sanitize_salvage_component("advisor role"), "advisor-role");
+    }
+
+    #[test]
+    fn salvage_worktree_patch_writes_diff_before_cleanup() {
+        let project = tempfile::tempdir().unwrap();
+        let worktree = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path())
+            .arg("init")
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path())
+            .args(["config", "user.email", "t@example.com"])
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path())
+            .args(["config", "user.name", "Test"])
+            .output()
+            .unwrap();
+        let file = worktree.path().join("notes.txt");
+        std::fs::write(&file, "before\n").unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path())
+            .args(["add", "notes.txt"])
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path())
+            .args(["commit", "-m", "init"])
+            .output()
+            .unwrap();
+        std::fs::write(&file, "after\n").unwrap();
+
+        let patch =
+            salvage_worktree_patch(project.path(), "TASK-515", Some("codex"), worktree.path())
+                .unwrap()
+                .expect("dirty worktree should produce salvage patch");
+        let body = std::fs::read_to_string(&patch).unwrap();
+        assert!(patch
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("TASK-515-codex-attempt-"));
+        assert!(body.contains("# AIDA salvage patch"));
+        assert!(body.contains("-before"));
+        assert!(body.contains("+after"));
     }
 }
 
@@ -49209,7 +50068,6 @@ mod is_work_spec_branch_name_tests {
 fn collect_cleanup_report(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
-    _backend: &aida_core::CachedGitBackend,
 ) -> status_cleanup::CleanupReport {
     let leases = list_leases(project_root);
     let now = chrono::Utc::now();
@@ -49711,7 +50569,7 @@ fn handle_status_command_distributed(
     // the text version and exit, skipping the rest of the status surface.
     // trace:STORY-385 | ai:claude
     if cleanup {
-        let report = collect_cleanup_report(&project_root, &store, backend);
+        let report = collect_cleanup_report(&project_root, &store);
         if json {
             println!("{}", serde_json::to_string_pretty(&report.to_json())?);
         } else {
@@ -49886,7 +50744,7 @@ fn handle_status_command_distributed(
     // when the cleanup report is non-empty — silent otherwise. Points the
     // operator at `--cleanup` for details.
     // trace:STORY-385 | ai:claude
-    let cleanup_report = collect_cleanup_report(&project_root, &store, backend);
+    let cleanup_report = collect_cleanup_report(&project_root, &store);
     if let Some(line) = cleanup_report.summary_line() {
         println!("  {}", line);
         println!();
