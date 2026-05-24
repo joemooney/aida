@@ -44131,6 +44131,62 @@ mod queue_work_tests {
         );
     }
 
+    #[test]
+    fn auto_complete_phase1_status_promotes_only_not_started_statuses() {
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Draft),
+            Some(RequirementStatus::InProgress)
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Approved),
+            Some(RequirementStatus::InProgress)
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Planned),
+            Some(RequirementStatus::InProgress)
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::InProgress),
+            None
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::NeedsAttention),
+            None
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Completed),
+            None
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Rejected),
+            None
+        );
+    }
+
+    #[test]
+    fn prepare_auto_complete_phase1_status_flips_approved_before_spawn() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("requirements.yaml");
+        let storage = Storage::new(&path);
+        let mut req = aida_core::Requirement::new("early punt".to_string(), String::new());
+        req.spec_id = Some("BUG-369".to_string());
+        req.status = RequirementStatus::Approved;
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+
+        let changed = prepare_auto_complete_phase1_status(&storage, "BUG-369")
+            .expect("phase-1 status preparation should succeed");
+
+        assert_eq!(
+            changed,
+            Some(("BUG-369".to_string(), RequirementStatus::Approved))
+        );
+        let updated = storage.load().unwrap();
+        let req = updated.get_requirement_by_spec_id("BUG-369").unwrap();
+        assert_eq!(req.status, RequirementStatus::InProgress);
+    }
+
     /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
     /// inner subprocess's error must name the lease + actual reason — not
     /// the canned "pass --steal" message. anyhow's `{:#}` collapses the
@@ -58606,6 +58662,10 @@ fn run_auto_complete(
         eprintln!("{} {}", "✗".red().bold(), e);
         std::process::exit(1);
     }
+    if let Err(e) = prepare_auto_complete_phase1_status(storage, spec) {
+        eprintln!("{} {}", "✗".red().bold(), e);
+        std::process::exit(1);
+    }
 
     let project_root = match find_main_worktree_root() {
         Ok(p) => p,
@@ -60345,6 +60405,46 @@ fn ensure_queued_for_implementer(storage: &Storage, user_id: &str, spec: &str) -
         anyhow::bail!("`aida queue add {spec} --for implementer --no-scope` failed");
     }
     Ok(())
+}
+
+fn auto_complete_phase1_target_status(status: &RequirementStatus) -> Option<RequirementStatus> {
+    match status {
+        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned => {
+            Some(RequirementStatus::InProgress)
+        }
+        _ => None,
+    }
+}
+
+/// BUG-369: mark orchestrator-driven phase-1 work as InProgress before the
+/// implementer subprocess starts. `aida punt` correctly allows only
+/// InProgress → NeedsAttention; without this pre-spawn flip, an early design
+/// fork on an Approved/Planned/Draft spec made `/aida-punt` refuse and the
+/// orchestrator misclassified the clean exit as NoPR.
+fn prepare_auto_complete_phase1_status(
+    storage: &Storage,
+    spec: &str,
+) -> Result<Option<(String, RequirementStatus)>> {
+    let store = storage.load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, spec))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
+    let req_id = req.id;
+    let display_id = req.display_id();
+    let current = req.status.clone();
+    let Some(target) = auto_complete_phase1_target_status(&current) else {
+        return Ok(None);
+    };
+    let now = chrono::Utc::now();
+    storage.update_atomically(|s| {
+        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+            r.status = target.clone();
+            r.modified_at = now;
+        }
+    })?;
+    Ok(Some((display_id, current)))
 }
 
 /// Best-effort lookup of the most recent workflow run id for `branch`, used
