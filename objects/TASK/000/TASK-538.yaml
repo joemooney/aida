@@ -1,0 +1,22 @@
+id: 019e5aa9-3907-76f1-80f2-7625416d4eec
+spec_id: TASK-538
+agreed_id: TASK-538
+title: 'MCP server: expose ''history'' tool (parity with ''aida history'' CLI)'
+description: |-
+  aida-chat EPIC-16 implementation surfaced this gap: the MCP server exposes list_requirements / show_requirement / search_requirements / add_requirement / update_requirement / list_features / resources, but NOT history. aida-chat's aida_history tool stays CLI-only as a result.
+
+  Add a history tool to aida-cli/src/mcp.rs that wraps the same logic as the 'aida history' CLI subcommand. Schema: spec_id (optional, filter to single spec) + since (optional, time bound). Returns the event ledger.
+
+  Once shipped, aida-chat (and other MCP consumers) can drop the CLI fallback for history queries. Empirically validated need (BUG-vs-feature: this is a feature gap, not a bug — MCP surface was always partial). trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T15:45:00.167902887Z
+modified_at: 2026-05-24T15:45:00.167902887Z
+req_type: Task
+tags:
+- from-aida-chat
+- from-self-test
+- mcp-server
+- mcp-surface
