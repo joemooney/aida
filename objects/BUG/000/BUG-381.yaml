@@ -1,0 +1,60 @@
+id: 019e5bd1-ba27-7103-9bbd-65f7b07e7965
+spec_id: BUG-381
+agreed_id: BUG-381
+title: MCP list_requirements silently returns empty on any status filter
+description: |-
+  Discovered 2026-05-24 by aida-chat advisor during killer-demo dry-run.
+
+  ## Symptom
+
+  `aida list --status in-progress` (CLI) returns 5 requirements correctly. The MCP equivalent silently returns "No requirements found matching the criteria." — even though the data is there.
+
+  ## Reproduce
+
+  ```
+  printf '%s\n' \
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+    '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+    '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_requirements","arguments":{"status":"in-progress"}}}' \
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_requirements","arguments":{"status":"InProgress"}}}' \
+    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_requirements","arguments":{}}}' \
+    | aida mcp-serve
+  ```
+
+  - id=2 (status="in-progress"): No requirements found
+  - id=3 (status="InProgress"): No requirements found
+  - id=4 (no filter): Found 32 requirements, output shows "Status: In Progress" (with literal space) for matching items
+
+  So the live data uses the human-readable "In Progress" string with a space; MCP's status filter neither normalizes input nor matches the kebab-case / no-space variants.
+
+  ## Impact
+
+  Silent failure on the MCP read-path. Worse than BUG-377 in user-visible behavior because aida-chat's CLI fallback only triggers on McpError::Unavailable — a successful-but-empty MCP response does NOT trigger fallback. End-user sees a misleading "no requirements" answer when there are 5.
+
+  Confirmed during aida-chat killer-demo Prompt 3 ("What requirements are still in progress?"): aida-chat returned "no in-progress requirements" even though CLI shows 5.
+
+  ## Likely fix
+
+  Either (a) MCP server normalizes the input status (accept "in-progress", "InProgress", "In Progress" → match against actual) or (b) document the exact expected token in the tool schema, OR (c) accept all common variants per AIDA's existing CLI parsing.
+
+  Suggest the same fix applies to type/priority filters if they exist — worth checking.
+
+  ## Acceptance
+
+  - MCP `list_requirements({status: "in-progress"})` returns the same set as `aida list --status in-progress` (CLI)
+  - Add an integration test asserting MCP/CLI status-filter parity for at least one known status value
+  - After fix, aida-chat's killer demo Prompt 3 ("What's in progress?") produces a substrate-grounded answer
+
+  Surfaced-by: aida-chat advisor during killer-demo dry-run, killer demo Prompt 3 blocked by this bug.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T21:08:51.878996643Z
+modified_at: 2026-05-24T21:08:51.878996643Z
+req_type: Bug
+tags:
+- aida-chat-blocker
+- mcp
+- read-path
+- silent-empty
