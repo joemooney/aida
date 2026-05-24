@@ -50,12 +50,12 @@ description: |-
   ## Origin
 
   2026-05-23 /aida-capture sweep. Codex's BUG-371 fix exposed the anti-pattern; this TASK is the broader audit.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:33:10.822701627Z
-modified_at: 2026-05-24T05:37:39.905337187Z
+modified_at: 2026-05-24T05:50:38.031878151Z
 req_type: Task
 tags:
 - aida-cli
