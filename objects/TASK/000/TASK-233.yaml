@@ -57,13 +57,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:24:21.036579876Z
-modified_at: 2026-05-15T15:51:59.302650916Z
+modified_at: 2026-05-24T06:38:54.017551886Z
 req_type: Task
 tags:
+- aida:session:end
 - batch:ux-polish
 - ci
 - interactive
-- session-end
 - ux
 - wait
 - watch
