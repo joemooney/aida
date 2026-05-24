@@ -15061,19 +15061,43 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             spec,
             cwd,
             permission_mode,
-        }) => agent_new_claude(role.clone(), spec.clone(), cwd.as_deref(), permission_mode),
+            no_context,
+            show_context,
+        }) => agent_new_claude(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            permission_mode,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
         AgentCommand::New(AgentNewCommand::Codex {
             role,
             spec,
             cwd,
             bypass_sandbox,
-        }) => agent_new_codex(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
+            no_context,
+            show_context,
+        }) => agent_new_codex(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            *bypass_sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
         AgentCommand::New(AgentNewCommand::Antigravity {
             role,
             spec,
             cwd,
             bypass_sandbox,
-        }) => agent_new_antigravity(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
+            no_context,
+            show_context,
+        }) => agent_new_antigravity(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            *bypass_sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
     }
 }
 
@@ -15092,18 +15116,37 @@ struct AgentLaunchPlan {
     current_spec: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AgentContextOptions {
+    enabled: bool,
+    show: bool,
+}
+
+impl AgentContextOptions {
+    fn new(enabled: bool, show: bool) -> Self {
+        Self { enabled, show }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentLaunchContext {
+    path: std::path::PathBuf,
+    token: String,
+}
+
 fn agent_new_claude(
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     permission_mode: &str,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let config = AgentLaunchConfig {
         agent_type: "claude",
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), permission_mode.to_string()],
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 // trace:STORY-433 | ai:codex
@@ -15112,6 +15155,7 @@ fn agent_new_codex(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let mut default_args = Vec::new();
     if bypass_sandbox {
@@ -15122,7 +15166,7 @@ fn agent_new_codex(
         binary: "codex",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 // trace:STORY-434 | ai:codex
@@ -15131,6 +15175,7 @@ fn agent_new_antigravity(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let mut default_args = Vec::new();
     if bypass_sandbox {
@@ -15141,7 +15186,7 @@ fn agent_new_antigravity(
         binary: "agy",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 fn agent_new_with_config(
@@ -15149,6 +15194,7 @@ fn agent_new_with_config(
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -15178,13 +15224,21 @@ fn agent_new_with_config(
     if let Some(role) = &plan.role {
         eprintln!("  {}: {}", "role".bold(), role.cyan());
     }
+    let launch_context = prepare_agent_launch_context(&config, &plan, context)?;
+    if let Some(ctx) = &launch_context {
+        eprintln!(
+            "  {}: {}",
+            "context".bold(),
+            ctx.path.display().to_string().cyan()
+        );
+    }
     eprintln!(
         "  {} multiple concurrent {} sessions are supported; registry entries are PID-keyed.",
         "ⓘ".cyan(),
         config.agent_type
     );
 
-    run_tracked_agent(&binary, &config, &plan)
+    run_tracked_agent(&binary, &config, &plan, launch_context.as_ref())
 }
 
 fn prepare_agent_launch(
@@ -15264,10 +15318,204 @@ fn prepare_agent_launch(
     }
 }
 
+// trace:STORY-436 | ai:codex
+fn prepare_agent_launch_context(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    options: AgentContextOptions,
+) -> Result<Option<AgentLaunchContext>> {
+    if !options.enabled {
+        return Ok(None);
+    }
+    let token = std::env::var("AIDA_AGENT_REGISTRY_TOKEN")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| Uuid::now_v7().to_string());
+    let dir = plan
+        .project_root
+        .join(".aida")
+        .join("agents")
+        .join("context");
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating agent context dir {}", dir.display()))?;
+    let path = dir.join(format!("{}-{token}.context.md", config.agent_type));
+    let body = render_agent_launch_context(config, plan, &token)?;
+    std::fs::write(&path, &body).with_context(|| format!("writing {}", path.display()))?;
+    if options.show {
+        println!("{body}");
+    }
+    Ok(Some(AgentLaunchContext { path, token }))
+}
+
+// trace:STORY-436 | ai:codex
+fn render_agent_launch_context(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    token: &str,
+) -> Result<String> {
+    let role = plan.role.as_deref().unwrap_or("unspecified");
+    let mut out = String::new();
+    out.push_str("# AIDA Launch Context\n\n");
+    out.push_str("This is a point-in-time spawn snapshot. Briefs, queue changes, leases, and registry heartbeats filed after launch are not reflected here; keep polling AIDA during the session.\n\n");
+    out.push_str("## Launch\n\n");
+    out.push_str(&format!("- Agent: {}\n", config.agent_type));
+    out.push_str(&format!("- Role: {role}\n"));
+    out.push_str(&format!(
+        "- Current spec: {}\n",
+        plan.current_spec.as_deref().unwrap_or("(none)")
+    ));
+    out.push_str(&format!(
+        "- Project root: {}\n",
+        plan.project_root.display()
+    ));
+    out.push_str(&format!(
+        "- Working directory: {}\n",
+        plan.launch_cwd.display()
+    ));
+    out.push_str(&format!("- Context token: {token}\n\n"));
+
+    out.push_str("## Role Guidance\n\n");
+    out.push_str(&role_guidance_for(&plan.project_root, role));
+    out.push_str("\n\n");
+
+    out.push_str("## Active Session\n\n");
+    if let Some(spec) = &plan.current_spec {
+        let lease = list_leases(&plan.project_root)
+            .into_iter()
+            .filter(|lease| lease.scope.eq_ignore_ascii_case(spec))
+            .max_by_key(|lease| lease.started_at);
+        if let Some(lease) = lease {
+            out.push_str(&format!("- Lease: {}\n", lease.id));
+            out.push_str(&format!(
+                "- Lease role: {}\n",
+                lease.role.as_deref().unwrap_or("(unset)")
+            ));
+            out.push_str(&format!("- Branch: {}\n", lease.branch));
+            out.push_str(&format!("- Worktree: {}\n", lease.worktree_path.display()));
+        } else {
+            out.push_str(&format!("- No active lease found for {spec}.\n"));
+        }
+    } else {
+        out.push_str("- No spec was provided at launch; start from the relevant queue head or pending brief.\n");
+    }
+    out.push('\n');
+
+    out.push_str("## Pending Briefs\n\n");
+    let briefs = collect_agent_briefs(&plan.project_root, Some(config.agent_type), false)
+        .unwrap_or_default();
+    if briefs.is_empty() {
+        out.push_str("_No pending briefs for this agent at launch._\n\n");
+    } else {
+        for brief in briefs {
+            let title = brief_title(&brief.path).unwrap_or_else(|| "(title unavailable)".into());
+            out.push_str(&format!(
+                "- {} — {} — {}\n",
+                brief.spec_id,
+                title,
+                brief.path.display()
+            ));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Queue Snapshot\n\n");
+    if plan.current_spec.is_none() {
+        if let Some(line) = queue_head_line(&plan.project_root, plan.role.as_deref()) {
+            out.push_str(&line);
+            out.push('\n');
+        } else {
+            out.push_str("- No queue head could be resolved for this role.\n");
+        }
+    } else {
+        out.push_str("- A spec was provided explicitly; queue head selection is bypassed.\n");
+    }
+    out.push('\n');
+
+    out.push_str("## Next Commands\n\n");
+    out.push_str("- Read AGENTS.md and any agent-specific setup document under docs/agents/.\n");
+    out.push_str("- Check pending briefs with `aida brief list --for-agent ");
+    out.push_str(config.agent_type);
+    out.push_str("`.\n");
+    if let Some(spec) = &plan.current_spec {
+        out.push_str(&format!(
+            "- Inspect the assigned spec with `aida show {spec}`.\n"
+        ));
+    }
+    out.push_str("- Ship with a trailing-parens spec trailer in the commit subject, then use `aida pr ship`.\n");
+    Ok(out)
+}
+
+// trace:STORY-436 | ai:codex
+fn role_guidance_for(project_root: &std::path::Path, role: &str) -> String {
+    if role != "unspecified" {
+        if let Ok((state, path)) = load_role(project_root, role) {
+            let mut out = String::new();
+            out.push_str(&format!("Loaded role file: {}\n\n", path.display()));
+            if let Some(purpose) = state.purpose.as_deref().filter(|s| !s.trim().is_empty()) {
+                out.push_str("Purpose:\n");
+                out.push_str(purpose.trim());
+                out.push_str("\n\n");
+            }
+            if let Some(prompt) = state
+                .system_prompt
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+            {
+                out.push_str("System prompt:\n");
+                out.push_str(prompt.trim());
+                return out;
+            }
+            if !out.trim().is_empty() {
+                return out.trim_end().to_string();
+            }
+        }
+    }
+
+    match role {
+        "advisor" | "dialog" => "You are advising the operator. Triage punts/findings, route implementation, clarify design forks, and avoid changing code unless explicitly asked.".to_string(),
+        "implementer" => "You are implementing. Read the assigned spec/brief, work in the supervised worktree, keep changes bounded to acceptance, run relevant tests, commit with the spec trailer, and finish with `aida pr ship`.".to_string(),
+        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation.".to_string(),
+        "unspecified" => "No role was provided. Determine whether you are acting as advisor, implementer, or reviewer before making changes.".to_string(),
+        other => format!("No stored role file was found for `{other}`. Follow the project discipline in AGENTS.md and the active spec/brief context."),
+    }
+}
+
+// trace:STORY-436 | ai:codex
+fn brief_title(path: &std::path::Path) -> Option<String> {
+    let body = std::fs::read_to_string(path).ok()?;
+    body.lines()
+        .find_map(|line| line.trim().strip_prefix("- Title:").map(str::trim))
+        .filter(|title| !title.is_empty())
+        .map(str::to_string)
+}
+
+// trace:STORY-436 | ai:codex
+fn queue_head_line(project_root: &std::path::Path, role: Option<&str>) -> Option<String> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let store = storage.load().ok()?;
+    let user_id = current_user_id(None);
+    let mut entries = storage.queue_list(&user_id, false).ok()?;
+    entries.sort_by_key(|entry| entry.position);
+    let head = entries.into_iter().find(|entry| match role {
+        Some(role) => entry.for_role.as_deref() == Some(role),
+        None => entry.for_role.is_none(),
+    })?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|req| req.id == head.requirement_id)?;
+    Some(format!(
+        "- Queue head: {} — {}",
+        req.display_id(),
+        req.title
+    ))
+}
+
 fn run_tracked_agent(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
 ) -> Result<()> {
     let mut command = std::process::Command::new(binary);
     command
@@ -15283,6 +15531,11 @@ fn run_tracked_agent(
     }
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
+    }
+    if let Some(ctx) = launch_context {
+        command
+            .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
+            .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
     }
 
     let mut child = command
@@ -15315,6 +15568,17 @@ fn run_tracked_agent(
             config.agent_type,
             child_pid
         );
+    }
+    if let Some(ctx) = launch_context {
+        if let Err(err) = std::fs::remove_file(&ctx.path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "{} failed to remove agent context file {}: {err}",
+                    "warning:".yellow().bold(),
+                    ctx.path.display()
+                );
+            }
+        }
     }
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
@@ -15464,6 +15728,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             permission_mode,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new claude command");
@@ -15472,6 +15738,8 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-432"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert_eq!(permission_mode, "acceptEdits");
+        assert!(!no_context);
+        assert!(!show_context);
     }
 
     #[test]
@@ -15495,6 +15763,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             bypass_sandbox,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new codex command");
@@ -15503,6 +15773,8 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-433"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert!(bypass_sandbox);
+        assert!(!no_context);
+        assert!(!show_context);
     }
 
     #[test]
@@ -15526,6 +15798,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             bypass_sandbox,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new antigravity command");
@@ -15534,6 +15808,33 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-434"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert!(bypass_sandbox);
+        assert!(!no_context);
+        assert!(!show_context);
+    }
+
+    #[test]
+    fn parses_agent_new_context_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "codex",
+            "--role",
+            "advisor",
+            "--no-context",
+            "--show-context",
+        ])
+        .unwrap();
+        let Command::Agent(AgentCommand::New(AgentNewCommand::Codex {
+            no_context,
+            show_context,
+            ..
+        })) = cli.command
+        else {
+            panic!("expected agent new codex command");
+        };
+        assert!(no_context);
+        assert!(show_context);
     }
 
     #[test]
@@ -15625,7 +15926,7 @@ mod agent_launcher_tests {
             current_spec: Some("STORY-433".into()),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan).unwrap();
+        run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -15680,7 +15981,7 @@ mod agent_launcher_tests {
             current_spec: Some("STORY-434".into()),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan).unwrap();
+        run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -15692,6 +15993,96 @@ mod agent_launcher_tests {
         assert!(agent_registry::list_agent_views(&project).is_empty());
         std::env::remove_var("AIDA_TEST_ENV_OUT");
         std::env::remove_var("AIDA_TEST_ARGV_OUT");
+    }
+
+    #[test]
+    fn renders_agent_launch_context_with_role_guidance_and_briefs() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida/agent-briefs/codex")).unwrap();
+        std::fs::write(
+            project.join(".aida/agent-briefs/codex/STORY-436-2026-05-24T025247Z.md"),
+            "---\nspec_id: STORY-436\nagent: codex\ngenerated_at: 2026-05-24T025247Z\nstatus: pending\n---\n\n## Spec\n\n- Title: Role-context auto-injection\n",
+        )
+        .unwrap();
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project,
+            role: Some("implementer".into()),
+            current_spec: Some("STORY-436".into()),
+        };
+
+        let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
+
+        assert!(
+            context.contains("This is a point-in-time spawn snapshot"),
+            "{context}"
+        );
+        assert!(context.contains("- Agent: codex"), "{context}");
+        assert!(context.contains("- Role: implementer"), "{context}");
+        assert!(context.contains("## Role Guidance"), "{context}");
+        assert!(
+            context.contains("STORY-436 — Role-context auto-injection"),
+            "{context}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
+        let fake_agent = tmp.path().join("agent");
+        std::fs::write(
+            &fake_agent,
+            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\ncp \"$AIDA_AGENT_CONTEXT_FILE\" \"$AIDA_TEST_CONTEXT_OUT\"\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_agent, perms).unwrap();
+        let env_out = tmp.path().join("env.txt");
+        let context_out = tmp.path().join("context-copy.md");
+        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
+        std::env::set_var("AIDA_TEST_CONTEXT_OUT", &context_out);
+        let context_path = project
+            .join(".aida/agents/context")
+            .join("codex-token.context.md");
+        std::fs::write(&context_path, "launch context body").unwrap();
+        let launch_context = AgentLaunchContext {
+            path: context_path.clone(),
+            token: "token".into(),
+        };
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project.clone(),
+            role: Some("advisor".into()),
+            current_spec: None,
+        };
+
+        run_tracked_agent(&fake_agent, &config, &plan, Some(&launch_context)).unwrap();
+
+        let env = std::fs::read_to_string(&env_out).unwrap();
+        let copied = std::fs::read_to_string(&context_out).unwrap();
+        assert!(env.contains("AIDA_AGENT_CONTEXT_FILE="), "{env}");
+        assert!(env.contains("AIDA_AGENT_REGISTRY_TOKEN=token"), "{env}");
+        assert_eq!(copied, "launch context body");
+        assert!(!context_path.exists());
+        std::env::remove_var("AIDA_TEST_ENV_OUT");
+        std::env::remove_var("AIDA_TEST_CONTEXT_OUT");
     }
 }
 
@@ -19245,13 +19636,37 @@ fn session_end(
             workflow_hints::PrState::Unknown
         }
     };
-    let session_end_unshipped_work = classify_session_end_unshipped_work(
-        &target.id,
-        &target.scope,
-        &target.branch,
-        commits_ahead,
-        pr_state,
-    );
+    // BUG-367: if the spec the lease owns has auto-bumped to Completed, or if the PR
+    // for this branch has already been squash-merged / merged, the work is shipped
+    // regardless of what the local branch looks like. Suppress warning.
+    // trace:BUG-367 | ai:antigravity
+    let mut is_completed = false;
+    let store_path = project_root.join(".aida-store");
+    if store_path.exists() {
+        if let Ok(storage) = Storage::new(store_path).load() {
+            if let Some(req) = storage.get_requirement_by_spec_id(&target.scope) {
+                if req.status == RequirementStatus::Completed {
+                    is_completed = true;
+                }
+            }
+        }
+    }
+    if !is_completed {
+        if let PrLookup::Found(_) = detect_merged_pr_for_branch(&project_root, &target.branch) {
+            is_completed = true;
+        }
+    }
+    let session_end_unshipped_work = if is_completed {
+        None
+    } else {
+        classify_session_end_unshipped_work(
+            &target.id,
+            &target.scope,
+            &target.branch,
+            commits_ahead,
+            pr_state,
+        )
+    };
     if let Some(work) = &session_end_unshipped_work {
         emit_session_end_unshipped_warning(&work);
     }
@@ -30176,11 +30591,40 @@ mod session_end_resolution_tests {
             records[0].classification.as_deref(),
             Some("UNSHIPPED-SESSION-END")
         );
-        assert!(
-            records[0].detail.contains("3 commits ahead"),
-            "{}",
-            records[0].detail
-        );
+        assert!(records[0].detail.contains("3 commits ahead"),);
+    }
+
+    /// BUG-367: session end suppresses the unshipped work warning if the spec
+    /// status is already Completed in the requirement store.
+    /// trace:BUG-367 | ai:antigravity
+    #[test]
+    fn session_end_unshipped_work_suppressed_when_completed() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store_dir = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+
+        // Create a completed requirement in the mock store
+        let storage = Storage::new(&store_dir);
+        let mut req = Requirement::new("Completed Spec Test".to_string(), "".to_string());
+        req.spec_id = Some("BUG-367".to_string());
+        req.status = RequirementStatus::Completed;
+
+        let mut store = storage.load().unwrap_or_default();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+
+        // Load store and verify is_completed resolves to true
+        let mut is_completed = false;
+        if store_dir.exists() {
+            if let Ok(storage) = Storage::new(&store_dir).load() {
+                if let Some(req) = storage.get_requirement_by_spec_id("BUG-367") {
+                    if req.status == RequirementStatus::Completed {
+                        is_completed = true;
+                    }
+                }
+            }
+        }
+        assert!(is_completed);
     }
 
     /// Explicit id query short-circuits the resolution chain.

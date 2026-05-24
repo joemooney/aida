@@ -3528,6 +3528,14 @@ pub enum AgentNewCommand {
         /// Claude Code permission mode passed through to `claude`.
         #[clap(long, default_value = "bypassPermissions")]
         permission_mode: String,
+
+        /// Do not write/inject the AIDA launch-context snapshot.
+        #[clap(long)]
+        no_context: bool,
+
+        /// Print the generated launch-context snapshot before spawning.
+        #[clap(long)]
+        show_context: bool,
     },
 
     /// Spawn Codex CLI with project-correct cwd/env and registry tracking.
@@ -3552,6 +3560,14 @@ pub enum AgentNewCommand {
         /// the empirical autonomous-drain posture used in prior dogfood runs.
         #[clap(long)]
         bypass_sandbox: bool,
+
+        /// Do not write/inject the AIDA launch-context snapshot.
+        #[clap(long)]
+        no_context: bool,
+
+        /// Print the generated launch-context snapshot before spawning.
+        #[clap(long)]
+        show_context: bool,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.
@@ -3576,6 +3592,14 @@ pub enum AgentNewCommand {
         /// asks for autonomous-drain posture.
         #[clap(long)]
         bypass_sandbox: bool,
+
+        /// Do not write/inject the AIDA launch-context snapshot.
+        #[clap(long)]
+        no_context: bool,
+
+        /// Print the generated launch-context snapshot before spawning.
+        #[clap(long)]
+        show_context: bool,
     },
 }
 
