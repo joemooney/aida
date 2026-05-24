@@ -2362,25 +2362,6 @@ fn generate_local_skills_readme() -> String {
     )
 }
 
-fn strip_yaml_frontmatter(content: &str) -> String {
-    if !content.starts_with("---\n") && !content.starts_with("---\r\n") {
-        return content.to_string();
-    }
-
-    let after_open = if content.starts_with("---\r\n") { 5 } else { 4 };
-    let rest = &content[after_open..];
-    if let Some(close_pos) = rest.find("\n---\n") {
-        let body_start = after_open + close_pos + 5;
-        return content[body_start..].to_string();
-    }
-    if let Some(close_pos) = rest.find("\n---\r\n") {
-        let body_start = after_open + close_pos + 6;
-        return content[body_start..].to_string();
-    }
-
-    content.to_string()
-}
-
 /// Errors that can occur during scaffolding
 #[derive(Debug)]
 pub enum ScaffoldError {
