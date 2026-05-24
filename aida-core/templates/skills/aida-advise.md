@@ -108,7 +108,7 @@ same context the implementer's `/ultraplan` would have had.
 A fork is Type A or recorded-B only if you can point at *where* the answer is
 recorded. Look:
 
-- **`docs/aida-discipline/`** — the project's canonical workflow + vocabulary
+- **`docs/aida/discipline/`** — the project's canonical workflow + vocabulary
   guides;
 - **`docs/plans/`** — an implementation plan may already decide the fork;
 - **the spec graph** — `aida show <related-spec>`, sibling specs, the parent;

@@ -87,6 +87,16 @@ suffix), or **cancel**. Never overwrite silently.
 aida comment add <SPEC-ID> "Plan imported to docs/plans/<YYYY-MM-DD>-<slug>.md (via /aida-import-plan)."
 ```
 
+If the plan includes an explicit effort estimate, normalize it to one of
+`15m` / `1h` / `4h` / `1d` / `1w` and stamp it as the plan touchpoint:
+
+```bash
+aida edit <SPEC-ID> --add-tag effort:plan:<bucket>
+```
+
+This is advisory calibration data, not a gate. `1d` means 8 work-hours;
+`1w` means 5 work-days / 40 work-hours.
+
 For each **secondary** spec named in a multi-spec plan, add a lighter
 note so the plan is discoverable from those specs too:
 

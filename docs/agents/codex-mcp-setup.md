@@ -81,6 +81,14 @@ aida agent new codex --spec STORY-433 --role implementer
 
 The launcher runs Codex from the project root, sets `AIDA_AGENT_TYPE=codex`, propagates `AIDA_SESSION_ROLE` and `AIDA_SESSION_SCOPE`, registers the process in `.aida/agents/`, and deregisters it on exit. When `--spec` is supplied, it first creates the standard sibling worktree + lease and launches Codex from that worktree.
 
+By default it also writes a point-in-time launch-context snapshot under
+`.aida/agents/context/` and passes the path as `AIDA_AGENT_CONTEXT_FILE`.
+The snapshot includes role guidance, active lease/spec details, pending
+brief paths with one-line titles, and queue-head hints. Use
+`--show-context` to print the generated snapshot before Codex starts, or
+`--no-context` to launch without it. The snapshot is not live-updating;
+continue polling briefs/MCP for work filed after startup.
+
 Keep the unsafe autonomous flag explicit:
 
 ```bash

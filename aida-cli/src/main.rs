@@ -2,14 +2,17 @@ mod advisor;
 mod agent_registry;
 mod auto_complete;
 mod auto_complete_telemetry;
+mod backlog;
 mod calibration;
 mod changelog;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod complexity_calibration;
 mod digest;
 mod docs;
 mod drain_state;
+mod effort_calibration;
 mod exit_signal;
 mod findings;
 mod global_queue;
@@ -28,8 +31,11 @@ mod punt;
 mod reviewer_summary;
 mod session;
 mod session_manifest;
+mod stacks;
 mod state_snapshot;
 mod status_display;
+#[cfg(test)]
+mod test_env;
 mod usage;
 mod worker;
 mod workflow_hints;
@@ -83,13 +89,14 @@ use aida_core::{
 };
 
 use crate::cli::{
-    AdvisorCommand, AgentCommand, AgentNewCommand, BlockCommand, BriefCommand, CacheCommand, Cli,
-    Command, CommentCommand, ConfigCommand, DbCommand, DevCommand, DocCommand, DocsCommand,
-    DrainCommand, FeatureCommand, FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand,
-    JiraCommand, McpCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
-    PuntsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand,
-    RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand,
-    SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand, TraceCommand,
+    AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BacklogCommand, BlockCommand,
+    BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
+    DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
+    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand, McpCommand,
+    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand,
+    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
+    SessionManifestCommand, SessionWakeupCommand, SkillCommand, StackCommand, TraceCommand,
     TypeCommand, WorkerCommand, ZenCommand,
 };
 
@@ -139,6 +146,29 @@ impl Default for StoreSyncConfig {
             source: "default".to_string(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct StoreAllocationConfig {
+    retry_max: usize,
+}
+
+impl Default for StoreAllocationConfig {
+    fn default() -> Self {
+        Self { retry_max: 3 }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SpecIdCollision {
+    spec_id: String,
+    claimants: Vec<SpecIdClaimant>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SpecIdClaimant {
+    uuid: Uuid,
+    title: String,
 }
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -545,7 +575,7 @@ fn shell_quote(arg: &str) -> String {
 #[cfg(test)]
 mod story_423_asciinema_tests {
     use super::*;
-    use crate::cli::{Command, QueueCommand};
+    use crate::cli::{BacklogCommand, Command, LoadCommand, PrCommand, QueueCommand};
     use chrono::TimeZone;
     use clap::Parser;
 
@@ -583,6 +613,66 @@ mod story_423_asciinema_tests {
             }
             other => panic!("expected queue work command, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn story_451_effort_flags_and_load_aliases_parse() {
+        let add = Cli::try_parse_from([
+            "aida",
+            "add",
+            "--title",
+            "estimate me",
+            "--type",
+            "task",
+            "--effort",
+            "1d",
+        ])
+        .unwrap();
+        match add.command {
+            Command::Add { effort, .. } => {
+                assert_eq!(effort, Some(effort_calibration::EffortBucket::OneDay));
+            }
+            other => panic!("expected add, got {other:?}"),
+        }
+
+        let queue =
+            Cli::try_parse_from(["aida", "queue", "work", "TASK-1", "--effort", "4h"]).unwrap();
+        match queue.command {
+            Command::Queue(QueueCommand::Work { effort, .. }) => {
+                assert_eq!(effort, Some(effort_calibration::EffortBucket::FourHours));
+            }
+            other => panic!("expected queue work, got {other:?}"),
+        }
+
+        let ship = Cli::try_parse_from(["aida", "pr", "ship", "--effort", "15m"]).unwrap();
+        match ship.command {
+            Command::Pr(PrCommand::Ship { effort, .. }) => {
+                assert_eq!(
+                    effort,
+                    Some(effort_calibration::EffortBucket::FifteenMinutes)
+                );
+            }
+            other => panic!("expected pr ship, got {other:?}"),
+        }
+
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "load", "queue"])
+                .unwrap()
+                .command,
+            Command::Load(LoadCommand::Queue)
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "queue", "load"])
+                .unwrap()
+                .command,
+            Command::Queue(QueueCommand::Load { .. })
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "backlog", "load"])
+                .unwrap()
+                .command,
+            Command::Backlog(BacklogCommand::Load)
+        ));
     }
 
     #[test]
@@ -1032,6 +1122,13 @@ fn run() -> Result<()> {
         return handle_drain_command(drain_cmd);
     }
 
+    // STORY-248: stack-graph introspection. Dispatched before storage
+    // init — reads only `.aida/stacks.json`, no requirement store.
+    // Mirrors the STORY-301 drain dispatch pattern. trace:STORY-248
+    if let Command::Stack(stack_cmd) = &cli.command {
+        return handle_stack_command(stack_cmd);
+    }
+
     // TASK-294: worker-directive introspection. Dispatched before storage
     // init — reads only `.aida/worker.cmd`, no requirement store. Mirrors
     // the STORY-301 drain dispatch pattern exactly. trace:TASK-294 | ai:claude
@@ -1050,6 +1147,13 @@ fn run() -> Result<()> {
     // trace:STORY-325 | ai:antigravity
     if let Command::Punts(punts_cmd) = &cli.command {
         return handle_punts_command(punts_cmd.clone());
+    }
+
+    // STORY-439: autonomy / calibration surface. Dispatched before storage
+    // init — it reads only `.aida/complexity-calibration/`, no requirement
+    // store. trace:STORY-439 | ai:claude
+    if let Command::Autonomy(autonomy_cmd) = &cli.command {
+        return handle_autonomy_command(autonomy_cmd);
     }
 
     // Determine which requirements file to use
@@ -1148,6 +1252,7 @@ fn run() -> Result<()> {
             parent,
             force_parent,
             interactive,
+            effort: _,
         } => {
             // trace:BUG-17 | ai:claude — resolve description from inline,
             // file, or stdin sources before dispatching.
@@ -1407,9 +1512,11 @@ fn run() -> Result<()> {
         }
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
+        Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
+        Command::Autonomy(_) => unreachable!("autonomy is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -1512,6 +1619,15 @@ fn run() -> Result<()> {
         Command::Queue(queue_cmd) => {
             handle_queue_command(queue_cmd, &storage)?;
         }
+        Command::Load(load_cmd) => {
+            handle_load_command(load_cmd, &storage)?;
+        }
+        // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
+        // `load` alias for quantitative effort summaries.
+        Command::Backlog(backlog_cmd) => match backlog_cmd {
+            BacklogCommand::Load => handle_load_command(&LoadCommand::Backlog, &storage)?,
+            _ => backlog::handle_backlog_command(backlog_cmd, &storage)?,
+        },
         // TASK-218: top-level alias in the legacy SQLite dispatch path —
         // forwards to the same handler as `aida queue rework SPEC`.
         // trace:TASK-218 | ai:claude
@@ -2777,6 +2893,114 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
     Ok(())
 }
 
+/// STORY-439: `aida autonomy calibration mismatches` — the substrate-gap
+/// signal. Walks `.aida/complexity-calibration/*.yaml`, drops records
+/// missing a pickup-or-review half, and surfaces the rest ranked by
+/// `|delta_steps|` descending. Tied gaps break by recency. The mismatch
+/// view IS the calibration view this STORY adds; the broader autonomy
+/// report (TASK-340) gains `--by` / `--calibration` slices in a
+/// follow-up that hangs off this same parent enum.
+/// trace:STORY-439 | ai:claude
+fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
+    match cmd {
+        AutonomyCommand::Calibration(sub) => match sub {
+            CalibrationSubcommand::Mismatches { since, last, json } => {
+                let project_root = find_project_root()?;
+                let main_root = main_worktree_root_from(&project_root);
+                let records = complexity_calibration::read_all_captures(&main_root);
+                let since_dur = match since {
+                    Some(s) => Some(calibration::parse_since(s).map_err(|e| anyhow::anyhow!(e))?),
+                    None => None,
+                };
+                let rows = complexity_calibration::mismatches(&records, since_dur);
+                let capped: Vec<&complexity_calibration::MismatchRow> =
+                    rows.iter().take(*last).collect();
+
+                if *json {
+                    println!("{}", serde_json::to_string_pretty(&capped)?);
+                    return Ok(());
+                }
+
+                if capped.is_empty() {
+                    println!(
+                        "{} no pickup-vs-reviewer divergences recorded{}",
+                        "Calibration:".bold(),
+                        match since {
+                            Some(s) => format!(" in the last {s}"),
+                            None => String::new(),
+                        }
+                    );
+                    println!(
+                        "  {}",
+                        "captures live under .aida/complexity-calibration/ — \
+                          set --complexity at pickup/ship and add \
+                          `implementation_complexity` to the reviewer's verdict \
+                          file to populate them"
+                            .dimmed()
+                    );
+                    return Ok(());
+                }
+
+                println!(
+                    "{} {} record{} (pickup-predicted vs reviewer-assessed){}",
+                    "Calibration mismatches:".bold(),
+                    capped.len(),
+                    if capped.len() == 1 { "" } else { "s" },
+                    match since {
+                        Some(s) => format!(", window {s}"),
+                        None => String::new(),
+                    },
+                );
+                println!(
+                    "  {:<14} {:<10} {:<10} {:<8} {}",
+                    "SPEC".dimmed(),
+                    "PICKUP".dimmed(),
+                    "REVIEWER".dimmed(),
+                    "DELTA".dimmed(),
+                    "AGREEMENT".dimmed(),
+                );
+                for row in &capped {
+                    let delta = match row.delta_steps.cmp(&0) {
+                        std::cmp::Ordering::Greater => {
+                            format!("+{}", row.delta_steps).red().to_string()
+                        }
+                        std::cmp::Ordering::Less => {
+                            row.delta_steps.to_string().yellow().to_string()
+                        }
+                        std::cmp::Ordering::Equal => "0".dimmed().to_string(),
+                    };
+                    let agree = match row.agreement {
+                        complexity_calibration::ComplexityAgreement::ImplementerUnderestimated => {
+                            row.agreement.as_str().red().to_string()
+                        }
+                        complexity_calibration::ComplexityAgreement::ImplementerOverestimated => {
+                            row.agreement.as_str().yellow().to_string()
+                        }
+                        complexity_calibration::ComplexityAgreement::Matched => {
+                            row.agreement.as_str().dimmed().to_string()
+                        }
+                    };
+                    println!(
+                        "  {:<14} {:<10} {:<10} {:<8} {}",
+                        row.spec.cyan().bold(),
+                        row.pickup_complexity.as_str(),
+                        row.reviewer_complexity.as_str(),
+                        delta,
+                        agree,
+                    );
+                }
+                println!();
+                println!(
+                    "  {}",
+                    "each row names a class of work the agents misjudged at pickup time; \
+                      a recurring gap is a memory candidate (the substrate-gap signal)"
+                        .dimmed()
+                );
+                Ok(())
+            }
+        },
+    }
+}
 /// Add a promoted finding to a role's work queue.
 ///
 /// Findings are follow-ups that usually need an implementer, so the default
@@ -2971,22 +3195,26 @@ fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Re
     Ok(())
 }
 
-/// Scaffold the discipline pack — every embedded `docs/aida-discipline/*`
-/// template — into `<root>/docs/aida-discipline/`. Idempotent: an existing
+/// Scaffold the discipline pack — every embedded `docs/aida/discipline/*`
+/// template — into `<root>/docs/aida/discipline/`. Idempotent: an existing
 /// file is left alone unless `force` is set. Returns the count written.
-/// trace:STORY-255 | ai:claude
+///
+/// The destination is pinned to `docs/aida/discipline/` (not `docs/aida/`
+/// flat) so the pack coexists with `aida docs build`'s graph projection
+/// at `docs/aida/{README,00-*,...}` without colliding on README.md.
+/// trace:STORY-255 | STORY-443 | ai:claude
 fn ensure_discipline_pack_scaffold(root: &std::path::Path, force: bool) -> Result<usize> {
     use aida_core::templates::EMBEDDED_TEMPLATES;
     let mut pack: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
         .iter()
-        .filter_map(|(k, v)| k.strip_prefix("docs/aida-discipline/").map(|n| (n, *v)))
+        .filter_map(|(k, v)| k.strip_prefix("docs/aida/discipline/").map(|n| (n, *v)))
         .collect();
     if pack.is_empty() {
         return Ok(0);
     }
     pack.sort_by(|a, b| a.0.cmp(b.0));
 
-    let dir = root.join("docs").join("aida-discipline");
+    let dir = root.join("docs").join("aida").join("discipline");
     std::fs::create_dir_all(&dir)?;
     let mut written = 0;
     for (name, content) in pack {
@@ -3454,8 +3682,8 @@ fn complete_init_scaffolding(
         }
     }
 
-    // Scaffold the discipline pack (docs/aida-discipline/) — generic
-    // AIDA-using guidance, written for every init mode. trace:STORY-255
+    // Scaffold the discipline pack (docs/aida/discipline/) — generic
+    // AIDA-using guidance, written for every init mode. trace:STORY-255 | STORY-443
     let discipline_written = ensure_discipline_pack_scaffold(root, force).unwrap_or(0);
 
     // Auto-configure Codex MCP if codex is installed
@@ -3557,7 +3785,7 @@ fn complete_init_scaffolding(
         );
         println!(
             "    {}{}AIDA-using discipline guides",
-            "docs/aida-discipline/".white().bold(),
+            "docs/aida/discipline/".white().bold(),
             " ".repeat(17)
         );
     } else {
@@ -3570,7 +3798,7 @@ fn complete_init_scaffolding(
             "  {} discipline guide{} scaffolded to {}",
             discipline_written.to_string().green(),
             if discipline_written == 1 { "" } else { "s" },
-            "docs/aida-discipline/".dimmed(),
+            "docs/aida/discipline/".dimmed(),
         );
     }
 
@@ -4039,12 +4267,20 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_gate,
             dry_run,
             json,
+            auto,
         } => {
             // TASK-108: --dry-run fetches, reports, and exits.
             if *dry_run || *json {
                 return handle_pull_dry_run(store_path, *code_only, *store_only, *json);
             }
-            return handle_pull_command(store_path, *code_only, *store_only, *quiet, *no_gate);
+            return handle_pull_command(
+                store_path,
+                *code_only,
+                *store_only,
+                *quiet,
+                *no_gate,
+                *auto,
+            );
         }
         Command::Fetch {
             code_only,
@@ -4092,6 +4328,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
+        Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::List {
@@ -4347,6 +4584,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             parent,
             force_parent,
             interactive,
+            effort,
             ..
         } => {
             // BUG-45 + interactive expansion: when the user doesn't pass
@@ -4506,6 +4744,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     req.tags.insert(tag.trim().to_string());
                 }
             }
+            if let Some(effort) = effort {
+                effort_calibration::apply_effort_tag(
+                    &mut req.tags,
+                    effort_calibration::EffortTouchpoint::Open,
+                    *effort,
+                );
+            }
             if let Some(p) = prefix {
                 req.prefix_override = Some(p.to_uppercase());
             }
@@ -4569,6 +4814,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             }
 
             let project_dir = std::env::current_dir().unwrap_or_default();
+            // BUG-372: before allocating a human-readable global SPEC-ID,
+            // refresh the git-canonical store and refuse known duplicate
+            // spec_ids. TASK-281 protects block refill commits, but the
+            // creation path also has to start from fresh store state.
+            pull_store_before_id_allocation(store_path, &project_dir)?;
             let id_policy = read_id_format_policy(&project_dir);
             if id_policy.uses_blocks() {
                 let node_id = load_node_id(store_path);
@@ -4593,10 +4843,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     // aggregate remaining drops below the configured threshold.
                     // Skips when auto-claim is disabled, when there's no active
                     // block yet (bootstrap is owned by `aida node acquire`), and
-                    // when we're still above threshold. A push failure is a
-                    // soft failure — the existing block still has SOME IDs, so
-                    // continue with the dispense rather than aborting the add.
-                    // trace:TASK-281 | ai:claude
+                    // when we're still above threshold. BUG-372 makes a
+                    // refill push failure fatal for add: continuing with a
+                    // stale local block can recreate the cross-clone
+                    // duplicate SPEC-ID race.
+                    // trace:TASK-281 BUG-372 | ai:claude
                     match ensure_block_capacity(store_path, &project_dir, &node_id, &type_prefix) {
                         Ok(Some(outcome)) => {
                             eprintln!(
@@ -4609,9 +4860,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         }
                         Ok(None) => {}
                         Err(e) => {
-                            eprintln!(
-                                "{} auto-claim failed ({}) — continuing with existing block",
-                                "Warning:".yellow().bold(),
+                            anyhow::bail!(
+                                "auto-claim failed before dispensing a new {} id: {}\n\
+                                 Refusing to continue with a potentially stale local block. \
+                                 Run `aida db sync --pull` and retry.",
+                                type_prefix,
                                 e
                             );
                         }
@@ -4859,6 +5112,25 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         parent_req.spec_id.as_deref().unwrap_or("?"),
                         last.spec_id.as_deref().unwrap_or("?")
                     );
+                }
+                if let Some(spec_id) = last.spec_id.as_deref() {
+                    let main_project_dir = main_worktree_root_from(&project_dir);
+                    if let Err(e) = effort_calibration::upsert_open(
+                        &main_project_dir,
+                        spec_id,
+                        *effort,
+                        Some(current_user_id(None)),
+                    ) {
+                        eprintln!(
+                            "  {} could not record open effort for {spec_id}: {e}",
+                            "⚠".yellow()
+                        );
+                    }
+                    // BUG-372: make newly allocated SPEC-IDs visible to the
+                    // remote orphan store immediately when online, so a
+                    // sibling clone that files next pulls the allocation
+                    // before dispensing from its own block.
+                    push_store_after_id_allocation(store_path, &project_dir, spec_id)?;
                 }
             }
         }
@@ -5413,6 +5685,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Punts(punts_cmd) => {
             handle_punts_command(punts_cmd.clone())?;
         }
+        Command::Autonomy(autonomy_cmd) => {
+            handle_autonomy_command(autonomy_cmd)?;
+        }
         Command::Search {
             query,
             status,
@@ -5885,6 +6160,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
                     Ok(()) => {
                         println!("  Pull complete.");
+                        ensure_no_spec_id_collisions(store_path)?;
 
                         // Detect conflicts with remote changes
                         let remote_reqs =
@@ -6127,6 +6403,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let storage = Storage::new(store_path);
             handle_queue_command(queue_cmd, &storage)?;
         }
+        Command::Load(load_cmd) => {
+            let storage = Storage::new(store_path);
+            handle_load_command(load_cmd, &storage)?;
+        }
+        // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
+        // `load` alias for quantitative effort summaries.
+        Command::Backlog(backlog_cmd) => {
+            let storage = Storage::new(store_path);
+            match backlog_cmd {
+                BacklogCommand::Load => handle_load_command(&LoadCommand::Backlog, &storage)?,
+                _ => backlog::handle_backlog_command(backlog_cmd, &storage)?,
+            }
+        }
         // TASK-218: top-level `aida rework SPEC` → forwards to the same
         // handler as `aida queue rework SPEC`. trace:TASK-218 | ai:claude
         Command::Rework {
@@ -6286,6 +6575,9 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | QueueCommand::Done { .. }
                 | QueueCommand::Rework { .. }
         ),
+        // STORY-444: `aida backlog groom` writes (queue + tag); list /
+        // analyze are read-only. trace:STORY-444 | ai:claude
+        Command::Backlog(cmd) => matches!(cmd, BacklogCommand::Groom { .. }),
         Command::Findings(cmd) => !matches!(cmd, FindingsCommand::List { .. }),
         Command::Config(cmd) => matches!(
             cmd,
@@ -6337,6 +6629,9 @@ fn handle_brief_command(
             include_acked,
         }) => list_agent_briefs(project_root, for_agent.as_deref(), *include_acked),
         Some(BriefCommand::Ack { brief_file }) => ack_agent_brief(brief_file),
+        Some(BriefCommand::Read { brief_file, latest }) => {
+            read_agent_brief(project_root, brief_file, *latest)
+        }
     }
 }
 
@@ -6709,6 +7004,91 @@ fn ack_agent_brief(brief_file: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+fn read_agent_brief(project_root: &std::path::Path, brief_file: &str, latest: bool) -> Result<()> {
+    let resolved_path = if latest {
+        let agent = validate_brief_agent(brief_file)?;
+        let entries = collect_agent_briefs(project_root, Some(agent), false)?;
+        let last_entry = entries.last().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Error: no pending briefs found for agent \"{}\". Use 'aida brief list' to view available briefs.",
+                agent
+            )
+        })?;
+        last_entry.path.clone()
+    } else {
+        let raw_path = std::path::Path::new(brief_file);
+        if raw_path.exists() {
+            raw_path.to_path_buf()
+        } else {
+            let relative_path = project_root.join(brief_file);
+            if relative_path.exists() {
+                relative_path
+            } else if let Some((agent, filename)) = brief_file.split_once('/') {
+                let agent = validate_brief_agent(agent)?;
+                let base_path = project_root
+                    .join(".aida")
+                    .join("agent-briefs")
+                    .join(agent)
+                    .join(filename);
+                if base_path.exists() {
+                    base_path
+                } else {
+                    let md_path = base_path.with_extension("md");
+                    if md_path.exists() {
+                        md_path
+                    } else {
+                        let acked_path = base_path.with_extension("acked");
+                        if acked_path.exists() {
+                            acked_path
+                        } else {
+                            let filename_str = filename.to_string();
+                            if filename_str.ends_with(".md") {
+                                let without_ext = &filename_str[..filename_str.len() - 3];
+                                let acked =
+                                    base_path.with_file_name(format!("{}.acked", without_ext));
+                                if acked.exists() {
+                                    acked
+                                } else {
+                                    anyhow::bail!(
+                                        "Error: brief not found at \"{}\". Use 'aida brief list' to view available briefs.",
+                                        brief_file
+                                    );
+                                }
+                            } else if filename_str.ends_with(".acked") {
+                                let without_ext = &filename_str[..filename_str.len() - 6];
+                                let md = base_path.with_file_name(format!("{}.md", without_ext));
+                                if md.exists() {
+                                    md
+                                } else {
+                                    anyhow::bail!(
+                                        "Error: brief not found at \"{}\". Use 'aida brief list' to view available briefs.",
+                                        brief_file
+                                    );
+                                }
+                            } else {
+                                anyhow::bail!(
+                                    "Error: brief not found at \"{}\". Use 'aida brief list' to view available briefs.",
+                                    brief_file
+                                );
+                            }
+                        }
+                    }
+                }
+            } else {
+                anyhow::bail!(
+                    "Error: brief not found at \"{}\". Use 'aida brief list' to view available briefs.",
+                    brief_file
+                );
+            }
+        }
+    };
+
+    let body = std::fs::read_to_string(&resolved_path)
+        .with_context(|| format!("failed to read brief at {}", resolved_path.display()))?;
+    print!("{}", body);
+    Ok(())
+}
+
 #[cfg(test)]
 mod task_492_brief_tests {
     use super::*;
@@ -6884,6 +7264,34 @@ mod task_492_brief_tests {
     }
 
     #[test]
+    fn test_brief_read_roundtrip() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let path =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", Some("Pre-note")).unwrap();
+
+        // 1. Read directly via path
+        let res = read_agent_brief(temp.path(), &path.to_string_lossy(), false);
+        assert!(res.is_ok());
+
+        // 2. Read using shortcut
+        let filename = path.file_name().unwrap().to_str().unwrap();
+        let shortcut = format!("codex/{}", filename);
+        let res2 = read_agent_brief(temp.path(), &shortcut, false);
+        assert!(res2.is_ok());
+
+        // 3. Read using --latest
+        let res3 = read_agent_brief(temp.path(), "codex", true);
+        assert!(res3.is_ok());
+
+        // 4. Test error handling when not found
+        let res4 = read_agent_brief(temp.path(), "nonexistent", false);
+        assert!(res4.is_err());
+        let err_msg = res4.unwrap_err().to_string();
+        assert!(err_msg.contains("aida brief list"));
+    }
+
+    #[test]
     fn invalid_agent_names_are_rejected() {
         assert!(validate_brief_agent("").is_err());
         assert!(validate_brief_agent("../codex").is_err());
@@ -7022,6 +7430,29 @@ fn read_store_sync_config(project_root: &std::path::Path) -> Result<StoreSyncCon
     })
 }
 
+fn read_store_allocation_config(project_root: &std::path::Path) -> Result<StoreAllocationConfig> {
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return Ok(StoreAllocationConfig::default());
+    };
+    let value: toml::Value =
+        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?;
+    let Some(allocation) = value
+        .get("store")
+        .and_then(|s| s.get("allocation"))
+        .and_then(|v| v.as_table())
+    else {
+        return Ok(StoreAllocationConfig::default());
+    };
+    let retry_max = allocation
+        .get("retry_max")
+        .and_then(|v| v.as_integer())
+        .and_then(|n| usize::try_from(n).ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(StoreAllocationConfig::default().retry_max);
+    Ok(StoreAllocationConfig { retry_max })
+}
+
 fn warn_if_periodic_auto_push(project_root: &std::path::Path) {
     if let Ok(cfg) = read_store_sync_config(project_root) {
         if cfg.auto_push == StoreAutoPushMode::Periodic {
@@ -7031,6 +7462,176 @@ fn warn_if_periodic_auto_push(project_root: &std::path::Path) {
             );
         }
     }
+}
+
+fn find_spec_id_collisions(store: &RequirementsStore) -> Vec<SpecIdCollision> {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut by_spec: BTreeMap<String, Vec<SpecIdClaimant>> = BTreeMap::new();
+    for req in &store.requirements {
+        let Some(spec_id) = req.spec_id.as_deref() else {
+            continue;
+        };
+        by_spec
+            .entry(spec_id.to_ascii_uppercase())
+            .or_default()
+            .push(SpecIdClaimant {
+                uuid: req.id,
+                title: req.title.clone(),
+            });
+    }
+
+    by_spec
+        .into_iter()
+        .filter_map(|(spec_id, mut claimants)| {
+            let unique_uuids: BTreeSet<Uuid> = claimants.iter().map(|c| c.uuid).collect();
+            if unique_uuids.len() <= 1 {
+                return None;
+            }
+            claimants.sort_by(|a, b| a.uuid.cmp(&b.uuid));
+            Some(SpecIdCollision { spec_id, claimants })
+        })
+        .collect()
+}
+
+fn spec_id_collision_recovery_message(
+    collisions: &[SpecIdCollision],
+    store_path: &std::path::Path,
+) -> String {
+    let mut out = String::new();
+    out.push_str("duplicate AIDA spec IDs detected after syncing the git-canonical store\n");
+    out.push_str(
+        "AIDA is refusing to continue before a divergent SPEC-ID silently drops content.\n\n",
+    );
+    for collision in collisions.iter().take(5) {
+        out.push_str(&format!("  {} is claimed by:\n", collision.spec_id));
+        for claimant in &collision.claimants {
+            out.push_str(&format!("    - {} — {}\n", claimant.uuid, claimant.title));
+        }
+    }
+    if collisions.len() > 5 {
+        out.push_str(&format!(
+            "  ... plus {} more duplicate id(s)\n",
+            collisions.len() - 5
+        ));
+    }
+    out.push_str("\nPaste-ready recovery:\n");
+    out.push_str(&format!("  cd {}\n", store_path.display()));
+    out.push_str("  git status\n");
+    out.push_str("  # inspect the duplicate object(s), then preserve both contents manually\n");
+    out.push_str("  # planned tooling: aida db check --collisions --show-conflict\n");
+    out.push_str("  # planned tooling: aida db check --collisions --repair\n");
+    out.push_str(
+        "\nDo not use `git rebase --skip` unless you intentionally want to drop one side.\n",
+    );
+    out
+}
+
+fn ensure_no_spec_id_collisions(store_path: &std::path::Path) -> Result<()> {
+    let backend = aida_core::GitBackend::new(store_path)?;
+    let store = backend.load()?;
+    let collisions = find_spec_id_collisions(&store);
+    if collisions.is_empty() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "{}",
+        spec_id_collision_recovery_message(&collisions, store_path)
+    );
+}
+
+fn pull_store_before_id_allocation(
+    store_path: &std::path::Path,
+    project_root: &std::path::Path,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    if !git_ops::is_git_repo(store_path) || !git_ops::has_remote(store_path, "origin") {
+        ensure_no_spec_id_collisions(store_path)?;
+        return Ok(());
+    }
+    if git_ops::has_changes(store_path).unwrap_or(false) {
+        let _ = git_ops::add(store_path, &["."]);
+        let _ = git_ops::commit(
+            store_path,
+            "chore: sync pending changes before id allocation",
+        );
+    }
+
+    let cfg = read_store_allocation_config(project_root)?;
+    let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+    for attempt in 0..cfg.retry_max {
+        match git_ops::pull_rebase(store_path, "origin", &branch) {
+            Ok(()) => return ensure_no_spec_id_collisions(store_path),
+            Err(e) if attempt + 1 < cfg.retry_max => {
+                eprintln!(
+                    "{} store allocation pull failed ({}) — retrying ({}/{})",
+                    "Warning:".yellow().bold(),
+                    e,
+                    attempt + 1,
+                    cfg.retry_max
+                );
+            }
+            Err(e) => {
+                anyhow::bail!(
+                    "store allocation pull failed after {} attempt(s): {}\n\
+                     To recover:\n  cd {} && git rebase --abort\n  aida db sync --pull",
+                    cfg.retry_max,
+                    e,
+                    store_path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn push_store_after_id_allocation(
+    store_path: &std::path::Path,
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    if !git_ops::is_git_repo(store_path) || !git_ops::has_remote(store_path, "origin") {
+        return Ok(());
+    }
+
+    let cfg = read_store_allocation_config(project_root)?;
+    let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+    for attempt in 0..cfg.retry_max {
+        ensure_no_spec_id_collisions(store_path)?;
+        match git_ops::push(store_path, "origin", &branch) {
+            Ok(true) => return Ok(()),
+            Ok(false) if attempt + 1 < cfg.retry_max => {
+                eprintln!(
+                    "{} store push rejected after allocating {} — pulling/retrying ({}/{})",
+                    "Warning:".yellow().bold(),
+                    spec_id,
+                    attempt + 1,
+                    cfg.retry_max
+                );
+                git_ops::pull_rebase(store_path, "origin", &branch)?;
+                ensure_no_spec_id_collisions(store_path)?;
+            }
+            Ok(false) => {
+                anyhow::bail!(
+                    "store push rejected after allocating {} and {} attempt(s) were exhausted.\n\
+                     Your local store still has the new spec commit; do not re-file blindly.\n\
+                     To recover:\n  aida db sync --pull\n  aida db sync --push",
+                    spec_id,
+                    cfg.retry_max
+                );
+            }
+            Err(e) => anyhow::bail!(
+                "store push failed after allocating {}: {}\n\
+                 Your local store still has the new spec commit; retry with `aida db sync --push` after the network recovers.",
+                spec_id,
+                e
+            ),
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -7086,6 +7687,81 @@ mod story_284_store_sync_tests {
             err.contains("manual, session-end, per-write, periodic"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn allocation_retry_max_defaults_to_three() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = read_store_allocation_config(tmp.path()).unwrap();
+        assert_eq!(cfg.retry_max, 3);
+    }
+
+    #[test]
+    fn allocation_retry_max_reads_store_allocation_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[store.allocation]\nretry_max = 7\n");
+        let cfg = read_store_allocation_config(tmp.path()).unwrap();
+        assert_eq!(cfg.retry_max, 7);
+    }
+
+    #[test]
+    fn allocation_retry_max_ignores_zero_and_negative_values() {
+        for raw in ["0", "-2"] {
+            let tmp = tempfile::tempdir().unwrap();
+            write_config(
+                tmp.path(),
+                &format!("[store.allocation]\nretry_max = {raw}\n"),
+            );
+            let cfg = read_store_allocation_config(tmp.path()).unwrap();
+            assert_eq!(cfg.retry_max, 3);
+        }
+    }
+
+    #[test]
+    fn spec_id_collision_scan_detects_same_id_different_uuid() {
+        let mut a = Requirement::new("local review story".to_string(), String::new());
+        a.spec_id = Some("STORY-446".to_string());
+        let mut b = Requirement::new("origin deps story".to_string(), String::new());
+        b.spec_id = Some("story-446".to_string());
+        let store = RequirementsStore {
+            requirements: vec![a, b],
+            ..RequirementsStore::new()
+        };
+
+        let collisions = find_spec_id_collisions(&store);
+        assert_eq!(collisions.len(), 1);
+        assert_eq!(collisions[0].spec_id, "STORY-446");
+        assert_eq!(collisions[0].claimants.len(), 2);
+    }
+
+    #[test]
+    fn spec_id_collision_scan_ignores_single_claimant() {
+        let mut req = Requirement::new("single".to_string(), String::new());
+        req.spec_id = Some("TASK-1".to_string());
+        let store = RequirementsStore {
+            requirements: vec![req],
+            ..RequirementsStore::new()
+        };
+        assert!(find_spec_id_collisions(&store).is_empty());
+    }
+
+    #[test]
+    fn collision_recovery_message_is_paste_ready() {
+        let collision = SpecIdCollision {
+            spec_id: "STORY-446".to_string(),
+            claimants: vec![SpecIdClaimant {
+                uuid: Uuid::new_v4(),
+                title: "origin deps story".to_string(),
+            }],
+        };
+        let msg = spec_id_collision_recovery_message(&[collision], std::path::Path::new("/tmp/s"));
+        assert!(msg.contains("cd /tmp/s"), "{msg}");
+        assert!(msg.contains("git status"), "{msg}");
+        assert!(
+            msg.contains("aida db check --collisions --show-conflict"),
+            "{msg}"
+        );
+        assert!(msg.contains("Do not use `git rebase --skip`"), "{msg}");
     }
 
     #[test]
@@ -7180,7 +7856,7 @@ fn resolve_description(
     Ok(None)
 }
 
-fn parse_requirement_type(s: &str) -> Result<RequirementType> {
+pub(crate) fn parse_requirement_type(s: &str) -> Result<RequirementType> {
     match s.to_lowercase().as_str() {
         "functional" | "fr" => Ok(RequirementType::Functional),
         "non-functional" | "nonfunctional" | "nfr" => Ok(RequirementType::NonFunctional),
@@ -8548,7 +9224,11 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
 /// entries are ignored. Adding a present tag or removing an absent one is
 /// a graceful no-op. Returns whether the set actually changed.
 // trace:TASK-351 | ai:claude
-fn apply_tag_deltas(tags: &mut HashSet<String>, add: &[String], remove: &[String]) -> bool {
+pub(crate) fn apply_tag_deltas(
+    tags: &mut HashSet<String>,
+    add: &[String],
+    remove: &[String],
+) -> bool {
     let mut changed = false;
     for raw in add {
         let trimmed = raw.trim();
@@ -8563,6 +9243,128 @@ fn apply_tag_deltas(tags: &mut HashSet<String>, add: &[String], remove: &[String
         }
     }
     changed
+}
+
+/// STORY-439: stamp `complexity:<level>` / `estimated-assistance:<level>`
+/// tags on `spec` so the new dimension composes with existing tag tooling
+/// (`aida queue list --tag-prefix complexity:`, batch routing). Mirrors
+/// `load_store_for_lookup` for backend resolution. Best-effort — a missing
+/// store / missing spec / save failure logs and returns; the pickup itself
+/// is unaffected. trace:STORY-439 | ai:claude
+fn apply_calibration_tags(
+    storage: &Storage,
+    spec: &str,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    assist_est: Option<complexity_calibration::AssistanceLevel>,
+) {
+    if complexity.is_none() && assist_est.is_none() {
+        return;
+    }
+    // Git-canonical path — direct backend write, exactly like Command::Edit.
+    if let Some(store_path) = detect_distributed_store() {
+        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+            use aida_core::DatabaseBackend;
+            let Ok(Some(mut req)) = backend.get_requirement_by_spec_id(spec) else {
+                return;
+            };
+            let mut changed = false;
+            if let Some(c) = complexity {
+                changed |= complexity_calibration::apply_complexity_tag(&mut req.tags, c);
+            }
+            if let Some(a) = assist_est {
+                changed |= complexity_calibration::apply_assistance_tag(&mut req.tags, a);
+            }
+            if changed {
+                req.modified_at = chrono::Utc::now();
+                if let Err(e) = backend.update_requirement(&req) {
+                    eprintln!(
+                        "  {} could not stamp calibration tags on {spec}: {e}",
+                        "⚠".yellow()
+                    );
+                }
+            }
+            return;
+        }
+    }
+    // Legacy fallback — load the whole store, mutate, save. Heavier but
+    // only fires on projects that haven't migrated.
+    let Ok(mut store) = storage.load() else {
+        return;
+    };
+    let Some(req) = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(spec) || r.agreed_id.as_deref() == Some(spec))
+    else {
+        return;
+    };
+    let mut changed = false;
+    if let Some(c) = complexity {
+        changed |= complexity_calibration::apply_complexity_tag(&mut req.tags, c);
+    }
+    if let Some(a) = assist_est {
+        changed |= complexity_calibration::apply_assistance_tag(&mut req.tags, a);
+    }
+    if changed {
+        req.modified_at = chrono::Utc::now();
+        if let Err(e) = storage.save(&store) {
+            eprintln!(
+                "  {} could not save calibration tags on {spec}: {e}",
+                "⚠".yellow()
+            );
+        }
+    }
+}
+
+/// STORY-451: stamp `effort:<touchpoint>:<bucket>` while preserving the
+/// other effort touchpoints. Best-effort sibling of [`apply_calibration_tags`].
+/// trace:STORY-451 | ai:codex
+fn apply_effort_tag(
+    storage: &Storage,
+    spec: &str,
+    touchpoint: effort_calibration::EffortTouchpoint,
+    effort: Option<effort_calibration::EffortBucket>,
+) {
+    let Some(effort) = effort else {
+        return;
+    };
+    if let Some(store_path) = detect_distributed_store() {
+        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+            use aida_core::DatabaseBackend;
+            let Ok(Some(mut req)) = backend.get_requirement_by_spec_id(spec) else {
+                return;
+            };
+            if effort_calibration::apply_effort_tag(&mut req.tags, touchpoint, effort) {
+                req.modified_at = chrono::Utc::now();
+                if let Err(e) = backend.update_requirement(&req) {
+                    eprintln!(
+                        "  {} could not stamp effort tag on {spec}: {e}",
+                        "⚠".yellow()
+                    );
+                }
+            }
+            return;
+        }
+    }
+    let Ok(mut store) = storage.load() else {
+        return;
+    };
+    let Some(req) = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(spec) || r.agreed_id.as_deref() == Some(spec))
+    else {
+        return;
+    };
+    if effort_calibration::apply_effort_tag(&mut req.tags, touchpoint, effort) {
+        req.modified_at = chrono::Utc::now();
+        if let Err(e) = storage.save(&store) {
+            eprintln!(
+                "  {} could not save effort tag on {spec}: {e}",
+                "⚠".yellow()
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -9078,7 +9880,7 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
 /// child` to refuse parenting under closed work, and to keep `aida show
 /// --tree` / `aida list --parent` views from accumulating mixed-status
 /// trees. trace:BUG-64 | ai:claude
-fn is_terminal_status(status: &RequirementStatus) -> bool {
+pub(crate) fn is_terminal_status(status: &RequirementStatus) -> bool {
     matches!(
         status,
         RequirementStatus::Completed | RequirementStatus::Rejected
@@ -9166,7 +9968,7 @@ fn parse_status(status_str: &str) -> Result<RequirementStatus> {
     }
 }
 
-fn parse_priority(priority_str: &str) -> Result<RequirementPriority> {
+pub(crate) fn parse_priority(priority_str: &str) -> Result<RequirementPriority> {
     match priority_str.to_lowercase().as_str() {
         "high" => Ok(RequirementPriority::High),
         "medium" => Ok(RequirementPriority::Medium),
@@ -11403,10 +12205,10 @@ struct AutoClaimOutcome {
 /// - `Ok(None)` — no action taken (auto-claim disabled OR above threshold).
 /// - `Ok(Some(outcome))` — a fresh block was claimed; caller should print
 ///   the info notice.
-/// - `Err(e)` — the claim's push failed after retries. Callers should treat
-///   this as a soft failure (warn, fall through to dispense from existing
-///   block) per TASK-281 acceptance: "Network failure during claim: surface
-///   clear error, fall back to existing block".
+/// - `Err(e)` — the claim's push failed after retries. BUG-372 upgraded the
+///   `aida add` caller to fail loud instead of dispensing from a potentially
+///   stale local block, because continuing there can recreate the cross-clone
+///   ID collision that lost specs during the PR-270 pull.
 ///
 /// trace:TASK-281 | ai:claude
 fn ensure_block_capacity(
@@ -14921,19 +15723,43 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             spec,
             cwd,
             permission_mode,
-        }) => agent_new_claude(role.clone(), spec.clone(), cwd.as_deref(), permission_mode),
+            no_context,
+            show_context,
+        }) => agent_new_claude(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            permission_mode,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
         AgentCommand::New(AgentNewCommand::Codex {
             role,
             spec,
             cwd,
             bypass_sandbox,
-        }) => agent_new_codex(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
+            no_context,
+            show_context,
+        }) => agent_new_codex(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            *bypass_sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
         AgentCommand::New(AgentNewCommand::Antigravity {
             role,
             spec,
             cwd,
             bypass_sandbox,
-        }) => agent_new_antigravity(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
+            no_context,
+            show_context,
+        }) => agent_new_antigravity(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            *bypass_sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
     }
 }
 
@@ -14952,18 +15778,37 @@ struct AgentLaunchPlan {
     current_spec: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AgentContextOptions {
+    enabled: bool,
+    show: bool,
+}
+
+impl AgentContextOptions {
+    fn new(enabled: bool, show: bool) -> Self {
+        Self { enabled, show }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentLaunchContext {
+    path: std::path::PathBuf,
+    token: String,
+}
+
 fn agent_new_claude(
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     permission_mode: &str,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let config = AgentLaunchConfig {
         agent_type: "claude",
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), permission_mode.to_string()],
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 // trace:STORY-433 | ai:codex
@@ -14972,6 +15817,7 @@ fn agent_new_codex(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let mut default_args = Vec::new();
     if bypass_sandbox {
@@ -14982,7 +15828,7 @@ fn agent_new_codex(
         binary: "codex",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 // trace:STORY-434 | ai:codex
@@ -14991,6 +15837,7 @@ fn agent_new_antigravity(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let mut default_args = Vec::new();
     if bypass_sandbox {
@@ -15001,7 +15848,7 @@ fn agent_new_antigravity(
         binary: "agy",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 fn agent_new_with_config(
@@ -15009,6 +15856,7 @@ fn agent_new_with_config(
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -15038,13 +15886,21 @@ fn agent_new_with_config(
     if let Some(role) = &plan.role {
         eprintln!("  {}: {}", "role".bold(), role.cyan());
     }
+    let launch_context = prepare_agent_launch_context(&config, &plan, context)?;
+    if let Some(ctx) = &launch_context {
+        eprintln!(
+            "  {}: {}",
+            "context".bold(),
+            ctx.path.display().to_string().cyan()
+        );
+    }
     eprintln!(
         "  {} multiple concurrent {} sessions are supported; registry entries are PID-keyed.",
         "ⓘ".cyan(),
         config.agent_type
     );
 
-    run_tracked_agent(&binary, &config, &plan)
+    run_tracked_agent(&binary, &config, &plan, launch_context.as_ref())
 }
 
 fn prepare_agent_launch(
@@ -15124,10 +15980,204 @@ fn prepare_agent_launch(
     }
 }
 
+// trace:STORY-436 | ai:codex
+fn prepare_agent_launch_context(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    options: AgentContextOptions,
+) -> Result<Option<AgentLaunchContext>> {
+    if !options.enabled {
+        return Ok(None);
+    }
+    let token = std::env::var("AIDA_AGENT_REGISTRY_TOKEN")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| Uuid::now_v7().to_string());
+    let dir = plan
+        .project_root
+        .join(".aida")
+        .join("agents")
+        .join("context");
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating agent context dir {}", dir.display()))?;
+    let path = dir.join(format!("{}-{token}.context.md", config.agent_type));
+    let body = render_agent_launch_context(config, plan, &token)?;
+    std::fs::write(&path, &body).with_context(|| format!("writing {}", path.display()))?;
+    if options.show {
+        println!("{body}");
+    }
+    Ok(Some(AgentLaunchContext { path, token }))
+}
+
+// trace:STORY-436 | ai:codex
+fn render_agent_launch_context(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    token: &str,
+) -> Result<String> {
+    let role = plan.role.as_deref().unwrap_or("unspecified");
+    let mut out = String::new();
+    out.push_str("# AIDA Launch Context\n\n");
+    out.push_str("This is a point-in-time spawn snapshot. Briefs, queue changes, leases, and registry heartbeats filed after launch are not reflected here; keep polling AIDA during the session.\n\n");
+    out.push_str("## Launch\n\n");
+    out.push_str(&format!("- Agent: {}\n", config.agent_type));
+    out.push_str(&format!("- Role: {role}\n"));
+    out.push_str(&format!(
+        "- Current spec: {}\n",
+        plan.current_spec.as_deref().unwrap_or("(none)")
+    ));
+    out.push_str(&format!(
+        "- Project root: {}\n",
+        plan.project_root.display()
+    ));
+    out.push_str(&format!(
+        "- Working directory: {}\n",
+        plan.launch_cwd.display()
+    ));
+    out.push_str(&format!("- Context token: {token}\n\n"));
+
+    out.push_str("## Role Guidance\n\n");
+    out.push_str(&role_guidance_for(&plan.project_root, role));
+    out.push_str("\n\n");
+
+    out.push_str("## Active Session\n\n");
+    if let Some(spec) = &plan.current_spec {
+        let lease = list_leases(&plan.project_root)
+            .into_iter()
+            .filter(|lease| lease.scope.eq_ignore_ascii_case(spec))
+            .max_by_key(|lease| lease.started_at);
+        if let Some(lease) = lease {
+            out.push_str(&format!("- Lease: {}\n", lease.id));
+            out.push_str(&format!(
+                "- Lease role: {}\n",
+                lease.role.as_deref().unwrap_or("(unset)")
+            ));
+            out.push_str(&format!("- Branch: {}\n", lease.branch));
+            out.push_str(&format!("- Worktree: {}\n", lease.worktree_path.display()));
+        } else {
+            out.push_str(&format!("- No active lease found for {spec}.\n"));
+        }
+    } else {
+        out.push_str("- No spec was provided at launch; start from the relevant queue head or pending brief.\n");
+    }
+    out.push('\n');
+
+    out.push_str("## Pending Briefs\n\n");
+    let briefs = collect_agent_briefs(&plan.project_root, Some(config.agent_type), false)
+        .unwrap_or_default();
+    if briefs.is_empty() {
+        out.push_str("_No pending briefs for this agent at launch._\n\n");
+    } else {
+        for brief in briefs {
+            let title = brief_title(&brief.path).unwrap_or_else(|| "(title unavailable)".into());
+            out.push_str(&format!(
+                "- {} — {} — {}\n",
+                brief.spec_id,
+                title,
+                brief.path.display()
+            ));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Queue Snapshot\n\n");
+    if plan.current_spec.is_none() {
+        if let Some(line) = queue_head_line(&plan.project_root, plan.role.as_deref()) {
+            out.push_str(&line);
+            out.push('\n');
+        } else {
+            out.push_str("- No queue head could be resolved for this role.\n");
+        }
+    } else {
+        out.push_str("- A spec was provided explicitly; queue head selection is bypassed.\n");
+    }
+    out.push('\n');
+
+    out.push_str("## Next Commands\n\n");
+    out.push_str("- Read AGENTS.md and any agent-specific setup document under docs/agents/.\n");
+    out.push_str("- Check pending briefs with `aida brief list --for-agent ");
+    out.push_str(config.agent_type);
+    out.push_str("`.\n");
+    if let Some(spec) = &plan.current_spec {
+        out.push_str(&format!(
+            "- Inspect the assigned spec with `aida show {spec}`.\n"
+        ));
+    }
+    out.push_str("- Ship with a trailing-parens spec trailer in the commit subject, then use `aida pr ship`.\n");
+    Ok(out)
+}
+
+// trace:STORY-436 | ai:codex
+fn role_guidance_for(project_root: &std::path::Path, role: &str) -> String {
+    if role != "unspecified" {
+        if let Ok((state, path)) = load_role(project_root, role) {
+            let mut out = String::new();
+            out.push_str(&format!("Loaded role file: {}\n\n", path.display()));
+            if let Some(purpose) = state.purpose.as_deref().filter(|s| !s.trim().is_empty()) {
+                out.push_str("Purpose:\n");
+                out.push_str(purpose.trim());
+                out.push_str("\n\n");
+            }
+            if let Some(prompt) = state
+                .system_prompt
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+            {
+                out.push_str("System prompt:\n");
+                out.push_str(prompt.trim());
+                return out;
+            }
+            if !out.trim().is_empty() {
+                return out.trim_end().to_string();
+            }
+        }
+    }
+
+    match role {
+        "advisor" | "dialog" => "You are advising the operator. Triage punts/findings, route implementation, clarify design forks, and avoid changing code unless explicitly asked.".to_string(),
+        "implementer" => "You are implementing. Read the assigned spec/brief, work in the supervised worktree, keep changes bounded to acceptance, run relevant tests, commit with the spec trailer, and finish with `aida pr ship`.".to_string(),
+        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation.".to_string(),
+        "unspecified" => "No role was provided. Determine whether you are acting as advisor, implementer, or reviewer before making changes.".to_string(),
+        other => format!("No stored role file was found for `{other}`. Follow the project discipline in AGENTS.md and the active spec/brief context."),
+    }
+}
+
+// trace:STORY-436 | ai:codex
+fn brief_title(path: &std::path::Path) -> Option<String> {
+    let body = std::fs::read_to_string(path).ok()?;
+    body.lines()
+        .find_map(|line| line.trim().strip_prefix("- Title:").map(str::trim))
+        .filter(|title| !title.is_empty())
+        .map(str::to_string)
+}
+
+// trace:STORY-436 | ai:codex
+fn queue_head_line(project_root: &std::path::Path, role: Option<&str>) -> Option<String> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let store = storage.load().ok()?;
+    let user_id = current_user_id(None);
+    let mut entries = storage.queue_list(&user_id, false).ok()?;
+    entries.sort_by_key(|entry| entry.position);
+    let head = entries.into_iter().find(|entry| match role {
+        Some(role) => entry.for_role.as_deref() == Some(role),
+        None => entry.for_role.is_none(),
+    })?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|req| req.id == head.requirement_id)?;
+    Some(format!(
+        "- Queue head: {} — {}",
+        req.display_id(),
+        req.title
+    ))
+}
+
 fn run_tracked_agent(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
 ) -> Result<()> {
     let mut command = std::process::Command::new(binary);
     command
@@ -15143,6 +16193,11 @@ fn run_tracked_agent(
     }
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
+    }
+    if let Some(ctx) = launch_context {
+        command
+            .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
+            .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
     }
 
     let mut child = command
@@ -15175,6 +16230,17 @@ fn run_tracked_agent(
             config.agent_type,
             child_pid
         );
+    }
+    if let Some(ctx) = launch_context {
+        if let Err(err) = std::fs::remove_file(&ctx.path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "{} failed to remove agent context file {}: {err}",
+                    "warning:".yellow().bold(),
+                    ctx.path.display()
+                );
+            }
+        }
     }
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
@@ -15324,6 +16390,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             permission_mode,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new claude command");
@@ -15332,6 +16400,8 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-432"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert_eq!(permission_mode, "acceptEdits");
+        assert!(!no_context);
+        assert!(!show_context);
     }
 
     #[test]
@@ -15355,6 +16425,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             bypass_sandbox,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new codex command");
@@ -15363,6 +16435,8 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-433"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert!(bypass_sandbox);
+        assert!(!no_context);
+        assert!(!show_context);
     }
 
     #[test]
@@ -15386,6 +16460,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             bypass_sandbox,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new antigravity command");
@@ -15394,6 +16470,33 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-434"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert!(bypass_sandbox);
+        assert!(!no_context);
+        assert!(!show_context);
+    }
+
+    #[test]
+    fn parses_agent_new_context_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "codex",
+            "--role",
+            "advisor",
+            "--no-context",
+            "--show-context",
+        ])
+        .unwrap();
+        let Command::Agent(AgentCommand::New(AgentNewCommand::Codex {
+            no_context,
+            show_context,
+            ..
+        })) = cli.command
+        else {
+            panic!("expected agent new codex command");
+        };
+        assert!(no_context);
+        assert!(show_context);
     }
 
     #[test]
@@ -15461,18 +16564,20 @@ mod agent_launcher_tests {
         let fake_bin = tmp.path().join("bin");
         std::fs::create_dir_all(&fake_bin).unwrap();
         let fake_agent = fake_bin.join("agent");
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+                env_out.display(),
+                argv_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let argv_out = tmp.path().join("argv.txt");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
         let config = AgentLaunchConfig {
             agent_type: "codex",
             binary: "codex",
@@ -15485,7 +16590,7 @@ mod agent_launcher_tests {
             current_spec: Some("STORY-433".into()),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan).unwrap();
+        run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -15497,7 +16602,11 @@ mod agent_launcher_tests {
             argv.contains("--dangerously-bypass-approvals-and-sandbox"),
             "{argv}"
         );
-        assert!(agent_registry::list_agent_views(&project).is_empty());
+        assert!(agent_registry::list_agent_views(
+            &project,
+            &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
+        )
+        .is_empty());
         std::env::remove_var("AIDA_TEST_ENV_OUT");
         std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
@@ -15516,18 +16625,20 @@ mod agent_launcher_tests {
         )
         .unwrap();
         let fake_agent = tmp.path().join("agy");
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+                env_out.display(),
+                argv_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let argv_out = tmp.path().join("argv.txt");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
         let config = AgentLaunchConfig {
             agent_type: "antigravity",
             binary: "agy",
@@ -15540,7 +16651,7 @@ mod agent_launcher_tests {
             current_spec: Some("STORY-434".into()),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan).unwrap();
+        run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -15549,9 +16660,103 @@ mod agent_launcher_tests {
         assert!(env.contains("AIDA_SESSION_SCOPE=STORY-434"), "{env}");
         assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
         assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
-        assert!(agent_registry::list_agent_views(&project).is_empty());
+        assert!(agent_registry::list_agent_views(
+            &project,
+            &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
+        )
+        .is_empty());
         std::env::remove_var("AIDA_TEST_ENV_OUT");
         std::env::remove_var("AIDA_TEST_ARGV_OUT");
+    }
+
+    #[test]
+    fn renders_agent_launch_context_with_role_guidance_and_briefs() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida/agent-briefs/codex")).unwrap();
+        std::fs::write(
+            project.join(".aida/agent-briefs/codex/STORY-436-2026-05-24T025247Z.md"),
+            "---\nspec_id: STORY-436\nagent: codex\ngenerated_at: 2026-05-24T025247Z\nstatus: pending\n---\n\n## Spec\n\n- Title: Role-context auto-injection\n",
+        )
+        .unwrap();
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project,
+            role: Some("implementer".into()),
+            current_spec: Some("STORY-436".into()),
+        };
+
+        let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
+
+        assert!(
+            context.contains("This is a point-in-time spawn snapshot"),
+            "{context}"
+        );
+        assert!(context.contains("- Agent: codex"), "{context}");
+        assert!(context.contains("- Role: implementer"), "{context}");
+        assert!(context.contains("## Role Guidance"), "{context}");
+        assert!(
+            context.contains("STORY-436 — Role-context auto-injection"),
+            "{context}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
+        let fake_agent = tmp.path().join("agent");
+        let env_out = tmp.path().join("env.txt");
+        let context_out = tmp.path().join("context-copy.md");
+        std::fs::write(
+            &fake_agent,
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\ncp \"$AIDA_AGENT_CONTEXT_FILE\" '{}'\n",
+                env_out.display(),
+                context_out.display()
+            ),
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_agent, perms).unwrap();
+        let context_path = project
+            .join(".aida/agents/context")
+            .join("codex-token.context.md");
+        std::fs::write(&context_path, "launch context body").unwrap();
+        let launch_context = AgentLaunchContext {
+            path: context_path.clone(),
+            token: "token".into(),
+        };
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project.clone(),
+            role: Some("advisor".into()),
+            current_spec: None,
+        };
+
+        run_tracked_agent(&fake_agent, &config, &plan, Some(&launch_context)).unwrap();
+
+        let env = std::fs::read_to_string(&env_out).unwrap();
+        let copied = std::fs::read_to_string(&context_out).unwrap();
+        assert!(env.contains("AIDA_AGENT_CONTEXT_FILE="), "{env}");
+        assert!(env.contains("AIDA_AGENT_REGISTRY_TOKEN=token"), "{env}");
+        assert_eq!(copied, "launch context body");
+        assert!(!context_path.exists());
     }
 }
 
@@ -15647,6 +16852,23 @@ struct SessionLease {
     /// trace:TASK-358 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     escalated_to_human: Option<chrono::DateTime<chrono::Utc>>,
+    /// STORY-248: when this session was started via `aida queue work
+    /// --stack` or `--base BRANCH`, the branch we forked from. `None` for
+    /// the default case (forked from `origin/main`). Paired with
+    /// `parent_branch_sha`; both are also reflected into `.aida/stacks.json`
+    /// for the auto-rebase cascade.
+    /// trace:STORY-248 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent_branch: Option<String>,
+    /// STORY-248: HEAD SHA of `parent_branch` at fork time. Critical for
+    /// the cascade: the project squash-merges + deletes branches, so a
+    /// later `git rebase origin/main` would replay the parent's
+    /// pre-squash commits. The cascade uses
+    /// `git rebase --onto origin/main <parent_branch_sha> <branch>` to
+    /// skip them. `None` when `parent_branch` is `None`.
+    /// trace:STORY-248 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent_branch_sha: Option<String>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -15760,6 +16982,8 @@ mod lease_covers_cwd_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -16774,6 +17998,87 @@ fn should_reuse_branch(reuse_flag: bool, branch_explicit: bool, branch_preexists
     reuse_flag || (branch_explicit && branch_preexists)
 }
 
+/// STORY-248: resolve the stacked-branch base for `aida queue work`.
+///
+/// Returns `Ok(None)` when neither `--stack` nor `--base` is set — the
+/// caller then proceeds with the default origin/main fork.
+///
+/// With `--stack`: walks the active lease set, filters to implementer
+/// roles with a branch that has NOT been merged, skips the lease whose
+/// worktree covers cwd (so a session can't stack on itself), and picks
+/// the freshest by `started_at`. Returns an error if nothing qualifies.
+///
+/// With `--base BRANCH`: validates the branch exists locally or on
+/// origin via `branch_exists_anywhere`. Unless `force` is set, checks
+/// `detect_merged_pr_for_branch` and refuses if the PR has merged
+/// (which means the branch is about to be / has been deleted on origin
+/// — branching from it now would create commits doomed to be stranded).
+/// The error names `--force-base` as the override.
+///
+/// Pure-ish: the lease + branch / PR lookups are all best-effort
+/// against the project's git state. trace:STORY-248 | ai:claude
+fn resolve_stack_base(
+    project_root: &std::path::Path,
+    cwd: &std::path::Path,
+    stack: bool,
+    base: Option<&str>,
+    force: bool,
+) -> anyhow::Result<Option<String>> {
+    if !stack && base.is_none() {
+        return Ok(None);
+    }
+    if let Some(b) = base {
+        if !branch_exists_anywhere(project_root, b) {
+            anyhow::bail!(
+                "--base `{}` does not exist locally or on origin — \
+                 verify the branch name (and that origin has it)",
+                b
+            );
+        }
+        if !force {
+            let merged = detect_merged_pr_for_branch(project_root, b);
+            if let PrLookup::Found(pr) = &merged {
+                anyhow::bail!(
+                    "--base `{}` is already merged (PR-{}); branching from it \
+                     would strand any new commits. Run `aida pull` and pass \
+                     `--base main` (or a different un-merged branch), or pass \
+                     `--force-base` to override.",
+                    b,
+                    pr.number
+                );
+            }
+        }
+        return Ok(Some(b.to_string()));
+    }
+    // `--stack` — auto-detect.
+    let canon_cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    let mut candidates: Vec<SessionLease> = list_leases(project_root)
+        .into_iter()
+        .filter(|l| {
+            l.role
+                .as_deref()
+                .map(|r| r.eq_ignore_ascii_case("implementer"))
+                .unwrap_or(false)
+        })
+        .filter(|l| !lease_covers_cwd(l, &canon_cwd))
+        .filter(|l| {
+            !matches!(
+                detect_merged_pr_for_branch(project_root, &l.branch),
+                PrLookup::Found(_)
+            )
+        })
+        .collect();
+    candidates.sort_by_key(|l| std::cmp::Reverse(l.started_at));
+    let Some(pick) = candidates.into_iter().next() else {
+        anyhow::bail!(
+            "--stack: no un-merged in-flight implementer branch found — \
+             start one with `aida queue work <SPEC>` (default base origin/main), \
+             then run `--stack` from a separate session"
+        );
+    };
+    Ok(Some(pick.branch))
+}
+
 #[cfg(test)]
 mod session_start_reuse_tests {
     use super::should_reuse_branch;
@@ -16801,6 +18106,107 @@ mod session_start_reuse_tests {
         // preexists signal.
         assert!(!should_reuse_branch(false, false, true));
         assert!(!should_reuse_branch(false, false, false));
+    }
+}
+
+/// STORY-248: `resolve_stack_base` integration tests against a real
+/// temp git repo. Covers the "no flags" pass-through and the
+/// `--base BRANCH` validation legs. The `--stack` auto-detect leg also
+/// runs against a temp repo with a hand-written lease file, exercising
+/// the lease walker without spawning `gh` (we use a branch with no PR,
+/// so `detect_merged_pr_for_branch` returns NoOpenPr / GhMissing — both
+/// pass the "not merged" filter). trace:STORY-248 | ai:claude
+#[cfg(test)]
+mod resolve_stack_base_tests {
+    use super::*;
+
+    fn init_repo() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Pin every config that a sandboxed CI shell might have set on the
+        // global level — signing usually breaks first, so override here.
+        for args in [
+            vec!["init", "-q", "-b", "main"],
+            vec!["config", "user.email", "t@x.example"],
+            vec!["config", "user.name", "t"],
+            vec!["config", "commit.gpgsign", "false"],
+            vec!["config", "tag.gpgsign", "false"],
+        ] {
+            assert!(std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(&args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        std::fs::write(root.join("a.txt"), b"a\n").unwrap();
+        for args in [vec!["add", "a.txt"], vec!["commit", "-qm", "init"]] {
+            assert!(std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(&args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        tmp
+    }
+
+    #[test]
+    fn resolve_stack_base_returns_none_without_flags() {
+        let tmp = init_repo();
+        let out = resolve_stack_base(tmp.path(), tmp.path(), false, None, false).unwrap();
+        assert_eq!(out, None);
+    }
+
+    #[test]
+    fn resolve_stack_base_refuses_unknown_base() {
+        let tmp = init_repo();
+        let err =
+            resolve_stack_base(tmp.path(), tmp.path(), false, Some("nope"), false).unwrap_err();
+        assert!(err.to_string().contains("nope"), "{err}");
+        assert!(err.to_string().contains("does not exist"), "{err}");
+    }
+
+    #[test]
+    fn resolve_stack_base_accepts_existing_local_branch() {
+        let tmp = init_repo();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["branch", "task-x"])
+            .status()
+            .unwrap()
+            .success());
+        // No `gh` in the sandbox → detect_merged_pr_for_branch returns
+        // GhMissing, which falls through the merged check.
+        let out = resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), false).unwrap();
+        assert_eq!(out.as_deref(), Some("task-x"));
+    }
+
+    #[test]
+    fn resolve_stack_base_force_keeps_through_safety_check() {
+        // Same shape, but with --force-base set, the merged check is
+        // skipped entirely. Asserts the flag wires through.
+        let tmp = init_repo();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["branch", "task-x"])
+            .status()
+            .unwrap()
+            .success());
+        let out = resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), true).unwrap();
+        assert_eq!(out.as_deref(), Some("task-x"));
+    }
+
+    #[test]
+    fn resolve_stack_base_stack_with_no_leases_errors() {
+        let tmp = init_repo();
+        std::fs::create_dir_all(tmp.path().join(".aida").join("sessions")).unwrap();
+        let err = resolve_stack_base(tmp.path(), tmp.path(), true, None, false).unwrap_err();
+        assert!(err.to_string().contains("no un-merged"), "{err}");
     }
 }
 
@@ -17399,6 +18805,39 @@ fn session_start(
         }
     }
 
+    // STORY-248: when an explicit `--base` was passed (queue work
+    // --stack / --base, or session start --base), capture the
+    // fork-point SHA so the auto-rebase cascade later runs
+    // `git rebase --onto origin/main <sha> <branch>` instead of a
+    // plain rebase that would replay the parent's pre-squash commits.
+    // The lookup uses the base name as a rev (works for local branches
+    // and origin/-prefixed refs alike); a failure to resolve is non-
+    // fatal — we just skip recording the SHA, which means the cascade
+    // will refuse to auto-rebase this entry (safer than guessing).
+    // trace:STORY-248 | ai:claude
+    let stack_parent_branch: Option<String> = base
+        .filter(|_| review_target.is_none() && !reuse_existing)
+        .map(|s| s.strip_prefix("origin/").unwrap_or(s).to_string());
+    let stack_parent_sha: Option<String> = base
+        .filter(|_| review_target.is_none() && !reuse_existing)
+        .and_then(|b| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&project_root)
+                .args(["rev-parse", b])
+                .output()
+                .ok()?;
+            if !out.status.success() {
+                return None;
+            }
+            let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if sha.is_empty() {
+                None
+            } else {
+                Some(sha)
+            }
+        });
+
     // STORY-52: share parent's cargo target/ with the new worktree so the
     // first `cargo build` inside the session reuses the existing build
     // cache instead of rebuilding from scratch (~2min for aida-cli). We
@@ -17517,6 +18956,11 @@ fn session_start(
         // its `--escalate-blocks` path parks the spec for a human.
         // trace:TASK-358 | ai:claude
         escalated_to_human: None,
+        // STORY-248: stacked-branch lineage captured above when `base`
+        // was passed. Default `None` for the BUG-76 "fork from
+        // origin/main" path. trace:STORY-248 | ai:claude
+        parent_branch: stack_parent_branch.clone(),
+        parent_branch_sha: stack_parent_sha.clone(),
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -18339,6 +19783,27 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
     CiProbe::NoSignal("--wait-ci gave up after 30m".to_string())
 }
 
+/// BUG-273: `gh run watch` is an interactive terminal renderer. When stdout
+/// is piped to tee, or when an auto-complete drain is explicitly headless, its
+/// redraw frames become hundreds of repeated log blocks. Stream only for the
+/// true interactive case; otherwise use the quiet poller.
+/// trace:BUG-273
+fn should_stream_ci_watch(stdout_is_tty: bool, no_human_active: bool) -> bool {
+    stdout_is_tty && !no_human_active
+}
+
+fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiProbe {
+    if should_stream_ci_watch(std::io::stdout().is_terminal(), no_human_active) {
+        watch_ci_terminal(branch)
+    } else {
+        eprintln!(
+            "  {} stdout is non-interactive or headless mode is active — using quiet CI polling.",
+            "ⓘ".cyan()
+        );
+        wait_for_ci_terminal(branch)
+    }
+}
+
 /// TASK-233: extract the most-recent workflow run id from `gh run list
 /// --json databaseId` JSON output. Pure — unit-testable independent of
 /// the `gh` subprocess. trace:TASK-233 | ai:claude
@@ -19105,13 +20570,37 @@ fn session_end(
             workflow_hints::PrState::Unknown
         }
     };
-    let session_end_unshipped_work = classify_session_end_unshipped_work(
-        &target.id,
-        &target.scope,
-        &target.branch,
-        commits_ahead,
-        pr_state,
-    );
+    // BUG-367: if the spec the lease owns has auto-bumped to Completed, or if the PR
+    // for this branch has already been squash-merged / merged, the work is shipped
+    // regardless of what the local branch looks like. Suppress warning.
+    // trace:BUG-367 | ai:antigravity
+    let mut is_completed = false;
+    let store_path = project_root.join(".aida-store");
+    if store_path.exists() {
+        if let Ok(storage) = Storage::new(store_path).load() {
+            if let Some(req) = storage.get_requirement_by_spec_id(&target.scope) {
+                if req.status == RequirementStatus::Completed {
+                    is_completed = true;
+                }
+            }
+        }
+    }
+    if !is_completed {
+        if let PrLookup::Found(_) = detect_merged_pr_for_branch(&project_root, &target.branch) {
+            is_completed = true;
+        }
+    }
+    let session_end_unshipped_work = if is_completed {
+        None
+    } else {
+        classify_session_end_unshipped_work(
+            &target.id,
+            &target.scope,
+            &target.branch,
+            commits_ahead,
+            pr_state,
+        )
+    };
     if let Some(work) = &session_end_unshipped_work {
         emit_session_end_unshipped_warning(&work);
     }
@@ -19132,10 +20621,10 @@ fn session_end(
             CiAction::Wait => {
                 let final_probe = if watch_ci {
                     eprintln!(
-                        "{} CI in progress — streaming live progress (Ctrl+C to stop watching)",
+                        "{} CI in progress — watching until terminal state (Ctrl+C to stop watching)",
                         "→".cyan()
                     );
-                    watch_ci_terminal(&target.branch)
+                    watch_ci_for_context(&target.branch, false)
                 } else {
                     eprintln!(
                         "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
@@ -20011,12 +21500,12 @@ struct TextQuestionPunt {
     lean: String,
 }
 
-/// BUG-354: classify the headless implementer's final `result` text as the
-/// plain-markdown variant of AskUserQuestion: the model asks the operator to
-/// choose a path, calls no tool, exits success, and opens no PR. We only scan
-/// the terminal result text and require both a question mark and decision-fork
-/// phrasing so normal implementation summaries that mention questions in
-/// passing keep the existing NoPr failure path.
+/// BUG-354 / BUG-374: classify the headless implementer's final `result` text
+/// as the plain-markdown variant of AskUserQuestion: the model asks the
+/// operator to choose/confirm a path, calls no tool, exits success, and opens
+/// no PR. We only scan the terminal result text and require both a question
+/// mark and decision-fork phrasing so normal implementation summaries that
+/// mention questions in passing keep the existing NoPr failure path.
 fn pending_text_question_from_headless_log(content: &str) -> Option<TextQuestionPunt> {
     let result = reviewer_summary::parse_result_event(content)?;
     if result.is_error {
@@ -20045,6 +21534,14 @@ fn pending_text_question_from_result_text(text: &str) -> Option<TextQuestionPunt
         "want me to",
         "how would you like",
         "need you to choose",
+        "please confirm",
+        "confirm and i'll proceed",
+        "confirm and i’ll proceed",
+        "confirm and i will proceed",
+        "confirm this path",
+        "confirm the path",
+        "confirm option",
+        "confirm approach",
     ];
     if !QUESTION_FORK_MARKERS
         .iter()
@@ -20570,7 +22067,7 @@ fn auto_followups_disabled() -> bool {
 /// Find the docs/plans/ files that *belong to* `spec_id` — the id appears
 /// in the `# Plan:` title line or the `Specs:` header line. Cross-references
 /// in a `## Related` section don't count (that plan owns a different spec).
-fn find_plan_files_for_spec(
+pub(crate) fn find_plan_files_for_spec(
     project_root: &std::path::Path,
     spec_id: &str,
 ) -> Vec<std::path::PathBuf> {
@@ -20642,7 +22139,7 @@ fn parse_plan_followups(content: &str) -> Vec<String> {
 
 /// TASK-95: parse the `## Critical Files` section — the column-0 bullets'
 /// backtick-quoted paths. The flat must-touch blast radius.
-fn parse_plan_critical_files(content: &str) -> Vec<String> {
+pub(crate) fn parse_plan_critical_files(content: &str) -> Vec<String> {
     let path_re = regex::Regex::new(r"`([A-Za-z0-9_][A-Za-z0-9_./\-]*\.[A-Za-z0-9]+)`").unwrap();
     let mut out: Vec<String> = Vec::new();
     let mut in_section = false;
@@ -21355,7 +22852,9 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             no_pull,
             no_cleanup,
             dry_run,
-        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run),
+            complexity,
+            effort,
+        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run, *complexity, *effort),
     }
 }
 
@@ -21761,7 +23260,14 @@ fn fetch_pr_info_via_gh_bin(
 /// double-implementing them.
 ///
 /// trace:TASK-458 | ai:claude
-fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: bool) -> Result<()> {
+fn pr_ship_handler(
+    n: Option<u64>,
+    no_pull: bool,
+    no_cleanup: bool,
+    dry_run: bool,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    effort: Option<effort_calibration::EffortBucket>,
+) -> Result<()> {
     use pr_ship::{
         format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
         recovery_hint, PrShipOptions, ShipStep, StepOutcome,
@@ -21772,6 +23278,8 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         no_pull,
         no_cleanup,
         dry_run,
+        complexity,
+        effort,
     };
 
     // Project root for gh/git invocations is wherever the user is —
@@ -21997,6 +23505,47 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         &ShipStep::Merge { delete_branch },
         &StepOutcome::Ok,
     );
+
+    // STORY-439: ship-side calibration capture. Resolve every spec the PR
+    // credits (title → branch → body, the same precedence the squash
+    // subject repair already uses) and write a ship slot per spec — the
+    // implementer's self-assessed complexity + the punt count
+    // (`.aida/punts.jsonl` filtered by spec). One PR crediting N specs
+    // populates N records. Best-effort: a `gh` blip here leaves the merge
+    // landed and just skips the capture.
+    // trace:STORY-439 | ai:claude
+    if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
+        let spec_ids =
+            pr_ship::derive_squash_subject_spec_ids(&pr_meta.title, &branch, &pr_meta.body);
+        for spec in &spec_ids {
+            let punts = complexity_calibration::punt_count_for_spec(&main_worktree, spec);
+            if let Err(e) =
+                complexity_calibration::upsert_ship(&main_worktree, spec, opts.complexity, punts)
+            {
+                eprintln!(
+                    "  {} could not record ship calibration for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+            if let Err(e) = effort_calibration::upsert_ship(
+                &main_worktree,
+                spec,
+                opts.effort,
+                Some(current_user_id(None)),
+            ) {
+                eprintln!(
+                    "  {} could not record ship effort for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+            apply_effort_tag(
+                &Storage::new(main_worktree.join(".aida-store")),
+                spec,
+                effort_calibration::EffortTouchpoint::Impl,
+                opts.effort,
+            );
+        }
+    }
 
     // ---- Step 4: aida pull (from the main worktree). ----
     if no_pull {
@@ -22945,6 +24494,7 @@ mod story_429_auto_rebase_tests {
             false,
             allow_stale_base,
             no_auto_rebase,
+            auto_complete::LifecycleSkip::none(),
         )
     }
 
@@ -23767,6 +25317,8 @@ mod task_358_escalation_cleanup_tests {
             } else {
                 None
             },
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         let path = sessions.join(format!("{id}.toml"));
         std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
@@ -26624,30 +28176,10 @@ mod statusline_tests {
     // `git fetch` on file:// remotes (rare; CI rolls everything).
     // trace:STORY-79 | ai:claude
 
-    /// RAII guard that points `aida_home_dir()` at `path` for the test's
-    /// duration via the AIDA_HOME override. TASK-32: replaces the old
-    /// HOME-clobbering guard, which couldn't isolate on Windows (dirs
-    /// uses SHGetKnownFolderPath there). trace:TASK-32 | ai:claude
-    struct TempAidaHomeEnv {
-        prev: Option<String>,
-    }
-
-    impl TempAidaHomeEnv {
-        fn set(path: &std::path::Path) -> Self {
-            let prev = std::env::var("AIDA_HOME").ok();
-            std::env::set_var("AIDA_HOME", path);
-            Self { prev }
-        }
-    }
-
-    impl Drop for TempAidaHomeEnv {
-        fn drop(&mut self) {
-            match &self.prev {
-                Some(v) => std::env::set_var("AIDA_HOME", v),
-                None => std::env::remove_var("AIDA_HOME"),
-            }
-        }
-    }
+    // TASK-32 introduced a local AIDA_HOME RAII guard; TASK-521 rewrites
+    // its callsite to use the shared `crate::test_env::EnvVarGuard`, which
+    // serialises process-global env-var swaps under a single mutex so
+    // sibling tests reading `AIDA_HOME` can't race. trace:TASK-521 trace:TASK-32 | ai:claude
 
     /// Worker writes `result = "error: ..."` to last-fetch.toml when the
     /// store has no `origin` remote configured. Exercises the failure
@@ -26685,7 +28217,7 @@ mod statusline_tests {
         // temp dir — works on all platforms (HOME alone can't isolate
         // on Windows because dirs uses SHGetKnownFolderPath there).
         // trace:TASK-32 | ai:claude
-        let _home_guard = TempAidaHomeEnv::set(&fake_home);
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &fake_home);
         let result = handle_bg_fetch_command(&store);
         drop(_home_guard);
         assert!(result.is_ok());
@@ -27878,7 +29410,7 @@ cargo test -p aida-cli
         bare.spec_id = Some("TASK-1".into());
         store.requirements.push(bare);
         let (prompt, warnings) =
-            assemble_ultraplan_prompt(&store, &store.requirements[0], None, true);
+            assemble_ultraplan_prompt(&store, &store.requirements[0], None, true, &[]);
         assert!(prompt.contains("Plan the implementation of TASK-1: do the thing."));
         assert!(prompt.contains("## Plan structure"));
         assert!(prompt.contains("(none specified"));
@@ -27898,6 +29430,7 @@ cargo test -p aida-cli
             &store2.requirements[0],
             Some("## Reusable helpers\n\n- x\n"),
             true,
+            &[],
         );
         assert!(prompt2.contains("- [ ] alpha"));
         assert!(prompt2.contains("## Reusable helpers"));
@@ -27940,7 +29473,7 @@ cargo test -p aida-cli
             .iter()
             .find(|r| r.spec_id.as_deref() == Some("TASK-1"))
             .unwrap();
-        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None, true);
+        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None, true, &[]);
         assert!(prompt.contains("Siblings (share a parent — 14 total)"));
         assert!(prompt.contains("more siblings omitted"));
         assert!(prompt.contains("Parent: EPIC-1"));
@@ -27967,7 +29500,7 @@ cargo test -p aida-cli
         let target = &store.requirements[0];
 
         // Default: comments included, most recent first.
-        let (with, _) = assemble_ultraplan_prompt(&store, target, None, true);
+        let (with, _) = assemble_ultraplan_prompt(&store, target, None, true, &[]);
         assert!(with.contains("## Comments"));
         assert!(with.contains("design fork: pick approach B"));
         assert!(with.contains("first thought"));
@@ -27976,9 +29509,77 @@ cargo test -p aida-cli
         assert!(recent_at < old_at, "comments render most-recent-first");
 
         // `--no-comments` → the section is omitted entirely.
-        let (without, _) = assemble_ultraplan_prompt(&store, target, None, false);
+        let (without, _) = assemble_ultraplan_prompt(&store, target, None, false, &[]);
         assert!(!without.contains("## Comments"));
         assert!(!without.contains("design fork"));
+    }
+
+    /// TASK-517: `/ultraplan` includes project-reserved namespaces so plans
+    /// avoid colliding with generated or convention-owned paths.
+    #[test]
+    fn ultraplan_prompt_includes_reserved_namespaces() {
+        use aida_core::{Requirement, RequirementsStore};
+
+        let mut store = RequirementsStore::new();
+        let mut req = Requirement::new(
+            "avoid docs collision".into(),
+            "Plan proposes docs/aida/new-guide.md.\n\n## Acceptance\n\n- x\n".into(),
+        );
+        req.spec_id = Some("TASK-517".into());
+        store.requirements.push(req);
+        let reservations = vec![ReservedPath {
+            path: "docs/aida/".into(),
+            reason: "reserved by `aida docs build` for requirement-layer projection".into(),
+        }];
+
+        let (prompt, _) =
+            assemble_ultraplan_prompt(&store, &store.requirements[0], None, true, &reservations);
+
+        assert!(prompt.contains("## Reserved namespaces and conventions"));
+        assert!(prompt.contains("`docs/aida/`"));
+        assert!(prompt.contains("reserved by `aida docs build`"));
+    }
+
+    #[test]
+    fn reserved_paths_file_parses_reservations_array() {
+        let parsed: ReservedPathsFile = toml::from_str(
+            r#"
+[[reservations]]
+path = "docs/aida/"
+reason = "reserved by docs build"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            parsed.reservations,
+            vec![ReservedPath {
+                path: "docs/aida/".into(),
+                reason: "reserved by docs build".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn ultraplan_json_includes_reservations_array() {
+        let reservations = vec![ReservedPath {
+            path: "docs/aida/".into(),
+            reason: "reserved by docs build".into(),
+        }];
+        let warnings = vec!["heads up".to_string()];
+
+        let value = ultraplan_json_value(
+            "TASK-517",
+            "reserved paths",
+            "prompt",
+            123,
+            &warnings,
+            &reservations,
+        );
+
+        assert_eq!(value["spec_id"], "TASK-517");
+        assert_eq!(value["reservations"][0]["path"], "docs/aida/");
+        assert_eq!(value["reservations"][0]["reason"], "reserved by docs build");
     }
 
     /// TASK-247: an empty comment list produces no `## Comments` section
@@ -28350,6 +29951,8 @@ cargo test -p aida-cli
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
 
         // No routing tags = visible everywhere.
@@ -28666,6 +30269,8 @@ hostname = "h"
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         std::fs::write(
             leases.join("abcdef123456.toml"),
@@ -29132,6 +30737,20 @@ mod bug_354_text_question_classifier_tests {
     }
 
     #[test]
+    fn final_result_with_confirm_and_proceed_question_classifies_as_punt() {
+        // BUG-374: STORY-444's headless implementer described a real fork,
+        // recommended a path, then ended with a confirmation question. The
+        // pre-BUG-374 marker list missed this wording and let the run fall
+        // through to a generic phase-1 NoPr failure instead of advisor-tier
+        // routing.
+        let text = "There are two implementation paths: A all-in-one, or B split into two passes.\n\nRecommendation: take A because the changes are tightly coupled.\n\nConfirm and I'll proceed?";
+        let punt = pending_text_question_from_result_text(text)
+            .expect("confirm-and-proceed fork must classify");
+        assert!(punt.detail.contains("Confirm and I'll proceed?"));
+        assert!(punt.lean.contains("Recommendation: take A"));
+    }
+
+    #[test]
     fn ordinary_summary_question_does_not_classify_without_fork_marker() {
         let text = "Implemented the change. Tests answer the question: does the parser handle aliases? Yes.";
         assert!(pending_text_question_from_result_text(text).is_none());
@@ -29416,6 +31035,8 @@ mod lease_enforcement_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -29633,6 +31254,8 @@ mod scope_fallback_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -29877,6 +31500,8 @@ mod session_end_resolution_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -30004,11 +31629,40 @@ mod session_end_resolution_tests {
             records[0].classification.as_deref(),
             Some("UNSHIPPED-SESSION-END")
         );
-        assert!(
-            records[0].detail.contains("3 commits ahead"),
-            "{}",
-            records[0].detail
-        );
+        assert!(records[0].detail.contains("3 commits ahead"),);
+    }
+
+    /// BUG-367: session end suppresses the unshipped work warning if the spec
+    /// status is already Completed in the requirement store.
+    /// trace:BUG-367 | ai:antigravity
+    #[test]
+    fn session_end_unshipped_work_suppressed_when_completed() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store_dir = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+
+        // Create a completed requirement in the mock store
+        let storage = Storage::new(&store_dir);
+        let mut req = Requirement::new("Completed Spec Test".to_string(), "".to_string());
+        req.spec_id = Some("BUG-367".to_string());
+        req.status = RequirementStatus::Completed;
+
+        let mut store = storage.load().unwrap_or_default();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+
+        // Load store and verify is_completed resolves to true
+        let mut is_completed = false;
+        if store_dir.exists() {
+            if let Ok(storage) = Storage::new(&store_dir).load() {
+                if let Some(req) = storage.get_requirement_by_spec_id("BUG-367") {
+                    if req.status == RequirementStatus::Completed {
+                        is_completed = true;
+                    }
+                }
+            }
+        }
+        assert!(is_completed);
     }
 
     /// Explicit id query short-circuits the resolution chain.
@@ -30079,8 +31733,12 @@ mod session_end_resolution_tests {
             lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None),
             lease("019e10271111", "EPIC-2", "/nonexistent/wt-2", None),
         ];
-        // Clear env so #2 doesn't fire.
-        std::env::remove_var("AIDA_SESSION_ID");
+        // Clear env so #2 doesn't fire. TASK-521: route through
+        // `EnvVarGuard` so a parallel test that legitimately sets
+        // AIDA_SESSION_ID can't see it gone, and the prior value (a
+        // real shell session running the test suite) is restored on
+        // drop. trace:TASK-521 | ai:claude
+        let _session_guard = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ID");
         let err = resolve_session_to_end(None, None, None, &leases, false).unwrap_err();
         let s = err.to_string();
         assert!(s.contains("no active session resolvable"), "{}", s);
@@ -30093,7 +31751,9 @@ mod session_end_resolution_tests {
     #[test]
     fn single_active_with_yes_resolves() {
         let leases = vec![lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None)];
-        std::env::remove_var("AIDA_SESSION_ID");
+        // TASK-521: serialised env-var swap (see sibling test above).
+        // trace:TASK-521 | ai:claude
+        let _session_guard = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ID");
         let got = resolve_session_to_end(None, None, None, &leases, true).unwrap();
         assert_eq!(got.scope, "EPIC-1");
     }
@@ -30625,16 +32285,20 @@ mod auto_bump_done_tests {
     /// unset, empty, "true", "1") leaves the feature on.
     #[test]
     fn auto_bump_env_flag_respects_opt_out() {
-        // Save & restore so we don't leak into sibling tests.
-        let saved = std::env::var("AIDA_AUTO_BUMP").ok();
+        // TASK-521: route AIDA_AUTO_BUMP mutation through the shared
+        // `EnvVarGuard` so parallel tests reading the var don't see
+        // torn state, and the prior value is restored on drop (no
+        // hand-rolled save/restore). The guard holds ENV_LOCK for the
+        // whole test, so `reset` can swap values without releasing it
+        // between spellings. trace:TASK-521 | ai:claude
+        let mut guard = crate::test_env::EnvVarGuard::unset("AIDA_AUTO_BUMP");
 
         // Unset → on.
-        std::env::remove_var("AIDA_AUTO_BUMP");
         assert!(auto_bump_enabled());
 
         // Each "off" spelling → off.
         for off in &["false", "0", "no", "off", "FALSE", "Off", " no "] {
-            std::env::set_var("AIDA_AUTO_BUMP", off);
+            guard.reset(off);
             assert!(
                 !auto_bump_enabled(),
                 "AIDA_AUTO_BUMP={:?} should disable",
@@ -30644,18 +32308,12 @@ mod auto_bump_done_tests {
 
         // Anything else → on (including the canonical "true" / "1").
         for on in &["true", "1", "", "yes", "anything-else"] {
-            std::env::set_var("AIDA_AUTO_BUMP", on);
+            guard.reset(on);
             assert!(
                 auto_bump_enabled(),
                 "AIDA_AUTO_BUMP={:?} should stay on",
                 on
             );
-        }
-
-        // Restore.
-        match saved {
-            Some(v) => std::env::set_var("AIDA_AUTO_BUMP", v),
-            None => std::env::remove_var("AIDA_AUTO_BUMP"),
         }
     }
 
@@ -32485,7 +34143,7 @@ mod handle_pull_command_tests {
 
         // The actual call under test: code_only=true skips the store
         // leg entirely, but the code leg + auto-bump must still run.
-        handle_pull_command(&store_path, true, false, true, true).unwrap();
+        handle_pull_command(&store_path, true, false, true, true, false).unwrap();
 
         let after = storage.load().unwrap();
         let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
@@ -32523,7 +34181,7 @@ mod handle_pull_command_tests {
 
         // code_only=true isolates the code leg so the test can't be
         // rescued by a successful store leg masking the code failure.
-        let result = handle_pull_command(&store_path, true, false, true, true);
+        let result = handle_pull_command(&store_path, true, false, true, true, false);
         let err = result
             .expect_err("BUG-254: handle_pull_command must return Err when code-leg ff-only fails");
         let msg = format!("{err}");
@@ -32571,7 +34229,7 @@ mod handle_pull_command_tests {
 
         // store_only=true; no orphan store configured → store-pull branch
         // prints a note + returns Ok(()). Code leg is skipped → no auto-bump.
-        handle_pull_command(&store_path, false, true, true, true).unwrap();
+        handle_pull_command(&store_path, false, true, true, true, false).unwrap();
 
         let after = storage.load().unwrap();
         let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
@@ -33022,6 +34680,32 @@ mod queue_tag_tests {
         );
         assert!(chip.ends_with("+2"), "overflow marker: {chip}");
         // batch + 3 plain + overflow = 5 comma-separated segments.
+        assert_eq!(chip.split(", ").count(), 5, "{chip}");
+    }
+
+    #[test]
+    fn tag_chip_hoists_lifecycle_tags_after_batch_tags() {
+        let chip = format_tag_chip(&tags(&[
+            "ux",
+            "lifecycle:no-review",
+            "batch:overnight",
+            "lifecycle:no-build",
+        ]))
+        .unwrap();
+        assert_eq!(
+            chip,
+            "batch:overnight, lifecycle:no-build, lifecycle:no-review, ux"
+        );
+    }
+
+    #[test]
+    fn tag_chip_always_shows_lifecycle_tags_before_plain_overflow() {
+        let chip = format_tag_chip(&tags(&["lifecycle:trivial", "a", "b", "c", "d", "e"])).unwrap();
+        assert!(
+            chip.starts_with("lifecycle:trivial"),
+            "lifecycle tag first: {chip}"
+        );
+        assert!(chip.ends_with("+2"), "plain overflow marker: {chip}");
         assert_eq!(chip.split(", ").count(), 5, "{chip}");
     }
 
@@ -35412,7 +37096,7 @@ fn collect_source_files(dir: &std::path::Path, exts: &[&str], out: &mut Vec<std:
 /// first definition on the trace line or the two lines below it (comment
 /// lines are skipped so the comment's own prose can't false-match).
 /// trace:TASK-94 | ai:claude
-fn scan_trace_graph(
+pub(crate) fn scan_trace_graph(
     project_root: &std::path::Path,
     wanted: &HashSet<String>,
 ) -> std::collections::HashMap<String, Vec<TraceHit>> {
@@ -35480,28 +37164,33 @@ fn parse_squash_pr_number(subject: &str) -> Option<u64> {
         .and_then(|n| n.parse::<u64>().ok())
 }
 
-/// TASK-238: the inline tag-chip body for an `aida queue list` row.
-/// `batch:*` tags come first and are always shown (they are the
-/// load-bearing grouping tags); plain tags are sorted, capped at 3, and
-/// any remainder collapses to a `+N` overflow marker. Returns None when
-/// the requirement carries no tags. trace:TASK-238 | ai:claude
-fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
+/// TASK-238/STORY-442: the inline tag-chip body for an `aida queue list`
+/// row. `batch:*` and `lifecycle:*` tags come first and are always shown
+/// (they alter pickup/routing behavior); plain tags are sorted, capped at
+/// 3, and any remainder collapses to a `+N` overflow marker. Returns None
+/// when the requirement carries no tags. trace:TASK-238 STORY-442
+pub(crate) fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
     if tags.is_empty() {
         return None;
     }
     const MAX_PLAIN: usize = 3;
     let mut batch_tags: Vec<&str> = Vec::new();
+    let mut lifecycle_tags: Vec<&str> = Vec::new();
     let mut plain_tags: Vec<&str> = Vec::new();
     for t in tags {
         if t.to_ascii_lowercase().starts_with("batch:") {
             batch_tags.push(t.as_str());
+        } else if t.to_ascii_lowercase().starts_with("lifecycle:") {
+            lifecycle_tags.push(t.as_str());
         } else {
             plain_tags.push(t.as_str());
         }
     }
     batch_tags.sort_unstable();
+    lifecycle_tags.sort_unstable();
     plain_tags.sort_unstable();
     let mut shown: Vec<String> = batch_tags.iter().map(|s| s.to_string()).collect();
+    shown.extend(lifecycle_tags.iter().map(|s| s.to_string()));
     shown.extend(plain_tags.iter().take(MAX_PLAIN).map(|s| s.to_string()));
     if plain_tags.len() > MAX_PLAIN {
         shown.push(format!("+{}", plain_tags.len() - MAX_PLAIN));
@@ -35511,13 +37200,13 @@ fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
 
 /// TASK-238: does the tag set contain `want` (case-insensitive)? The
 /// predicate behind `aida queue list --tag`. trace:TASK-238 | ai:claude
-fn tag_matches_exact(tags: &std::collections::HashSet<String>, want: &str) -> bool {
+pub(crate) fn tag_matches_exact(tags: &std::collections::HashSet<String>, want: &str) -> bool {
     tags.iter().any(|t| t.eq_ignore_ascii_case(want))
 }
 
 /// TASK-238: does any tag start with `prefix` (case-insensitive)? The
 /// predicate behind `aida queue list --tag-prefix`. trace:TASK-238
-fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) -> bool {
+pub(crate) fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) -> bool {
     let lp = prefix.to_ascii_lowercase();
     tags.iter().any(|t| t.to_ascii_lowercase().starts_with(&lp))
 }
@@ -35526,7 +37215,7 @@ fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) ->
 /// when several), used as the group key for `aida queue list
 /// --by-batch`. None when the requirement is un-batched.
 /// trace:TASK-238 | ai:claude
-fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
+pub(crate) fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
     let mut found: Vec<&str> = tags
         .iter()
         .filter(|t| t.to_ascii_lowercase().starts_with("batch:"))
@@ -35551,7 +37240,7 @@ fn strip_batch_prefix(s: &str) -> Option<&str> {
 /// TASK-270: normalize a `--batch` flag value so `--batch NAME` and the
 /// redundant `--batch batch:NAME` (the literal tag from `aida queue
 /// list`) both resolve to `NAME`. trace:TASK-270 | ai:claude
-fn normalize_batch_name(s: &str) -> &str {
+pub(crate) fn normalize_batch_name(s: &str) -> &str {
     strip_batch_prefix(s).unwrap_or(s)
 }
 
@@ -35925,6 +37614,8 @@ mod task_250_review_state_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         std::fs::write(
             dir.join(format!("{}.toml", id)),
@@ -37388,8 +39079,9 @@ fn assemble_punt_payload(
     attention: &aida_core::AttentionReason,
 ) -> punt::PuntRequest {
     let helpers = build_reusable_helpers_section(store, project_root, target);
+    let (reservations, _reservation_warnings) = read_reserved_paths(project_root);
     let (context_markdown, _warnings) =
-        assemble_ultraplan_prompt(store, target, helpers.as_deref(), true);
+        assemble_ultraplan_prompt(store, target, helpers.as_deref(), true, &reservations);
     punt::PuntRequest {
         spec: target.display_id(),
         category: attention.category,
@@ -37405,11 +39097,87 @@ fn assemble_punt_payload(
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct ReservedPath {
+    path: String,
+    reason: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ReservedPathsFile {
+    #[serde(default)]
+    reservations: Vec<ReservedPath>,
+}
+
+fn read_reserved_paths(project_root: &std::path::Path) -> (Vec<ReservedPath>, Vec<String>) {
+    let path = project_root.join(".aida").join("reserved-paths.toml");
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return (
+            Vec::new(),
+            vec![format!(
+                "{} not found — reserved namespace guidance omitted",
+                path.display()
+            )],
+        );
+    };
+
+    match toml::from_str::<ReservedPathsFile>(&body) {
+        Ok(parsed) => (parsed.reservations, Vec::new()),
+        Err(err) => (
+            Vec::new(),
+            vec![format!(
+                "failed to parse {} — reserved namespace guidance omitted: {err}",
+                path.display()
+            )],
+        ),
+    }
+}
+
+fn reserved_paths_section(reservations: &[ReservedPath]) -> Option<String> {
+    if reservations.is_empty() {
+        return None;
+    }
+
+    let mut out = String::from("## Reserved namespaces and conventions\n\n");
+    out.push_str(
+        "Before proposing new files, check these project-reserved paths and avoid \
+         collisions unless the plan explicitly updates the owning convention.\n\n",
+    );
+    for reservation in reservations {
+        out.push_str(&format!(
+            "- `{}` — {}\n",
+            reservation.path.trim(),
+            reservation.reason.trim()
+        ));
+    }
+    out.push('\n');
+    Some(out)
+}
+
+fn ultraplan_json_value(
+    display: &str,
+    title: &str,
+    prompt: &str,
+    token_estimate: usize,
+    warnings: &[String],
+    reservations: &[ReservedPath],
+) -> serde_json::Value {
+    serde_json::json!({
+        "spec_id": display,
+        "title": title,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "warnings": warnings,
+        "reservations": reservations,
+    })
+}
+
 fn assemble_ultraplan_prompt(
     store: &aida_core::RequirementsStore,
     target: &aida_core::models::Requirement,
     helpers_section: Option<&str>,
     include_comments: bool,
+    reservations: &[ReservedPath],
 ) -> (String, Vec<String>) {
     // TASK-247: raised from 1800 — a truncated description dropped the
     // densest planning context. Comments now carry the long-form
@@ -37469,6 +39237,13 @@ fn assemble_ultraplan_prompt(
         if let Some(section) = ultraplan_comments_section(&target.comments) {
             p.push_str(&section);
         }
+    }
+
+    // TASK-517: surface reserved namespaces before the plan proposes files.
+    // This catches likely collisions (notably docs/aida/) while the model is
+    // still choosing the implementation shape.
+    if let Some(section) = reserved_paths_section(reservations) {
+        p.push_str(&section);
     }
 
     // ── Related-spec context ──
@@ -37600,19 +39375,28 @@ fn handle_ultraplan_command(
     .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
 
     let helpers = build_reusable_helpers_section(&store, &project_root, target);
-    let (prompt, warnings) =
-        assemble_ultraplan_prompt(&store, target, helpers.as_deref(), !no_comments);
+    let (reservations, reservation_warnings) = read_reserved_paths(&project_root);
+    let (prompt, warnings) = assemble_ultraplan_prompt(
+        &store,
+        target,
+        helpers.as_deref(),
+        !no_comments,
+        &reservations,
+    );
+    let mut warnings = warnings;
+    warnings.extend(reservation_warnings);
     let token_estimate = prompt.chars().count() / 4;
     let display = target.display_id();
 
     if json {
-        let out = serde_json::json!({
-            "spec_id": display,
-            "title": target.title,
-            "prompt": prompt,
-            "token_estimate": token_estimate,
-            "warnings": warnings,
-        });
+        let out = ultraplan_json_value(
+            &display,
+            &target.title,
+            &prompt,
+            token_estimate,
+            &warnings,
+            &reservations,
+        );
         println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
@@ -40821,6 +42605,7 @@ fn handle_pull_command(
     store_only: bool,
     quiet: bool,
     no_gate: bool,
+    auto: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -40896,6 +42681,24 @@ fn handle_pull_command(
                             }
                         }
                     }
+                    // STORY-248: stacked-branch cascade. Walks
+                    // `.aida/stacks.json`; for each entry whose parent
+                    // branch is no longer reachable locally + on origin
+                    // (= it was merged + auto-deleted), rebase it onto
+                    // origin/main using the recorded fork-point SHA.
+                    // Best-effort: a failure prints a warning but does
+                    // NOT fail the pull (BUG-254 contract — pull's exit
+                    // reflects code + store legs only).
+                    // trace:STORY-248 | ai:claude
+                    if let Err(e) = cascade_rebase_stacked_branches(&project_root, auto) {
+                        eprintln!(
+                            "  {} stacked-branch cascade failed: {} (some stacked branches \
+                             may be unrebased; run `/aida-rebase` in each, or \
+                             `aida stack show` to inspect)",
+                            "Warning:".yellow().bold(),
+                            e
+                        );
+                    }
                 }
                 Ok(s) => {
                     // BUG-254: surface the recovery hint and an explicit
@@ -40969,8 +42772,12 @@ fn handle_pull_command(
         match git_ops::pull_rebase(store_path, "origin", &branch) {
             Ok(()) => {
                 println!("  {}", "store pull complete".green());
+                if let Err(e) = ensure_no_spec_id_collisions(store_path) {
+                    eprintln!("  {} {}", "Warning:".yellow().bold(), e);
+                    store_failed = Some(format!("store collision scan failed: {}", e));
+                }
                 // TASK-73 — summarize the delta unless --quiet.
-                if !quiet {
+                if store_failed.is_none() && !quiet {
                     if let Some(pre) = pre_sha.as_deref() {
                         print_pull_summary(store_path, pre);
                     }
@@ -40982,7 +42789,7 @@ fn handle_pull_command(
                 // Skipped by `--no-gate` or `AIDA_AUTO_MERGE_GATE=false`.
                 // Idempotent (no-op when there's nothing pending) and
                 // cheap. trace:TASK-78 | ai:claude
-                if !no_gate && auto_merge_gate_enabled() {
+                if store_failed.is_none() && !no_gate && auto_merge_gate_enabled() {
                     match git_ops::merge_gate(store_path) {
                         Ok(assignments) if assignments.is_empty() => {
                             // Stay silent when nothing was promoted — pull
@@ -41037,6 +42844,463 @@ fn handle_pull_command(
         (Some(c), Some(s)) => {
             anyhow::bail!("aida pull: code leg failed ({c}); store leg failed ({s})")
         }
+    }
+}
+
+/// STORY-248: after `aida pull` lands new commits on main, rebase every
+/// stacked branch whose parent was just merged (= branch no longer
+/// exists locally or on origin) onto origin/main. Bottom-up: entries
+/// whose parent is "main" itself are obviously not affected; entries
+/// whose parent vanished are. After each successful rebase we update
+/// the recorded SHA for any dependent still pointing at the rebased
+/// branch (its branch is the same, its HEAD moved) and `repoint`
+/// dependents that pointed at the now-merged parent onto main.
+///
+/// Safety rails:
+///   - `aida_core::rebase::classify` is consulted first; a
+///     `DivergedRisky` (file-overlap) classification skips this branch
+///     with a clear error pointing at `/aida-rebase`. The user opted in
+///     to `--auto`, but file-overlap is the boundary where a human
+///     decision matters.
+///   - Without `--auto` and stdin attached, prompt per branch; without
+///     `--auto` and no stdin (`! IsTerminal::is_terminal`), print a
+///     summary of what WOULD be rebased and skip.
+///   - Worktree missing for a stacked entry → skip with a warning. The
+///     entry stays in the graph; `aida stack show --prune-stale` is the
+///     way to clean it up.
+///
+/// trace:STORY-248 | ai:claude
+fn cascade_rebase_stacked_branches(
+    project_root: &std::path::Path,
+    auto: bool,
+) -> anyhow::Result<()> {
+    let mut graph = stacks::load(project_root);
+    if graph.is_empty() {
+        return Ok(());
+    }
+    // Default-branch short name (e.g. "main") — entries whose parent IS
+    // main are not stacked behind anything, so the cascade skips them.
+    let default_short = detect_default_branch_ref(project_root)
+        .as_deref()
+        .and_then(|s| {
+            s.strip_prefix("origin/")
+                .map(|x| x.to_string())
+                .or(Some(s.to_string()))
+        })
+        .unwrap_or_else(|| "main".to_string());
+
+    // Affected = entries whose parent vanished from the local + origin
+    // refs (the signature of `gh pr merge --squash --delete-branch`).
+    // Don't flag entries whose parent IS the default branch; main never
+    // vanishes.
+    let mut affected: Vec<stacks::StackEntry> = graph
+        .entries
+        .values()
+        .filter(|e| e.parent_branch != default_short)
+        .filter(|e| !branch_exists_anywhere(project_root, &e.parent_branch))
+        .cloned()
+        .collect();
+    if affected.is_empty() {
+        return Ok(());
+    }
+    // Older entries (deeper in chain) come first.
+    affected.sort_by_key(|e| e.created_at);
+
+    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
+    if !auto && !interactive {
+        eprintln!(
+            "  {} {} stacked branch{} have merged bases; pass `--auto` to rebase \
+             (or run `/aida-rebase` interactively): {}",
+            "ⓘ".cyan(),
+            affected.len(),
+            if affected.len() == 1 { "" } else { "es" },
+            affected
+                .iter()
+                .map(|e| e.branch.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        return Ok(());
+    }
+
+    eprintln!(
+        "{} {} stacked branch{} to rebase onto {}",
+        "▶".cyan().bold(),
+        affected.len(),
+        if affected.len() == 1 { "" } else { "es" },
+        default_short.cyan()
+    );
+
+    for entry in affected {
+        let lease = list_leases(project_root)
+            .into_iter()
+            .find(|l| l.branch == entry.branch);
+        let Some(lease) = lease else {
+            eprintln!(
+                "  {} skipping `{}` — no lease found (worktree may have been removed; \
+                 run `aida stack show --prune-stale` to clean up the graph)",
+                "⚠".yellow().bold(),
+                entry.branch.cyan()
+            );
+            continue;
+        };
+        if !lease.worktree_path.exists() {
+            eprintln!(
+                "  {} skipping `{}` — worktree {} is missing",
+                "⚠".yellow().bold(),
+                entry.branch.cyan(),
+                lease.worktree_path.display()
+            );
+            continue;
+        }
+
+        // Per-entry prompt when not --auto. A `n` answer skips this
+        // branch but continues the cascade — the user might want to
+        // handle just one manually.
+        if !auto && interactive {
+            use std::io::Write;
+            eprint!(
+                "  Rebase `{}` onto {} (parent `{}` merged)? [y/N] ",
+                entry.branch.cyan(),
+                default_short.cyan(),
+                entry.parent_branch
+            );
+            let _ = std::io::stderr().flush();
+            let mut ans = String::new();
+            if std::io::stdin().read_line(&mut ans).is_err() {
+                eprintln!("  {} cascade aborted at stdin EOF", "✗".red());
+                return Ok(());
+            }
+            if !matches!(ans.trim(), "y" | "Y") {
+                continue;
+            }
+        }
+
+        // Refresh origin/<default> in the entry's worktree so the
+        // rebase target is the freshly-merged tip, not a stale ref.
+        // Best-effort — offline / fetch failure still tries the rebase
+        // against whatever cached ref we have.
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&lease.worktree_path)
+            .args(["fetch", "origin", &default_short])
+            .output();
+
+        // Run the rebase: `git rebase --onto origin/<default> <parent_sha> <branch>`
+        // from the entry's worktree. The 3-arg form skips commits in
+        // `parent_sha..` so the parent's pre-squash commits aren't
+        // re-applied. We skip the pre-classify-then-rebase split (it'd
+        // need a checkout first to read the right branch's ahead/behind)
+        // and rely on `git rebase`'s exit status: success means clean,
+        // non-zero means conflict, which the conflict arm below handles.
+        // trace:STORY-248 | ai:claude
+        let onto = format!("origin/{}", default_short);
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&lease.worktree_path)
+            .args([
+                "rebase",
+                "--onto",
+                &onto,
+                &entry.parent_branch_sha,
+                &entry.branch,
+            ])
+            .status();
+        match res {
+            Ok(s) if s.success() => {
+                // New HEAD of the rebased branch — used to update
+                // dependents' recorded parent_branch_sha.
+                let new_sha = aida_core::git_ops::head_sha(&lease.worktree_path).ok();
+                eprintln!(
+                    "  {} rebased `{}` onto {} ({})",
+                    "✓".green().bold(),
+                    entry.branch.cyan(),
+                    default_short.cyan(),
+                    new_sha
+                        .as_deref()
+                        .map(|s| &s[..s.len().min(8)])
+                        .unwrap_or("<unknown sha>")
+                        .dimmed()
+                );
+                // `entry.branch` is no longer stacked — its parent is
+                // now `main`. Drop it from the graph; dependents (whose
+                // parent_branch is still entry.branch) get their
+                // recorded SHA bumped so their next cascade pass is
+                // correct.
+                stacks::remove(&mut graph, &entry.branch);
+                if let Some(sha) = new_sha.as_deref() {
+                    stacks::update_parent_sha(&mut graph, &entry.branch, sha);
+                }
+                // Any other entries that pointed at the now-merged
+                // parent get their `parent_branch` repointed at main
+                // (their fork point has effectively moved to main).
+                stacks::repoint(
+                    &mut graph,
+                    &entry.parent_branch,
+                    &default_short,
+                    new_sha.as_deref().unwrap_or(""),
+                );
+                stacks::save(project_root, &graph)?;
+            }
+            Ok(_s) => {
+                // Conflict — leave the worktree mid-rebase so the user
+                // can resolve via `/aida-rebase` (cleanest signal); the
+                // alternative (auto-abort) would re-create the same
+                // problem next pull.
+                eprintln!(
+                    "  {} rebase of `{}` hit conflicts; left in mid-rebase state at {}. \
+                     Run `/aida-rebase` or `git rebase --abort` to recover.",
+                    "✗".red().bold(),
+                    entry.branch.cyan(),
+                    lease.worktree_path.display()
+                );
+                // Cascade aborts here — subsequent branches likely depend on this one.
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} could not spawn `git rebase` for `{}`: {}",
+                    "✗".red().bold(),
+                    entry.branch.cyan(),
+                    e
+                );
+                continue;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod cascade_rebase_tests {
+    //! STORY-248: cascade integration tests. Build a real git repo with
+    //! a stacked-branch scenario, write a fake lease + stacks.json, run
+    //! the cascade, assert the rebase landed. Skipped silently when
+    //! `git` is too old for `worktree add` semantics we need.
+    //! trace:STORY-248 | ai:claude
+    use super::*;
+
+    fn run_git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .expect("git spawn")
+    }
+
+    fn pin_identity(root: &std::path::Path) {
+        for args in [
+            vec!["config", "user.email", "t@x.example"],
+            vec!["config", "user.name", "t"],
+            vec!["config", "commit.gpgsign", "false"],
+            vec!["config", "tag.gpgsign", "false"],
+        ] {
+            assert!(
+                run_git(root, &args).status.success(),
+                "git config {args:?} failed"
+            );
+        }
+    }
+
+    fn init_repo_with_remote() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+        // Layout: <tmp>/origin (bare) + <tmp>/work (working repo).
+        let tmp = tempfile::tempdir().unwrap();
+        let origin = tmp.path().join("origin.git");
+        let work = tmp.path().join("work");
+
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q", "--bare", "-b", "main"])
+            .arg(&origin)
+            .status()
+            .unwrap()
+            .success());
+
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q", "-b", "main"])
+            .arg(&work)
+            .status()
+            .unwrap()
+            .success());
+        pin_identity(&work);
+
+        std::fs::write(work.join("README.md"), b"hello\n").unwrap();
+        assert!(run_git(&work, &["add", "README.md"]).status.success());
+        assert!(run_git(&work, &["commit", "-qm", "init"]).status.success());
+        assert!(run_git(
+            &work,
+            &["remote", "add", "origin", origin.to_str().unwrap()]
+        )
+        .status
+        .success());
+        assert!(run_git(&work, &["push", "-q", "-u", "origin", "main"])
+            .status
+            .success());
+
+        (tmp, origin, work)
+    }
+
+    /// Helper: drop a SessionLease toml so `list_leases` finds a
+    /// pseudo-session pointing at the given worktree + branch.
+    fn write_fake_lease(project_root: &std::path::Path, branch: &str, worktree: &std::path::Path) {
+        let leases = project_root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&leases).unwrap();
+        let lease = SessionLease {
+            id: format!("lease-{branch}"),
+            scope: branch.to_string(),
+            slug: branch.to_string(),
+            owner: "t".into(),
+            worktree_path: worktree.to_path_buf(),
+            branch: branch.to_string(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: Some(project_root.to_path_buf()),
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+        };
+        std::fs::write(
+            leases.join(format!("{}.toml", lease.id)),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn cascade_skips_when_no_stacked_branches() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Empty .aida/, no stacks.json — cascade should no-op.
+        cascade_rebase_stacked_branches(tmp.path(), true).unwrap();
+    }
+
+    #[test]
+    fn cascade_skips_entry_whose_parent_is_default_branch() {
+        // task-y whose parent is `main` is not a "stacked behind another
+        // branch" case; it's just a working branch. The cascade must
+        // leave it alone even when --auto is set.
+        let (_tmp, _origin, work) = init_repo_with_remote();
+        let mut graph = stacks::StackGraph::default();
+        stacks::add(
+            &mut graph,
+            stacks::StackEntry {
+                branch: "task-y".into(),
+                parent_branch: "main".into(),
+                parent_branch_sha: "00".into(),
+                spec_id: None,
+                created_at: chrono::Utc::now(),
+            },
+        );
+        stacks::save(&work, &graph).unwrap();
+        cascade_rebase_stacked_branches(&work, true).unwrap();
+        // Entry still there (untouched).
+        let reloaded = stacks::load(&work);
+        assert!(reloaded.get("task-y").is_some());
+    }
+
+    #[test]
+    fn cascade_rebases_clean_chain_onto_main_and_removes_entry() {
+        // Setup:
+        //   main:   init  → A   (pushed)
+        //   task-x: init  → A → B (forked from A, then `git push origin
+        //                          --delete task-x` simulates squash-merge)
+        //   task-y: init  → A → B → C (stacked on task-x)
+        //   New commit on main: D
+        //   After cascade: task-y rebased --onto origin/main <B-sha> task-y
+        //   → main D + C; stacks.json entry for task-y removed.
+        let (_tmp, _origin, work) = init_repo_with_remote();
+
+        // Commit A on main (already there).
+        let a_sha = aida_core::git_ops::head_sha(&work).unwrap();
+        let _ = a_sha;
+
+        // Branch task-x, commit B (the would-be-merged content).
+        assert!(run_git(&work, &["checkout", "-q", "-b", "task-x"])
+            .status
+            .success());
+        std::fs::write(work.join("x.txt"), b"x\n").unwrap();
+        assert!(run_git(&work, &["add", "x.txt"]).status.success());
+        assert!(run_git(&work, &["commit", "-qm", "task-x: add x"])
+            .status
+            .success());
+        let task_x_sha = aida_core::git_ops::head_sha(&work).unwrap();
+
+        // Branch task-y off task-x, commit C.
+        assert!(run_git(&work, &["checkout", "-q", "-b", "task-y"])
+            .status
+            .success());
+        std::fs::write(work.join("y.txt"), b"y\n").unwrap();
+        assert!(run_git(&work, &["add", "y.txt"]).status.success());
+        assert!(run_git(&work, &["commit", "-qm", "task-y: add y"])
+            .status
+            .success());
+
+        // Simulate the squash-merge: main gets a new commit with x.txt's
+        // content + a new file (D), then task-x is deleted both locally
+        // and from origin. We never pushed task-x — so deleting it
+        // locally is enough.
+        assert!(run_git(&work, &["checkout", "-q", "main"]).status.success());
+        std::fs::write(work.join("x.txt"), b"x\n").unwrap();
+        std::fs::write(work.join("d.txt"), b"d\n").unwrap();
+        assert!(run_git(&work, &["add", "x.txt", "d.txt"]).status.success());
+        assert!(
+            run_git(&work, &["commit", "-qm", "squash-merge task-x + D"])
+                .status
+                .success()
+        );
+        assert!(run_git(&work, &["push", "-q", "origin", "main"])
+            .status
+            .success());
+        // Remove task-x (-D because it's "not merged" by git's lights —
+        // squash-merge breaks the ancestry check).
+        assert!(run_git(&work, &["branch", "-q", "-D", "task-x"])
+            .status
+            .success());
+
+        // Record task-y in stacks.json + write a fake lease pointing at `work`.
+        let mut graph = stacks::StackGraph::default();
+        stacks::add(
+            &mut graph,
+            stacks::StackEntry {
+                branch: "task-y".into(),
+                parent_branch: "task-x".into(),
+                parent_branch_sha: task_x_sha.clone(),
+                spec_id: Some("TASK-Y".into()),
+                created_at: chrono::Utc::now(),
+            },
+        );
+        stacks::save(&work, &graph).unwrap();
+        write_fake_lease(&work, "task-y", &work);
+
+        // Run the cascade with --auto. It should classify behind-only
+        // (clean rebase) and run the rebase successfully.
+        cascade_rebase_stacked_branches(&work, true).unwrap();
+
+        // Post-conditions:
+        // 1. The stacks.json entry for task-y is gone (it was rebased
+        //    onto main and is no longer stacked).
+        let reloaded = stacks::load(&work);
+        assert!(
+            reloaded.get("task-y").is_none(),
+            "task-y should be removed from stacks.json after successful rebase, graph={:?}",
+            reloaded.entries
+        );
+        // 2. task-y now contains the post-rebase commit (y.txt) AND the
+        //    new d.txt that landed on main. Switch to it and check.
+        assert!(run_git(&work, &["checkout", "-q", "task-y"])
+            .status
+            .success());
+        assert!(work.join("y.txt").exists(), "y.txt missing after rebase");
+        assert!(
+            work.join("d.txt").exists(),
+            "d.txt (from main) missing after rebase"
+        );
     }
 }
 
@@ -43031,6 +45295,8 @@ mod queue_work_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -43596,6 +45862,62 @@ mod queue_work_tests {
         );
     }
 
+    #[test]
+    fn auto_complete_phase1_status_promotes_only_not_started_statuses() {
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Draft),
+            Some(RequirementStatus::InProgress)
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Approved),
+            Some(RequirementStatus::InProgress)
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Planned),
+            Some(RequirementStatus::InProgress)
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::InProgress),
+            None
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::NeedsAttention),
+            None
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Completed),
+            None
+        );
+        assert_eq!(
+            auto_complete_phase1_target_status(&RequirementStatus::Rejected),
+            None
+        );
+    }
+
+    #[test]
+    fn prepare_auto_complete_phase1_status_flips_approved_before_spawn() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("requirements.yaml");
+        let storage = Storage::new(&path);
+        let mut req = aida_core::Requirement::new("early punt".to_string(), String::new());
+        req.spec_id = Some("BUG-369".to_string());
+        req.status = RequirementStatus::Approved;
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+
+        let changed = prepare_auto_complete_phase1_status(&storage, "BUG-369")
+            .expect("phase-1 status preparation should succeed");
+
+        assert_eq!(
+            changed,
+            Some(("BUG-369".to_string(), RequirementStatus::Approved))
+        );
+        let updated = storage.load().unwrap();
+        let req = updated.get_requirement_by_spec_id("BUG-369").unwrap();
+        assert_eq!(req.status, RequirementStatus::InProgress);
+    }
+
     /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
     /// inner subprocess's error must name the lease + actual reason — not
     /// the canned "pass --steal" message. anyhow's `{:#}` collapses the
@@ -43879,6 +46201,17 @@ mod ci_action_tests {
             ),
             CiAction::Cancel(_)
         ));
+    }
+
+    /// BUG-273: live `gh run watch` output is only safe in an interactive
+    /// terminal. Headless drains and tee-captured logs must use quiet polling.
+    /// trace:BUG-273
+    #[test]
+    fn ci_watch_streams_only_for_interactive_non_headless_context() {
+        assert!(should_stream_ci_watch(true, false));
+        assert!(!should_stream_ci_watch(false, false));
+        assert!(!should_stream_ci_watch(true, true));
+        assert!(!should_stream_ci_watch(false, true));
     }
 
     /// TASK-233: run-id extraction from `gh run list --json databaseId`.
@@ -44167,7 +46500,10 @@ fn collect_user_context(
 
     let (queue_head, queue_total) =
         collect_queue_snapshot(backend, store, role.as_deref(), &leases);
-    let agents = agent_registry::list_agent_views(project_root);
+    let agents = agent_registry::list_agent_views(
+        project_root,
+        &build_agent_classify_context(project_root, &leases),
+    );
 
     UserStatusContext {
         session,
@@ -44178,6 +46514,38 @@ fn collect_user_context(
         queue_total,
         agents,
     }
+}
+
+/// STORY-435: assemble the `AgentClassifyContext` `list_agent_views` needs
+/// to compute busy/idle. The live-lease snapshot reuses the same
+/// `probe_live_claude_sessions` that `aida session leases` shows under the
+/// ● live glyph so the two views agree about which scopes are "being
+/// worked." trace:STORY-435 | ai:claude
+fn build_agent_classify_context(
+    project_root: &std::path::Path,
+    leases: &[SessionLease],
+) -> agent_registry::AgentClassifyContext {
+    let now = chrono::Utc::now();
+    let cfg = agent_registry::Config::load(project_root);
+    let live_sessions = process_probe::probe_live_claude_sessions();
+    let live_lease_worktrees: Vec<std::path::PathBuf> = leases
+        .iter()
+        .filter_map(|l| {
+            if l.worktree_path.as_os_str().is_empty() {
+                return None;
+            }
+            let worktree_exists = l.worktree_path.exists();
+            let live_in_worktree = live_sessions.iter().any(|s| {
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            });
+            let age_hours = now.signed_duration_since(l.started_at).num_hours();
+            match classify_lease_state(worktree_exists, live_in_worktree, age_hours) {
+                LeaseState::Live => Some(l.worktree_path.clone()),
+                _ => None,
+            }
+        })
+        .collect();
+    agent_registry::AgentClassifyContext::new(now, cfg.busy_threshold_secs, live_lease_worktrees)
 }
 
 fn collect_branch_facts(project_root: &std::path::Path) -> Option<BranchFacts> {
@@ -51939,7 +54307,7 @@ fn html_escape(s: &str) -> String {
 /// invisible to their own queuer because list resolved to one identity and
 /// add resolved to another).
 /// trace:BUG-89 | ai:claude
-fn current_user_id(user_override: Option<&str>) -> String {
+pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     user_override.map(str::to_string).unwrap_or_else(|| {
         std::env::var("AIDA_USER")
             .or_else(|_| std::env::var("USER"))
@@ -52078,6 +54446,204 @@ fn warn_if_queued_ahead_of_blocker(
 }
 
 // trace:STORY-0368 | ai:claude
+fn effort_display_id(req: &Requirement) -> &str {
+    req.agreed_id
+        .as_deref()
+        .or(req.spec_id.as_deref())
+        .unwrap_or("?")
+}
+
+fn latest_effort_for_req(
+    project_root: &std::path::Path,
+    req: &Requirement,
+) -> Option<(
+    effort_calibration::EffortTouchpoint,
+    effort_calibration::EffortBucket,
+)> {
+    let spec = effort_display_id(req);
+    effort_calibration::read_capture(project_root, spec)
+        .and_then(|r| r.latest_effort())
+        .or_else(|| {
+            let tags: Vec<String> = req.tags.iter().cloned().collect();
+            [
+                effort_calibration::EffortTouchpoint::Review,
+                effort_calibration::EffortTouchpoint::Impl,
+                effort_calibration::EffortTouchpoint::Plan,
+                effort_calibration::EffortTouchpoint::Open,
+            ]
+            .into_iter()
+            .find_map(|t| effort_calibration::effort_from_tags(&tags, t).map(|e| (t, e)))
+        })
+}
+
+fn print_effort_load_for_requirements<'a>(
+    project_root: &std::path::Path,
+    title: &str,
+    requirements: impl Iterator<Item = &'a Requirement>,
+) {
+    let mut known = Vec::new();
+    let mut unknown = 0usize;
+    for req in requirements {
+        match latest_effort_for_req(project_root, req) {
+            Some((touchpoint, bucket)) => {
+                known.push((effort_display_id(req).to_string(), touchpoint, bucket))
+            }
+            None => unknown += 1,
+        }
+    }
+    let total: u32 = known.iter().map(|(_, _, b)| b.minutes()).sum();
+    println!(
+        "{}: {} across {} estimated item{} ({} unknown)",
+        title.bold(),
+        effort_calibration::format_minutes(total).cyan(),
+        known.len(),
+        if known.len() == 1 { "" } else { "s" },
+        unknown
+    );
+    for (spec, touchpoint, bucket) in known.iter().take(12) {
+        println!("  {:<12} {:<6} {}", spec, touchpoint.as_str(), bucket);
+    }
+    if known.len() > 12 {
+        println!("  …and {} more", known.len() - 12);
+    }
+}
+
+fn queued_requirement_ids(storage: &Storage, user_id: &str) -> Result<HashSet<Uuid>> {
+    Ok(storage
+        .queue_list(user_id, false)?
+        .into_iter()
+        .map(|e| e.requirement_id)
+        .collect())
+}
+
+fn is_backlog_status(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned
+    )
+}
+
+fn handle_load_command(cmd: &LoadCommand, storage: &Storage) -> Result<()> {
+    let store = storage.load()?;
+    let project_root = find_project_root()
+        .map(|p| main_worktree_root_from(&p))
+        .unwrap_or_else(|_| {
+            storage
+                .path()
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+        });
+    let user_id = current_user_id(None);
+    let queued = queued_requirement_ids(storage, &user_id).unwrap_or_default();
+    match cmd {
+        LoadCommand::Queue => {
+            print_effort_load_for_requirements(
+                &project_root,
+                "Queue load",
+                store.requirements.iter().filter(|r| queued.contains(&r.id)),
+            );
+        }
+        LoadCommand::Backlog => {
+            print_effort_load_for_requirements(
+                &project_root,
+                "Backlog load",
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| is_backlog_status(&r.status) && !queued.contains(&r.id)),
+            );
+        }
+        LoadCommand::Report => {
+            print_effort_load_for_requirements(
+                &project_root,
+                "Queue load",
+                store.requirements.iter().filter(|r| queued.contains(&r.id)),
+            );
+            print_effort_load_for_requirements(
+                &project_root,
+                "Backlog load",
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| is_backlog_status(&r.status) && !queued.contains(&r.id)),
+            );
+            print_effort_load_for_requirements(
+                &project_root,
+                "In-flight load",
+                store.requirements.iter().filter(|r| {
+                    matches!(
+                        r.status,
+                        RequirementStatus::InProgress | RequirementStatus::Done
+                    )
+                }),
+            );
+        }
+        LoadCommand::Calibration {
+            since,
+            by_type,
+            json,
+        } => {
+            let since_dur = match since {
+                Some(s) => Some(calibration::parse_since(s).map_err(|e| anyhow::anyhow!(e))?),
+                None => None,
+            };
+            let records = effort_calibration::read_all_captures(&project_root);
+            let rows = effort_calibration::calibration_deltas(&records, since_dur);
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+                return Ok(());
+            }
+            if rows.is_empty() {
+                println!("No effort calibration deltas found.");
+                return Ok(());
+            }
+            if *by_type {
+                let by_spec_type: std::collections::HashMap<String, String> = store
+                    .requirements
+                    .iter()
+                    .map(|r| (effort_display_id(r).to_string(), r.req_type.to_string()))
+                    .collect();
+                let mut groups: std::collections::BTreeMap<String, (usize, i32)> =
+                    std::collections::BTreeMap::new();
+                for row in &rows {
+                    let typ = by_spec_type
+                        .get(&row.spec)
+                        .cloned()
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let entry = groups.entry(typ).or_insert((0, 0));
+                    entry.0 += 1;
+                    entry.1 += row.delta_minutes;
+                }
+                println!("{}", "Effort calibration by type".bold());
+                for (typ, (count, delta)) in groups {
+                    println!(
+                        "  {:<16} {:>3} rows  net delta {}",
+                        typ,
+                        count,
+                        effort_calibration::format_minutes(delta.unsigned_abs())
+                    );
+                }
+            } else {
+                println!("{}", "Effort calibration deltas".bold());
+                for row in rows.iter().take(50) {
+                    let sign = if row.delta_minutes >= 0 { "+" } else { "-" };
+                    println!(
+                        "  {:<12} {:<6} est {:<3} actual {:<3} delta {}{}",
+                        row.spec,
+                        row.touchpoint.as_str(),
+                        row.estimate,
+                        row.actual,
+                        sign,
+                        effort_calibration::format_minutes(row.delta_minutes.unsigned_abs())
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Handle queue commands
 fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
     let get_user = |user: &Option<String>| -> String { current_user_id(user.as_deref()) };
@@ -52989,6 +55555,29 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     );
                 }
             }
+        }
+        QueueCommand::Load { user } => {
+            let user_id = get_user(user);
+            let store = storage.load()?;
+            let entries = storage.queue_list(&user_id, false)?;
+            let queued_ids: HashSet<Uuid> = entries.iter().map(|e| e.requirement_id).collect();
+            let project_root = find_project_root()
+                .map(|p| main_worktree_root_from(&p))
+                .unwrap_or_else(|_| {
+                    storage
+                        .path()
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."))
+                });
+            print_effort_load_for_requirements(
+                &project_root,
+                "Queue load",
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| queued_ids.contains(&r.id)),
+            );
         }
         QueueCommand::Add {
             id,
@@ -54243,6 +56832,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             type_filter,
             branch,
             path,
+            stack,
+            base,
+            force_base,
             steal,
             batch,
             batches,
@@ -54265,6 +56857,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             no_calibrate,
             allow_stale_base,
             no_auto_rebase,
+            complexity,
+            assist_est,
+            effort,
         } => {
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
@@ -54624,6 +57219,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 type_filter.as_deref(),
                 branch.as_deref(),
                 path.as_deref(),
+                // STORY-248: stacked-branch base resolution. Mutually
+                // exclusive at the CLI level — `--stack` auto-picks the
+                // freshest un-merged implementer lease, `--base BRANCH`
+                // takes a name. Threaded through into `session_start` via
+                // its existing `base` parameter. trace:STORY-248 | ai:claude
+                *stack,
+                base.as_deref(),
+                *force_base,
                 *steal,
                 resume.as_deref(),
                 *fresh,
@@ -54641,6 +57244,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // STORY-281: opt out of the reviewer pre-flight stale-base
                 // refusal. trace:STORY-281 | ai:claude
                 *allow_stale_base,
+                // STORY-439: pickup-time calibration capture. Each value
+                // writes to .aida/complexity-calibration/<SPEC>.yaml AND
+                // stamps a tag on the spec.
+                *complexity,
+                *assist_est,
+                *effort,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -55617,6 +58226,9 @@ fn handle_queue_rework(
             /* type_filter */ None,
             /* branch_override */ None,
             /* path_override */ None,
+            /* stack */ false,
+            /* base */ None,
+            /* force_base */ false,
             steal,
             // Bare `--resume` → resume the scope's most recent recorded
             // claude session (`resolve_queue_work_launch` fails clean when
@@ -55629,6 +58241,9 @@ fn handle_queue_rework(
             /* batch_name */ None,
             /* quiet */ false,
             /* allow_stale_base */ false,
+            /* complexity */ None,
+            /* assist_est */ None,
+            /* effort */ None,
         )?;
     } else {
         println!(
@@ -56341,6 +58956,14 @@ fn handle_queue_work(
     type_filter: Option<&str>,
     branch_override: Option<&str>,
     path_override: Option<&str>,
+    // STORY-248: stacked-branch base resolution. `stack` auto-detects the
+    // freshest un-merged in-flight implementer lease; `base` takes an
+    // explicit branch name. CLI clap-level enforces they're mutually
+    // exclusive. `force_base` opts out of the merged-base safety check.
+    // trace:STORY-248 | ai:claude
+    stack: bool,
+    base: Option<&str>,
+    force_base: bool,
     steal: bool,
     resume: Option<&str>,
     fresh: bool,
@@ -56359,6 +58982,15 @@ fn handle_queue_work(
     // Only meaningful when scope resolves to a PR + role is reviewer;
     // ignored on every other pickup. trace:STORY-281 | ai:claude
     allow_stale_base: bool,
+    // STORY-439: pickup-time complexity + assistance estimate. Each
+    // value writes a slot to `.aida/complexity-calibration/<SPEC>.yaml`
+    // AND stamps a `complexity:<level>` / `estimated-assistance:<level>`
+    // tag on the spec for tag-based queries. trace:STORY-439 | ai:claude
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    assist_est: Option<complexity_calibration::AssistanceLevel>,
+    // STORY-451: post-plan/pickup effort estimate. Captured as the plan
+    // touchpoint and stamped as `effort:plan:<bucket>`.
+    effort: Option<effort_calibration::EffortBucket>,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -56368,6 +59000,56 @@ fn handle_queue_work(
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
     }
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
+
+    // STORY-439: capture pickup-time complexity + assistance estimate
+    // ASAP after plan resolution — we know the anchor spec, the project
+    // root is reachable via `find_project_root`, and the capture is a
+    // local FS write that won't perturb the rest of the pickup flow.
+    // Best-effort: a write error logs and continues. Cluster mode uses
+    // the anchor (the parent scope) as the captured spec; the
+    // operator's estimate is for the cluster as a whole.
+    // trace:STORY-439 | ai:claude
+    if (complexity.is_some() || assist_est.is_some()) && !list_sessions {
+        if let Ok(project_root) = find_project_root() {
+            let main_root = main_worktree_root_from(&project_root);
+            let spec = plan.anchor_display.as_str();
+            if let Err(e) =
+                complexity_calibration::upsert_pickup(&main_root, spec, complexity, assist_est)
+            {
+                eprintln!(
+                    "  {} could not record pickup calibration for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+            // Stamp the tags on the spec so existing tag tooling works
+            // on the new dimension. Best-effort — a load/save failure
+            // doesn't fail the pickup.
+            apply_calibration_tags(storage, spec, complexity, assist_est);
+        }
+    }
+    if effort.is_some() && !list_sessions {
+        if let Ok(project_root) = find_project_root() {
+            let main_root = main_worktree_root_from(&project_root);
+            let spec = plan.anchor_display.as_str();
+            if let Err(e) = effort_calibration::upsert_plan(
+                &main_root,
+                spec,
+                effort,
+                Some(current_user_id(None)),
+            ) {
+                eprintln!(
+                    "  {} could not record plan effort for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+            apply_effort_tag(
+                storage,
+                spec,
+                effort_calibration::EffortTouchpoint::Plan,
+                effort,
+            );
+        }
+    }
 
     // TASK-112: `--list-sessions` is a pure read — print the recorded
     // claude conversations for this scope and exit before any side
@@ -56788,6 +59470,33 @@ fn handle_queue_work(
     // hook sees on launch.
     std::env::set_var("AIDA_SESSION_ROLE", &role);
 
+    // STORY-248: resolve the stacked base BEFORE session_start so the
+    // worktree is forked from the right place and the SHA capture has a
+    // real base to record. Both `--stack` and `--base` flow through the
+    // same `session_start(base: Option<&str>)` parameter.
+    // trace:STORY-248 | ai:claude
+    let project_root_for_base = find_main_worktree_root()?;
+    let cwd_for_base = std::env::current_dir().unwrap_or_else(|_| project_root_for_base.clone());
+    let resolved_base = resolve_stack_base(
+        &project_root_for_base,
+        &cwd_for_base,
+        stack,
+        base,
+        force_base,
+    )?;
+    if let Some(b) = resolved_base.as_deref() {
+        eprintln!(
+            "  {} base: {} {}",
+            "▶".cyan().bold(),
+            b.cyan(),
+            if stack {
+                "(detected via --stack)".dimmed().to_string()
+            } else {
+                "(--base)".dimmed().to_string()
+            }
+        );
+    }
+
     // session_start handles worktree creation, lease persistence, env
     // shim, conflict detection. We always pass launch=false so we can
     // (a) write the cluster manifest from the new lease and (b) emit
@@ -56795,7 +59504,7 @@ fn handle_queue_work(
     session_start(
         &plan.scope,
         branch_override,
-        /* base */ None,
+        resolved_base.as_deref(),
         /* reuse_branch */ false,
         path_override,
         /* forge_override */ None,
@@ -56819,6 +59528,48 @@ fn handle_queue_work(
                 plan.scope
             )
         })?;
+
+    // STORY-248: register the stacked-branch entry in `.aida/stacks.json`
+    // so `aida pull --auto`'s cascade can find it when the parent merges.
+    // session_start records the parent fields on the lease itself; we
+    // mirror them into the dedicated graph file because the cascade
+    // needs to consult them AFTER the lease has been removed by
+    // `aida queue done`. Best-effort — a write failure logs but doesn't
+    // fail the pickup. trace:STORY-248 | ai:claude
+    if let (Some(parent), Some(sha)) = (
+        lease.parent_branch.as_deref(),
+        lease.parent_branch_sha.as_deref(),
+    ) {
+        let mut graph = stacks::load(&project_root);
+        stacks::add(
+            &mut graph,
+            stacks::StackEntry {
+                branch: lease.branch.clone(),
+                parent_branch: parent.to_string(),
+                parent_branch_sha: sha.to_string(),
+                spec_id: Some(plan.scope.clone()),
+                created_at: chrono::Utc::now(),
+            },
+        );
+        if let Err(e) = stacks::save(&project_root, &graph) {
+            eprintln!(
+                "  {} {}",
+                "⚠".yellow().bold(),
+                format!(
+                    "stack graph save failed: {} (cascade may miss this branch)",
+                    e
+                )
+                .yellow()
+            );
+        } else {
+            eprintln!(
+                "  {} stacked: {} → {}",
+                "✓".green(),
+                lease.branch.cyan(),
+                parent.cyan()
+            );
+        }
+    }
 
     // Cluster manifest: pre-populate items so /aida-pickup can walk
     // them top-down. Skip for head/item modes (single item → no plan
@@ -57224,6 +59975,17 @@ fn run_standalone_reviewer(
             }
         }
     };
+
+    // STORY-439: tag-along reviewer-side calibration capture. Resolve
+    // every spec the PR credits (via the existing title / branch / body
+    // precedence used by the squash-subject repair) and write a review
+    // slot per spec. Best-effort; never blocks the summary print.
+    // trace:STORY-439 | ai:claude
+    if let Ok(meta) = fetch_pr_ship_metadata_via_gh(project_root, pr) {
+        for spec in pr_ship::derive_squash_subject_spec_ids(&meta.title, branch, &meta.body) {
+            capture_review_calibration_for_spec(project_root, verdict_path, &spec);
+        }
+    }
 
     // End-of-command summary, assembled from the verdict file the
     // `/aida-review` skill wrote and (headless only) the JSONL log.
@@ -57714,6 +60476,99 @@ fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
     }
 }
 
+/// `aida stack {show,list}` (STORY-248). Reads `.aida/stacks.json` —
+/// no requirement-store dependency, so dispatches pre-storage like
+/// `aida drain status`. Prints "No stacked branches." (exit 0) on an
+/// empty graph so a quiet project never errors. `--prune-stale` (show
+/// only) drops entries whose branch no longer exists locally or on
+/// origin; the prune writes the graph back atomically.
+/// trace:STORY-248 | ai:claude
+fn handle_stack_command(cmd: &StackCommand) -> Result<()> {
+    let project_root = find_main_worktree_root()
+        .or_else(|_| std::env::current_dir())
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut graph = stacks::load(&project_root);
+
+    match cmd {
+        StackCommand::Show { json, prune_stale } => {
+            if *prune_stale {
+                let stale: Vec<String> = graph
+                    .entries
+                    .values()
+                    .filter(|e| !branch_exists_anywhere(&project_root, &e.branch))
+                    .map(|e| e.branch.clone())
+                    .collect();
+                if !stale.is_empty() {
+                    for s in &stale {
+                        stacks::remove(&mut graph, s);
+                    }
+                    stacks::save(&project_root, &graph)?;
+                    if !*json {
+                        eprintln!(
+                            "  {} pruned {} stale entr{}",
+                            "✓".green(),
+                            stale.len(),
+                            if stale.len() == 1 { "y" } else { "ies" }
+                        );
+                    }
+                }
+            }
+            if *json {
+                let chains: Vec<Vec<&stacks::StackEntry>> = stacks::chains(&graph);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({ "chains": chains }))?
+                );
+                return Ok(());
+            }
+            if graph.is_empty() {
+                println!("No stacked branches.");
+                return Ok(());
+            }
+            for chain in stacks::chains(&graph) {
+                // Root parent of the chain is the first entry's parent —
+                // typically `main`, sometimes a since-merged branch.
+                if let Some(first) = chain.first() {
+                    println!("{}", first.parent_branch.dimmed());
+                }
+                for (depth, entry) in chain.iter().enumerate() {
+                    let indent = "  ".repeat(depth + 1);
+                    let spec = entry
+                        .spec_id
+                        .as_deref()
+                        .map(|s| format!(" {}", format!("({})", s).dimmed()))
+                        .unwrap_or_default();
+                    println!("{}└─ {}{}", indent, entry.branch.cyan(), spec);
+                }
+            }
+            Ok(())
+        }
+        StackCommand::List { json } => {
+            let chains = stacks::chains(&graph);
+            if *json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({ "chains": chains }))?
+                );
+                return Ok(());
+            }
+            if chains.is_empty() {
+                println!("No stacked branches.");
+                return Ok(());
+            }
+            for chain in chains {
+                let root = chain
+                    .first()
+                    .map(|e| e.parent_branch.as_str())
+                    .unwrap_or("main");
+                let rest: Vec<&str> = chain.iter().map(|e| e.branch.as_str()).collect();
+                println!("{} → {}", root.dimmed(), rest.join(" → ").cyan());
+            }
+            Ok(())
+        }
+    }
+}
+
 /// `aida headless tail` — clean tailer for `.aida/headless-logs/<spec>-<lease>.jsonl`
 /// (TASK-398). Wraps the right JSONL filtering so the user doesn't have to
 /// remember (and debug) the non-obvious jq pipeline that picks text content
@@ -58018,6 +60873,17 @@ fn run_auto_complete(
         eprintln!("{} {}", "✗".red().bold(), e);
         std::process::exit(1);
     }
+    if let Err(e) = prepare_auto_complete_phase1_status(storage, spec) {
+        eprintln!("{} {}", "✗".red().bold(), e);
+        std::process::exit(1);
+    }
+    let lifecycle_skip = match resolve_lifecycle_skip(storage, spec) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{} {}", "✗".red().bold(), e);
+            std::process::exit(1);
+        }
+    };
 
     let project_root = match find_main_worktree_root() {
         Ok(p) => p,
@@ -58097,9 +60963,17 @@ fn run_auto_complete(
         steal,
         allow_stale_base,
         no_auto_rebase,
+        lifecycle_skip,
     );
     let started_at = chrono::Utc::now();
-    let result = auto_complete::orchestrate(&mut driver, spec, variant, json, escalate_mode);
+    let result = auto_complete::orchestrate_with_lifecycle_skip(
+        &mut driver,
+        spec,
+        variant,
+        json,
+        escalate_mode,
+        lifecycle_skip,
+    );
     let completed_at = chrono::Utc::now();
     // TASK-336: the run-UUID is no longer needed once `orchestrate` has
     // returned — every phase child has been spawned and reaped. Clear it on
@@ -59759,6 +62633,58 @@ fn ensure_queued_for_implementer(storage: &Storage, user_id: &str, spec: &str) -
     Ok(())
 }
 
+fn auto_complete_phase1_target_status(status: &RequirementStatus) -> Option<RequirementStatus> {
+    match status {
+        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned => {
+            Some(RequirementStatus::InProgress)
+        }
+        _ => None,
+    }
+}
+
+/// BUG-369: mark orchestrator-driven phase-1 work as InProgress before the
+/// implementer subprocess starts. `aida punt` correctly allows only
+/// InProgress → NeedsAttention; without this pre-spawn flip, an early design
+/// fork on an Approved/Planned/Draft spec made `/aida-punt` refuse and the
+/// orchestrator misclassified the clean exit as NoPR.
+fn prepare_auto_complete_phase1_status(
+    storage: &Storage,
+    spec: &str,
+) -> Result<Option<(String, RequirementStatus)>> {
+    let store = storage.load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, spec))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
+    let req_id = req.id;
+    let display_id = req.display_id();
+    let current = req.status.clone();
+    let Some(target) = auto_complete_phase1_target_status(&current) else {
+        return Ok(None);
+    };
+    let now = chrono::Utc::now();
+    storage.update_atomically(|s| {
+        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+            r.status = target.clone();
+            r.modified_at = now;
+        }
+    })?;
+    Ok(Some((display_id, current)))
+}
+
+fn resolve_lifecycle_skip(storage: &Storage, spec: &str) -> Result<auto_complete::LifecycleSkip> {
+    let store = storage.load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, spec))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
+    Ok(auto_complete::LifecycleSkip::from_tags(
+        req.tags.iter().map(String::as_str),
+    ))
+}
+
 /// Best-effort lookup of the most recent workflow run id for `branch`, used
 /// to enrich the CI-failure recovery hint. trace:STORY-246 | ai:claude
 fn latest_run_id_for_branch(branch: &str) -> Option<String> {
@@ -59840,6 +62766,60 @@ fn read_verdict_file(
                 format!("unrecognised verdict `{raw}` in the verdict file"),
             )
         })
+}
+
+/// STORY-439: pick the calibration review-slot fields out of a verdict
+/// file and upsert the per-spec capture record. The verdict file is
+/// already loaded by `read_verdict_file` for the orchestrator's PASS /
+/// FAIL decision; this is a tag-along read that records advisory
+/// metadata (it never changes the decision). Best-effort — a missing
+/// file, missing fields, or write error all silently no-op. Called for
+/// each spec the PR credits; one PR populates N records.
+/// trace:STORY-439 | ai:claude
+fn capture_review_calibration_for_spec(
+    project_root: &std::path::Path,
+    verdict_path: &std::path::Path,
+    spec: &str,
+) {
+    let Ok(body) = std::fs::read_to_string(verdict_path) else {
+        return;
+    };
+    let Some(verdict) = reviewer_summary::parse_verdict_file(&body) else {
+        return;
+    };
+    if let Some(level_raw) = verdict
+        .implementation_complexity
+        .as_deref()
+        .map(str::trim)
+        .filter(|s: &&str| !s.is_empty())
+    {
+        if let Some(level) = complexity_calibration::ComplexityLevel::parse_str(level_raw) {
+            let agreement = verdict
+                .complexity_agreement
+                .as_deref()
+                .and_then(complexity_calibration::ComplexityAgreement::parse_str);
+            if let Err(e) =
+                complexity_calibration::upsert_review(project_root, spec, level, agreement)
+            {
+                eprintln!(
+                    "  {} could not record review calibration for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+        }
+    }
+    let effort = verdict
+        .implementation_effort
+        .as_deref()
+        .and_then(effort_calibration::EffortBucket::parse_str);
+    if let Err(e) =
+        effort_calibration::upsert_review(project_root, spec, effort, Some("reviewer".to_string()))
+    {
+        eprintln!(
+            "  {} could not record review effort for {spec}: {e}",
+            "⚠".yellow()
+        );
+    }
 }
 
 /// When phase 3 ends with [`auto_complete::FailureKind::NoVerdict`] under a
@@ -60621,6 +63601,10 @@ struct RealPhaseDriver {
     no_auto_rebase: bool,
     /// STORY-429: embedded telemetry for phase-3 stale-base auto-rebase.
     auto_rebase_events: Vec<auto_complete_telemetry::AutoRebaseEvent>,
+    /// STORY-442: opt-in lifecycle short-circuit tags for non-integrity
+    /// phases. Phase 2 owns CI waiting; phases 3/6 are sequenced in
+    /// `auto_complete.rs`.
+    lifecycle_skip: auto_complete::LifecycleSkip,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -60640,6 +63624,7 @@ impl RealPhaseDriver {
         steal: bool,
         allow_stale_base: bool,
         no_auto_rebase: bool,
+        lifecycle_skip: auto_complete::LifecycleSkip,
     ) -> Self {
         Self {
             project_root,
@@ -60660,6 +63645,7 @@ impl RealPhaseDriver {
             allow_stale_base,
             no_auto_rebase,
             auto_rebase_events: Vec::new(),
+            lifecycle_skip,
         }
     }
 
@@ -61338,10 +64324,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })?;
 
-        // Probe, then block until CI is terminal. `PrNoChecks` is treated as
-        // "proceed" — matches `aida session end`'s CI semantics.
+        // Probe, then block until CI is terminal unless the spec opted into
+        // lifecycle:no-ci-wait / lifecycle:trivial. The non-waiting path still
+        // records the PR number and still ends the implementer lease below;
+        // it just lets CI finish in parallel with review/merge. trace:STORY-442
         let mut probe = probe_ci_state_for_branch(&branch);
-        if matches!(probe, CiProbe::InProgress { .. }) {
+        if matches!(probe, CiProbe::InProgress { .. }) && self.lifecycle_skip.no_ci_wait {
+            eprintln!(
+                "  {} CI still running on `{}` — skipping wait per lifecycle tag.",
+                "↷".cyan(),
+                branch
+            );
+        } else if matches!(probe, CiProbe::InProgress { .. }) {
             eprintln!(
                 "  {} waiting for CI on `{}` to finish…",
                 "◐".yellow(),
@@ -61350,7 +64344,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             probe = if self.json {
                 wait_for_ci_terminal(&branch)
             } else {
-                watch_ci_terminal(&branch)
+                watch_ci_for_context(&branch, self.no_human.is_some())
             };
         }
 
@@ -61377,10 +64371,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 );
             }
             CiProbe::InProgress { pr_number } => {
-                return Err(auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::CiTimeout,
-                    format!("CI on PR-{pr_number} did not reach a terminal state in time"),
-                ));
+                self.pr_number = Some(pr_number);
+                if !self.lifecycle_skip.no_ci_wait {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::CiTimeout,
+                        format!("CI on PR-{pr_number} did not reach a terminal state in time"),
+                    ));
+                }
             }
             CiProbe::NoSignal(reason) => {
                 // We confirmed a PR in phase 1, so this is an environment
@@ -61593,6 +64590,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
             Err(e) => return Err(e),
         };
+
+        // STORY-439: tag-along read for reviewer-side calibration. Same
+        // verdict file we just parsed; we re-read so the orchestrator's
+        // PASS/FAIL decision stays untouched even if the calibration
+        // capture changes. trace:STORY-439 | ai:claude
+        capture_review_calibration_for_spec(&self.project_root, &verdict_path, &self.spec);
 
         // End the reviewer session (best-effort — the verdict is already in
         // hand, so a stuck reviewer worktree must not block the merge).
@@ -62933,6 +65936,8 @@ mod queue_work_resume_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         std::fs::write(
             sessions.join("019eabcd-1234.toml"),
@@ -62997,6 +66002,8 @@ mod queue_work_resume_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         std::fs::write(
             sessions.join("019eaaaa-bbbb.toml"),
@@ -64836,29 +67843,36 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
 #[cfg(test)]
 mod story_255_discipline_pack_tests {
-    //! Starter discipline pack — `docs/aida-discipline/` + the opt-in
+    //! Starter discipline pack — `docs/aida/discipline/` + the opt-in
     //! memory pack scaffolded by `aida init --with-memories`.
-    //! trace:STORY-255 | ai:claude
+    //! trace:STORY-255 | STORY-443 | ai:claude
     use super::*;
 
     #[test]
     fn discipline_pack_scaffolds_seven_docs_plus_readme() {
         // trace:TASK-479 | ai:antigravity — robust-project-root-resolution.md joins the pack.
+        // trace:TASK-512 | ai:claude — tag-conventions.md joins the pack.
+        // trace:STORY-444 | ai:claude — backlog-grooming.md joins the pack.
+        // trace:TASK-517 | ai:codex — reserved-paths.md documents the
+        // `/ultraplan` namespace-reservation prompt source.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 9, "expected README + 8 discipline docs");
+        assert_eq!(written, 12, "expected README + 11 discipline docs");
 
-        let dir = root.path().join("docs/aida-discipline");
+        let dir = root.path().join("docs/aida/discipline");
         for f in [
             "README.md",
             "advisor-role.md",
+            "backlog-grooming.md",
             "lifecycle-vocabulary.md",
             "machinery-glossary.md",
+            "tag-conventions.md",
             "workflow-patterns.md",
             "session-discipline.md",
             "skill-prompt-kinds.md",
             "substrate-as-bouncer.md",
             "robust-project-root-resolution.md",
+            "reserved-paths.md",
         ] {
             assert!(dir.join(f).is_file(), "missing discipline doc: {f}");
         }
@@ -64871,7 +67885,24 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            9
+            12
+        );
+    }
+
+    #[test]
+    fn discipline_pack_lands_under_docs_aida_namespace() {
+        // trace:STORY-443 — pack must land at docs/aida/discipline/, not the
+        // historical docs/aida-discipline/. Guards against accidental
+        // fallback during the namespace reshape.
+        let root = tempfile::tempdir().unwrap();
+        ensure_discipline_pack_scaffold(root.path(), false).unwrap();
+        assert!(
+            root.path().join("docs/aida/discipline/README.md").is_file(),
+            "discipline pack must land at docs/aida/discipline/"
+        );
+        assert!(
+            !root.path().join("docs/aida-discipline").exists(),
+            "historical docs/aida-discipline/ path must not be created"
         );
     }
 

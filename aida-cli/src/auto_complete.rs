@@ -76,6 +76,62 @@ impl AutoCompleteVariant {
     }
 }
 
+/// Per-spec lifecycle short-circuit switches resolved from `lifecycle:*`
+/// tags. These skip only non-integrity phases: CI wait, reviewer, and local
+/// build. Merge and pull/auto-bump are deliberately not skippable.
+/// trace:STORY-442 | ai:codex
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct LifecycleSkip {
+    pub(crate) no_ci_wait: bool,
+    pub(crate) no_review: bool,
+    pub(crate) no_build: bool,
+}
+
+impl LifecycleSkip {
+    pub(crate) fn none() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn from_tags<'a>(tags: impl IntoIterator<Item = &'a str>) -> Self {
+        let mut skip = Self::none();
+        for tag in tags {
+            match tag.trim().to_ascii_lowercase().as_str() {
+                "lifecycle:no-ci-wait" => skip.no_ci_wait = true,
+                "lifecycle:no-review" => skip.no_review = true,
+                "lifecycle:no-build" => skip.no_build = true,
+                "lifecycle:trivial" => {
+                    skip.no_ci_wait = true;
+                    skip.no_review = true;
+                    skip.no_build = true;
+                }
+                _ => {}
+            }
+        }
+        skip
+    }
+
+    pub(crate) fn is_empty(self) -> bool {
+        !self.no_ci_wait && !self.no_review && !self.no_build
+    }
+
+    pub(crate) fn banner_summary(self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+        let mut parts = Vec::new();
+        if self.no_ci_wait {
+            parts.push("CI wait");
+        }
+        if self.no_review {
+            parts.push("reviewer");
+        }
+        if self.no_build {
+            parts.push("build");
+        }
+        Some(format!("skipping {}", parts.join(" + ")))
+    }
+}
+
 /// Which phases an `--auto-complete --no-human` run drives headless.
 ///
 /// `--no-human` makes the orchestrator launch a phase's Claude session with
@@ -1511,17 +1567,40 @@ pub(crate) fn orchestrate(
     json: bool,
     escalate_mode: EscalateMode,
 ) -> OrchestrationResult {
+    orchestrate_with_lifecycle_skip(
+        driver,
+        spec,
+        variant,
+        json,
+        escalate_mode,
+        LifecycleSkip::none(),
+    )
+}
+
+pub(crate) fn orchestrate_with_lifecycle_skip(
+    driver: &mut dyn PhaseDriver,
+    spec: &str,
+    variant: AutoCompleteVariant,
+    json: bool,
+    escalate_mode: EscalateMode,
+    lifecycle_skip: LifecycleSkip,
+) -> OrchestrationResult {
     let start = Instant::now();
     // Per-phase wall time, captured as each phase runs so a failure carries
     // the timing of the phases that did complete. trace:TASK-266 | ai:claude
     let mut durations: Vec<(Phase, u128)> = Vec::new();
     if !json {
+        let lifecycle_note = lifecycle_skip
+            .banner_summary()
+            .map(|s| format!("; {s} per lifecycle tag"))
+            .unwrap_or_default();
         eprintln!();
         eprintln!(
-            "{} {} {}",
+            "{} {} {}{}",
             "🚀".bold(),
             format!("auto-complete: {spec}").bold(),
-            format!("({})", variant.describe()).dimmed()
+            format!("({})", variant.describe()).dimmed(),
+            lifecycle_note.dimmed()
         );
     }
 
@@ -1621,59 +1700,66 @@ pub(crate) fn orchestrate(
         return finish_success(spec, &credited, json, &start, durations);
     }
 
-    // Phase 3 — reviewer session.
-    emit_start(Phase::Reviewer, spec, json, start.elapsed().as_millis());
-    let phase_start = Instant::now();
-    match driver.run_reviewer() {
-        Err(f) => {
-            durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-            return resolve_phase_failure(
-                driver,
-                Phase::Reviewer,
-                spec,
-                json,
-                &start,
-                &f,
-                durations,
-            );
+    // Phase 3 — reviewer session. lifecycle:no-review skips only this model
+    // phase; merge and pull still run so substrate state stays coherent.
+    if lifecycle_skip.no_review {
+        if !json {
+            eprintln!("  {} skipping reviewer phase per lifecycle tag", "↷".cyan());
         }
-        // STORY-306: the reviewer escalated the merge decision to a human
-        // rather than auto-deciding it (uncertain zen provenance, an
-        // irreversible call). A clean stop, not a failure — exit `0`, no
-        // merge runs, the PR is left for a human. Distinct from a
-        // non-Approved verdict (which still fails the phase below) and from a
-        // crashed reviewer. trace:STORY-306 | ai:claude
-        Ok(ReviewerOutcome::EscalatedToHuman { reason }) => {
-            durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-            return finish_escalated(
-                spec,
-                json,
-                &start,
-                durations,
-                EscalationKind::MergeDecision,
-                &reason,
-            );
+    } else {
+        emit_start(Phase::Reviewer, spec, json, start.elapsed().as_millis());
+        let phase_start = Instant::now();
+        match driver.run_reviewer() {
+            Err(f) => {
+                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Reviewer,
+                    spec,
+                    json,
+                    &start,
+                    &f,
+                    durations,
+                );
+            }
+            // STORY-306: the reviewer escalated the merge decision to a human
+            // rather than auto-deciding it (uncertain zen provenance, an
+            // irreversible call). A clean stop, not a failure — exit `0`, no
+            // merge runs, the PR is left for a human. Distinct from a
+            // non-Approved verdict (which still fails the phase below) and from a
+            // crashed reviewer. trace:STORY-306 | ai:claude
+            Ok(ReviewerOutcome::EscalatedToHuman { reason }) => {
+                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                return finish_escalated(
+                    spec,
+                    json,
+                    &start,
+                    durations,
+                    EscalationKind::MergeDecision,
+                    &reason,
+                );
+            }
+            Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
+                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                let f = PhaseFailure::new(format!(
+                    "reviewer verdict is {} — not Approved",
+                    verdict.label()
+                ));
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Reviewer,
+                    spec,
+                    json,
+                    &start,
+                    &f,
+                    durations,
+                );
+            }
+            Ok(ReviewerOutcome::Verdict(_)) => {}
         }
-        Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
-            durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-            let f = PhaseFailure::new(format!(
-                "reviewer verdict is {} — not Approved",
-                verdict.label()
-            ));
-            return resolve_phase_failure(
-                driver,
-                Phase::Reviewer,
-                spec,
-                json,
-                &start,
-                &f,
-                durations,
-            );
-        }
-        Ok(ReviewerOutcome::Verdict(_)) => {}
+        durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+        emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
     }
-    durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-    emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
 
     // Phase 4 — merge.
     emit_start(Phase::Merge, spec, json, start.elapsed().as_millis());
@@ -1702,14 +1788,20 @@ pub(crate) fn orchestrate(
     }
 
     // Phase 6 — build verify.
-    emit_start(Phase::Build, spec, json, start.elapsed().as_millis());
-    let phase_start = Instant::now();
-    if let Err(f) = driver.build() {
+    if lifecycle_skip.no_build {
+        if !json {
+            eprintln!("  {} skipping build phase per lifecycle tag", "↷".cyan());
+        }
+    } else {
+        emit_start(Phase::Build, spec, json, start.elapsed().as_millis());
+        let phase_start = Instant::now();
+        if let Err(f) = driver.build() {
+            durations.push((Phase::Build, phase_start.elapsed().as_millis()));
+            return resolve_phase_failure(driver, Phase::Build, spec, json, &start, &f, durations);
+        }
         durations.push((Phase::Build, phase_start.elapsed().as_millis()));
-        return resolve_phase_failure(driver, Phase::Build, spec, json, &start, &f, durations);
+        emit_done(Phase::Build, spec, json, start.elapsed().as_millis());
     }
-    durations.push((Phase::Build, phase_start.elapsed().as_millis()));
-    emit_done(Phase::Build, spec, json, start.elapsed().as_millis());
 
     finish_success(spec, &credited, json, &start, durations)
 }
@@ -2300,6 +2392,53 @@ mod tests {
     // --- Core orchestration: the mock-Claude integration test -------------
 
     #[test]
+    fn lifecycle_skip_from_tags_parses_tags_case_insensitively() {
+        let skip = LifecycleSkip::from_tags([
+            "Lifecycle:No-CI-Wait",
+            "lifecycle:no-review",
+            "LIFECYCLE:NO-BUILD",
+            "lifecycle:unknown",
+        ]);
+        assert!(skip.no_ci_wait);
+        assert!(skip.no_review);
+        assert!(skip.no_build);
+    }
+
+    #[test]
+    fn lifecycle_skip_trivial_implies_all_three() {
+        let skip = LifecycleSkip::from_tags(["lifecycle:trivial"]);
+        assert_eq!(
+            skip,
+            LifecycleSkip {
+                no_ci_wait: true,
+                no_review: true,
+                no_build: true,
+            }
+        );
+    }
+
+    #[test]
+    fn lifecycle_skip_unknown_lifecycle_tag_is_ignored() {
+        assert_eq!(
+            LifecycleSkip::from_tags(["lifecycle:no-ci", "papercut"]),
+            LifecycleSkip::none()
+        );
+    }
+
+    #[test]
+    fn lifecycle_skip_banner_summary_lists_skipped_phases() {
+        let skip = LifecycleSkip {
+            no_ci_wait: true,
+            no_review: true,
+            no_build: false,
+        };
+        assert_eq!(
+            skip.banner_summary().as_deref(),
+            Some("skipping CI wait + reviewer")
+        );
+    }
+
+    #[test]
     fn orchestrate_full_pipeline_runs_all_six_phases() {
         let mut driver = MockPhaseDriver::all_ok();
         let code = orchestrate(
@@ -2322,6 +2461,98 @@ mod tests {
                 Phase::Build,
             ]
         );
+    }
+
+    #[test]
+    fn orchestrate_no_review_skips_phase_3_and_runs_merge_pull_build() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip {
+                no_review: true,
+                ..LifecycleSkip::none()
+            },
+        );
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build
+            ]
+        );
+    }
+
+    #[test]
+    fn orchestrate_no_build_skips_phase_6_only() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip {
+                no_build: true,
+                ..LifecycleSkip::none()
+            },
+        );
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull
+            ]
+        );
+    }
+
+    #[test]
+    fn orchestrate_trivial_skips_reviewer_and_build_keeps_merge_and_pull() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip::from_tags(["lifecycle:trivial"]),
+        );
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer, Phase::Ci, Phase::Merge, Phase::Pull,],
+            "merge + pull are substrate-integrity phases and must not be skipped"
+        );
+    }
+
+    #[test]
+    fn orchestrate_no_review_unreachable_reviewer_escalation_does_not_fire() {
+        let mut driver = MockPhaseDriver::reviewer_escalates_merge("would have escalated");
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip {
+                no_review: true,
+                ..LifecycleSkip::none()
+            },
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(result.escalation.is_none());
+        assert!(!driver.calls.contains(&Phase::Reviewer));
     }
 
     // --- STORY-306: the headless advisor tier -----------------------------
@@ -2363,6 +2594,36 @@ mod tests {
             ]
         );
         assert_eq!(driver.advisor_calls, 1);
+    }
+
+    #[test]
+    fn orchestrate_text_question_punt_routes_to_advisor_not_phase1_failure() {
+        let mut driver = MockPhaseDriver::punting_at_implementer(
+            "headless implementer exited without opening a PR after asking: Confirm and I'll proceed?",
+        )
+        .advisor_resolves("proceed with option A")
+        .resume_opens_pr();
+        let result = orchestrate(
+            &mut driver,
+            "BUG-374",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failure.is_none(), "text-question punt is not NoPr");
+        assert_eq!(driver.advisor_calls, 1);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
     }
 
     /// A punt the advisor cannot safely judge, under `--escalate-blocks`: the
