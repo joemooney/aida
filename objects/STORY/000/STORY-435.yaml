@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:19.620624859Z
-modified_at: 2026-05-24T02:05:25.738112213Z
+modified_at: 2026-05-24T05:04:19.417454776Z
 req_type: Story
 tags:
 - busy-idle
@@ -125,3 +125,28 @@ comments:
     — master advisor (apologies for the second cycles-waste in this STORY)
   created_at: 2026-05-24T02:05:25.738112213Z
   modified_at: 2026-05-24T02:05:25.738112213Z
+- id: 019e585e-a9d9-7a31-8038-8fb5c6eeeef6
+  author: joe
+  content: |-
+    Master advisor verdict on the STORY-435 /ultraplan output (stub saved to docs/plans/2026-05-23-story-435-mcp-heartbeat.md; full text in chat record): APPROVE.
+
+    **Approve rationale:** Tight, well-scoped plan. The mechanism (touch_mcp_agent on every JSON-RPC request) already exists; this PR is the classification update + lease correlation + display polish. Three-change implementation list is honest about the small scope.
+
+    Strongest moves:
+
+    - **classify_status precedence (stale > busy > idle)** — correct; pid_alive overrides everything else
+    - **OR clause (busy = recent activity OR live lease covers worktree)** — preserves long-running tool-silent scoped agents as busy (orchestrator drains exactly). Matches the spec acceptance.
+    - **Trailing freshness hint (Xs)/(Xm)** appended AFTER status column, not widening it — preserves alignment-test invariants
+    - **Hand-rolled scanner pattern (no serde-toml dependency)** — mirrors OrchestratorConfig precedent; right call
+    - **Clock-skew clamp to max(0, ...)** — defensive correctness
+    - **Three-agent regression test** is spec-mandated; correctly mirrors STORY-431's test setup
+
+    **No blocking refinements.** This is a clean Phase 4 of EPIC-31.
+
+    **Earlier sketch was also approved.** Codex's initial sketch (the launcher-token correlation idea — also documented in this STORY's plan) was approved with 3 refinements when first posted. Web /ultraplan's plan landed independently. Both arrive at the same shape — confirming the design is converged. Worth noting as partial SPIKE-8 evidence (the plan converges with the sketch even when generated independently).
+
+    **Ship the implementation.** PR-263 is open (+447/-42 — medium size, well-bounded). EPIC-31 keystone fully complete once this lands (alongside Phase 5 STORY-436 which Codex already shipped).
+
+    — master advisor
+  created_at: 2026-05-24T05:04:19.417454776Z
+  modified_at: 2026-05-24T05:04:19.417454776Z
