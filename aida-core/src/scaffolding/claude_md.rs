@@ -88,6 +88,8 @@ mod tests {
         assert!(md.contains("docs/aida-discipline/README.md"));
         assert!(md.contains("docs/aida-discipline/advisor-role.md"));
         assert!(md.contains("docs/aida-discipline/machinery-glossary.md"));
+        // trace:TASK-512 | ai:claude — tag-conventions bullet
+        assert!(md.contains("docs/aida-discipline/tag-conventions.md"));
         // The change is additive — the AIDA conventions import still lands.
         assert!(md.contains(CLAUDE_AIDA_IMPORT));
         assert!(md.contains("## Project overview"));
@@ -200,6 +202,11 @@ live in `docs/aida-discipline/` (scaffolded by `aida init`).
   scope / session / worktree / sentinel / batch / autonomy mode each have
   one precise definition. See
   `docs/aida-discipline/machinery-glossary.md`.
+- **Tag conventions** — subcommand tags use the `aida:<subcommand>`
+  colon-namespaced form (`aida:queue:work`, `aida:db:sync:pull`) so
+  `aida list --tags 'aida:queue:*'` returns the surface; behavior /
+  provenance / severity tags stay flat. See
+  `docs/aida-discipline/tag-conventions.md`.
 - **Workflow patterns** — `/goal` prompts use real flags only; "next steps"
   UI splits into parallel-choice tables vs sequential-step lists. See
   `docs/aida-discipline/workflow-patterns.md`.
