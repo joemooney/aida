@@ -2343,6 +2343,85 @@ pub enum GitLabCommand {
     },
 }
 
+/// Curate Approved-but-not-queued work into the queue with risk + conflict
+/// heuristics. The "backlog" is the Approved pile that nobody has yet
+/// committed to working — `aida backlog list` filters it, `analyze` reports
+/// pairwise file-overlap, `groom` moves a curated selection onto the queue
+/// (optionally under a single `batch:NAME` tag for `aida queue work
+/// --batch NAME`).
+// trace:STORY-444 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum BacklogCommand {
+    /// Show Approved items that are not currently in any user's queue.
+    /// Risk chips (low / medium / high / unknown) are advisory only.
+    List {
+        /// Filter to a single risk level (low, medium, high, unknown).
+        #[clap(long, value_name = "LEVEL")]
+        risk: Option<String>,
+        /// Filter by requirement type (e.g. task, story, bug, doc).
+        #[clap(long, value_name = "TYPE")]
+        r#type: Option<String>,
+        /// Filter by priority (high, medium, low).
+        #[clap(long, value_name = "PRIORITY")]
+        priority: Option<String>,
+        /// Require this exact tag (case-insensitive).
+        #[clap(long, value_name = "TAG")]
+        tag: Option<String>,
+        /// Require any tag with this prefix (case-insensitive).
+        #[clap(long, value_name = "PREFIX")]
+        tag_prefix: Option<String>,
+        /// Cap the number of rows shown.
+        #[clap(long, default_value = "50")]
+        limit: usize,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+        /// User ID for queue-membership scan (defaults to AIDA_USER /
+        /// system user — same resolution as `aida queue list`).
+        #[clap(long)]
+        user: Option<String>,
+    },
+    /// Report pairwise file-overlap between selected backlog candidates.
+    /// File sets come from inline spec-id trace markers in source plus the
+    /// `## Critical Files` section of any owning plan in `docs/plans/`.
+    Analyze {
+        /// Comma-separated list of spec IDs to analyze (≥ 2 required).
+        #[clap(long, value_name = "CSV")]
+        specs: Option<String>,
+        /// Shorthand for `--specs A,B` — analyzes exactly one pair.
+        #[clap(long, value_names = ["A", "B"], num_args = 2)]
+        pair: Option<Vec<String>>,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Move selected backlog items onto the queue. Optionally tags every
+    /// groomed item with `batch:NAME` so `aida queue work --batch NAME`
+    /// can drain them as one cluster.
+    Groom {
+        /// Comma-separated list of spec IDs to groom into the queue.
+        #[clap(long, value_name = "CSV")]
+        specs: Option<String>,
+        /// Read newline-separated spec IDs from stdin (mutually exclusive
+        /// with --specs).
+        #[clap(long, conflicts_with = "specs")]
+        from_stdin: bool,
+        /// Tag every groomed item with `batch:NAME` (composes with
+        /// `aida queue work --batch NAME`).
+        #[clap(long, value_name = "NAME")]
+        batch: Option<String>,
+        /// Print what would happen without writing.
+        #[clap(long)]
+        dry_run: bool,
+        /// Optional note recorded on every produced queue entry.
+        #[clap(long)]
+        note: Option<String>,
+        /// Override the queue user (defaults to AIDA_USER / system user).
+        #[clap(long)]
+        user: Option<String>,
+    },
+}
+
 /// Personal work queue commands.
 // trace:STORY-368 | ai:claude
 // trace:TASK-487 | ai:claude
@@ -4747,6 +4826,12 @@ pub enum Command {
     /// Personal work queue commands
     #[clap(subcommand, hide = true)]
     Queue(QueueCommand),
+
+    /// Curate Approved-but-not-queued work into the queue with risk and
+    /// file-overlap heuristics. See `aida backlog --help`.
+    // trace:STORY-444 | ai:claude
+    #[clap(subcommand)]
+    Backlog(BacklogCommand),
 
     /// Top-level alias for `aida queue rework SPEC` — single verb for the
     /// recurring implementer → reviewer → fixup recovery sequence
