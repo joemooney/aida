@@ -44,10 +44,29 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T19:10:56.557219921Z
-modified_at: 2026-05-24T19:10:56.557219921Z
+modified_at: 2026-05-24T19:50:53.674271907Z
 req_type: Bug
 tags:
 - aida-chat-blocker
 - mcp
 - silent-data-loss
 - write-path
+comments:
+- id: 019e5b8a-57ea-7a52-a5ce-e52a653a55a6
+  author: joe
+  content: |-
+    Scope-widening update from aida-chat advisor 2026-05-24:
+
+    Codex confirmed during STORY-22 backend implementation that the SAME defect class affects MCP **add_requirement** as well as add_comment:
+
+    > 'live MCP add_requirement returns success but does not persist a CLI-visible requirement here, so the product write path is CLI-only for now'
+
+    Same shape as the original add_comment finding: MCP returns 200/success, but the requirement is not visible via subsequent `aida list` / `aida show`. So this is not an add_comment-specific bug — it's an MCP write-path bug class affecting at least two tools.
+
+    Working hypothesis: the MCP server's write handlers share a common buggy persistence path, possibly the same author/body field mapping inversion identified earlier. Worth checking add_relationship + any other MCP write tools too.
+
+    aida-chat workaround unchanged: both `aida_comment_add` and `aida_add` now CLI-only. Once this bug is fixed, both should be re-evaluated for the MCP path.
+
+    Surfaced by: aida-chat advisor (cross-project filing per coordination protocol)
+  created_at: 2026-05-24T19:50:53.674271907Z
+  modified_at: 2026-05-24T19:50:53.674271907Z
