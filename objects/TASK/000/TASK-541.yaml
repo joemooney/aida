@@ -1,0 +1,51 @@
+id: 019e5ab9-60b2-7212-a2c2-562e1dd78f9a
+spec_id: TASK-541
+agreed_id: TASK-541
+title: 'aida brief --depends-on <SPEC>: explicit pickup-order constraint between briefs'
+description: |-
+  ## Substrate gap
+
+  Today 'aida brief list' shows briefs chronologically by filename timestamp. When the operator files multiple briefs for an agent and wants pickup-order enforced ('do BUG-375 first, then TASK-515'), the only mechanism is the chronological order of filing. If the operator files them out of order, the substrate doesn't enforce — the agent has to read note-prose to figure out dependencies.
+
+  Empirical 2026-05-24: master dispatched Antigravity with two briefs (BUG-375 and TASK-515), filed TASK-515 first by accident, fixed by deleting + re-filing. With more agents and longer queues, this gets brittle.
+
+  ## Proposed shape
+
+  1. 'aida brief <agent> <SPEC> --depends-on <PREREQ-SPEC>' — explicit dependency on another brief or spec.
+  2. 'aida brief list' shows briefs in dependency-respecting order (topological sort: prereqs before dependents).
+  3. 'aida brief read <file>' shows a 'Blocked by:' header if prereqs are still pending.
+  4. Optional: 'aida brief next --for-agent <name>' returns the next pickup-ready brief (top of dep-sorted list with all prereqs satisfied).
+
+  ## Acceptance
+
+  - [ ] --depends-on flag accepts SPEC-ID; validates the prereq exists
+  - [ ] Dependency stored in brief frontmatter ('depends_on: <SPEC>')
+  - [ ] brief list orders by dep-graph topology (prereqs first)
+  - [ ] brief read surfaces 'Blocked by: SPEC' header when prereq pending
+  - [ ] Cycle detection (refuses circular dependencies)
+  - [ ] Optional: 'aida brief next --for-agent' picks the first unblocked brief
+  - [ ] Test: file brief A, file brief B --depends-on A, verify list order + Blocked header on B
+
+  ## Composes with
+
+  - STORY-459 (aida queue --for-agent — same routing model; deps could compose there too)
+  - Existing brief frontmatter (spec_id, agent, generated_at, generated_by, note) — adds depends_on
+
+  ## Origin
+
+  2026-05-24 master dispatched Antigravity with sequential pickup intent (BUG-375 → TASK-515), filed out-of-order, had to delete + re-file to fix chronological-as-priority ordering. With 4+ briefs queued per agent (becoming common in multi-agent parallel work), this scales badly.
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T16:02:38.898092570Z
+modified_at: 2026-05-24T16:02:38.898092570Z
+req_type: Task
+tags:
+- aida:brief
+- from-self-test
+- multi-agent
+- routing
+- substrate-gap
