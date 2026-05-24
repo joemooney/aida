@@ -1,0 +1,12 @@
+id: 019e589c-051a-70f3-a215-bc837f051905
+spec_id: TASK-523
+agreed_id: TASK-523
+title: lifecycle:no-review auto-remove orphaned Review PR-N queue item after merge
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T06:11:20.474142639Z
+modified_at: 2026-05-24T06:11:20.474142639Z
+req_type: Task
