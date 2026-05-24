@@ -1,0 +1,30 @@
+id: 019e582c-3fc2-7502-b14f-431bf1316883
+spec_id: STORY-450
+agreed_id: STORY-450
+title: Optional --auto-complete phase 7 — patch-release after each successful spec
+description: |-
+  EPIC-28 STORY 5: extend the --auto-complete orchestrator with an optional phase 7 that runs the patch-release scaffolding after a clean lifecycle, so each successful spec ships to a tagged version.
+
+  Scope:
+  - New auto-complete variant `--auto-complete=through-release` (or `--auto-complete --release` flag) — composes with the existing `through-ci` / `through-merge` / `through-build` variants.
+  - Phase 7 invokes `scripts/release.sh patch` (or the equivalent `aida release patch` if EPIC-27-ish lands first). Composes with the TASK-257 cross-platform CI freshness check (release blocks on nightly green) and with BUG-217's subprocess PATH correctness.
+  - Per-spec release vs aggregate-then-release: configurable. Default per-spec is risky for fast drains (many small versions); default aggregate batches the release to the end of the drain.
+  - The shelving-on-failure path (STORY 3) composes naturally — a shelved spec never reaches phase 7, so the release scope stays clean.
+
+  Acceptance:
+  - [ ] Phase 7 wiring + variant.
+  - [ ] Aggregate mode is the default; per-spec mode opt-in.
+  - [ ] CI freshness check enforced.
+  - [ ] End-to-end smoke: a 2-spec batch with the release flag set produces two patch versions (per-spec) or one (aggregate).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:09:15.458103544Z
+modified_at: 2026-05-24T04:09:15.458103544Z
+req_type: Story
+tags:
+- autonomous-drain
+- batch
+- nightly
+- patch-release
