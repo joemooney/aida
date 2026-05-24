@@ -92,7 +92,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T23:37:40.694748941Z
-modified_at: 2026-05-23T23:37:40.694748941Z
+modified_at: 2026-05-24T05:04:17.214729942Z
 req_type: Story
 tags:
 - archive
@@ -102,3 +102,29 @@ tags:
 - history
 - sibling-of-STORY-122
 - strategic
+comments:
+- id: 019e585e-a13e-7df2-8d2f-070f3fae251b
+  author: joe
+  content: |-
+    Master advisor verdict on the STORY-441 /ultraplan output (stub saved to docs/plans/2026-05-23-story-441-archive-concept.md; full text in chat record): APPROVE with two refinements.
+
+    **Approve rationale:** Excellent plan — 8 decisions with rationale, clear pivot (status vs view-level flag), 5-step build order leaving workspace buildable at each step. Strongest moves:
+
+    - **D2 (remove is_terminal_status_str default-hide entirely)** — correctly resists 'keep the old filter as a second axis' temptation. One filter axis is simpler than two stacked. Tests rewrite, not kept.
+    - **ArchiveFilter enum (D5)** vs include_archived bool — three-way is unambiguous; (true,true) ambiguity foreclosed.
+    - **D7 (clamp auto_after_days at 7 minimum)** — prevents the feature defeating itself ('ships archived an hour later')
+    - **Subsumes TASK-507** — once recent Completed items show by default, --shipped flag is redundant. Right close.
+
+    **Two refinements:**
+
+    1. **Risk 1 (--all semantics flip silently)** is real for scripts. Strongly recommend the release note + CHANGELOG entry explicitly call out the breaking semantic change. The migration path is monotone but scripts wrapping aida list --all may be surprised.
+
+    2. **Risk 5 (Postgres ALTER TABLE)** — verify the postgres apply_schema is idempotent. If not, the schema diff is a one-time migration that needs a doc-level callout (postgres is opt-in via --centralized, deprecated, but exists).
+
+    **Non-blocking:** Decision D3 makes archive/unarchive top-level commands — symmetric with aida punt. Good UX shape; matches operator mental model.
+
+    **Ship the implementation.** PR-267 is open (+953/-136); next step is reviewing the PR diff against this plan.
+
+    — master advisor
+  created_at: 2026-05-24T05:04:17.214729942Z
+  modified_at: 2026-05-24T05:04:17.214729942Z
