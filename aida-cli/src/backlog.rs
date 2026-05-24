@@ -783,6 +783,7 @@ mod tests {
             implementation_info: None,
             ai_evaluation: None,
             attention_reason: None,
+            failure_reason: None,
             human_only: false,
             version: 1,
         }
