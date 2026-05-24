@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:21:20.065824954Z
-modified_at: 2026-05-24T07:27:50.170129650Z
+modified_at: 2026-05-24T07:29:17.308111858Z
 req_type: Story
 tags:
 - agile
@@ -164,6 +164,13 @@ comments:
   content: Commit 4cc04b0c references this requirement
   created_at: 2026-05-24T07:27:13.700996115Z
   modified_at: 2026-05-24T07:27:13.700996115Z
+- id: 019e58e3-6432-7711-bd92-920a62283699
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-23-story-444-backlog-groom.md
+    filed 6 task(s): TASK-528, TASK-529, TASK-530, TASK-531, TASK-532, TASK-533
+  created_at: 2026-05-24T07:29:17.874214616Z
+  modified_at: 2026-05-24T07:29:17.874214616Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-24T07:27:50.170129650Z
