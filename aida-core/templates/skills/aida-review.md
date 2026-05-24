@@ -571,6 +571,11 @@ EOF
   `implementer-overestimated`. Omit when there was no ship-side
   estimate to compare against — `aida` will derive the field
   mechanically from the pickup/ship slot if you skip it.
+- `implementation_effort` — **advisory, not graded** (STORY-451).
+  Your effort estimate from the observed diff, one of `15m` / `1h` /
+  `4h` / `1d` / `1w`. `1d` means 8 work-hours; `1w` means 5
+  work-days / 40 work-hours. Captured to
+  `.aida/effort-calibration/<SPEC>.yaml` as the review touchpoint.
 
 Example with the STORY-439 fields filled in (`--no-human=both`,
 diff was bigger than the implementer claimed):
@@ -582,7 +587,8 @@ cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
   "summary": "ships cleanly",
   "mode": "orchestrator-phase-3",
   "implementation_complexity": "high",
-  "complexity_agreement": "implementer-underestimated"
+  "complexity_agreement": "implementer-underestimated",
+  "implementation_effort": "1d"
 }
 EOF
 ```

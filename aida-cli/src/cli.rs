@@ -1031,6 +1031,14 @@ pub enum PrCommand {
         // trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, value_enum, value_name = "LEVEL")]
         complexity: Option<crate::complexity_calibration::ComplexityLevel>,
+
+        /// Implementer's actual effort spent: 15m, 1h, 4h, 1d, or 1w.
+        /// Captured to `.aida/effort-calibration/<SPEC>.yaml` as the
+        /// ship/implementation touchpoint. `1d` is 8 work-hours; `1w`
+        /// is 40 work-hours.
+        // trace:STORY-451 | ai:codex
+        #[clap(long, value_enum, value_name = "BUCKET")]
+        effort: Option<crate::effort_calibration::EffortBucket>,
     },
 }
 
@@ -2420,6 +2428,10 @@ pub enum BacklogCommand {
         #[clap(long)]
         user: Option<String>,
     },
+    /// Sum latest effort estimates for approved/planned/draft backlog items
+    /// that are not currently queued.
+    // trace:STORY-451 | ai:codex
+    Load,
 }
 
 /// Personal work queue commands.
@@ -2594,6 +2606,13 @@ pub enum QueueCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long)]
         force: bool,
+    },
+    /// Sum latest effort estimates for queued items.
+    // trace:STORY-451 | ai:codex
+    Load {
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
     },
     /// Remove a requirement from your queue
     Remove {
@@ -3059,6 +3078,13 @@ pub enum QueueCommand {
         // trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long = "assist-est", value_enum, value_name = "LEVEL")]
         assist_est: Option<crate::complexity_calibration::AssistanceLevel>,
+        /// Pickup-time effort estimate: 15m, 1h, 4h, 1d, or 1w.
+        /// Captured as the `plan` touchpoint for queued work pickup
+        /// (post-plan/implementation-brief estimate). `1d` is 8
+        /// work-hours; `1w` is 40 work-hours.
+        // trace:STORY-451 | ai:codex
+        #[clap(long, value_enum, value_name = "BUCKET")]
+        effort: Option<crate::effort_calibration::EffortBucket>,
     },
     /// Show what an active session has shipped so far alongside what
     /// remains. Bucketed view (Shipped / In flight / Working now /
@@ -3334,6 +3360,33 @@ pub enum CalibrationSubcommand {
         #[clap(long, value_name = "N", default_value_t = 50)]
         last: usize,
         /// Emit a machine-readable JSON array instead of the human table.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
+/// Quantitative effort/load views over `.aida/effort-calibration/`.
+// trace:STORY-451 | ai:codex
+#[derive(Subcommand, Debug, Clone)]
+pub enum LoadCommand {
+    /// Sum latest effort estimates for queued items.
+    Queue,
+    /// Sum latest effort estimates for approved/planned/draft backlog items
+    /// that are not currently queued.
+    Backlog,
+    /// Queue + backlog + in-flight effort summary.
+    Report,
+    /// Estimate-vs-actual effort deltas. `1d` is 8 work-hours; `1w`
+    /// is 5 work-days / 40 work-hours.
+    Calibration {
+        /// Restrict to records within the window. Form: `<N>{d,h,w,m}`
+        /// — e.g. `7d`, `12h`, `2w`, `30m`.
+        #[clap(long, value_name = "WINDOW")]
+        since: Option<String>,
+        /// Group deltas by requirement type.
+        #[clap(long)]
+        by_type: bool,
+        /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
     },
@@ -3761,6 +3814,14 @@ pub enum Command {
         /// Use interactive mode (prompts)
         #[clap(long)]
         interactive: bool,
+
+        /// Open-time effort estimate: 15m, 1h, 4h, 1d, or 1w. Captured
+        /// to `.aida/effort-calibration/<SPEC>.yaml` and stamped as an
+        /// `effort:open:<value>` tag. `1d` means 8 work-hours; `1w`
+        /// means 5 work-days / 40 work-hours.
+        // trace:STORY-451 | ai:codex
+        #[clap(long, value_enum, value_name = "BUCKET")]
+        effort: Option<crate::effort_calibration::EffortBucket>,
     },
 
     /// List all requirements
@@ -4047,6 +4108,12 @@ pub enum Command {
     // trace:STORY-439 | ai:claude
     #[clap(subcommand)]
     Autonomy(AutonomyCommand),
+
+    /// Quantitative effort/load views. Effort buckets are 15m, 1h, 4h,
+    /// 1d (8 work-hours), and 1w (5 work-days / 40 work-hours).
+    // trace:STORY-451 | ai:codex
+    #[clap(subcommand)]
+    Load(LoadCommand),
 
     /// Feature management commands
     #[clap(subcommand, hide = true)]

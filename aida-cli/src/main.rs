@@ -12,6 +12,7 @@ mod complexity_calibration;
 mod digest;
 mod docs;
 mod drain_state;
+mod effort_calibration;
 mod exit_signal;
 mod findings;
 mod global_queue;
@@ -90,11 +91,12 @@ use crate::cli::{
     AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BacklogCommand, BlockCommand,
     BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
     DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
-    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand,
-    OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
-    RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand,
-    SessionWakeupCommand, SkillCommand, TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
+    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand, McpCommand,
+    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand,
+    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
+    SessionManifestCommand, SessionWakeupCommand, SkillCommand, TraceCommand, TypeCommand,
+    WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -572,7 +574,7 @@ fn shell_quote(arg: &str) -> String {
 #[cfg(test)]
 mod story_423_asciinema_tests {
     use super::*;
-    use crate::cli::{Command, QueueCommand};
+    use crate::cli::{BacklogCommand, Command, LoadCommand, PrCommand, QueueCommand};
     use chrono::TimeZone;
     use clap::Parser;
 
@@ -610,6 +612,66 @@ mod story_423_asciinema_tests {
             }
             other => panic!("expected queue work command, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn story_451_effort_flags_and_load_aliases_parse() {
+        let add = Cli::try_parse_from([
+            "aida",
+            "add",
+            "--title",
+            "estimate me",
+            "--type",
+            "task",
+            "--effort",
+            "1d",
+        ])
+        .unwrap();
+        match add.command {
+            Command::Add { effort, .. } => {
+                assert_eq!(effort, Some(effort_calibration::EffortBucket::OneDay));
+            }
+            other => panic!("expected add, got {other:?}"),
+        }
+
+        let queue =
+            Cli::try_parse_from(["aida", "queue", "work", "TASK-1", "--effort", "4h"]).unwrap();
+        match queue.command {
+            Command::Queue(QueueCommand::Work { effort, .. }) => {
+                assert_eq!(effort, Some(effort_calibration::EffortBucket::FourHours));
+            }
+            other => panic!("expected queue work, got {other:?}"),
+        }
+
+        let ship = Cli::try_parse_from(["aida", "pr", "ship", "--effort", "15m"]).unwrap();
+        match ship.command {
+            Command::Pr(PrCommand::Ship { effort, .. }) => {
+                assert_eq!(
+                    effort,
+                    Some(effort_calibration::EffortBucket::FifteenMinutes)
+                );
+            }
+            other => panic!("expected pr ship, got {other:?}"),
+        }
+
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "load", "queue"])
+                .unwrap()
+                .command,
+            Command::Load(LoadCommand::Queue)
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "queue", "load"])
+                .unwrap()
+                .command,
+            Command::Queue(QueueCommand::Load { .. })
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "backlog", "load"])
+                .unwrap()
+                .command,
+            Command::Backlog(BacklogCommand::Load)
+        ));
     }
 
     #[test]
@@ -1176,6 +1238,7 @@ fn run() -> Result<()> {
             parent,
             force_parent,
             interactive,
+            effort: _,
         } => {
             // trace:BUG-17 | ai:claude — resolve description from inline,
             // file, or stdin sources before dispatching.
@@ -1529,12 +1592,15 @@ fn run() -> Result<()> {
         Command::Queue(queue_cmd) => {
             handle_queue_command(queue_cmd, &storage)?;
         }
-        // STORY-444: `aida backlog list/groom/analyze` — backlog grooming
-        // surface in the legacy SQLite dispatch path.
-        // trace:STORY-444 | ai:claude
-        Command::Backlog(backlog_cmd) => {
-            backlog::handle_backlog_command(backlog_cmd, &storage)?;
+        Command::Load(load_cmd) => {
+            handle_load_command(load_cmd, &storage)?;
         }
+        // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
+        // `load` alias for quantitative effort summaries.
+        Command::Backlog(backlog_cmd) => match backlog_cmd {
+            BacklogCommand::Load => handle_load_command(&LoadCommand::Backlog, &storage)?,
+            _ => backlog::handle_backlog_command(backlog_cmd, &storage)?,
+        },
         // TASK-218: top-level alias in the legacy SQLite dispatch path —
         // forwards to the same handler as `aida queue rework SPEC`.
         // trace:TASK-218 | ai:claude
@@ -4448,6 +4514,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             parent,
             force_parent,
             interactive,
+            effort,
             ..
         } => {
             // BUG-45 + interactive expansion: when the user doesn't pass
@@ -4606,6 +4673,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 for tag in t.split(',') {
                     req.tags.insert(tag.trim().to_string());
                 }
+            }
+            if let Some(effort) = effort {
+                effort_calibration::apply_effort_tag(
+                    &mut req.tags,
+                    effort_calibration::EffortTouchpoint::Open,
+                    *effort,
+                );
             }
             if let Some(p) = prefix {
                 req.prefix_override = Some(p.to_uppercase());
@@ -4970,6 +5044,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     );
                 }
                 if let Some(spec_id) = last.spec_id.as_deref() {
+                    let main_project_dir = main_worktree_root_from(&project_dir);
+                    if let Err(e) = effort_calibration::upsert_open(
+                        &main_project_dir,
+                        spec_id,
+                        *effort,
+                        Some(current_user_id(None)),
+                    ) {
+                        eprintln!(
+                            "  {} could not record open effort for {spec_id}: {e}",
+                            "⚠".yellow()
+                        );
+                    }
                     // BUG-372: make newly allocated SPEC-IDs visible to the
                     // remote orphan store immediately when online, so a
                     // sibling clone that files next pulls the allocation
@@ -6247,14 +6333,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let storage = Storage::new(store_path);
             handle_queue_command(queue_cmd, &storage)?;
         }
-        // STORY-444: `aida backlog list/groom/analyze` — backlog grooming
-        // surface in the git-backend dispatch path. Both arms must dispatch
-        // (a missing arm would fall through to clap's auto-error at runtime
-        // on modern-backend projects, which is the failure mode plan risk
-        // #2 calls out). trace:STORY-444 | ai:claude
+        Command::Load(load_cmd) => {
+            let storage = Storage::new(store_path);
+            handle_load_command(load_cmd, &storage)?;
+        }
+        // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
+        // `load` alias for quantitative effort summaries.
         Command::Backlog(backlog_cmd) => {
             let storage = Storage::new(store_path);
-            backlog::handle_backlog_command(backlog_cmd, &storage)?;
+            match backlog_cmd {
+                BacklogCommand::Load => handle_load_command(&LoadCommand::Backlog, &storage)?,
+                _ => backlog::handle_backlog_command(backlog_cmd, &storage)?,
+            }
         }
         // TASK-218: top-level `aida rework SPEC` → forwards to the same
         // handler as `aida queue rework SPEC`. trace:TASK-218 | ai:claude
@@ -9150,6 +9240,57 @@ fn apply_calibration_tags(
         if let Err(e) = storage.save(&store) {
             eprintln!(
                 "  {} could not save calibration tags on {spec}: {e}",
+                "⚠".yellow()
+            );
+        }
+    }
+}
+
+/// STORY-451: stamp `effort:<touchpoint>:<bucket>` while preserving the
+/// other effort touchpoints. Best-effort sibling of [`apply_calibration_tags`].
+/// trace:STORY-451 | ai:codex
+fn apply_effort_tag(
+    storage: &Storage,
+    spec: &str,
+    touchpoint: effort_calibration::EffortTouchpoint,
+    effort: Option<effort_calibration::EffortBucket>,
+) {
+    let Some(effort) = effort else {
+        return;
+    };
+    if let Some(store_path) = detect_distributed_store() {
+        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+            use aida_core::DatabaseBackend;
+            let Ok(Some(mut req)) = backend.get_requirement_by_spec_id(spec) else {
+                return;
+            };
+            if effort_calibration::apply_effort_tag(&mut req.tags, touchpoint, effort) {
+                req.modified_at = chrono::Utc::now();
+                if let Err(e) = backend.update_requirement(&req) {
+                    eprintln!(
+                        "  {} could not stamp effort tag on {spec}: {e}",
+                        "⚠".yellow()
+                    );
+                }
+            }
+            return;
+        }
+    }
+    let Ok(mut store) = storage.load() else {
+        return;
+    };
+    let Some(req) = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(spec) || r.agreed_id.as_deref() == Some(spec))
+    else {
+        return;
+    };
+    if effort_calibration::apply_effort_tag(&mut req.tags, touchpoint, effort) {
+        req.modified_at = chrono::Utc::now();
+        if let Err(e) = storage.save(&store) {
+            eprintln!(
+                "  {} could not save effort tag on {spec}: {e}",
                 "⚠".yellow()
             );
         }
@@ -22383,7 +22524,8 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             no_cleanup,
             dry_run,
             complexity,
-        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run, *complexity),
+            effort,
+        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run, *complexity, *effort),
     }
 }
 
@@ -22795,6 +22937,7 @@ fn pr_ship_handler(
     no_cleanup: bool,
     dry_run: bool,
     complexity: Option<complexity_calibration::ComplexityLevel>,
+    effort: Option<effort_calibration::EffortBucket>,
 ) -> Result<()> {
     use pr_ship::{
         format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
@@ -22807,6 +22950,7 @@ fn pr_ship_handler(
         no_cleanup,
         dry_run,
         complexity,
+        effort,
     };
 
     // Project root for gh/git invocations is wherever the user is —
@@ -23054,6 +23198,23 @@ fn pr_ship_handler(
                     "⚠".yellow()
                 );
             }
+            if let Err(e) = effort_calibration::upsert_ship(
+                &main_worktree,
+                spec,
+                opts.effort,
+                Some(current_user_id(None)),
+            ) {
+                eprintln!(
+                    "  {} could not record ship effort for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+            apply_effort_tag(
+                &Storage::new(main_worktree.join(".aida-store")),
+                spec,
+                effort_calibration::EffortTouchpoint::Impl,
+                opts.effort,
+            );
         }
     }
 
@@ -53168,6 +53329,204 @@ fn warn_if_queued_ahead_of_blocker(
 }
 
 // trace:STORY-0368 | ai:claude
+fn effort_display_id(req: &Requirement) -> &str {
+    req.agreed_id
+        .as_deref()
+        .or(req.spec_id.as_deref())
+        .unwrap_or("?")
+}
+
+fn latest_effort_for_req(
+    project_root: &std::path::Path,
+    req: &Requirement,
+) -> Option<(
+    effort_calibration::EffortTouchpoint,
+    effort_calibration::EffortBucket,
+)> {
+    let spec = effort_display_id(req);
+    effort_calibration::read_capture(project_root, spec)
+        .and_then(|r| r.latest_effort())
+        .or_else(|| {
+            let tags: Vec<String> = req.tags.iter().cloned().collect();
+            [
+                effort_calibration::EffortTouchpoint::Review,
+                effort_calibration::EffortTouchpoint::Impl,
+                effort_calibration::EffortTouchpoint::Plan,
+                effort_calibration::EffortTouchpoint::Open,
+            ]
+            .into_iter()
+            .find_map(|t| effort_calibration::effort_from_tags(&tags, t).map(|e| (t, e)))
+        })
+}
+
+fn print_effort_load_for_requirements<'a>(
+    project_root: &std::path::Path,
+    title: &str,
+    requirements: impl Iterator<Item = &'a Requirement>,
+) {
+    let mut known = Vec::new();
+    let mut unknown = 0usize;
+    for req in requirements {
+        match latest_effort_for_req(project_root, req) {
+            Some((touchpoint, bucket)) => {
+                known.push((effort_display_id(req).to_string(), touchpoint, bucket))
+            }
+            None => unknown += 1,
+        }
+    }
+    let total: u32 = known.iter().map(|(_, _, b)| b.minutes()).sum();
+    println!(
+        "{}: {} across {} estimated item{} ({} unknown)",
+        title.bold(),
+        effort_calibration::format_minutes(total).cyan(),
+        known.len(),
+        if known.len() == 1 { "" } else { "s" },
+        unknown
+    );
+    for (spec, touchpoint, bucket) in known.iter().take(12) {
+        println!("  {:<12} {:<6} {}", spec, touchpoint.as_str(), bucket);
+    }
+    if known.len() > 12 {
+        println!("  …and {} more", known.len() - 12);
+    }
+}
+
+fn queued_requirement_ids(storage: &Storage, user_id: &str) -> Result<HashSet<Uuid>> {
+    Ok(storage
+        .queue_list(user_id, false)?
+        .into_iter()
+        .map(|e| e.requirement_id)
+        .collect())
+}
+
+fn is_backlog_status(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned
+    )
+}
+
+fn handle_load_command(cmd: &LoadCommand, storage: &Storage) -> Result<()> {
+    let store = storage.load()?;
+    let project_root = find_project_root()
+        .map(|p| main_worktree_root_from(&p))
+        .unwrap_or_else(|_| {
+            storage
+                .path()
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+        });
+    let user_id = current_user_id(None);
+    let queued = queued_requirement_ids(storage, &user_id).unwrap_or_default();
+    match cmd {
+        LoadCommand::Queue => {
+            print_effort_load_for_requirements(
+                &project_root,
+                "Queue load",
+                store.requirements.iter().filter(|r| queued.contains(&r.id)),
+            );
+        }
+        LoadCommand::Backlog => {
+            print_effort_load_for_requirements(
+                &project_root,
+                "Backlog load",
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| is_backlog_status(&r.status) && !queued.contains(&r.id)),
+            );
+        }
+        LoadCommand::Report => {
+            print_effort_load_for_requirements(
+                &project_root,
+                "Queue load",
+                store.requirements.iter().filter(|r| queued.contains(&r.id)),
+            );
+            print_effort_load_for_requirements(
+                &project_root,
+                "Backlog load",
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| is_backlog_status(&r.status) && !queued.contains(&r.id)),
+            );
+            print_effort_load_for_requirements(
+                &project_root,
+                "In-flight load",
+                store.requirements.iter().filter(|r| {
+                    matches!(
+                        r.status,
+                        RequirementStatus::InProgress | RequirementStatus::Done
+                    )
+                }),
+            );
+        }
+        LoadCommand::Calibration {
+            since,
+            by_type,
+            json,
+        } => {
+            let since_dur = match since {
+                Some(s) => Some(calibration::parse_since(s).map_err(|e| anyhow::anyhow!(e))?),
+                None => None,
+            };
+            let records = effort_calibration::read_all_captures(&project_root);
+            let rows = effort_calibration::calibration_deltas(&records, since_dur);
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+                return Ok(());
+            }
+            if rows.is_empty() {
+                println!("No effort calibration deltas found.");
+                return Ok(());
+            }
+            if *by_type {
+                let by_spec_type: std::collections::HashMap<String, String> = store
+                    .requirements
+                    .iter()
+                    .map(|r| (effort_display_id(r).to_string(), r.req_type.to_string()))
+                    .collect();
+                let mut groups: std::collections::BTreeMap<String, (usize, i32)> =
+                    std::collections::BTreeMap::new();
+                for row in &rows {
+                    let typ = by_spec_type
+                        .get(&row.spec)
+                        .cloned()
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let entry = groups.entry(typ).or_insert((0, 0));
+                    entry.0 += 1;
+                    entry.1 += row.delta_minutes;
+                }
+                println!("{}", "Effort calibration by type".bold());
+                for (typ, (count, delta)) in groups {
+                    println!(
+                        "  {:<16} {:>3} rows  net delta {}",
+                        typ,
+                        count,
+                        effort_calibration::format_minutes(delta.unsigned_abs())
+                    );
+                }
+            } else {
+                println!("{}", "Effort calibration deltas".bold());
+                for row in rows.iter().take(50) {
+                    let sign = if row.delta_minutes >= 0 { "+" } else { "-" };
+                    println!(
+                        "  {:<12} {:<6} est {:<3} actual {:<3} delta {}{}",
+                        row.spec,
+                        row.touchpoint.as_str(),
+                        row.estimate,
+                        row.actual,
+                        sign,
+                        effort_calibration::format_minutes(row.delta_minutes.unsigned_abs())
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Handle queue commands
 fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
     let get_user = |user: &Option<String>| -> String { current_user_id(user.as_deref()) };
@@ -54079,6 +54438,29 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     );
                 }
             }
+        }
+        QueueCommand::Load { user } => {
+            let user_id = get_user(user);
+            let store = storage.load()?;
+            let entries = storage.queue_list(&user_id, false)?;
+            let queued_ids: HashSet<Uuid> = entries.iter().map(|e| e.requirement_id).collect();
+            let project_root = find_project_root()
+                .map(|p| main_worktree_root_from(&p))
+                .unwrap_or_else(|_| {
+                    storage
+                        .path()
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."))
+                });
+            print_effort_load_for_requirements(
+                &project_root,
+                "Queue load",
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| queued_ids.contains(&r.id)),
+            );
         }
         QueueCommand::Add {
             id,
@@ -55357,6 +55739,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             no_auto_rebase,
             complexity,
             assist_est,
+            effort,
         } => {
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
@@ -55738,6 +56121,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // stamps a tag on the spec.
                 *complexity,
                 *assist_est,
+                *effort,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -56728,6 +57112,7 @@ fn handle_queue_rework(
             /* allow_stale_base */ false,
             /* complexity */ None,
             /* assist_est */ None,
+            /* effort */ None,
         )?;
     } else {
         println!(
@@ -57464,6 +57849,9 @@ fn handle_queue_work(
     // tag on the spec for tag-based queries. trace:STORY-439 | ai:claude
     complexity: Option<complexity_calibration::ComplexityLevel>,
     assist_est: Option<complexity_calibration::AssistanceLevel>,
+    // STORY-451: post-plan/pickup effort estimate. Captured as the plan
+    // touchpoint and stamped as `effort:plan:<bucket>`.
+    effort: Option<effort_calibration::EffortBucket>,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -57498,6 +57886,29 @@ fn handle_queue_work(
             // on the new dimension. Best-effort — a load/save failure
             // doesn't fail the pickup.
             apply_calibration_tags(storage, spec, complexity, assist_est);
+        }
+    }
+    if effort.is_some() && !list_sessions {
+        if let Ok(project_root) = find_project_root() {
+            let main_root = main_worktree_root_from(&project_root);
+            let spec = plan.anchor_display.as_str();
+            if let Err(e) = effort_calibration::upsert_plan(
+                &main_root,
+                spec,
+                effort,
+                Some(current_user_id(None)),
+            ) {
+                eprintln!(
+                    "  {} could not record plan effort for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+            apply_effort_tag(
+                storage,
+                spec,
+                effort_calibration::EffortTouchpoint::Plan,
+                effort,
+            );
         }
     }
 
@@ -61075,24 +61486,36 @@ fn capture_review_calibration_for_spec(
     let Some(verdict) = reviewer_summary::parse_verdict_file(&body) else {
         return;
     };
-    let Some(level_raw) = verdict
+    if let Some(level_raw) = verdict
         .implementation_complexity
         .as_deref()
         .map(str::trim)
         .filter(|s: &&str| !s.is_empty())
-    else {
-        return;
-    };
-    let Some(level) = complexity_calibration::ComplexityLevel::parse_str(level_raw) else {
-        return;
-    };
-    let agreement = verdict
-        .complexity_agreement
+    {
+        if let Some(level) = complexity_calibration::ComplexityLevel::parse_str(level_raw) {
+            let agreement = verdict
+                .complexity_agreement
+                .as_deref()
+                .and_then(complexity_calibration::ComplexityAgreement::parse_str);
+            if let Err(e) =
+                complexity_calibration::upsert_review(project_root, spec, level, agreement)
+            {
+                eprintln!(
+                    "  {} could not record review calibration for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+        }
+    }
+    let effort = verdict
+        .implementation_effort
         .as_deref()
-        .and_then(complexity_calibration::ComplexityAgreement::parse_str);
-    if let Err(e) = complexity_calibration::upsert_review(project_root, spec, level, agreement) {
+        .and_then(effort_calibration::EffortBucket::parse_str);
+    if let Err(e) =
+        effort_calibration::upsert_review(project_root, spec, effort, Some("reviewer".to_string()))
+    {
         eprintln!(
-            "  {} could not record review calibration for {spec}: {e}",
+            "  {} could not record review effort for {spec}: {e}",
             "⚠".yellow()
         );
     }
