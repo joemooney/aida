@@ -48,10 +48,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:20:25.092899708Z
-modified_at: 2026-05-24T16:20:25.092899708Z
+modified_at: 2026-05-24T16:22:57.206482353Z
 req_type: Task
 tags:
 - aida:agent
+- batch:multi-agent-coordination
 - from-self-test
 - multi-agent
 - registry
