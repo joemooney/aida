@@ -1,0 +1,77 @@
+id: 019e57c8-c0d9-7af1-b1ef-620065277fd4
+spec_id: STORY-442
+agreed_id: STORY-442
+title: 'Lifecycle short-circuit tags: lifecycle:no-ci-wait / no-review / no-build / trivial for small-blast-radius specs'
+description: |-
+  ## Why
+
+  aida queue work --auto-complete --no-human=both runs 6 phases: implementer (~1m) + CI wait (3-5m) + reviewer (3-5m) + merge (~10s) + pull (~10s) + build (~30s). End-to-end ~10-12 min minimum.
+
+  For one-line docs fixes, trace-comment additions, fmt-cleanups, gitignore tweaks — the CI wait and reviewer phases are pure tax. Math: typo-fix work itself is 30s but lifecycle adds 10 min.
+
+  User direction 2026-05-23: introduce per-spec lifecycle tags that opt out of non-critical phases when the spec's risk profile justifies it, accepting that 'anything that went awry can be cleaned up later'.
+
+  ## Proposed tags
+
+  Four composable tags. Apply via aida edit <spec> --tags lifecycle:no-review etc.
+
+  - lifecycle:no-ci-wait     — skip waiting for CI before phase 3+; CI still runs in parallel
+  - lifecycle:no-review      — auto-merge without spawning reviewer session
+  - lifecycle:no-build       — skip phase 6 local build (re-run on next session anyway)
+  - lifecycle:trivial        — shorthand for all three above combined
+
+  When the orchestrator sees these tags on the dispatched spec, it skips the corresponding phases. The kickoff banner reports what was skipped: 'auto-complete drain (skipping CI wait + reviewer per lifecycle:trivial tag)'.
+
+  ## Risk model
+
+  Each tag is opt-in per-spec. Accepting:
+  - no-review: ~5% of mechanical changes turn out subtly wrong; post-hoc fix is a separate spec
+  - no-ci-wait: if CI catches something after merge, file the follow-up
+  - no-build: essentially free; you build before next implementer session anyway
+
+  The fast-track tags don't promise zero risk; they promise expected-speedup x small-change-probability beats expected-catch-rate x small-change-cost.
+
+  ## Acceptance
+
+  - [ ] Orchestrator recognizes the four lifecycle:* tags on dispatched spec and skips corresponding phases
+  - [ ] Kickoff banner reports what was skipped (transparency)
+  - [ ] aida show <spec> displays the lifecycle:* tags clearly
+  - [ ] aida list --tags lifecycle:trivial filters audit view
+  - [ ] Phase 4 (merge) and Phase 5 (pull auto-bump) are NEVER skipped — substrate state integrity
+  - [ ] Docs: aida-discipline / machinery-glossary updates explaining the tags + risk model
+  - [ ] Regression test: drain with lifecycle:trivial tag confirms CI-wait + reviewer + build skipped, merge + pull still run
+  - [ ] Scaffolding-pack — every project gets the same conventions
+
+  ## Out of scope (noted for follow-up)
+
+  - Auto-apply lifecycle:fast-track based on spec shape heuristics (TYPE=task + Priority=low + papercut tag => auto-trivial). Separate spec; the auto-apply rule is more controversial than the manual opt-in.
+  - Per-tag custom risk thresholds (e.g., 'only skip review if spec.complexity == low')
+  - Post-merge audit dashboard ('what did we fast-track this month, did anything regress')
+  - Promoting auto-bump for fast-tracked specs that skipped Done->Completed lifecycle path
+
+  ## Composes with
+
+  - batch:NAME convention — fast-track tags compose with batch drains for parallel small work
+  - STORY-441 (archive concept) — archive timing for fast-tracked specs should be unchanged
+  - STORY-439 (calibration layer) — fast-track tags become a complexity-estimate signal: 'implementer marked it trivial; did the actual implementation match?'
+  - TASK-503 (pre-commit fmt hook) — fast-tracked fmt-cleanup specs are exactly the use case
+
+  ## Origin
+
+  2026-05-23 user: 'aida queue work can be quite long for very small tasks. Are there tags we could apply to short circuit some steps that we know are not critical and can be cleaned up later if anything went awry?'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:20:34.905803870Z
+modified_at: 2026-05-24T02:20:34.905803870Z
+req_type: Story
+tags:
+- batch
+- from-user-direction
+- lifecycle
+- orchestrator
+- papercut-acceleration
+- parallel
+- small-changes
+- tags
