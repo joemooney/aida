@@ -2,6 +2,7 @@ mod advisor;
 mod agent_registry;
 mod auto_complete;
 mod auto_complete_telemetry;
+mod backlog;
 mod calibration;
 mod changelog;
 mod cli;
@@ -86,9 +87,9 @@ use aida_core::{
 };
 
 use crate::cli::{
-    AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BlockCommand, BriefCommand,
-    CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand,
-    DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
+    AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BacklogCommand, BlockCommand,
+    BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
+    DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
     GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand,
     OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand, RelDefCommand,
     RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
@@ -1527,6 +1528,12 @@ fn run() -> Result<()> {
         }
         Command::Queue(queue_cmd) => {
             handle_queue_command(queue_cmd, &storage)?;
+        }
+        // STORY-444: `aida backlog list/groom/analyze` — backlog grooming
+        // surface in the legacy SQLite dispatch path.
+        // trace:STORY-444 | ai:claude
+        Command::Backlog(backlog_cmd) => {
+            backlog::handle_backlog_command(backlog_cmd, &storage)?;
         }
         // TASK-218: top-level alias in the legacy SQLite dispatch path —
         // forwards to the same handler as `aida queue rework SPEC`.
@@ -6240,6 +6247,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let storage = Storage::new(store_path);
             handle_queue_command(queue_cmd, &storage)?;
         }
+        // STORY-444: `aida backlog list/groom/analyze` — backlog grooming
+        // surface in the git-backend dispatch path. Both arms must dispatch
+        // (a missing arm would fall through to clap's auto-error at runtime
+        // on modern-backend projects, which is the failure mode plan risk
+        // #2 calls out). trace:STORY-444 | ai:claude
+        Command::Backlog(backlog_cmd) => {
+            let storage = Storage::new(store_path);
+            backlog::handle_backlog_command(backlog_cmd, &storage)?;
+        }
         // TASK-218: top-level `aida rework SPEC` → forwards to the same
         // handler as `aida queue rework SPEC`. trace:TASK-218 | ai:claude
         Command::Rework {
@@ -6399,6 +6415,9 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | QueueCommand::Done { .. }
                 | QueueCommand::Rework { .. }
         ),
+        // STORY-444: `aida backlog groom` writes (queue + tag); list /
+        // analyze are read-only. trace:STORY-444 | ai:claude
+        Command::Backlog(cmd) => matches!(cmd, BacklogCommand::Groom { .. }),
         Command::Findings(cmd) => !matches!(cmd, FindingsCommand::List { .. }),
         Command::Config(cmd) => matches!(
             cmd,
@@ -7677,7 +7696,7 @@ fn resolve_description(
     Ok(None)
 }
 
-fn parse_requirement_type(s: &str) -> Result<RequirementType> {
+pub(crate) fn parse_requirement_type(s: &str) -> Result<RequirementType> {
     match s.to_lowercase().as_str() {
         "functional" | "fr" => Ok(RequirementType::Functional),
         "non-functional" | "nonfunctional" | "nfr" => Ok(RequirementType::NonFunctional),
@@ -9045,7 +9064,11 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
 /// entries are ignored. Adding a present tag or removing an absent one is
 /// a graceful no-op. Returns whether the set actually changed.
 // trace:TASK-351 | ai:claude
-fn apply_tag_deltas(tags: &mut HashSet<String>, add: &[String], remove: &[String]) -> bool {
+pub(crate) fn apply_tag_deltas(
+    tags: &mut HashSet<String>,
+    add: &[String],
+    remove: &[String],
+) -> bool {
     let mut changed = false;
     for raw in add {
         let trimmed = raw.trim();
@@ -9646,7 +9669,7 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
 /// child` to refuse parenting under closed work, and to keep `aida show
 /// --tree` / `aida list --parent` views from accumulating mixed-status
 /// trees. trace:BUG-64 | ai:claude
-fn is_terminal_status(status: &RequirementStatus) -> bool {
+pub(crate) fn is_terminal_status(status: &RequirementStatus) -> bool {
     matches!(
         status,
         RequirementStatus::Completed | RequirementStatus::Rejected
@@ -9734,7 +9757,7 @@ fn parse_status(status_str: &str) -> Result<RequirementStatus> {
     }
 }
 
-fn parse_priority(priority_str: &str) -> Result<RequirementPriority> {
+pub(crate) fn parse_priority(priority_str: &str) -> Result<RequirementPriority> {
     match priority_str.to_lowercase().as_str() {
         "high" => Ok(RequirementPriority::High),
         "medium" => Ok(RequirementPriority::Medium),
@@ -21574,7 +21597,7 @@ fn auto_followups_disabled() -> bool {
 /// Find the docs/plans/ files that *belong to* `spec_id` — the id appears
 /// in the `# Plan:` title line or the `Specs:` header line. Cross-references
 /// in a `## Related` section don't count (that plan owns a different spec).
-fn find_plan_files_for_spec(
+pub(crate) fn find_plan_files_for_spec(
     project_root: &std::path::Path,
     spec_id: &str,
 ) -> Vec<std::path::PathBuf> {
@@ -21646,7 +21669,7 @@ fn parse_plan_followups(content: &str) -> Vec<String> {
 
 /// TASK-95: parse the `## Critical Files` section — the column-0 bullets'
 /// backtick-quoted paths. The flat must-touch blast radius.
-fn parse_plan_critical_files(content: &str) -> Vec<String> {
+pub(crate) fn parse_plan_critical_files(content: &str) -> Vec<String> {
     let path_re = regex::Regex::new(r"`([A-Za-z0-9_][A-Za-z0-9_./\-]*\.[A-Za-z0-9]+)`").unwrap();
     let mut out: Vec<String> = Vec::new();
     let mut in_section = false;
@@ -36488,7 +36511,7 @@ fn collect_source_files(dir: &std::path::Path, exts: &[&str], out: &mut Vec<std:
 /// first definition on the trace line or the two lines below it (comment
 /// lines are skipped so the comment's own prose can't false-match).
 /// trace:TASK-94 | ai:claude
-fn scan_trace_graph(
+pub(crate) fn scan_trace_graph(
     project_root: &std::path::Path,
     wanted: &HashSet<String>,
 ) -> std::collections::HashMap<String, Vec<TraceHit>> {
@@ -36561,7 +36584,7 @@ fn parse_squash_pr_number(subject: &str) -> Option<u64> {
 /// (they alter pickup/routing behavior); plain tags are sorted, capped at
 /// 3, and any remainder collapses to a `+N` overflow marker. Returns None
 /// when the requirement carries no tags. trace:TASK-238 STORY-442
-fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
+pub(crate) fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
     if tags.is_empty() {
         return None;
     }
@@ -36592,13 +36615,13 @@ fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
 
 /// TASK-238: does the tag set contain `want` (case-insensitive)? The
 /// predicate behind `aida queue list --tag`. trace:TASK-238 | ai:claude
-fn tag_matches_exact(tags: &std::collections::HashSet<String>, want: &str) -> bool {
+pub(crate) fn tag_matches_exact(tags: &std::collections::HashSet<String>, want: &str) -> bool {
     tags.iter().any(|t| t.eq_ignore_ascii_case(want))
 }
 
 /// TASK-238: does any tag start with `prefix` (case-insensitive)? The
 /// predicate behind `aida queue list --tag-prefix`. trace:TASK-238
-fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) -> bool {
+pub(crate) fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) -> bool {
     let lp = prefix.to_ascii_lowercase();
     tags.iter().any(|t| t.to_ascii_lowercase().starts_with(&lp))
 }
@@ -36607,7 +36630,7 @@ fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) ->
 /// when several), used as the group key for `aida queue list
 /// --by-batch`. None when the requirement is un-batched.
 /// trace:TASK-238 | ai:claude
-fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
+pub(crate) fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
     let mut found: Vec<&str> = tags
         .iter()
         .filter(|t| t.to_ascii_lowercase().starts_with("batch:"))
@@ -36632,7 +36655,7 @@ fn strip_batch_prefix(s: &str) -> Option<&str> {
 /// TASK-270: normalize a `--batch` flag value so `--batch NAME` and the
 /// redundant `--batch batch:NAME` (the literal tag from `aida queue
 /// list`) both resolve to `NAME`. trace:TASK-270 | ai:claude
-fn normalize_batch_name(s: &str) -> &str {
+pub(crate) fn normalize_batch_name(s: &str) -> &str {
     strip_batch_prefix(s).unwrap_or(s)
 }
 
@@ -53006,7 +53029,7 @@ fn html_escape(s: &str) -> String {
 /// invisible to their own queuer because list resolved to one identity and
 /// add resolved to another).
 /// trace:BUG-89 | ai:claude
-fn current_user_id(user_override: Option<&str>) -> String {
+pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     user_override.map(str::to_string).unwrap_or_else(|| {
         std::env::var("AIDA_USER")
             .or_else(|_| std::env::var("USER"))
@@ -66101,14 +66124,16 @@ mod story_255_discipline_pack_tests {
     fn discipline_pack_scaffolds_seven_docs_plus_readme() {
         // trace:TASK-479 | ai:antigravity — robust-project-root-resolution.md joins the pack.
         // trace:TASK-512 | ai:claude — tag-conventions.md joins the pack.
+        // trace:STORY-444 | ai:claude — backlog-grooming.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 10, "expected README + 9 discipline docs");
+        assert_eq!(written, 11, "expected README + 10 discipline docs");
 
         let dir = root.path().join("docs/aida/discipline");
         for f in [
             "README.md",
             "advisor-role.md",
+            "backlog-grooming.md",
             "lifecycle-vocabulary.md",
             "machinery-glossary.md",
             "tag-conventions.md",
@@ -66129,7 +66154,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            10
+            11
         );
     }
 
