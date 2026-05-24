@@ -3652,6 +3652,14 @@ pub enum Command {
         // trace:TASK-64 | ai:claude
         #[clap(long, alias = "include-terminal")]
         all: bool,
+
+        /// Emit `[{spec_id,title,req_type,status,tags}]` as JSON instead
+        /// of the human table. Internal-use surface for the TUI launcher
+        /// (STORY-244) to populate its Backlog / History panes; the
+        /// schema may change without notice.
+        // trace:STORY-244 | ai:claude
+        #[clap(long, hide = true)]
+        json: bool,
     },
 
     /// Show details for a specific requirement
@@ -4547,15 +4555,31 @@ pub enum Command {
     ///
     // trace:STORY-132 | ai:claude
     Tui {
-        /// Scope (an EPIC / STORY / … id) to host in the first tab.
-        /// Omit to open an empty shell.
+        /// Scope (an EPIC / STORY / … id) to host in the first tab
+        /// (PTY-host mode) or to scope the Sessions section against
+        /// (launcher mode). Omit to open the launcher dashboard / an
+        /// empty PTY-host shell.
         scope: Option<String>,
         /// Skip crash-recovery re-attach of orphaned sessions on launch
-        /// and discard any stale `.aida/tui-state.json`.
+        /// and discard any stale `.aida/tui-state.json`. PTY-host-mode
+        /// only — the launcher does not own PTY children.
         // trace:STORY-135 | ai:claude
         // trace:TASK-487 | ai:claude
         #[clap(long)]
         no_recover: bool,
+        /// Force launcher mode (STORY-244): the TUI renders a dashboard,
+        /// exits emitting one intent line, and the `aida-tui` bash
+        /// wrapper dispatches the intent. Defaults to whatever
+        /// `[tui] mode` resolves to (launcher unless overridden).
+        // trace:STORY-244 | ai:claude
+        #[clap(long)]
+        launcher: bool,
+        /// File descriptor the launcher writes its intent line to on
+        /// exit. The `aida-tui` wrapper passes `3>&1`; tests may pass
+        /// any open writable fd. Defaults to 3. Launcher mode only.
+        // trace:STORY-244 | ai:claude
+        #[clap(long, value_name = "FD", hide = true)]
+        intent_fd: Option<u32>,
     },
 
     /// Project the requirements graph as a layered docs tree.

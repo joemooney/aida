@@ -871,7 +871,9 @@ impl App {
 
     /// Write the live tab set to `.aida/tui-state.json` so a crash or
     /// `prefix d` detach can re-attach the sessions on the next launch.
-    /// trace:STORY-135 | ai:claude
+    /// Preserves `dialog_session_id` if a prior launcher run wrote one —
+    /// the launcher and PTY-host paths share the file. trace:STORY-135
+    /// STORY-244 | ai:claude
     fn persist_state(&self) {
         let tabs = self
             .tabs
@@ -881,7 +883,15 @@ impl App {
                 scope: t.scope.clone(),
             })
             .collect();
-        state::save(&self.project_root, &TuiState { tabs });
+        // Preserve dialog_session_id across PTY-host saves.
+        let dialog_session_id = state::load(&self.project_root).and_then(|s| s.dialog_session_id);
+        state::save(
+            &self.project_root,
+            &TuiState {
+                tabs,
+                dialog_session_id,
+            },
+        );
     }
 
     /// Whether stable tab id `id` is the currently focused tab.
