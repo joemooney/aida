@@ -1,0 +1,12 @@
+id: 019e58e2-4ced-7450-af3f-8893b1d48a35
+spec_id: TASK-529
+agreed_id: TASK-529
+title: 'TASK: `aida backlog list --by-risk` (group view, mirrors `aida queue list --by-batch`)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:28:06.381030657Z
+modified_at: 2026-05-24T07:28:06.381030657Z
+req_type: Task
