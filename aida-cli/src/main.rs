@@ -6040,6 +6040,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     maybe_hint_after_queue_drain(&storage, &user_id);
                 }
 
+                // BUG-378: substrate-as-bouncer — direct `aida edit --status
+                // done|completed` is the other path an agent uses to declare
+                // work shipped, so the pending-brief banner must fire here
+                // too. Mirrors the queue-done hookup. trace:BUG-378 | ai:claude
+                if matches!(
+                    new_status_for_manifest.as_deref(),
+                    Some("Done") | Some("Completed")
+                ) {
+                    if let Ok(project_root) = find_project_root() {
+                        warn_pending_briefs_for_running_agent(&project_root);
+                    }
+                }
+
                 // BUG-238: file plan `## Followups` when `aida edit` directly
                 // transitions a spec into Done/Completed. `aida queue done`
                 // and the STORY-86 auto-bump already trigger the parse; the
@@ -7469,6 +7482,79 @@ fn collect_agent_briefs(
     Ok(entries)
 }
 
+/// BUG-378: substrate-as-bouncer for agent scratchpad drift.
+///
+/// When an agent is about to declare a spec Done/Completed, scan the brief
+/// surface for unacked briefs targeting THIS agent's type and print a loud
+/// banner to stderr naming each file path. The agent — about to loop on its
+/// own internal scratchpad and re-render "all done" — gets told by the
+/// substrate that new work is queued before it gets a chance to exit.
+///
+/// Gating rules (kept narrow on purpose — false positives would teach agents
+/// to ignore the banner):
+/// - Agent type detected as `claude`, `codex`, or `antigravity` only. The
+///   `"other"` fallback (raw shell, untagged caller) does NOT scan — would
+///   noise up every interactive `aida queue done` run by a human.
+/// - Only briefs matching the running agent's type are listed. A pending
+///   `antigravity` brief never fires when Codex is running.
+/// - Banner goes to stderr in bold red so it survives stdout piping and
+///   stands out in a wall of green check marks. trace:BUG-378 | ai:claude
+fn warn_pending_briefs_for_running_agent(project_root: &std::path::Path) {
+    let agent_type = agent_registry::detect_agent_type();
+    let Some(lines) = pending_brief_banner_lines(project_root, &agent_type) else {
+        return;
+    };
+    for line in lines {
+        eprintln!("{}", line);
+    }
+}
+
+/// Pure-function core of [`warn_pending_briefs_for_running_agent`] —
+/// returns the banner lines (already styled with ANSI red/bold) or `None`
+/// when the gate stays silent. Split out so unit tests can assert directly
+/// on the rendered output without capturing stderr. trace:BUG-378 | ai:claude
+fn pending_brief_banner_lines(
+    project_root: &std::path::Path,
+    agent_type: &str,
+) -> Option<Vec<String>> {
+    if !matches!(agent_type, "claude" | "codex" | "antigravity") {
+        return None;
+    }
+    let entries = collect_agent_briefs(project_root, Some(agent_type), false).ok()?;
+    if entries.is_empty() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(entries.len() + 4);
+    out.push(String::new());
+    out.push(
+        format!(
+            "⚠ NEW BRIEF(S) PENDING for agent `{}` — read before exiting:",
+            agent_type
+        )
+        .red()
+        .bold()
+        .to_string(),
+    );
+    for entry in &entries {
+        out.push(format!("    {}", entry.path.display()).red().to_string());
+    }
+    out.push(format!(
+        "{} {}",
+        "  Run:".red(),
+        format!("aida brief list --for-agent {}", agent_type)
+            .red()
+            .bold()
+    ));
+    out.push(
+        "  Your internal task.md / scratchpad is NOT ground truth — \
+         poll the brief surface before declaring work complete."
+            .red()
+            .to_string(),
+    );
+    out.push(String::new());
+    Some(out)
+}
+
 fn frontmatter_value(content: &str, key: &str) -> Option<String> {
     let mut lines = content.lines();
     if lines.next()? != "---" {
@@ -7819,6 +7905,113 @@ mod task_492_brief_tests {
         assert!(validate_brief_agent("").is_err());
         assert!(validate_brief_agent("../codex").is_err());
         assert!(validate_brief_agent("codex").is_ok());
+    }
+
+    // BUG-378: substrate-as-bouncer banner that catches the scratchpad-drift
+    // failure mode. The pure-function core returns the banner lines (or
+    // None when the gate stays silent) so the test can assert on output
+    // shape without capturing stderr.
+    // trace:BUG-378 | ai:claude
+
+    fn strip_ansi(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == 0x1B && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+                i += 2;
+                while i < bytes.len() && !bytes[i].is_ascii_alphabetic() {
+                    i += 1;
+                }
+                if i < bytes.len() {
+                    i += 1;
+                }
+            } else {
+                out.push(bytes[i] as char);
+                i += 1;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn pending_brief_banner_silent_for_other_agent_type() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        create_agent_brief(temp.path(), &store, "codex", "TASK-492", None).unwrap();
+        // Running shell / unknown caller — banner must NOT fire even though
+        // a pending brief exists. Avoids noising up every human queue-done.
+        assert!(pending_brief_banner_lines(temp.path(), "other").is_none());
+        assert!(pending_brief_banner_lines(temp.path(), "").is_none());
+    }
+
+    #[test]
+    fn pending_brief_banner_silent_when_no_briefs_for_running_type() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        create_agent_brief(temp.path(), &store, "antigravity", "TASK-492", None).unwrap();
+        // A Codex session must not see Antigravity briefs — cross-type
+        // false positives teach agents to ignore the banner.
+        assert!(pending_brief_banner_lines(temp.path(), "codex").is_none());
+    }
+
+    #[test]
+    fn pending_brief_banner_silent_when_no_briefs_at_all() {
+        let temp = tempfile::tempdir().unwrap();
+        // No .aida/agent-briefs/ directory at all — common happy-path case.
+        assert!(pending_brief_banner_lines(temp.path(), "codex").is_none());
+    }
+
+    #[test]
+    fn pending_brief_banner_lists_all_pending_briefs_for_running_type() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let first = create_agent_brief(temp.path(), &store, "codex", "TASK-492", None).unwrap();
+        // Second brief — banner must enumerate ALL of them, not just one.
+        // (Per the BUG-378 master verdict: a missed brief implies the
+        // multi-missed case is plausible too.)
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let second =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", Some("note")).unwrap();
+
+        let lines = pending_brief_banner_lines(temp.path(), "codex")
+            .expect("banner should fire for codex with pending briefs");
+        let rendered: String = lines
+            .iter()
+            .map(|l| strip_ansi(l))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(
+            rendered.contains("NEW BRIEF(S) PENDING for agent `codex`"),
+            "banner header missing: {rendered}"
+        );
+        assert!(
+            rendered.contains(&first.display().to_string()),
+            "first brief path not listed: {rendered}"
+        );
+        assert!(
+            rendered.contains(&second.display().to_string()),
+            "second brief path not listed: {rendered}"
+        );
+        assert!(
+            rendered.contains("aida brief list --for-agent codex"),
+            "remediation command missing: {rendered}"
+        );
+        assert!(
+            rendered.contains("scratchpad is NOT ground truth"),
+            "discipline reminder missing: {rendered}"
+        );
+    }
+
+    #[test]
+    fn pending_brief_banner_skips_acked_briefs() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let path = create_agent_brief(temp.path(), &store, "codex", "TASK-492", None).unwrap();
+        ack_agent_brief(&path).unwrap();
+        // An acked brief is no longer pending — banner must stay silent.
+        assert!(pending_brief_banner_lines(temp.path(), "codex").is_none());
     }
 }
 
@@ -60257,6 +60450,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // skips the hint silently rather than failing the command.
             // trace:STORY-106 | ai:claude
             maybe_hint_after_queue_drain(storage, &user_id);
+
+            // BUG-378: substrate-as-bouncer for the scratchpad-drift ceiling.
+            // An agent about to declare "all done" gets told here, before it
+            // exits, if new work is queued in the brief surface for its type.
+            // trace:BUG-378 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                warn_pending_briefs_for_running_agent(&project_root);
+            }
         }
         // STORY-42: one-shot queue pickup → session start → claude launch.
         // trace:STORY-42 | ai:claude
@@ -71636,15 +71837,17 @@ mod story_255_discipline_pack_tests {
         // trace:STORY-444 | ai:claude — backlog-grooming.md joins the pack.
         // trace:TASK-517 | ai:codex — reserved-paths.md documents the
         // `/ultraplan` namespace-reservation prompt source.
+        // trace:BUG-378 | ai:claude — brief-polling.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 12, "expected README + 11 discipline docs");
+        assert_eq!(written, 13, "expected README + 12 discipline docs");
 
         let dir = root.path().join("docs/aida/discipline");
         for f in [
             "README.md",
             "advisor-role.md",
             "backlog-grooming.md",
+            "brief-polling.md",
             "lifecycle-vocabulary.md",
             "machinery-glossary.md",
             "tag-conventions.md",
@@ -71666,7 +71869,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            12
+            13
         );
     }
 
