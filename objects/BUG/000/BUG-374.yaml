@@ -1,0 +1,70 @@
+id: 019e58ca-3f23-7bb1-96a2-235cc5f5ad9e
+spec_id: BUG-374
+agreed_id: BUG-374
+title: Headless implementer text-question-and-clean-exit recurrence (BUG-354 family) — orchestrator misclassifies as phase-1 failure
+description: |-
+  ## Empirical 2026-05-24 ~06:30
+
+  STORY-444 overnight drain hit phase-1 failure with the implementer exiting cleanly + no PR, exactly the BUG-354 ceiling pattern. Sequence:
+
+  1. Headless implementer (claude -p, bypassPermissions) loaded STORY-444 + plan
+  2. Identified a legitimate design fork: A (all-in-one PR) vs B (split into 2 passes)
+  3. Made a recommendation (A) and asked operator: 'Confirm and I'll proceed?'
+  4. Exited cleanly (no PR opened, no aida-punt called)
+  5. Orchestrator detected clean-exit-no-PR, marked phase 1 as failed
+  6. Batch drain stopped at STORY-444 (TASK-521 + TASK-511 already shipped)
+
+  ## Why BUG-354 + BUG-369 didn't catch this
+
+  BUG-354 ('headless implementer text-question bypass') shipped via PR-237 earlier today. BUG-369 (punt-from-Approved orchestrator gap) shipped tonight via PR-274 — but BUG-369 fixes the EARLY-phase-1 punt window, not the late text-question-and-exit case.
+
+  The implementer ASKED a text question in markdown and exited — never called AskUserQuestion (which BUG-354 catches) and never called /aida-punt (which BUG-369 enables). The clean exit is silent from both gates' perspective.
+
+  ## Fix direction
+
+  Three options:
+
+  A. **Extend BUG-354's detection** to also catch 'response text contains an interrogative question + no tool call in the final turn' as a ceiling-pattern signal. Heuristic: if final assistant message ends with '?' and no PR was opened, treat as text-question-bypass.
+
+  B. **/aida-pickup skill template hardening** — explicitly forbid 'ask question and exit' in --no-human mode; instruct implementer to punt instead. (Substrate-as-bouncer says: a rule in template is the weaker fix vs a programmatic gate. Use as defense-in-depth, not primary.)
+
+  C. **Orchestrator post-exit check** — if clean exit with no PR + no punt signal, inspect the headless log for the final assistant message; if it ends with a question pattern, route through advisor tier as if it were a punt. Most robust.
+
+  Lean C as primary fix (programmatic, doesn't rely on skill template adherence); A as secondary defense.
+
+  ## Acceptance
+
+  - [ ] Reproduce: simulate a headless implementer that asks a clarifying question in markdown and exits cleanly with no PR; confirm current code misclassifies as phase-1 failure
+  - [ ] Implement chosen fix(es)
+  - [ ] On detection: route the text-question through advisor tier (per STORY-306) — advisor either resolves or escalates to human
+  - [ ] Regression test: scripted headless session that ends with 'A or B? Please confirm' should produce advisor-tier routing, NOT phase-1 failure
+  - [ ] Document the gate in docs/aida/discipline/substrate-as-bouncer.md as another ceiling-pattern closure
+
+  ## Composes with
+
+  - BUG-354 (original headless text-question ceiling — same family)
+  - BUG-369 (punt-from-Approved — adjacent fix, doesn't cover this case)
+  - STORY-306 (advisor tier — the right routing target)
+  - STORY-276 (headless implementer punt safety net — extended scope)
+  - feedback_substrate_as_bouncer_not_rules — text-question is the recurring 'rule in template fails' pattern
+
+  ## Origin
+
+  2026-05-24 overnight drain: STORY-444 stalled exactly here. User had to manually post verdict + resume drain. Without the fix this exact pattern keeps recurring on any drain where the implementer encounters a legitimate design fork.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:01:49.987073204Z
+modified_at: 2026-05-24T07:01:49.987073204Z
+req_type: Bug
+tags:
+- bug-354-family
+- ceiling-pattern
+- from-self-test
+- from-story-444
+- headless
+- phase-1
+- sibling-of-BUG-354
+- sibling-of-BUG-369
+- text-question
