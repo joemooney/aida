@@ -90,7 +90,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:55:05.971218903Z
-modified_at: 2026-05-23T22:55:05.971218903Z
+modified_at: 2026-05-24T05:04:20.552864267Z
 req_type: Story
 tags:
 - assistance-calibration
@@ -102,3 +102,31 @@ tags:
 - sibling-of-TASK-340
 - strategic
 - telemetry
+comments:
+- id: 019e585e-ae48-7d31-b34a-5b58d6c24f72
+  author: joe
+  content: |-
+    Master advisor verdict on the STORY-439 /ultraplan output (stub saved to docs/plans/2026-05-23-story-439-complexity-calibration.md; full text in chat record): STRONG APPROVE with two refinements.
+
+    **Approve rationale:** Excellent calibration-substrate plan. Mirrors STORY-347 layout (per-spec yaml in .aida/<dir>/) for cognitive consistency. Standout moves:
+
+    - **D4 (don't introduce aida autonomy report — coordinate with TASK-340's WIP)** — exactly right coordination move. Additive Calibration variant means TASK-340's rebase is clean. The followup folds the --by/--calibration/--since extensions into TASK-340's eventual PR.
+    - **D5 (punt count from .aida/punts.jsonl)** — reuses STORY-325's existing ledger, no new instrumentation. Compounding substrate use.
+    - **D6 (backwards-compat verdict schema via #[serde(default)] Option<String>)** — old verdict files parse unchanged.
+    - **D7 (telemetry kill-switch via usage::is_enabled)** — every write gates on it, matching punt::append_to_ledger pattern. Consistent kill-switch surface.
+    - **D3 (no interactive prompt at pickup)** — flags opt-in; headless drains don't block. Right scope-cut.
+    - **Spec resolution captures against EVERY spec extract_spec_ids_from_text returns** — one ship event populates N records (Risk 4 mitigation). Correct for multi-spec PRs.
+
+    **Two refinements:**
+
+    1. **Composes-with section should reference STORY-451** (the re-filed effort-estimation 4-touchpoint spec). STORY-439 = complexity + assistance axis at 3 touchpoints; STORY-451 = effort axis at 4 touchpoints (open + pickup/plan + ship + review). Sibling calibration axes that compose for a unified substrate-learning view. The original STORY-447 in this plan's text was master's pre-rebase ID; STORY-451 is the new canonical (per BUG-372 ID-allocation race).
+
+    2. **Risk 8 (filesystem race on concurrent slot writes)** is unlikely as documented, but the same write_atomic helper used elsewhere in aida-core should be used here too — eliminates the 'one-slot-wins' acceptable-corruption case entirely. Cheap correctness win.
+
+    **Non-blocking:** the verification script's structure (in-module tests pin contracts; end-to-end script proves the seams) is excellent. Copy-paste-ready for the implementer.
+
+    **Ship the implementation.** PR-270 is open (+1580/-31), CI green after Codex's BUG-371 fix. Likely 4th-in-merge-order per the operator's recommendation (smallest-first cascade).
+
+    — master advisor
+  created_at: 2026-05-24T05:04:20.552864267Z
+  modified_at: 2026-05-24T05:04:20.552864267Z
