@@ -3630,7 +3630,7 @@ fn complete_init_scaffolding(
 
     // Run scaffold
     let config_for_output = config.clone();
-    let mut scaffolder = Scaffolder::with_database(root.to_path_buf(), config, db_path);
+    let mut scaffolder = Scaffolder::with_database(root.to_path_buf(), config, db_path.clone());
     let preview = scaffolder.preview(store);
 
     let mut _created_count = 0;
@@ -3862,7 +3862,115 @@ fn complete_init_scaffolding(
     }
     println!();
 
+    // trace:TASK-510 | ai:antigravity
+    if let Err(e) = enqueue_initial_scaffold_task(root, &db_path) {
+        eprintln!(
+            "  {} could not enqueue initial scaffolding task: {}",
+            "Note:".dimmed(),
+            e
+        );
+    }
+
     Ok(())
+}
+
+// trace:TASK-510 | ai:antigravity
+fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Path) -> Result<()> {
+    use aida_core::{
+        Requirement, RequirementPriority, RequirementStatus, RequirementType, Storage,
+    };
+
+    let resolved_db_path = root.join(db_path);
+    let storage = Storage::new(&resolved_db_path);
+    let mut store = storage.load()?;
+
+    let already_exists = store
+        .requirements
+        .iter()
+        .any(|r| r.tags.contains("from-aida-init"));
+
+    if already_exists {
+        return Ok(());
+    }
+
+    let mut req = Requirement::new(
+        "Commit AIDA scaffolding (initial setup)".to_string(),
+        "".to_string(),
+    );
+    req.req_type = RequirementType::Task;
+    req.status = RequirementStatus::Approved;
+    req.priority = RequirementPriority::High;
+    req.tags.insert("from-aida-init".to_string());
+    req.tags.insert("first-task".to_string());
+    req.tags.insert("scaffolding".to_string());
+
+    store.add_requirement_with_id(req, None, Some("task"));
+
+    if let Some(last) = store.requirements.last_mut() {
+        let spec_id = last.spec_id.as_deref().unwrap_or("TASK-1");
+        last.description = format!(
+            "After aida init, the scaffolded files are untracked. Run: git add . && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + !.aida/config.toml) ensure only the right files get committed. Run 'aida queue done {}' after the commit lands.",
+            spec_id
+        );
+
+        println!(
+            "  {} onboarding task enqueued: {}",
+            "Enqueued".green(),
+            spec_id.cyan()
+        );
+    }
+
+    storage.save(&store)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod task_510_init_scaffold_task_tests {
+    use super::*;
+    use aida_core::{RequirementPriority, RequirementStatus, RequirementType, Storage};
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_enqueue_initial_scaffold_task_success_and_idempotency() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = std::path::Path::new(".aida/cache.db");
+        let full_db_dir = tmp.path().join(".aida");
+        std::fs::create_dir_all(&full_db_dir).unwrap();
+
+        // 1. Initial enqueueing
+        enqueue_initial_scaffold_task(tmp.path(), db_path).unwrap();
+
+        // Load and assert
+        let storage = Storage::new(&tmp.path().join(db_path));
+        let store = storage.load().unwrap();
+        assert_eq!(store.requirements.len(), 1);
+
+        let req = &store.requirements[0];
+        assert_eq!(req.title, "Commit AIDA scaffolding (initial setup)");
+        assert_eq!(req.req_type, RequirementType::Task);
+        assert_eq!(req.status, RequirementStatus::Approved);
+        assert_eq!(req.priority, RequirementPriority::High);
+        assert!(req.tags.contains("from-aida-init"));
+        assert!(req.tags.contains("first-task"));
+        assert!(req.tags.contains("scaffolding"));
+
+        let spec_id = req.spec_id.as_deref().unwrap_or("TASK-1");
+        assert!(req
+            .description
+            .contains("After aida init, the scaffolded files are untracked."));
+        assert!(req
+            .description
+            .contains(&format!("Run 'aida queue done {}'", spec_id)));
+
+        // 2. Idempotency check: run it again and verify we don't duplicate
+        enqueue_initial_scaffold_task(tmp.path(), db_path).unwrap();
+        let store2 = storage.load().unwrap();
+        assert_eq!(
+            store2.requirements.len(),
+            1,
+            "Idempotency failed: task was duplicated"
+        );
+    }
 }
 
 /// Detect if the current directory has a distributed store configured.
