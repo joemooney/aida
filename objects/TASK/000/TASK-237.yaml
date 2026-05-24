@@ -49,14 +49,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:16:31.841526860Z
-modified_at: 2026-05-15T14:35:12.392690835Z
+modified_at: 2026-05-24T06:39:09.008409089Z
 req_type: Task
 tags:
 - agreed-id
+- aida:session:list
 - batch:display-polish
 - display
 - long-form
-- session-list
 - spec-id
 - ux
 relationships:
