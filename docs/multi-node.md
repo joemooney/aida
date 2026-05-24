@@ -29,7 +29,7 @@ diagnose when it doesn't.
 The queue is one YAML file per shell user, stored in the orphan `aida-store`
 branch at `registry/queues/<user_id>.yaml`. `<user_id>` resolves in this order:
 `--user <id>` flag → `AIDA_USER` env → `USER` env → `USERNAME` env → `"default"`
-(see `aida-cli/src/main.rs:47443` `current_user_id`). Queue reads and writes
+(see `current_user_id` in `aida-cli/src/main.rs`).<!-- trace:TASK-476 | ai:claude --> Queue reads and writes
 go through the git backend directly — **not** through the SQLite cache (which
 holds `aida list` / `aida search` projections only). So a stale cache cannot
 make the queue look empty; only two things can:
