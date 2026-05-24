@@ -2975,6 +2975,16 @@ pub enum QueueCommand {
         // trace:TASK-285 | ai:claude
         #[clap(long, value_name = "N", requires = "auto_complete")]
         max: Option<usize>,
+        /// With `--auto-complete`: after this many phase failures shelve in
+        /// a single batch, stop the drain entirely rather than continue
+        /// past the wreck (the environment is probably broken — gh
+        /// rate-limited, CI infra down, etc.). Default is 5. Set to 0 to
+        /// fall back to the historical "first failure stops" behaviour.
+        /// Per-batch — a `--batches A,B,C` chain gets an independent budget
+        /// for each.
+        // trace:EPIC-28 | ai:claude
+        #[clap(long, value_name = "N", requires = "auto_complete")]
+        max_failures: Option<usize>,
         /// Run `--auto-complete` phases headless (`claude -p`) so the drain
         /// needs no Ctrl+D.
         ///

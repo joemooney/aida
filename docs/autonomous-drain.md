@@ -617,6 +617,128 @@ when it sees the merge SHA on main.
 > calls it out as optional. Until then, the two recipes above plus muscle
 > memory cover the ground.
 
+## Shelving on failure (EPIC-28)
+
+Before EPIC-28, the first phase failure in a `--batch --auto-complete` drain
+halted the whole batch — the rest of the members sat queued until morning.
+EPIC-28 changes that for the recoverable kinds of failure (CI red, reviewer
+RequestChanges, build failed, …): the orchestrator **shelves** the failed
+spec, **skips its dependents**, and **continues** with the independent
+members.
+
+```
+batch:nightly = [A, B, C, D, E]   (D declared blocked-by B via `aida rel add D B --type blocked-by`)
+
+  head=A → ship                       shipped=[A]
+  head=B → ✗ CI red → shelve(B)       shelved=[B]   (B → NeedsAttention + FailureReason)
+  head=C → ship                       shipped=[A,C]
+  head=D → pickability=blocked-by B   skipped=[D]   (NeedsAttention is not Completed)
+  head=E → ship                       shipped=[A,C,E]
+  ───────────────────────────────────────────────────────
+  outcome: DrainedWithShelved   exit 2
+  → triage shelved with `aida findings list`
+```
+
+### What's recorded on a shelve
+
+A shelved spec carries the same `NeedsAttention` status as a punt, plus a
+**`FailureReason`** sibling to `AttentionReason`:
+
+| field | shape | example |
+|---|---|---|
+| `phase` | slug | `ci` / `review` / `merge` / `pull` / `build` |
+| `phase_index` | 1..=6 | `2` |
+| `kind` | slug | `ci-red` / `request-changes` / `merge-conflict` |
+| `detail` | one-liner | "Linux CI red — 3 tests panicked" |
+| `recovery_hint` | optional one-liner | "`gh run view 12345`" |
+| `shelved_by` | role / `None` | `implementer` |
+| `shelved_at` | UTC timestamp | … |
+
+`aida findings list` renders these under a **"Failures awaiting triage"**
+section next to the existing **"Punts awaiting triage"** — the column
+shape differs (the failure section leads with `failure:<phase>` + the
+recovery hint), so the triage action is immediately obvious. The same
+ledger file (`.aida/punts.jsonl`) records each shelving with
+`resolution_path: "shelved-by-failure"` and `decision: "failure:<phase>"`
+so STORY-325 punt analysis can filter shelvings in or out by that
+discriminator.
+
+### Which failures shelve
+
+Shelvable (the drain continues):
+
+- `no-pr` — phase 1 finished cleanly but opened no PR
+- `ci-red` — phase 2 CI failed
+- `ci-timeout` — phase 2 CI never reached a terminal state
+- `no-verdict` — phase 3 reviewer produced no usable verdict
+- `failed` — the spawned work ran and reported failure (the phase default)
+
+Not shelvable (the drain stops, as it did pre-EPIC-28):
+
+- `spawn` — subprocess could not even start (PATH problem)
+- `missing-tool` — `gh` / `cargo` / etc. is absent
+- `internal` — an orchestrator invariant was violated
+
+The split is intentional: those last three describe a broken **environment**.
+Parking an entire batch of innocent specs because the env is broken would
+be worse than stopping; the env needs to be fixed before any spec can ship.
+
+### The `--max-failures` safety cap
+
+`aida queue work --auto-complete --batch X --max-failures N` stops the
+drain after N shelves in a single batch — the assumption being that if N
+specs in a row fail in a recoverable way, the assumption that they're
+"independent local failures" is probably wrong (more likely: an upstream
+broke, or every spec depends on something missing). The cap **defaults
+to 5**; pass `--max-failures 0` to fall back to the historical "first
+failure stops the batch" semantics. The cap is **per-batch**, not
+per-chain — a `--batches A,B,C` chain has its own independent budget for
+each batch.
+
+### Dependency-aware skip
+
+The skip is **free**: it falls out of the existing pickability gate
+(STORY-333). When B is shelved, B is no longer `Completed`, so any
+member with `BlockedBy → B` is reported as `UnsatisfiedBlocker` by
+`pickability` and silently dropped by `resolve_batch_members` on the next
+head-pickup call. The summary surfaces both the skipped member and why
+("D (blocked-by B (Needs Attention))") so the operator can see the
+cascade at a glance. Today's declaration path is
+`aida rel add D B --type blocked-by`; STORY-1 of EPIC-28 will add an
+`aida add --blocked-by` / `aida edit --blocked-by` flag for the same
+relationship at file-time.
+
+### Exit code grid
+
+| Outcome | Exit code |
+|---|---|
+| Clean drain — every member shipped | `0` |
+| `--max` cap reached, more queued | `0` |
+| Stalled — head did not advance after a successful run | `1` |
+| **Drained with shelved members (EPIC-28)** | **`2`** |
+| Phase 1 (implementer) failed un-shelvably | `3` |
+| Phase 2 (CI) failed un-shelvably | `4` |
+| Phase 3 (review) failed un-shelvably | `5` |
+| Phase 4 (merge) failed un-shelvably | `6` |
+| Phase 5 (pull) failed un-shelvably | `7` |
+| Phase 6 (build) failed un-shelvably | `8` |
+
+Exit `2` is the new signal: "the drain did its job — independents shipped,
+failures parked — but you have triage to do." Scripts that wrap a batch
+drain should treat exit `2` as non-failure but actionable.
+
+### Triage path
+
+```bash
+aida findings list                       # show both punts and failures
+aida show TASK-99                        # detail on a shelved spec
+aida edit TASK-99 --status approved      # fix-and-re-queue
+aida edit TASK-99 --status rejected      # drop (was wrong direction)
+```
+
+Triaging a spec out of `NeedsAttention` clears both `attention_reason`
+and `failure_reason`. The punt ledger entry stays — it's history.
+
 ## Limits of this cut
 
 - There is no liveness watchdog yet: a genuinely stuck headless run is not
