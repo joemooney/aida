@@ -4298,6 +4298,20 @@ pub enum Command {
         // trace:TASK-220 | ai:claude
         #[clap(long)]
         no_ci: bool,
+        /// Focus on the cleanup section only — print just "Needs attention"
+        /// (sticky In-Progress specs, missed auto-bumps, dormant leases,
+        /// stale-on-merged reviewer leases, branches ahead with no PR,
+        /// worktrees with uncommitted work, orphan project dirs, open PRs
+        /// awaiting merge). Default `aida status` adds a one-line summary
+        /// at the bottom when the section is non-empty.
+        // trace:STORY-385 | ai:claude
+        #[clap(long, conflicts_with_all = ["queue", "ci", "short"])]
+        cleanup: bool,
+        /// With `--cleanup`: list every item per category instead of the
+        /// first 3. No-op without `--cleanup`.
+        // trace:STORY-385 | ai:claude
+        #[clap(long, requires = "cleanup")]
+        verbose: bool,
     },
 
     /// Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl`
