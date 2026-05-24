@@ -1,0 +1,102 @@
+id: 019e5850-d812-77e2-8e09-b44e5af3ac37
+spec_id: STORY-451
+agreed_id: STORY-451
+title: Effort estimation at four lifecycle touchpoints + queue/backlog load aggregates + calibration trend (re-filed after STORY-447 ID-allocation race)
+description: |-
+  ## Re-filing context
+
+  Originally filed earlier 2026-05-23 as STORY-447. Lost in orphan-store rebase ID-allocation race (BUG-1-085 documents the race) — origin's STORY-447 became the EPIC-28 deps-sweep spec. This is the re-file under a fresh ID.
+
+  ## Why
+
+  STORY-439 captures complexity (low/med/high) and assistance level (none/advisor/human) at three touchpoints (pickup, ship, review). User direction 2026-05-23 evening added the quantitative effort axis and extended to four touchpoints with load aggregates:
+
+  - Estimate at SPEC-OPEN time (earliest signal — useful for backlog triage)
+  - Re-estimate POST-PLAN (after /ultraplan or sketch lands; sharpens the estimate)
+  - Re-estimate POST-IMPLEMENTATION (implementer self-assesses actual effort spent)
+  - Re-estimate POST-REVIEW (reviewer assesses based on diff observed)
+
+  Plus aggregate surfaces:
+  - Total estimated effort in queue (load visibility)
+  - Total estimated effort in backlog (load visibility for queue-drain planning)
+  - Estimate-vs-actual deltas tracked over time -> calibration trend
+  - Fine-tune estimation heuristics as data accumulates
+
+  ## Substrate-learning loop
+
+  Each estimate at each touchpoint is RECORDED, not just overwritten. The history of (touchpoint, estimate, who-estimated, when) per spec becomes the calibration corpus.
+
+  ## Effort unit choice
+
+  Hour buckets (15min, 1h, 4h, 1d, 1w) — concrete, easy to mentally calibrate, sums readily.
+
+  ## Four-touchpoint shape
+
+  | Touchpoint | Who estimates | What |
+  |---|---|---|
+  | Spec opens (status=Approved) | Filer | Rough estimate from spec description alone |
+  | Post-plan | Plan author | Refined estimate informed by plan structure |
+  | Post-implementation (aida pr ship) | Implementer | Actual effort spent |
+  | Post-review (reviewer verdict) | Reviewer | Effort-as-perceived-from-diff (most objective signal) |
+
+  Tags on the spec: effort:open:1h, effort:plan:2h, effort:impl:3h, effort:review:2h.
+
+  ## Aggregate surfaces
+
+  aida queue load                   # sum of effort:latest across queued items
+  aida backlog load                 # sum across Approved-not-queued items
+  aida load report                  # queue + backlog + in-flight breakdown
+  aida load calibration             # estimate-vs-actual deltas, by touchpoint, over time
+  aida load calibration --by-type   # slice by spec type
+  aida load calibration --since 30d # rolling window for trend
+
+  ## Acceptance
+
+  - [ ] Tag convention: effort:<touchpoint>:<value> recorded at each touchpoint
+  - [ ] aida add accepts --effort at open time
+  - [ ] /aida-import-plan adds effort:plan:<value>
+  - [ ] aida pr ship records effort:impl:<value>
+  - [ ] Reviewer verdict file gets effort:review:<value> field
+  - [ ] aida queue load / backlog load / load report commands
+  - [ ] aida load calibration shows estimate-vs-actual deltas
+  - [ ] Local-only; consistent with STORY-122 / TASK-340
+  - [ ] Scaffolding-pack
+
+  ## Out of scope
+
+  - Auto-estimation by LLM (manual first; revisit once calibration corpus exists)
+  - Cross-project effort aggregation
+  - Burndown charts (CLI tables suffice for v1)
+
+  ## Composes with
+
+  - STORY-439 (complexity + assistance calibration)
+  - TASK-340 (autonomy metric)
+  - STORY-347 (calibration ledger pattern)
+  - STORY-444 (aida-backlog-groom — uses load aggregates)
+  - STORY-122 (usage telemetry)
+  - STORY-441 (archive concept — load excludes archived)
+  - feedback_substrate_learning_loop_calibration memory (this STORY is a canonical application)
+
+  ## Origin
+
+  2026-05-23 user direction. Re-filed after orphan-store rebase lost the original STORY-447 to ID-allocation race.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:49:13.746865359Z
+modified_at: 2026-05-24T04:49:13.746865359Z
+req_type: Story
+tags:
+- backlog-load
+- calibration
+- effort-estimation
+- fine-tuning
+- four-touchpoints
+- from-user-direction
+- metrics
+- queue-load
+- re-filed-from-rebase-loss
+- sibling-of-STORY-439
+- substrate-learning
