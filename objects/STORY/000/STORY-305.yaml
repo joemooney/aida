@@ -40,12 +40,12 @@ description: |-
   ## Origin
 
   2026-05-18: STORY-255's implementer hit a design-fork — a comment on STORY-255 had added 3 scope items never promoted to acceptance criteria. Advisor ruled Option 1 (implement only the 8 binding criteria; spin the comment-items out). Comment items 2 + 3 (\`.claude/skills/local/\` scaffolding + \`<skill>.local.md\` extensions + \`extending-skills.md\`) are this STORY. Comment item 1 (split the propagation memory into generic/AIDA halves) is advisor memory-curation, handled separately.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T03:33:17.151089316Z
-modified_at: 2026-05-22T23:05:27.932255509Z
+modified_at: 2026-05-24T22:07:42.992382004Z
 req_type: Story
 tags:
 - batch:demo-overnight-2026-05-22
@@ -64,3 +64,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-22T23:01:20.598131963Z
   implemented_by: joe
+  completed_at: 2026-05-24T22:07:42.992382004Z
+  completion_sha: 18f4e4ba72e825b536dbf8cd83fa325bd6af482f
