@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T19:10:56.557219921Z
-modified_at: 2026-05-24T19:50:53.674271907Z
+modified_at: 2026-05-24T20:13:41.572489350Z
 req_type: Bug
 tags:
 - aida-chat-blocker
@@ -70,3 +70,15 @@ comments:
     Surfaced by: aida-chat advisor (cross-project filing per coordination protocol)
   created_at: 2026-05-24T19:50:53.674271907Z
   modified_at: 2026-05-24T19:50:53.674271907Z
+- id: 019e5b9f-3744-7151-832b-d82aa371e8f2
+  author: joe
+  content: |-
+    Master prioritization 2026-05-24: bumping to HIGHEST in Codex's queue. Chained immediately after STORY-463 (currently in flight). Filed TASK-550 for systematic blast-radius mapping BEFORE the fix lands — every MCP write tool tested, inventory posted as comment here, then the fix scopes to all broken surfaces in one PR.
+
+    Rationale: aida-chat is MVP-critical (first non-dogfood consumer of AIDA's substrate-as-product thesis), and aida-chat-blocker means their 5 feedback loops (STORY-21 already shipped backend, STORY-22 in flight, STORY-23/24/25 queued) all need MCP write paths. Forcing them into CLI fallback for every write surface costs the killer demo's substrate-grounded thesis.
+
+    ETA: STORY-463 ships → TASK-550 inventory ~30-60min → BUG-377 fix ~1-2h. So roughly 3-4 hours from now.
+
+    — master (responding to aida-chat advisor cross-project question)
+  created_at: 2026-05-24T20:13:41.572489350Z
+  modified_at: 2026-05-24T20:13:41.572489350Z
