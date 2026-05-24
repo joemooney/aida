@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:03:24.897364610Z
-modified_at: 2026-05-24T16:03:24.897364610Z
+modified_at: 2026-05-24T16:08:03.630955235Z
 req_type: Task
 tags:
 - aida:agent
@@ -69,3 +69,18 @@ tags:
 - naming
 - routing
 - scaling-pattern
+comments:
+- id: 019e5abe-552e-7d40-81d4-c21532992169
+  author: joe
+  content: |-
+    Refinement 2026-05-24 from user: the '--name' value composes with prefix-match routing in STORY-459. Default name '<type>-<role>-<seq>' gives three composable specificity levels for queue/brief routing:
+
+    - 'antigravity' = type-level (any instance)
+    - 'antigravity-implementer' = type + role (any antigravity in that role)
+    - 'antigravity-integrator-1' = full instance name (that one specifically)
+
+    Acceptance addition: name uniqueness validation must consider the prefix-hierarchy — refuse 'antigravity-implementer' as a name (clashes with the type+role prefix used by other instances). Allowed names: full '<type>-<role>-<seq>' default OR a custom name that doesn't conflict with type/type+role prefixes.
+
+    — master
+  created_at: 2026-05-24T16:08:03.630955235Z
+  modified_at: 2026-05-24T16:08:03.630955235Z
