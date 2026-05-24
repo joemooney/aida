@@ -1,0 +1,83 @@
+id: 019e57c9-0f17-71f1-ace1-2e5149e66003
+spec_id: STORY-443
+agreed_id: STORY-443
+title: 'Reshape aida init docs/ namespace: discipline pack to docs/aida/, keep docs/plans/ for project-authored plans'
+description: |-
+  ## Why now
+
+  User confirmed 2026-05-23: 'there are no real users of aida at the moment, so now is the time to make the right choice.' No-existing-users window means architectural cleanup can land without migration burden. Apply the right shape now.
+
+  ## The architectural insight
+
+  aida init currently scaffolds two doc directories that look similar but have different ownership:
+
+  - docs/aida-discipline/  ::  AIDA-owned content (master templates shipped from aida-core/templates/docs/aida-discipline/, versioned with AIDA)
+  - docs/plans/  ::  PROJECT-owned content (user-authored plans; AIDA only provides the template + naming convention)
+
+  Conflating them under sibling subdirs is the design mistake. Plans are project content; discipline is AIDA content. They belong in different namespaces.
+
+  ## Proposed shape (Option F)
+
+  - docs/plans/         :: PROJECT-owned: user's plans + _TEMPLATE.md (AIDA convention slot)
+  - docs/aida/          :: AIDA-owned: discipline pack (9 guides), namespace-clean
+  - docs/<anything>/    :: 100 percent safe for user content; only docs/plans/ + docs/aida/ are AIDA-owned
+  - .aida/              :: system runtime (unchanged)
+  - CLAUDE.md / AGENTS.md / .mcp.json / .claude/ / .codex/   ::  tool conventions, root-level (unchanged)
+
+  ## Why this and not 'move everything under .aida/'
+
+  Considered moving the discipline pack into .aida/discipline/ for purer namespacing. Rejected because:
+
+  1. .aida/* is deny-by-default gitignore -- adding the discipline pack means more allow-list entries
+  2. Files in .aida/ signal 'runtime / system' by convention -- the discipline pack is operating manual for humans, intended to be read
+  3. Hidden directories aren't naturally browsed -- discoverability hit for a doc set whose purpose IS to be read
+
+  Contributors should land in docs/ and find the AIDA discipline pack there.
+
+  ## What changes
+
+  - Master templates: aida-core/templates/docs/aida-discipline/* -> aida-core/templates/docs/aida/*
+  - build.rs embedded paths updated
+  - Scaffolding pipeline (aida-core/src/scaffolding/): mod.rs artifact paths + ensure_discipline_pack_scaffold path constants
+  - CLAUDE.md template: any 'docs/aida-discipline/' refs -> 'docs/aida/'
+  - Internal cross-references in the discipline pack itself (relative paths -- verify)
+  - Dogfood copy in THIS repo: git mv docs/aida-discipline docs/aida + update refs in README, CLAUDE.md, OVERVIEW.md, skill templates
+  - Tests: ensure_discipline_pack_scaffold tests asserting paths; any aida plan verify tests referencing the old path
+
+  ## Acceptance
+
+  - [ ] Master templates moved
+  - [ ] build.rs embed paths updated
+  - [ ] aida init scaffolds discipline pack to docs/aida/
+  - [ ] CLAUDE.md template references docs/aida/
+  - [ ] This repo migrated
+  - [ ] Tests updated
+  - [ ] No 'aida-discipline' references in code, templates, or scaffolded docs (excepting historical artifacts per feedback_dated_artifacts_immutable: commits, PROMPT_HISTORY, SPIKE outputs, spec comments stay frozen)
+  - [ ] aida init in a fresh project produces the new shape
+
+  ## Composes with
+
+  - feedback_dated_artifacts_immutable -- historical refs are immutable; do NOT rewrite them
+  - TASK-510 (just-filed onboarding TASK) -- sibling init UX improvement
+  - STORY-441 (archive concept) -- broader 'right shape now since no users' theme
+
+  ## Origin
+
+  2026-05-23 user: 'docs seems like it is in the wrong place, maybe they should go under .aida and not conflict with any of the projects own docs.' Refined via design discussion: Option F (docs/aida/ for AIDA content + docs/plans/ for project content) is architecturally correct given no-existing-users window.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T02:20:54.935228214Z
+modified_at: 2026-05-24T02:20:54.935228214Z
+req_type: Story
+tags:
+- architecture
+- breaking-change
+- docs
+- from-self-test
+- from-user-direction
+- init
+- namespace
+- no-existing-users-window
+- scaffolding
