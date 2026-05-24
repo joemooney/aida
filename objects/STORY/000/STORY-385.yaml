@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:49:19.704186488Z
-modified_at: 2026-05-24T16:24:18.737197197Z
+modified_at: 2026-05-24T16:24:55.165512205Z
 req_type: Story
 tags:
 - aida:status
@@ -289,6 +289,19 @@ comments:
   content: 'Additional empirical evidence 2026-05-22: gh pr checks <N> --watch can show STALE check status — the displayed checks may reflect an OLD CI run (the one originally triggered by the PR''s first commit) while a newer commit''s CI has passed but isn''t yet reflected in the display. Concrete case: PR-193''s first commit (0bba5f9d) failed CI; pushed a fix (13542492); then pushed an empty commit (7ed20c14) to force fresh CI. The ''gh pr checks 193 --watch'' continued to display the original FAILED run as ''currently failing'' while the newer CI on the empty commit had passed and the PR was merged. STORY-385''s status-surface should distinguish: (a) the LATEST CI run on origin''s HEAD, (b) historical runs on prior commits, (c) the merge-mergeability state independent of CI. Today the three are conflated in ''gh pr checks --watch''s'' single view; a clearer aida status section would split them. Also captures the lesson that ''check status is failing'' does NOT necessarily mean ''PR cannot merge'' — the PR might be mergeable via branch-protection-bypass / admin-merge / ''Merge anyway''.'
   created_at: 2026-05-22T19:17:10.960855374Z
   modified_at: 2026-05-22T19:17:10.960855374Z
+- id: 019e5acd-c6e2-7243-8df3-fddd367b2702
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-24-story-385-status-cleanup.md
+    filed 2 task(s): TASK-544, TASK-545
+    declined 5:
+      - Working-tree state (modified / untracked-recent / untracked-stale)
+      - Advisor-activity log surface (per the 2026-05-22 multi-agent
+      - `aida status --cleanup --resolve` to integrate the move-pull-diff
+      - Distinguish "latest CI run on origin HEAD" from "historical runs on
+      - `aida status --cleanup` performance — the gh + git invocations could
+  created_at: 2026-05-24T16:24:55.778224544Z
+  modified_at: 2026-05-24T16:24:55.778224544Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-24T16:24:18.737197197Z
