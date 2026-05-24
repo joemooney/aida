@@ -1356,6 +1356,7 @@ fn run() -> Result<()> {
             agent,
             spec,
             note,
+            depends_on,
             cmd,
         } => {
             let store = storage.load()?;
@@ -1365,6 +1366,7 @@ fn run() -> Result<()> {
                 agent.as_deref(),
                 spec.as_deref(),
                 note.as_deref(),
+                depends_on.as_deref(),
                 cmd,
                 &store,
                 &project_root,
@@ -4545,6 +4547,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             agent,
             spec,
             note,
+            depends_on,
             cmd,
         } => {
             let store = backend.load()?;
@@ -4555,6 +4558,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 agent.as_deref(),
                 spec.as_deref(),
                 note.as_deref(),
+                depends_on.as_deref(),
                 cmd,
                 &store,
                 project_root,
@@ -7135,6 +7139,7 @@ fn handle_brief_command(
     agent: Option<&str>,
     spec: Option<&str>,
     note: Option<&str>,
+    depends_on: Option<&str>,
     cmd: &Option<BriefCommand>,
     store: &RequirementsStore,
     project_root: &std::path::Path,
@@ -7155,8 +7160,14 @@ fn handle_brief_command(
                 spec.to_string()
             };
             let note = read_brief_note(note)?;
-            let path =
-                create_agent_brief(project_root, store, agent, &effective_spec, note.as_deref())?;
+            let path = create_agent_brief(
+                project_root,
+                store,
+                agent,
+                &effective_spec,
+                note.as_deref(),
+                depends_on,
+            )?;
             println!("{}", path.display());
             Ok(())
         }
@@ -7190,18 +7201,29 @@ fn create_agent_brief(
     agent: &str,
     spec: &str,
     note: Option<&str>,
+    depends_on: Option<&str>,
 ) -> Result<std::path::PathBuf> {
     let agent = validate_brief_agent(agent)?;
     let req = store
         .get_requirement_by_spec_id(spec)
         .ok_or_else(|| not_found::requirement_not_found(spec, None))?;
     let spec_id = req.spec_id.as_deref().unwrap_or(spec);
+    let depends_on = normalize_brief_dependency(store, depends_on)?;
+    ensure_brief_dependency_is_acyclic(project_root, agent, spec_id, depends_on.as_deref())?;
     let generated_at = chrono::Utc::now().format("%Y-%m-%dT%H%M%SZ").to_string();
     let brief_dir = project_root.join(".aida").join("agent-briefs").join(agent);
     std::fs::create_dir_all(&brief_dir)
         .with_context(|| format!("failed to create {}", brief_dir.display()))?;
     let path = brief_dir.join(format!("{spec_id}-{generated_at}.md"));
-    let body = render_agent_brief(agent, spec_id, req, store, &generated_at, note);
+    let body = render_agent_brief(
+        agent,
+        spec_id,
+        req,
+        store,
+        &generated_at,
+        note,
+        depends_on.as_deref(),
+    );
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -7238,6 +7260,7 @@ fn render_agent_brief(
     store: &RequirementsStore,
     generated_at: &str,
     note: Option<&str>,
+    depends_on: Option<&str>,
 ) -> String {
     let generated_by = brief_generated_by();
     let mut out = String::new();
@@ -7249,6 +7272,9 @@ fn render_agent_brief(
     if let Some(note) = note {
         out.push_str("note: |-\n");
         out.push_str(&indent_block(note, "  "));
+    }
+    if let Some(depends_on) = depends_on {
+        out.push_str(&format!("depends_on: {}\n", yaml_scalar(depends_on)));
     }
     out.push_str("status: pending\n");
     out.push_str("---\n\n");
@@ -7395,6 +7421,7 @@ struct BriefListEntry {
     spec_id: String,
     agent: String,
     generated_at: String,
+    depends_on: Option<String>,
     acked: bool,
 }
 
@@ -7464,22 +7491,116 @@ fn collect_agent_briefs(
             let spec_id = frontmatter_value(&content, "spec_id")
                 .unwrap_or_else(|| spec_id_from_brief_filename(&name).unwrap_or_default());
             let generated_at = frontmatter_value(&content, "generated_at").unwrap_or_default();
+            let depends_on = frontmatter_value(&content, "depends_on");
             entries.push(BriefListEntry {
                 path,
                 spec_id,
                 agent: agent.clone(),
                 generated_at,
+                depends_on,
                 acked,
             });
         }
     }
+    sort_brief_entries_topologically(&mut entries)?;
+    Ok(entries)
+}
+
+fn normalize_brief_dependency(
+    store: &RequirementsStore,
+    depends_on: Option<&str>,
+) -> Result<Option<String>> {
+    let Some(depends_on) = depends_on.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    let req = store
+        .get_requirement_by_spec_id(depends_on)
+        .ok_or_else(|| not_found::requirement_not_found(depends_on, None))?;
+    Ok(Some(
+        req.spec_id.as_deref().unwrap_or(depends_on).to_string(),
+    ))
+}
+
+fn ensure_brief_dependency_is_acyclic(
+    project_root: &std::path::Path,
+    agent: &str,
+    spec_id: &str,
+    depends_on: Option<&str>,
+) -> Result<()> {
+    let Some(depends_on) = depends_on else {
+        return Ok(());
+    };
+    if depends_on == spec_id {
+        anyhow::bail!("brief dependency cycle: {spec_id} cannot depend on itself");
+    }
+
+    let mut deps = collect_agent_briefs(project_root, Some(agent), true)?
+        .into_iter()
+        .filter_map(|entry| entry.depends_on.map(|dep| (entry.spec_id, dep)))
+        .collect::<std::collections::HashMap<_, _>>();
+    deps.insert(spec_id.to_string(), depends_on.to_string());
+
+    let mut cursor = depends_on;
+    let mut seen = std::collections::HashSet::new();
+    while let Some(next) = deps.get(cursor).map(String::as_str) {
+        if next == spec_id {
+            anyhow::bail!(
+                "brief dependency cycle: adding {spec_id} --depends-on {depends_on} would create a cycle"
+            );
+        }
+        if !seen.insert(next.to_string()) {
+            anyhow::bail!("brief dependency cycle detected involving {next}");
+        }
+        cursor = next;
+    }
+    Ok(())
+}
+
+fn brief_entry_depends_on(
+    deps: &std::collections::HashMap<String, String>,
+    start: &str,
+    target: &str,
+) -> bool {
+    let mut cursor = start;
+    let mut seen = std::collections::HashSet::new();
+    while let Some(next) = deps.get(cursor).map(String::as_str) {
+        if next == target {
+            return true;
+        }
+        if !seen.insert(next.to_string()) {
+            return false;
+        }
+        cursor = next;
+    }
+    false
+}
+
+fn sort_brief_entries_topologically(entries: &mut [BriefListEntry]) -> Result<()> {
+    let deps = entries
+        .iter()
+        .filter_map(|entry| {
+            entry
+                .depends_on
+                .as_ref()
+                .map(|depends_on| (entry.spec_id.clone(), depends_on.clone()))
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+
     entries.sort_by(|a, b| {
+        if a.agent == b.agent {
+            if brief_entry_depends_on(&deps, &a.spec_id, &b.spec_id) {
+                return std::cmp::Ordering::Greater;
+            }
+            if brief_entry_depends_on(&deps, &b.spec_id, &a.spec_id) {
+                return std::cmp::Ordering::Less;
+            }
+        }
         a.agent
             .cmp(&b.agent)
             .then(a.generated_at.cmp(&b.generated_at))
             .then(a.path.cmp(&b.path))
     });
-    Ok(entries)
+    Ok(())
 }
 
 /// BUG-378: substrate-as-bouncer for agent scratchpad drift.
@@ -7694,8 +7815,41 @@ fn read_agent_brief(project_root: &std::path::Path, brief_file: &str, latest: bo
 
     let body = std::fs::read_to_string(&resolved_path)
         .with_context(|| format!("failed to read brief at {}", resolved_path.display()))?;
-    print!("{}", body);
+    print!(
+        "{}",
+        render_agent_brief_read(project_root, &resolved_path, &body)?
+    );
     Ok(())
+}
+
+fn render_agent_brief_read(
+    project_root: &std::path::Path,
+    path: &std::path::Path,
+    body: &str,
+) -> Result<String> {
+    let Some(depends_on) = frontmatter_value(body, "depends_on") else {
+        return Ok(body.to_string());
+    };
+    let agent = frontmatter_value(body, "agent")
+        .or_else(|| {
+            path.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_default();
+    if agent.is_empty() {
+        return Ok(body.to_string());
+    }
+    let pending = collect_agent_briefs(project_root, Some(&agent), false)?;
+    if pending.iter().any(|entry| {
+        entry.spec_id == depends_on
+            && entry.path != path
+            && entry.path.with_extension("md") != path.with_extension("md")
+    }) {
+        return Ok(format!("Blocked by: {depends_on}\n\n{body}"));
+    }
+    Ok(body.to_string())
 }
 
 #[cfg(test)]
@@ -7753,12 +7907,30 @@ mod task_492_brief_tests {
                 agent,
                 spec,
                 note,
+                depends_on,
                 cmd,
             } => {
                 assert_eq!(agent.as_deref(), Some("codex"));
                 assert_eq!(spec.as_deref(), Some("TASK-492"));
                 assert_eq!(note.as_deref(), Some("ship it"));
+                assert_eq!(depends_on, None);
                 assert!(cmd.is_none());
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let cli = Cli::try_parse_from([
+            "aida",
+            "brief",
+            "codex",
+            "TASK-493",
+            "--depends-on",
+            "TASK-492",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Brief { depends_on, .. } => {
+                assert_eq!(depends_on.as_deref(), Some("TASK-492"));
             }
             other => panic!("unexpected command: {other:?}"),
         }
@@ -7810,6 +7982,7 @@ mod task_492_brief_tests {
             "codex",
             "TASK-492",
             Some("why this, why now"),
+            None,
         )
         .unwrap();
 
@@ -7855,7 +8028,8 @@ mod task_492_brief_tests {
     fn list_excludes_acked_by_default_and_ack_renames_file() {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
-        let path = create_agent_brief(temp.path(), &store, "codex", "TASK-492", None).unwrap();
+        let path =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
 
         let pending = collect_agent_briefs(temp.path(), Some("codex"), false).unwrap();
         assert_eq!(pending.len(), 1);
@@ -7876,8 +8050,15 @@ mod task_492_brief_tests {
     fn test_brief_read_roundtrip() {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
-        let path =
-            create_agent_brief(temp.path(), &store, "codex", "TASK-492", Some("Pre-note")).unwrap();
+        let path = create_agent_brief(
+            temp.path(),
+            &store,
+            "codex",
+            "TASK-492",
+            Some("Pre-note"),
+            None,
+        )
+        .unwrap();
 
         // 1. Read directly via path
         let res = read_agent_brief(temp.path(), &path.to_string_lossy(), false);
@@ -7898,6 +8079,86 @@ mod task_492_brief_tests {
         assert!(res4.is_err());
         let err_msg = res4.unwrap_err().to_string();
         assert!(err_msg.contains("aida brief list"));
+    }
+
+    // trace:TASK-541 | ai:codex
+    #[test]
+    fn brief_depends_on_persists_orders_and_blocks_until_prereq_acked() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+
+        let dependent = create_agent_brief(
+            temp.path(),
+            &store,
+            "codex",
+            "TASK-493",
+            None,
+            Some("TASK-492"),
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let prereq =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
+
+        let entries = collect_agent_briefs(temp.path(), Some("codex"), false).unwrap();
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.spec_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["TASK-492", "TASK-493"],
+            "dependency order should override chronological order"
+        );
+        assert_eq!(entries[1].depends_on.as_deref(), Some("TASK-492"));
+
+        let body = std::fs::read_to_string(&dependent).unwrap();
+        assert!(body.contains("depends_on: TASK-492"));
+        let rendered = render_agent_brief_read(temp.path(), &dependent, &body).unwrap();
+        assert!(rendered.starts_with("Blocked by: TASK-492\n\n"));
+
+        ack_agent_brief(&prereq).unwrap();
+        let rendered = render_agent_brief_read(temp.path(), &dependent, &body).unwrap();
+        assert!(!rendered.starts_with("Blocked by: TASK-492"));
+    }
+
+    // trace:TASK-541 | ai:codex
+    #[test]
+    fn brief_depends_on_validates_target_and_rejects_cycles() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+
+        let err = create_agent_brief(
+            temp.path(),
+            &store,
+            "codex",
+            "TASK-493",
+            None,
+            Some("TASK-404"),
+        )
+        .expect_err("missing dependency target should fail")
+        .to_string();
+        assert!(err.contains("TASK-404"), "{err}");
+
+        create_agent_brief(
+            temp.path(),
+            &store,
+            "codex",
+            "TASK-493",
+            None,
+            Some("TASK-492"),
+        )
+        .unwrap();
+        let cycle = create_agent_brief(
+            temp.path(),
+            &store,
+            "codex",
+            "TASK-492",
+            None,
+            Some("TASK-493"),
+        )
+        .expect_err("reverse dependency should create a cycle")
+        .to_string();
+        assert!(cycle.contains("dependency cycle"), "{cycle}");
     }
 
     #[test]
@@ -7938,7 +8199,7 @@ mod task_492_brief_tests {
     fn pending_brief_banner_silent_for_other_agent_type() {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
-        create_agent_brief(temp.path(), &store, "codex", "TASK-492", None).unwrap();
+        create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
         // Running shell / unknown caller — banner must NOT fire even though
         // a pending brief exists. Avoids noising up every human queue-done.
         assert!(pending_brief_banner_lines(temp.path(), "other").is_none());
@@ -7949,7 +8210,7 @@ mod task_492_brief_tests {
     fn pending_brief_banner_silent_when_no_briefs_for_running_type() {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
-        create_agent_brief(temp.path(), &store, "antigravity", "TASK-492", None).unwrap();
+        create_agent_brief(temp.path(), &store, "antigravity", "TASK-492", None, None).unwrap();
         // A Codex session must not see Antigravity briefs — cross-type
         // false positives teach agents to ignore the banner.
         assert!(pending_brief_banner_lines(temp.path(), "codex").is_none());
@@ -7966,13 +8227,15 @@ mod task_492_brief_tests {
     fn pending_brief_banner_lists_all_pending_briefs_for_running_type() {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
-        let first = create_agent_brief(temp.path(), &store, "codex", "TASK-492", None).unwrap();
+        let first =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
         // Second brief — banner must enumerate ALL of them, not just one.
         // (Per the BUG-378 master verdict: a missed brief implies the
         // multi-missed case is plausible too.)
         std::thread::sleep(std::time::Duration::from_millis(1100));
         let second =
-            create_agent_brief(temp.path(), &store, "codex", "TASK-492", Some("note")).unwrap();
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", Some("note"), None)
+                .unwrap();
 
         let lines = pending_brief_banner_lines(temp.path(), "codex")
             .expect("banner should fire for codex with pending briefs");
@@ -8008,7 +8271,8 @@ mod task_492_brief_tests {
     fn pending_brief_banner_skips_acked_briefs() {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
-        let path = create_agent_brief(temp.path(), &store, "codex", "TASK-492", None).unwrap();
+        let path =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
         ack_agent_brief(&path).unwrap();
         // An acked brief is no longer pending — banner must stay silent.
         assert!(pending_brief_banner_lines(temp.path(), "codex").is_none());
