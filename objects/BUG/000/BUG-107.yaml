@@ -59,13 +59,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T19:29:04.230402571Z
-modified_at: 2026-05-15T23:42:21.567572199Z
+modified_at: 2026-05-24T06:38:48.406369840Z
 req_type: Bug
 tags:
+- aida:session:end
 - auto-queue
 - enoent
 - gh
-- session-end
 - spawn
 relationships:
 - rel_type: !Custom implemented-by
