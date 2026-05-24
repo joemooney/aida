@@ -5094,6 +5094,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             brief,
             full,
         } => {
+            // trace:TASK-518 | ai:antigravity
+            let mut resolved_id = id.clone();
+            if let Some(pr) = parse_pr_arg(id) {
+                let store = backend.load()?;
+                let project_root = store_path
+                    .parent()
+                    .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+                let resolved = resolve_pr_to_spec(project_root, pr, &store)?;
+                println!("showing {} (backs {})", resolved, id);
+                resolved_id = resolved;
+            }
+            let id = &resolved_id;
+
             // STORY-78: opt-in sync-pull before show. trace:STORY-78 | ai:claude
             if *sync {
                 maybe_sync_pull(store_path)?;
@@ -5348,6 +5361,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_human_only,
             ..
         } => {
+            // trace:TASK-518 | ai:antigravity
+            let mut resolved_id = id.clone();
+            if let Some(pr) = parse_pr_arg(id) {
+                let store = backend.load()?;
+                let project_root = store_path
+                    .parent()
+                    .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+                let resolved = resolve_pr_to_spec(project_root, pr, &store)?;
+                println!("editing {} (backs {})", resolved, id);
+                resolved_id = resolved;
+            }
+            let id = &resolved_id;
+
             // BUG-68: record activity AFTER successful lookup AND
             // after the TASK-47 terminal-status guard, so a refused
             // re-open doesn't leave a phantom edit entry.
@@ -6567,8 +6593,16 @@ fn handle_brief_command(
             let spec = spec.ok_or_else(|| {
                 anyhow::anyhow!("usage: aida brief <agent> <SPEC-ID> [--note <STR>|--note -]")
             })?;
+            let effective_spec = if let Some(pr) = parse_pr_arg(spec) {
+                let resolved = resolve_pr_to_spec(project_root, pr, store)?;
+                println!("briefing on {} (backs {})", resolved, spec);
+                resolved
+            } else {
+                spec.to_string()
+            };
             let note = read_brief_note(note)?;
-            let path = create_agent_brief(project_root, store, agent, spec, note.as_deref())?;
+            let path =
+                create_agent_brief(project_root, store, agent, &effective_spec, note.as_deref())?;
             println!("{}", path.display());
             Ok(())
         }
@@ -52033,6 +52067,275 @@ fn looks_like_spec_id(s: &str) -> bool {
     true
 }
 
+pub fn parse_pr_arg(arg: &str) -> Option<u32> {
+    let s = arg.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let s_lower = s.to_lowercase();
+    let digits = if let Some(rest) = s_lower.strip_prefix("pr-") {
+        rest
+    } else if let Some(rest) = s_lower.strip_prefix("pr") {
+        rest
+    } else if let Some(rest) = s_lower.strip_prefix('#') {
+        rest
+    } else {
+        s
+    };
+    if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+        digits.parse::<u32>().ok()
+    } else {
+        None
+    }
+}
+
+fn extract_all_spec_ids(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let split_chars = |c: char| {
+        c.is_whitespace()
+            || c == '('
+            || c == ')'
+            || c == '['
+            || c == ']'
+            || c == '{'
+            || c == '}'
+            || c == ','
+            || c == '.'
+            || c == ':'
+            || c == ';'
+            || c == '/'
+            || c == '\\'
+            || c == '"'
+            || c == '\''
+    };
+    for word in text.split(split_chars) {
+        let trimmed = word.trim();
+        if looks_like_spec_id(trimmed) {
+            let canon = trimmed.to_uppercase();
+            if !canon.starts_with("PR-") {
+                if !out.contains(&canon) {
+                    out.push(canon);
+                }
+            }
+        }
+    }
+    for id in extract_spec_ids_from_commit(text) {
+        let canon = id.to_uppercase();
+        if !canon.starts_with("PR-") {
+            if !out.contains(&canon) {
+                out.push(canon);
+            }
+        }
+    }
+    out
+}
+
+pub fn resolve_pr_to_spec(
+    project_root: &std::path::Path,
+    pr: u32,
+    store: &RequirementsStore,
+) -> Result<String> {
+    let mut specs = Vec::new();
+
+    for req in &store.requirements {
+        if let Some(num) = parse_review_story_pr_number(&req.title) {
+            if num == pr as u64 {
+                for id in extract_all_spec_ids(&req.title) {
+                    if !specs.contains(&id) {
+                        specs.push(id);
+                    }
+                }
+                for id in extract_all_spec_ids(&req.description) {
+                    if !specs.contains(&id) {
+                        specs.push(id);
+                    }
+                }
+                for rel in &req.relationships {
+                    if let Some(target) = store.requirements.iter().find(|r| r.id == rel.target_id)
+                    {
+                        if let Some(spec_id) = &target.spec_id {
+                            let canon = spec_id.to_uppercase();
+                            if !canon.starts_with("PR-") {
+                                if !specs.contains(&canon) {
+                                    specs.push(canon);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(gh) = resolve_gh_binary() {
+        let pr_str = pr.to_string();
+        let mut c = std::process::Command::new(&gh);
+        c.current_dir(project_root).args([
+            "pr",
+            "view",
+            &pr_str,
+            "--json",
+            "title,commits",
+            "-q",
+            "[.title, (.commits[].messageHeadline)] | @tsv",
+        ]);
+        if let Ok(out) = c.output() {
+            if out.status.success() {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let mut fields = stdout.trim_end().split('\t');
+                if let Some(title) = fields.next() {
+                    for id in extract_all_spec_ids(title) {
+                        if !specs.contains(&id) {
+                            specs.push(id);
+                        }
+                    }
+                }
+                for subject in fields {
+                    for id in extract_all_spec_ids(subject) {
+                        if !specs.contains(&id) {
+                            specs.push(id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if specs.is_empty() {
+        anyhow::bail!("PR-{} has no backing specs (could not find any associated spec IDs in review stories or PR metadata)", pr);
+    } else if specs.len() > 1 {
+        anyhow::bail!(
+            "PR-{} has multiple backing specs: {}. Use a single SPEC-ID instead.",
+            pr,
+            specs.join(", ")
+        );
+    } else {
+        Ok(specs[0].clone())
+    }
+}
+
+#[cfg(test)]
+mod task_518_pr_to_spec_tests {
+    use super::*;
+    use aida_core::{Relationship, RelationshipType};
+
+    #[test]
+    fn test_parse_pr_arg() {
+        // Valid shapes: PR-N, pr-N, Pr-N, #N, N, prN
+        assert_eq!(parse_pr_arg("PR-123"), Some(123));
+        assert_eq!(parse_pr_arg("pr-456"), Some(456));
+        assert_eq!(parse_pr_arg("Pr-789"), Some(789));
+        assert_eq!(parse_pr_arg("#1234"), Some(1234));
+        assert_eq!(parse_pr_arg("5678"), Some(5678));
+        assert_eq!(parse_pr_arg("pr123"), Some(123));
+
+        // Spaces
+        assert_eq!(parse_pr_arg("  PR-123  "), Some(123));
+
+        // Invalid shapes
+        assert_eq!(parse_pr_arg("abc"), None);
+        assert_eq!(parse_pr_arg("TASK-123"), None);
+        assert_eq!(parse_pr_arg(""), None);
+        assert_eq!(parse_pr_arg("PR-"), None);
+        assert_eq!(parse_pr_arg("#"), None);
+    }
+
+    fn mock_req(title: &str, description: &str, spec_id: Option<&str>) -> Requirement {
+        let mut req = Requirement::new(title.to_string(), description.to_string());
+        req.spec_id = spec_id.map(|s| s.to_string());
+        req.status = RequirementStatus::Approved;
+        req.req_type = RequirementType::Task;
+        req
+    }
+
+    #[test]
+    fn test_resolve_pr_to_spec_success_title() {
+        let mut store = RequirementsStore::new();
+        // A review story that backs PR 123 and names STORY-101 in title
+        let review_story = mock_req(
+            "Review PR-123: implements STORY-101",
+            "This is a review story",
+            None,
+        );
+        store.requirements.push(review_story);
+
+        let root = std::path::Path::new("/tmp");
+        let resolved = resolve_pr_to_spec(root, 123, &store).unwrap();
+        assert_eq!(resolved, "STORY-101");
+    }
+
+    #[test]
+    fn test_resolve_pr_to_spec_success_description() {
+        let mut store = RequirementsStore::new();
+        // A review story that backs PR 123 and names TASK-102 in description
+        let review_story = mock_req(
+            "Review PR-123: some pr title",
+            "This PR implements TASK-102 nicely",
+            None,
+        );
+        store.requirements.push(review_story);
+
+        let root = std::path::Path::new("/tmp");
+        let resolved = resolve_pr_to_spec(root, 123, &store).unwrap();
+        assert_eq!(resolved, "TASK-102");
+    }
+
+    #[test]
+    fn test_resolve_pr_to_spec_success_relationship() {
+        let mut store = RequirementsStore::new();
+        let target_req = mock_req(
+            "Target requirement title",
+            "Target requirement description",
+            Some("BUG-103"),
+        );
+        let mut review_story = mock_req(
+            "Review PR-123: some pr title",
+            "Description without spec id",
+            None,
+        );
+        review_story.relationships.push(Relationship {
+            rel_type: RelationshipType::References,
+            target_id: target_req.id,
+            created_at: None,
+            created_by: None,
+        });
+        store.requirements.push(target_req);
+        store.requirements.push(review_story);
+
+        let root = std::path::Path::new("/tmp");
+        let resolved = resolve_pr_to_spec(root, 123, &store).unwrap();
+        assert_eq!(resolved, "BUG-103");
+    }
+
+    #[test]
+    fn test_resolve_pr_to_spec_no_backing_spec() {
+        let mut store = RequirementsStore::new();
+        // Review story backs PR 123 but has no backing spec mentioned anywhere
+        let review_story = mock_req("Review PR-123: empty", "No description", None);
+        store.requirements.push(review_story);
+
+        let root = std::path::Path::new("/tmp");
+        let err = resolve_pr_to_spec(root, 123, &store).unwrap_err();
+        assert!(err.to_string().contains("has no backing specs"));
+    }
+
+    #[test]
+    fn test_resolve_pr_to_spec_ambiguous() {
+        let mut store = RequirementsStore::new();
+        // Review story has multiple distinct spec IDs
+        let review_story = mock_req(
+            "Review PR-123: STORY-101 and TASK-102",
+            "No description",
+            None,
+        );
+        store.requirements.push(review_story);
+
+        let root = std::path::Path::new("/tmp");
+        let err = resolve_pr_to_spec(root, 123, &store).unwrap_err();
+        assert!(err.to_string().contains("has multiple backing specs"));
+    }
+}
+
 /// trace:STORY-67 | ai:claude
 fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
     match cmd {
@@ -56824,10 +57127,29 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // not a spec-id, so clear `effective_id` — every head-pickup path
             // below keys off `None`. trace:TASK-293 | ai:claude
             let next_kw = parse_next_keyword(effective_id, count.as_deref())?;
-            let effective_id: Option<&str> = match next_kw {
+            let mut effective_id: Option<&str> = match next_kw {
                 NextKeyword::Count(_) => None,
                 NextKeyword::NotNext => effective_id,
             };
+            // trace:TASK-518 | ai:antigravity
+            let resolved_spec_id = if let Some(s) = effective_id {
+                if let Some(pr) = parse_pr_arg(s) {
+                    let store = storage.load()?;
+                    let project_root = storage.path().parent().ok_or_else(|| {
+                        anyhow::anyhow!("cannot derive project root from store path")
+                    })?;
+                    let resolved = resolve_pr_to_spec(project_root, pr, &store)?;
+                    println!("working on {} (backs {})", resolved, s);
+                    Some(resolved)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            if let Some(ref res) = resolved_spec_id {
+                effective_id = Some(res.as_str());
+            }
             // STORY-246: `--auto-complete` drives the full
             // implementer→CI→reviewer→merge→pull→build lifecycle. It is a
             // sibling orchestrator, not a decoration of the exec path —
