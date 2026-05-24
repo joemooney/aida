@@ -556,6 +556,36 @@ EOF
   migration, a release tag), genuine strategic uncertainty. The code review
   still stands: write your real `verdict` (`Approved` if the code passed)
   **and** `"merge": "escalated-to-human"`.
+- `implementation_complexity` — **advisory, not graded** (STORY-439).
+  The diff-grounded complexity the changes actually demanded, one of
+  `low` / `med` / `high`. Captured to
+  `.aida/complexity-calibration/<SPEC>.yaml` for the three-way
+  calibration view (`aida autonomy calibration mismatches`). The
+  reviewer is the most objective of the three measurement points
+  (pickup → ship → review) because you see the full diff. Never part
+  of the PASS / FAIL decision; the field is omitted on older verdict
+  files.
+- `complexity_agreement` — **advisory, not graded** (STORY-439). Your
+  call on whether the implementer's ship-side complexity estimate
+  matched the diff: `matched` / `implementer-underestimated` /
+  `implementer-overestimated`. Omit when there was no ship-side
+  estimate to compare against — `aida` will derive the field
+  mechanically from the pickup/ship slot if you skip it.
+
+Example with the STORY-439 fields filled in (`--no-human=both`,
+diff was bigger than the implementer claimed):
+
+```bash
+cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
+{
+  "verdict": "Approved",
+  "summary": "ships cleanly",
+  "mode": "orchestrator-phase-3",
+  "implementation_complexity": "high",
+  "complexity_agreement": "implementer-underestimated"
+}
+EOF
+```
 
 **Escalating the merge decision.** Escalating is the honest move when you
 would otherwise be *guessing* whether to merge — it is distinct from

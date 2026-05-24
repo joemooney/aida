@@ -7,6 +7,7 @@ mod changelog;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod complexity_calibration;
 mod digest;
 mod docs;
 mod drain_state;
@@ -83,14 +84,14 @@ use aida_core::{
 };
 
 use crate::cli::{
-    AdvisorCommand, AgentCommand, AgentNewCommand, BlockCommand, BriefCommand, CacheCommand, Cli,
-    Command, CommentCommand, ConfigCommand, DbCommand, DevCommand, DocCommand, DocsCommand,
-    DrainCommand, FeatureCommand, FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand,
-    JiraCommand, McpCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
-    PuntsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand,
-    RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand,
-    SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand, TraceCommand,
-    TypeCommand, WorkerCommand, ZenCommand,
+    AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BlockCommand, BriefCommand,
+    CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand,
+    DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
+    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand,
+    OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand, RelDefCommand,
+    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand,
+    SessionWakeupCommand, SkillCommand, TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1046,6 +1047,13 @@ fn run() -> Result<()> {
         return handle_punts_command(punts_cmd.clone());
     }
 
+    // STORY-439: autonomy / calibration surface. Dispatched before storage
+    // init — it reads only `.aida/complexity-calibration/`, no requirement
+    // store. trace:STORY-439 | ai:claude
+    if let Command::Autonomy(autonomy_cmd) = &cli.command {
+        return handle_autonomy_command(autonomy_cmd);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -1392,6 +1400,7 @@ fn run() -> Result<()> {
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
+        Command::Autonomy(_) => unreachable!("autonomy is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -2757,6 +2766,115 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// STORY-439: `aida autonomy calibration mismatches` — the substrate-gap
+/// signal. Walks `.aida/complexity-calibration/*.yaml`, drops records
+/// missing a pickup-or-review half, and surfaces the rest ranked by
+/// `|delta_steps|` descending. Tied gaps break by recency. The mismatch
+/// view IS the calibration view this STORY adds; the broader autonomy
+/// report (TASK-340) gains `--by` / `--calibration` slices in a
+/// follow-up that hangs off this same parent enum.
+/// trace:STORY-439 | ai:claude
+fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
+    match cmd {
+        AutonomyCommand::Calibration(sub) => match sub {
+            CalibrationSubcommand::Mismatches { since, last, json } => {
+                let project_root = find_project_root()?;
+                let main_root = main_worktree_root_from(&project_root);
+                let records = complexity_calibration::read_all_captures(&main_root);
+                let since_dur = match since {
+                    Some(s) => Some(calibration::parse_since(s).map_err(|e| anyhow::anyhow!(e))?),
+                    None => None,
+                };
+                let rows = complexity_calibration::mismatches(&records, since_dur);
+                let capped: Vec<&complexity_calibration::MismatchRow> =
+                    rows.iter().take(*last).collect();
+
+                if *json {
+                    println!("{}", serde_json::to_string_pretty(&capped)?);
+                    return Ok(());
+                }
+
+                if capped.is_empty() {
+                    println!(
+                        "{} no pickup-vs-reviewer divergences recorded{}",
+                        "Calibration:".bold(),
+                        match since {
+                            Some(s) => format!(" in the last {s}"),
+                            None => String::new(),
+                        }
+                    );
+                    println!(
+                        "  {}",
+                        "captures live under .aida/complexity-calibration/ — \
+                         set --complexity at pickup/ship and add \
+                         `implementation_complexity` to the reviewer's verdict \
+                         file to populate them"
+                            .dimmed()
+                    );
+                    return Ok(());
+                }
+
+                println!(
+                    "{} {} record{} (pickup-predicted vs reviewer-assessed){}",
+                    "Calibration mismatches:".bold(),
+                    capped.len(),
+                    if capped.len() == 1 { "" } else { "s" },
+                    match since {
+                        Some(s) => format!(", window {s}"),
+                        None => String::new(),
+                    },
+                );
+                println!(
+                    "  {:<14} {:<10} {:<10} {:<8} {}",
+                    "SPEC".dimmed(),
+                    "PICKUP".dimmed(),
+                    "REVIEWER".dimmed(),
+                    "DELTA".dimmed(),
+                    "AGREEMENT".dimmed(),
+                );
+                for row in &capped {
+                    let delta = match row.delta_steps.cmp(&0) {
+                        std::cmp::Ordering::Greater => {
+                            format!("+{}", row.delta_steps).red().to_string()
+                        }
+                        std::cmp::Ordering::Less => {
+                            row.delta_steps.to_string().yellow().to_string()
+                        }
+                        std::cmp::Ordering::Equal => "0".dimmed().to_string(),
+                    };
+                    let agree = match row.agreement {
+                        complexity_calibration::ComplexityAgreement::ImplementerUnderestimated => {
+                            row.agreement.as_str().red().to_string()
+                        }
+                        complexity_calibration::ComplexityAgreement::ImplementerOverestimated => {
+                            row.agreement.as_str().yellow().to_string()
+                        }
+                        complexity_calibration::ComplexityAgreement::Matched => {
+                            row.agreement.as_str().dimmed().to_string()
+                        }
+                    };
+                    println!(
+                        "  {:<14} {:<10} {:<10} {:<8} {}",
+                        row.spec.cyan().bold(),
+                        row.pickup_complexity.as_str(),
+                        row.reviewer_complexity.as_str(),
+                        delta,
+                        agree,
+                    );
+                }
+                println!();
+                println!(
+                    "  {}",
+                    "each row names a class of work the agents misjudged at pickup time; \
+                     a recurring gap is a memory candidate (the substrate-gap signal)"
+                        .dimmed()
+                );
+                Ok(())
+            }
+        },
+    }
 }
 
 /// Add a promoted finding to a role's work queue.
@@ -5360,6 +5478,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Punts(punts_cmd) => {
             handle_punts_command(punts_cmd.clone())?;
+        }
+        Command::Autonomy(autonomy_cmd) => {
+            handle_autonomy_command(autonomy_cmd)?;
         }
         Command::Search {
             query,
@@ -8511,6 +8632,77 @@ fn apply_tag_deltas(tags: &mut HashSet<String>, add: &[String], remove: &[String
         }
     }
     changed
+}
+
+/// STORY-439: stamp `complexity:<level>` / `estimated-assistance:<level>`
+/// tags on `spec` so the new dimension composes with existing tag tooling
+/// (`aida queue list --tag-prefix complexity:`, batch routing). Mirrors
+/// `load_store_for_lookup` for backend resolution. Best-effort — a missing
+/// store / missing spec / save failure logs and returns; the pickup itself
+/// is unaffected. trace:STORY-439 | ai:claude
+fn apply_calibration_tags(
+    storage: &Storage,
+    spec: &str,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    assist_est: Option<complexity_calibration::AssistanceLevel>,
+) {
+    if complexity.is_none() && assist_est.is_none() {
+        return;
+    }
+    // Git-canonical path — direct backend write, exactly like Command::Edit.
+    if let Some(store_path) = detect_distributed_store() {
+        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+            use aida_core::DatabaseBackend;
+            let Ok(Some(mut req)) = backend.get_requirement_by_spec_id(spec) else {
+                return;
+            };
+            let mut changed = false;
+            if let Some(c) = complexity {
+                changed |= complexity_calibration::apply_complexity_tag(&mut req.tags, c);
+            }
+            if let Some(a) = assist_est {
+                changed |= complexity_calibration::apply_assistance_tag(&mut req.tags, a);
+            }
+            if changed {
+                req.modified_at = chrono::Utc::now();
+                if let Err(e) = backend.update_requirement(&req) {
+                    eprintln!(
+                        "  {} could not stamp calibration tags on {spec}: {e}",
+                        "⚠".yellow()
+                    );
+                }
+            }
+            return;
+        }
+    }
+    // Legacy fallback — load the whole store, mutate, save. Heavier but
+    // only fires on projects that haven't migrated.
+    let Ok(mut store) = storage.load() else {
+        return;
+    };
+    let Some(req) = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(spec) || r.agreed_id.as_deref() == Some(spec))
+    else {
+        return;
+    };
+    let mut changed = false;
+    if let Some(c) = complexity {
+        changed |= complexity_calibration::apply_complexity_tag(&mut req.tags, c);
+    }
+    if let Some(a) = assist_est {
+        changed |= complexity_calibration::apply_assistance_tag(&mut req.tags, a);
+    }
+    if changed {
+        req.modified_at = chrono::Utc::now();
+        if let Err(e) = storage.save(&store) {
+            eprintln!(
+                "  {} could not save calibration tags on {spec}: {e}",
+                "⚠".yellow()
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -15710,18 +15902,20 @@ mod agent_launcher_tests {
         let fake_bin = tmp.path().join("bin");
         std::fs::create_dir_all(&fake_bin).unwrap();
         let fake_agent = fake_bin.join("agent");
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+                env_out.display(),
+                argv_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let argv_out = tmp.path().join("argv.txt");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
         let config = AgentLaunchConfig {
             agent_type: "codex",
             binary: "codex",
@@ -15747,8 +15941,6 @@ mod agent_launcher_tests {
             "{argv}"
         );
         assert!(agent_registry::list_agent_views(&project).is_empty());
-        std::env::remove_var("AIDA_TEST_ENV_OUT");
-        std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
 
     #[cfg(unix)]
@@ -15765,18 +15957,20 @@ mod agent_launcher_tests {
         )
         .unwrap();
         let fake_agent = tmp.path().join("agy");
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+                env_out.display(),
+                argv_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let argv_out = tmp.path().join("argv.txt");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
         let config = AgentLaunchConfig {
             agent_type: "antigravity",
             binary: "agy",
@@ -15799,8 +15993,6 @@ mod agent_launcher_tests {
         assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
         assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
         assert!(agent_registry::list_agent_views(&project).is_empty());
-        std::env::remove_var("AIDA_TEST_ENV_OUT");
-        std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
 
     #[test]
@@ -15849,18 +16041,20 @@ mod agent_launcher_tests {
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
         let fake_agent = tmp.path().join("agent");
+        let env_out = tmp.path().join("env.txt");
+        let context_out = tmp.path().join("context-copy.md");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\ncp \"$AIDA_AGENT_CONTEXT_FILE\" \"$AIDA_TEST_CONTEXT_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\ncp \"$AIDA_AGENT_CONTEXT_FILE\" '{}'\n",
+                env_out.display(),
+                context_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let context_out = tmp.path().join("context-copy.md");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_CONTEXT_OUT", &context_out);
         let context_path = project
             .join(".aida/agents/context")
             .join("codex-token.context.md");
@@ -15889,8 +16083,6 @@ mod agent_launcher_tests {
         assert!(env.contains("AIDA_AGENT_REGISTRY_TOKEN=token"), "{env}");
         assert_eq!(copied, "launch context body");
         assert!(!context_path.exists());
-        std::env::remove_var("AIDA_TEST_ENV_OUT");
-        std::env::remove_var("AIDA_TEST_CONTEXT_OUT");
     }
 }
 
@@ -21718,7 +21910,8 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             no_pull,
             no_cleanup,
             dry_run,
-        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run),
+            complexity,
+        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run, *complexity),
     }
 }
 
@@ -22124,7 +22317,13 @@ fn fetch_pr_info_via_gh_bin(
 /// double-implementing them.
 ///
 /// trace:TASK-458 | ai:claude
-fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: bool) -> Result<()> {
+fn pr_ship_handler(
+    n: Option<u64>,
+    no_pull: bool,
+    no_cleanup: bool,
+    dry_run: bool,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+) -> Result<()> {
     use pr_ship::{
         format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
         recovery_hint, PrShipOptions, ShipStep, StepOutcome,
@@ -22135,6 +22334,7 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         no_pull,
         no_cleanup,
         dry_run,
+        complexity,
     };
 
     // Project root for gh/git invocations is wherever the user is —
@@ -22360,6 +22560,30 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         &ShipStep::Merge { delete_branch },
         &StepOutcome::Ok,
     );
+
+    // STORY-439: ship-side calibration capture. Resolve every spec the PR
+    // credits (title → branch → body, the same precedence the squash
+    // subject repair already uses) and write a ship slot per spec — the
+    // implementer's self-assessed complexity + the punt count
+    // (`.aida/punts.jsonl` filtered by spec). One PR crediting N specs
+    // populates N records. Best-effort: a `gh` blip here leaves the merge
+    // landed and just skips the capture.
+    // trace:STORY-439 | ai:claude
+    if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
+        let spec_ids =
+            pr_ship::derive_squash_subject_spec_ids(&pr_meta.title, &branch, &pr_meta.body);
+        for spec in &spec_ids {
+            let punts = complexity_calibration::punt_count_for_spec(&main_worktree, spec);
+            if let Err(e) =
+                complexity_calibration::upsert_ship(&main_worktree, spec, opts.complexity, punts)
+            {
+                eprintln!(
+                    "  {} could not record ship calibration for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+        }
+    }
 
     // ---- Step 4: aida pull (from the main worktree). ----
     if no_pull {
@@ -54572,6 +54796,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             no_calibrate,
             allow_stale_base,
             no_auto_rebase,
+            complexity,
+            assist_est,
         } => {
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
@@ -54948,6 +55174,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // STORY-281: opt out of the reviewer pre-flight stale-base
                 // refusal. trace:STORY-281 | ai:claude
                 *allow_stale_base,
+                // STORY-439: pickup-time calibration capture. Each value
+                // writes to .aida/complexity-calibration/<SPEC>.yaml AND
+                // stamps a tag on the spec.
+                *complexity,
+                *assist_est,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -55936,6 +56167,8 @@ fn handle_queue_rework(
             /* batch_name */ None,
             /* quiet */ false,
             /* allow_stale_base */ false,
+            /* complexity */ None,
+            /* assist_est */ None,
         )?;
     } else {
         println!(
@@ -56666,6 +56899,12 @@ fn handle_queue_work(
     // Only meaningful when scope resolves to a PR + role is reviewer;
     // ignored on every other pickup. trace:STORY-281 | ai:claude
     allow_stale_base: bool,
+    // STORY-439: pickup-time complexity + assistance estimate. Each
+    // value writes a slot to `.aida/complexity-calibration/<SPEC>.yaml`
+    // AND stamps a `complexity:<level>` / `estimated-assistance:<level>`
+    // tag on the spec for tag-based queries. trace:STORY-439 | ai:claude
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    assist_est: Option<complexity_calibration::AssistanceLevel>,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -56675,6 +56914,33 @@ fn handle_queue_work(
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
     }
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
+
+    // STORY-439: capture pickup-time complexity + assistance estimate
+    // ASAP after plan resolution — we know the anchor spec, the project
+    // root is reachable via `find_project_root`, and the capture is a
+    // local FS write that won't perturb the rest of the pickup flow.
+    // Best-effort: a write error logs and continues. Cluster mode uses
+    // the anchor (the parent scope) as the captured spec; the
+    // operator's estimate is for the cluster as a whole.
+    // trace:STORY-439 | ai:claude
+    if (complexity.is_some() || assist_est.is_some()) && !list_sessions {
+        if let Ok(project_root) = find_project_root() {
+            let main_root = main_worktree_root_from(&project_root);
+            let spec = plan.anchor_display.as_str();
+            if let Err(e) =
+                complexity_calibration::upsert_pickup(&main_root, spec, complexity, assist_est)
+            {
+                eprintln!(
+                    "  {} could not record pickup calibration for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+            // Stamp the tags on the spec so existing tag tooling works
+            // on the new dimension. Best-effort — a load/save failure
+            // doesn't fail the pickup.
+            apply_calibration_tags(storage, spec, complexity, assist_est);
+        }
+    }
 
     // TASK-112: `--list-sessions` is a pure read — print the recorded
     // claude conversations for this scope and exit before any side
@@ -57531,6 +57797,17 @@ fn run_standalone_reviewer(
             }
         }
     };
+
+    // STORY-439: tag-along reviewer-side calibration capture. Resolve
+    // every spec the PR credits (via the existing title / branch / body
+    // precedence used by the squash-subject repair) and write a review
+    // slot per spec. Best-effort; never blocks the summary print.
+    // trace:STORY-439 | ai:claude
+    if let Ok(meta) = fetch_pr_ship_metadata_via_gh(project_root, pr) {
+        for spec in pr_ship::derive_squash_subject_spec_ids(&meta.title, branch, &meta.body) {
+            capture_review_calibration_for_spec(project_root, verdict_path, &spec);
+        }
+    }
 
     // End-of-command summary, assembled from the verdict file the
     // `/aida-review` skill wrote and (headless only) the JSONL log.
@@ -60149,6 +60426,48 @@ fn read_verdict_file(
         })
 }
 
+/// STORY-439: pick the calibration review-slot fields out of a verdict
+/// file and upsert the per-spec capture record. The verdict file is
+/// already loaded by `read_verdict_file` for the orchestrator's PASS /
+/// FAIL decision; this is a tag-along read that records advisory
+/// metadata (it never changes the decision). Best-effort — a missing
+/// file, missing fields, or write error all silently no-op. Called for
+/// each spec the PR credits; one PR populates N records.
+/// trace:STORY-439 | ai:claude
+fn capture_review_calibration_for_spec(
+    project_root: &std::path::Path,
+    verdict_path: &std::path::Path,
+    spec: &str,
+) {
+    let Ok(body) = std::fs::read_to_string(verdict_path) else {
+        return;
+    };
+    let Some(verdict) = reviewer_summary::parse_verdict_file(&body) else {
+        return;
+    };
+    let Some(level_raw) = verdict
+        .implementation_complexity
+        .as_deref()
+        .map(str::trim)
+        .filter(|s: &&str| !s.is_empty())
+    else {
+        return;
+    };
+    let Some(level) = complexity_calibration::ComplexityLevel::parse_str(level_raw) else {
+        return;
+    };
+    let agreement = verdict
+        .complexity_agreement
+        .as_deref()
+        .and_then(complexity_calibration::ComplexityAgreement::parse_str);
+    if let Err(e) = complexity_calibration::upsert_review(project_root, spec, level, agreement) {
+        eprintln!(
+            "  {} could not record review calibration for {spec}: {e}",
+            "⚠".yellow()
+        );
+    }
+}
+
 /// When phase 3 ends with [`auto_complete::FailureKind::NoVerdict`] under a
 /// headless `--no-human` drain, scan the reviewer's headless log for the
 /// BUG-280 signature: an `AskUserQuestion` event. The harness denies
@@ -61900,6 +62219,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
             Err(e) => return Err(e),
         };
+
+        // STORY-439: tag-along read for reviewer-side calibration. Same
+        // verdict file we just parsed; we re-read so the orchestrator's
+        // PASS/FAIL decision stays untouched even if the calibration
+        // capture changes. trace:STORY-439 | ai:claude
+        capture_review_calibration_for_spec(&self.project_root, &verdict_path, &self.spec);
 
         // End the reviewer session (best-effort — the verdict is already in
         // hand, so a stuck reviewer worktree must not block the merge).

@@ -123,6 +123,20 @@ pub struct VerdictFile {
     /// handshake artifact is never missing. trace:STORY-306 | ai:claude
     #[serde(default)]
     pub merge: Option<String>,
+    /// STORY-439: the diff-grounded complexity the reviewer assessed —
+    /// `low` / `med` / `high`. Advisory only (not part of the
+    /// PASS/CHANGES/FAIL decision); fuels the three-way calibration
+    /// view. Absent on older verdict files and on interactive reviews
+    /// where the reviewer skipped the field. trace:STORY-439 | ai:claude
+    #[serde(default)]
+    pub implementation_complexity: Option<String>,
+    /// STORY-439: the reviewer's call on whether the implementer's
+    /// ship-side complexity estimate matched the diff —
+    /// `matched` / `implementer-underestimated` / `implementer-overestimated`.
+    /// Absent when no ship-side estimate existed to compare against, or
+    /// when the reviewer didn't volunteer one. trace:STORY-439 | ai:claude
+    #[serde(default)]
+    pub complexity_agreement: Option<String>,
 }
 
 /// Parse a verdict file's JSON. `None` on absent/unreadable/malformed —
@@ -276,6 +290,27 @@ pub fn format_reviewer_summary(
         == Some(MERGE_ESCALATED_TO_HUMAN)
     {
         out.push_str("  merge: escalated to a human — left unmerged for a person to decide\n");
+    }
+
+    // STORY-439: surface the reviewer's diff-grounded complexity assessment
+    // and (when volunteered) their agreement call against the implementer's
+    // ship-side estimate. Advisory only — these feed the three-way
+    // calibration view, not the PASS/CHANGES/FAIL decision.
+    if let Some(level) = verdict
+        .as_ref()
+        .and_then(|v| v.implementation_complexity.as_deref())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        out.push_str(&format!("  implementation complexity: {level}\n"));
+    }
+    if let Some(agreement) = verdict
+        .as_ref()
+        .and_then(|v| v.complexity_agreement.as_deref())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        out.push_str(&format!("  complexity agreement: {agreement}\n"));
     }
 
     // Comment URL — when the verdict file recorded one.
@@ -485,5 +520,64 @@ mod tests {
         assert_eq!(fmt_duration(38_000), "38s");
         assert_eq!(fmt_duration(278_000), "4m38s");
         assert_eq!(fmt_duration(3_900_000), "1h05m00s");
+    }
+
+    #[test]
+    fn verdict_file_parses_implementation_complexity_field() {
+        let body = r#"{
+            "verdict": "Approved",
+            "implementation_complexity": "high",
+            "complexity_agreement": "implementer-underestimated"
+        }"#;
+        let v = parse_verdict_file(body).expect("parses");
+        assert_eq!(v.implementation_complexity.as_deref(), Some("high"));
+        assert_eq!(
+            v.complexity_agreement.as_deref(),
+            Some("implementer-underestimated")
+        );
+    }
+
+    #[test]
+    fn verdict_file_back_compat_no_complexity_fields() {
+        // A verdict file written before STORY-439 parses cleanly with both
+        // new fields defaulting to `None`.
+        let body = r#"{"verdict":"Approved","summary":"all green"}"#;
+        let v = parse_verdict_file(body).expect("parses");
+        assert!(v.implementation_complexity.is_none());
+        assert!(v.complexity_agreement.is_none());
+    }
+
+    #[test]
+    fn summary_surfaces_implementation_complexity_and_agreement() {
+        let verdict = r#"{
+            "verdict":"Approved",
+            "summary":"smoke",
+            "implementation_complexity":"high",
+            "complexity_agreement":"implementer-underestimated"
+        }"#;
+        let s = format_reviewer_summary(65, Some(verdict), None, &vpath(), None, Some(0));
+        assert!(s.contains("verdict: PASS"), "{s}");
+        assert!(
+            s.contains("implementation complexity: high"),
+            "missing complexity line: {s}"
+        );
+        assert!(
+            s.contains("complexity agreement: implementer-underestimated"),
+            "missing agreement line: {s}"
+        );
+    }
+
+    #[test]
+    fn summary_omits_complexity_lines_when_unset() {
+        let s = format_reviewer_summary(
+            65,
+            Some(r#"{"verdict":"Approved"}"#),
+            None,
+            &vpath(),
+            None,
+            Some(0),
+        );
+        assert!(!s.contains("implementation complexity:"), "{s}");
+        assert!(!s.contains("complexity agreement:"), "{s}");
     }
 }
