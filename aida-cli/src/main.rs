@@ -31,6 +31,8 @@ mod session;
 mod session_manifest;
 mod state_snapshot;
 mod status_display;
+#[cfg(test)]
+mod test_env;
 mod usage;
 mod worker;
 mod workflow_hints;
@@ -27215,30 +27217,10 @@ mod statusline_tests {
     // `git fetch` on file:// remotes (rare; CI rolls everything).
     // trace:STORY-79 | ai:claude
 
-    /// RAII guard that points `aida_home_dir()` at `path` for the test's
-    /// duration via the AIDA_HOME override. TASK-32: replaces the old
-    /// HOME-clobbering guard, which couldn't isolate on Windows (dirs
-    /// uses SHGetKnownFolderPath there). trace:TASK-32 | ai:claude
-    struct TempAidaHomeEnv {
-        prev: Option<String>,
-    }
-
-    impl TempAidaHomeEnv {
-        fn set(path: &std::path::Path) -> Self {
-            let prev = std::env::var("AIDA_HOME").ok();
-            std::env::set_var("AIDA_HOME", path);
-            Self { prev }
-        }
-    }
-
-    impl Drop for TempAidaHomeEnv {
-        fn drop(&mut self) {
-            match &self.prev {
-                Some(v) => std::env::set_var("AIDA_HOME", v),
-                None => std::env::remove_var("AIDA_HOME"),
-            }
-        }
-    }
+    // TASK-32 introduced a local AIDA_HOME RAII guard; TASK-521 rewrites
+    // its callsite to use the shared `crate::test_env::EnvVarGuard`, which
+    // serialises process-global env-var swaps under a single mutex so
+    // sibling tests reading `AIDA_HOME` can't race. trace:TASK-521 trace:TASK-32 | ai:claude
 
     /// Worker writes `result = "error: ..."` to last-fetch.toml when the
     /// store has no `origin` remote configured. Exercises the failure
@@ -27276,7 +27258,7 @@ mod statusline_tests {
         // temp dir — works on all platforms (HOME alone can't isolate
         // on Windows because dirs uses SHGetKnownFolderPath there).
         // trace:TASK-32 | ai:claude
-        let _home_guard = TempAidaHomeEnv::set(&fake_home);
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &fake_home);
         let result = handle_bg_fetch_command(&store);
         drop(_home_guard);
         assert!(result.is_ok());
@@ -30699,8 +30681,12 @@ mod session_end_resolution_tests {
             lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None),
             lease("019e10271111", "EPIC-2", "/nonexistent/wt-2", None),
         ];
-        // Clear env so #2 doesn't fire.
-        std::env::remove_var("AIDA_SESSION_ID");
+        // Clear env so #2 doesn't fire. TASK-521: route through
+        // `EnvVarGuard` so a parallel test that legitimately sets
+        // AIDA_SESSION_ID can't see it gone, and the prior value (a
+        // real shell session running the test suite) is restored on
+        // drop. trace:TASK-521 | ai:claude
+        let _session_guard = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ID");
         let err = resolve_session_to_end(None, None, None, &leases, false).unwrap_err();
         let s = err.to_string();
         assert!(s.contains("no active session resolvable"), "{}", s);
@@ -30713,7 +30699,9 @@ mod session_end_resolution_tests {
     #[test]
     fn single_active_with_yes_resolves() {
         let leases = vec![lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None)];
-        std::env::remove_var("AIDA_SESSION_ID");
+        // TASK-521: serialised env-var swap (see sibling test above).
+        // trace:TASK-521 | ai:claude
+        let _session_guard = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ID");
         let got = resolve_session_to_end(None, None, None, &leases, true).unwrap();
         assert_eq!(got.scope, "EPIC-1");
     }
@@ -31245,16 +31233,20 @@ mod auto_bump_done_tests {
     /// unset, empty, "true", "1") leaves the feature on.
     #[test]
     fn auto_bump_env_flag_respects_opt_out() {
-        // Save & restore so we don't leak into sibling tests.
-        let saved = std::env::var("AIDA_AUTO_BUMP").ok();
+        // TASK-521: route AIDA_AUTO_BUMP mutation through the shared
+        // `EnvVarGuard` so parallel tests reading the var don't see
+        // torn state, and the prior value is restored on drop (no
+        // hand-rolled save/restore). The guard holds ENV_LOCK for the
+        // whole test, so `reset` can swap values without releasing it
+        // between spellings. trace:TASK-521 | ai:claude
+        let mut guard = crate::test_env::EnvVarGuard::unset("AIDA_AUTO_BUMP");
 
         // Unset → on.
-        std::env::remove_var("AIDA_AUTO_BUMP");
         assert!(auto_bump_enabled());
 
         // Each "off" spelling → off.
         for off in &["false", "0", "no", "off", "FALSE", "Off", " no "] {
-            std::env::set_var("AIDA_AUTO_BUMP", off);
+            guard.reset(off);
             assert!(
                 !auto_bump_enabled(),
                 "AIDA_AUTO_BUMP={:?} should disable",
@@ -31264,18 +31256,12 @@ mod auto_bump_done_tests {
 
         // Anything else → on (including the canonical "true" / "1").
         for on in &["true", "1", "", "yes", "anything-else"] {
-            std::env::set_var("AIDA_AUTO_BUMP", on);
+            guard.reset(on);
             assert!(
                 auto_bump_enabled(),
                 "AIDA_AUTO_BUMP={:?} should stay on",
                 on
             );
-        }
-
-        // Restore.
-        match saved {
-            Some(v) => std::env::set_var("AIDA_AUTO_BUMP", v),
-            None => std::env::remove_var("AIDA_AUTO_BUMP"),
         }
     }
 

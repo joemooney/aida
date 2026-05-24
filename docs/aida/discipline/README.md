@@ -30,6 +30,7 @@ in hand.
 | [`skill-prompt-kinds.md`](skill-prompt-kinds.md) | Classifying `AskUserQuestion` prompts into mechanical vs design-fork kind, and their `--zen` pause behavior |
 | [`substrate-as-bouncer.md`](substrate-as-bouncer.md) | The substrate-as-bouncer principle, detailing the pre-commit gitignored check hook and reviewer PR gates |
 | [`robust-project-root-resolution.md`](robust-project-root-resolution.md) | Project-root resolution fallbacks, explaining how skill-rendering gracefully handles missing git repositories |
+| [`test-isolation.md`](test-isolation.md) | Parallel-test isolation under `cargo test` — the `EnvVarGuard` helper for process-global env mutation, the per-test temp-path pattern for subprocess plumbing |
 
 ## The companion: the starter memory pack
 
