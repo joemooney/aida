@@ -17,12 +17,12 @@ description: |-
   - drain_batch_clean_drain_without_shelved_still_returns_drained_exit_0 (regression)
   - drain_batch_punt_and_shelve_in_same_drain_both_counted_separately
   - drain_batch_unshelvable_failure_still_stops_the_drain (env-level still halts)
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:08:58.913136780Z
-modified_at: 2026-05-24T04:08:58.913136780Z
+modified_at: 2026-05-24T17:41:41.903554728Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -34,3 +34,7 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-05-24T04:09:01.217929747Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T17:41:41.903554728Z
+  completion_sha: a24546ce017a1949c5bf499df99d5b1506b99897

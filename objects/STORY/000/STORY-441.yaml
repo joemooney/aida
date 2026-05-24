@@ -87,12 +87,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'I wonder if aida history should show the Completed/Rejected items and maybe we have an archive flag that gets applied after every n days or explicitly by the user?' Refines TASK-507's small-fix scope into a substrate-level design.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T23:37:40.694748941Z
-modified_at: 2026-05-24T05:04:17.214729942Z
+modified_at: 2026-05-24T17:41:41.903554728Z
 req_type: Story
 tags:
 - archive
@@ -128,3 +128,7 @@ comments:
     — master advisor
   created_at: 2026-05-24T05:04:17.214729942Z
   modified_at: 2026-05-24T05:04:17.214729942Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T17:41:41.903554728Z
+  completion_sha: a69b0ffbb41777cc063dcdb94ca0b6f5284526b7
