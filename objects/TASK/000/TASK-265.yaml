@@ -84,10 +84,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-05-17T17:07:51.259833621Z
+modified_at: 2026-05-24T06:36:58.639437127Z
 req_type: Task
 tags:
-- aida-pickup
+- aida:pickup
 - banner
 - batch:display-polish
 - first-users
