@@ -16453,6 +16453,13 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
         ),
+        AgentCommand::Register {
+            pid,
+            agent_type,
+            role,
+            spec,
+            name,
+        } => agent_register(*pid, agent_type, role, spec.as_deref(), name.as_deref()),
     }
 }
 
@@ -16941,6 +16948,143 @@ fn run_tracked_agent(
     Ok(())
 }
 
+// trace:TASK-543 | ai:codex
+fn agent_register(
+    pid: u32,
+    agent_type: &str,
+    role: &str,
+    spec: Option<&str>,
+    name: Option<&str>,
+) -> Result<()> {
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let agent_type = validate_registered_agent_type(agent_type)?;
+    let role = validate_registered_agent_role(role)?;
+    let spec = match spec {
+        Some(spec) => {
+            let spec = spec.trim().to_string();
+            if !looks_like_spec_id(&spec) {
+                anyhow::bail!("--spec must be a SPEC-ID like TASK-543, got `{spec}`");
+            }
+            Some(spec)
+        }
+        None => None,
+    };
+    let name = match name {
+        Some(name) => {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                anyhow::bail!("--name cannot be empty");
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+
+    validate_register_pid(pid)?;
+    let worktree_path = registered_process_cwd(pid).unwrap_or_else(|| project_root.clone());
+    let entry = agent_registry::register_existing_agent(
+        &project_root,
+        &agent_type,
+        pid,
+        role,
+        spec,
+        worktree_path,
+        name,
+    )?;
+    println!(
+        "{} registered {}#{} ({}) at {}",
+        "✓".green(),
+        entry.agent_type,
+        entry.pid,
+        entry.role.as_deref().unwrap_or("(none)"),
+        entry.worktree_path.display()
+    );
+    Ok(())
+}
+
+// trace:TASK-543 | ai:codex
+fn validate_registered_agent_type(raw: &str) -> Result<String> {
+    let normalized = agent_registry::normalize_agent_type(raw.to_string());
+    match normalized.as_str() {
+        "claude" | "codex" | "antigravity" | "web" => Ok(normalized),
+        _ => anyhow::bail!(
+            "--type must be one of: codex, claude, antigravity, web (got `{}`)",
+            raw
+        ),
+    }
+}
+
+// trace:TASK-543 | ai:codex
+fn validate_registered_agent_role(raw: &str) -> Result<String> {
+    let role = raw.trim().to_ascii_lowercase();
+    match role.as_str() {
+        "implementer" | "advisor" | "reviewer" | "integrator" => Ok(role),
+        _ => anyhow::bail!(
+            "--role must be one of: implementer, advisor, reviewer, integrator (got `{}`)",
+            raw
+        ),
+    }
+}
+
+// trace:TASK-543 | ai:codex
+fn validate_register_pid(pid: u32) -> Result<()> {
+    if pid == 0 {
+        anyhow::bail!("pid must be a positive process id");
+    }
+    if !process_probe::pid_is_alive(pid) {
+        anyhow::bail!("pid {pid} is not alive");
+    }
+    validate_register_pid_owner(pid)
+}
+
+#[cfg(unix)]
+// trace:TASK-543 | ai:codex
+fn validate_register_pid_owner(pid: u32) -> Result<()> {
+    let uid = proc_status_uid(pid)
+        .with_context(|| format!("reading /proc/{pid}/status to verify process owner"))?;
+    let current = unsafe { libc::geteuid() } as u32;
+    if uid != current {
+        anyhow::bail!("pid {pid} is owned by uid {uid}, not current uid {current}");
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn validate_register_pid_owner(_pid: u32) -> Result<()> {
+    // Non-Unix process-owner APIs differ by platform. `pid_is_alive` still
+    // prevents stale registrations; Windows owner enforcement can be tightened
+    // when a native user-token helper lands.
+    Ok(())
+}
+
+#[cfg(unix)]
+// trace:TASK-543 | ai:codex
+fn proc_status_uid(pid: u32) -> Result<u32> {
+    let body = std::fs::read_to_string(format!("/proc/{pid}/status"))?;
+    parse_proc_status_uid(&body).ok_or_else(|| anyhow::anyhow!("Uid line missing"))
+}
+
+#[cfg(unix)]
+// trace:TASK-543 | ai:codex
+fn parse_proc_status_uid(body: &str) -> Option<u32> {
+    body.lines().find_map(|line| {
+        let rest = line.strip_prefix("Uid:")?;
+        rest.split_whitespace().next()?.parse().ok()
+    })
+}
+
+#[cfg(unix)]
+// trace:TASK-543 | ai:codex
+fn registered_process_cwd(pid: u32) -> Option<std::path::PathBuf> {
+    std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
+}
+
+#[cfg(not(unix))]
+fn registered_process_cwd(_pid: u32) -> Option<std::path::PathBuf> {
+    None
+}
+
 struct ChildSignalForwarder {
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
@@ -17192,6 +17336,84 @@ mod agent_launcher_tests {
         assert!(show_context);
     }
 
+    // trace:TASK-543 | ai:codex
+    #[test]
+    fn parses_agent_register_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "agent",
+            "register",
+            "12345",
+            "--type",
+            "codex",
+            "--role",
+            "implementer",
+            "--spec",
+            "TASK-543",
+            "--name",
+            "codex-1",
+        ])
+        .unwrap();
+        let Command::Agent(AgentCommand::Register {
+            pid,
+            agent_type,
+            role,
+            spec,
+            name,
+        }) = cli.command
+        else {
+            panic!("expected agent register command");
+        };
+        assert_eq!(pid, 12345);
+        assert_eq!(agent_type, "codex");
+        assert_eq!(role, "implementer");
+        assert_eq!(spec.as_deref(), Some("TASK-543"));
+        assert_eq!(name.as_deref(), Some("codex-1"));
+    }
+
+    // trace:TASK-543 | ai:codex
+    #[test]
+    fn agent_register_validation_accepts_locked_taxonomy() {
+        assert_eq!(validate_registered_agent_type("codex").unwrap(), "codex");
+        assert_eq!(
+            validate_registered_agent_type("claude-code").unwrap(),
+            "claude"
+        );
+        assert_eq!(
+            validate_registered_agent_type("antigravity").unwrap(),
+            "antigravity"
+        );
+        assert_eq!(validate_registered_agent_type("web").unwrap(), "web");
+        assert!(validate_registered_agent_type("random").is_err());
+
+        assert_eq!(
+            validate_registered_agent_role("Implementer").unwrap(),
+            "implementer"
+        );
+        assert_eq!(
+            validate_registered_agent_role("advisor").unwrap(),
+            "advisor"
+        );
+        assert_eq!(
+            validate_registered_agent_role("reviewer").unwrap(),
+            "reviewer"
+        );
+        assert_eq!(
+            validate_registered_agent_role("integrator").unwrap(),
+            "integrator"
+        );
+        assert!(validate_registered_agent_role("observer").is_err());
+    }
+
+    #[cfg(unix)]
+    // trace:TASK-543 | ai:codex
+    #[test]
+    fn parses_proc_status_uid() {
+        let body = "Name:\ttest\nUid:\t1000\t1000\t1000\t1000\n";
+        assert_eq!(parse_proc_status_uid(body), Some(1000));
+        assert_eq!(parse_proc_status_uid("Name:\ttest\n"), None);
+    }
+
     #[test]
     fn find_aida_project_root_walks_up_from_descendant() {
         let tmp = TempDir::new().unwrap();
@@ -17239,6 +17461,40 @@ mod agent_launcher_tests {
         assert!(agent_registry::remove_agent(tmp.path(), "claude", 111).unwrap());
         assert!(agent_registry::remove_agent(tmp.path(), "claude", 222).unwrap());
         assert!(!agent_registry::remove_agent(tmp.path(), "claude", 222).unwrap());
+    }
+
+    // trace:TASK-543 | ai:codex
+    #[test]
+    fn register_existing_agent_entry_is_status_visible_and_pid_keyed() {
+        let tmp = TempDir::new().unwrap();
+        let entry = agent_registry::register_existing_agent(
+            tmp.path(),
+            "web",
+            std::process::id(),
+            "advisor".to_string(),
+            Some("TASK-543".to_string()),
+            tmp.path().into(),
+            Some("browser-advisor".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(entry.id, format!("web-{}", std::process::id()));
+        assert_eq!(entry.agent_type, "web");
+        assert_eq!(entry.role.as_deref(), Some("advisor"));
+        assert_eq!(entry.current_spec.as_deref(), Some("TASK-543"));
+        assert_eq!(entry.name.as_deref(), Some("browser-advisor"));
+        assert_eq!(entry.source, "manual-register");
+
+        let ctx = agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]);
+        let views = agent_registry::list_agent_views(tmp.path(), &ctx);
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].status, agent_registry::AgentStatus::Busy);
+        let lines = agent_registry::format_agent_status_lines(&views);
+        assert!(
+            lines[0].contains(&format!("web#{}", std::process::id())),
+            "unexpected status line: {}",
+            lines[0]
+        );
     }
 
     #[cfg(unix)]
@@ -47499,6 +47755,7 @@ fn lease_agent_view(
         id: format!("lease-{}", lease.id),
         agent_type: lease_agent_type(lease),
         pid: lease.creator_pid.unwrap_or(0),
+        name: None,
         tty: None,
         started_at: lease.started_at,
         last_active_at: lease_activity_timestamp(project_root, lease).unwrap_or(lease.started_at),
@@ -49294,6 +49551,7 @@ mod task_515_status_agent_lease_fallback_tests {
             id: "codex-123".to_string(),
             agent_type: "codex".to_string(),
             pid: 123,
+            name: None,
             tty: None,
             started_at: lease.started_at,
             last_active_at: lease.started_at,

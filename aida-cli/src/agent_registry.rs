@@ -25,6 +25,8 @@ pub(crate) struct AgentRegistryEntry {
     pub(crate) agent_type: String,
     pub(crate) pid: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) tty: Option<String>,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) last_active_at: DateTime<Utc>,
@@ -63,6 +65,7 @@ pub(crate) struct AgentRegistryView {
     pub(crate) id: String,
     pub(crate) agent_type: String,
     pub(crate) pid: u32,
+    pub(crate) name: Option<String>,
     pub(crate) tty: Option<String>,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) last_active_at: DateTime<Utc>,
@@ -218,6 +221,7 @@ pub(crate) fn touch_mcp_agent(
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
+            name: None,
             tty: current_tty(),
             started_at: now,
             last_active_at: now,
@@ -270,6 +274,7 @@ pub(crate) fn register_spawned_agent(
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
+        name: None,
         tty: current_tty(),
         started_at: now,
         last_active_at: now,
@@ -279,6 +284,41 @@ pub(crate) fn register_spawned_agent(
         source: "agent-launcher".to_string(),
         binary_version: binary.map(|b| b.version.clone()),
         build_sha: binary.map(|b| b.sha.clone()),
+    };
+    write_entry(project_root, &entry)?;
+    Ok(entry)
+}
+
+/// Register a raw-launched process that was not spawned by `aida agent new`.
+///
+/// The entry intentionally uses the same `<agent-type>-<pid>` id/key shape as
+/// supervised launches so status rendering and stale-PID handling stay shared.
+// trace:TASK-543 | ai:codex
+pub(crate) fn register_existing_agent(
+    project_root: &Path,
+    agent_type: &str,
+    pid: u32,
+    role: String,
+    current_spec: Option<String>,
+    worktree_path: PathBuf,
+    name: Option<String>,
+) -> Result<AgentRegistryEntry> {
+    let now = Utc::now();
+    let agent_type = normalize_agent_type(agent_type.to_string());
+    let entry = AgentRegistryEntry {
+        id: agent_id(&agent_type, pid),
+        agent_type,
+        pid,
+        name,
+        tty: process_tty(pid).or_else(current_tty),
+        started_at: now,
+        last_active_at: now,
+        role: Some(role),
+        current_spec,
+        worktree_path,
+        source: "manual-register".to_string(),
+        binary_version: None,
+        build_sha: None,
     };
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -381,6 +421,7 @@ fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegis
         id: entry.id,
         agent_type: entry.agent_type,
         pid: entry.pid,
+        name: entry.name,
         tty: entry.tty,
         started_at: entry.started_at,
         last_active_at: entry.last_active_at,
@@ -472,6 +513,7 @@ pub(crate) fn normalize_agent_type(raw: String) -> String {
         "claude" | "claudecode" => "claude".to_string(),
         "codex" => "codex".to_string(),
         "antigravity" | "gemini" => "antigravity".to_string(),
+        "web" => "web".to_string(),
         _ => "other".to_string(),
     }
 }
@@ -498,8 +540,21 @@ fn current_tty() -> Option<String> {
         .filter(|s| s.starts_with("/dev/"))
 }
 
+#[cfg(unix)]
+fn process_tty(pid: u32) -> Option<String> {
+    std::fs::read_link(format!("/proc/{pid}/fd/0"))
+        .ok()
+        .map(|p| p.display().to_string())
+        .filter(|s| s.starts_with("/dev/"))
+}
+
 #[cfg(not(unix))]
 fn current_tty() -> Option<String> {
+    None
+}
+
+#[cfg(not(unix))]
+fn process_tty(_pid: u32) -> Option<String> {
     None
 }
 
@@ -514,6 +569,7 @@ mod tests {
             id: agent_id("codex", pid),
             agent_type: "codex".to_string(),
             pid,
+            name: None,
             tty: Some("/dev/pts/1".to_string()),
             started_at: last_active_at,
             last_active_at,
@@ -657,6 +713,24 @@ mod tests {
         assert_eq!(views[0].status, AgentStatus::Stale);
     }
 
+    // TASK-543: raw-registered agents use the same stale-PID transition as
+    // launcher/MCP entries.
+    #[test]
+    fn manual_registered_entry_with_dead_pid_is_stale() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut record = entry_with(u32::MAX - 1, now);
+        record.source = "manual-register".to_string();
+        record.name = Some("codex-raw".to_string());
+        write_entry(tmp.path(), &record).unwrap();
+
+        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]));
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].source, "manual-register");
+        assert_eq!(views[0].name.as_deref(), Some("codex-raw"));
+        assert_eq!(views[0].status, AgentStatus::Stale);
+    }
+
     #[test]
     fn format_agent_status_lines_appends_freshness_hint() {
         let now = Utc::now();
@@ -664,6 +738,7 @@ mod tests {
             id: "codex-42".to_string(),
             agent_type: "codex".to_string(),
             pid: 42,
+            name: None,
             tty: None,
             started_at: now,
             // Freshness column is computed relative to `Utc::now()` inside

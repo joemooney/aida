@@ -3711,6 +3711,29 @@ pub enum AgentCommand {
     /// Launch a new agent process.
     #[clap(subcommand)]
     New(AgentNewCommand),
+
+    /// Register an already-running raw-launched agent process.
+    // trace:TASK-543 | ai:codex
+    Register {
+        /// PID of the already-running process to register.
+        pid: u32,
+
+        /// Agent type: codex, claude, antigravity, or web.
+        #[clap(long = "type", value_name = "TYPE")]
+        agent_type: String,
+
+        /// Agent role: implementer, advisor, reviewer, or integrator.
+        #[clap(long, value_name = "ROLE")]
+        role: String,
+
+        /// SPEC-ID currently owned by the agent.
+        #[clap(long, value_name = "SPEC-ID")]
+        spec: Option<String>,
+
+        /// Optional human-readable instance name.
+        #[clap(long)]
+        name: Option<String>,
+    },
 }
 
 /// Agent-specific launchers. Each variant maps AIDA's supervision layer onto
