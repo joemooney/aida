@@ -82,7 +82,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:35:04.141728639Z
-modified_at: 2026-05-24T06:31:27.531228175Z
+modified_at: 2026-05-24T06:41:47.293183419Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-24
@@ -94,3 +94,8 @@ tags:
 - no-existing-users-window
 - substrate-cleanup
 - tags
+relationships:
+- rel_type: Parent
+  target_id: 019e58b7-a4d8-7e90-9ed4-834308da85f2
+  created_at: 2026-05-24T06:41:47.293173758Z
+  created_by: joe
