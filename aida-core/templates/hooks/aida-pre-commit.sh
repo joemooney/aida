@@ -13,15 +13,12 @@ NC='\033[0m' # No Color
 # Check if AIDA_ALLOW_INTERMEDIATE=1 is set, or if the git commit command was invoked with --allow-intermediate.
 # We check /proc/$PPID/cmdline (Linux) for --allow-intermediate to enable seamless bypass.
 if [ "$AIDA_ALLOW_INTERMEDIATE" = "1" ] || ( [ -f "/proc/$PPID/cmdline" ] && grep -q -z -- "--allow-intermediate" "/proc/$PPID/cmdline" 2>/dev/null ); then
-    echo "DEBUG: Bypass detected" >&2
     exit 0
 fi
 
 # 2. Special-case bypass for .aida-store worktree/branch (deliberate gitignored path commits)
 CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
-echo "DEBUG: CURRENT_BRANCH='$CURRENT_BRANCH' PWD='$(pwd)'" >&2
 if [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || [[ "$(pwd)" == *"/.aida-store"* ]]; then
-    echo "DEBUG: .aida-store bypass matched" >&2
     exit 0
 fi
 
@@ -45,16 +42,10 @@ fi
 # Using git status --porcelain is completely safe and works on unborn branches (first commit)
 STAGED_FILES=$(git status --porcelain 2>/dev/null | grep -E '^[AMRC]' | awk '{print $NF}')
 
-echo "DEBUG: STAGED_FILES='$STAGED_FILES'" >&2
-
 IGNORED_STAGED_FILES=()
 for file in $STAGED_FILES; do
-    echo "DEBUG: Checking file='$file'" >&2
     if git check-ignore --no-index -q "$file" 2>/dev/null; then
-        echo "DEBUG: File '$file' IS IGNORED" >&2
         IGNORED_STAGED_FILES+=("$file")
-    else
-        echo "DEBUG: File '$file' IS NOT IGNORED" >&2
     fi
 done
 
