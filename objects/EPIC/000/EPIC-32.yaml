@@ -1,0 +1,111 @@
+id: 019e5b0a-4e9a-7921-9004-a45cf997ab0e
+spec_id: EPIC-32
+agreed_id: EPIC-32
+title: 'User-driven substrate vectors: query / canned-answer / skill-prompt entity types'
+description: |-
+  ## Strategic context
+
+  AIDA's substrate today captures DEVELOPER-driven knowledge: specs, traces, plans, memories, punts, calibration data, history. To make AIDA's first non-dogfood consumer (aida-chat — see aida-chat repo's EPIC-26 'fast-response query routing') first-class, the substrate gains a new dimension: USER-driven vectors. Queries users actually ask, FAQ patterns that emerge, skill-prompts (canned tool sequences) that handle common patterns.
+
+  This isn't aida-chat-specific. Every project-using-aida that exposes a chat or query surface gains the same substrate-resident FAQ + skill-prompt + query-analytics infrastructure. The web of knowledge expands.
+
+  User direction 2026-05-24: 'I like the idea of folding the questions/answers/faq into the substrate somehow, we will be building more user driven vectors into our web of knowledge thereby enhancing the underlying fabric.'
+
+  ## Three new entity types (sketch — for aida-chat advisor verdict)
+
+  ### 1. query
+
+  Read-only log of user queries answered by an aida-consumer.
+
+  Fields:
+  - text: the user's question
+  - session_id: source session/conversation
+  - consumer: which project's chat surface ('aida-chat', future consumers)
+  - timestamp
+  - latency_ms: time-to-first-token or full response time
+  - tokens_in / tokens_out: cost signals
+  - tools_used: list of tool names invoked
+  - linked_specs: SPEC-IDs cited in the response (the substrate-grounding signal)
+  - starred: boolean (operator can star valuable queries)
+  - tags: free-form
+
+  Use cases:
+  - FAQ ranking: which queries recur
+  - Substrate-grounding metric: what fraction of queries cite SPEC-IDs
+  - Cost analytics: average latency + token usage per query class
+  - Cross-project: 'what questions do users ask projects-using-aida?'
+
+  ### 2. canned-answer
+
+  Pre-computed static response. Bypasses LLM round-trip on match.
+
+  Fields:
+  - trigger: question pattern (regex or fuzzy-match key phrases)
+  - answer: the static response text
+  - linked_specs: SPEC-IDs this answer cites (for substrate-grounding)
+  - last_validated_at: stale-detection signal
+  - tags
+
+  Use cases:
+  - 'What is AIDA?' → instant canned answer with substrate citations
+  - 'How do I init a project?' → canned answer pointing at scaffolding
+  - Stale-detection: if the underlying specs change, the canned answer may need refresh
+
+  ### 3. skill-prompt
+
+  Pre-bound tool sequence for parameterized queries. Single-pass execution instead of generic agent loop.
+
+  Fields:
+  - trigger: question pattern
+  - system_prompt: focused single-purpose system prompt
+  - tool_sequence: ordered list of tool calls (with parameter templates)
+  - cached_context: optional pre-computed context (e.g., recent spec list)
+  - linked_specs
+  - tags
+
+  Use cases:
+  - 'Show me recent specs' → skill-prompt invokes list_requirements with bounded args
+  - 'What changed last week?' → skill-prompt invokes history tool with time bound
+  - The middle ground between canned-answer (static) and full-agent-loop (open-ended)
+
+  ## Composes with
+
+  - aida-chat repo EPIC-26 — the consumer. Master core schema lands FIRST as a focused ship; aida-chat consumes via MCP. Sequenced, not blocked.
+  - EPIC-31 (agent-lifecycle keystone — same substrate-as-product pattern; user-driven entities sit alongside agent-driven entities)
+  - STORY-385 / aida status (eventually surfaces query analytics — most-asked questions, starred queue size)
+  - ADR-7 in aida-chat (tool-call surface decision — these new entities ARE the substrate-grounded tools)
+
+  ## Sub-stories (to file after master sketches the schema)
+
+  - STORY: 'query' entity type — definition + CRUD verbs + MCP surface
+  - STORY: 'canned-answer' entity type — definition + CRUD verbs + MCP surface
+  - STORY: 'skill-prompt' entity type — definition + CRUD verbs + MCP surface
+  - TASK: scaffolding updates (CLAUDE.md template + AGENTS.md template documenting the new types)
+  - TASK: aida add --type query/canned-answer/skill-prompt CLI surface
+
+  ## Sequencing relative to MVP
+
+  - Day-1: ship EPIC-16 PR-1 in aida-chat (FIRST), STORY-21, killer demo. Day-1 builds on EXISTING substrate.
+  - Day-2+: this EPIC's schema lands; aida-chat EPIC-26 consumes the new substrate.
+
+  EPIC-16 PR-1 + STORY-21 + killer demo are DAY-1; this EPIC is parallel-track but not blocking.
+
+  ## Sketch-first
+
+  Master advisor will post a schema sketch comment on this EPIC for aida-chat advisor to verdict before implementation. Per feedback_sketch_first_pays_for_itself, this is architecture-class work (new entity types + cross-consumer substrate contract) — sketch round-trip cheaper than rework.
+
+  trace:EPIC-X
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T17:31:02.682757847Z
+modified_at: 2026-05-24T17:31:02.682757847Z
+req_type: Epic
+tags:
+- batch:user-driven-substrate
+- cross-project
+- from-aida-chat
+- from-user-direction
+- substrate-evolution
+- user-driven-vectors
