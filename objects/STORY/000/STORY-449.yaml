@@ -1,0 +1,32 @@
+id: 019e582b-ff21-7bb0-8975-b8b9dc08388c
+spec_id: STORY-449
+agreed_id: STORY-449
+title: Dependency-aware batch drain — continue past shelved, skip dependents
+description: |-
+  EPIC-28 STORY 4 (first vertical — IMPLEMENTED in the same PR as STORY 3). Make the auto-complete batch drain tolerate per-spec failures and skip transitively-blocked members instead of halting.
+
+  Scope (delivered):
+  - aida-cli/src/auto_complete.rs: new BatchDrainOutcome::DrainedWithShelved variant (exit code 2 — distinct from 0/clean, 1/stall, 3..=8/phase failures). BatchDrainResult gains shelved + skipped fields; BatchChainDrainResult mirrors them. drain_batch's failure arm shelves and continues when OrchestrationResult::shelved_reason is Some; falls back to historical Failed(phase) when shelved_reason is None (env-level failure) or when --max-failures budget exhausted.
+  - aida-cli/src/cli.rs: --max-failures N (Option<usize>) flag on Queue::Work, default 5 (constant DEFAULT_MAX_FAILURES in main.rs). --max-failures 0 disables the cap (falls back to historical first-failure-stops).
+  - aida-cli/src/main.rs: --max-failures threaded through handle_auto_complete_batch / batches / next_n. resolve_batch_members now filters NeedsAttention members (mirrors queue next's STORY-332 filter — also closes a latent punt-loop bug). emit_batch_drain_summary + emit_batch_chain_summary + emit_next_n_drain_summary render the new shelved + skipped sections (human + JSON). Dependency-aware skip is FREE — pickability already drops blocked-by-NeedsAttention members on next_head().
+
+  Tests (delivered):
+  - drain_batch_shelves_failure_and_continues_to_next_member
+  - drain_batch_skips_dependent_when_blocker_shelved
+  - drain_batch_caps_at_max_failures_and_stops
+  - drain_batch_clean_drain_without_shelved_still_returns_drained_exit_0 (regression)
+  - drain_batch_punt_and_shelve_in_same_drain_both_counted_separately
+  - drain_batch_unshelvable_failure_still_stops_the_drain (env-level still halts)
+status: InProgress
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:08:58.913136780Z
+modified_at: 2026-05-24T04:08:58.913136780Z
+req_type: Story
+tags:
+- autonomous-drain
+- batch
+- dependency-aware
+- resilient-drain
+- skip-dependents
