@@ -137,6 +137,12 @@ pub struct VerdictFile {
     /// when the reviewer didn't volunteer one. trace:STORY-439 | ai:claude
     #[serde(default)]
     pub complexity_agreement: Option<String>,
+    /// STORY-451: reviewer's effort estimate from the observed diff.
+    /// Advisory only; captured into `.aida/effort-calibration/<SPEC>.yaml`
+    /// as the review touchpoint. Buckets: `15m`, `1h`, `4h`, `1d`, `1w`.
+    /// trace:STORY-451 | ai:codex
+    #[serde(default)]
+    pub implementation_effort: Option<String>,
 }
 
 /// Parse a verdict file's JSON. `None` on absent/unreadable/malformed —
@@ -311,6 +317,14 @@ pub fn format_reviewer_summary(
         .filter(|s| !s.is_empty())
     {
         out.push_str(&format!("  complexity agreement: {agreement}\n"));
+    }
+    if let Some(effort) = verdict
+        .as_ref()
+        .and_then(|v| v.implementation_effort.as_deref())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        out.push_str(&format!("  implementation effort: {effort}\n"));
     }
 
     // Comment URL — when the verdict file recorded one.
@@ -527,7 +541,8 @@ mod tests {
         let body = r#"{
             "verdict": "Approved",
             "implementation_complexity": "high",
-            "complexity_agreement": "implementer-underestimated"
+            "complexity_agreement": "implementer-underestimated",
+            "implementation_effort": "1d"
         }"#;
         let v = parse_verdict_file(body).expect("parses");
         assert_eq!(v.implementation_complexity.as_deref(), Some("high"));
@@ -535,6 +550,7 @@ mod tests {
             v.complexity_agreement.as_deref(),
             Some("implementer-underestimated")
         );
+        assert_eq!(v.implementation_effort.as_deref(), Some("1d"));
     }
 
     #[test]
@@ -553,7 +569,8 @@ mod tests {
             "verdict":"Approved",
             "summary":"smoke",
             "implementation_complexity":"high",
-            "complexity_agreement":"implementer-underestimated"
+            "complexity_agreement":"implementer-underestimated",
+            "implementation_effort":"1d"
         }"#;
         let s = format_reviewer_summary(65, Some(verdict), None, &vpath(), None, Some(0));
         assert!(s.contains("verdict: PASS"), "{s}");
@@ -564,6 +581,10 @@ mod tests {
         assert!(
             s.contains("complexity agreement: implementer-underestimated"),
             "missing agreement line: {s}"
+        );
+        assert!(
+            s.contains("implementation effort: 1d"),
+            "missing effort line: {s}"
         );
     }
 
@@ -579,5 +600,6 @@ mod tests {
         );
         assert!(!s.contains("implementation complexity:"), "{s}");
         assert!(!s.contains("complexity agreement:"), "{s}");
+        assert!(!s.contains("implementation effort:"), "{s}");
     }
 }
