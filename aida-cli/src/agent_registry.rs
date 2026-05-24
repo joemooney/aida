@@ -333,14 +333,31 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
         .iter()
         .map(|agent| {
             let elapsed = humanize_elapsed(elapsed_secs_clamped(now, agent.last_active_at));
+            let identity = if agent.source == "lease" {
+                let short = agent.id.trim_start_matches("lease-");
+                let short = &short[..short.len().min(8)];
+                format!("{}#{}", agent.agent_type, short)
+            } else {
+                format!("{}#{}", agent.agent_type, agent.pid)
+            };
+            let source_note = if agent.source == "lease" {
+                if agent.agent_type == "unknown" {
+                    "  (via lease; agent type: unknown)"
+                } else {
+                    "  (via lease)"
+                }
+            } else {
+                ""
+            };
             format!(
-                "  {:<15} {:<11} {:<12} {:<5} {:<8} {}",
-                format!("{}#{}", agent.agent_type, agent.pid),
+                "  {:<15} {:<11} {:<12} {:<5} {:<8} {}{}",
+                identity,
                 agent.role.as_deref().unwrap_or("(none)"),
                 agent.current_spec.as_deref().unwrap_or("(none)"),
                 agent.status.as_str(),
                 format!("({elapsed})"),
-                agent.worktree_path.display()
+                agent.worktree_path.display(),
+                source_note
             )
         })
         .collect()
@@ -450,7 +467,7 @@ fn detect_agent_type() -> String {
     "other".to_string()
 }
 
-fn normalize_agent_type(raw: String) -> String {
+pub(crate) fn normalize_agent_type(raw: String) -> String {
     match raw.to_ascii_lowercase().replace(['_', '-'], "").as_str() {
         "claude" | "claudecode" => "claude".to_string(),
         "codex" => "codex".to_string(),
