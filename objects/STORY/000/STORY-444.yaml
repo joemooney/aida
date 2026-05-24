@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:21:20.065824954Z
-modified_at: 2026-05-24T02:21:20.065824954Z
+modified_at: 2026-05-24T05:10:06.680395286Z
 req_type: Story
 tags:
 - agile
@@ -98,3 +98,35 @@ tags:
 - queue
 - risk-analysis
 - skill
+comments:
+- id: 019e5863-f658-7280-bf2a-5d237e5af21a
+  author: joe
+  content: |-
+    Master advisor verdict on the STORY-444 /ultraplan output (already on disk at docs/plans/2026-05-23-story-444-backlog-groom.md — 27KB, landed when the /ultraplan EXECUTE phase was interrupted by usage limit): APPROVE with two refinements.
+
+    **Approve rationale:** Strong plan despite the interrupt. Standout moves:
+
+    - **New backlog.rs module, not more main.rs** — matches pr_rebase.rs / drain_state.rs / digest.rs carve-out pattern. main.rs at 65k lines doesn't need another 600.
+    - **CLI does filing, skill drives interactive AskUserQuestion** — same split as aida-decompose; correct delegation of responsibility (CLI is non-interactive, skill is the conversation).
+    - **Risk levels are advisory chips, NOT gates** (D3) — explicitly matches spec's 'heuristics are HINTS, not gates'. The classifier surfaces, operator decides.
+    - **Conflict detection O(n²) over candidates only** (D5) — pragmatic; ≤30 candidates makes inverted-index overkill.
+    - **File-overlap source: trace graph + plan files** — composes with STORY-443 (plan archival) and existing scan_trace_graph. git log --grep deferred to followup; right scope-cut.
+    - **batch:NAME via existing --add-tag semantics** (D7) — single mutation path, no parallel implementation. Right substrate reuse.
+    - **JSON shape stability tests** (analyze_report_json_shape_is_stable + backlog_list_json_shape_is_stable) — good hygiene; locks the skill→CLI contract.
+
+    **Two refinements:**
+
+    1. **Decision 8 is OBE — coordinate with STORY-443.** The plan's D8 notes 'no Option F decision artifact exists' and lands docs at docs/aida-discipline/backlog-grooming.md as the fallback. STORY-443 (just-reviewed and APPROVE'd this turn) ships the docs/aida/discipline/ namespace move. When STORY-443 lands first, this plan's docs-file location should be docs/aida/discipline/backlog-grooming.md. Implementer should check STORY-443 status at pickup time and land accordingly (substrate-as-bouncer would be a path-aware install helper; out of scope here).
+
+    2. **Risk 2 (both dispatch sites) deserves a verification-script smoke.** The dispatcher's two arms (legacy SQLite + git-backend) both need the new Backlog match arm, and cargo check won't catch a missing one because Subcommand dispatch is silent on misses. Worth adding a verification step that runs aida backlog list against BOTH backend modes (or at minimum, calls out the explicit-grep-for-both-dispatch-sites discipline in the implementer brief).
+
+    **Non-blocking observations:**
+
+    - The plan's interrupted /ultraplan run produced ONLY the plan, not an implementation. This is fine — STORY-444 ships when an implementer picks it up. The plan is the standing brief.
+    - The Followups list includes 'feed the risk heuristic from STORY-439's calibration data' — exactly the compounding-substrate use of the just-shipped STORY-439 calibration layer. This is the kind of cross-spec composition that makes the substrate valuable.
+
+    **Ready for implementation pickup.** When picked up: aida session start --owns STORY-444 → implement per plan → standard ship cadence. The plan is detailed enough that an implementer can execute without re-/ultraplanning.
+
+    — master advisor
+  created_at: 2026-05-24T05:10:06.680395286Z
+  modified_at: 2026-05-24T05:10:06.680395286Z
