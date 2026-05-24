@@ -60,10 +60,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:03:24.897364610Z
-modified_at: 2026-05-24T16:08:03.630955235Z
+modified_at: 2026-05-24T16:22:52.150004611Z
 req_type: Task
 tags:
 - aida:agent
+- batch:multi-agent-coordination
 - from-self-test
 - multi-agent
 - naming
