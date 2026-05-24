@@ -62674,13 +62674,16 @@ fn infer_queue_work_role(
 ///   - reviewer → `/aida-review --pr N` (when scope parses as PR-N/MR-N)
 ///                else `/aida-review`
 ///   - implementer / other → `/aida-pickup [<ITEM-ID> | --auto-first]`
-///                Item mode focuses a single id and keeps the skill's
-///                pre-pickup confirm (user named one item, may want to
-///                verify). Cluster / head mode passes `--auto-first` so
-///                the skill skips the first confirm — STORY-42's
-///                pre-flight summary is the consent point and re-asking
-///                inside the launched session is friction-without-value.
-///                trace:TASK-86 | ai:claude
+///                Both forms skip the skill's Step 2 confirm — the
+///                argument IS the consent signal. Item mode focuses a
+///                single id (the operator typed it, so the SPEC-ID is
+///                the commitment — TASK-548 generalised TASK-86's
+///                argument-as-consent rule to cover this case).
+///                Cluster / head mode passes `--auto-first` to ride the
+///                queue-work pre-flight summary as its consent point.
+///                Only a bare `/aida-pickup` from the conversation (no
+///                argument) still pauses to confirm.
+///                trace:TASK-86 trace:TASK-548 | ai:claude
 /// trace:STORY-42 | ai:claude
 fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
     let role_lower = role.to_ascii_lowercase();
