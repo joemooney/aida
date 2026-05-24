@@ -1,0 +1,63 @@
+id: 019e5b26-5330-7931-8d85-a0d42c6d450e
+spec_id: TASK-548
+agreed_id: TASK-548
+title: 'aida-pickup: skip ''confirm pickup'' step when SPEC-ID is explicit (operator already committed)'
+description: |-
+  ## Friction
+
+  When the operator runs 'aida queue work <SPEC-ID>' with an explicit SPEC-ID, the aida-pickup skill still pauses with a 4-option confirmation menu ('Yes — pick up', 'Pick up but show <related> first', 'Cancel — pick a different spec', 'Type something'). The operator has ALREADY chosen the spec by typing it; the confirmation is redundant.
+
+  Today's skill template at .claude/skills/aida-pickup.md step 3 says 'Confirm pickup with the user, then aida edit <id> --status in-progress'. This discipline is valuable when 'aida queue work' (no arg) auto-picks the queue head and the operator hasn't verified — but redundant when the operator typed the SPEC-ID explicitly.
+
+  ## Reproduced 2026-05-24
+
+  Operator ran 'aida queue work BUG-376'. Implementer presented the spec context, then paused with a 4-option menu asking 'Confirm pickup of BUG-376 and start implementation?'. Operator's intent was already explicit; the pause forced an extra round-trip.
+
+  ## Sibling friction patterns
+
+  - BUG-376: implementer LINGERS after pr ship instead of exiting (ship-then-linger ceiling). Same friction class.
+  - This TASK: implementer PAUSES before starting when intent is explicit (start-then-pause ceiling).
+
+  Both are 'implementer ceremonial pauses when operator intent is already explicit'. Per feedback_substrate_as_bouncer_not_rules, substrate enforces — agent ceremonies that don't add value get pruned.
+
+  ## Proposed fix
+
+  Skill template (.claude/skills/aida-pickup.md) step 3 conditional:
+
+  - IF entry was 'aida queue work' (no SPEC-ID arg, picks queue head): keep the confirmation menu — operator hasn't committed to the head explicitly.
+  - IF entry was 'aida queue work <SPEC-ID>' (explicit): skip the menu; transition to in-progress and start implementation immediately. Print a one-line 'Picking up BUG-376 — Acceptance: <N> items' for observability; do NOT pause for confirmation.
+
+  Detection: aida queue work passes 'AIDA_QUEUE_PICKUP_SPEC' env (or equivalent) when SPEC-ID was explicit. Skill template branches on that.
+
+  ## Acceptance
+
+  - [ ] .claude/skills/aida-pickup.md updated with the conditional pause
+  - [ ] aida queue work <SPEC-ID> passes the explicit-intent signal to the skill (env var or argv)
+  - [ ] Test: aida queue work BUG-X with explicit SPEC: agent transitions to in-progress without pausing
+  - [ ] Test: aida queue work with no SPEC (auto-pick): agent pauses with confirmation menu (today's behavior preserved)
+
+  ## Composes with
+
+  - BUG-376 (sibling ceiling — post-ship linger)
+  - TASK-359 (implementer finish-checkpoint UX — relevant; that's the post-work checkpoint, this is the pre-work checkpoint)
+  - feedback_substrate_as_bouncer_not_rules — ceremonies that don't add value get pruned at the substrate level
+  - feedback_match_operator_mode_specific_when_execution — when operator is in execution mode (explicit command), don't force them back into exploration mode (confirmation menu)
+
+  ## Origin
+
+  2026-05-24 operator: 'why did it pause to ask this question?' after running 'aida queue work BUG-376' with explicit SPEC-ID.
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T18:01:38.864883637Z
+modified_at: 2026-05-24T18:01:38.864883637Z
+req_type: Task
+tags:
+- batch:ceiling-pattern
+- ceiling-pattern
+- from-self-test
+- implementer-discipline
+- ux-papercut
