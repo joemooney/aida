@@ -1,0 +1,95 @@
+id: 019e5bbe-9ba6-7c01-b377-c5939fc76973
+spec_id: STORY-467
+agreed_id: STORY-467
+title: 'aida findings add: advisor-driven observation entry — capture ''noticed but not yet actionable'' patterns for audit/triage'
+description: |-
+  ## Friction
+
+  Today 'aida findings' is auto-populated by headless drain phases (reviewer + implementer) and calibration runs. No surface exists for the ADVISOR to file 'I observed this pattern; not yet a confirmed bug; record for audit if it recurs.'
+
+  Advisor today handles this with verbal 'will capture if it recurs 2+ more times' commitments that decay (the advisor session's context is gone tomorrow; nobody remembers the prior observation when recurrence happens).
+
+  ## Reproduced pattern 2026-05-24
+
+  Multiple times tonight master said 'not filing now; capture if it recurs 2+ more times':
+  - Spike auto-routed to implementer (instead of advisor seat) — caught by implementer's option-3 escape, but the pattern itself is unrecorded
+  - Codex/Antigravity scratchpad-loop variants beyond BUG-378
+  - Multi-instance brief ambiguity moments beyond STORY-459
+  - Cross-project paste-ready friction beyond the explicit cases filed
+
+  Without a substrate slot, each observation is recreated from scratch when it recurs — wasted reasoning, missed pattern signal.
+
+  ## Proposed shape
+
+  Extend the 'aida findings' surface with an 'add' verb:
+
+    aida findings add --kind observation --note '<observation text>' [--severity cosmetic|minor|major] [--linked-specs SPEC-A,SPEC-B] [--tags ...]
+
+  Creates a finding with:
+  - kind: 'observation' (new — distinguishes from 'review', 'punt', 'calibration')
+  - source: 'advisor' (or the filing role)
+  - author: current user
+  - text: the observation
+  - recurrence-counter: starts at 1; future 'aida findings add' with similar text (or explicit --recur <FINDING-ID>) increments
+  - linked-specs: cross-references to existing specs
+  - created_at, last_seen_at
+
+  The existing 'aida findings list' surfaces observations alongside review-findings and punts (already shows multi-source today). Existing 'promote' / 'dismiss' triage verbs work without modification.
+
+  ### Triage rule of thumb (advisor discipline)
+
+  - Recurrence count >= 3: promote to TASK/BUG/STORY (substrate-actionable)
+  - Recurrence count 1-2: leave as observation (still gathering signal)
+  - After 30 days of no recurrence: auto-archive or dismiss as 'pattern not confirmed'
+
+  ### Naming alternative considered
+
+  User raised 'CASE / INCIDENT' as possible spec-type alternatives. Master prefers extending findings because:
+  1. Existing triage flow already covers the lifecycle (filed → list → promote/dismiss)
+  2. Findings already aggregate multi-source observations (review + punt + calibration); adding 'advisor-observation' fits the pattern
+  3. New top-level type = ceremony + scaffolding + tag-namespace expansion
+  4. Per feedback_pushback_on_overengineering: smallest valuable slice = extend existing surface
+
+  If observations grow to need their own first-class surface (e.g., dedicated workflow + storage shape), can graduate to a separate type later. Today: just need the input verb.
+
+  ## Acceptance
+
+  - [ ] 'aida findings add --kind observation' command with --note (required), --severity, --linked-specs, --tags flags
+  - [ ] Stored alongside drain-filed findings in same substrate location
+  - [ ] 'aida findings list' shows observations grouped under 'From advisor' or similar source-label
+  - [ ] Existing 'aida findings promote <ID>' works on observations (promotes to TASK/BUG/STORY per --type)
+  - [ ] Existing 'aida findings dismiss <ID> --reason' works on observations
+  - [ ] Recurrence support: 'aida findings recur <ID> [--note ...]' increments counter + appends note
+  - [ ] Test: file observation, list shows it, promote/dismiss works
+  - [ ] Documentation: advisor discipline doc on when to file observations vs immediate-BUG-or-TASK
+
+  ## Composes with
+
+  - Existing 'aida findings' surface (extends, doesn't replace)
+  - EPIC-32 (substrate extension mechanism for consumer-driven vectors — when shipped, observations could become a consumer of EPIC-32's 'observation' entity type with kind='advisor:observation'. For now: dedicated finding kind suffices)
+  - feedback_capture_over_concentration (capture as you observe; this verb is the capture mechanism)
+  - feedback_pushback_on_overengineering (extend, don't add new type)
+
+  ## Why this matters strategically
+
+  The substrate's value compounds with observations. Today multi-agent dispatch produces dozens of weak-signal observations per session; without capture, they vaporize. With this verb, every advisor session contributes to a growing pattern-recognition substrate that surfaces problems early (before BUG-class-confirmed).
+
+  ## Origin
+
+  2026-05-24 user: 'we want some type of CASE type or INCIDENT type that we file, not a bug but something an audit could consider?' Master concurs gap is real; recommends extending findings surface (smaller slice than new spec-type).
+
+  trace:STORY-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T20:47:58.886480242Z
+modified_at: 2026-05-24T20:47:58.886480242Z
+req_type: Story
+tags:
+- advisor-discipline
+- aida:findings
+- from-self-test
+- from-user-direction
+- observability
+- substrate-extension
