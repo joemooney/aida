@@ -1,0 +1,25 @@
+id: 019e5aa5-0ac8-7cb0-ab8d-e95d29c3dcff
+spec_id: BUG-375
+agreed_id: BUG-375
+title: Codex skills scaffolded by 'aida init' missing YAML frontmatter — 18 skills skipped on Codex launch
+description: |-
+  When a fresh 'codex' session launches in a project scaffolded by 'aida init', Codex CLI emits 18 warnings: '/path/.codex/skills/aida-<name>/SKILL.md: missing YAML frontmatter delimited by ---' and skips loading all 18 skills.
+
+  Verbatim warnings: aida-req, aida-docs, aida-capture, aida-test, aida-standup, aida-commit, aida-sprint, aida-evaluate, aida-implement, aida-digest, aida-onboard, aida-search, aida-docs-review, aida-sync, aida-import-plan, aida-review, aida-plan, aida-release.
+
+  Codex's new SKILL.md format requires YAML frontmatter (---name:...---). Today's aida-core/templates/codex-skills/ scaffolds files without it. Codex falls back to AGENTS.md so work is not blocked, but the skill surface is unavailable to Codex-launched sessions.
+
+  Reproduced 2026-05-24 in ~/ai/aida-chat (Codex v0.133.0).
+
+  Fix: prepend YAML frontmatter to each templates/codex-skills/*/SKILL.md master file. Validate by launching codex in a fresh init'd project — zero warnings expected. trace:BUG-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T15:40:26.184433801Z
+modified_at: 2026-05-24T15:40:26.184433801Z
+req_type: Bug
+tags:
+- codex
+- first-user-papercut
+- scaffolding
