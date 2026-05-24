@@ -33,12 +33,12 @@ description: |-
   ## Origin
 
   2026-05-23 codex during STORY-432 sketch: 'aida brief has list and ack, but no CLI read; direct file read was necessary despite the brief instruction.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T23:17:20.867209589Z
-modified_at: 2026-05-23T23:17:20.867209589Z
+modified_at: 2026-05-24T07:00:15.544428349Z
 req_type: Task
 tags:
 - agent-comms
@@ -48,3 +48,7 @@ tags:
 - from-self-test
 - papercut
 - sibling-of-TASK-492
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T07:00:15.544428349Z
+  completion_sha: ed122ba32ff42831a247537e7fe09b8293d6882c
