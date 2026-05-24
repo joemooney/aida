@@ -2596,6 +2596,36 @@ mod tests {
         assert_eq!(driver.advisor_calls, 1);
     }
 
+    #[test]
+    fn orchestrate_text_question_punt_routes_to_advisor_not_phase1_failure() {
+        let mut driver = MockPhaseDriver::punting_at_implementer(
+            "headless implementer exited without opening a PR after asking: Confirm and I'll proceed?",
+        )
+        .advisor_resolves("proceed with option A")
+        .resume_opens_pr();
+        let result = orchestrate(
+            &mut driver,
+            "BUG-374",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failure.is_none(), "text-question punt is not NoPr");
+        assert_eq!(driver.advisor_calls, 1);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
+    }
+
     /// A punt the advisor cannot safely judge, under `--escalate-blocks`: the
     /// advisor escalates, the run stops clean after phase 1 — phases 2-6 never
     /// run — exits `0`, and the result carries the escalation.
