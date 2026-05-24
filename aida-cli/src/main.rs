@@ -21794,6 +21794,9 @@ enum PrLookup {
 /// AIDA_DEBUG_GH=1 prints the search trace to stderr so the user can see
 /// exactly what was looked at. trace:BUG-74 | ai:claude
 fn resolve_gh_binary() -> Option<std::path::PathBuf> {
+    if let Ok(test_path) = std::env::var("AIDA_TEST_GH_BINARY") {
+        return Some(std::path::PathBuf::from(test_path));
+    }
     let debug = std::env::var("AIDA_DEBUG_GH")
         .map(|v| !v.is_empty() && v != "0")
         .unwrap_or(false);
