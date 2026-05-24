@@ -37,6 +37,30 @@ on the producer side (see `aida role enter dialog` and
 - The user is in `dialog` mode (the advisor seat) — that's the producer
   seat, not the consumer
 
+## Your local scratchpad is NOT AIDA substrate (BUG-378)
+
+If you are an agent with an internal session file (`task.md`,
+`walkthrough.md`, `~/.gemini/antigravity-cli/brain/<id>/task.md`, Codex's
+internal todo, etc.), **your scratchpad is a private working draft, not
+ground truth**. It does NOT auto-sync with AIDA's brief surface, the queue,
+or the spec store. Re-reading your own scratchpad to figure out what to do
+next is the **scratchpad-drift failure mode** — the agent loops on stale
+local state and re-renders "all done" while new work sits unread in the
+brief queue.
+
+Authoritative state lives in:
+
+- `aida queue next` / `aida queue list --for <role>` — the role's work queue
+- `aida brief list --for-agent <type>` — pending briefs filed for your agent type
+- `aida show <SPEC-ID>` — the spec's current contract
+
+At every work-cycle boundary (start of a pickup, after a finish, before
+declaring "done"), poll the substrate — not your scratchpad. The
+**substrate-as-bouncer** gate added by BUG-378 will print a loud
+`NEW BRIEF(S) PENDING` banner on `aida queue done` / `aida edit --status
+done|completed` if you missed a brief, but the banner is a last-line backstop:
+the discipline is to poll first.
+
 ## Active role
 
 !`echo "Role: ${AIDA_SESSION_ROLE:-(none active)}"`

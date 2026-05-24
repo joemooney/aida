@@ -492,7 +492,7 @@ fn humanize_elapsed(secs: i64) -> String {
     }
 }
 
-fn detect_agent_type() -> String {
+pub(crate) fn detect_agent_type() -> String {
     if let Some(v) = env_nonempty("AIDA_AGENT_TYPE").map(normalize_agent_type) {
         return v;
     }
