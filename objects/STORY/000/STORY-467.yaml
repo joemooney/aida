@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-24T20:47:58.886480242Z
+modified_at: 2026-05-24T20:48:40.808975005Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -93,3 +93,27 @@ tags:
 - from-user-direction
 - observability
 - substrate-extension
+comments:
+- id: 019e5bbf-3f68-7272-b728-3786036a3ff7
+  author: joe
+  content: |-
+    First observation to capture once STORY-467 ships — recording here as comment-carrier until the proper 'aida findings add' verb lands:
+
+    OBSERVATION: Spike auto-routes to implementer queue head; risks misfit pickup
+
+    Pattern: 'aida queue list' with default sort shows SPIKE specs alongside implementation TASKs in role:implementer queue. The implementer's /aida-pickup head-grab risks pulling a spike (research/empirical work) into the implementer seat when advisor-tier is the right fit.
+
+    Today's saving mechanism: implementer's structured finish-checkpoint (TASK-359) includes an explicit 'advise escape' option — the implementer pauses + offers to route to advisor before committing to a misfit pickup. This caught the case once tonight (master tried 'aida queue work' on STORY-385 implementer slot, queue head was SPIKE-8, implementer paused + asked).
+
+    Pattern strength: 1 observed occurrence (single case). Not actionable as BUG yet (TASK-359's advise-escape working). Recurrence count: 1.
+
+    Promotion trigger: if 2+ more occurrences within 30 days AND advise-escape fails to catch (implementer auto-grabs spike without pausing), promote to BUG: 'aida queue should not include spike-type specs in implementer-role queue, or queue list should warn before serving spike at head.'
+
+    Linked specs:
+    - TASK-548 (skip pickup confirmation when explicit — sibling: when SPEC-ID is explicit, no pause; but maybe spike-type warrants pause regardless)
+    - TASK-359 (finish-checkpoint structured menu with advise escape — the mechanism that caught it)
+    - SPIKE-8 (the specific spike that surfaced this)
+
+    — master observation 2026-05-24
+  created_at: 2026-05-24T20:48:40.808975005Z
+  modified_at: 2026-05-24T20:48:40.808975005Z
