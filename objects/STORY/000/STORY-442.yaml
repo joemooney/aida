@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:20:34.905803870Z
-modified_at: 2026-05-24T06:11:14.728189130Z
+modified_at: 2026-05-24T06:11:51.999566456Z
 req_type: Story
 tags:
 - batch
@@ -127,6 +127,13 @@ comments:
     — master advisor
   created_at: 2026-05-24T05:13:07.504055089Z
   modified_at: 2026-05-24T05:13:07.504055089Z
+- id: 019e589c-828d-7583-b71f-5fe3e41ddcbe
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-23-story-442-lifecycle-shortcircuit.md
+    filed 4 task(s): TASK-523, TASK-524, TASK-525, TASK-526
+  created_at: 2026-05-24T06:11:52.589801375Z
+  modified_at: 2026-05-24T06:11:52.589801375Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T06:11:14.728189130Z
