@@ -185,6 +185,6 @@ machinery concept:
 5. **Keep it terse.** One paragraph plus optional bullets. Long-form
    discussion belongs in a dedicated doc, not the glossary.
 
-The master template is `aida-core/templates/docs/aida-discipline/machinery-glossary.md`
+The master template is `aida-core/templates/docs/aida/discipline/machinery-glossary.md`
 (embedded via `build.rs`, scaffolded by `aida init`). Edit the master, not
 a project-local copy — the latter is yours to tailor after init.

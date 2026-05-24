@@ -64,7 +64,7 @@ aida zen status
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen`. An un-annotated prompt defaults to `design-fork`
-(pause-safe). Author guidance: `docs/aida-discipline/skill-prompt-kinds.md`.
+(pause-safe). Author guidance: `docs/aida/discipline/skill-prompt-kinds.md`.
 trace:STORY-287
 
 ## Workflow
@@ -498,7 +498,7 @@ naming the user-action (the recommendation in summary form), a per-option
 **downstream consequence + reversibility**, an **advise escape** row,
 and decoupled coupled decisions (the reviewer-queue story is filed
 independently in step 11, not bundled into the exit row). Full rubric:
-`docs/aida-discipline/session-discipline.md` § *Finish-state communication
+`docs/aida/discipline/session-discipline.md` § *Finish-state communication
 rubric*. Print the State preamble verbatim above the table — silence is
 not an acceptable signal, especially on the conclusion surface.
 
@@ -570,7 +570,7 @@ zen annotation and stop:
 
 In default (non-`$AIDA_ZEN`) interactive mode, do **not** touch the sentinel
 — render the table and let the user press Ctrl+D. Full protocol:
-`docs/aida-discipline/skill-prompt-kinds.md`.
+`docs/aida/discipline/skill-prompt-kinds.md`.
 
 **Loud closing block — name the next user-action (TASK-359).** After the
 table (interactive) or in place of it (auto-resolved zen / headless), the

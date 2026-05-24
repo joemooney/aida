@@ -39,11 +39,11 @@ fn main() {
     embed_file(&mut code, "templates/plan-template.md", "plan-template.md");
 
     // Discipline pack — canonical markdown scaffolded into a new project's
-    // docs/aida-discipline/. trace:STORY-255
+    // docs/aida/discipline/. trace:STORY-255 | STORY-443
     embed_directory(
         &mut code,
-        "templates/docs/aida-discipline",
-        "docs/aida-discipline",
+        "templates/docs/aida/discipline",
+        "docs/aida/discipline",
     );
 
     // Cross-agent onboarding docs — MCP setup and operating guidance for
@@ -75,7 +75,7 @@ fn main() {
     code.push_str("    (\"hooks\", \"Hooks - Git and Claude Code integration hooks\"),\n");
     code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");
     code.push_str("    (\"plan-template.md\", \"Plan template - scaffolded into docs/plans/_TEMPLATE.md\"),\n");
-    code.push_str("    (\"docs/aida-discipline\", \"Discipline pack - AIDA-using guidance scaffolded into docs/aida-discipline/\"),\n");
+    code.push_str("    (\"docs/aida/discipline\", \"Discipline pack - AIDA-using guidance scaffolded into docs/aida/discipline/\"),\n");
     code.push_str(
         "    (\"docs/agents\", \"Cross-agent onboarding docs scaffolded into docs/agents/\"),\n",
     );

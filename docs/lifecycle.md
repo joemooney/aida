@@ -200,5 +200,5 @@ lives in [`autonomous-drain.md`](autonomous-drain.md).
 - [`docs/autonomous-drain.md`](autonomous-drain.md) — the headless `--no-human`
   drain and the evidence behind each flag
 - The `lifecycle-vocabulary.md` discipline guide scaffolded by `aida init`
-  into `docs/aida-discipline/` — the same verb vocabulary, as a habit for any
+  into `docs/aida/discipline/` — the same verb vocabulary, as a habit for any
   AIDA-using project

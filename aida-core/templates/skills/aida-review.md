@@ -56,7 +56,7 @@ A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen` — see the *Headless mode contract* below for the full
 ordering invariant and the AskUserQuestion ban. An un-annotated prompt
 defaults to `design-fork` (pause-safe). Author guidance:
-`docs/aida-discipline/skill-prompt-kinds.md`. trace:STORY-287
+`docs/aida/discipline/skill-prompt-kinds.md`. trace:STORY-287
 
 ## Headless mode contract (`AIDA_HEADLESS=1`) — trace:BUG-280
 
@@ -729,7 +729,7 @@ orchestrator-headless reviewer's verdict is read by phase 4. trace:BUG-280
   ```
 
   In default interactive mode leave the sentinel untouched and let the user
-  press Ctrl+D. Full protocol: `docs/aida-discipline/skill-prompt-kinds.md`.
+  press Ctrl+D. Full protocol: `docs/aida/discipline/skill-prompt-kinds.md`.
   trace:TASK-329 | ai:claude
 
 ### 7b. File non-blocking findings as draft TASKs (headless drain) — trace:STORY-278

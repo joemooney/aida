@@ -110,5 +110,5 @@ When that threshold lands, AIDA composes underneath: subagents stay where they a
 - [vs-ultrareview.md](vs-ultrareview.md) — same shape of comparison applied to Claude Code's cloud review surface.
 - [vs-ultraplan.md](vs-ultraplan.md) — same shape of comparison applied to Claude Code's cloud planning surface.
 - [vs-karpathy-md.md](vs-karpathy-md.md) — the "is structured markdown enough?" question at the other end of the spectrum.
-- [`docs/aida-discipline/advisor-role.md`](../aida-discipline/advisor-role.md) — the advisor role consults this directory when a user asks a "where does AIDA fit / vs X" question, rather than improvising.
+- [`docs/aida/discipline/advisor-role.md`](../aida/discipline/advisor-role.md) — the advisor role consults this directory when a user asks a "where does AIDA fit / vs X" question, rather than improvising.
 - [`OVERVIEW.md`](../../OVERVIEW.md) "Public face: the TUI is the product" — the broader framing for why AIDA's value is below the visible surface.

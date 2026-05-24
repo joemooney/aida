@@ -48,7 +48,7 @@ prompt-classification. Skill templates tag each prompt with a `kind:`
 annotation (`confirmation` vs `design-fork`); under `$AIDA_ZEN` the skill
 auto-resolves the `confirmation` prompts and still surfaces the
 `design-fork` ones. The classification rules live in
-`docs/aida-discipline/skill-prompt-kinds.md`.
+`docs/aida/discipline/skill-prompt-kinds.md`.
 
 ### Exiting a `--zen` session — the graceful-exit sentinel (TASK-329)
 
@@ -69,7 +69,7 @@ still presses Ctrl+D; under `--zen` the orchestrator reaps the REPL within
 ~100ms of the skill touching the sentinel — no keystroke, no hang. The
 polling and grace windows are tunable via `AIDA_EXIT_POLL_MS` /
 `AIDA_EXIT_GRACE_MS`. Full protocol:
-`docs/aida-discipline/skill-prompt-kinds.md`.
+`docs/aida/discipline/skill-prompt-kinds.md`.
 
 ## What runs headless
 

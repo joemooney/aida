@@ -2953,22 +2953,26 @@ fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Re
     Ok(())
 }
 
-/// Scaffold the discipline pack — every embedded `docs/aida-discipline/*`
-/// template — into `<root>/docs/aida-discipline/`. Idempotent: an existing
+/// Scaffold the discipline pack — every embedded `docs/aida/discipline/*`
+/// template — into `<root>/docs/aida/discipline/`. Idempotent: an existing
 /// file is left alone unless `force` is set. Returns the count written.
-/// trace:STORY-255 | ai:claude
+///
+/// The destination is pinned to `docs/aida/discipline/` (not `docs/aida/`
+/// flat) so the pack coexists with `aida docs build`'s graph projection
+/// at `docs/aida/{README,00-*,...}` without colliding on README.md.
+/// trace:STORY-255 | STORY-443 | ai:claude
 fn ensure_discipline_pack_scaffold(root: &std::path::Path, force: bool) -> Result<usize> {
     use aida_core::templates::EMBEDDED_TEMPLATES;
     let mut pack: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
         .iter()
-        .filter_map(|(k, v)| k.strip_prefix("docs/aida-discipline/").map(|n| (n, *v)))
+        .filter_map(|(k, v)| k.strip_prefix("docs/aida/discipline/").map(|n| (n, *v)))
         .collect();
     if pack.is_empty() {
         return Ok(0);
     }
     pack.sort_by(|a, b| a.0.cmp(b.0));
 
-    let dir = root.join("docs").join("aida-discipline");
+    let dir = root.join("docs").join("aida").join("discipline");
     std::fs::create_dir_all(&dir)?;
     let mut written = 0;
     for (name, content) in pack {
@@ -3436,8 +3440,8 @@ fn complete_init_scaffolding(
         }
     }
 
-    // Scaffold the discipline pack (docs/aida-discipline/) — generic
-    // AIDA-using guidance, written for every init mode. trace:STORY-255
+    // Scaffold the discipline pack (docs/aida/discipline/) — generic
+    // AIDA-using guidance, written for every init mode. trace:STORY-255 | STORY-443
     let discipline_written = ensure_discipline_pack_scaffold(root, force).unwrap_or(0);
 
     // Auto-configure Codex MCP if codex is installed
@@ -3539,7 +3543,7 @@ fn complete_init_scaffolding(
         );
         println!(
             "    {}{}AIDA-using discipline guides",
-            "docs/aida-discipline/".white().bold(),
+            "docs/aida/discipline/".white().bold(),
             " ".repeat(17)
         );
     } else {
@@ -3552,7 +3556,7 @@ fn complete_init_scaffolding(
             "  {} discipline guide{} scaffolded to {}",
             discipline_written.to_string().green(),
             if discipline_written == 1 { "" } else { "s" },
-            "docs/aida-discipline/".dimmed(),
+            "docs/aida/discipline/".dimmed(),
         );
     }
 
@@ -64699,9 +64703,9 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
 #[cfg(test)]
 mod story_255_discipline_pack_tests {
-    //! Starter discipline pack — `docs/aida-discipline/` + the opt-in
+    //! Starter discipline pack — `docs/aida/discipline/` + the opt-in
     //! memory pack scaffolded by `aida init --with-memories`.
-    //! trace:STORY-255 | ai:claude
+    //! trace:STORY-255 | STORY-443 | ai:claude
     use super::*;
 
     #[test]
@@ -64711,7 +64715,7 @@ mod story_255_discipline_pack_tests {
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
         assert_eq!(written, 9, "expected README + 8 discipline docs");
 
-        let dir = root.path().join("docs/aida-discipline");
+        let dir = root.path().join("docs/aida/discipline");
         for f in [
             "README.md",
             "advisor-role.md",
@@ -64735,6 +64739,23 @@ mod story_255_discipline_pack_tests {
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
             9
+        );
+    }
+
+    #[test]
+    fn discipline_pack_lands_under_docs_aida_namespace() {
+        // trace:STORY-443 — pack must land at docs/aida/discipline/, not the
+        // historical docs/aida-discipline/. Guards against accidental
+        // fallback during the namespace reshape.
+        let root = tempfile::tempdir().unwrap();
+        ensure_discipline_pack_scaffold(root.path(), false).unwrap();
+        assert!(
+            root.path().join("docs/aida/discipline/README.md").is_file(),
+            "discipline pack must land at docs/aida/discipline/"
+        );
+        assert!(
+            !root.path().join("docs/aida-discipline").exists(),
+            "historical docs/aida-discipline/ path must not be created"
         );
     }
 
