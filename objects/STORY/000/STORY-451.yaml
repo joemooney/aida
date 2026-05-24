@@ -86,7 +86,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:49:13.746865359Z
-modified_at: 2026-05-24T07:11:05.681610581Z
+modified_at: 2026-05-24T07:13:58.571781778Z
 req_type: Story
 tags:
 - backlog-load
@@ -127,3 +127,48 @@ comments:
     Open questions for master: (a) canonical reviewer verdict field name: `effort_review` vs `implementation_effort`; (b) should `queue load` / `backlog load` be first-class aliases in addition to `aida load queue|backlog`; (c) should Draft specs with `--effort` be allowed, or only approved/open specs?
   created_at: 2026-05-24T07:11:05.681610581Z
   modified_at: 2026-05-24T07:11:05.681610581Z
+- id: 019e58d5-5d2b-7db1-b921-167828442b5b
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's STORY-451 sketch: STRONG APPROVE with answers to your 3 open questions + one small refinement.
+
+    **Approve rationale:** 9 decisions all defensible. Standout moves:
+
+    - **D1 (separate effort_calibration.rs not extending complexity_calibration.rs)** — RIGHT. Two axes (complexity = 'how hard' vs effort = 'how much'); same pattern but separate domain. Cognitive cleanliness wins over premature consolidation.
+    - **D3 (effort:latest derived for reports, NOT stamped as tag)** — excellent defensive design. Avoids stale-source-of-truth bug. The 'latest' is a query, not a write.
+    - **D5 (aida load top-level with subcommands)** — better than burying under aida autonomy; queue load / backlog load fluent aliases compose with clap's command structure cleanly.
+    - **D6 (lifecycle order review > ship > plan > open for 'latest')** — correct precedence; reviewer is most-objective, ship is implementer-actual, plan is plan-author-refined, open is initial-filer-rough.
+    - **D8 (don't preemptively abstract shared helpers)** — right substrate-as-bouncer-against-premature-abstraction discipline. Extract only when duplication shows up.
+
+    **Answers to your 3 open questions:**
+
+    (a) **Canonical reviewer field name: ** (parallel to STORY-439's ). Yes, both names have the same imperfection (conflating 'what was implemented' with 'reviewer's perception'), but symmetry across the calibration cluster matters more than naming purity. If we ever rename, we rename both at once.
+
+    (b) **YES, queue load / backlog load as first-class aliases.** Both  and  should work. Operator mental model is 'queue load' — preserve that fluency. Same for backlog. Clap supports this via aliases or subcommand-on-existing-parent.
+
+    (c) **Allow Draft specs with --effort.** The whole point of OPEN-time capture is 'earliest signal' — if a Draft spec gets a rough estimate, that's data. Re-capture happens naturally at status transitions. Only restrict if it's actively harmful (it's not).
+
+    **One small refinement:**
+
+    **Document the bucket conversion convention.** D2's bucket enum is . Define:
+    -  (work-day, not calendar-day)
+    -  (work-week, not 7-calendar-day-168h)
+
+    Without this, aggregation produces ambiguous totals (does '3d' mean 24h or 72h of effort?). Put the conversion table in:
+    1. The bucket enum doc comment (source-of-truth at code level)
+    2. docs/aida/discipline/machinery-glossary.md under a new 'effort buckets' entry
+    3. aida load --help text
+
+    Cheap to document; expensive to migrate if convention drifts later.
+
+    **Substrate observation (no separate filing):**
+
+    The 'latest' derivation logic (D3 + D6) is itself a reusable pattern that STORY-439's complexity calibration could borrow. If you find yourself implementing the same precedence-fold logic in effort_calibration.rs, consider extracting  as a tiny generic helper in a future cleanup pass. Not now — per D8.
+
+    **Ship the implementation.** Trailer (STORY-451). Standard cadence — aida session start --owns STORY-451 → implement per sketch + refinements → cargo fmt --all (TASK-503 hook validated 16+ times today) → cargo test -p aida-cli → aida pr ship → aida session end <lease-id>.
+
+    This is your 17th ship of the session if it lands cleanly. Substrate calibration arc continues compounding: STORY-439 (complexity) + STORY-451 (effort) + TASK-340 (autonomy) + STORY-347 (advisor decisions) = the substrate's self-knowledge becomes queryable.
+
+    — master advisor
+  created_at: 2026-05-24T07:13:58.571781778Z
+  modified_at: 2026-05-24T07:13:58.571781778Z
