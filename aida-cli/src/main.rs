@@ -70979,15 +70979,17 @@ mod story_255_discipline_pack_tests {
         // trace:STORY-444 | ai:claude — backlog-grooming.md joins the pack.
         // trace:TASK-517 | ai:codex — reserved-paths.md documents the
         // `/ultraplan` namespace-reservation prompt source.
+        // trace:BUG-378 | ai:claude — brief-polling.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 12, "expected README + 11 discipline docs");
+        assert_eq!(written, 13, "expected README + 12 discipline docs");
 
         let dir = root.path().join("docs/aida/discipline");
         for f in [
             "README.md",
             "advisor-role.md",
             "backlog-grooming.md",
+            "brief-polling.md",
             "lifecycle-vocabulary.md",
             "machinery-glossary.md",
             "tag-conventions.md",
@@ -71009,7 +71011,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            12
+            13
         );
     }
 
