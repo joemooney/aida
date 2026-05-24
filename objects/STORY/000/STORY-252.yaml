@@ -155,11 +155,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:10:49.715594843Z
-modified_at: 2026-05-20T04:58:41.957874231Z
+modified_at: 2026-05-24T06:36:47.348740026Z
 req_type: Story
 tags:
 - advisor
-- aida-digest
+- aida:digest
 - alpha-readiness
 - customer-perspective
 - dialog-role
