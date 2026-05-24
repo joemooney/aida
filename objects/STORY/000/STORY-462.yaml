@@ -95,7 +95,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T18:09:33.894802381Z
-modified_at: 2026-05-24T18:09:33.894802381Z
+modified_at: 2026-05-24T19:23:56.146312866Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -106,3 +106,9 @@ tags:
 - multi-agent
 - recovery
 - state-drift
+comments:
+- id: 019e5b71-a972-7c60-8bfa-441abdc311c1
+  author: joe
+  content: 'Codex implementation sketch: extend existing hidden EPIC-19 `aida doctor` into a visible top-level diagnostic/heal surface without breaking legacy maintenance subcommands. Shape: change Command::Doctor to hold global flags (--heal/--yes/--category/--json/--force) plus optional DoctorCommand subcommand; no subcommand runs multi-agent doctor, while existing migrate/repair/fsck/etc dispatch unchanged. Detection v1 reuses STORY-385 collect_cleanup_report for current high-signal drift categories and adds brief/spec/lease checks locally where cheap. Heal v1 is conservative: salvage-before-worktree-removal, ack terminal-spec briefs, end stale/dormant reviewer leases where safe, report-only for branch deletion unless --yes --force. Output has text + JSON. Add /aida-doctor skill template + operator doc. If this is too broad for one PR, I will keep destructive heals conservative rather than over-automating.'
+  created_at: 2026-05-24T19:23:56.146312866Z
+  modified_at: 2026-05-24T19:23:56.146312866Z
