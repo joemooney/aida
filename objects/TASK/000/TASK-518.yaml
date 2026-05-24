@@ -44,11 +44,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:59:07.716532125Z
-modified_at: 2026-05-24T03:59:07.716532125Z
+modified_at: 2026-05-24T14:52:21.980476907Z
 req_type: Task
 tags:
 - brief
 - cli-ux
+- effort:impl:15m
 - from-self-test
 - operator-mental-model
 - papercut
