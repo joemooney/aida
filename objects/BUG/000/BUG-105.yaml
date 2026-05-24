@@ -44,14 +44,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:15:53.972861010Z
-modified_at: 2026-05-15T06:15:53.972861010Z
+modified_at: 2026-05-24T06:38:36.252500214Z
 req_type: Bug
 tags:
 - DP-2
+- aida:queue:work
 - deep-pass-finding
 - first-only
 - plan-file
-- queue-work
 - session-manifest
 relationships:
 - rel_type: Child
