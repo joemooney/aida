@@ -1,0 +1,82 @@
+id: 019e5b25-5b62-7513-9944-494888bb535a
+spec_id: TASK-547
+agreed_id: TASK-547
+title: 'aida queue work: pull from backlog with one verb (eliminate the two-step add + work)'
+description: |-
+  ## Friction
+
+  Today, when an operator wants to pick up an Approved-but-not-queued spec via 'aida queue work <ID>', AIDA errors with:
+
+    Error: `BUG-376` isn't queued. Status is Approved.
+      To queue and start: `aida queue add BUG-376 --for implementer` then `aida queue work BUG-376`
+
+  The error message is helpful — but the two-step itself is the friction. Picking up a backlog item is a common operation; it shouldn't require remembering to queue first.
+
+  ## Reproduced 2026-05-24
+
+  User ran 'aida queue work BUG-376', hit the error, ran the suggested two-step. Worked, but the round-trip is unnecessary.
+
+  ## Proposed shapes (design alternatives)
+
+  **Option A: Auto-queue on 'aida queue work <ID>' when spec is Approved and not queued**
+
+    aida queue work BUG-376
+    # → if Approved + not queued: auto-add to current shell's role queue, then start
+
+    aida queue work BUG-376 --strict
+    # → today's behavior: refuse if not queued (operator wants explicit add)
+
+  Pro: zero-cost UX win; the common case becomes one command. Cleanest substrate behavior.
+  Con: silent auto-queue might surprise operators who expected the error. Mitigate with a short '→ queued BUG-376 for role:implementer' message before the work starts.
+
+  **Option B: Explicit flag on 'aida queue work'**
+
+    aida queue work BUG-376 --from-backlog
+    # → equivalent to: aida queue add BUG-376 --for <current-role> + aida queue work BUG-376
+
+  Pro: explicit + discoverable in --help.
+  Con: still two-mental-steps; just merged into one command.
+
+  **Option C: New verb 'aida queue pickup'**
+
+    aida queue pickup BUG-376
+    # → adds to queue + immediately starts work
+
+  Pro: clean verb that maps to the intent.
+  Con: another verb to learn; 'pickup' already overlaps with '/aida-pickup' skill semantics.
+
+  ## Recommendation
+
+  Option A. Smart default behavior + --strict opt-out for power users. The 'auto-queued for role:implementer' message preserves observability.
+
+  ## Acceptance
+
+  - [ ] 'aida queue work <ID>' on an Approved-not-queued spec auto-queues for the current shell role (resolved via 'aida role show' or env)
+  - [ ] '--strict' flag preserves today's refuse-and-suggest behavior
+  - [ ] One-line 'queued <ID> for role:<R>' message printed before work starts (observability)
+  - [ ] Test: queue work on an Approved-not-queued spec, confirm auto-add + work-start; queue work --strict on same, confirm refusal with helpful message
+
+  ## Composes with
+
+  - STORY-459 (queue --for-agent routing — auto-queue also picks correct agent identity if --for-agent override is given)
+  - feedback_failed_flag_attempts_are_ux_signals (this is a UX signal: friction the error message correctly identifies but doesn't fix)
+  - aida-pickup skill (which already handles the 'pick up next queued item' flow — this complements the explicit 'pick up THIS specific backlog item' flow)
+
+  ## Origin
+
+  2026-05-24 operator: 'maybe an option to pull from the backlog? aida queue --backlog work BUG-376 or aida queue --pull-backlog work BUG-376?' (Operator's explicit flag suggestion; master recommends auto-default with --strict opt-out instead per friction-elimination principle.)
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T18:00:35.426597720Z
+modified_at: 2026-05-24T18:00:35.426597720Z
+req_type: Task
+tags:
+- aida:queue
+- backlog-routing
+- from-self-test
+- from-user-direction
+- ux-papercut
