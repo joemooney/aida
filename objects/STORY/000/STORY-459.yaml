@@ -58,10 +58,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:58:48.735617683Z
-modified_at: 2026-05-24T16:07:59.622725760Z
+modified_at: 2026-05-24T16:23:02.069893007Z
 req_type: Story
 tags:
 - aida:queue
+- batch:multi-agent-coordination
 - from-self-test
 - multi-agent
 - routing
