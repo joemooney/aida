@@ -86,10 +86,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:31:11.178643234Z
-modified_at: 2026-05-18T04:06:13.615173541Z
+modified_at: 2026-05-24T06:36:51.017912628Z
 req_type: Story
 tags:
-- aida-init
+- aida:init
 - alpha-readiness
 - batch:alpha-docs
 - discipline
