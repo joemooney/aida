@@ -1,7 +1,7 @@
 id: 019e5b0a-4e9a-7921-9004-a45cf997ab0e
 spec_id: EPIC-32
 agreed_id: EPIC-32
-title: 'User-driven substrate vectors: query / canned-answer / skill-prompt entity types'
+title: 'Substrate extension mechanism: generic ''observation'' entity type for consumer-driven vectors (FAQ, telemetry, user-driven data)'
 description: |-
   ## Strategic context
 
@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T17:31:02.682757847Z
-modified_at: 2026-05-24T17:31:02.682757847Z
+modified_at: 2026-05-24T17:33:27.792141144Z
 req_type: Epic
 tags:
 - batch:user-driven-substrate
