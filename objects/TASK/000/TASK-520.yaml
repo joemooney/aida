@@ -1,0 +1,42 @@
+id: 019e582b-9e4f-7c93-b87a-20bbe2b47606
+spec_id: TASK-520
+agreed_id: TASK-520
+title: 'Update TASK-512 AC text: docs/aida/ → docs/aida-discipline/ (or note pending STORY-443 sweep)'
+description: |
+  TASK-512's acceptance bullets cite `docs/aida/tag-conventions.md` and
+  `aida-core/templates/docs/aida/tag-conventions.md`. The implementation in PR-271
+  correctly landed at `docs/aida-discipline/tag-conventions.md` per master verdict
+  comments on TASK-512 (2026-05-23 20:27 and repeated 20:54):
+
+  > Option A. Land convention doc at docs/aida-discipline/tag-conventions.md +
+  > aida-core/templates/docs/aida-discipline/tag-conventions.md (master template).
+  > STORY-443 will sweep this and the rest of the pack into docs/aida/discipline/
+  > during the namespace rename. AC paths update accordingly.
+
+  The refinement was captured as a comment but the AC text was never edited, leaving
+  the spec's stated AC drifted from the implemented (and approved) reality. Per
+  `feedback_refinements_must_be_acceptance_criteria` (in memory), design refinements
+  on a filed spec must edit acceptance criteria (or file a follow-up TASK).
+
+  Two reasonable resolutions:
+  1. Edit TASK-512's AC to swap `docs/aida/` → `docs/aida-discipline/` now, with a
+     note that STORY-443 will sweep the path later.
+  2. Leave it and rely on STORY-443 ('Reshape aida init docs/ namespace') to make
+     the AC text accurate on its merge — but a future re-review (e.g. on a follow-up
+     PR that re-touches the same files) will hit the drift again.
+
+  Recommend (1) — small one-line edit, zero risk, removes the recurring confusion.
+
+  Raised in review of PR-271: https://github.com/joemooney/aida/pull/271#issuecomment-4527346838
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:08:34.127370979Z
+modified_at: 2026-05-24T04:08:34.127370979Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-271
+- kind:ac-text-drift
+- severity:cosmetic
