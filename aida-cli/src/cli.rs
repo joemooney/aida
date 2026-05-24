@@ -1019,6 +1019,18 @@ pub enum PrCommand {
         /// Print the resolved sequence without executing any of it.
         #[clap(long)]
         dry_run: bool,
+
+        /// Implementer's self-assessed actual complexity at ship time:
+        /// `low` / `med` / `high`. Captured to
+        /// `.aida/complexity-calibration/<SPEC>.yaml` alongside the
+        /// punt count from `.aida/punts.jsonl` — feeds the three-way
+        /// calibration view (`aida autonomy calibration mismatches`).
+        /// Best-effort, not graded: estimate is a substrate-knowledge
+        /// signal, never an approval criterion. Absent ⇒ ship slot
+        /// records only the punt count.
+        // trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_enum, value_name = "LEVEL")]
+        complexity: Option<crate::complexity_calibration::ComplexityLevel>,
     },
 }
 
@@ -2947,6 +2959,27 @@ pub enum QueueCommand {
         // trace:STORY-429 | ai:claude
         #[clap(long)]
         no_auto_rebase: bool,
+        /// Implementer's pickup-time complexity estimate:
+        /// `low` / `med` / `high`. Captured to
+        /// `.aida/complexity-calibration/<SPEC>.yaml` AND stamped onto
+        /// the spec as a `complexity:<level>` tag so existing tag
+        /// tooling (e.g. `aida queue list --tag-prefix complexity:`)
+        /// works on the new dimension. Best-effort, not graded — feeds
+        /// the three-way calibration view, never an approval gate.
+        /// Absent ⇒ no pickup slot is captured.
+        // trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_enum, value_name = "LEVEL")]
+        complexity: Option<crate::complexity_calibration::ComplexityLevel>,
+        /// Implementer's pickup-time assistance estimate:
+        /// `none` / `advisor` / `human` — how much help the spec is
+        /// expected to need. Captured alongside `--complexity` and
+        /// stamped as `estimated-assistance:<level>`. The actual
+        /// intervention count comes from the punt ledger
+        /// (`.aida/punts.jsonl`); this flag captures only the
+        /// prediction.
+        // trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long = "assist-est", value_enum, value_name = "LEVEL")]
+        assist_est: Option<crate::complexity_calibration::AssistanceLevel>,
     },
     /// Show what an active session has shipped so far alongside what
     /// remains. Bucketed view (Shipped / In flight / Working now /
@@ -3186,6 +3219,44 @@ pub enum CalibrationAction {
         punt_id: String,
         /// The annotation text. Trimmed; stored verbatim.
         note: String,
+    },
+}
+
+/// Three-way complexity-calibration views (pickup vs ship vs reviewer)
+/// — STORY-439. The parent `aida autonomy` namespace is shared with
+/// TASK-340's eventual `report` subcommand; this PR adds only the
+/// calibration surface so the two land cleanly side-by-side.
+// trace:STORY-439 | ai:claude
+#[derive(Subcommand, Debug, Clone)]
+pub enum AutonomyCommand {
+    /// Calibration views over `.aida/complexity-calibration/`.
+    // trace:STORY-439 | ai:claude
+    #[clap(subcommand)]
+    Calibration(CalibrationSubcommand),
+}
+
+/// Subcommands under `aida autonomy calibration`.
+// trace:STORY-439 | ai:claude — plain `//` keeps the marker out of `--help`.
+#[derive(Subcommand, Debug, Clone)]
+pub enum CalibrationSubcommand {
+    /// Surface specs where pickup-predicted complexity diverged most
+    /// from reviewer-assessed implementation complexity. The
+    /// substrate-gap signal — a class of work the agents systematically
+    /// misjudge. Records ranked by biggest gap first; ties broken by
+    /// recency.
+    // trace:STORY-439 | ai:claude
+    Mismatches {
+        /// Restrict to records within the window. Form: `<N>{d,h,w,m}`
+        /// — e.g. `7d`, `12h`, `2w`, `30m`. Filters by the newest
+        /// timestamp across the three slots.
+        #[clap(long, value_name = "WINDOW")]
+        since: Option<String>,
+        /// Cap the rows printed. Default 50.
+        #[clap(long, value_name = "N", default_value_t = 50)]
+        last: usize,
+        /// Emit a machine-readable JSON array instead of the human table.
+        #[clap(long)]
+        json: bool,
     },
 }
 
@@ -3855,6 +3926,14 @@ pub enum Command {
     // trace:STORY-325 | ai:claude
     #[clap(subcommand)]
     Punts(PuntsCommand),
+
+    /// Autonomy + calibration views. Today this carries the three-way
+    /// complexity-calibration surface from `aida autonomy calibration
+    /// mismatches`; the broader autonomy-report views land alongside
+    /// the autonomy-metric work that owns them.
+    // trace:STORY-439 | ai:claude
+    #[clap(subcommand)]
+    Autonomy(AutonomyCommand),
 
     /// Feature management commands
     #[clap(subcommand, hide = true)]

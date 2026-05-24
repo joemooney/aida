@@ -151,6 +151,42 @@ Without a sentinel the orchestrator can't tell *"session paused for human
 input"* from *"session finished its work cleanly"* — both look like an
 idle Claude Code process. The sentinel is the explicit "I'm done" signal.
 
+### complexity (tag convention)
+
+`complexity:low | complexity:med | complexity:high` — a spec tag the
+operator (or implementer) sets at pickup time and the reviewer may
+override based on the diff. Surfaces in `aida queue list --tag-prefix
+complexity:` and feeds the three-way calibration view
+(`aida autonomy calibration mismatches`).
+
+**Best-effort, not graded.** The point of capturing this is *substrate
+self-knowledge* — when pickup-predicted complexity consistently
+diverges from reviewer-assessed complexity, that gap names a class of
+work the agents systematically misjudge (a memory candidate). The tag
+is never an approval criterion and never blocks a pickup or a merge.
+
+Set at pickup with `aida queue work <SPEC> --complexity {low|med|high}`;
+at ship time with `aida pr ship --complexity {low|med|high}`; at
+review time via `implementation_complexity` in the
+`.aida/review-verdicts/PR-N.json` file the `/aida-review` skill writes.
+Each capture point also writes a per-spec record to
+`.aida/complexity-calibration/<SPEC>.yaml`.
+
+### estimated-assistance (tag convention)
+
+`estimated-assistance:none | estimated-assistance:advisor |
+estimated-assistance:human` — pickup-time prediction of how much help
+the spec is expected to need. Companion to `complexity:` and same
+"best-effort, not graded" framing.
+
+The *actual* intervention count comes from the punt ledger
+(`.aida/punts.jsonl`); this tag captures only the prediction. The gap
+between predicted and actual is the same kind of substrate signal the
+complexity calibration surfaces — both feed the maturity trend.
+
+Set at pickup with `aida queue work <SPEC> --assist-est
+{none|advisor|human}`.
+
 ## Adjacent terms (defined elsewhere)
 
 These show up in the same sentences but live in other pages:
