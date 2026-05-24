@@ -86,7 +86,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:49:13.746865359Z
-modified_at: 2026-05-24T04:49:13.746865359Z
+modified_at: 2026-05-24T07:11:05.681610581Z
 req_type: Story
 tags:
 - backlog-load
@@ -100,3 +100,30 @@ tags:
 - re-filed-from-rebase-loss
 - sibling-of-STORY-439
 - substrate-learning
+comments:
+- id: 019e58d2-b9d1-76e0-bbeb-13f07373ca9e
+  author: codex
+  content: |-
+    Architecture sketch for STORY-451:
+
+    1. Module shape: add `aida-cli/src/effort_calibration.rs` rather than extending `complexity_calibration.rs`. Keep the axes separate: complexity answers "how hard/class of work", effort answers "how much load/time". Reuse the same file-per-spec YAML, parse-tolerant directory walk, upsert-slot pattern, and `usage::is_enabled` telemetry kill-switch from STORY-439.
+
+    2. Record shape: `.aida/effort-calibration/<SPEC>.yaml` with `spec_id` plus optional `open`, `plan`, `ship`, `review` slots. Each slot carries `{ effort, estimator, ts }` where effort is an enum/bucket over `15m|1h|4h|1d|1w` (accept aliases like `15min`, `day`, `week`, but serialize canonical short values). Ship slot is the implementer actual; review slot is reviewer-perceived.
+
+    3. Tag convention: implement `effort:<touchpoint>:<value>` helpers in the new module. Applying a touchpoint tag replaces only that touchpoint prefix, preserving other effort touchpoints and unrelated tags. `effort:latest` should be derived for reports, not stamped, to avoid stale duplicate source-of-truth.
+
+    4. Lifecycle wiring: `aida add --effort` captures `open`; `/aida-import-plan` or its import handler captures `plan`; `aida pr ship --effort` captures `ship` for every spec in the PR trailer; reviewer verdict gets optional `effort_review` (or `implementation_effort`) captured into `review`. All writes are best-effort and non-blocking like STORY-439.
+
+    5. CLI surface: add a top-level `aida load` command with `queue`, `backlog`, `report`, `calibration` subcommands, rather than burying quantitative load under `aida autonomy`. `queue load` / `backlog load` from the spec can be aliases or wrappers if clap shape permits cleanly; canonical surface should be `aida load ...` for discoverability.
+
+    6. Aggregation semantics: latest effort per spec is the newest populated slot by lifecycle order `review > ship > plan > open`; if absent, omit from totals and count as `unknown`. Convert buckets to minutes internally for sums, render back into mixed human buckets (e.g. `1d 4h`) plus counts by bucket. Exclude terminal/archive statuses if STORY-441 archive metadata is available; otherwise exclude Completed/Rejected in v1.
+
+    7. Calibration view: compare `open->ship`, `plan->ship`, and `review->ship` deltas in minutes/buckets, with `--by-type` and `--since` mirroring STORY-439/calibration parsing. Ship is the actual anchor for v1 because it is implementer self-reported actual effort; review is a secondary external estimate.
+
+    8. Shared helpers: do not preemptively abstract the full record layer. If implementation shows duplication, extract tiny generic helpers only for `write_yaml_atomic`, `read_yaml_dir_tolerant`, and `apply_prefixed_tag`; leave domain enums/records/report rows separate.
+
+    9. Tests: bucket parse/render; tag replacement per touchpoint; open/plan/ship/review upserts preserve other slots; telemetry-off suppresses writes; latest-effort selection; queue/backlog load filtering; calibration deltas with since/by-type; reviewer verdict back-compat; clap parsing for `--effort` and `aida load` subcommands.
+
+    Open questions for master: (a) canonical reviewer verdict field name: `effort_review` vs `implementation_effort`; (b) should `queue load` / `backlog load` be first-class aliases in addition to `aida load queue|backlog`; (c) should Draft specs with `--effort` be allowed, or only approved/open specs?
+  created_at: 2026-05-24T07:11:05.681610581Z
+  modified_at: 2026-05-24T07:11:05.681610581Z
