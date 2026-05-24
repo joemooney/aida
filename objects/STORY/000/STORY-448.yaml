@@ -18,12 +18,12 @@ description: |-
   - failure_reason_round_trips, failure_reason_absent_on_fresh_requirement, failure_reason_skip_serialise_when_none
   - append_failure_to_ledger_writes_shelved_marker, append_failure_to_ledger_preserves_punt_category_other
   - shelve_result helper + MockBatchDriver.shelving builder used by STORY 4's tests
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:08:42.711612539Z
-modified_at: 2026-05-24T04:08:42.711612539Z
+modified_at: 2026-05-24T17:41:41.903554728Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -35,3 +35,7 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-05-24T04:08:45.104772807Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T17:41:41.903554728Z
+  completion_sha: a24546ce017a1949c5bf499df99d5b1506b99897
