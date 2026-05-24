@@ -45,7 +45,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T00:58:56.413102025Z
-modified_at: 2026-05-24T02:54:54.198439389Z
+modified_at: 2026-05-24T02:57:06.845530383Z
 req_type: Task
 tags:
 - cleanup
@@ -55,3 +55,16 @@ tags:
 - papercut
 - parent:FR-0226
 - scaffolding
+comments:
+- id: 019e57ea-331d-7193-a93d-6bbccb5833e2
+  author: joe
+  content: |-
+    Implemented via commit 6f8ccee2 (PR URL added on open):
+
+    - Removed 7 DEBUG echoes from aida-core/templates/hooks/aida-pre-commit.sh
+    - Removed identical 7 DEBUG echoes from the embedded copy in aida-core/src/scaffolding/hooks.rs
+    - Dropped the debug-only else branch on the per-file ignore check
+
+    Test status: test_pre_commit_hook_scaffolded_and_works + test_pre_commit_hook_runs_cargo_fmt_on_staged_rust_files both green; manual scaffolded-fresh-repo commit produces clean stderr.
+  created_at: 2026-05-24T02:57:06.845530383Z
+  modified_at: 2026-05-24T02:57:06.845530383Z
