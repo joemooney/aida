@@ -912,7 +912,7 @@ impl<'a> McpServer<'a> {
             .get_requirement_by_spec_id_mut(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
 
-        let comment = Comment::new(text.to_string(), "mcp".to_string());
+        let comment = Comment::new("mcp".to_string(), text.to_string());
         req.add_comment(comment);
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
@@ -1269,8 +1269,8 @@ impl<'a> McpServer<'a> {
                 req.status = RequirementStatus::Approved;
                 if let Some(r) = reason {
                     req.add_comment(Comment::new(
-                        format!("promoted via MCP: {}", r),
                         "mcp".to_string(),
+                        format!("promoted via MCP: {}", r),
                     ));
                 }
             }
@@ -1278,8 +1278,8 @@ impl<'a> McpServer<'a> {
                 req.status = RequirementStatus::Rejected;
                 if let Some(r) = reason {
                     req.add_comment(Comment::new(
-                        format!("dismissed via MCP: {}", r),
                         "mcp".to_string(),
+                        format!("dismissed via MCP: {}", r),
                     ));
                 }
             }
@@ -3255,6 +3255,160 @@ mod tests {
                 "{type_name} must not produce generic SPEC-* IDs"
             );
         }
+    }
+
+    // trace:BUG-377 TASK-550 | ai:codex
+    #[test]
+    fn mcp_add_requirement_persists_all_advertised_fields() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let response = server
+            .tool_add_requirement(&json!({
+                "title": "MCP write map",
+                "description": "All advertised fields should persist",
+                "type": "bug",
+                "status": "approved",
+                "priority": "high",
+                "tags": ["mcp", "roundtrip"],
+            }))
+            .unwrap();
+        let spec_id = added_spec_id(&response);
+
+        let store = server.storage.load().unwrap();
+        let req = store
+            .get_requirement_by_spec_id(spec_id)
+            .expect("requirement should be visible after MCP add");
+        assert_eq!(req.title, "MCP write map");
+        assert_eq!(req.description, "All advertised fields should persist");
+        assert_eq!(req.req_type, RequirementType::Bug);
+        assert_eq!(req.status, RequirementStatus::Approved);
+        assert_eq!(req.priority, RequirementPriority::High);
+        assert!(req.tags.contains("mcp"));
+        assert!(req.tags.contains("roundtrip"));
+    }
+
+    // trace:BUG-377 TASK-550 | ai:codex
+    #[test]
+    fn mcp_update_requirement_persists_advertised_fields_only() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let response = server
+            .tool_add_requirement(&json!({
+                "title": "Update target",
+                "description": "before",
+                "type": "task",
+            }))
+            .unwrap();
+        let spec_id = added_spec_id(&response).to_string();
+
+        let result = server
+            .tool_update_requirement(&json!({
+                "id": spec_id,
+                "status": "planned",
+                "description": "after",
+                "title": "ignored title",
+                "priority": "high",
+                "tags": ["ignored"],
+            }))
+            .unwrap();
+        assert!(result.contains("status:"), "{result}");
+        assert!(result.contains("description updated"), "{result}");
+
+        let store = server.storage.load().unwrap();
+        let req = store
+            .get_requirement_by_spec_id(&spec_id)
+            .expect("requirement should exist");
+        assert_eq!(req.title, "Update target");
+        assert_eq!(req.description, "after");
+        assert_eq!(req.status, RequirementStatus::Planned);
+        assert_eq!(req.priority, RequirementPriority::Medium);
+        assert!(!req.tags.contains("ignored"));
+    }
+
+    // trace:BUG-377 TASK-550 | ai:codex
+    #[test]
+    fn mcp_add_comment_persists_text_as_comment_content() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let response = server
+            .tool_add_requirement(&json!({
+                "title": "Comment target",
+                "description": "comment roundtrip",
+                "type": "task",
+            }))
+            .unwrap();
+        let spec_id = added_spec_id(&response).to_string();
+
+        server
+            .tool_add_comment(&json!({
+                "id": spec_id,
+                "text": "visible comment via MCP",
+            }))
+            .unwrap();
+
+        let store = server.storage.load().unwrap();
+        let req = store
+            .get_requirement_by_spec_id(&spec_id)
+            .expect("requirement should exist");
+        assert_eq!(req.comments.len(), 1);
+        assert_eq!(req.comments[0].author, "mcp");
+        assert_eq!(req.comments[0].content, "visible comment via MCP");
+    }
+
+    // trace:BUG-377 TASK-550 | ai:codex
+    #[test]
+    fn mcp_triage_finding_persists_reason_as_comment_content() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let filed = server
+            .tool_file_finding(&json!({
+                "title": "Finding target",
+                "description": "finding body",
+                "source": "review",
+                "pr": 377,
+            }))
+            .unwrap();
+        let finding_id = filed
+            .strip_prefix("Finding filed: ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .unwrap()
+            .to_string();
+
+        server
+            .tool_triage_finding(&json!({
+                "id": finding_id,
+                "action": "promote",
+                "reason": "verified high priority",
+            }))
+            .unwrap();
+
+        let store = server.storage.load().unwrap();
+        let req = store
+            .get_requirement_by_spec_id(&finding_id)
+            .expect("finding should exist");
+        assert_eq!(req.status, RequirementStatus::Approved);
+        assert_eq!(req.comments.len(), 1);
+        assert_eq!(req.comments[0].author, "mcp");
+        assert_eq!(
+            req.comments[0].content,
+            "promoted via MCP: verified high priority"
+        );
+    }
+
+    // trace:TASK-550 | ai:codex
+    #[test]
+    fn mcp_write_inventory_has_no_add_relationship_tool() {
+        let desc = tool_descriptors();
+        let names: Vec<&str> = desc
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|tool| tool.get("name").and_then(|name| name.as_str()))
+            .collect();
+        assert!(
+            !names.contains(&"add_relationship"),
+            "TASK-550 inventory: add_relationship is not exposed over MCP"
+        );
     }
 
     #[test]
