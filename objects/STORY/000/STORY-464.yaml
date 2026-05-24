@@ -1,0 +1,101 @@
+id: 019e5b9c-6371-76f2-8aa7-30f902e815c5
+spec_id: STORY-464
+agreed_id: STORY-464
+title: aida status integrates passive aida doctor scan — surface 1-2 findings under a 'Hygiene' section
+description: |-
+  ## Strategic rationale
+
+  aida doctor (STORY-462) is genuinely valuable for multi-agent dispatch but offers modest day-to-day utility for solo developers — they rarely have brief-lease-drift, agent-registry pathologies, etc. Solo-relevant categories (orphan-branches, orphan-worktrees, spec-status-drift, stale-locks once STORY-463 lands) still apply but accumulate slowly enough that explicit 'aida doctor' invocation is unlikely.
+
+  Per the Trojan-horse positioning (CLAUDE.md): visible product intentionally simple; actual value surfaces through use. Solo devs benefit from doctor's hygiene categories WITHOUT needing to know doctor exists. The right surfacing is PASSIVE: bake a lightweight doctor scan into 'aida status' so solo-relevant findings appear inline.
+
+  ## Proposed shape
+
+  'aida status' gains a new section near the bottom (after Queue, before Requirements totals):
+
+    ─── Hygiene (run ─── AIDA doctor ───
+
+  • brief-lease-drift
+    - pending brief for STORY-463 exists while a lease is active [manual]
+      → ack brief or end/re-brief: aida brief ack /home/joe/ai/aida/.aida/agent-briefs/codex/STORY-463-2026-05-24T195344Z.md
+
+  • spec-status-drift
+    - STORY-463 is Approved but lease 019e5b8e0595 is active [safe]
+      → bump spec to In Progress
+
+    Total: 2 findings
+    Re-run with --heal to apply safe fixes. for full view) ───
+      • 1 orphan branch ( — 3 weeks stale)
+      • 1 stale lease (TASK-N — last active 2d ago)
+      • 3 more findings (run ─── AIDA doctor ───
+
+  • brief-lease-drift
+    - pending brief for STORY-463 exists while a lease is active [manual]
+      → ack brief or end/re-brief: aida brief ack /home/joe/ai/aida/.aida/agent-briefs/codex/STORY-463-2026-05-24T195344Z.md
+
+  • spec-status-drift
+    - STORY-463 is Approved but lease 019e5b8e0595 is active [safe]
+      → bump spec to In Progress
+
+    Total: 2 findings
+    Re-run with --heal to apply safe fixes.)
+
+  ### Display rules
+
+  - Show at most 2 inline findings (highest-impact categories first: spec-status-drift > stale-locks > orphan-worktrees > orphan-branches > others)
+  - Append '+N more' when remaining
+  - Hide section entirely when doctor finds 0 (don't add noise to healthy projects)
+  - Only surface categories that are SOLO-relevant by default (orphan-branches, orphan-worktrees, spec-status-drift, stale-locks). Multi-agent categories (brief-lease-drift, agent-registry stuff) stay invisible unless --verbose
+  - 'aida status --verbose' lifts the cap to ALL doctor findings
+  - 'aida status --no-hygiene' suppresses the section (for machine consumers or operators who only care about queue state)
+
+  ### Implementation
+
+  Reuse doctor's existing JSON emission ('aida doctor --json'). 'aida status' invokes 'aida doctor --json --filter solo-relevant' (or similar), parses the result, renders a 2-line summary. No code duplication — status is a consumer of doctor's output.
+
+  ## Acceptance
+
+  - [ ] 'aida status' includes a 'Hygiene' section when doctor has findings
+  - [ ] Section shows up to 2 highest-impact findings inline, '+N more' when remaining
+  - [ ] Section is hidden when 0 findings (healthy projects see clean output)
+  - [ ] Only solo-relevant categories surfaced by default; multi-agent categories require --verbose
+  - [ ] '--no-hygiene' flag suppresses the section
+  - [ ] Performance: status invocation overhead < 50ms (doctor's scan is fast; cache where possible)
+  - [ ] Tests: status with healthy project (no hygiene section); status with 1 orphan branch (section shows 1 line + recommendation); status with 5+ findings (shows 2 + '+3 more')
+
+  ## Composes with
+
+  - STORY-385 (aida status --cleanup — the explicit verbose surface; this story adds the passive surface)
+  - STORY-462 (aida doctor — the engine this story consumes)
+  - STORY-463 (lock-info — when shipped, stale-locks become a hygiene category)
+  - BUG-379 (session-start auto-bump — when shipped, removes one source of spec-status-drift)
+  - feedback_substrate_as_bouncer_not_rules — solo devs don't have to remember doctor exists; substrate surfaces what matters
+  - Trojan-horse positioning — depth surfaces through use; the visible product stays simple
+
+  ## Why this matters strategically
+
+  A solo dev running 'aida status' daily WILL see hygiene findings as they accumulate (months in), without ever learning the doctor command. When they finally want to act, they get told 'run aida doctor'. Discoverability + frictionless onboarding both win.
+
+  For multi-agent operators, this is harmless — they were already running 'aida doctor' explicitly. The Hygiene section in status is a secondary surfacing that doesn't replace the explicit verb.
+
+  ## Origin
+
+  2026-05-24 master responding to user's strategic question 'how useful is aida doctor for a project using aida?'. Master's analysis: doctor is ~25% solo / 75% multi-agent. User: 'file it' (the proposed refinement to passive-surface doctor in status).
+
+  trace:STORY-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T20:10:36.273421663Z
+modified_at: 2026-05-24T20:10:36.273421663Z
+req_type: Story
+tags:
+- aida:doctor
+- aida:status
+- batch:multi-agent-coordination
+- from-self-test
+- from-user-direction
+- passive-surfacing
+- solo-dev-ux
+- trojan-horse
