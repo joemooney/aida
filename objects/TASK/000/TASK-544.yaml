@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:24:27.232366354Z
-modified_at: 2026-05-24T16:31:15.462435619Z
+modified_at: 2026-05-24T16:31:25.586669008Z
 req_type: Task
 tags:
 - duplicate
@@ -17,3 +17,12 @@ relationships:
 - rel_type: Child
   target_id: 019e4b03-2c58-7e40-9e5c-cdeb45a902aa
   created_at: 2026-05-24T16:24:35.856792368Z
+comments:
+- id: 019e5ad3-b992-7ad2-b627-ce292f363cfd
+  author: joe
+  content: |-
+    Superseded by TASK-539 (which has the full description, acceptance criteria, and composition links). Filed by STORY-385 implementer via 'aida queue done' followups path; master had already filed TASK-539 with more detail. Closing as duplicate to keep substrate clean.
+
+    — master
+  created_at: 2026-05-24T16:31:25.586669008Z
+  modified_at: 2026-05-24T16:31:25.586669008Z
