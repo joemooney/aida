@@ -94,7 +94,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:24:27.901638768Z
-modified_at: 2026-05-19T17:44:22.159062863Z
+modified_at: 2026-05-24T05:25:40.042907412Z
 req_type: Story
 tags:
 - advanced-user
@@ -124,3 +124,33 @@ comments:
     BUG-114 precondition already satisfied (Completed).
   created_at: 2026-05-19T17:44:20.597696150Z
   modified_at: 2026-05-19T17:44:20.597696150Z
+- id: 019e5872-344a-7663-a603-0e9b9d31cfe4
+  author: joe
+  content: |-
+    Master advisor verdict on the STORY-248 /ultraplan output (stub saved to docs/plans/2026-05-23-story-248-stacked-branches.md; full text in chat record): STRONG APPROVE with one refinement + one substrate observation.
+
+    **Approve rationale:** Excellent plan; the critical design insight is correctly load-bearing. Standout moves:
+
+    - **Recording parent_branch_sha is mandatory (squash-merge constraint)** — the plan correctly identifies that plain 'git rebase origin/main' from stacked Y would re-apply X's pre-squash commits onto main and CONFLICT with the squash. The  formulation is the only correct cascade for AIDA's squash-and-delete workflow. This is the kind of mistake that would have been a multi-day-debug if missed; calling it out up-front in Context + D1 is right.
+
+    - **Three independently shippable slices** — each slice can ship as its own PR if needed. Slice 1 (flags + lease fields) is usable on its own (informational). Slice 2 (stacks.json + show command) adds visibility. Slice 3 (cascade rebase on pull) is the payoff. Right scope decomposition.
+
+    - **D4 (refuse --base on merged-deleted branch)** — surfaces a real failure mode with actionable message instead of silent unstacking confusion. Right discipline.
+
+    - **D7 (cascade aborts on conflict + names unrebased branches + points at /aida-rebase)** — graceful failure mode; the rebase ABORTS rather than leaves the worktree in conflict state. Composes with the conversational /aida-rebase skill correctly.
+
+    - **D8 (no --auto flag for MVP)** — minimum surface. aida pull is operator-typed; opt-in is implicit. The interactive-prompt-if-TTY heuristic is the right default. Adding a config flag later (per the plan's note) is the right backstop if it gets noisy.
+
+    **One refinement:**
+
+    1. **Cascade ordering edge case worth a test**: when X stacks on main, Y stacks on X, Z stacks on Y, AND X just merged — Y rebases cleanly first; Z's parent (Y) NOW has a different SHA than what stacks.json recorded for Z's parent_sha. The topological sort handles 'Y waits until X rebases' but the plan should add an explicit step: after each successful rebase, UPDATE downstream stack entries' parent_sha to the new (post-rebase) HEAD before processing them. Otherwise Z's  would fail. Worth a regression test: three-deep stack X→Y→Z, X merges, aida pull rebases Y (clean), then Z (clean) — verify Z's rebase command uses the NEW Y SHA.
+
+    **Substrate observation worth noting (no separate filing):**
+
+    STORY-248's design is the substrate-aware version of what stacked-PR tools (Graphite, ghstack, spr) do externally. By keeping the stack model in .aida/stacks.json instead of relying on external tooling, AIDA owns the contract — cascade timing, conflict handling, lease integration are all in-band. This is the same 'substrate-owned vs tool-coordinated' design choice EPIC-31 made for agent lifecycle. Worth a one-line mention in a future writeup about why AIDA chose to own the primitive rather than wrap an external tool.
+
+    **Ready for implementation pickup.** PR-272 is open (+1716/-7). After tonight's other PRs merge (especially EPIC-28 which touches the orchestrator drain that --auto-complete --pipelined would extend), this becomes a clean cascade-rebase test against the post-merge main.
+
+    — master advisor
+  created_at: 2026-05-24T05:25:40.042907412Z
+  modified_at: 2026-05-24T05:25:40.042907412Z
