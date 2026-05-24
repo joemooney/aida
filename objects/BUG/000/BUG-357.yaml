@@ -51,12 +51,12 @@ description: |-
   ## Empirical anchor
 
   The drain that surfaced this is also captured in: '✗ batch drain stopped — TASK-488 stayed at the head after a successful run (queue did not advance)' — the orchestrator's OWN detection that the queue didn't advance is the contradicting signal that should have prevented the 'reconciled-ship' claim. Worth using queue-advancement as the corroborating gate.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T15:44:48.833016879Z
-modified_at: 2026-05-23T15:44:48.833016879Z
+modified_at: 2026-05-24T02:20:10.945667126Z
 req_type: Bug
 tags:
 - bug-245-sibling
@@ -66,3 +66,7 @@ tags:
 - orchestrator
 - phase-1
 - reconcile-against-reality
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T02:20:10.945667126Z
+  completion_sha: 523afe73b14ddf8413808646404e5f9d0d1a38d8
