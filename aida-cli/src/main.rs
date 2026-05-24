@@ -6411,6 +6411,9 @@ fn handle_brief_command(
             include_acked,
         }) => list_agent_briefs(project_root, for_agent.as_deref(), *include_acked),
         Some(BriefCommand::Ack { brief_file }) => ack_agent_brief(brief_file),
+        Some(BriefCommand::Read { brief_file, latest }) => {
+            read_agent_brief(project_root, brief_file, *latest)
+        }
     }
 }
 
@@ -6783,6 +6786,91 @@ fn ack_agent_brief(brief_file: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+fn read_agent_brief(project_root: &std::path::Path, brief_file: &str, latest: bool) -> Result<()> {
+    let resolved_path = if latest {
+        let agent = validate_brief_agent(brief_file)?;
+        let entries = collect_agent_briefs(project_root, Some(agent), false)?;
+        let last_entry = entries.last().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Error: no pending briefs found for agent \"{}\". Use 'aida brief list' to view available briefs.",
+                agent
+            )
+        })?;
+        last_entry.path.clone()
+    } else {
+        let raw_path = std::path::Path::new(brief_file);
+        if raw_path.exists() {
+            raw_path.to_path_buf()
+        } else {
+            let relative_path = project_root.join(brief_file);
+            if relative_path.exists() {
+                relative_path
+            } else if let Some((agent, filename)) = brief_file.split_once('/') {
+                let agent = validate_brief_agent(agent)?;
+                let base_path = project_root
+                    .join(".aida")
+                    .join("agent-briefs")
+                    .join(agent)
+                    .join(filename);
+                if base_path.exists() {
+                    base_path
+                } else {
+                    let md_path = base_path.with_extension("md");
+                    if md_path.exists() {
+                        md_path
+                    } else {
+                        let acked_path = base_path.with_extension("acked");
+                        if acked_path.exists() {
+                            acked_path
+                        } else {
+                            let filename_str = filename.to_string();
+                            if filename_str.ends_with(".md") {
+                                let without_ext = &filename_str[..filename_str.len() - 3];
+                                let acked =
+                                    base_path.with_file_name(format!("{}.acked", without_ext));
+                                if acked.exists() {
+                                    acked
+                                } else {
+                                    anyhow::bail!(
+                                        "Error: brief not found at \"{}\". Use 'aida brief list' to view available briefs.",
+                                        brief_file
+                                    );
+                                }
+                            } else if filename_str.ends_with(".acked") {
+                                let without_ext = &filename_str[..filename_str.len() - 6];
+                                let md = base_path.with_file_name(format!("{}.md", without_ext));
+                                if md.exists() {
+                                    md
+                                } else {
+                                    anyhow::bail!(
+                                        "Error: brief not found at \"{}\". Use 'aida brief list' to view available briefs.",
+                                        brief_file
+                                    );
+                                }
+                            } else {
+                                anyhow::bail!(
+                                    "Error: brief not found at \"{}\". Use 'aida brief list' to view available briefs.",
+                                    brief_file
+                                );
+                            }
+                        }
+                    }
+                }
+            } else {
+                anyhow::bail!(
+                    "Error: brief not found at \"{}\". Use 'aida brief list' to view available briefs.",
+                    brief_file
+                );
+            }
+        }
+    };
+
+    let body = std::fs::read_to_string(&resolved_path)
+        .with_context(|| format!("failed to read brief at {}", resolved_path.display()))?;
+    print!("{}", body);
+    Ok(())
+}
+
 #[cfg(test)]
 mod task_492_brief_tests {
     use super::*;
@@ -6955,6 +7043,34 @@ mod task_492_brief_tests {
         assert!(all[0].acked);
         let body = std::fs::read_to_string(&all[0].path).unwrap();
         assert!(body.contains("status: acked"));
+    }
+
+    #[test]
+    fn test_brief_read_roundtrip() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let path =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", Some("Pre-note")).unwrap();
+
+        // 1. Read directly via path
+        let res = read_agent_brief(temp.path(), &path.to_string_lossy(), false);
+        assert!(res.is_ok());
+
+        // 2. Read using shortcut
+        let filename = path.file_name().unwrap().to_str().unwrap();
+        let shortcut = format!("codex/{}", filename);
+        let res2 = read_agent_brief(temp.path(), &shortcut, false);
+        assert!(res2.is_ok());
+
+        // 3. Read using --latest
+        let res3 = read_agent_brief(temp.path(), "codex", true);
+        assert!(res3.is_ok());
+
+        // 4. Test error handling when not found
+        let res4 = read_agent_brief(temp.path(), "nonexistent", false);
+        assert!(res4.is_err());
+        let err_msg = res4.unwrap_err().to_string();
+        assert!(err_msg.contains("aida brief list"));
     }
 
     #[test]
