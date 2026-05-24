@@ -51,12 +51,12 @@ description: |-
   2026-05-24 master observed this twice within 4 hours during heavy multi-agent dispatch. doctor (STORY-462) catches it; substrate enforcement at session start would prevent it.
 
   trace:BUG-X
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:04:50.998768012Z
-modified_at: 2026-05-24T20:04:50.998768012Z
+modified_at: 2026-05-24T21:13:43.545022878Z
 req_type: Bug
 tags:
 - batch:ceiling-pattern
