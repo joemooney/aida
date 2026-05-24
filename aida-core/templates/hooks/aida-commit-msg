@@ -24,13 +24,17 @@ if [ -f ".aida/commit-config" ]; then
 fi
 
 # Patterns
-AI_TAG_PATTERN='^\[AI:[a-zA-Z]+(:(high|med|low))?\]'
+# TASK-509: accept multi-agent attribution (`[AI:codex+claude]`) while
+# rejecting empty/leading/trailing separators. Confidence applies to the
+# whole commit when present (`[AI:codex+claude:med]`).
+AI_TOOL_PATTERN='[a-zA-Z]+(\+[a-zA-Z]+)*'
+AI_TAG_PATTERN="^\\[AI:${AI_TOOL_PATTERN}(:(high|med|low))?\\]"
 # BUG-84: scope class accepts commas (and whitespace, slashes) so the
 # conventional-commits spec's comma-separated scope syntax works —
 # `fix(queue,session,role): ...` and `feat(api, ui): ...` are both valid
 # per conventionalcommits.org. Also accept `/` for monorepo path-as-scope
 # like `feat(packages/foo): ...`. trace:BUG-84 | ai:claude
-CONVENTIONAL_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_,/[:space:]-]+\))?: .+'
+CONVENTIONAL_PATTERN="^(\\[AI:${AI_TOOL_PATTERN}(:(high|med|low))?\\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([a-zA-Z0-9_,/[:space:]-]+\\))?: .+"
 # Match a REQ-ID at end of line in any of:
 #   - single id (centralized):    (FR-42)
 #   - single id (distributed):    (FR-1-042) or (FR-JPM-42) — node id may be alphanumeric
@@ -46,7 +50,7 @@ ID_ATOM='[A-Za-z]+(-[A-Za-z0-9_]+)?-[0-9]+(\.\.[0-9]+)?'
 # BUG-78: accept whitespace as a separator alongside comma — squash commits
 # from multi-spec PRs land subjects like `(STORY-98 STORY-90 BUG-74)`.
 REQ_ID_PATTERN="\\(${ID_ATOM}([,[:space:]]+${ID_ATOM})*\\)\$"
-FEAT_FIX_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix)'
+FEAT_FIX_PATTERN="^(\\[AI:${AI_TOOL_PATTERN}(:(high|med|low))?\\] )?(feat|fix)"
 
 ERRORS=()
 WARNINGS=()
@@ -120,10 +124,10 @@ if [ "$SKIP_AI_WARNINGS" = false ] && [ "$HAS_TRACE_FILES" = true ] && [ "$REQUI
     if ! echo "$FIRST_LINE" | grep -qE "$AI_TAG_PATTERN"; then
         if [ "$STRICT_MODE" = "true" ]; then
             ERRORS+=("Commit includes AI-traced files but no [AI:tool] tag")
-            ERRORS+=("  Format: [AI:claude] or [AI:claude:med] or [AI:claude:low]")
+            ERRORS+=("  Format: [AI:claude], [AI:claude+codex], [AI:claude:med], or [AI:claude+codex:low]")
         else
             WARNINGS+=("Commit includes AI-traced files - consider adding [AI:tool] tag")
-            WARNINGS+=("  Format: [AI:claude] or [AI:claude:med] or [AI:claude:low]")
+            WARNINGS+=("  Format: [AI:claude], [AI:claude+codex], [AI:claude:med], or [AI:claude+codex:low]")
         fi
     fi
 fi

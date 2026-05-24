@@ -220,12 +220,13 @@ Format: `// trace:<SPEC-ID> | ai:<tool>[:<confidence>]` where confidence is high
 Examples:
   [AI:claude] feat(auth): add login validation (FR-0042)
   [AI:claude:med] fix(api): handle null response (BUG-0023)
+  [AI:antigravity+claude] test(hooks): accept mixed authorship (TASK-509)
   chore(deps): update dependencies          (no REQ-ID needed)
   docs: update README                       (no REQ-ID needed)
 ```
 
 Rules:
-- `[AI:tool]` required when commit includes AI-assisted code (files with `trace:` comments)
+- `[AI:tool]` required when commit includes AI-assisted code (files with `trace:` comments); use `[AI:tool1+tool2]` for mixed-agent authorship, with optional confidence on the whole commit (`[AI:tool1+tool2:med]`)
 - `type` required: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
 - `(scope)` optional: component or area affected
 - `(REQ-ID)` required for feat/fix; optional for chore/docs
