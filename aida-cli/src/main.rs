@@ -1014,6 +1014,7 @@ fn run() -> Result<()> {
         spec,
         stdout,
         json,
+        copy: _,
         no_comments,
     } = &cli.command
     {
@@ -29732,6 +29733,68 @@ reason = "reserved by docs build"
         assert!(ultraplan_comments_section(&[]).is_none());
     }
 
+    /// TASK-514: test --copy flag is accepted and conflicts with --stdout and --json
+    // trace:TASK-514 | ai:antigravity
+    #[test]
+    fn test_ultraplan_copy_flag() {
+        use crate::cli::{Cli, Command};
+        use clap::Parser;
+
+        // No copy flag
+        let cli = Cli::try_parse_from(["aida", "ultraplan", "TASK-1"]).unwrap();
+        if let Command::Ultraplan {
+            spec,
+            stdout,
+            json,
+            copy,
+            ..
+        } = cli.command
+        {
+            assert_eq!(spec, "TASK-1");
+            assert!(!stdout);
+            assert!(!json);
+            assert!(!copy);
+        } else {
+            panic!("expected Ultraplan command");
+        }
+
+        // With copy flag
+        let cli = Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy"]).unwrap();
+        if let Command::Ultraplan {
+            spec,
+            stdout,
+            json,
+            copy,
+            ..
+        } = cli.command
+        {
+            assert_eq!(spec, "TASK-1");
+            assert!(!stdout);
+            assert!(!json);
+            assert!(copy);
+        } else {
+            panic!("expected Ultraplan command");
+        }
+
+        // Copy and stdout conflicts
+        assert!(
+            Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--stdout"]).is_err()
+        );
+
+        // Copy and json conflicts
+        assert!(Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--json"]).is_err());
+    }
+
+    /// TASK-514: test that success message text contains '--stdout' hint
+    // trace:TASK-514 | ai:antigravity
+    #[test]
+    fn test_ultraplan_success_message_contains_stdout_hint() {
+        let msg = ultraplan_copy_success_message("TASK-514", 2655);
+        assert!(msg.contains("use --stdout to print"));
+        assert!(msg.contains("TASK-514"));
+        assert!(msg.contains("2655"));
+    }
+
     /// STORY-306: the punt payload carries the spec's identity + the fork
     /// question from the `AttentionReason`, and embeds the ultraplan-grade
     /// context brief so a fresh advisor has the full spec context.
@@ -39500,6 +39563,15 @@ fn assemble_ultraplan_prompt(
     (p, warnings)
 }
 
+// trace:TASK-514 | ai:antigravity
+pub(crate) fn ultraplan_copy_success_message(display: &str, token_estimate: usize) -> String {
+    format!(
+        "assembled /ultraplan prompt for {} (~{} tokens) — copied to clipboard (use --stdout to print, --json for machine consumption)",
+        display,
+        token_estimate
+    )
+}
+
 /// `aida ultraplan <SPEC>` — assemble + deliver the planning prompt.
 fn handle_ultraplan_command(
     spec_arg: &str,
@@ -39553,12 +39625,12 @@ fn handle_ultraplan_command(
     }
 
     // Default: copy to clipboard, falling back to stdout when no tool exists.
+    // trace:TASK-514 | ai:antigravity
     if copy_to_clipboard(&prompt) {
         println!(
-            "{} assembled /ultraplan prompt for {} (~{} tokens) — copied to clipboard",
+            "{} {}",
             "✓".green(),
-            display.bold(),
-            token_estimate
+            ultraplan_copy_success_message(&display.bold().to_string(), token_estimate)
         );
         println!(
             "  {}",
