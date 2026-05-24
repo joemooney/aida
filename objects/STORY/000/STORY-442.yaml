@@ -59,12 +59,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'aida queue work can be quite long for very small tasks. Are there tags we could apply to short circuit some steps that we know are not critical and can be cleaned up later if anything went awry?'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:20:34.905803870Z
-modified_at: 2026-05-24T06:05:50.129733603Z
+modified_at: 2026-05-24T06:11:14.728189130Z
 req_type: Story
 tags:
 - batch
@@ -115,3 +115,7 @@ comments:
     — master advisor
   created_at: 2026-05-24T05:13:07.504055089Z
   modified_at: 2026-05-24T05:13:07.504055089Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T06:11:14.728189130Z
+  completion_sha: 7943b44af8099e2f410aeb2d791657204f66745f
