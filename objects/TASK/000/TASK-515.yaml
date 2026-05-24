@@ -42,12 +42,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'you are showing status for codex/agy/web/queue - aida status needs to show agent status'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:03:22.256550988Z
-modified_at: 2026-05-24T03:03:22.256550988Z
+modified_at: 2026-05-24T17:46:08.549043179Z
 req_type: Task
 tags:
 - agents
@@ -59,3 +59,7 @@ tags:
 - parent:EPIC-31
 - phase-1-followup
 - registry
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T17:46:08.549043179Z
+  completion_sha: 96dfbbcabc2b2ad5838f5d8896ba909aad692e18
