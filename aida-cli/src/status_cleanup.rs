@@ -113,6 +113,15 @@ pub(crate) struct OpenPrItem {
 }
 
 /// A dormant lease (worktree present, no live process, <24h old).
+///
+/// BUG-376: `spec_done` is the *"lingering implementer with done queue"*
+/// subcategory marker — the lease's scope is a spec that has already
+/// reached **Done** or **Completed**, so the agent finished work
+/// correctly but never exited. Informational rather than error: the
+/// PR shipped, nothing is at risk; the only cost is operator attention
+/// and a forced manual Ctrl+D. Surfaced as a sub-line within the
+/// Dormant category rather than a sibling category so the recovery
+/// verb stays `aida session end <lease>`.
 #[derive(Debug, Clone)]
 pub(crate) struct DormantLeaseItem {
     pub lease_id: String,
@@ -120,6 +129,9 @@ pub(crate) struct DormantLeaseItem {
     pub role: Option<String>,
     pub worktree_path: std::path::PathBuf,
     pub age_hours: i64,
+    /// True when the lease's scope is a spec at status Done or Completed
+    /// — the BUG-376 lingering-implementer signal. trace:BUG-376
+    pub spec_done: bool,
 }
 
 /// A reviewer-role lease for a PR that has already merged. Safe to end.
@@ -218,6 +230,7 @@ impl CleanupReport {
                     "role": i.role,
                     "worktree_path": i.worktree_path,
                     "age_hours": i.age_hours,
+                    "spec_done": i.spec_done,
                 })).collect::<Vec<_>>(),
                 "stale_reviewer_leases": self.stale_reviewer_leases.iter().map(|i| serde_json::json!({
                     "lease_id": i.lease_id,
@@ -510,17 +523,42 @@ fn render_dormant_leases(
     if items.is_empty() {
         return Ok(());
     }
-    writeln!(w, "{} Dormant leases ({}):", "⚠".yellow(), items.len())?;
+    // BUG-376: count the *"lingering implementer with done queue"*
+    // sub-cohort so the section header can hint at the subcategory's
+    // presence before the detail lines render it.
+    let lingering = items.iter().filter(|i| i.spec_done).count();
+    let header_suffix = if lingering > 0 {
+        format!(", {lingering} lingering after ship")
+    } else {
+        String::new()
+    };
+    writeln!(
+        w,
+        "{} Dormant leases ({}{}):",
+        "⚠".yellow(),
+        items.len(),
+        header_suffix
+    )?;
     for item in items.iter().take(cap) {
         let role = item.role.as_deref().unwrap_or("-");
+        // BUG-376: annotate the "lingering implementer with done queue"
+        // subcategory inline. Informational tag (ℹ), not a warning —
+        // the work shipped; the only issue is that the agent did not
+        // exit. Recovery verb is the same as a plain dormant lease.
+        let lingering_tag = if item.spec_done {
+            format!(" {} lingering after ship", "ℹ".cyan())
+        } else {
+            String::new()
+        };
         writeln!(
             w,
-            "    {} {} · role {} · {}h ({})",
+            "    {} {} · role {} · {}h ({}){}",
             item.lease_id.dimmed(),
             item.scope.bold(),
             role,
             item.age_hours,
             item.worktree_path.display(),
+            lingering_tag,
         )?;
     }
     print_overflow(items.len(), cap, w)?;
@@ -528,6 +566,13 @@ fn render_dormant_leases(
         w,
         "    → resume the worktree, or `aida session end <lease>` to release"
     )?;
+    if lingering > 0 {
+        writeln!(
+            w,
+            "    {} `lingering after ship`: BUG-376 — implementer shipped + queue-done correctly but did not exit; safe to `aida session end`",
+            "ℹ".cyan(),
+        )?;
+    }
     writeln!(w)?;
     Ok(())
 }
@@ -703,6 +748,7 @@ mod tests {
             role: Some("implementer".into()),
             worktree_path: "/y".into(),
             age_hours: 6,
+            spec_done: false,
         });
         report.stale_reviewer_leases.push(StaleReviewerLeaseItem {
             lease_id: "def".into(),
@@ -774,6 +820,109 @@ mod tests {
             .filter(|l| l.trim_start().starts_with("✓"))
             .count();
         assert_eq!(healthy_count, 7);
+    }
+
+    /// BUG-376: a dormant lease whose scope is a Done/Completed spec is
+    /// surfaced as a *"lingering implementer with done queue"* subcategory
+    /// within the Dormant section — informational annotation on the
+    /// detail line + a section-header count + an explanatory footer.
+    /// Plain dormant leases (work still in progress, lease just idle)
+    /// render unchanged.
+    #[test]
+    fn dormant_lease_with_spec_done_surfaces_lingering_subcategory() {
+        colored::control::set_override(false);
+        let mut report = CleanupReport::default();
+        report.dormant_leases.push(DormantLeaseItem {
+            lease_id: "abc12345".into(),
+            scope: "TASK-376".into(),
+            role: Some("implementer".into()),
+            worktree_path: "/tmp/task-376".into(),
+            age_hours: 2,
+            spec_done: true,
+        });
+        report.dormant_leases.push(DormantLeaseItem {
+            lease_id: "def67890".into(),
+            scope: "TASK-377".into(),
+            role: Some("implementer".into()),
+            worktree_path: "/tmp/task-377".into(),
+            age_hours: 4,
+            spec_done: false,
+        });
+        let out = render_to_string(&report, false);
+        colored::control::unset_override();
+
+        // Header annotates the subcategory count.
+        assert!(
+            out.contains("Dormant leases (2, 1 lingering after ship)"),
+            "header missing lingering subcategory count: {out}"
+        );
+        // The lingering lease gets the inline tag.
+        let lingering_line = out
+            .lines()
+            .find(|l| l.contains("TASK-376"))
+            .expect("TASK-376 line missing");
+        assert!(
+            lingering_line.contains("lingering after ship"),
+            "lingering tag missing on TASK-376 line: {lingering_line}"
+        );
+        // The non-lingering lease must NOT get the tag.
+        let plain_line = out
+            .lines()
+            .find(|l| l.contains("TASK-377"))
+            .expect("TASK-377 line missing");
+        assert!(
+            !plain_line.contains("lingering after ship"),
+            "plain dormant lease incorrectly tagged: {plain_line}"
+        );
+        // Footer explains the subcategory + names BUG-376.
+        assert!(
+            out.contains("BUG-376"),
+            "footer missing BUG-376 attribution: {out}"
+        );
+        // Recovery verb is the same as plain dormant — informational, not error.
+        assert!(out.contains("aida session end"));
+    }
+
+    /// BUG-376: when ZERO dormant leases are "lingering after ship",
+    /// neither the header count nor the footer mention the subcategory.
+    #[test]
+    fn dormant_lease_subcategory_absent_when_no_spec_done() {
+        colored::control::set_override(false);
+        let mut report = CleanupReport::default();
+        report.dormant_leases.push(DormantLeaseItem {
+            lease_id: "abc12345".into(),
+            scope: "TASK-377".into(),
+            role: Some("implementer".into()),
+            worktree_path: "/tmp/task-377".into(),
+            age_hours: 4,
+            spec_done: false,
+        });
+        let out = render_to_string(&report, false);
+        colored::control::unset_override();
+
+        assert!(out.contains("Dormant leases (1):"), "{out}");
+        assert!(!out.contains("lingering"), "{out}");
+        assert!(!out.contains("BUG-376"), "{out}");
+    }
+
+    /// BUG-376: the JSON view exposes `spec_done` on every dormant lease
+    /// so the TUI / scripted consumers can render the same subcategory.
+    #[test]
+    fn dormant_lease_json_includes_spec_done() {
+        let mut report = CleanupReport::default();
+        report.dormant_leases.push(DormantLeaseItem {
+            lease_id: "abc".into(),
+            scope: "TASK-376".into(),
+            role: Some("implementer".into()),
+            worktree_path: "/tmp/x".into(),
+            age_hours: 1,
+            spec_done: true,
+        });
+        let v = report.to_json();
+        assert_eq!(
+            v["categories"]["dormant_leases"][0]["spec_done"].as_bool(),
+            Some(true)
+        );
     }
 
     #[test]

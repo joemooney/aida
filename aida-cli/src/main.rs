@@ -24676,9 +24676,101 @@ fn pr_ship_handler(
         "✓".green().bold(),
         pr_number
     );
+
+    // BUG-376: substrate-as-bouncer signal. The implementer's job ends
+    // here — CI was gated in step 2, the merge ran in step 3, pull +
+    // auto-bump in step 4, lease release in step 5 (any skipped step
+    // already reported its alternate path above). The banner exists so
+    // a confident LLM that "wants to helpfully watch CI" is told, at
+    // the load-bearing moment, that there is nothing left to watch.
+    // Paired with the `aida-implement.md` Step 7 skill directive. The
+    // banner is the *substrate* half of the pairing — even an agent
+    // that has not read or has misremembered the skill template sees
+    // this on the way out. trace:BUG-376 | ai:claude
+    let mut stderr = std::io::stderr();
+    let _ = write_implementer_complete_banner(&mut stderr, pr_number);
+
     // Keep the activity-event formatter referenced so the warning-as-
     // unused-import doesn't fire if a future refactor narrows usage.
     let _ = format_activity_event;
+    Ok(())
+}
+
+/// Loud "IMPLEMENTER COMPLETE — EXIT NOW" banner printed at the end of
+/// a successful `aida pr ship`. Substrate-as-bouncer signal for BUG-376:
+/// an interactive implementer session that has just shipped a PR has
+/// nothing left to do and must exit. Lingering to "watch CI" forces a
+/// manual Ctrl+D from the operator and prevents the orchestrator from
+/// advancing phases.
+///
+/// Worded so it stays correct when `--no-pull` / `--no-cleanup` / the
+/// cwd-inside-worktree fallback caused step 4 or 5 to skip — those
+/// alternate paths print their own next-step lines above; this banner
+/// just reinforces that *the implementer session itself* is done.
+///
+/// Takes `&mut impl Write` so the rendering is unit-testable without
+/// spawning a subprocess — mirrors the `status_cleanup::render` pattern.
+///
+/// trace:BUG-376 | ai:claude
+fn write_implementer_complete_banner(
+    w: &mut impl std::io::Write,
+    pr_number: u64,
+) -> std::io::Result<()> {
+    let bar = "═".repeat(64);
+    writeln!(w)?;
+    writeln!(w, "{}", bar.bold())?;
+    writeln!(
+        w,
+        "{} {}",
+        "▶".cyan().bold(),
+        "IMPLEMENTER COMPLETE — EXIT NOW".bold()
+    )?;
+    writeln!(w, "{}", bar.bold())?;
+    writeln!(w)?;
+    writeln!(
+        w,
+        "  PR-{} is merged. The post-ship phases (CI watch, merge, pull /",
+        pr_number
+    )?;
+    writeln!(
+        w,
+        "  auto-bump, lease release) either ran in steps 2-5 above or are"
+    )?;
+    writeln!(
+        w,
+        "  listed there as their own next-step lines. Nothing left for this"
+    )?;
+    writeln!(w, "  implementer session to do.")?;
+    writeln!(w)?;
+    writeln!(
+        w,
+        "  Do NOT watch CI further — step 2 already gated on green before the"
+    )?;
+    writeln!(
+        w,
+        "  merge. Do NOT wait for the merge — step 3 already landed it. Do"
+    )?;
+    writeln!(
+        w,
+        "  NOT re-run `aida pull` or `aida status` to verify the auto-bump /"
+    )?;
+    writeln!(
+        w,
+        "  cleanup — any skipped step is recoverable from the lines above and"
+    )?;
+    writeln!(w, "  this session adds nothing by polling for it.")?;
+    writeln!(w)?;
+    writeln!(
+        w,
+        "  {} Press Ctrl+D to exit the chat session. Anything that remains is",
+        "→".cyan().bold()
+    )?;
+    writeln!(
+        w,
+        "    owned by the orchestrator (--auto-complete) or the next-phase"
+    )?;
+    writeln!(w, "    agent — not this implementer.")?;
+    writeln!(w)?;
     Ok(())
 }
 
@@ -49456,12 +49548,34 @@ fn collect_cleanup_report(
             continue;
         }
         let age_hours = now.signed_duration_since(l.started_at).num_hours();
+        // BUG-376: detect the "lingering implementer with done queue"
+        // subcategory by looking up the lease's scope as a spec ID and
+        // checking whether it has already reached Done / Completed.
+        // Informational annotation only — the recovery verb is the same
+        // as a plain dormant lease (`aida session end`). Cap the lookup
+        // to implementer-role leases so reviewer / triage / advisor
+        // dormancy doesn't get mis-tagged (their lifecycle relative to
+        // the spec's status is different — a reviewer can be dormant on
+        // a Done spec entirely legitimately while waiting for merge).
+        // trace:BUG-376 | ai:claude
+        let spec_done = if matches!(l.role.as_deref(), Some("implementer")) {
+            store.requirements.iter().any(|req| {
+                req.spec_id.as_deref() == Some(l.scope.as_str())
+                    && matches!(
+                        req.status,
+                        RequirementStatus::Done | RequirementStatus::Completed
+                    )
+            })
+        } else {
+            false
+        };
         dormant_leases.push(status_cleanup::DormantLeaseItem {
             lease_id: l.id.clone(),
             scope: l.scope.clone(),
             role: l.role.clone(),
             worktree_path: l.worktree_path.clone(),
             age_hours,
+            spec_done,
         });
     }
     dormant_leases.sort_by(|a, b| b.age_hours.cmp(&a.age_hours));
@@ -66164,6 +66278,125 @@ mod resolve_aida_exe_tests {
             exe.exists(),
             "expected pr-ship post-merge subcommands to use an existing executable path, got: {}",
             exe.display()
+        );
+    }
+}
+
+/// BUG-376: tests that pin both substrate halves of the implementer-
+/// complete signal — the `aida pr ship` banner emits the load-bearing
+/// "EXIT NOW" phrases, and the `aida-implement.md` skill template
+/// embeds the matching directive so an implementer agent picking up
+/// the skill at session start sees the same rule the substrate enforces
+/// at session end. Together they cover acceptance #3 ("run 'aida queue
+/// work TASK-X' on a no-op test spec, confirm agent receives the exit
+/// directive") at the unit level: the skill is what the agent reads on
+/// the way in, the banner is what it reads on the way out.
+#[cfg(test)]
+mod bug_376_implementer_exit_directive_tests {
+    use super::write_implementer_complete_banner;
+
+    fn strip_ansi(s: &str) -> String {
+        // Same shape as status_cleanup::tests::strip_ansi — the banner
+        // uses `colored` glyphs that wrap text in ESC[…m sequences.
+        let mut out = String::with_capacity(s.len());
+        let mut chars = s.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' && chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&p) = chars.peek() {
+                    chars.next();
+                    if p.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    /// Banner carries every load-bearing substrate-as-bouncer signal:
+    /// the headline, the concrete PR number, the explicit Ctrl+D
+    /// instruction, the "Do NOT watch CI" prohibition, and the hand-off
+    /// to the orchestrator / next-phase agent.
+    #[test]
+    fn banner_emits_all_load_bearing_substrate_signals() {
+        colored::control::set_override(false);
+        let mut buf = Vec::new();
+        write_implementer_complete_banner(&mut buf, 296).unwrap();
+        colored::control::unset_override();
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
+
+        // Headline — the substrate's "you are done" verdict.
+        assert!(
+            out.contains("IMPLEMENTER COMPLETE — EXIT NOW"),
+            "headline missing from banner: {out}"
+        );
+        // Concrete PR number — placeholders would defeat the load-bearing
+        // moment (see TASK-291's "PR-57 / BUG-219, STORY-261" pattern).
+        assert!(
+            out.contains("PR-296"),
+            "PR number substitution missing: {out}"
+        );
+        // Explicit user-action — "Press Ctrl+D" must be named verbatim;
+        // a vague "session is done" is exactly what BUG-376 / TASK-291
+        // forbid.
+        assert!(
+            out.contains("Press Ctrl+D"),
+            "explicit Ctrl+D instruction missing: {out}"
+        );
+        // Substrate-as-bouncer prohibition — name the specific anti-
+        // pattern the bug observed ("watch CI") so the agent has no
+        // confusion about which behavior is being banned.
+        assert!(
+            out.contains("Do NOT watch CI"),
+            "CI-watching prohibition missing: {out}"
+        );
+        // Hand-off — name who DOES own the post-ship phases so the
+        // agent's "but someone has to do it!" objection is pre-empted.
+        // Tokens checked independently because the banner soft-wraps
+        // the phrase "next-phase\n    agent" across two lines.
+        assert!(
+            out.contains("orchestrator") && out.contains("next-phase") && out.contains("agent"),
+            "hand-off naming missing: {out}"
+        );
+    }
+
+    /// The `aida-implement.md` skill template — the file an implementer
+    /// agent loads at session start via Claude Code's skills mechanism —
+    /// must carry the matching exit-after-ship directive. Tests the
+    /// embedded master template (rather than the symlinked `.claude/`
+    /// copy) so the assertion survives a project that has not yet run
+    /// `make sync-templates`.
+    #[test]
+    fn aida_implement_skill_template_carries_exit_directive() {
+        let template = include_str!("../../aida-core/templates/skills/aida-implement.md");
+
+        // The directive must reference BUG-376 so future maintainers
+        // can trace the constraint back to its origin.
+        assert!(
+            template.contains("BUG-376"),
+            "skill template missing BUG-376 attribution"
+        );
+        // The headline must match the substrate banner so the agent
+        // sees the same phrase on the way in (skill) and on the way out
+        // (banner) — reinforcement, not divergence.
+        assert!(
+            template.contains("IMPLEMENTER COMPLETE — EXIT NOW"),
+            "skill template missing matching banner headline"
+        );
+        // The skill must explicitly forbid CI-watching after `aida pr
+        // ship` — that is the exact ceiling pattern BUG-376 observed.
+        assert!(
+            template.contains("aida pr ship") && template.contains("Watch CI"),
+            "skill template missing 'no CI watching after pr ship' rule"
+        );
+        // The skill must name `aida queue done` as the symmetric stop
+        // point — the bug description called out both lifecycle commands.
+        assert!(
+            template.contains("aida queue done"),
+            "skill template missing aida queue done symmetric rule"
         );
     }
 }
