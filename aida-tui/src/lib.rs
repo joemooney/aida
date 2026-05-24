@@ -21,8 +21,12 @@
 mod actions;
 mod app;
 mod config;
+mod dashboard;
 mod event;
 mod help;
+mod intent;
+mod launcher;
+mod nav;
 mod overlay;
 mod picker;
 mod pty;
@@ -33,7 +37,20 @@ mod term;
 mod welcome;
 
 pub use app::{App, ExitKind};
-pub use config::TuiConfig;
+pub use config::{TuiConfig, TuiMode};
+pub use launcher::LauncherOptions;
+
+/// Test-only re-export of the launcher's internal Intent + writer so
+/// integration tests under `aida-tui/tests/` can exercise the wire
+/// format without depending on the private module. Not part of the
+/// public API — gated on `cfg(any(test, feature = "test-internals"))`
+/// would be cleaner once the feature lands; for now we expose it
+/// always, named with a `__` prefix to signal "internal use only".
+/// trace:STORY-244 | ai:claude
+#[doc(hidden)]
+pub mod __test_only {
+    pub use crate::intent::{write_to_fd as write_intent, Intent};
+}
 
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
@@ -47,6 +64,14 @@ pub struct TuiOptions {
     /// Skip crash-recovery re-attach on launch (STORY-135): start clean
     /// and discard any stale `.aida/tui-state.json`.
     pub no_recover: bool,
+}
+
+/// Launch the AIDA TUI in **launcher mode** (STORY-244). Renders a
+/// full-screen navigator, exits cleanly on user action emitting one
+/// intent line for the `aida-tui` bash wrapper to dispatch. Does not
+/// PTY-host Claude — the wrapper does.
+pub fn run_launcher(opts: LauncherOptions) -> Result<()> {
+    launcher::run(opts)
 }
 
 /// Launch the AIDA TUI. Installs a panic hook and an RAII terminal guard

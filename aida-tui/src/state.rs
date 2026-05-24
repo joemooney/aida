@@ -29,9 +29,21 @@ pub struct TabRecord {
 }
 
 /// The recoverable tab set written to `.aida/tui-state.json`.
+///
+/// STORY-244 added `dialog_session_id` for launcher-mode continuity: the
+/// launcher's persistent "dialog" top tab resumes the same Claude
+/// conversation across re-entries. PTY-host and launcher share the file;
+/// each path leaves the other's field alone on save (PTY-host preserves
+/// `dialog_session_id`, launcher preserves `tabs`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TuiState {
+    #[serde(default)]
     pub tabs: Vec<TabRecord>,
+    /// The Claude conversation id for the launcher's persistent dialog tab,
+    /// resumed on re-entry. None when no dialog session has been started
+    /// yet. trace:STORY-244 | ai:claude
+    #[serde(default)]
+    pub dialog_session_id: Option<String>,
 }
 
 /// `.aida/tui-state.json` under `project_root`. Covered by the
@@ -94,6 +106,7 @@ mod tests {
                     scope: "BUG-9".to_string(),
                 },
             ],
+            dialog_session_id: None,
         };
         save(&root, &state);
         let loaded = load(&root).expect("state round-trips");
@@ -113,6 +126,38 @@ mod tests {
         // Malformed JSON → still None, never a panic.
         std::fs::write(state_path(&root), "{ not json").unwrap();
         assert!(load(&root).is_none());
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn state_roundtrips_with_dialog_id() {
+        let root = temp_root();
+        let state = TuiState {
+            tabs: vec![TabRecord {
+                session_id: "019e2d4f-aaaa".to_string(),
+                scope: "EPIC-26".to_string(),
+            }],
+            dialog_session_id: Some("019e2d4f-dialog".to_string()),
+        };
+        save(&root, &state);
+        let loaded = load(&root).expect("state round-trips");
+        assert_eq!(loaded.tabs.len(), 1);
+        assert_eq!(loaded.dialog_session_id.as_deref(), Some("019e2d4f-dialog"));
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn legacy_state_without_dialog_id_loads() {
+        // Files written before STORY-244 omit `dialog_session_id`. serde
+        // `default` keeps them loadable. trace:STORY-244 | ai:claude
+        let root = temp_root();
+        let legacy = r#"{"tabs":[{"session_id":"019e2d4f","scope":"EPIC-26"}]}"#;
+        std::fs::write(state_path(&root), legacy).unwrap();
+        let loaded = load(&root).expect("legacy state still loads");
+        assert_eq!(loaded.tabs.len(), 1);
+        assert_eq!(loaded.dialog_session_id, None);
 
         std::fs::remove_dir_all(&root).ok();
     }

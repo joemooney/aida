@@ -6,11 +6,12 @@
 //!
 //! ```toml
 //! [tui]
-//! prefix_key = "Ctrl-a"   # command-mode toggle key
+//! prefix_key = "Ctrl-a"   # command-mode toggle key (PTY-host mode only)
 //! max_tabs   = 4          # soft cap on concurrently hosted sessions
+//! mode       = "launcher" # "launcher" (default) or "pty-host" (legacy)
 //! ```
 //!
-//! trace:STORY-132 | ai:claude
+//! trace:STORY-132 STORY-244 | ai:claude
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::path::{Path, PathBuf};
@@ -20,11 +21,25 @@ pub fn default_prefix_key() -> KeyEvent {
     KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)
 }
 
+/// Which TUI to launch. STORY-244 made `Launcher` the default — the TUI is a
+/// full-screen navigator that exits emitting an intent line for a bash
+/// wrapper to dispatch. `PtyHost` is the legacy STORY-132 shell that hosts
+/// Claude as a PTY child; opt in with `[tui] mode = "pty-host"` if you want
+/// concurrent PTY panes and accept the render contention with Claude.
+/// trace:STORY-244 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TuiMode {
+    #[default]
+    Launcher,
+    PtyHost,
+}
+
 /// Resolved `[tui]` settings for one `aida tui` run.
 #[derive(Debug, Clone)]
 pub struct TuiConfig {
     pub prefix_key: KeyEvent,
     pub max_tabs: usize,
+    pub mode: TuiMode,
 }
 
 impl Default for TuiConfig {
@@ -33,6 +48,7 @@ impl Default for TuiConfig {
             prefix_key: default_prefix_key(),
             // Soft cap on concurrently hosted sessions (plan risk #6).
             max_tabs: crate::tab::MAX_TABS,
+            mode: TuiMode::default(),
         }
     }
 }
@@ -59,6 +75,11 @@ impl TuiConfig {
                 "max_tabs" => {
                     if let Ok(n) = val.parse::<usize>() {
                         cfg.max_tabs = n.max(1);
+                    }
+                }
+                "mode" => {
+                    if let Some(m) = parse_mode(&val) {
+                        cfg.mode = m;
                     }
                 }
                 _ => {}
@@ -119,6 +140,18 @@ fn strip_inline_comment(s: &str) -> &str {
         }
     }
     s
+}
+
+/// Parse a `mode = "..."` string into a [`TuiMode`]. Case-insensitive;
+/// accepts `launcher`, `pty-host`, and the hyphen-free `ptyhost` for
+/// tolerance. Anything else returns `None` so the caller keeps the
+/// default. trace:STORY-244 | ai:claude
+pub fn parse_mode(spec: &str) -> Option<TuiMode> {
+    match spec.trim().to_ascii_lowercase().as_str() {
+        "launcher" => Some(TuiMode::Launcher),
+        "pty-host" | "ptyhost" | "pty_host" => Some(TuiMode::PtyHost),
+        _ => None,
+    }
 }
 
 /// Parse a prefix-key string into a [`KeyEvent`]. Accepts `Ctrl-a`,
@@ -191,5 +224,33 @@ permission_mode = \"auto\"
         assert!(pairs.contains(&("prefix_key".into(), "Ctrl-b".into())));
         assert!(pairs.contains(&("max_tabs".into(), "6".into())));
         assert!(!pairs.iter().any(|(k, _)| k == "permission_mode"));
+    }
+
+    #[test]
+    fn mode_default_is_launcher() {
+        // STORY-244 pivot: launcher is the new default.
+        assert_eq!(TuiConfig::default().mode, TuiMode::Launcher);
+    }
+
+    #[test]
+    fn mode_parses_pty_host() {
+        assert_eq!(parse_mode("launcher"), Some(TuiMode::Launcher));
+        assert_eq!(parse_mode("LAUNCHER"), Some(TuiMode::Launcher));
+        assert_eq!(parse_mode("pty-host"), Some(TuiMode::PtyHost));
+        assert_eq!(parse_mode("PTY-HOST"), Some(TuiMode::PtyHost));
+        assert_eq!(parse_mode("ptyhost"), Some(TuiMode::PtyHost));
+        // Unknown spelling falls back to caller's default.
+        assert_eq!(parse_mode("bogus"), None);
+        assert_eq!(parse_mode(""), None);
+    }
+
+    #[test]
+    fn config_load_picks_up_mode_field() {
+        let toml = "\
+[tui]
+mode = \"pty-host\"
+";
+        let pairs = scan_tui_section(toml);
+        assert!(pairs.contains(&("mode".into(), "pty-host".into())));
     }
 }

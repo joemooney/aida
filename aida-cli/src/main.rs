@@ -1047,8 +1047,14 @@ fn run() -> Result<()> {
     // holds no storage handle (it shells out to `aida` subcommands), so
     // it dispatches before storage init like Goal / Statusline.
     // trace:STORY-132 | ai:claude
-    if let Command::Tui { scope, no_recover } = &cli.command {
-        return handle_tui_command(scope.clone(), *no_recover);
+    if let Command::Tui {
+        scope,
+        no_recover,
+        launcher,
+        intent_fd,
+    } = &cli.command
+    {
+        return handle_tui_command(scope.clone(), *no_recover, *launcher, *intent_fd);
     }
 
     // Roles + statusline dispatch before storage init — roles are TOML
@@ -1299,9 +1305,21 @@ fn run() -> Result<()> {
             r#type,
             feature,
             tags,
+            json,
             ..
         } => {
-            // Legacy SQLite path doesn't honor role scope (deprecated backend).
+            // Legacy SQLite path doesn't honor role scope (deprecated
+            // backend). STORY-244 `--json` is git-backend only — the
+            // legacy path stays human-only since `aida init --centralized`
+            // is deprecated. trace:STORY-244 | ai:claude
+            if *json {
+                anyhow::bail!(
+                    "`aida list --json` requires the default git-canonical \
+                     backend; the deprecated --centralized SQLite mode does \
+                     not emit JSON. Run `aida init` (no flags) on a new \
+                     project, or upgrade an existing one."
+                );
+            }
             list_requirements(&storage, status, priority, r#type, feature, tags)?;
         }
         Command::Show { id, .. } => {
@@ -4324,6 +4342,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             parent,
             sync,
             all,
+            json,
             ..
         } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -4427,6 +4446,39 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 0
             };
+
+            // STORY-244: internal JSON output for the TUI launcher's
+            // Backlog / History panes. Hidden from --help; schema is
+            // internal and may change. Emits the row set straight as
+            // `[{spec_id,title,req_type,status,tags}]` without the
+            // human chrome (banner / footer count / colours).
+            // trace:STORY-244 | ai:claude
+            if *json {
+                #[derive(serde::Serialize)]
+                struct ListJsonRow<'a> {
+                    spec_id: &'a str,
+                    title: &'a str,
+                    req_type: &'a str,
+                    status: &'a str,
+                    tags: &'a [String],
+                }
+                let out: Vec<ListJsonRow> = reqs
+                    .iter()
+                    .map(|r| ListJsonRow {
+                        spec_id: r
+                            .agreed_id
+                            .as_deref()
+                            .or(r.spec_id.as_deref())
+                            .unwrap_or(""),
+                        title: r.title.as_str(),
+                        req_type: r.req_type.as_str(),
+                        status: r.status.as_str(),
+                        tags: &r.tags,
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&out)?);
+                return Ok(());
+            }
 
             if reqs.is_empty() {
                 println!("No requirements found.");
@@ -38782,16 +38834,43 @@ fn build_goal_clauses(
 /// EPIC-26: launch the AIDA TUI shell. Gated behind the `tui` feature
 /// (default-on as of STORY-137) — the `aida tui` subcommand stays visible
 /// in `--help` either way, but a binary built without the feature errors
-/// clearly instead of half-running. trace:STORY-132 STORY-137 | ai:claude
+/// clearly instead of half-running.
+///
+/// STORY-244 added launcher mode. With `--launcher` (or
+/// `[tui] mode = "launcher"` in `.aida/config.toml`, the default), the
+/// TUI is a dashboard that exits emitting one intent line on the
+/// configured fd; without it (and with `mode = "pty-host"`), the legacy
+/// STORY-132 PTY-host shell runs.
+/// trace:STORY-132 STORY-137 STORY-244 | ai:claude
 #[cfg(feature = "tui")]
-fn handle_tui_command(scope: Option<String>, no_recover: bool) -> Result<()> {
-    aida_tui::run(aida_tui::TuiOptions { scope, no_recover })
+fn handle_tui_command(
+    scope: Option<String>,
+    no_recover: bool,
+    launcher: bool,
+    intent_fd: Option<u32>,
+) -> Result<()> {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let cfg = aida_tui::TuiConfig::load(&cwd);
+    let use_launcher = launcher || cfg.mode == aida_tui::TuiMode::Launcher;
+    if use_launcher {
+        aida_tui::run_launcher(aida_tui::LauncherOptions {
+            scope,
+            intent_fd: intent_fd.unwrap_or(3),
+        })
+    } else {
+        aida_tui::run(aida_tui::TuiOptions { scope, no_recover })
+    }
 }
 
 /// Stub for binaries built without the `tui` feature.
 /// trace:STORY-132 | ai:claude
 #[cfg(not(feature = "tui"))]
-fn handle_tui_command(_scope: Option<String>, _no_recover: bool) -> Result<()> {
+fn handle_tui_command(
+    _scope: Option<String>,
+    _no_recover: bool,
+    _launcher: bool,
+    _intent_fd: Option<u32>,
+) -> Result<()> {
     anyhow::bail!(
         "the `aida tui` shell is not compiled into this binary — rebuild \
          aida-cli with the default features (the `tui` feature ships \
@@ -40214,6 +40293,64 @@ aida() {
             command aida "$@"
             ;;
     esac
+}
+
+# STORY-244 launcher wrapper. Runs `aida tui --launcher` in a loop,
+# dispatches the intent line it writes on fd 3, and re-enters when the
+# dispatched command exits. The launcher writes one line per run:
+#
+#   quit                     stop the loop
+#   launch:<command>         eval <command> (typically `aida queue work …`)
+#   resume:<session-id>      claude --resume <session-id>
+#   shell:<command>          eval <command> (e.g. `gh pr view 42`)
+#
+# Pass `--once` to disable the re-entry loop (debug / scripting). All
+# other args are forwarded to `aida tui --launcher`.
+aida-tui() {
+    local _once=0
+    local -a _args=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --once) _once=1; shift ;;
+            *) _args+=("$1"); shift ;;
+        esac
+    done
+    local _intent _cmd _rc
+    while true; do
+        # The launcher paints the real terminal (stdout/stderr) and writes
+        # its single intent line to fd 3 — the redirection here moves fd 3
+        # into our captured pipe and points the launcher's stdout/stderr
+        # at /dev/tty so it can draw without contaminating the capture.
+        _intent="$(command aida tui --launcher "${_args[@]}" 3>&1 1>/dev/tty 2>/dev/tty)"
+        case "$_intent" in
+            ""|quit)
+                break
+                ;;
+            launch:*)
+                _cmd="${_intent#launch:}"
+                eval "$_cmd"
+                _rc=$?
+                # Defensive terminal reset between Claude and the next
+                # launcher entry — if the dispatched command crashed and
+                # left raw mode on, this prevents the new launcher from
+                # painting over garbage. trace:STORY-244 risk #3
+                [ $_rc -ne 0 ] && command -v tput >/dev/null && tput reset 2>/dev/null
+                ;;
+            resume:*)
+                claude --resume "${_intent#resume:}"
+                _rc=$?
+                [ $_rc -ne 0 ] && command -v tput >/dev/null && tput reset 2>/dev/null
+                ;;
+            shell:*)
+                eval "${_intent#shell:}"
+                ;;
+            *)
+                printf 'aida-tui: unrecognized intent line: %s\n' "$_intent" >&2
+                break
+                ;;
+        esac
+        [ $_once -eq 1 ] && break
+    done
 }
 "#;
 
