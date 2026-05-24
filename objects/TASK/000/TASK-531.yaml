@@ -1,0 +1,12 @@
+id: 019e58e2-a639-7660-a517-25e1fd4cab01
+spec_id: TASK-531
+agreed_id: TASK-531
+title: 'TASK: `aida backlog groom --interactive` (drive a TTY prompt instead of requiring `--specs` from the CLI side) — once we have a justified pattern for CLI-side interactive prompts'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:28:29.241811390Z
+modified_at: 2026-05-24T07:28:29.241811390Z
+req_type: Task
