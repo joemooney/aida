@@ -594,6 +594,7 @@ impl<'a> McpServer<'a> {
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let status_filter = args.get("status").and_then(|v| v.as_str());
         let type_filter = args.get("type").and_then(|v| v.as_str());
+        let priority_filter = args.get("priority").and_then(|v| v.as_str());
         let feature_filter = args.get("feature").and_then(|v| v.as_str());
         let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
 
@@ -602,16 +603,17 @@ impl<'a> McpServer<'a> {
             .iter()
             .filter(|r| {
                 if let Some(status) = status_filter {
-                    let status_str = format!("{}", r.status);
-                    if !status_str.eq_ignore_ascii_case(status)
-                        && !status.eq_ignore_ascii_case(&status_str.replace('-', ""))
-                    {
+                    if !mcp_filter_eq(&r.status.to_string(), status) {
                         return false;
                     }
                 }
                 if let Some(type_name) = type_filter {
-                    let type_str = format!("{}", r.req_type);
-                    if !type_str.eq_ignore_ascii_case(type_name) {
+                    if !mcp_filter_eq(&r.req_type.to_string(), type_name) {
+                        return false;
+                    }
+                }
+                if let Some(priority) = priority_filter {
+                    if !mcp_filter_eq(&r.priority.to_string(), priority) {
                         return false;
                     }
                 }
@@ -1782,24 +1784,36 @@ impl<'a> McpServer<'a> {
 // Helpers
 // ============================================================================
 
+fn normalize_mcp_filter_token(s: &str) -> String {
+    s.chars()
+        .filter_map(|c| match c {
+            ' ' | '-' | '_' => None,
+            c if c.is_ascii_alphabetic() => Some(c.to_ascii_lowercase()),
+            c => Some(c),
+        })
+        .collect()
+}
+
+fn mcp_filter_eq(stored: &str, filter: &str) -> bool {
+    normalize_mcp_filter_token(stored) == normalize_mcp_filter_token(filter)
+}
+
 fn parse_status(s: &str) -> Option<RequirementStatus> {
-    match s.to_lowercase().as_str() {
+    match normalize_mcp_filter_token(s).as_str() {
         "draft" => Some(RequirementStatus::Draft),
         "approved" => Some(RequirementStatus::Approved),
         "planned" => Some(RequirementStatus::Planned),
-        "in-progress" | "inprogress" | "in_progress" => Some(RequirementStatus::InProgress),
+        "inprogress" => Some(RequirementStatus::InProgress),
         "done" => Some(RequirementStatus::Done),
         "completed" => Some(RequirementStatus::Completed),
         "rejected" => Some(RequirementStatus::Rejected),
-        "needs-attention" | "needsattention" | "needs_attention" => {
-            Some(RequirementStatus::NeedsAttention)
-        }
+        "needsattention" => Some(RequirementStatus::NeedsAttention),
         _ => None,
     }
 }
 
 fn parse_priority(s: &str) -> Option<RequirementPriority> {
-    match s.to_lowercase().as_str() {
+    match normalize_mcp_filter_token(s).as_str() {
         "high" => Some(RequirementPriority::High),
         "medium" => Some(RequirementPriority::Medium),
         "low" => Some(RequirementPriority::Low),
@@ -1808,7 +1822,7 @@ fn parse_priority(s: &str) -> Option<RequirementPriority> {
 }
 
 fn parse_requirement_type(s: &str) -> Option<RequirementType> {
-    match s.to_lowercase().replace('-', "").as_str() {
+    match normalize_mcp_filter_token(s).as_str() {
         "functional" => Some(RequirementType::Functional),
         "nonfunctional" => Some(RequirementType::NonFunctional),
         "system" => Some(RequirementType::System),
@@ -2021,6 +2035,12 @@ pub fn tool_descriptors() -> Value {
                         "description": "Filter by the semantic type of the requirement.",
                         "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint"],
                         "example": "story"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "Filter by priority. Accepts the same case-insensitive spelling as the CLI.",
+                        "enum": ["high", "medium", "low"],
+                        "example": "high"
                     },
                     "feature": {
                         "type": "string",
@@ -3426,6 +3446,83 @@ mod tests {
         assert_eq!(req.priority, RequirementPriority::High);
         assert!(req.tags.contains("mcp"));
         assert!(req.tags.contains("roundtrip"));
+    }
+
+    // trace:BUG-381 | ai:codex
+    #[test]
+    fn mcp_list_requirements_normalizes_status_type_and_priority_filters() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let working = server
+            .tool_add_requirement(&json!({
+                "title": "Working MCP item",
+                "description": "status filter target",
+                "type": "task",
+                "status": "in-progress",
+                "priority": "high",
+            }))
+            .unwrap();
+        let working_id = added_spec_id(&working).to_string();
+        let planned = server
+            .tool_add_requirement(&json!({
+                "title": "Planned MCP item",
+                "description": "negative control",
+                "type": "story",
+                "status": "planned",
+                "priority": "low",
+            }))
+            .unwrap();
+        let planned_id = added_spec_id(&planned).to_string();
+        let nfr = server
+            .tool_add_requirement(&json!({
+                "title": "Nonfunctional MCP item",
+                "description": "type filter target",
+                "type": "non-functional",
+                "priority": "medium",
+            }))
+            .unwrap();
+        let nfr_id = added_spec_id(&nfr).to_string();
+
+        for status in ["in-progress", "InProgress", "In Progress", "in_progress"] {
+            let output = server
+                .tool_list_requirements(&json!({ "status": status }))
+                .unwrap();
+            assert!(output.contains(&working_id), "{status}: {output}");
+            assert!(!output.contains(&planned_id), "{status}: {output}");
+            assert!(
+                !output.contains("No requirements found"),
+                "{status}: {output}"
+            );
+        }
+
+        let type_output = server
+            .tool_list_requirements(&json!({ "type": "non functional" }))
+            .unwrap();
+        assert!(type_output.contains(&nfr_id), "{type_output}");
+        assert!(!type_output.contains(&working_id), "{type_output}");
+
+        let priority_output = server
+            .tool_list_requirements(&json!({ "priority": " HIGH " }))
+            .unwrap();
+        assert!(priority_output.contains(&working_id), "{priority_output}");
+        assert!(!priority_output.contains(&planned_id), "{priority_output}");
+    }
+
+    // trace:BUG-381 | ai:codex
+    #[test]
+    fn mcp_list_requirements_descriptor_advertises_priority_filter() {
+        let desc = tool_descriptors();
+        let tool = desc
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some("list_requirements"))
+            .expect("list_requirements descriptor must exist");
+
+        assert!(
+            tool.pointer("/inputSchema/properties/priority").is_some(),
+            "list_requirements should advertise the priority filter it accepts"
+        );
     }
 
     // trace:BUG-377 TASK-550 | ai:codex
