@@ -1,0 +1,37 @@
+id: 019e582b-2ed1-7b23-9358-dafcb36f73ce
+spec_id: STORY-446
+agreed_id: STORY-446
+title: Add --blocked-by / --depends-on flag to aida add and aida edit
+description: |-
+  Today, declaring a blocked-by relationship requires `aida rel add X Y --type blocked-by` (the typed BlockedBy variant already exists via STORY-333). EPIC-28 STORY 1: surface that as first-class ergonomics on the spec-creation and spec-editing paths.
+
+  Scope:
+  - `aida add --blocked-by <SPEC-ID>` (alias `--depends-on`) — repeatable. Creates the BlockedBy edge + the inverse Blocks edge atomically.
+  - `aida edit <X> --blocked-by <SPEC-ID>` — repeatable. Same atomic add-edge behavior.
+  - `aida edit <X> --remove-blocked-by <SPEC-ID>` — repeatable.
+  - `aida show <X>` already prints 'is blocked by …' (line ~8437 of main.rs); add a Blockers section above it that summarises pickability state (e.g. 'Blocked by: TASK-N (In Progress) ◐, TASK-M (Completed) ✓').
+  - The pickability gate (aida_core::pickability) is already wired into queue work / next / batch — nothing new there.
+
+  Out of scope (defer): the dependency *inference* sweep (STORY 2 of EPIC-28).
+
+  Acceptance:
+  - [ ] `aida add --type task --title T --blocked-by FOO` creates the spec + the BlockedBy edge + Blocks inverse on FOO.
+  - [ ] `aida edit X --blocked-by Y` adds retroactively (idempotent on a re-add).
+  - [ ] `aida edit X --remove-blocked-by Y` removes both halves.
+  - [ ] `aida show X` Blockers section prints one line per blocker with status + pickability glyph.
+  - [ ] Unit tests for the new flag parsing + the show rendering.
+  - [ ] `aida queue work X` continues to refuse pickup when blockers aren't Completed (existing pickability behavior — regression test only).
+
+  Composes with EPIC-28 STORY 4 (which uses the pickability gate already; this STORY just makes declaration ergonomic enough that users actually do it).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:08:05.585129303Z
+modified_at: 2026-05-24T04:08:05.585129303Z
+req_type: Story
+tags:
+- autonomous-drain
+- batch
+- blocked-by-flag
+- resilient-drain
