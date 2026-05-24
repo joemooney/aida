@@ -8,15 +8,19 @@ description: |-
   Add a history tool to aida-cli/src/mcp.rs that wraps the same logic as the 'aida history' CLI subcommand. Schema: spec_id (optional, filter to single spec) + since (optional, time bound). Returns the event ledger.
 
   Once shipped, aida-chat (and other MCP consumers) can drop the CLI fallback for history queries. Empirically validated need (BUG-vs-feature: this is a feature gap, not a bug — MCP surface was always partial). trace:TASK-X
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:45:00.167902887Z
-modified_at: 2026-05-24T15:45:00.167902887Z
+modified_at: 2026-05-24T16:49:11.744525291Z
 req_type: Task
 tags:
 - from-aida-chat
 - from-self-test
 - mcp-server
 - mcp-surface
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T16:49:11.744525291Z
+  completion_sha: 97d296a797f57185036f16d71b2bae85ef0ccd9a
