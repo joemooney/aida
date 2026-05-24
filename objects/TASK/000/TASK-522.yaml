@@ -3,12 +3,12 @@ spec_id: TASK-522
 agreed_id: TASK-522
 title: Auto-complete telemetry should record lifecycle short-circuit skips
 description: 'STORY-442 adds per-spec lifecycle short-circuit tags (lifecycle:no-ci-wait, lifecycle:no-review, lifecycle:no-build, lifecycle:trivial) that alter which non-integrity phases the auto-complete orchestrator runs. Follow-up: include the resolved LifecycleSkip state in .aida/auto-complete.jsonl so STORY-451 calibration/analysis can distinguish normal phase absence from tag-driven skips.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T06:05:14.003210420Z
-modified_at: 2026-05-24T06:12:32.205378847Z
+modified_at: 2026-05-24T06:12:34.352826498Z
 req_type: Task
 tags:
 - codex
