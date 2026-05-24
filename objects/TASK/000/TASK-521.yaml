@@ -55,10 +55,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:33:10.822701627Z
-modified_at: 2026-05-24T04:33:10.822701627Z
+modified_at: 2026-05-24T05:37:39.905337187Z
 req_type: Task
 tags:
 - aida-cli
+- batch:overnight-2026-05-24
 - env-vars
 - from-bug-371
 - from-self-test
