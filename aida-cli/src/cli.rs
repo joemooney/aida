@@ -3482,6 +3482,30 @@ pub enum AgentNewCommand {
         #[clap(long)]
         bypass_sandbox: bool,
     },
+
+    /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.
+    // trace:STORY-434 | ai:codex
+    Antigravity {
+        /// Role propagated to the spawned Antigravity process as AIDA_SESSION_ROLE.
+        #[clap(long)]
+        role: Option<String>,
+
+        /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
+        #[clap(long)]
+        spec: Option<String>,
+
+        /// AIDA project root or descendant used as the launch base.
+        #[clap(long, value_name = "PATH")]
+        cwd: Option<PathBuf>,
+
+        /// Pass Antigravity CLI's unsafe permission-skipping flag.
+        ///
+        /// This is opt-in by design. Interactive launches keep Antigravity's
+        /// normal approval/sandbox behavior unless the operator explicitly
+        /// asks for autonomous-drain posture.
+        #[clap(long)]
+        bypass_sandbox: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

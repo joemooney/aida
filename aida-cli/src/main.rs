@@ -14858,6 +14858,12 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             cwd,
             bypass_sandbox,
         }) => agent_new_codex(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
+        AgentCommand::New(AgentNewCommand::Antigravity {
+            role,
+            spec,
+            cwd,
+            bypass_sandbox,
+        }) => agent_new_antigravity(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
     }
 }
 
@@ -14904,6 +14910,25 @@ fn agent_new_codex(
     let config = AgentLaunchConfig {
         agent_type: "codex",
         binary: "codex",
+        default_args,
+    };
+    agent_new_with_config(config, role, spec, cwd)
+}
+
+// trace:STORY-434 | ai:codex
+fn agent_new_antigravity(
+    role: Option<String>,
+    spec: Option<String>,
+    cwd: Option<&std::path::Path>,
+    bypass_sandbox: bool,
+) -> Result<()> {
+    let mut default_args = Vec::new();
+    if bypass_sandbox {
+        default_args.push("--dangerously-skip-permissions".to_string());
+    }
+    let config = AgentLaunchConfig {
+        agent_type: "antigravity",
+        binary: "agy",
         default_args,
     };
     agent_new_with_config(config, role, spec, cwd)
@@ -15271,6 +15296,37 @@ mod agent_launcher_tests {
     }
 
     #[test]
+    fn parses_agent_new_antigravity_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "antigravity",
+            "--role",
+            "implementer",
+            "--spec",
+            "STORY-434",
+            "--cwd",
+            "/tmp/project",
+            "--bypass-sandbox",
+        ])
+        .unwrap();
+        let Command::Agent(AgentCommand::New(AgentNewCommand::Antigravity {
+            role,
+            spec,
+            cwd,
+            bypass_sandbox,
+        })) = cli.command
+        else {
+            panic!("expected agent new antigravity command");
+        };
+        assert_eq!(role.as_deref(), Some("implementer"));
+        assert_eq!(spec.as_deref(), Some("STORY-434"));
+        assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
+        assert!(bypass_sandbox);
+    }
+
+    #[test]
     fn find_aida_project_root_walks_up_from_descendant() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -15371,6 +15427,58 @@ mod agent_launcher_tests {
             argv.contains("--dangerously-bypass-approvals-and-sandbox"),
             "{argv}"
         );
+        assert!(agent_registry::list_agent_views(&project).is_empty());
+        std::env::remove_var("AIDA_TEST_ENV_OUT");
+        std::env::remove_var("AIDA_TEST_ARGV_OUT");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let fake_agent = tmp.path().join("agy");
+        std::fs::write(
+            &fake_agent,
+            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_agent, perms).unwrap();
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
+        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
+        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
+        let config = AgentLaunchConfig {
+            agent_type: "antigravity",
+            binary: "agy",
+            default_args: vec!["--dangerously-skip-permissions".to_string()],
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project.clone(),
+            role: Some("implementer".into()),
+            current_spec: Some("STORY-434".into()),
+        };
+
+        run_tracked_agent(&fake_agent, &config, &plan).unwrap();
+
+        let env = std::fs::read_to_string(&env_out).unwrap();
+        let argv = std::fs::read_to_string(&argv_out).unwrap();
+        assert!(env.contains("AIDA_AGENT_TYPE=antigravity"), "{env}");
+        assert!(env.contains("AIDA_SESSION_ROLE=implementer"), "{env}");
+        assert!(env.contains("AIDA_SESSION_SCOPE=STORY-434"), "{env}");
+        assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
+        assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
         assert!(agent_registry::list_agent_views(&project).is_empty());
         std::env::remove_var("AIDA_TEST_ENV_OUT");
         std::env::remove_var("AIDA_TEST_ARGV_OUT");
