@@ -5182,6 +5182,13 @@ pub enum Command {
         #[clap(long)]
         json: bool,
 
+        /// Copy the assembled prompt to the clipboard (default behavior).
+        /// This flag is an explicit alias for the default, provided for
+        /// command-line discoverability and ease of use.
+        // trace:TASK-514 | ai:antigravity
+        #[clap(long, conflicts_with = "stdout", conflicts_with = "json")]
+        copy: bool,
+
         /// Omit the `## Comments` section — the spec's enrichment
         /// comments are pulled in by default; pass this for the
         /// leaner comment-free prompt.
