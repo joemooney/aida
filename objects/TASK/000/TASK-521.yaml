@@ -55,7 +55,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:33:10.822701627Z
-modified_at: 2026-05-24T05:50:38.031878151Z
+modified_at: 2026-05-24T06:13:09.285840668Z
 req_type: Task
 tags:
 - aida-cli
@@ -67,3 +67,9 @@ tags:
 - reliability
 - sweep-pattern
 - test-hygiene
+comments:
+- id: 019e589d-ae25-7d30-b12b-357c007d106d
+  author: joe
+  content: Commit bd3daa5f references this requirement
+  created_at: 2026-05-24T06:13:09.285840668Z
+  modified_at: 2026-05-24T06:13:09.285840668Z
