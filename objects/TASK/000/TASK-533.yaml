@@ -1,0 +1,12 @@
+id: 019e58e3-31fb-7b11-aa66-64d2a5480ce2
+spec_id: TASK-533
+agreed_id: TASK-533
+title: 'TASK: feed the risk heuristic from STORY-439''s calibration data once that lands'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:29:05.019838285Z
+modified_at: 2026-05-24T07:29:05.019838285Z
+req_type: Task
