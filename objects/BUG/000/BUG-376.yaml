@@ -65,12 +65,12 @@ description: |-
   2026-05-24 user: 'I think this happened in a aida queue work and it did not exit back to the orc - I am trying Ctrl-D now'
 
   trace:BUG-X
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T17:21:42.292598488Z
-modified_at: 2026-05-24T17:21:42.292598488Z
+modified_at: 2026-05-24T18:01:53.909012630Z
 req_type: Bug
 tags:
 - batch:ceiling-pattern
