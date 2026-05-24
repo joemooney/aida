@@ -773,6 +773,7 @@ mod tests {
             comments: Vec::new(),
             history: Vec::new(),
             archived: false,
+            archived_at: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: Default::default(),
