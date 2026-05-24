@@ -29087,7 +29087,7 @@ cargo test -p aida-cli
         bare.spec_id = Some("TASK-1".into());
         store.requirements.push(bare);
         let (prompt, warnings) =
-            assemble_ultraplan_prompt(&store, &store.requirements[0], None, true);
+            assemble_ultraplan_prompt(&store, &store.requirements[0], None, true, &[]);
         assert!(prompt.contains("Plan the implementation of TASK-1: do the thing."));
         assert!(prompt.contains("## Plan structure"));
         assert!(prompt.contains("(none specified"));
@@ -29107,6 +29107,7 @@ cargo test -p aida-cli
             &store2.requirements[0],
             Some("## Reusable helpers\n\n- x\n"),
             true,
+            &[],
         );
         assert!(prompt2.contains("- [ ] alpha"));
         assert!(prompt2.contains("## Reusable helpers"));
@@ -29149,7 +29150,7 @@ cargo test -p aida-cli
             .iter()
             .find(|r| r.spec_id.as_deref() == Some("TASK-1"))
             .unwrap();
-        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None, true);
+        let (prompt, _) = assemble_ultraplan_prompt(&store, target, None, true, &[]);
         assert!(prompt.contains("Siblings (share a parent — 14 total)"));
         assert!(prompt.contains("more siblings omitted"));
         assert!(prompt.contains("Parent: EPIC-1"));
@@ -29176,7 +29177,7 @@ cargo test -p aida-cli
         let target = &store.requirements[0];
 
         // Default: comments included, most recent first.
-        let (with, _) = assemble_ultraplan_prompt(&store, target, None, true);
+        let (with, _) = assemble_ultraplan_prompt(&store, target, None, true, &[]);
         assert!(with.contains("## Comments"));
         assert!(with.contains("design fork: pick approach B"));
         assert!(with.contains("first thought"));
@@ -29185,9 +29186,77 @@ cargo test -p aida-cli
         assert!(recent_at < old_at, "comments render most-recent-first");
 
         // `--no-comments` → the section is omitted entirely.
-        let (without, _) = assemble_ultraplan_prompt(&store, target, None, false);
+        let (without, _) = assemble_ultraplan_prompt(&store, target, None, false, &[]);
         assert!(!without.contains("## Comments"));
         assert!(!without.contains("design fork"));
+    }
+
+    /// TASK-517: `/ultraplan` includes project-reserved namespaces so plans
+    /// avoid colliding with generated or convention-owned paths.
+    #[test]
+    fn ultraplan_prompt_includes_reserved_namespaces() {
+        use aida_core::{Requirement, RequirementsStore};
+
+        let mut store = RequirementsStore::new();
+        let mut req = Requirement::new(
+            "avoid docs collision".into(),
+            "Plan proposes docs/aida/new-guide.md.\n\n## Acceptance\n\n- x\n".into(),
+        );
+        req.spec_id = Some("TASK-517".into());
+        store.requirements.push(req);
+        let reservations = vec![ReservedPath {
+            path: "docs/aida/".into(),
+            reason: "reserved by `aida docs build` for requirement-layer projection".into(),
+        }];
+
+        let (prompt, _) =
+            assemble_ultraplan_prompt(&store, &store.requirements[0], None, true, &reservations);
+
+        assert!(prompt.contains("## Reserved namespaces and conventions"));
+        assert!(prompt.contains("`docs/aida/`"));
+        assert!(prompt.contains("reserved by `aida docs build`"));
+    }
+
+    #[test]
+    fn reserved_paths_file_parses_reservations_array() {
+        let parsed: ReservedPathsFile = toml::from_str(
+            r#"
+[[reservations]]
+path = "docs/aida/"
+reason = "reserved by docs build"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            parsed.reservations,
+            vec![ReservedPath {
+                path: "docs/aida/".into(),
+                reason: "reserved by docs build".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn ultraplan_json_includes_reservations_array() {
+        let reservations = vec![ReservedPath {
+            path: "docs/aida/".into(),
+            reason: "reserved by docs build".into(),
+        }];
+        let warnings = vec!["heads up".to_string()];
+
+        let value = ultraplan_json_value(
+            "TASK-517",
+            "reserved paths",
+            "prompt",
+            123,
+            &warnings,
+            &reservations,
+        );
+
+        assert_eq!(value["spec_id"], "TASK-517");
+        assert_eq!(value["reservations"][0]["path"], "docs/aida/");
+        assert_eq!(value["reservations"][0]["reason"], "reserved by docs build");
     }
 
     /// TASK-247: an empty comment list produces no `## Comments` section
@@ -38648,8 +38717,9 @@ fn assemble_punt_payload(
     attention: &aida_core::AttentionReason,
 ) -> punt::PuntRequest {
     let helpers = build_reusable_helpers_section(store, project_root, target);
+    let (reservations, _reservation_warnings) = read_reserved_paths(project_root);
     let (context_markdown, _warnings) =
-        assemble_ultraplan_prompt(store, target, helpers.as_deref(), true);
+        assemble_ultraplan_prompt(store, target, helpers.as_deref(), true, &reservations);
     punt::PuntRequest {
         spec: target.display_id(),
         category: attention.category,
@@ -38665,11 +38735,87 @@ fn assemble_punt_payload(
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct ReservedPath {
+    path: String,
+    reason: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ReservedPathsFile {
+    #[serde(default)]
+    reservations: Vec<ReservedPath>,
+}
+
+fn read_reserved_paths(project_root: &std::path::Path) -> (Vec<ReservedPath>, Vec<String>) {
+    let path = project_root.join(".aida").join("reserved-paths.toml");
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return (
+            Vec::new(),
+            vec![format!(
+                "{} not found — reserved namespace guidance omitted",
+                path.display()
+            )],
+        );
+    };
+
+    match toml::from_str::<ReservedPathsFile>(&body) {
+        Ok(parsed) => (parsed.reservations, Vec::new()),
+        Err(err) => (
+            Vec::new(),
+            vec![format!(
+                "failed to parse {} — reserved namespace guidance omitted: {err}",
+                path.display()
+            )],
+        ),
+    }
+}
+
+fn reserved_paths_section(reservations: &[ReservedPath]) -> Option<String> {
+    if reservations.is_empty() {
+        return None;
+    }
+
+    let mut out = String::from("## Reserved namespaces and conventions\n\n");
+    out.push_str(
+        "Before proposing new files, check these project-reserved paths and avoid \
+         collisions unless the plan explicitly updates the owning convention.\n\n",
+    );
+    for reservation in reservations {
+        out.push_str(&format!(
+            "- `{}` — {}\n",
+            reservation.path.trim(),
+            reservation.reason.trim()
+        ));
+    }
+    out.push('\n');
+    Some(out)
+}
+
+fn ultraplan_json_value(
+    display: &str,
+    title: &str,
+    prompt: &str,
+    token_estimate: usize,
+    warnings: &[String],
+    reservations: &[ReservedPath],
+) -> serde_json::Value {
+    serde_json::json!({
+        "spec_id": display,
+        "title": title,
+        "prompt": prompt,
+        "token_estimate": token_estimate,
+        "warnings": warnings,
+        "reservations": reservations,
+    })
+}
+
 fn assemble_ultraplan_prompt(
     store: &aida_core::RequirementsStore,
     target: &aida_core::models::Requirement,
     helpers_section: Option<&str>,
     include_comments: bool,
+    reservations: &[ReservedPath],
 ) -> (String, Vec<String>) {
     // TASK-247: raised from 1800 — a truncated description dropped the
     // densest planning context. Comments now carry the long-form
@@ -38729,6 +38875,13 @@ fn assemble_ultraplan_prompt(
         if let Some(section) = ultraplan_comments_section(&target.comments) {
             p.push_str(&section);
         }
+    }
+
+    // TASK-517: surface reserved namespaces before the plan proposes files.
+    // This catches likely collisions (notably docs/aida/) while the model is
+    // still choosing the implementation shape.
+    if let Some(section) = reserved_paths_section(reservations) {
+        p.push_str(&section);
     }
 
     // ── Related-spec context ──
@@ -38860,19 +39013,28 @@ fn handle_ultraplan_command(
     .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
 
     let helpers = build_reusable_helpers_section(&store, &project_root, target);
-    let (prompt, warnings) =
-        assemble_ultraplan_prompt(&store, target, helpers.as_deref(), !no_comments);
+    let (reservations, reservation_warnings) = read_reserved_paths(&project_root);
+    let (prompt, warnings) = assemble_ultraplan_prompt(
+        &store,
+        target,
+        helpers.as_deref(),
+        !no_comments,
+        &reservations,
+    );
+    let mut warnings = warnings;
+    warnings.extend(reservation_warnings);
     let token_estimate = prompt.chars().count() / 4;
     let display = target.display_id();
 
     if json {
-        let out = serde_json::json!({
-            "spec_id": display,
-            "title": target.title,
-            "prompt": prompt,
-            "token_estimate": token_estimate,
-            "warnings": warnings,
-        });
+        let out = ultraplan_json_value(
+            &display,
+            &target.title,
+            &prompt,
+            token_estimate,
+            &warnings,
+            &reservations,
+        );
         println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
@@ -66570,9 +66732,11 @@ mod story_255_discipline_pack_tests {
         // trace:TASK-479 | ai:antigravity — robust-project-root-resolution.md joins the pack.
         // trace:TASK-512 | ai:claude — tag-conventions.md joins the pack.
         // trace:STORY-444 | ai:claude — backlog-grooming.md joins the pack.
+        // trace:TASK-517 | ai:codex — reserved-paths.md documents the
+        // `/ultraplan` namespace-reservation prompt source.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 11, "expected README + 10 discipline docs");
+        assert_eq!(written, 12, "expected README + 11 discipline docs");
 
         let dir = root.path().join("docs/aida/discipline");
         for f in [
@@ -66587,6 +66751,7 @@ mod story_255_discipline_pack_tests {
             "skill-prompt-kinds.md",
             "substrate-as-bouncer.md",
             "robust-project-root-resolution.md",
+            "reserved-paths.md",
         ] {
             assert!(dir.join(f).is_file(), "missing discipline doc: {f}");
         }
@@ -66599,7 +66764,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            11
+            12
         );
     }
 

@@ -35,6 +35,14 @@ fn main() {
     // Settings (Claude Code configuration)
     embed_file(&mut code, "templates/settings.json", "settings.json");
 
+    // Reserved namespaces injected into `aida ultraplan` prompts and
+    // scaffolded into `.aida/reserved-paths.toml`. trace:TASK-517
+    embed_file(
+        &mut code,
+        "templates/reserved-paths.toml",
+        "reserved-paths.toml",
+    );
+
     // Plan template (scaffolded into docs/plans/_TEMPLATE.md). trace:TASK-92
     embed_file(&mut code, "templates/plan-template.md", "plan-template.md");
 
@@ -74,6 +82,7 @@ fn main() {
     code.push_str("    (\"commands\", \"Slash Commands - Quick actions for common tasks\"),\n");
     code.push_str("    (\"hooks\", \"Hooks - Git and Claude Code integration hooks\"),\n");
     code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");
+    code.push_str("    (\"reserved-paths.toml\", \"Reserved namespace baseline for `.aida/reserved-paths.toml`\"),\n");
     code.push_str("    (\"plan-template.md\", \"Plan template - scaffolded into docs/plans/_TEMPLATE.md\"),\n");
     code.push_str("    (\"docs/aida/discipline\", \"Discipline pack - AIDA-using guidance scaffolded into docs/aida/discipline/\"),\n");
     code.push_str(

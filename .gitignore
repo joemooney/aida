@@ -79,6 +79,7 @@ docker/.env
 
 # Tracked exceptions: project-level config that lives in the repo.
 !.aida/config.toml
+!.aida/reserved-paths.toml
 !.aida/docker-compose.yml
 !.aida/docker-compose.dev.yml
 !.aida/setup.sh
