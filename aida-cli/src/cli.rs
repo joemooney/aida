@@ -3495,6 +3495,16 @@ pub enum BriefCommand {
         /// Brief file path, either absolute or relative to the current directory.
         brief_file: PathBuf,
     },
+
+    /// Read a brief file and print its contents to stdout.
+    Read {
+        /// Brief file path, shortcut (<agent>/<filename>), or agent name.
+        brief_file: String,
+
+        /// Read the most recent unacked brief for the given agent.
+        #[clap(long)]
+        latest: bool,
+    },
 }
 
 /// Launch and track external AI agent processes under AIDA supervision.
