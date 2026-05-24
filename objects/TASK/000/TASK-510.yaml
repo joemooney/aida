@@ -59,12 +59,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'for aida init in a new project I want it to add an initial task to the queue to commit the files that were added during aida init.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:14:28.594251825Z
-modified_at: 2026-05-24T02:14:28.594251825Z
+modified_at: 2026-05-24T15:33:47.978100860Z
 req_type: Task
 tags:
 - dogfood
@@ -75,3 +75,7 @@ tags:
 - onboarding
 - queue
 - scaffolding
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T15:33:47.978100860Z
+  completion_sha: 76aec615d37bbf15e4ad14bd8eb9f1d18c2b7037
