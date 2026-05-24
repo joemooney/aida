@@ -2278,37 +2278,18 @@ Use this skill when:
     }
 
     /// Generate Codex skill content from an embedded Claude skill template.
-    /// Converts frontmatter-style skill files into plain SKILL.md content.
+    /// Codex requires YAML frontmatter in SKILL.md; keep the embedded
+    /// template frontmatter intact so Codex loads the scaffolded skills.
+    /// trace:BUG-375 | ai:codex
     fn generate_codex_skill(&self, skill_name: &str) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
 
         let key = format!("skills/{}.md", skill_name);
-        let raw = EMBEDDED_TEMPLATES
+        EMBEDDED_TEMPLATES
             .get(key.as_str())
             .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name));
-
-        strip_yaml_frontmatter(&raw)
+            .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name))
     }
-}
-
-fn strip_yaml_frontmatter(content: &str) -> String {
-    if !content.starts_with("---\n") && !content.starts_with("---\r\n") {
-        return content.to_string();
-    }
-
-    let after_open = if content.starts_with("---\r\n") { 5 } else { 4 };
-    let rest = &content[after_open..];
-    if let Some(close_pos) = rest.find("\n---\n") {
-        let body_start = after_open + close_pos + 5;
-        return content[body_start..].to_string();
-    }
-    if let Some(close_pos) = rest.find("\n---\r\n") {
-        let body_start = after_open + close_pos + 6;
-        return content[body_start..].to_string();
-    }
-
-    content.to_string()
 }
 
 /// Errors that can occur during scaffolding
@@ -2443,6 +2424,23 @@ mod tests {
         assert!(temp_dir.path().join(".claude/commands").exists());
         assert!(temp_dir.path().join(".claude/skills").exists());
         assert!(temp_dir.path().join(".codex/skills").exists());
+        // BUG-375: Codex skips scaffolded skills without YAML frontmatter.
+        // The AIDA header must be inserted after the frontmatter, not before
+        // it, so Codex sees `---` at byte 0 of SKILL.md.
+        for entry in std::fs::read_dir(temp_dir.path().join(".codex/skills")).unwrap() {
+            let skill_path = entry.unwrap().path().join("SKILL.md");
+            let content = std::fs::read_to_string(&skill_path).unwrap();
+            assert!(
+                content.starts_with("---\nname:"),
+                "{} should start with Codex-readable YAML frontmatter",
+                skill_path.display()
+            );
+            assert!(
+                content.contains("\n---\n<!-- AIDA Generated:"),
+                "{} should keep the AIDA header after YAML frontmatter",
+                skill_path.display()
+            );
+        }
         assert!(temp_dir
             .path()
             .join("docs/agents/cross-agent-onboarding.md")
