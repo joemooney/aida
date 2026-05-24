@@ -1,0 +1,69 @@
+id: 019e5820-801b-7842-90d4-084c57b769bb
+spec_id: BUG-371
+agreed_id: BUG-371
+title: 'PR-270 (STORY-439 calibration): agent_launcher_tests from STORY-436 regress with NotFound on context-file unwrap'
+description: |-
+  ## Empirical 2026-05-23 evening
+
+  PR-270 (STORY-439 — three-way complexity calibration substrate, opened by web /ultraplan EXECUTE-mode) has CI failure.
+
+  Run: 26351086745
+  Site: aida-cli/src/main.rs:16078:53
+  Error: 'Os { code: 2, kind: NotFound, message: No such file or directory }' (unwrap on missing file)
+
+  Failing tests:
+  - agent_launcher_tests::tracked_fake_agent_receives_context_file_env_and_cleans_file
+  - agent_launcher_tests::tracked_fake_agent_receives_env_and_registry_is_removed
+
+  ## Root cause hypothesis
+
+  These tests were added by STORY-436 (role-context auto-injection, shipped earlier today via PR-266). PR-270 was forked after STORY-436 landed -> includes the tests + interacts with same code paths.
+
+  Likely:
+  - PR-270 changed where context files are written, breaking the cleanup path
+  - OR PR-270 changed registry directory structure, breaking the env/registry test
+  - OR PR-270's calibration writes interfere with the test's expected directory state
+
+  ## Fix process
+
+  1. gh pr checkout 270 (or worktree-add for isolation)
+  2. cargo test -p aida-cli agent_launcher_tests to reproduce
+  3. Identify the regression vs STORY-436's agent_launcher logic
+  4. Push fixup commit to claude/plan-complexity-calibration-oqyf0 branch
+  5. Wait for CI green
+  6. Do NOT merge — leave merge for operator
+
+  ## Acceptance
+
+  - [ ] agent_launcher_tests::tracked_fake_agent_receives_context_file_env_and_cleans_file passes on PR-270's branch
+  - [ ] agent_launcher_tests::tracked_fake_agent_receives_env_and_registry_is_removed passes on PR-270's branch
+  - [ ] No new test failures introduced
+  - [ ] cargo fmt --all clean (TASK-503 hook should handle)
+  - [ ] PR-270's CI returns green
+
+  ## Composes with
+
+  - STORY-439 (the calibration substrate being implemented; this BUG is its CI-blocker)
+  - STORY-436 (the tests being regressed against)
+  - PR-270 (the actual ship surface)
+  - Web /ultraplan workflow (the source that produced PR-270; can't iterate due to approaching usage limit)
+
+  ## Origin
+
+  2026-05-23 user reported red CI on PR-270 via screenshot; master triaged + brief filed to Codex per standing 'keep Codex busy' direction.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T03:56:25.499531823Z
+modified_at: 2026-05-24T03:56:25.499531823Z
+req_type: Bug
+tags:
+- agent-launcher
+- calibration
+- ci-failure
+- from-self-test
+- from-story-436
+- from-story-439
+- from-web-ultraplan
+- regression
