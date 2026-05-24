@@ -193,7 +193,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:45:16.445271126Z
-modified_at: 2026-05-22T19:40:32.435294272Z
+modified_at: 2026-05-24T04:57:34.111440819Z
 req_type: Story
 tags:
 - alpha-gating
@@ -271,3 +271,37 @@ comments:
     *The full research document is available at: [tui-prior-art.md](file:///home/joe/ai/aida-task-288/docs/competitive-analysis/tui-prior-art.md)*
   created_at: 2026-05-22T19:40:32.435294272Z
   modified_at: 2026-05-22T19:40:32.435294272Z
+- id: 019e5858-7a9f-7673-a491-ea4f798d19a8
+  author: joe
+  content: |-
+    Master advisor verdict on the STORY-244 /ultraplan output (saved to docs/plans/2026-05-23-story-244-tui-launcher.md): **APPROVE** the plan with four small refinements.
+
+    **Approve rationale:** Excellent plan — 11 sections per template, 9 concrete decisions with rationale, 13-file build order with module-level detail, 9 risks with mitigations, named tests (not 'add tests'), executable verification script, 10-item followups. Hits the AIDA plan template's quality bar.
+
+    Strongest design moves:
+    - **Intent transport via fd 3, not stdout** — idiomatic for shell-eval'd CLIs; matches aida session start's stderr/stdout split; testable via --intent-fd N
+    - **Launcher + PTY-host coexist via [tui] mode = ...** — preserves STORY-132 for users who want concurrent PTY panes; launcher is the default-once-shipped
+    - **Reuse overlay::fetch / picker::parse_list_sessions / TermGuard / install_signal_handler** — no reimplementation; substrate compounds
+    - **Risk 8 (shell metacharacter injection)** — explicitly addressed with character-class validation in the intent serializer; defense-in-depth even when SPEC IDs can't contain shell metas today
+    - **Risk 1 (fd 3 swallowed without wrapper)** — fstat(3) check + hint pointing at shell-init; prevents the 'intent bytes spray after alt-screen restore' failure mode
+
+    **Four refinements (small, in-scope):**
+
+    1. **Risk 8 mitigation: prefer exec-array argv-passing over character-class validation.** The character-class regex is a backstop but the more-robust pattern is bash arrays + 'exec' family rather than 'eval'. Consider whether the wrapper can use: case parsing the intent prefix, then 'exec aida queue work "$spec"' (quoted positional) instead of 'eval'. Eval is the simplest mechanism but the regex defense feels brittle. Optional refinement; if eval-and-regex is shipped, document the threat model in the wrapper's comment block.
+
+    2. **Risk 3 mitigation: prefer crossterm::Clear over tput reset.** 'tput reset' is broad (resets terminfo state, may clobber color settings the next process wants). The wrapper could instead emit a more targeted clear when re-entering launcher after a non-zero child exit. Minor; tput reset works and is more portable.
+
+    3. **Decision: clarify the 'mode default flip'.** The plan says 'mode = launcher (default once shipped)' but also 'non-launcher invocation keeps STORY-132 PTY-host behavior for back-compat'. Worth a single explicit sentence: 'Today the default is pty-host (STORY-132); this STORY ships launcher as the new default by changing TuiMode::default() in this PR.' Removes ambiguity for the reviewer.
+
+    4. **Compose decision: schema_version for --json output.** Risk 5 mitigation says 'bump a schema_version field' — good. Suggest borrowing the exact shape STORY-451's effort-estimation output uses (when STORY-451 lands). One repo-wide pattern for 'machine-readable JSON output with schema versioning' beats inventing two patterns.
+
+    **Non-blocking observations:**
+
+    - The plan's 10 followups are well-scoped — each is a concrete TASK candidate post-ship. Consider filing the high-value ones up-front (mouse support, search/filter, auto-refresh) so they're tracked alongside the implementation rather than re-discovered later.
+    - TASK-282 (sess_anchor_annotation + wt_divergence_segment) promotion to aida-core noted in two places (#8 dashboard.rs + followups) — make sure the implementation handles this cross-crate promotion cleanly; otherwise the launcher's ambient strip duplicates logic.
+
+    **Ship the implementation.** Trailer (STORY-244). The implementation is already open as PR-269 (+2766/-15, opened by web /ultraplan); next step is reviewing the PR's actual diff against this plan for any divergence — that's a separate review pass.
+
+    — master advisor
+  created_at: 2026-05-24T04:57:34.111440819Z
+  modified_at: 2026-05-24T04:57:34.111440819Z
