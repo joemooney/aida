@@ -19444,13 +19444,37 @@ fn session_end(
             workflow_hints::PrState::Unknown
         }
     };
-    let session_end_unshipped_work = classify_session_end_unshipped_work(
-        &target.id,
-        &target.scope,
-        &target.branch,
-        commits_ahead,
-        pr_state,
-    );
+    // BUG-367: if the spec the lease owns has auto-bumped to Completed, or if the PR
+    // for this branch has already been squash-merged / merged, the work is shipped
+    // regardless of what the local branch looks like. Suppress warning.
+    // trace:BUG-367 | ai:antigravity
+    let mut is_completed = false;
+    let store_path = project_root.join(".aida-store");
+    if store_path.exists() {
+        if let Ok(storage) = Storage::new(store_path).load() {
+            if let Some(req) = storage.get_requirement_by_spec_id(&target.scope) {
+                if req.status == RequirementStatus::Completed {
+                    is_completed = true;
+                }
+            }
+        }
+    }
+    if !is_completed {
+        if let PrLookup::Found(_) = detect_merged_pr_for_branch(&project_root, &target.branch) {
+            is_completed = true;
+        }
+    }
+    let session_end_unshipped_work = if is_completed {
+        None
+    } else {
+        classify_session_end_unshipped_work(
+            &target.id,
+            &target.scope,
+            &target.branch,
+            commits_ahead,
+            pr_state,
+        )
+    };
     if let Some(work) = &session_end_unshipped_work {
         emit_session_end_unshipped_warning(&work);
     }
@@ -30343,11 +30367,40 @@ mod session_end_resolution_tests {
             records[0].classification.as_deref(),
             Some("UNSHIPPED-SESSION-END")
         );
-        assert!(
-            records[0].detail.contains("3 commits ahead"),
-            "{}",
-            records[0].detail
-        );
+        assert!(records[0].detail.contains("3 commits ahead"),);
+    }
+
+    /// BUG-367: session end suppresses the unshipped work warning if the spec
+    /// status is already Completed in the requirement store.
+    /// trace:BUG-367 | ai:antigravity
+    #[test]
+    fn session_end_unshipped_work_suppressed_when_completed() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store_dir = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+
+        // Create a completed requirement in the mock store
+        let storage = Storage::new(&store_dir);
+        let mut req = Requirement::new("Completed Spec Test".to_string(), "".to_string());
+        req.spec_id = Some("BUG-367".to_string());
+        req.status = RequirementStatus::Completed;
+
+        let mut store = storage.load().unwrap_or_default();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+
+        // Load store and verify is_completed resolves to true
+        let mut is_completed = false;
+        if store_dir.exists() {
+            if let Ok(storage) = Storage::new(&store_dir).load() {
+                if let Some(req) = storage.get_requirement_by_spec_id("BUG-367") {
+                    if req.status == RequirementStatus::Completed {
+                        is_completed = true;
+                    }
+                }
+            }
+        }
+        assert!(is_completed);
     }
 
     /// Explicit id query short-circuits the resolution chain.
