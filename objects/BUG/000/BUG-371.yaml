@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:56:25.499531823Z
-modified_at: 2026-05-24T03:56:25.499531823Z
+modified_at: 2026-05-24T04:06:59.796669754Z
 req_type: Bug
 tags:
 - agent-launcher
@@ -67,3 +67,9 @@ tags:
 - from-story-439
 - from-web-ultraplan
 - regression
+comments:
+- id: 019e582a-2dd4-7d83-b029-13c133e78672
+  author: joe
+  content: Fix pushed to PR-270 branch at 84564e07. Root cause was process-global AIDA_TEST_* env var sharing across parallel fake-agent tests; tests now write to literal per-test temp paths. Verified locally with cargo test -p aida-cli agent_launcher_tests, cargo test -p aida-cli, and cargo test --workspace. Fresh PR-270 CI run 26351401457 is green.
+  created_at: 2026-05-24T04:06:59.796669754Z
+  modified_at: 2026-05-24T04:06:59.796669754Z
