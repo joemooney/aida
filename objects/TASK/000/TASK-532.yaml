@@ -1,0 +1,12 @@
+id: 019e58e2-f87c-7450-b01c-724b1a200e55
+spec_id: TASK-532
+agreed_id: TASK-532
+title: 'TASK: cross-machine groom — emit a JSON plan another node can consume via `aida queue add`'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:28:50.300413036Z
+modified_at: 2026-05-24T07:28:50.300413036Z
+req_type: Task
