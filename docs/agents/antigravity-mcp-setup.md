@@ -64,6 +64,14 @@ aida agent new antigravity --spec STORY-434 --role implementer
 
 The launcher uses the Antigravity agent CLI binary `agy`, not the `/usr/bin/antigravity` IDE wrapper. It runs from the project root, sets `AIDA_AGENT_TYPE=antigravity`, propagates `AIDA_SESSION_ROLE` and `AIDA_SESSION_SCOPE`, registers the process in `.aida/agents/`, and deregisters it on exit. When `--spec` is supplied, it first creates the standard sibling worktree + lease and launches Antigravity from that worktree.
 
+By default it also writes a point-in-time launch-context snapshot under
+`.aida/agents/context/` and passes the path as `AIDA_AGENT_CONTEXT_FILE`.
+The snapshot includes role guidance, active lease/spec details, pending
+brief paths with one-line titles, and queue-head hints. Use
+`--show-context` to print it before launch, or `--no-context` for a bare
+launch. The snapshot is not live-updating; continue polling briefs/MCP
+for work filed after startup.
+
 Keep the unsafe autonomous flag explicit:
 
 ```bash
