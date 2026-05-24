@@ -1,0 +1,80 @@
+id: 019e5b01-c194-7803-a5d8-93536ddc93de
+spec_id: BUG-376
+agreed_id: BUG-376
+title: 'Implementer ceiling: agent ships + queue-done correctly, then lingers watching CI instead of exiting (interactive variant of BUG-361 family)'
+description: |-
+  ## Symptom
+
+  After 'aida queue work <SPEC>' opens an implementer chat session, the implementer ships the PR + runs 'aida queue done' (or 'aida pr ship' which calls it) — queue state correctly transitions to Done — BUT the chat session does NOT EXIT. Agent says something like 'Next action: watch CI on PR-N and merge when green' and lingers waiting for CI.
+
+  User has to Ctrl-D out manually. The lease and sibling worktree persist past the natural session end.
+
+  ## Reproduced 2026-05-24
+
+  User ran 'aida queue work STORY-385'. Implementer:
+  1. Created sibling worktree (correct)
+  2. Implemented STORY-385 (8 cleanup categories, --json, --verbose, etc.)
+  3. Opened PR-296 via 'aida pr ship' (correct)
+  4. STORY-385 status: ◉ Done (queue transition correct)
+  5. **Did NOT exit** — recap said 'Next action: watch CI on PR-296 and merge when green'
+  6. User Ctrl-D'd twice manually to escape
+  7. Lease 019e5aa9 still active post-exit; needed explicit 'aida session end --yes' to clean up
+
+  ## Why this is wrong
+
+  The implementer's job ends at 'PR opened + queue done'. CI watching is the orchestrator's job (in --auto-complete mode) or the next-phase agent's job (reviewer, integrator). The implementer that stays around watching CI:
+
+  - Wastes operator attention (forces manual Ctrl-D)
+  - Prevents the orchestrator from advancing through phase transitions (when it's an orchestrator-spawned session)
+  - Pollutes the session ledger with sessions that have no remaining work but no exit signal
+  - Leaves leases + worktrees dangling, contributing to 'aida status --cleanup' Dormant/Stale category growth
+
+  ## Distinct from related bugs
+
+  - BUG-361: ceiling variant where agent commits LOCALLY + exits WITHOUT running aida queue done OR aida pr ship. Opposite shape: that ceiling is no-lifecycle-call; this one is correct-lifecycle-call-then-no-exit.
+  - BUG-369: implementer can't punt on Approved spec (different lifecycle issue).
+  - BUG-354/374: headless implementer asks text question + clean-exits. This is INTERACTIVE; agent doesn't ask anything, just lingers.
+
+  ## Fix direction
+
+  Two paths, can compose:
+
+  1. **Skill-side**: aida-implement skill explicitly tells the agent 'After 'aida pr ship' completes successfully, your work is DONE — exit cleanly. CI watching is the orchestrator's or reviewer's job, NOT yours.' Per TASK-291 which did this for reviewer; needs implementer-side equivalent.
+
+  2. **Substrate-side**: 'aida pr ship' (or 'aida queue done') prints a final loud banner: 'IMPLEMENTER COMPLETE. Exit the chat session now (Ctrl-D). CI + merge + auto-bump happen via the orchestrator or integrator, not in this session.'
+
+  Option 2 is the substrate-as-bouncer route — even a confident LLM that wants to 'helpfully watch CI' is told the explicit policy at the load-bearing moment. Per feedback_substrate_as_bouncer_not_rules.
+
+  ## Acceptance
+
+  - [ ] Skill template (.claude/skills/aida-implement.md) updated with explicit 'exit after pr ship' directive at the end
+  - [ ] 'aida pr ship' final output includes a loud 'IMPLEMENTER COMPLETE — EXIT NOW' banner
+  - [ ] Test: run 'aida queue work TASK-X' on a no-op test spec, confirm agent receives the exit directive
+  - [ ] 'aida status --cleanup' rolls in the new 'lingering implementer with done queue' state as a Dormant subcategory (informational, not error)
+
+  ## Composes with
+
+  - BUG-361 family (sibling ceiling variants)
+  - TASK-291 (reviewer-side equivalent — already shipped)
+  - TASK-359 (implementer finish-checkpoint UX — shipped, but evidently didn't prevent this case)
+  - STORY-385 (the cleanup-state surface — gives operator visibility into dangling leases caused by this)
+  - feedback_substrate_as_bouncer_not_rules — option 2 in the fix is exactly this principle
+
+  ## Origin
+
+  2026-05-24 user: 'I think this happened in a aida queue work and it did not exit back to the orc - I am trying Ctrl-D now'
+
+  trace:BUG-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T17:21:42.292598488Z
+modified_at: 2026-05-24T17:21:42.292598488Z
+req_type: Bug
+tags:
+- batch:ceiling-pattern
+- ceiling-pattern
+- from-self-test
+- implementer-discipline
+- substrate-as-bouncer

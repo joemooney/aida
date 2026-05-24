@@ -1,0 +1,26 @@
+id: 019e5b01-f715-7bc3-8942-33c25fc3ab06
+spec_id: STORY-461
+agreed_id: STORY-461
+title: 'Review PR-296: feat(status): aida status --cleanup surfaces attention-state (STORY-385)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e5aa9`) for branch `story-385`.
+
+  - PR: <https://github.com/joemooney/aida/pull/296>
+  - Branch: `story-385` → `main`
+
+  ## Covers
+
+  - STORY-385
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 296` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T17:21:55.989032954Z
+modified_at: 2026-05-24T17:21:55.989032954Z
+req_type: Story
