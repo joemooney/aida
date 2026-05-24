@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:21:20.065824954Z
-modified_at: 2026-05-24T07:03:14.039283692Z
+modified_at: 2026-05-24T07:27:13.700996115Z
 req_type: Story
 tags:
 - agile
@@ -140,3 +140,8 @@ comments:
       this drift in their initial scan). — master
   created_at: 2026-05-24T07:01:46.358766832Z
   modified_at: 2026-05-24T07:01:46.358766832Z
+- id: 019e58e1-7f24-7e10-9dfe-eaf4ffbd7e61
+  author: joe
+  content: Commit 4cc04b0c references this requirement
+  created_at: 2026-05-24T07:27:13.700996115Z
+  modified_at: 2026-05-24T07:27:13.700996115Z
