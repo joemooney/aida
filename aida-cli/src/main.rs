@@ -28,6 +28,7 @@ mod punt;
 mod reviewer_summary;
 mod session;
 mod session_manifest;
+mod stacks;
 mod state_snapshot;
 mod status_display;
 mod usage;
@@ -89,8 +90,8 @@ use crate::cli::{
     JiraCommand, McpCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
     PuntsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand,
     RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand,
-    SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand, TraceCommand,
-    TypeCommand, WorkerCommand, ZenCommand,
+    SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand, StackCommand,
+    TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1026,6 +1027,13 @@ fn run() -> Result<()> {
         return handle_drain_command(drain_cmd);
     }
 
+    // STORY-248: stack-graph introspection. Dispatched before storage
+    // init — reads only `.aida/stacks.json`, no requirement store.
+    // Mirrors the STORY-301 drain dispatch pattern. trace:STORY-248
+    if let Command::Stack(stack_cmd) = &cli.command {
+        return handle_stack_command(stack_cmd);
+    }
+
     // TASK-294: worker-directive introspection. Dispatched before storage
     // init — reads only `.aida/worker.cmd`, no requirement store. Mirrors
     // the STORY-301 drain dispatch pattern exactly. trace:TASK-294 | ai:claude
@@ -1389,6 +1397,7 @@ fn run() -> Result<()> {
         }
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
+        Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
@@ -4021,12 +4030,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_gate,
             dry_run,
             json,
+            auto,
         } => {
             // TASK-108: --dry-run fetches, reports, and exits.
             if *dry_run || *json {
                 return handle_pull_dry_run(store_path, *code_only, *store_only, *json);
             }
-            return handle_pull_command(store_path, *code_only, *store_only, *quiet, *no_gate);
+            return handle_pull_command(
+                store_path, *code_only, *store_only, *quiet, *no_gate, *auto,
+            );
         }
         Command::Fetch {
             code_only,
@@ -4074,6 +4086,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
+        Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::List {
@@ -15986,6 +15999,23 @@ struct SessionLease {
     /// trace:TASK-358 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     escalated_to_human: Option<chrono::DateTime<chrono::Utc>>,
+    /// STORY-248: when this session was started via `aida queue work
+    /// --stack` or `--base BRANCH`, the branch we forked from. `None` for
+    /// the default case (forked from `origin/main`). Paired with
+    /// `parent_branch_sha`; both are also reflected into `.aida/stacks.json`
+    /// for the auto-rebase cascade.
+    /// trace:STORY-248 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent_branch: Option<String>,
+    /// STORY-248: HEAD SHA of `parent_branch` at fork time. Critical for
+    /// the cascade: the project squash-merges + deletes branches, so a
+    /// later `git rebase origin/main` would replay the parent's
+    /// pre-squash commits. The cascade uses
+    /// `git rebase --onto origin/main <parent_branch_sha> <branch>` to
+    /// skip them. `None` when `parent_branch` is `None`.
+    /// trace:STORY-248 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent_branch_sha: Option<String>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -16099,6 +16129,8 @@ mod lease_covers_cwd_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -17113,6 +17145,82 @@ fn should_reuse_branch(reuse_flag: bool, branch_explicit: bool, branch_preexists
     reuse_flag || (branch_explicit && branch_preexists)
 }
 
+/// STORY-248: resolve the stacked-branch base for `aida queue work`.
+///
+/// Returns `Ok(None)` when neither `--stack` nor `--base` is set — the
+/// caller then proceeds with the default origin/main fork.
+///
+/// With `--stack`: walks the active lease set, filters to implementer
+/// roles with a branch that has NOT been merged, skips the lease whose
+/// worktree covers cwd (so a session can't stack on itself), and picks
+/// the freshest by `started_at`. Returns an error if nothing qualifies.
+///
+/// With `--base BRANCH`: validates the branch exists locally or on
+/// origin via `branch_exists_anywhere`. Unless `force` is set, checks
+/// `detect_merged_pr_for_branch` and refuses if the PR has merged
+/// (which means the branch is about to be / has been deleted on origin
+/// — branching from it now would create commits doomed to be stranded).
+/// The error names `--force-base` as the override.
+///
+/// Pure-ish: the lease + branch / PR lookups are all best-effort
+/// against the project's git state. trace:STORY-248 | ai:claude
+fn resolve_stack_base(
+    project_root: &std::path::Path,
+    cwd: &std::path::Path,
+    stack: bool,
+    base: Option<&str>,
+    force: bool,
+) -> anyhow::Result<Option<String>> {
+    if !stack && base.is_none() {
+        return Ok(None);
+    }
+    if let Some(b) = base {
+        if !branch_exists_anywhere(project_root, b) {
+            anyhow::bail!(
+                "--base `{}` does not exist locally or on origin — \
+                 verify the branch name (and that origin has it)",
+                b
+            );
+        }
+        if !force {
+            let merged = detect_merged_pr_for_branch(project_root, b);
+            if let PrLookup::Found(pr) = &merged {
+                anyhow::bail!(
+                    "--base `{}` is already merged (PR-{}); branching from it \
+                     would strand any new commits. Run `aida pull` and pass \
+                     `--base main` (or a different un-merged branch), or pass \
+                     `--force-base` to override.",
+                    b,
+                    pr.number
+                );
+            }
+        }
+        return Ok(Some(b.to_string()));
+    }
+    // `--stack` — auto-detect.
+    let canon_cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    let mut candidates: Vec<SessionLease> = list_leases(project_root)
+        .into_iter()
+        .filter(|l| {
+            l.role
+                .as_deref()
+                .map(|r| r.eq_ignore_ascii_case("implementer"))
+                .unwrap_or(false)
+        })
+        .filter(|l| !lease_covers_cwd(l, &canon_cwd))
+        .filter(|l| !matches!(detect_merged_pr_for_branch(project_root, &l.branch), PrLookup::Found(_)))
+        .collect();
+    candidates.sort_by_key(|l| std::cmp::Reverse(l.started_at));
+    let Some(pick) = candidates.into_iter().next() else {
+        anyhow::bail!(
+            "--stack: no un-merged in-flight implementer branch found — \
+             start one with `aida queue work <SPEC>` (default base origin/main), \
+             then run `--stack` from a separate session"
+        );
+    };
+    Ok(Some(pick.branch))
+}
+
 #[cfg(test)]
 mod session_start_reuse_tests {
     use super::should_reuse_branch;
@@ -17140,6 +17248,115 @@ mod session_start_reuse_tests {
         // preexists signal.
         assert!(!should_reuse_branch(false, false, true));
         assert!(!should_reuse_branch(false, false, false));
+    }
+}
+
+/// STORY-248: `resolve_stack_base` integration tests against a real
+/// temp git repo. Covers the "no flags" pass-through and the
+/// `--base BRANCH` validation legs. The `--stack` auto-detect leg also
+/// runs against a temp repo with a hand-written lease file, exercising
+/// the lease walker without spawning `gh` (we use a branch with no PR,
+/// so `detect_merged_pr_for_branch` returns NoOpenPr / GhMissing — both
+/// pass the "not merged" filter). trace:STORY-248 | ai:claude
+#[cfg(test)]
+mod resolve_stack_base_tests {
+    use super::*;
+
+    fn init_repo() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Pin every config that a sandboxed CI shell might have set on the
+        // global level — signing usually breaks first, so override here.
+        for args in [
+            vec!["init", "-q", "-b", "main"],
+            vec!["config", "user.email", "t@x.example"],
+            vec!["config", "user.name", "t"],
+            vec!["config", "commit.gpgsign", "false"],
+            vec!["config", "tag.gpgsign", "false"],
+        ] {
+            assert!(std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(&args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        std::fs::write(root.join("a.txt"), b"a\n").unwrap();
+        for args in [vec!["add", "a.txt"], vec!["commit", "-qm", "init"]] {
+            assert!(std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(&args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        tmp
+    }
+
+    #[test]
+    fn resolve_stack_base_returns_none_without_flags() {
+        let tmp = init_repo();
+        let out = resolve_stack_base(tmp.path(), tmp.path(), false, None, false).unwrap();
+        assert_eq!(out, None);
+    }
+
+    #[test]
+    fn resolve_stack_base_refuses_unknown_base() {
+        let tmp = init_repo();
+        let err = resolve_stack_base(tmp.path(), tmp.path(), false, Some("nope"), false)
+            .unwrap_err();
+        assert!(err.to_string().contains("nope"), "{err}");
+        assert!(
+            err.to_string().contains("does not exist"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn resolve_stack_base_accepts_existing_local_branch() {
+        let tmp = init_repo();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["branch", "task-x"])
+            .status()
+            .unwrap()
+            .success());
+        // No `gh` in the sandbox → detect_merged_pr_for_branch returns
+        // GhMissing, which falls through the merged check.
+        let out =
+            resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), false).unwrap();
+        assert_eq!(out.as_deref(), Some("task-x"));
+    }
+
+    #[test]
+    fn resolve_stack_base_force_keeps_through_safety_check() {
+        // Same shape, but with --force-base set, the merged check is
+        // skipped entirely. Asserts the flag wires through.
+        let tmp = init_repo();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["branch", "task-x"])
+            .status()
+            .unwrap()
+            .success());
+        let out =
+            resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), true).unwrap();
+        assert_eq!(out.as_deref(), Some("task-x"));
+    }
+
+    #[test]
+    fn resolve_stack_base_stack_with_no_leases_errors() {
+        let tmp = init_repo();
+        std::fs::create_dir_all(tmp.path().join(".aida").join("sessions")).unwrap();
+        let err = resolve_stack_base(tmp.path(), tmp.path(), true, None, false).unwrap_err();
+        assert!(
+            err.to_string().contains("no un-merged"),
+            "{err}"
+        );
     }
 }
 
@@ -17738,6 +17955,39 @@ fn session_start(
         }
     }
 
+    // STORY-248: when an explicit `--base` was passed (queue work
+    // --stack / --base, or session start --base), capture the
+    // fork-point SHA so the auto-rebase cascade later runs
+    // `git rebase --onto origin/main <sha> <branch>` instead of a
+    // plain rebase that would replay the parent's pre-squash commits.
+    // The lookup uses the base name as a rev (works for local branches
+    // and origin/-prefixed refs alike); a failure to resolve is non-
+    // fatal — we just skip recording the SHA, which means the cascade
+    // will refuse to auto-rebase this entry (safer than guessing).
+    // trace:STORY-248 | ai:claude
+    let stack_parent_branch: Option<String> = base
+        .filter(|_| review_target.is_none() && !reuse_existing)
+        .map(|s| s.strip_prefix("origin/").unwrap_or(s).to_string());
+    let stack_parent_sha: Option<String> = base
+        .filter(|_| review_target.is_none() && !reuse_existing)
+        .and_then(|b| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&project_root)
+                .args(["rev-parse", b])
+                .output()
+                .ok()?;
+            if !out.status.success() {
+                return None;
+            }
+            let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if sha.is_empty() {
+                None
+            } else {
+                Some(sha)
+            }
+        });
+
     // STORY-52: share parent's cargo target/ with the new worktree so the
     // first `cargo build` inside the session reuses the existing build
     // cache instead of rebuilding from scratch (~2min for aida-cli). We
@@ -17856,6 +18106,11 @@ fn session_start(
         // its `--escalate-blocks` path parks the spec for a human.
         // trace:TASK-358 | ai:claude
         escalated_to_human: None,
+        // STORY-248: stacked-branch lineage captured above when `base`
+        // was passed. Default `None` for the BUG-76 "fork from
+        // origin/main" path. trace:STORY-248 | ai:claude
+        parent_branch: stack_parent_branch.clone(),
+        parent_branch_sha: stack_parent_sha.clone(),
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -24106,6 +24361,8 @@ mod task_358_escalation_cleanup_tests {
             } else {
                 None
             },
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         let path = sessions.join(format!("{id}.toml"));
         std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
@@ -28689,6 +28946,8 @@ cargo test -p aida-cli
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
 
         // No routing tags = visible everywhere.
@@ -29005,6 +29264,8 @@ hostname = "h"
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         std::fs::write(
             leases.join("abcdef123456.toml"),
@@ -29755,6 +30016,8 @@ mod lease_enforcement_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -29972,6 +30235,8 @@ mod scope_fallback_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -30216,6 +30481,8 @@ mod session_end_resolution_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -32824,7 +33091,7 @@ mod handle_pull_command_tests {
 
         // The actual call under test: code_only=true skips the store
         // leg entirely, but the code leg + auto-bump must still run.
-        handle_pull_command(&store_path, true, false, true, true).unwrap();
+        handle_pull_command(&store_path, true, false, true, true, false).unwrap();
 
         let after = storage.load().unwrap();
         let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
@@ -32862,7 +33129,7 @@ mod handle_pull_command_tests {
 
         // code_only=true isolates the code leg so the test can't be
         // rescued by a successful store leg masking the code failure.
-        let result = handle_pull_command(&store_path, true, false, true, true);
+        let result = handle_pull_command(&store_path, true, false, true, true, false);
         let err = result
             .expect_err("BUG-254: handle_pull_command must return Err when code-leg ff-only fails");
         let msg = format!("{err}");
@@ -32910,7 +33177,7 @@ mod handle_pull_command_tests {
 
         // store_only=true; no orphan store configured → store-pull branch
         // prints a note + returns Ok(()). Code leg is skipped → no auto-bump.
-        handle_pull_command(&store_path, false, true, true, true).unwrap();
+        handle_pull_command(&store_path, false, true, true, true, false).unwrap();
 
         let after = storage.load().unwrap();
         let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
@@ -36264,6 +36531,8 @@ mod task_250_review_state_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         std::fs::write(
             dir.join(format!("{}.toml", id)),
@@ -41075,6 +41344,7 @@ fn handle_pull_command(
     store_only: bool,
     quiet: bool,
     no_gate: bool,
+    auto: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -43285,6 +43555,8 @@ mod queue_work_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         }
     }
 
@@ -54497,6 +54769,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             type_filter,
             branch,
             path,
+            stack,
+            base,
+            force_base,
             steal,
             batch,
             batches,
@@ -54878,6 +55153,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 type_filter.as_deref(),
                 branch.as_deref(),
                 path.as_deref(),
+                // STORY-248: stacked-branch base resolution. Mutually
+                // exclusive at the CLI level — `--stack` auto-picks the
+                // freshest un-merged implementer lease, `--base BRANCH`
+                // takes a name. Threaded through into `session_start` via
+                // its existing `base` parameter. trace:STORY-248 | ai:claude
+                *stack,
+                base.as_deref(),
+                *force_base,
                 *steal,
                 resume.as_deref(),
                 *fresh,
@@ -55871,6 +56154,9 @@ fn handle_queue_rework(
             /* type_filter */ None,
             /* branch_override */ None,
             /* path_override */ None,
+            /* stack */ false,
+            /* base */ None,
+            /* force_base */ false,
             steal,
             // Bare `--resume` → resume the scope's most recent recorded
             // claude session (`resolve_queue_work_launch` fails clean when
@@ -56595,6 +56881,14 @@ fn handle_queue_work(
     type_filter: Option<&str>,
     branch_override: Option<&str>,
     path_override: Option<&str>,
+    // STORY-248: stacked-branch base resolution. `stack` auto-detects the
+    // freshest un-merged in-flight implementer lease; `base` takes an
+    // explicit branch name. CLI clap-level enforces they're mutually
+    // exclusive. `force_base` opts out of the merged-base safety check.
+    // trace:STORY-248 | ai:claude
+    stack: bool,
+    base: Option<&str>,
+    force_base: bool,
     steal: bool,
     resume: Option<&str>,
     fresh: bool,
@@ -57042,6 +57336,33 @@ fn handle_queue_work(
     // hook sees on launch.
     std::env::set_var("AIDA_SESSION_ROLE", &role);
 
+    // STORY-248: resolve the stacked base BEFORE session_start so the
+    // worktree is forked from the right place and the SHA capture has a
+    // real base to record. Both `--stack` and `--base` flow through the
+    // same `session_start(base: Option<&str>)` parameter.
+    // trace:STORY-248 | ai:claude
+    let project_root_for_base = find_main_worktree_root()?;
+    let cwd_for_base = std::env::current_dir().unwrap_or_else(|_| project_root_for_base.clone());
+    let resolved_base = resolve_stack_base(
+        &project_root_for_base,
+        &cwd_for_base,
+        stack,
+        base,
+        force_base,
+    )?;
+    if let Some(b) = resolved_base.as_deref() {
+        eprintln!(
+            "  {} base: {} {}",
+            "▶".cyan().bold(),
+            b.cyan(),
+            if stack {
+                "(detected via --stack)".dimmed().to_string()
+            } else {
+                "(--base)".dimmed().to_string()
+            }
+        );
+    }
+
     // session_start handles worktree creation, lease persistence, env
     // shim, conflict detection. We always pass launch=false so we can
     // (a) write the cluster manifest from the new lease and (b) emit
@@ -57049,7 +57370,7 @@ fn handle_queue_work(
     session_start(
         &plan.scope,
         branch_override,
-        /* base */ None,
+        resolved_base.as_deref(),
         /* reuse_branch */ false,
         path_override,
         /* forge_override */ None,
@@ -57073,6 +57394,43 @@ fn handle_queue_work(
                 plan.scope
             )
         })?;
+
+    // STORY-248: register the stacked-branch entry in `.aida/stacks.json`
+    // so `aida pull --auto`'s cascade can find it when the parent merges.
+    // session_start records the parent fields on the lease itself; we
+    // mirror them into the dedicated graph file because the cascade
+    // needs to consult them AFTER the lease has been removed by
+    // `aida queue done`. Best-effort — a write failure logs but doesn't
+    // fail the pickup. trace:STORY-248 | ai:claude
+    if let (Some(parent), Some(sha)) =
+        (lease.parent_branch.as_deref(), lease.parent_branch_sha.as_deref())
+    {
+        let mut graph = stacks::load(&project_root);
+        stacks::add(
+            &mut graph,
+            stacks::StackEntry {
+                branch: lease.branch.clone(),
+                parent_branch: parent.to_string(),
+                parent_branch_sha: sha.to_string(),
+                spec_id: Some(plan.scope.clone()),
+                created_at: chrono::Utc::now(),
+            },
+        );
+        if let Err(e) = stacks::save(&project_root, &graph) {
+            eprintln!(
+                "  {} {}",
+                "⚠".yellow().bold(),
+                format!("stack graph save failed: {} (cascade may miss this branch)", e).yellow()
+            );
+        } else {
+            eprintln!(
+                "  {} stacked: {} → {}",
+                "✓".green(),
+                lease.branch.cyan(),
+                parent.cyan()
+            );
+        }
+    }
 
     // Cluster manifest: pre-populate items so /aida-pickup can walk
     // them top-down. Skip for head/item modes (single item → no plan
@@ -57962,6 +58320,104 @@ fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             if let Some(line) = worker::status_line(&directives) {
                 println!();
                 println!("  {line}");
+            }
+            Ok(())
+        }
+    }
+}
+
+/// `aida stack {show,list}` (STORY-248). Reads `.aida/stacks.json` —
+/// no requirement-store dependency, so dispatches pre-storage like
+/// `aida drain status`. Prints "No stacked branches." (exit 0) on an
+/// empty graph so a quiet project never errors. `--prune-stale` (show
+/// only) drops entries whose branch no longer exists locally or on
+/// origin; the prune writes the graph back atomically.
+/// trace:STORY-248 | ai:claude
+fn handle_stack_command(cmd: &StackCommand) -> Result<()> {
+    let project_root = find_main_worktree_root()
+        .or_else(|_| std::env::current_dir())
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut graph = stacks::load(&project_root);
+
+    match cmd {
+        StackCommand::Show { json, prune_stale } => {
+            if *prune_stale {
+                let stale: Vec<String> = graph
+                    .entries
+                    .values()
+                    .filter(|e| !branch_exists_anywhere(&project_root, &e.branch))
+                    .map(|e| e.branch.clone())
+                    .collect();
+                if !stale.is_empty() {
+                    for s in &stale {
+                        stacks::remove(&mut graph, s);
+                    }
+                    stacks::save(&project_root, &graph)?;
+                    if !*json {
+                        eprintln!(
+                            "  {} pruned {} stale entr{}",
+                            "✓".green(),
+                            stale.len(),
+                            if stale.len() == 1 { "y" } else { "ies" }
+                        );
+                    }
+                }
+            }
+            if *json {
+                let chains: Vec<Vec<&stacks::StackEntry>> = stacks::chains(&graph);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({ "chains": chains }))?
+                );
+                return Ok(());
+            }
+            if graph.is_empty() {
+                println!("No stacked branches.");
+                return Ok(());
+            }
+            for chain in stacks::chains(&graph) {
+                // Root parent of the chain is the first entry's parent —
+                // typically `main`, sometimes a since-merged branch.
+                if let Some(first) = chain.first() {
+                    println!("{}", first.parent_branch.dimmed());
+                }
+                for (depth, entry) in chain.iter().enumerate() {
+                    let indent = "  ".repeat(depth + 1);
+                    let spec = entry
+                        .spec_id
+                        .as_deref()
+                        .map(|s| format!(" {}", format!("({})", s).dimmed()))
+                        .unwrap_or_default();
+                    println!(
+                        "{}└─ {}{}",
+                        indent,
+                        entry.branch.cyan(),
+                        spec
+                    );
+                }
+            }
+            Ok(())
+        }
+        StackCommand::List { json } => {
+            let chains = stacks::chains(&graph);
+            if *json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({ "chains": chains }))?
+                );
+                return Ok(());
+            }
+            if chains.is_empty() {
+                println!("No stacked branches.");
+                return Ok(());
+            }
+            for chain in chains {
+                let root = chain
+                    .first()
+                    .map(|e| e.parent_branch.as_str())
+                    .unwrap_or("main");
+                let rest: Vec<&str> = chain.iter().map(|e| e.branch.as_str()).collect();
+                println!("{} → {}", root.dimmed(), rest.join(" → ").cyan());
             }
             Ok(())
         }
@@ -63187,6 +63643,8 @@ mod queue_work_resume_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         std::fs::write(
             sessions.join("019eabcd-1234.toml"),
@@ -63251,6 +63709,8 @@ mod queue_work_resume_tests {
             pr_base_ref: None,
             zen_intent_token: None,
             escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
         };
         std::fs::write(
             sessions.join("019eaaaa-bbbb.toml"),
