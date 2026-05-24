@@ -4194,12 +4194,7 @@ mod tests {
         /// the head queue and record the skip with `reason`. Simulates
         /// `resolve_batch_members`'s pickability filter: a member with
         /// `BlockedBy → <shelved>` becomes un-pickable on the next round.
-        fn dependent(
-            mut self,
-            dependent: &str,
-            blocker: &str,
-            reason: &str,
-        ) -> Self {
+        fn dependent(mut self, dependent: &str, blocker: &str, reason: &str) -> Self {
             self.skip_dependent_of.push((
                 dependent.to_string(),
                 blocker.to_string(),
@@ -4465,8 +4460,8 @@ mod tests {
     /// trace:EPIC-28 | ai:claude
     #[test]
     fn drain_batch_shelves_failure_and_continues_to_next_member() {
-        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"])
-            .shelving("TASK-2", Phase::Ci);
+        let mut driver =
+            MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]).shelving("TASK-2", Phase::Ci);
         let result = drain_batch(&mut driver, None, None);
         assert_eq!(
             result.exit_code, 2,
