@@ -51,6 +51,26 @@ The bouncer automatically exempts the orphan `.aida-store` branch and its worktr
 
 ---
 
+## The Pre-Commit cargo fmt Bouncer Hook (TASK-503)
+
+To prevent code formatting drift from breaking the CI builds (e.g., `Check formatting` failing), AIDA integrates an auto-formatting bouncer directly into the pre-commit hook.
+
+### The Hook's Behavior
+Upon running `git commit`, the pre-commit bouncer:
+1. Detects staged Rust files (`.rs`) using `git diff --cached`.
+2. If any Rust files are staged, it runs a fast check: `cargo fmt --all -- --check`.
+3. If formatting drift is detected, it automatically runs `cargo fmt --all` to fix the drift, re-stages the formatted files using `git add`, and prints:
+   ```
+   pre-commit: cargo fmt --all detected drift, applying…
+   pre-commit: drift fixed and re-staged
+   ```
+
+### The Deliberate Escape Hatch
+To bypass this (or any pre-commit hook) in emergency situations, you can use the standard Git flag:
+- `git commit --no-verify` (or `-n`)
+
+---
+
 ## Sibling: The Reviewer-Phase Gate (TASK-480)
 
 Local pre-commit hooks are powerful but can be bypassed (e.g., using `git commit --no-verify`). To guarantee enforcement at scale, AIDA implements a multi-layered bouncer strategy.

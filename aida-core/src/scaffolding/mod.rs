@@ -2714,4 +2714,101 @@ mod tests {
             "hook should succeed when on aida-store branch"
         );
     }
+
+    // trace:TASK-503 | ai:antigravity
+    // Verifies the pre-commit hook's auto-fmt section reformats and re-stages
+    // a fmt-drifty Rust file so CI's `cargo fmt --all -- --check` cannot fail
+    // on local commits. Origin: three fmt-CI failures in one session on
+    // 2026-05-23 (BUG-360, TASK-497, TASK-490) — the substrate-as-bouncer fix.
+    #[test]
+    fn test_pre_commit_hook_runs_cargo_fmt_on_staged_rust_files() {
+        use std::process::Command;
+        let temp_dir = TempDir::new().unwrap();
+
+        let run_git = |args: &[&str]| {
+            let mut cmd = Command::new("git");
+            cmd.args(args);
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            let status = cmd.status().unwrap();
+            assert!(status.success(), "git command {:?} failed", args);
+        };
+
+        run_git(&["init"]);
+
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+
+        let hook_path = temp_dir.path().join(".git/hooks/pre-commit");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        // Minimal Cargo project so `cargo fmt --all` has something to format.
+        std::fs::write(
+            temp_dir.path().join("Cargo.toml"),
+            "[package]\nname = \"fmt-test\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[[bin]]\nname = \"fmt-test\"\npath = \"src/main.rs\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(temp_dir.path().join("src")).unwrap();
+
+        // Deliberately fmt-drifty: missing spaces, packed statements.
+        let messy = "fn main(){let x=1;let y=2;println!(\"{}\",x+y);}\n";
+        std::fs::write(temp_dir.path().join("src/main.rs"), messy).unwrap();
+        std::fs::write(temp_dir.path().join(".gitignore"), "target/\n").unwrap();
+
+        run_git(&["config", "user.email", "test@aida.dev"]);
+        run_git(&["config", "user.name", "AIDA Test"]);
+        run_git(&["add", "src/main.rs", "Cargo.toml", ".gitignore"]);
+
+        // Run the hook directly.
+        let mut cmd = if cfg!(windows) {
+            let mut c = Command::new("sh");
+            c.arg(&hook_path);
+            c
+        } else {
+            Command::new(&hook_path)
+        };
+        cmd.current_dir(temp_dir.path());
+        for (key, _) in std::env::vars() {
+            if key.starts_with("GIT_") {
+                cmd.env_remove(&key);
+            }
+        }
+        let output = cmd.output().unwrap();
+
+        // Skip the test (don't fail) if cargo or rustfmt aren't on PATH —
+        // the hook's --check branch returns non-zero, but if cargo itself
+        // can't run we shouldn't claim a regression.
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("command not found") || stderr.contains("rustfmt") {
+            eprintln!("skipping: cargo/rustfmt unavailable in test env: {stderr}");
+            return;
+        }
+
+        assert!(
+            output.status.success(),
+            "hook should succeed (cargo fmt re-formats and re-stages). stderr: {stderr}"
+        );
+
+        let after = std::fs::read_to_string(temp_dir.path().join("src/main.rs")).unwrap();
+        assert_ne!(
+            after, messy,
+            "src/main.rs should have been reformatted by the hook"
+        );
+        // rustfmt produces multi-line output for this packed code.
+        assert!(
+            after.lines().count() > 1,
+            "reformatted file should be multi-line, got: {after:?}"
+        );
+    }
 }
