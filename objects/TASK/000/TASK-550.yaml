@@ -1,0 +1,59 @@
+id: 019e5b9e-aa60-7073-861c-7ef75ed1c62d
+spec_id: TASK-550
+agreed_id: TASK-550
+title: 'Map BUG-377 blast radius: systematic test of all MCP write tools for field-mapping inversions'
+description: |-
+  ## Why
+
+  BUG-377 surfaced: 'add_comment' MCP tool routes text arg into author field with hardcoded body='mcp' — silent data loss. Codex's STORY-22 smoke (in aida-chat) suggested add_requirement may have a similar pattern. Working hypothesis: shared buggy write handler across multiple MCP write tools.
+
+  aida-chat advisor's question: 'worth Codex testing add_relationship and any other MCP write tool to fully map the blast radius?'
+
+  Master answer: YES. Test EVERY MCP write tool systematically before fixing BUG-377, so the fix covers all affected tools in one PR.
+
+  ## Scope
+
+  Run a roundtrip test for each MCP write tool exposed by aida-cli/src/mcp.rs:
+
+  - [ ] add_comment (KNOWN BROKEN per BUG-377)
+  - [ ] add_requirement (suspected per Codex STORY-22 smoke)
+  - [ ] update_requirement (test status / title / description / tags / priority fields each)
+  - [ ] add_relationship (if exposed)
+  - [ ] any other write tool found in mcp.rs
+
+  For each: send the MCP call, verify the data is persisted CORRECTLY (not just 200-OK), via 'aida show <ID>' / 'aida comment list <ID>' / 'aida list' verification. Note the field-mapping inversion (if any) for each.
+
+  Output: comment on BUG-377 with the full inventory: 'tools tested, expected-vs-actual field mapping for each, broken-or-not'. Then BUG-377's fix can address all affected tools in one PR.
+
+  ## Acceptance
+
+  - [ ] Every MCP write tool tested via JSON-RPC roundtrip
+  - [ ] Inventory posted as comment on BUG-377
+  - [ ] Working tools: marked 'verified OK'
+  - [ ] Broken tools: field-mapping inversion documented
+  - [ ] BUG-377's fix scope expanded if needed (or sibling bugs filed for distinct field-mapping bugs)
+
+  ## Composes with
+
+  - BUG-377 (the parent; this maps the scope)
+  - aida-chat EPIC-16 + 5 feedback loops (consumers of MCP write surface)
+  - TASK-538 (MCP history tool — read surface; this validates the write surface)
+
+  ## Origin
+
+  2026-05-24 aida-chat advisor cross-project question: 'worth Codex testing add_relationship and any other MCP write tool to fully map the blast radius?' Master concurs — map before fix.
+
+  trace:TASK-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T20:13:05.504399774Z
+modified_at: 2026-05-24T20:13:05.504399774Z
+req_type: Task
+tags:
+- aida-chat-blocker
+- from-aida-chat
+- investigation
+- mcp
+- write-path
