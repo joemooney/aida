@@ -23,12 +23,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T19:51:17.579740126Z
-modified_at: 2026-05-18T00:10:21.754513940Z
+modified_at: 2026-05-24T06:38:30.581070731Z
 req_type: Task
 tags:
 - TASK-268
+- aida:queue:move
 - from-review:PR-74
-- queue-move
 - severity:cosmetic
 - user-facing-text
 relationships:
