@@ -243,6 +243,45 @@ aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
    Step 6 (menu) and `/aida-pr` orchestrator-mode (closing block).
    trace:TASK-359
 
+### Step 7: Exit after `aida pr ship` (or `aida queue done`) — do NOT linger watching CI
+
+**Your work ends the moment `aida pr ship` returns zero (or `aida queue
+done` if you intentionally stopped one step earlier).** Both commands
+print a loud "IMPLEMENTER COMPLETE — EXIT NOW" banner at success — that
+banner is the substrate's signal that the implementer Claude has
+nothing left to do. Read it and exit. trace:BUG-376 | ai:claude
+
+Do **NOT**, after a successful `aida pr ship`:
+
+- Watch CI further (`gh pr checks <N> --watch`, `gh run watch …`) — CI
+  already ran inside `aida pr ship` step 2 *before* the merge; it is
+  green by the time you see the banner. Re-watching it is theatre.
+- Wait for the merge to land — `aida pr ship` step 3 already merged it.
+- Run `aida pull` to verify the auto-bump fired — `aida pr ship` step 4
+  already ran `aida pull`.
+- Run `aida status` / `aida session leases` to confirm the lease
+  cleared — `aida pr ship` step 5 already ran `aida session end`.
+- "Helpfully" stay around in case something needs follow-up — the
+  orchestrator (under `--auto-complete`), the reviewer (under a
+  separate review session), or the next-phase agent owns everything
+  that happens after the implementer's chair empties. Lingering only
+  burns operator attention and forces a manual Ctrl-D.
+
+After `aida queue done` (without a subsequent `aida pr ship`): the same
+rule applies — the spec is on the branch, the queue position is closed,
+and whichever caller spawned this implementer (orchestrator, interactive
+shell, drain) owns the next phase. Print one closing line naming
+*"→ Press Ctrl+D to exit"* and exit. Under `$AIDA_EXIT_SENTINEL` the
+sentinel touch from Step 6 of the autonomy-mode section is the
+machine-readable equivalent — do that and exit; never both poll CI
+*and* touch the sentinel.
+
+The motivating incident is BUG-376: an interactive implementer ran
+`aida pr ship` correctly, then said *"Next action: watch CI on PR-296
+and merge when green"* and lingered. The PR was already merged; the
+lease was already released; the only thing left was the Ctrl-D the user
+then had to type twice manually. Don't reproduce that shape.
+
 ## State Transitions
 
 During implementation, requirements should transition through:
