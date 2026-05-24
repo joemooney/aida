@@ -10151,5 +10151,13 @@ operations:
   timestamp: 2026-05-24T17:33:27.852234700Z
   kind: !SetTitle
     title: 'Substrate extension mechanism: generic ''observation'' entity type for consumer-driven vectors (FAQ, telemetry, user-driven data)'
-clock: 1093
+- id: 019e5b26-8e32-7651-a54f-ecccc28026ce
+  target_id: 019e5b01-c194-7803-a5d8-93536ddc93de
+  author: aida
+  node_id: '1'
+  lamport: 1094
+  timestamp: 2026-05-24T18:01:53.970136681Z
+  kind: !SetStatus
+    status: In Progress
+clock: 1094
 node_id: '1'
