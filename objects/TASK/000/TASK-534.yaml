@@ -1,0 +1,26 @@
+id: 019e58ec-39ba-7ec1-86c3-3a98d543fff5
+spec_id: TASK-534
+agreed_id: TASK-534
+title: Rename stale test discipline_pack_scaffolds_seven_docs_plus_readme
+description: |
+  Raised in review of PR-282: https://github.com/joemooney/aida/pull/282#issuecomment-4527739506
+
+  In `aida-cli/src/main.rs:66124`, the test name still says `seven_docs_plus_readme`
+  but the assertion is `assert_eq!(written, 11, "expected README + 10 discipline docs")`.
+  The discipline pack now scaffolds 10 docs + README = 11 files (after STORY-444's
+  addition of backlog-grooming.md). The test name is stale; rename to
+  `discipline_pack_scaffolds_ten_docs_plus_readme` (or `_with_readme` to avoid
+  re-naming on every pack addition).
+
+  Pure rename — no behavior change.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T07:38:56.826228125Z
+modified_at: 2026-05-24T07:38:56.826228125Z
+req_type: Task
+tags:
+- from-review:PR-282
+- severity:cosmetic
+- test-hygiene
