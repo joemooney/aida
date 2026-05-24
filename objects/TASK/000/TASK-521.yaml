@@ -55,7 +55,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:33:10.822701627Z
-modified_at: 2026-05-24T06:13:09.285840668Z
+modified_at: 2026-05-24T06:18:23.800095314Z
 req_type: Task
 tags:
 - aida-cli
@@ -73,3 +73,18 @@ comments:
   content: Commit bd3daa5f references this requirement
   created_at: 2026-05-24T06:13:09.285840668Z
   modified_at: 2026-05-24T06:13:09.285840668Z
+- id: 019e58a2-7ab8-77c2-991e-e97e53889de2
+  author: joe
+  content: |-
+    Implemented via PR-277 (commit d4c9091b):
+
+    - Audited workspace-wide `env::set_var`/`env::remove_var` use in tests; 4 fragile in-process spots found (all in aida-cli)
+    - Migrated to a shared `crate::test_env::EnvVarGuard` RAII helper (one static `ENV_LOCK` mutex, prior-value restore on drop)
+    - New guide at `docs/aida/discipline/test-isolation.md` covers both anti-pattern shapes — in-process env mutation (this PR) + subprocess plumbing (Codex's BUG-371 fix)
+    - Existing module-local mutex helpers (`with_env_vars`, `with_bg_fetch_env`, `scoped_prepend_path`, `workflow_hints LOCK`) left as-is — each guards a distinct key, no race risk, churn would be scope creep
+
+    Test status: 1584/1584 cargo test --workspace, verified consistent at --test-threads=2/8/16
+
+    PR: https://github.com/joemooney/aida/pull/277
+  created_at: 2026-05-24T06:18:23.800095314Z
+  modified_at: 2026-05-24T06:18:23.800095314Z
