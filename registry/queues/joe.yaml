@@ -1241,9 +1241,3 @@
   note: auto-queued by `aida pr` (019e57e7); covers 1 spec
   added_at: 2026-05-24T02:57:39.080975457Z
   for_role: reviewer
-- user_id: joe
-  requirement_id: 019e57d6-161a-7bb0-aa7a-07420deedfba
-  position: 277000
-  added_by: joe
-  added_at: 2026-05-24T03:13:12.563807248Z
-  for_role: implementer
