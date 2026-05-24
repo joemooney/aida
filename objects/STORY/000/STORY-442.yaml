@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:20:34.905803870Z
-modified_at: 2026-05-24T02:20:34.905803870Z
+modified_at: 2026-05-24T05:13:07.504055089Z
 req_type: Story
 tags:
 - batch
@@ -75,3 +75,38 @@ tags:
 - parallel
 - small-changes
 - tags
+comments:
+- id: 019e5866-b8b0-71c3-a9f1-883292275cd1
+  author: joe
+  content: |-
+    Master advisor verdict on the STORY-442 /ultraplan output (stub saved to docs/plans/2026-05-23-story-442-lifecycle-shortcircuit.md; full text in chat record): STRONG APPROVE with two refinements.
+
+    **Approve rationale:** Excellent small-blast-radius plan. Standout moves:
+
+    - **D1+D2 (LifecycleSkip resolution at run_auto_complete + passed to BOTH orchestrate AND driver)** — exactly right architectural split. Keeps orchestrate pure (no Storage dep), keeps the trait stable (no PhaseDriver::finish_ci signature widening), wait-skip lives where it executes. Mirrors the AutoCompleteVariant pattern.
+    - **D3 (tags from dispatched spec only — not tag-mates / parents / BUG-245-credited spec)** — predictable semantics. Operator tagged X, X's lifecycle is short-circuited. Right resistance to over-clever auto-inference.
+    - **D4 (phase 4 + 5 unconditional)** — substrate integrity. Without phase 4 the work never lands; without phase 5 the auto-bump never fires + 'aida list' contamination. Hard boundary, well-documented.
+    - **D7 (lifecycle:* hoist in format_tag_chip)** — extends batch:* precedent; visible-at-a-glance in queue list. Risk 3 mitigation built-in.
+    - **D8 (no new CLI flag — tag IS the API)** — minimum-surface. aida edit --add-tag lifecycle:trivial composes with TASK-351's --add-tag work. Right scope.
+
+    **Risks well-handled:**
+
+    - Risk 2 (CI race under no-ci-wait) explicitly accepts the model — 'CI catches something after merge, file the follow-up.' Banner makes per-run choice visible. The risk model is the spec, not a hidden trap.
+    - Risk 1 (orphaned Review PR-N when lifecycle:no-review) is explicitly accepted as harmless cruft + followup. Good triage.
+
+    **Two refinements:**
+
+    1. **Risk 5 (40 orchestrate test call-sites update)** — strongly recommend the orchestrate_default(driver, spec, variant, json, escalate) wrapper for test ergonomics, not optional. The mechanical churn IS noisy + introduces a real risk of missing a site that should keep none() semantics. The wrapper is 4 lines + makes the diff easier to read; it pays for itself.
+
+    2. **Composition with STORY-447/STORY-451 calibration** — lifecycle:* tags are ITSELF calibration signal: 'operator marked it trivial; did the actual implementation match?' Worth a one-line note in the discipline-pack entry that lifecycle:trivial + post-hoc cleanup count becomes the substrate-gap signal STORY-447 (now STORY-451 per BUG-372 rebase) measures. The followup 'auto-complete telemetry record LifecycleSkip in JSONL event' already points at this — make explicit that STORY-451 consumes that JSONL.
+
+    **Non-blocking observations:**
+
+    - The verification script's kickoff-banner verification via aida queue work --json + grep for 'skipping' is the right shape. Locks the operator-visible signal as part of the test contract.
+    - D6 (orphaned auto-queue Review item is acceptable cruft) is a deliberate v1 compromise — the followup verb to clean it up is filed. Right scope-cut.
+
+    **Ready for implementation pickup.** When picked up: aida session start --owns STORY-442 → implement per plan → standard ship cadence. No PR exists yet (STORY-442's /ultraplan generated the plan but didn't execute the implementation).
+
+    — master advisor
+  created_at: 2026-05-24T05:13:07.504055089Z
+  modified_at: 2026-05-24T05:13:07.504055089Z
