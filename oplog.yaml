@@ -10143,5 +10143,13 @@ operations:
   timestamp: 2026-05-24T16:31:27.948955123Z
   kind: !SetStatus
     status: Rejected
-clock: 1092
+- id: 019e5b0c-85ac-7450-9124-8b00b19a056a
+  target_id: 019e5b0a-4e9a-7921-9004-a45cf997ab0e
+  author: aida
+  node_id: '1'
+  lamport: 1093
+  timestamp: 2026-05-24T17:33:27.852234700Z
+  kind: !SetTitle
+    title: 'Substrate extension mechanism: generic ''observation'' entity type for consumer-driven vectors (FAQ, telemetry, user-driven data)'
+clock: 1093
 node_id: '1'
