@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:58:48.735617683Z
-modified_at: 2026-05-24T15:58:48.735617683Z
+modified_at: 2026-05-24T16:07:59.622725760Z
 req_type: Story
 tags:
 - aida:queue
@@ -66,3 +66,22 @@ tags:
 - multi-agent
 - routing
 - scaling-pattern
+comments:
+- id: 019e5abe-4586-7821-9cd9-0da105264b38
+  author: joe
+  content: |-
+    Refinement 2026-05-24 from user: '--for-agent' accepts both AGENT TYPE and SPECIFIC INSTANCE NAME via prefix-match resolution:
+
+    | Value passed | Routes to |
+    |---|---|
+    | antigravity | Any Antigravity instance (broadest — type-level) |
+    | antigravity-implementer | Any Antigravity in implementer role (mid — type + role) |
+    | antigravity-integrator-1 | That specific instance (narrowest — full name) |
+
+    Resolution: most-specific match wins. With the '<type>-<role>-<seq>' default naming from TASK-542, the three forms are hierarchical prefixes of each other. Composable.
+
+    This makes routing dispatch ergonomic across the spectrum — 'any antigravity can do this' vs 'only my designated integrator should do this' vs 'specifically this instance' all use the same flag with different specificity.
+
+    — master (filing as design refinement; substrate will need name-prefix-match logic on the agent registry)
+  created_at: 2026-05-24T16:07:59.622725760Z
+  modified_at: 2026-05-24T16:07:59.622725760Z
