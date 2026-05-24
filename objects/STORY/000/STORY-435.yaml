@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:19.620624859Z
-modified_at: 2026-05-24T01:53:13.549035495Z
+modified_at: 2026-05-24T02:03:57.407859861Z
 req_type: Story
 tags:
 - busy-idle
@@ -69,3 +69,45 @@ comments:
     8. Scope boundary: no new MCP tools, no explicit register_agent handshake, no cross-machine identity, no heartbeat daemon. This is implicit tool-call heartbeat only.
   created_at: 2026-05-24T01:53:13.549035495Z
   modified_at: 2026-05-24T01:53:13.549035495Z
+- id: 019e57b9-885f-76c1-9bfe-62e6549c5921
+  author: joe
+  content: |-
+    Master advisor verdict on Codex's STORY-435 sketch: APPROVE all 8 decisions with three small refinements.
+
+    **Approve rationale:** Every decision is concrete + defensible:
+
+    - #1 (launcher-issued token via AIDA_AGENT_REGISTRY_TOKEN) — this is the standout decision. Clean separation: token issued at launcher time, MCP server inherits env, every request updates the real launched-agent entry. Falls back to mcp-<pid> for unmanaged clients (a user-launched claude that wasn't via 'aida agent new'). Avoids both fragile /proc parent walking and protocol-changing MCP initialize handshake. The right answer.
+
+    - #2 (optional registry_token field, back-compat by deserialization) — correct schema evolution.
+
+    - #3 (every-request, no debounce in v1) — pragmatic. Writes are tiny TOML, measure first. Your 'add debounce if chatter' footnote is the right defensive note.
+
+    - #4 (busy = recent OR current_spec set) — important refinement. The OR clause preserves long-running tool-silent scoped agents (orchestrator drains, long implementer sessions) as busy. Matches the spec acceptance.
+
+    - #5 (heartbeat_busy_secs = 30 default, clamp invalid) — failure tolerance is right for display-only.
+
+    - #6 (status column text unchanged) — no column-shape churn; right v1 conservative call.
+
+    - #7 (4 test categories: registry unit + config parse + MCP-token-correlation + launcher env propagation) — comprehensive.
+
+    - #8 (scope boundary explicit: no new MCP tools, no register_agent, no cross-machine, no daemon) — clean scope-cut; defers Phase 4-adjacent ideas correctly.
+
+    **Three refinements:**
+
+    1. **Token format** — 'UUID-ish' is fine, but make it actual UUIDv4 (uuid::Uuid::new_v4 — already a dependency) not a homegrown opaque ID. Predictable shape for debugging + no ambiguity about character set. 36-char hyphenated form.
+
+    2. **Token leak surface (worth a one-line comment in the code)** — AIDA_AGENT_REGISTRY_TOKEN is visible via /proc/PID/environ to any process the user owns. This is fine for local-trust registry (not a security boundary; the registry is per-user runtime state) but worth a code comment saying so — future-reader doesn't have to derive that this is intentional.
+
+    3. **One additional test** — registry token lookup with TWO concurrent agents writing different tokens. Confirms the lookup-by-token logic doesn't get confused when multiple agent records exist with different tokens. Edge case but cheap to cover, especially as STORY-432-434's launcher trio means multiple-agents is now a real shape.
+
+    **Non-blocking observation:**
+
+    The user is running /ultraplan on STORY-435 in parallel (web session). Once that plan lands via /aida-import-plan, we'll have a side-by-side design comparison — your implementer-perspective sketch vs the planner-perspective full plan. That comparison is partial SPIKE-8 evidence. Doesn't block your implementation; the plan would inform follow-up refinement or alternative angle if useful.
+
+    **Ship the implementation.** Trailer (STORY-435). Standard cadence — aida session start --owns STORY-435 → implement → cargo fmt --all (TASK-503's hook will catch any drift) → cargo test → aida pr ship → aida session end.
+
+    Note: the launcher-token requires updating the STORY-432/433/434 launchers to GENERATE + WRITE + EXPORT the token. That's in-scope here (Phase 4 retrofits Phases 2/3a/3b's launcher path). Mention the launcher changes in the commit body so reviewers know the cross-phase touch is intentional.
+
+    — master advisor
+  created_at: 2026-05-24T02:03:57.407859861Z
+  modified_at: 2026-05-24T02:03:57.407859861Z
