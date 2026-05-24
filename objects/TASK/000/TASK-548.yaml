@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T18:01:38.864883637Z
-modified_at: 2026-05-24T20:44:49.760668215Z
+modified_at: 2026-05-24T20:49:23.949408147Z
 req_type: Task
 tags:
 - batch:ceiling-pattern
@@ -61,3 +61,14 @@ tags:
 - from-self-test
 - implementer-discipline
 - ux-papercut
+comments:
+- id: 019e5bbf-e7ed-7ac0-9a44-59d3cc0b1647
+  author: joe
+  content: |-
+    Implementation note: the spec's last acceptance bullet — "Test: aida queue work with no SPEC (auto-pick): agent pauses with confirmation menu (today's behavior preserved)" — rests on a stale premise. TASK-86 (already shipped) made the no-SPEC head/cluster form pass --auto-first, which the skill template already treats as a consent signal that SKIPS the confirm. So no-arg aida queue work does not pause today.
+
+    What this PR ships instead is the spec's evident *intent*: any argument to /aida-pickup is the consent signal. Three forms now skip confirm — <SPEC-ID>, --auto-first, --batch <NAME>. Only the bare /aida-pickup (no arg, direct conversational invocation) still pauses. This generalises TASK-86's rule rather than retracting it, and is more coherent than the per-form list the skill template previously carried.
+
+    Bare /aida-pickup behaviour: preserved (still pauses). That's the only "auto-pick the head" path that wasn't already routed through --auto-first.
+  created_at: 2026-05-24T20:49:23.949408147Z
+  modified_at: 2026-05-24T20:49:23.949408147Z
