@@ -15301,6 +15301,38 @@ fn collect_doctor_findings(
         }
     };
 
+    let cache_path =
+        aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
+    let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
+    if let Some(lock_info) = aida_core::read_cache_lock_info(&cache_path)? {
+        let stale_secs = std::env::var("AIDA_CACHE_LOCK_STALE_SECS")
+            .ok()
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(300);
+        let age_secs = lock_info
+            .started_at_utc()
+            .map(|started| now.signed_duration_since(started).num_seconds())
+            .unwrap_or(0);
+        if age_secs >= stale_secs && !process_probe::pid_is_alive(lock_info.pid) {
+            push(DoctorFinding {
+                category: "stale-locks".to_string(),
+                id: lock_info_path.display().to_string(),
+                summary: format!(
+                    "cache lock-info from dead pid {} ({}) is {} old",
+                    lock_info.pid,
+                    if lock_info.command.trim().is_empty() {
+                        "unknown command"
+                    } else {
+                        lock_info.command.as_str()
+                    },
+                    humanize_duration_secs(age_secs.max(0) as u64)
+                ),
+                action: format!("remove stale lock-info file {}", lock_info_path.display()),
+                safe_heal: true,
+            });
+        }
+    }
+
     for lease in &leases {
         let worktree_exists = lease.worktree_path.exists();
         let live_in_worktree = live_sessions.iter().any(|s| {
@@ -15511,11 +15543,12 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         "stale-reviewer" | "stale-reviewer-lease" | "stale-reviewer-leases" => {
             "stale-reviewer-leases"
         }
+        "stale-lock" | "stale-locks" | "locks" => "stale-locks",
         "obe-brief" | "obe-briefs" | "obsolete-briefs" => "OBE-briefs",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
-             orphan-branches, stale-reviewer-leases, OBE-briefs)",
+             orphan-branches, stale-reviewer-leases, stale-locks, OBE-briefs)",
             other
         ),
     };
@@ -15641,6 +15674,7 @@ fn heal_doctor_finding(
         }
         "spec-status-drift" => heal_doctor_spec_status(project_root, finding),
         "orphan-worktrees" => heal_doctor_orphan_worktree(project_root, finding),
+        "stale-locks" => heal_doctor_stale_lock(finding),
         "orphan-branches" if opts.force && opts.yes => {
             heal_doctor_orphan_branch(project_root, finding)
         }
@@ -15762,6 +15796,28 @@ fn heal_doctor_orphan_worktree(
     })
 }
 
+fn heal_doctor_stale_lock(finding: &DoctorFinding) -> Result<DoctorHealResult> {
+    let path = std::path::Path::new(&finding.id);
+    let removed = if path.exists() {
+        std::fs::remove_file(path)
+            .with_context(|| format!("removing stale lock-info file {}", path.display()))?;
+        true
+    } else {
+        false
+    };
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "removed stale cache lock-info file".to_string(),
+        status: if removed { "healed" } else { "skipped" }.to_string(),
+        detail: if removed {
+            None
+        } else {
+            Some("lock-info file was already gone".to_string())
+        },
+    })
+}
+
 fn heal_doctor_orphan_branch(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -15836,6 +15892,16 @@ fn git_output_lossy(worktree: &std::path::Path, args: &[&str]) -> String {
     match out {
         Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
         Err(_) => String::new(),
+    }
+}
+
+fn humanize_duration_secs(secs: u64) -> String {
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m {}s", secs / 60, secs % 60)
+    } else {
+        format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
     }
 }
 
@@ -15953,7 +16019,52 @@ mod story_462_doctor_tests {
             normalize_doctor_category("OBE_briefs").unwrap(),
             "OBE-briefs"
         );
+        assert_eq!(normalize_doctor_category("locks").unwrap(), "stale-locks");
         assert!(normalize_doctor_category("not-a-category").is_err());
+    }
+
+    #[test]
+    fn doctor_detects_and_heals_stale_cache_lock_info() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path();
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
+        let cache_path =
+            aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
+        let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
+        let info = aida_core::CacheLockInfo {
+            pid: 999_999,
+            command: "aida list".to_string(),
+            started_at: (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339(),
+            user: "tester".to_string(),
+            session_id: None,
+        };
+        std::fs::write(&lock_info_path, serde_json::to_string(&info).unwrap()).unwrap();
+
+        let findings = collect_doctor_findings(
+            project_root,
+            &aida_core::models::RequirementsStore::new(),
+            Some("stale-locks"),
+        )
+        .unwrap();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].category, "stale-locks");
+        assert!(findings[0].summary.contains("dead pid"));
+
+        let result = heal_doctor_finding(
+            project_root,
+            &findings[0],
+            &DoctorRunOptions {
+                heal: true,
+                yes: true,
+                category: Some("stale-locks".to_string()),
+                json: false,
+                force: false,
+            },
+        )
+        .unwrap();
+        assert_eq!(result.status, "healed");
+        assert!(!lock_info_path.exists());
     }
 
     #[test]

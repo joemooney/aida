@@ -21,7 +21,10 @@ mod traits;
 mod yaml_backend;
 
 #[cfg(feature = "native")]
-pub use cache::{ArchiveFilter, Cache, ListFilter, RequirementSummary};
+pub use cache::{
+    cache_lock_info_path, read_cache_lock_info, ArchiveFilter, Cache, CacheLockInfo, ListFilter,
+    RequirementSummary,
+};
 #[cfg(feature = "native")]
 pub use cached_git_backend::CachedGitBackend;
 #[cfg(feature = "native")]

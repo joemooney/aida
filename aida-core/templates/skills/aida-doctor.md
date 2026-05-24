@@ -5,7 +5,7 @@ description: Diagnose and heal multi-agent AIDA state drift: stale leases, obsol
 
 # /aida-doctor
 
-Use this skill when the operator suspects AIDA's coordination substrate has drifted: leases left behind after an agent exits, pending briefs for shipped specs, worktrees with no lease, branches with no PR, or specs whose status no longer matches active work.
+Use this skill when the operator suspects AIDA's coordination substrate has drifted: leases left behind after an agent exits, pending briefs for shipped specs, worktrees with no lease, branches with no PR, stale cache lock-info sidecars, or specs whose status no longer matches active work.
 
 ## Workflow
 
@@ -20,6 +20,7 @@ Use this skill when the operator suspects AIDA's coordination substrate has drif
    ```bash
    aida doctor check stale-leases
    aida doctor check OBE-briefs
+   aida doctor check stale-locks
    ```
 
 3. Heal safe categories only after reading the report:
