@@ -57,10 +57,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T07:05:21.735843047Z
-modified_at: 2026-05-23T17:53:20.766516138Z
+modified_at: 2026-05-24T06:36:55.018834674Z
 req_type: Task
 tags:
-- aida-mcp-serve
+- aida:mcp-serve
 - from-codex-observation
 - from-self-test
 - mcp
