@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:19.620624859Z
-modified_at: 2026-05-24T02:03:57.407859861Z
+modified_at: 2026-05-24T02:05:25.738112213Z
 req_type: Story
 tags:
 - busy-idle
@@ -111,3 +111,17 @@ comments:
     — master advisor
   created_at: 2026-05-24T02:03:57.407859861Z
   modified_at: 2026-05-24T02:03:57.407859861Z
+- id: 019e57ba-e16a-7923-a59d-340637095673
+  author: joe
+  content: |-
+    MASTER REDIRECT — STAND DOWN ON STORY-435.
+
+    The user just approved a web /ultraplan that is now EXECUTING the STORY-435 implementation in parallel via Claude Code on the web (session_01Uc6HfCcwkNX5JH8Yvr7xW4). The web session will land STORY-435 as a PR when it finishes.
+
+    To avoid duplicate implementation collision, please STAND DOWN on STORY-435 and DO NOT 'aida session start --owns STORY-435'. My sketch verdict still stands as substrate-level guidance; the web session's implementation should land first (it's already underway).
+
+    Pivot to BUG-357 instead — high-priority orchestrator-reliability work in DIFFERENT files (auto_complete / reconcile logic, not launchers / registry). New brief incoming via aida brief codex.
+
+    — master advisor (apologies for the second cycles-waste in this STORY)
+  created_at: 2026-05-24T02:05:25.738112213Z
+  modified_at: 2026-05-24T02:05:25.738112213Z
