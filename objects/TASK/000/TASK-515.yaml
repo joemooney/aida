@@ -1,0 +1,61 @@
+id: 019e57ef-ed90-7f21-a22c-b01eb1de11f3
+spec_id: TASK-515
+agreed_id: TASK-515
+title: 'aida status: derive agent visibility from active leases when launcher-provenance is absent (lease-as-agent fallback)'
+description: |-
+  ## Why
+
+  STORY-431 (Phase 1) added agent registry + aida status integration: 'Active agents' section appears when .aida/agents/<type>-<pid>.toml entries exist. STORY-432/433/434 (launcher trio) write registry entries when used.
+
+  Empirical 2026-05-23 evening: operator sessions are launched via each agent's own CLI (codex, antigravity, etc.) — NOT via 'aida agent new <kind>'. So the registry stays empty even when multiple agents are actively working. aida status correctly omits the section (per STORY-431's 'omit when empty'), but operator wants visibility into who's working what.
+
+  Meanwhile aida session leases ALREADY shows active leases with scope + branch + worktree + role. The information needed for an 'Active agents' view is sitting in the lease records.
+
+  ## Proposed fix
+
+  aida status should derive an 'Active agents' section from active leases when the registry directory is empty:
+
+  - Each active lease is rendered as an agent line
+  - Agent type: 'unknown' if not derivable, else inferred from AIDA_AGENT_TYPE env captured at session_start (if available) or commit-tag history on the spec
+  - Status: busy (lease in working state) / idle / stale
+  - Owns: SPEC-ID
+  - Worktree: path
+
+  When the launcher-populated registry DOES have entries, merge: launcher entries first (richer metadata), then leases that aren't covered by a launcher entry.
+
+  ## Acceptance
+
+  - [ ] aida status shows 'Active agents' section when ANY of: registry entries exist, OR active leases exist
+  - [ ] Lease-derived entries clearly labeled (e.g., '(via lease; agent type: unknown)') to distinguish from launcher entries
+  - [ ] If session_start captured AIDA_AGENT_TYPE env, show that as the agent type
+  - [ ] Merge logic: launcher entry wins when both exist for same scope/PID
+  - [ ] Test: create lease via aida session start --owns SPEC, confirm aida status shows it under 'Active agents'
+  - [ ] No regression: behavior with populated registry (launcher-spawned) unchanged
+
+  ## Composes with
+
+  - STORY-431 (the registry + aida status integration this extends)
+  - STORY-432/433/434 (the launcher trio — preferred registration path)
+  - STORY-435 (MCP heartbeat — when shipped, adds busy/idle freshness on top)
+  - Gap 2 (the remote-agent registry, separate TASK)
+
+  ## Origin
+
+  2026-05-23 user: 'you are showing status for codex/agy/web/queue - aida status needs to show agent status'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T03:03:22.256550988Z
+modified_at: 2026-05-24T03:03:22.256550988Z
+req_type: Task
+tags:
+- agents
+- aida:status
+- from-self-test
+- from-user-direction
+- leases
+- operator-ux
+- parent:EPIC-31
+- phase-1-followup
+- registry
