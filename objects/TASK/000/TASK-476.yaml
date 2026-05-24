@@ -10,12 +10,12 @@ description: |-
   Fix: drop the `:47443` suffix and leave the symbol-ref alone, OR refresh the line number. Symbol-ref-only is the more durable form.
 
   Raised in review of PR-207: https://github.com/joemooney/aida/pull/207#issuecomment-4522658109
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:59:26.489156710Z
-modified_at: 2026-05-24T02:28:51.455439429Z
+modified_at: 2026-05-24T02:29:02.437461530Z
 req_type: Task
 tags:
 - docs
@@ -26,3 +26,7 @@ relationships:
   target_id: 019e57d0-4004-7a21-9c44-b45cb4f77332
   created_at: 2026-05-24T02:28:51.455432590Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-24T02:29:02.437461530Z
+  implemented_by: joe
