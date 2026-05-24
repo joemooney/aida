@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-05-17T05:22:28.705243643Z
+modified_at: 2026-05-24T04:59:09.142023431Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -290,3 +290,31 @@ comments:
     Both produce machine-state (NeedsAttention + reason category) AND human-readable triage context (the comment).
   created_at: 2026-05-17T05:22:28.705243643Z
   modified_at: 2026-05-17T05:22:28.705243643Z
+- id: 019e5859-edd6-7923-91bc-c140e17777ef
+  author: joe
+  content: |-
+    Master advisor verdict on the EPIC-28 /ultraplan output (saved to docs/plans/2026-05-23-epic-28-dependency-aware-drain.md): **STRONG APPROVE** with two small refinements + one substrate observation.
+
+    **Approve rationale:** This is one of the cleanest plans tonight. Standout design moves:
+
+    - **D1 (reuse NeedsAttention, no Shelved status)** — correct lifecycle thinking; shelved failure and punted obstacle are the same lifecycle position (paused awaiting triage). A separate status would fork the state machine for no semantic gain.
+    - **D2 (failure_reason sibling field, not PuntCategory variant)** — preserves the PuntCategory invariant that aida-core models.rs explicitly documents (obstacle-shape, not failure-shape). Honors the substrate's existing design discipline.
+    - **D7 (resolve_batch_members filters NeedsAttention)** — closes a latent punt re-pickup loop incidentally; documenting the closed bug in the commit message rather than separate filing is the right call.
+    - **PhaseDriver::shelve_on_failure as a trait method** (D-noted in 'risks' #1 mitigation) — keeps auto_complete.rs pure (the docstring on OrchestrationResult specifically calls out the pure-by-design invariant). Side-effect lives in RealPhaseDriver in main.rs. Excellent architectural discipline.
+    - **Scope shrink** to ship STORY 3 + STORY 4 only as 'first vertical' — exactly the right move per feedback_pushback_on_overengineering memory. Files the other 3 STORYs with concrete scope but defers implementation.
+
+    **Two refinements (small, in-scope):**
+
+    1. **R3 (latent punt re-pickup) should still be filed as a BUG** even if it's fixed incidentally here. The commit message documentation is necessary but not sufficient — without a spec ID, the fix isn't queryable + future-readers can't find the test that proves the fix holds. File as a low-priority BUG with status Completed at PR-merge time, referencing this EPIC-28 implementation as the fix. Cost: 30 seconds.
+
+    2. **Acceptance criterion #1 timing risk: the 5 child STORYs filed by this work could collide with already-claimed IDs per BUG-372 (ID-allocation race).** Specifically: STORY-446/447/448 are ALREADY claimed by web /ultraplan's EPIC-28 plan output (we already saw them on origin/aida-store). The plan acknowledges this implicitly ('implemented in this PR' for STORY-448 = the local STORY 3). When the implementer files the 5 STORYs, they should verify against existing IDs first — if 446/447/448 already exist as the EPIC-28 children, just reuse them; only file STORY 4 + STORY 5 fresh.
+
+    **Substrate observation worth noting (no separate filing required):**
+
+    The plan's Risk 6 mentions exit code 2 for DrainedWithShelved. Add this to CLAUDE.md's exit-code documentation (the plan calls it out but worth emphasizing the doc-update is part of the PR). Scripts wrapping aida queue work --batch may need to update their expected-exit-code matrix.
+
+    **Ship the implementation.** Trailer (EPIC-28) or per-STORY trailer (STORY-448 if that's the unit being merged). PR-273 is already open with +1188/-51 lines; next step is reviewing the actual diff against this plan for divergence + sequencing decision relative to other EPIC-28-touching PRs.
+
+    — master advisor
+  created_at: 2026-05-24T04:59:09.142023431Z
+  modified_at: 2026-05-24T04:59:09.142023431Z
