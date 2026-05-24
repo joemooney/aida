@@ -1,0 +1,71 @@
+id: 019e5aba-1461-7a43-879a-6ca7b0fa6d22
+spec_id: TASK-542
+agreed_id: TASK-542
+title: 'aida agent new --name <name>: explicit naming + default <agent>-<role>-<seq> auto-naming'
+description: |-
+  ## Substrate gap
+
+  Today 'aida agent new codex --role implementer' registers an entry under .aida/agents/ with PID-or-UUID-based identifier. When multiple Codex instances run concurrently (parallel dispatch becoming common in MVP-pace work), the operator has no stable handle: 'codex-1' vs 'codex-2' vs 'codex-on-aida-chat' vs 'codex-rebasing-PR-267'.
+
+  Every per-agent surface — briefs, queue routing (STORY-459), aida status — needs a stable name to be usable. Today the operator must mental-map PIDs to roles to repos.
+
+  ## Proposed shape
+
+  1. 'aida agent new <type> --name <name>' — explicit name. Validates uniqueness across active agents.
+
+  2. Default when --name absent: '<type>-<role>-<seq>' where seq is the next free integer for the (type, role) combination. Examples:
+     - 'aida agent new codex --role implementer' → 'codex-implementer-1' (first), 'codex-implementer-2' (second running concurrently)
+     - 'aida agent new antigravity --role implementer' → 'antigravity-implementer-1'
+     - 'aida agent new claude --role advisor' → 'claude-advisor-1'
+
+  3. When an agent exits, its name is freed; subsequent agents reuse the lowest free seq (so concurrent count == max seq in use, not monotonic-growing).
+
+  4. Name is the stable handle in:
+     - 'aida brief <name> <SPEC>' — already by type today, but accepts named instance per STORY-459's per-agent routing
+     - 'aida queue add --for-agent <name>' (STORY-459 dependency)
+     - 'aida agent ls' and 'aida status' Active Agents section
+     - 'aida agent stop <name>' for clean termination
+
+  5. Backward compat: if name doesn't match any active agent, fall back to type-level routing (today's behavior). Warn on ambiguity.
+
+  ## Acceptance
+
+  - [ ] '--name <name>' flag on 'aida agent new'
+  - [ ] Default '<type>-<role>-<seq>' when --name absent
+  - [ ] Uniqueness validation across active agents (refuse if name in use)
+  - [ ] Sequence number reuse on exit
+  - [ ] 'aida agent ls' shows the registered name prominently
+  - [ ] 'aida status' Active Agents section shows name
+  - [ ] 'aida agent stop <name>' clean-termination verb
+  - [ ] Backward compat with type-level routing
+  - [ ] Tests: seq auto-allocation, uniqueness refusal, name-vs-type routing precedence, reuse-on-exit
+
+  ## Composes with
+
+  - EPIC-31 (agent-lifecycle keystone — this completes the naming dimension)
+  - STORY-431 (registry + aida status — surfaces names)
+  - STORY-432/433/434 (claude/codex/antigravity launchers — all gain --name)
+  - STORY-459 (aida queue --for-agent — needs stable names to route)
+  - TASK-541 (aida brief --depends-on — references agent names; same need)
+  - TASK-515 (lease-as-agent fallback — when no launcher, name derived from lease — '<type-unknown>-<role>-<seq>' or similar)
+  - feedback_one_master_advisor_until_subsystems — names enable per-subsystem advisor identity ('advisor-storage', 'advisor-cli') when subsystems emerge
+
+  ## Origin
+
+  2026-05-24 master dispatched Codex-1 (aida) + Codex-2 (aida-chat) concurrently. Operator has been writing 'Codex-1' / 'Codex-2' in advisor commentary but no substrate mechanism backs the labels. With 4+ agents becoming common (master + Codex-1 + Codex-2 + Antigravity + future second Antigravity instance), stable names are load-bearing.
+
+  trace:TASK-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T16:03:24.897364610Z
+modified_at: 2026-05-24T16:03:24.897364610Z
+req_type: Task
+tags:
+- aida:agent
+- from-self-test
+- multi-agent
+- naming
+- routing
+- scaling-pattern
