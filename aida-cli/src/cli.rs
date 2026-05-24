@@ -2829,6 +2829,32 @@ pub enum QueueCommand {
         /// `aida session start --path`.
         #[clap(long)]
         path: Option<String>,
+        /// Stack this session's branch atop the most recent un-merged
+        /// in-flight implementer branch instead of forking from
+        /// `origin/main`. Lets the user start spec Y while spec X's PR is
+        /// still in CI/review — when X merges, `aida pull` auto-rebases Y
+        /// onto the new main (slice 3). The resolver picks the freshest
+        /// implementer lease whose branch is not yet merged; the lease
+        /// covering cwd is skipped so a session can't stack on itself.
+        /// Mutually exclusive with `--base`.
+        // trace:STORY-248 | ai:claude
+        #[clap(long, conflicts_with = "base")]
+        stack: bool,
+        /// Explicit base branch for this session — fork from `BRANCH`
+        /// instead of `origin/main`. The branch must exist locally or on
+        /// origin. Refuses if the branch's PR has already merged
+        /// (suggests `aida pull` + a fresh `--base main`); pass
+        /// `--force-base` to override.
+        // trace:STORY-248 | ai:claude
+        #[clap(long, value_name = "BRANCH", conflicts_with = "stack")]
+        base: Option<String>,
+        /// Bypass the `--base BRANCH` safety check that refuses an
+        /// already-merged base. Use when you know the rebase will still
+        /// apply cleanly (e.g. base merged but branch tip hasn't been
+        /// reused). Only meaningful with `--base`.
+        // trace:STORY-248 | ai:claude
+        #[clap(long = "force-base")]
+        force_base: bool,
         /// Override the In-Progress guard when the target scope is already
         /// held by another active lease. Without --steal, `aida queue work`
         /// refuses and names the holding lease. With --steal, the holding
@@ -3606,6 +3632,35 @@ pub enum DrainCommand {
         /// orchestrator removes the file itself on exit.
         #[clap(long)]
         clear: bool,
+    },
+}
+
+/// Stack-graph introspection for STORY-248. `aida queue work --stack /
+/// --base` records each stacked branch's parent in `.aida/stacks.json`;
+/// `aida stack show` renders the chain tree; `aida stack list` prints one
+/// chain per line for scripting.
+// trace:STORY-248 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum StackCommand {
+    /// Render the stack tree — one indented line per branch, grouped by
+    /// chain. Stale entries (branch missing locally + on origin) are
+    /// suffixed with `(stale)` and can be cleaned by passing
+    /// `--prune-stale`.
+    Show {
+        /// Emit the chains as JSON instead of the indented tree.
+        #[clap(long)]
+        json: bool,
+        /// Remove stack entries whose branch no longer exists locally or
+        /// on origin. Idempotent — safe to re-run.
+        #[clap(long)]
+        prune_stale: bool,
+    },
+    /// One line per chain in the form `bottom → mid → top`. Quieter than
+    /// `show`; useful for scripts and the statusline.
+    List {
+        /// Emit the chains as JSON instead of the arrow form.
+        #[clap(long)]
+        json: bool,
     },
 }
 
@@ -4388,6 +4443,18 @@ pub enum Command {
         // trace:TASK-108 | ai:claude
         #[clap(long)]
         json: bool,
+        /// Auto-rebase tracked stacked branches whose base merged in this
+        /// pull. Walks `.aida/stacks.json` bottom-up; for each chain whose
+        /// `parent_branch` was just deleted on origin, runs
+        /// `git rebase --onto origin/main <recorded-parent-sha> <branch>`
+        /// in that branch's worktree. Without `--auto`, prompts
+        /// interactively and refuses non-interactively. Refuses to execute
+        /// any rebase the `aida_core::rebase::classify` pure classifier
+        /// flags as `diverged-risky` — drops the user into `/aida-rebase`
+        /// for those.
+        // trace:STORY-248 | ai:claude
+        #[clap(long)]
+        auto: bool,
     },
 
     /// Detect, classify, and (optionally) execute a rebase of the
@@ -4489,6 +4556,14 @@ pub enum Command {
     // trace:STORY-301 | ai:claude
     #[clap(subcommand)]
     Drain(DrainCommand),
+
+    /// Inspect the stacked-branch graph: `aida queue work --stack` records
+    /// each stacked branch's parent in `.aida/stacks.json`; `aida stack
+    /// show` / `list` render the chains. Pairs with the auto-rebase
+    /// cascade that `aida pull --auto` runs when a base merges.
+    // trace:STORY-248 | ai:claude
+    #[clap(subcommand)]
+    Stack(StackCommand),
 
     /// Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the
     /// non-obvious jq filter (assistant content blocks, text-only by default,
