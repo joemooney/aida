@@ -15902,18 +15902,20 @@ mod agent_launcher_tests {
         let fake_bin = tmp.path().join("bin");
         std::fs::create_dir_all(&fake_bin).unwrap();
         let fake_agent = fake_bin.join("agent");
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+                env_out.display(),
+                argv_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let argv_out = tmp.path().join("argv.txt");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
         let config = AgentLaunchConfig {
             agent_type: "codex",
             binary: "codex",
@@ -15939,8 +15941,6 @@ mod agent_launcher_tests {
             "{argv}"
         );
         assert!(agent_registry::list_agent_views(&project).is_empty());
-        std::env::remove_var("AIDA_TEST_ENV_OUT");
-        std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
 
     #[cfg(unix)]
@@ -15957,18 +15957,20 @@ mod agent_launcher_tests {
         )
         .unwrap();
         let fake_agent = tmp.path().join("agy");
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+                env_out.display(),
+                argv_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let argv_out = tmp.path().join("argv.txt");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
         let config = AgentLaunchConfig {
             agent_type: "antigravity",
             binary: "agy",
@@ -15991,8 +15993,6 @@ mod agent_launcher_tests {
         assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
         assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
         assert!(agent_registry::list_agent_views(&project).is_empty());
-        std::env::remove_var("AIDA_TEST_ENV_OUT");
-        std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
 
     #[test]
@@ -16041,18 +16041,20 @@ mod agent_launcher_tests {
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
         let fake_agent = tmp.path().join("agent");
+        let env_out = tmp.path().join("env.txt");
+        let context_out = tmp.path().join("context-copy.md");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\ncp \"$AIDA_AGENT_CONTEXT_FILE\" \"$AIDA_TEST_CONTEXT_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\ncp \"$AIDA_AGENT_CONTEXT_FILE\" '{}'\n",
+                env_out.display(),
+                context_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let context_out = tmp.path().join("context-copy.md");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_CONTEXT_OUT", &context_out);
         let context_path = project
             .join(".aida/agents/context")
             .join("codex-token.context.md");
@@ -16081,8 +16083,6 @@ mod agent_launcher_tests {
         assert!(env.contains("AIDA_AGENT_REGISTRY_TOKEN=token"), "{env}");
         assert_eq!(copied, "launch context body");
         assert!(!context_path.exists());
-        std::env::remove_var("AIDA_TEST_ENV_OUT");
-        std::env::remove_var("AIDA_TEST_CONTEXT_OUT");
     }
 }
 
