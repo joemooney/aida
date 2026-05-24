@@ -90,7 +90,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:55:05.971218903Z
-modified_at: 2026-05-24T05:04:20.552864267Z
+modified_at: 2026-05-24T17:32:13.153425105Z
 req_type: Story
 tags:
 - assistance-calibration
@@ -102,6 +102,7 @@ tags:
 - sibling-of-TASK-340
 - strategic
 - telemetry
+- test-task-518
 comments:
 - id: 019e585e-ae48-7d31-b34a-5b58d6c24f72
   author: joe
