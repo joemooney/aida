@@ -282,6 +282,18 @@ and merge when green"* and lingered. The PR was already merged; the
 lease was already released; the only thing left was the Ctrl-D the user
 then had to type twice manually. Don't reproduce that shape.
 
+### Substrate-as-bouncer for pending briefs (BUG-378)
+
+`aida queue done` and `aida edit --status done|completed` now scan the
+brief surface (`.aida/agent-briefs/<your-agent-type>/`) and print a loud
+`NEW BRIEF(S) PENDING` banner to stderr if work is queued for your agent
+type. **If you see that banner, read the listed brief file(s) before
+exiting — even if your local scratchpad / task.md says "all done."** Your
+internal session state is a private draft, not ground truth; the brief
+surface is the canonical pickup queue. The motivating incident is the
+scratchpad-drift loop where an agent re-reads its own `task.md` and keeps
+re-rendering "all shipped" while a new brief sits unread. trace:BUG-378
+
 ## State Transitions
 
 During implementation, requirements should transition through:

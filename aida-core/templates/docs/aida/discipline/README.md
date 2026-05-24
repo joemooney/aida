@@ -29,6 +29,7 @@ in hand.
 | [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
 | [`skill-prompt-kinds.md`](skill-prompt-kinds.md) | Classifying `AskUserQuestion` prompts into mechanical vs design-fork kind, and their `--zen` pause behavior |
 | [`substrate-as-bouncer.md`](substrate-as-bouncer.md) | The substrate-as-bouncer principle, detailing the pre-commit gitignored check hook and reviewer PR gates |
+| [`brief-polling.md`](brief-polling.md) | How agents should poll AIDA's brief surface — the scratchpad-drift failure mode and the `aida queue done` pending-brief banner |
 | [`robust-project-root-resolution.md`](robust-project-root-resolution.md) | Project-root resolution fallbacks, explaining how skill-rendering gracefully handles missing git repositories |
 
 ## The companion: the starter memory pack
