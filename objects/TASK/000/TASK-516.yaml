@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:06:37.039775930Z
-modified_at: 2026-05-24T03:06:37.039775930Z
+modified_at: 2026-05-24T15:44:09.292935214Z
 req_type: Task
 tags:
 - advisor
@@ -81,3 +81,20 @@ tags:
 - sibling-of-TASK-114
 - ultraplan
 - workflow
+comments:
+- id: 019e5aa8-724c-7e72-8fe0-cfe2ca4b077e
+  author: joe
+  content: |-
+    Codex sketch before implementation:
+
+    1. Add a real top-level `aida import-plan <file>` command (not just the existing skill-template workflow) with flags `--request-review`, `--queue`, `--auto-anchor`, and `--dry-run`. Keep the current skill template as the human-facing wrapper, updated to call the CLI.
+    2. Represent pending review with a small sentinel under `.aida/plan-reviews/pending/<SPEC-ID>.toml` carrying `{spec_id, plan_path, requested_at, status, note?}` rather than tags. Rationale: review state is operational/local like briefs, and status can summarize without mutating the spec graph repeatedly.
+    3. Add `aida plan-review approve|revise|decline <SPEC> [--note <TEXT>]`. `approve` removes/moves the pending sentinel to acked/approved and comments on the spec; `revise`/`decline` records the verdict and comments, leaving an audit trail. If the sentinel is missing, fail with a helpful message.
+    4. Queue gate: before `aida queue work <SPEC>` dispatches, detect pending review for that spec. Default: refuse with clear text and suggest `aida plan-review approve <SPEC>` or `--override-plan-review`. Add `--override-plan-review` only to queue work; it bypasses the gate and logs the bypass.
+    5. `aida status` gets a compact section: `Plan reviews pending (N)` with spec + plan path. Omit cleanly when empty.
+    6. Import behavior with `--request-review`: move/copy plan into `docs/plans/`, run/optionally fix `aida plan verify`, write sentinel, post spec comment: `Plan landed for master review: <path>. Master verdict awaited before implementer pickup.` Without `--request-review`, preserve existing import semantics.
+    7. Docs/scaffold: add `docs/aida/plan-review-workflow.md` and template it through `aida-core/templates/docs/aida/plan-review-workflow.md`; update `aida-import-plan` skill invocation docs to mention `--request-review` and the review commands.
+    8. Tests: CLI parse for new commands/flags; sentinel roundtrip; import with request-review writes sentinel + comment; queue work refuses pending review and accepts override; plan-review approve removes pending marker; status renders pending count.
+    9. Boundary: no web `/ultraplan` UI changes; no per-advisor routing; no auto-approval heuristics. This ships the master-review handshake as a local substrate gate first.
+  created_at: 2026-05-24T15:44:09.292935214Z
+  modified_at: 2026-05-24T15:44:09.292935214Z
