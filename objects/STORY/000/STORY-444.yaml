@@ -79,12 +79,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'we are using agile terminology now ... I wonder if we want an /aida-backlog-groom command/skill to move items into the queue. I can imagine I want to move very low risk/non conflicting items so that I can process in a batch or in parallel.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:21:20.065824954Z
-modified_at: 2026-05-24T07:27:13.700996115Z
+modified_at: 2026-05-24T07:27:50.170129650Z
 req_type: Story
 tags:
 - agile
@@ -145,3 +145,7 @@ comments:
   content: Commit 4cc04b0c references this requirement
   created_at: 2026-05-24T07:27:13.700996115Z
   modified_at: 2026-05-24T07:27:13.700996115Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-24T07:27:50.170129650Z
+  implemented_by: joe
