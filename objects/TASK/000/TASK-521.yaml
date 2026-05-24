@@ -1,0 +1,68 @@
+id: 019e5842-26a6-71d0-aa7a-eb449a137803
+spec_id: TASK-521
+agreed_id: TASK-521
+title: Audit AIDA_TEST_* process-global env var usage in tests; isolate via per-test temp paths (BUG-371 root-cause sweep)
+description: |-
+  ## Why
+
+  Codex's BUG-371 fix (2026-05-23) addressed parallel test interference via process-global AIDA_TEST_* env vars — fake-agent tests were colliding because they shared env state. Fix: tests now write to literal per-test temp paths in their generated scripts.
+
+  But the fix was SPECIFIC to the failing fake-agent tests. The anti-pattern (tests reading/writing process-global env state expected to be unique-per-test) may exist elsewhere. If so, those tests will silently pass in serial but fail when parallel + co-scheduled with another test touching the same env var. Symptoms: intermittent CI failures, flaky tests, NotFound errors at file unwraps.
+
+  ## Investigation
+
+  Grep for AIDA_TEST_* env var usage across the workspace:
+
+    rg 'AIDA_TEST_' --type rust
+
+  For each hit:
+  - Is it a test setup writing to process-global state? -> potentially fragile
+  - Is it isolated via per-test temp paths (Codex's BUG-371 pattern)? -> safe
+  - Is it reading env state that another test sets? -> definitely fragile
+
+  Also check non-AIDA env vars used in tests that share process-global state:
+  - TEMP / TMPDIR overrides
+  - HOME / XDG_CONFIG_HOME overrides
+  - Anything written via std::env::set_var in test setup
+
+  ## Fix pattern
+
+  For each fragile test, apply Codex's BUG-371 pattern:
+  - Generate per-test temp paths (via TempDir or similar)
+  - Write the path into the test's generated artifacts (scripts, configs) as literal values
+  - DON'T rely on env-var-passing-into-subprocess-which-reads-env
+
+  ## Acceptance
+
+  - [ ] All AIDA_TEST_* usage in tests audited
+  - [ ] Non-isolated usages identified (in a comment in this spec or a new doc)
+  - [ ] Each non-isolated test migrated to per-test temp paths
+  - [ ] Regression test that runs aida-cli + aida-core tests in parallel mode (cargo test --workspace -- --test-threads=N) consistently
+  - [ ] Doc in docs/aida-discipline/test-isolation.md (or docs/aida/discipline/test-isolation.md per STORY-443) explaining the pattern
+
+  ## Composes with
+
+  - BUG-371 (the empirical case)
+  - STORY-436 (the fake-agent tests that Codex fixed)
+  - Future tests should follow the pattern by default
+  - feedback_substrate_as_bouncer_not_rules — a clippy lint or test-template that prevents the anti-pattern would be substrate-as-bouncer; defer to follow-up if audit reveals widespread issue
+
+  ## Origin
+
+  2026-05-23 /aida-capture sweep. Codex's BUG-371 fix exposed the anti-pattern; this TASK is the broader audit.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T04:33:10.822701627Z
+modified_at: 2026-05-24T04:33:10.822701627Z
+req_type: Task
+tags:
+- aida-cli
+- env-vars
+- from-bug-371
+- from-self-test
+- parallel-test-interference
+- reliability
+- sweep-pattern
+- test-hygiene
