@@ -236,7 +236,7 @@ fn generate_aida_header_shell(content: &str) -> String {
 /// Header form depends on file type:
 /// - `.json`             → no header (JSON has no comment syntax; an HTML
 ///   comment breaks parsers like Claude Code's settings reader).
-/// - shell scripts (`.sh`) → `# AIDA Generated: ...` shell-comment header
+/// - shell scripts (`.sh`) and TOML files → `# AIDA Generated: ...`
 ///   prepended.
 /// - markdown with YAML frontmatter (starts with `---\n` and has a
 ///   closing `---\n`) → header inserted *after* the frontmatter so YAML
@@ -256,10 +256,11 @@ pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> Strin
         || path_str.starts_with(".claude/hooks/")
         || raw_content.starts_with("#!");
     let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
+    let is_toml = path.extension().and_then(|e| e.to_str()) == Some("toml");
 
     if is_json {
         raw_content.to_string()
-    } else if is_shell {
+    } else if is_shell || is_toml {
         // The shebang (if present) must remain on line 1 or the OS won't
         // honor it. Inject the AIDA-Generated comment block AFTER the
         // shebang line. trace:BUG-21 | ai:claude
@@ -868,6 +869,28 @@ impl Scaffolder {
                     FileStatus::New
                 },
             });
+        }
+
+        // .aida/reserved-paths.toml — hand-curated project reservations
+        // injected into `aida ultraplan` prompts. trace:TASK-517 | ai:codex
+        if let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get("reserved-paths.toml") {
+            new_dirs.insert(PathBuf::from(".aida"));
+            let path = PathBuf::from(".aida/reserved-paths.toml");
+            let artifact = self.create_artifact(
+                path.clone(),
+                body.to_string(),
+                "Project reserved namespaces for /ultraplan collision avoidance".to_string(),
+                false,
+            );
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+            artifacts.push(artifact);
         }
 
         // .claude/AIDA.md — single source of truth for AIDA conventions.
@@ -2410,6 +2433,11 @@ mod tests {
         // Check that CLAUDE.md was created
         assert!(temp_dir.path().join("CLAUDE.md").exists());
         assert!(temp_dir.path().join("AGENTS.md").exists());
+        assert!(temp_dir.path().join(".aida/reserved-paths.toml").exists());
+        let reserved_paths =
+            std::fs::read_to_string(temp_dir.path().join(".aida/reserved-paths.toml")).unwrap();
+        toml::from_str::<toml::Value>(&reserved_paths)
+            .expect("scaffolded reserved-paths.toml must be valid TOML");
 
         // Check that .claude directories were created
         assert!(temp_dir.path().join(".claude/commands").exists());
@@ -2450,6 +2478,7 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-brief-pickup.md")));
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
+        assert!(paths.contains(&PathBuf::from(".aida/reserved-paths.toml")));
     }
 
     #[test]
