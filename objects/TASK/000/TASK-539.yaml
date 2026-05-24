@@ -1,0 +1,29 @@
+id: 019e5aae-4248-7803-a662-d6fdeb535d15
+spec_id: TASK-539
+agreed_id: TASK-539
+title: 'aida status: surface pending findings tally + per-finding summary (STORY-385 follow-up)'
+description: |-
+  Refinement deferred from STORY-385 to keep PR scope tight. Add a 'Findings' section to 'aida status' showing:
+
+  1. Pending findings count (delta since last run if tracked)
+  2. Per-finding mini-table: ID + source spec + tag + verdict (one line each)
+  3. JSON emission includes structured findings detail
+
+  Compose with STORY-385's other 'needs attention' categories. Without this, the findings backlog is silent in status; user must remember 'aida findings list' explicitly. Empirically the backlog has been re-triaged 2-3x/day during heavy sessions.
+
+  Source: STORY-385 comment 019e50ab-... at 2026-05-22.
+
+  trace:STORY-385
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-24T15:50:30.216362474Z
+modified_at: 2026-05-24T15:50:30.216362474Z
+req_type: Task
+tags:
+- aida:status
+- batch:aida-status
+- findings
+- from-self-test
+- story-385-followup
