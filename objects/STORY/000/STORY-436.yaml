@@ -51,7 +51,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:23.515609854Z
-modified_at: 2026-05-23T16:22:23.515609854Z
+modified_at: 2026-05-24T02:55:43.879548222Z
 req_type: Story
 tags:
 - context-injection
@@ -60,3 +60,30 @@ tags:
 - parent:EPIC-31
 - phase-5
 - role-context
+comments:
+- id: 019e57e8-ef07-7ea0-b770-a70a790bfe0f
+  author: joe
+  content: |-
+    Architecture sketch for STORY-436 role-context auto-injection:
+
+    1. Insertion point: extend the existing `aida agent new` launcher path, not global shell startup. Add `--no-context` to each `agent new <kind>` subcommand, thread it through `agent_new_with_config`, and build context immediately before `run_tracked_agent` spawns the process.
+
+    2. Context artifact: render one universal markdown primer at `.aida/agents/context/<agent-type>-<pid-or-token>.md` or, pre-spawn, `<agent-type>-<uuid>.context.md`. Do not encode context only in env vars; env is too small/opaque and hard to inspect. Pass the path via `AIDA_AGENT_CONTEXT_FILE` for every agent.
+
+    3. Per-agent delivery: keep one shared renderer plus thin agent adapters. Claude can receive the file path/env and also rely on existing `aida-role-context.sh`; Codex gets the path/env plus a launch argument/prompt if the CLI supports it; Antigravity gets the same path/env and can mirror or reference it from brain/walkthrough initialization. If an agent lacks a safe argv injection primitive, print a one-line operator hint and still write the file.
+
+    4. Default behavior: context injection ON by default for `aida agent new`. Add `--no-context` as the explicit escape hatch. The launcher is already AIDA-supervised, so orientation is expected; manual raw `claude` / `codex` launches remain untouched.
+
+    5. Primer content MVP: project root, launch cwd, agent type, role, current spec if provided, active lease summary if `--spec` created one, role guidance for advisor/implementer/reviewer, and pending brief count for the launched agent type. For implementer with no spec, include current queue head. For reviewer, include PR context only when scope parses as PR/MR; otherwise generic reviewer guidance.
+
+    6. Role guidance source: reuse existing role TOML lookup semantics where possible (project `.aida/roles/<role>.toml`, then `~/.aida/roles/<role>.toml`). Fallback to built-in concise role templates for advisor/implementer/reviewer so the feature works in fresh projects without custom roles.
+
+    7. STORY-435 composition: if heartbeat lands first, include the registry id/token and heartbeat expectation in the primer, e.g. 'MCP calls update last_active_at; idle threshold defaults to 30s'. Do not make context injection depend on heartbeat; it should degrade independently.
+
+    8. Cleanup/lifecycle: context files are ephemeral registry-adjacent state under `.aida/agents/` and should be removed when the spawned process exits, same lifecycle as `remove_agent`. If cleanup fails, stale files are harmless and can be pruned later.
+
+    9. Tests: clap parse tests for `--no-context` on claude/codex/antigravity; pure renderer tests for advisor/implementer/reviewer content; fake-agent integration test asserts `AIDA_AGENT_CONTEXT_FILE` exists and contains role/spec/brief count; `--no-context` test asserts env var absent. Add docs in CLAUDE.md and AGENTS.md.
+
+    Recommended MVP scope: shared renderer + default-on file/env delivery for all three launchers, but only hard-require visible first-context injection for Claude if Codex/Antigravity lack a reliable argv primitive. File follow-ups for richer Codex/Antigravity native delivery if needed.
+  created_at: 2026-05-24T02:55:43.879548222Z
+  modified_at: 2026-05-24T02:55:43.879548222Z
