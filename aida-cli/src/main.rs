@@ -28702,13 +28702,14 @@ mod statusline_tests {
         );
     }
 
-    /// TASK-491: regression for the spec's worked example — add 5 items in
-    /// order, move the position-5 item to the top, queue ends up as
-    /// `[5, 1, 2, 3, 4]`. Exercises `move_to_absolute_position(slot=1)`,
-    /// which is the same path `--top` falls into after the no-op check.
-    /// trace:TASK-491 | ai:claude
+    /// TASK-280/TASK-491: regression for the shared visible ordering in the
+    /// spec's worked example — add 5 items in order, move the position-5 item
+    /// to absolute slot 1, queue ends up as `[5, 1, 2, 3, 4]`. This exercises
+    /// the `--to 1` path; `--top` uses separate position arithmetic that should
+    /// be tested independently if it needs coverage.
+    /// trace:TASK-491 TASK-501 | ai:claude
     #[test]
-    fn queue_move_to_top_promotes_last_item_to_head() {
+    fn queue_move_to_absolute_slot_promotes_last_item_to_head() {
         let ids: Vec<uuid::Uuid> = (1..=5).map(|n| uuid::Uuid::from_u128(n)).collect();
         let (order, slot) = move_to_absolute_position(&ids, ids[4], 1);
         assert_eq!(slot, 1);
@@ -29741,7 +29742,14 @@ reason = "reserved by docs build"
 
         // No copy flag
         let cli = Cli::try_parse_from(["aida", "ultraplan", "TASK-1"]).unwrap();
-        if let Command::Ultraplan { spec, stdout, json, copy, .. } = cli.command {
+        if let Command::Ultraplan {
+            spec,
+            stdout,
+            json,
+            copy,
+            ..
+        } = cli.command
+        {
             assert_eq!(spec, "TASK-1");
             assert!(!stdout);
             assert!(!json);
@@ -29752,7 +29760,14 @@ reason = "reserved by docs build"
 
         // With copy flag
         let cli = Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy"]).unwrap();
-        if let Command::Ultraplan { spec, stdout, json, copy, .. } = cli.command {
+        if let Command::Ultraplan {
+            spec,
+            stdout,
+            json,
+            copy,
+            ..
+        } = cli.command
+        {
             assert_eq!(spec, "TASK-1");
             assert!(!stdout);
             assert!(!json);
@@ -29762,7 +29777,9 @@ reason = "reserved by docs build"
         }
 
         // Copy and stdout conflicts
-        assert!(Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--stdout"]).is_err());
+        assert!(
+            Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--stdout"]).is_err()
+        );
 
         // Copy and json conflicts
         assert!(Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--json"]).is_err());
@@ -29777,7 +29794,6 @@ reason = "reserved by docs build"
         assert!(msg.contains("TASK-514"));
         assert!(msg.contains("2655"));
     }
-
 
     /// STORY-306: the punt payload carries the spec's identity + the fork
     /// question from the `AttentionReason`, and embeds the ultraplan-grade
