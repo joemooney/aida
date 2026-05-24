@@ -43,12 +43,12 @@ description: |-
   2026-05-24 user during multi-agent dispatch: 'I have an agy implementer running and the aida-chat advisor but I did not use aida new agent commands, I guess I should have done that?' Without register-existing, the workaround is restart-with-supervised-launcher (disruptive) or accept registry-gap (loses status visibility). Register fills the gap cleanly.
 
   trace:TASK-X
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:20:25.092899708Z
-modified_at: 2026-05-24T16:22:57.206482353Z
+modified_at: 2026-05-24T18:17:45.239569492Z
 req_type: Task
 tags:
 - aida:agent
@@ -57,3 +57,7 @@ tags:
 - multi-agent
 - registry
 - substrate-gap
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-24T18:17:45.239569492Z
+  completion_sha: 7154757969152f1fb02484b6d5a01e897253d603
