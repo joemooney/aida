@@ -91,6 +91,8 @@ aida changelog preview                 # Stdout-only preview of the [Unreleased]
 aida brief <agent> TASK-492 --note "why this, why now"  # Write a local pickup brief under .aida/agent-briefs/
 aida brief list --for-agent <agent>      # List pending briefs for a target agent; add --include-acked for audit
 aida brief ack .aida/agent-briefs/<agent>/<file>.md  # Mark a brief acknowledged
+aida agent new claude --role implementer --spec <SPEC-ID>  # Supervised launcher with registry + role context
+aida agent new claude --role advisor --show-context        # Print the generated launch-context snapshot
 aida --asciinema queue work --batch overnight-X --auto-complete  # Record a demo/training/audit cast under project-local .aida/casts/ (falls back to ~/.aida/casts/)
 ```
 
@@ -102,12 +104,24 @@ to route work without scrollback and `brief ack` after the agent has read
 the file. MCP-speaking agents should use the equivalent brief tools:
 `list_briefs`, `read_brief`, and `ack_brief`.
 
+`aida agent new <type>` is the supervised launch path for Claude, Codex,
+and Antigravity. It registers the child process under `.aida/agents/`,
+writes a point-in-time role-context snapshot under
+`.aida/agents/context/`, and passes that path as
+`AIDA_AGENT_CONTEXT_FILE`. The snapshot includes role guidance, the active
+lease/spec, pending brief paths with titles, and queue-head hints. Use
+`--show-context` to print it before spawn, or `--no-context` for a bare
+launch. The file is a startup snapshot only; keep polling briefs/MCP for
+work filed after launch.
+
 `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
 the first-class capture wrapper for demos, training corpus material, and
 autonomous-drain audit trails. It no-ops gracefully when `asciinema` is
 missing or the invocation is not attached to a TTY. By default, casts are written to `.aida/casts/` at the project root, falling back to `~/.aida/casts/` if not run inside a project directory (defined by the presence of `.git` or `.aida/`).
 
 `aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
+
+**Tag conventions** (TASK-512): subcommand-identifying tags use the `aida:<subcommand>[:<verb>][:<sub-verb>]` colon-namespaced form (`aida:status`, `aida:queue:work`, `aida:db:sync:pull`) so `aida list --tags 'aida:queue:*'` returns every spec touching that surface. Behavior / pattern / provenance / severity tags stay flat (`orchestrator`, `papercut`, `from-self-test`, `ceiling-pattern`). Existing colon namespaces continue unchanged — `batch:NAME`, `lifecycle:trivial`, `severity:cosmetic`, `parent:EPIC-31`, `depends-on:phase-1`, `subsumes:TASK-N`, `from-review:PR-N`, `kind:bug-spotted`. Multi-touch specs get multiple subcommand tags. Full rules + anti-patterns: `docs/aida-discipline/tag-conventions.md`. trace:TASK-512
 
 **Batch tag convention** (TASK-229): items sharing a `batch:NAME` tag (set via `aida edit <id> --tags batch:NAME`) compose with two commands. `aida queue list --batch NAME` filters both the queued and in-flight sections to that batch. `aida queue work --batch NAME` picks the head queued member of that batch (head-pickup loop — re-run after each session exits to drain the next one); `--dry-run --batch NAME` lists the pickup order without acting. `aida queue progress --batch NAME` (TASK-232) shows the bucketed view of the batch's lifecycle (Shipped / In flight / Working now / Remaining). `aida queue work --batch NAME --auto-complete` (TASK-285) drains the whole batch autonomously — one full implementer→CI→reviewer→merge→pull→build lifecycle per member, advancing the head after each — until the batch is empty, `--max N` is reached, or a phase fails (which stops the drain at that spec with the queue intact for retry). The `--auto-complete=through-ci` / `through-merge` variants compose too.
 

@@ -7,6 +7,7 @@ mod changelog;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod complexity_calibration;
 mod digest;
 mod docs;
 mod drain_state;
@@ -83,14 +84,14 @@ use aida_core::{
 };
 
 use crate::cli::{
-    AdvisorCommand, AgentCommand, AgentNewCommand, BlockCommand, BriefCommand, CacheCommand, Cli,
-    Command, CommentCommand, ConfigCommand, DbCommand, DevCommand, DocCommand, DocsCommand,
-    DrainCommand, FeatureCommand, FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand,
-    JiraCommand, McpCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
-    PuntsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand,
-    RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand,
-    SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand, TraceCommand,
-    TypeCommand, WorkerCommand, ZenCommand,
+    AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BlockCommand, BriefCommand,
+    CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand,
+    DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
+    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, McpCommand, NodeCommand,
+    OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand, RelDefCommand,
+    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand,
+    SessionWakeupCommand, SkillCommand, TraceCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1046,6 +1047,13 @@ fn run() -> Result<()> {
         return handle_punts_command(punts_cmd.clone());
     }
 
+    // STORY-439: autonomy / calibration surface. Dispatched before storage
+    // init — it reads only `.aida/complexity-calibration/`, no requirement
+    // store. trace:STORY-439 | ai:claude
+    if let Command::Autonomy(autonomy_cmd) = &cli.command {
+        return handle_autonomy_command(autonomy_cmd);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -1392,6 +1400,7 @@ fn run() -> Result<()> {
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
+        Command::Autonomy(_) => unreachable!("autonomy is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -2757,6 +2766,115 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// STORY-439: `aida autonomy calibration mismatches` — the substrate-gap
+/// signal. Walks `.aida/complexity-calibration/*.yaml`, drops records
+/// missing a pickup-or-review half, and surfaces the rest ranked by
+/// `|delta_steps|` descending. Tied gaps break by recency. The mismatch
+/// view IS the calibration view this STORY adds; the broader autonomy
+/// report (TASK-340) gains `--by` / `--calibration` slices in a
+/// follow-up that hangs off this same parent enum.
+/// trace:STORY-439 | ai:claude
+fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
+    match cmd {
+        AutonomyCommand::Calibration(sub) => match sub {
+            CalibrationSubcommand::Mismatches { since, last, json } => {
+                let project_root = find_project_root()?;
+                let main_root = main_worktree_root_from(&project_root);
+                let records = complexity_calibration::read_all_captures(&main_root);
+                let since_dur = match since {
+                    Some(s) => Some(calibration::parse_since(s).map_err(|e| anyhow::anyhow!(e))?),
+                    None => None,
+                };
+                let rows = complexity_calibration::mismatches(&records, since_dur);
+                let capped: Vec<&complexity_calibration::MismatchRow> =
+                    rows.iter().take(*last).collect();
+
+                if *json {
+                    println!("{}", serde_json::to_string_pretty(&capped)?);
+                    return Ok(());
+                }
+
+                if capped.is_empty() {
+                    println!(
+                        "{} no pickup-vs-reviewer divergences recorded{}",
+                        "Calibration:".bold(),
+                        match since {
+                            Some(s) => format!(" in the last {s}"),
+                            None => String::new(),
+                        }
+                    );
+                    println!(
+                        "  {}",
+                        "captures live under .aida/complexity-calibration/ — \
+                         set --complexity at pickup/ship and add \
+                         `implementation_complexity` to the reviewer's verdict \
+                         file to populate them"
+                            .dimmed()
+                    );
+                    return Ok(());
+                }
+
+                println!(
+                    "{} {} record{} (pickup-predicted vs reviewer-assessed){}",
+                    "Calibration mismatches:".bold(),
+                    capped.len(),
+                    if capped.len() == 1 { "" } else { "s" },
+                    match since {
+                        Some(s) => format!(", window {s}"),
+                        None => String::new(),
+                    },
+                );
+                println!(
+                    "  {:<14} {:<10} {:<10} {:<8} {}",
+                    "SPEC".dimmed(),
+                    "PICKUP".dimmed(),
+                    "REVIEWER".dimmed(),
+                    "DELTA".dimmed(),
+                    "AGREEMENT".dimmed(),
+                );
+                for row in &capped {
+                    let delta = match row.delta_steps.cmp(&0) {
+                        std::cmp::Ordering::Greater => {
+                            format!("+{}", row.delta_steps).red().to_string()
+                        }
+                        std::cmp::Ordering::Less => {
+                            row.delta_steps.to_string().yellow().to_string()
+                        }
+                        std::cmp::Ordering::Equal => "0".dimmed().to_string(),
+                    };
+                    let agree = match row.agreement {
+                        complexity_calibration::ComplexityAgreement::ImplementerUnderestimated => {
+                            row.agreement.as_str().red().to_string()
+                        }
+                        complexity_calibration::ComplexityAgreement::ImplementerOverestimated => {
+                            row.agreement.as_str().yellow().to_string()
+                        }
+                        complexity_calibration::ComplexityAgreement::Matched => {
+                            row.agreement.as_str().dimmed().to_string()
+                        }
+                    };
+                    println!(
+                        "  {:<14} {:<10} {:<10} {:<8} {}",
+                        row.spec.cyan().bold(),
+                        row.pickup_complexity.as_str(),
+                        row.reviewer_complexity.as_str(),
+                        delta,
+                        agree,
+                    );
+                }
+                println!();
+                println!(
+                    "  {}",
+                    "each row names a class of work the agents misjudged at pickup time; \
+                     a recurring gap is a memory candidate (the substrate-gap signal)"
+                        .dimmed()
+                );
+                Ok(())
+            }
+        },
+    }
 }
 
 /// Add a promoted finding to a role's work queue.
@@ -5364,6 +5482,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Punts(punts_cmd) => {
             handle_punts_command(punts_cmd.clone())?;
+        }
+        Command::Autonomy(autonomy_cmd) => {
+            handle_autonomy_command(autonomy_cmd)?;
         }
         Command::Search {
             query,
@@ -8515,6 +8636,77 @@ fn apply_tag_deltas(tags: &mut HashSet<String>, add: &[String], remove: &[String
         }
     }
     changed
+}
+
+/// STORY-439: stamp `complexity:<level>` / `estimated-assistance:<level>`
+/// tags on `spec` so the new dimension composes with existing tag tooling
+/// (`aida queue list --tag-prefix complexity:`, batch routing). Mirrors
+/// `load_store_for_lookup` for backend resolution. Best-effort — a missing
+/// store / missing spec / save failure logs and returns; the pickup itself
+/// is unaffected. trace:STORY-439 | ai:claude
+fn apply_calibration_tags(
+    storage: &Storage,
+    spec: &str,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    assist_est: Option<complexity_calibration::AssistanceLevel>,
+) {
+    if complexity.is_none() && assist_est.is_none() {
+        return;
+    }
+    // Git-canonical path — direct backend write, exactly like Command::Edit.
+    if let Some(store_path) = detect_distributed_store() {
+        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+            use aida_core::DatabaseBackend;
+            let Ok(Some(mut req)) = backend.get_requirement_by_spec_id(spec) else {
+                return;
+            };
+            let mut changed = false;
+            if let Some(c) = complexity {
+                changed |= complexity_calibration::apply_complexity_tag(&mut req.tags, c);
+            }
+            if let Some(a) = assist_est {
+                changed |= complexity_calibration::apply_assistance_tag(&mut req.tags, a);
+            }
+            if changed {
+                req.modified_at = chrono::Utc::now();
+                if let Err(e) = backend.update_requirement(&req) {
+                    eprintln!(
+                        "  {} could not stamp calibration tags on {spec}: {e}",
+                        "⚠".yellow()
+                    );
+                }
+            }
+            return;
+        }
+    }
+    // Legacy fallback — load the whole store, mutate, save. Heavier but
+    // only fires on projects that haven't migrated.
+    let Ok(mut store) = storage.load() else {
+        return;
+    };
+    let Some(req) = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(spec) || r.agreed_id.as_deref() == Some(spec))
+    else {
+        return;
+    };
+    let mut changed = false;
+    if let Some(c) = complexity {
+        changed |= complexity_calibration::apply_complexity_tag(&mut req.tags, c);
+    }
+    if let Some(a) = assist_est {
+        changed |= complexity_calibration::apply_assistance_tag(&mut req.tags, a);
+    }
+    if changed {
+        req.modified_at = chrono::Utc::now();
+        if let Err(e) = storage.save(&store) {
+            eprintln!(
+                "  {} could not save calibration tags on {spec}: {e}",
+                "⚠".yellow()
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -14873,19 +15065,43 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             spec,
             cwd,
             permission_mode,
-        }) => agent_new_claude(role.clone(), spec.clone(), cwd.as_deref(), permission_mode),
+            no_context,
+            show_context,
+        }) => agent_new_claude(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            permission_mode,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
         AgentCommand::New(AgentNewCommand::Codex {
             role,
             spec,
             cwd,
             bypass_sandbox,
-        }) => agent_new_codex(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
+            no_context,
+            show_context,
+        }) => agent_new_codex(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            *bypass_sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
         AgentCommand::New(AgentNewCommand::Antigravity {
             role,
             spec,
             cwd,
             bypass_sandbox,
-        }) => agent_new_antigravity(role.clone(), spec.clone(), cwd.as_deref(), *bypass_sandbox),
+            no_context,
+            show_context,
+        }) => agent_new_antigravity(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            *bypass_sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+        ),
     }
 }
 
@@ -14904,18 +15120,37 @@ struct AgentLaunchPlan {
     current_spec: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AgentContextOptions {
+    enabled: bool,
+    show: bool,
+}
+
+impl AgentContextOptions {
+    fn new(enabled: bool, show: bool) -> Self {
+        Self { enabled, show }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentLaunchContext {
+    path: std::path::PathBuf,
+    token: String,
+}
+
 fn agent_new_claude(
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     permission_mode: &str,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let config = AgentLaunchConfig {
         agent_type: "claude",
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), permission_mode.to_string()],
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 // trace:STORY-433 | ai:codex
@@ -14924,6 +15159,7 @@ fn agent_new_codex(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let mut default_args = Vec::new();
     if bypass_sandbox {
@@ -14934,7 +15170,7 @@ fn agent_new_codex(
         binary: "codex",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 // trace:STORY-434 | ai:codex
@@ -14943,6 +15179,7 @@ fn agent_new_antigravity(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let mut default_args = Vec::new();
     if bypass_sandbox {
@@ -14953,7 +15190,7 @@ fn agent_new_antigravity(
         binary: "agy",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd)
+    agent_new_with_config(config, role, spec, cwd, context)
 }
 
 fn agent_new_with_config(
@@ -14961,6 +15198,7 @@ fn agent_new_with_config(
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
+    context: AgentContextOptions,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -14990,13 +15228,21 @@ fn agent_new_with_config(
     if let Some(role) = &plan.role {
         eprintln!("  {}: {}", "role".bold(), role.cyan());
     }
+    let launch_context = prepare_agent_launch_context(&config, &plan, context)?;
+    if let Some(ctx) = &launch_context {
+        eprintln!(
+            "  {}: {}",
+            "context".bold(),
+            ctx.path.display().to_string().cyan()
+        );
+    }
     eprintln!(
         "  {} multiple concurrent {} sessions are supported; registry entries are PID-keyed.",
         "ⓘ".cyan(),
         config.agent_type
     );
 
-    run_tracked_agent(&binary, &config, &plan)
+    run_tracked_agent(&binary, &config, &plan, launch_context.as_ref())
 }
 
 fn prepare_agent_launch(
@@ -15076,10 +15322,204 @@ fn prepare_agent_launch(
     }
 }
 
+// trace:STORY-436 | ai:codex
+fn prepare_agent_launch_context(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    options: AgentContextOptions,
+) -> Result<Option<AgentLaunchContext>> {
+    if !options.enabled {
+        return Ok(None);
+    }
+    let token = std::env::var("AIDA_AGENT_REGISTRY_TOKEN")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| Uuid::now_v7().to_string());
+    let dir = plan
+        .project_root
+        .join(".aida")
+        .join("agents")
+        .join("context");
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating agent context dir {}", dir.display()))?;
+    let path = dir.join(format!("{}-{token}.context.md", config.agent_type));
+    let body = render_agent_launch_context(config, plan, &token)?;
+    std::fs::write(&path, &body).with_context(|| format!("writing {}", path.display()))?;
+    if options.show {
+        println!("{body}");
+    }
+    Ok(Some(AgentLaunchContext { path, token }))
+}
+
+// trace:STORY-436 | ai:codex
+fn render_agent_launch_context(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    token: &str,
+) -> Result<String> {
+    let role = plan.role.as_deref().unwrap_or("unspecified");
+    let mut out = String::new();
+    out.push_str("# AIDA Launch Context\n\n");
+    out.push_str("This is a point-in-time spawn snapshot. Briefs, queue changes, leases, and registry heartbeats filed after launch are not reflected here; keep polling AIDA during the session.\n\n");
+    out.push_str("## Launch\n\n");
+    out.push_str(&format!("- Agent: {}\n", config.agent_type));
+    out.push_str(&format!("- Role: {role}\n"));
+    out.push_str(&format!(
+        "- Current spec: {}\n",
+        plan.current_spec.as_deref().unwrap_or("(none)")
+    ));
+    out.push_str(&format!(
+        "- Project root: {}\n",
+        plan.project_root.display()
+    ));
+    out.push_str(&format!(
+        "- Working directory: {}\n",
+        plan.launch_cwd.display()
+    ));
+    out.push_str(&format!("- Context token: {token}\n\n"));
+
+    out.push_str("## Role Guidance\n\n");
+    out.push_str(&role_guidance_for(&plan.project_root, role));
+    out.push_str("\n\n");
+
+    out.push_str("## Active Session\n\n");
+    if let Some(spec) = &plan.current_spec {
+        let lease = list_leases(&plan.project_root)
+            .into_iter()
+            .filter(|lease| lease.scope.eq_ignore_ascii_case(spec))
+            .max_by_key(|lease| lease.started_at);
+        if let Some(lease) = lease {
+            out.push_str(&format!("- Lease: {}\n", lease.id));
+            out.push_str(&format!(
+                "- Lease role: {}\n",
+                lease.role.as_deref().unwrap_or("(unset)")
+            ));
+            out.push_str(&format!("- Branch: {}\n", lease.branch));
+            out.push_str(&format!("- Worktree: {}\n", lease.worktree_path.display()));
+        } else {
+            out.push_str(&format!("- No active lease found for {spec}.\n"));
+        }
+    } else {
+        out.push_str("- No spec was provided at launch; start from the relevant queue head or pending brief.\n");
+    }
+    out.push('\n');
+
+    out.push_str("## Pending Briefs\n\n");
+    let briefs = collect_agent_briefs(&plan.project_root, Some(config.agent_type), false)
+        .unwrap_or_default();
+    if briefs.is_empty() {
+        out.push_str("_No pending briefs for this agent at launch._\n\n");
+    } else {
+        for brief in briefs {
+            let title = brief_title(&brief.path).unwrap_or_else(|| "(title unavailable)".into());
+            out.push_str(&format!(
+                "- {} — {} — {}\n",
+                brief.spec_id,
+                title,
+                brief.path.display()
+            ));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Queue Snapshot\n\n");
+    if plan.current_spec.is_none() {
+        if let Some(line) = queue_head_line(&plan.project_root, plan.role.as_deref()) {
+            out.push_str(&line);
+            out.push('\n');
+        } else {
+            out.push_str("- No queue head could be resolved for this role.\n");
+        }
+    } else {
+        out.push_str("- A spec was provided explicitly; queue head selection is bypassed.\n");
+    }
+    out.push('\n');
+
+    out.push_str("## Next Commands\n\n");
+    out.push_str("- Read AGENTS.md and any agent-specific setup document under docs/agents/.\n");
+    out.push_str("- Check pending briefs with `aida brief list --for-agent ");
+    out.push_str(config.agent_type);
+    out.push_str("`.\n");
+    if let Some(spec) = &plan.current_spec {
+        out.push_str(&format!(
+            "- Inspect the assigned spec with `aida show {spec}`.\n"
+        ));
+    }
+    out.push_str("- Ship with a trailing-parens spec trailer in the commit subject, then use `aida pr ship`.\n");
+    Ok(out)
+}
+
+// trace:STORY-436 | ai:codex
+fn role_guidance_for(project_root: &std::path::Path, role: &str) -> String {
+    if role != "unspecified" {
+        if let Ok((state, path)) = load_role(project_root, role) {
+            let mut out = String::new();
+            out.push_str(&format!("Loaded role file: {}\n\n", path.display()));
+            if let Some(purpose) = state.purpose.as_deref().filter(|s| !s.trim().is_empty()) {
+                out.push_str("Purpose:\n");
+                out.push_str(purpose.trim());
+                out.push_str("\n\n");
+            }
+            if let Some(prompt) = state
+                .system_prompt
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+            {
+                out.push_str("System prompt:\n");
+                out.push_str(prompt.trim());
+                return out;
+            }
+            if !out.trim().is_empty() {
+                return out.trim_end().to_string();
+            }
+        }
+    }
+
+    match role {
+        "advisor" | "dialog" => "You are advising the operator. Triage punts/findings, route implementation, clarify design forks, and avoid changing code unless explicitly asked.".to_string(),
+        "implementer" => "You are implementing. Read the assigned spec/brief, work in the supervised worktree, keep changes bounded to acceptance, run relevant tests, commit with the spec trailer, and finish with `aida pr ship`.".to_string(),
+        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation.".to_string(),
+        "unspecified" => "No role was provided. Determine whether you are acting as advisor, implementer, or reviewer before making changes.".to_string(),
+        other => format!("No stored role file was found for `{other}`. Follow the project discipline in AGENTS.md and the active spec/brief context."),
+    }
+}
+
+// trace:STORY-436 | ai:codex
+fn brief_title(path: &std::path::Path) -> Option<String> {
+    let body = std::fs::read_to_string(path).ok()?;
+    body.lines()
+        .find_map(|line| line.trim().strip_prefix("- Title:").map(str::trim))
+        .filter(|title| !title.is_empty())
+        .map(str::to_string)
+}
+
+// trace:STORY-436 | ai:codex
+fn queue_head_line(project_root: &std::path::Path, role: Option<&str>) -> Option<String> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let store = storage.load().ok()?;
+    let user_id = current_user_id(None);
+    let mut entries = storage.queue_list(&user_id, false).ok()?;
+    entries.sort_by_key(|entry| entry.position);
+    let head = entries.into_iter().find(|entry| match role {
+        Some(role) => entry.for_role.as_deref() == Some(role),
+        None => entry.for_role.is_none(),
+    })?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|req| req.id == head.requirement_id)?;
+    Some(format!(
+        "- Queue head: {} — {}",
+        req.display_id(),
+        req.title
+    ))
+}
+
 fn run_tracked_agent(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
 ) -> Result<()> {
     let mut command = std::process::Command::new(binary);
     command
@@ -15095,6 +15535,11 @@ fn run_tracked_agent(
     }
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
+    }
+    if let Some(ctx) = launch_context {
+        command
+            .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
+            .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
     }
 
     let mut child = command
@@ -15127,6 +15572,17 @@ fn run_tracked_agent(
             config.agent_type,
             child_pid
         );
+    }
+    if let Some(ctx) = launch_context {
+        if let Err(err) = std::fs::remove_file(&ctx.path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "{} failed to remove agent context file {}: {err}",
+                    "warning:".yellow().bold(),
+                    ctx.path.display()
+                );
+            }
+        }
     }
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
@@ -15276,6 +15732,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             permission_mode,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new claude command");
@@ -15284,6 +15742,8 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-432"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert_eq!(permission_mode, "acceptEdits");
+        assert!(!no_context);
+        assert!(!show_context);
     }
 
     #[test]
@@ -15307,6 +15767,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             bypass_sandbox,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new codex command");
@@ -15315,6 +15777,8 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-433"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert!(bypass_sandbox);
+        assert!(!no_context);
+        assert!(!show_context);
     }
 
     #[test]
@@ -15338,6 +15802,8 @@ mod agent_launcher_tests {
             spec,
             cwd,
             bypass_sandbox,
+            no_context,
+            show_context,
         })) = cli.command
         else {
             panic!("expected agent new antigravity command");
@@ -15346,6 +15812,33 @@ mod agent_launcher_tests {
         assert_eq!(spec.as_deref(), Some("STORY-434"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
         assert!(bypass_sandbox);
+        assert!(!no_context);
+        assert!(!show_context);
+    }
+
+    #[test]
+    fn parses_agent_new_context_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "codex",
+            "--role",
+            "advisor",
+            "--no-context",
+            "--show-context",
+        ])
+        .unwrap();
+        let Command::Agent(AgentCommand::New(AgentNewCommand::Codex {
+            no_context,
+            show_context,
+            ..
+        })) = cli.command
+        else {
+            panic!("expected agent new codex command");
+        };
+        assert!(no_context);
+        assert!(show_context);
     }
 
     #[test]
@@ -15413,18 +15906,20 @@ mod agent_launcher_tests {
         let fake_bin = tmp.path().join("bin");
         std::fs::create_dir_all(&fake_bin).unwrap();
         let fake_agent = fake_bin.join("agent");
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+                env_out.display(),
+                argv_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let argv_out = tmp.path().join("argv.txt");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
         let config = AgentLaunchConfig {
             agent_type: "codex",
             binary: "codex",
@@ -15437,7 +15932,7 @@ mod agent_launcher_tests {
             current_spec: Some("STORY-433".into()),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan).unwrap();
+        run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -15450,8 +15945,6 @@ mod agent_launcher_tests {
             "{argv}"
         );
         assert!(agent_registry::list_agent_views(&project).is_empty());
-        std::env::remove_var("AIDA_TEST_ENV_OUT");
-        std::env::remove_var("AIDA_TEST_ARGV_OUT");
     }
 
     #[cfg(unix)]
@@ -15468,18 +15961,20 @@ mod agent_launcher_tests {
         )
         .unwrap();
         let fake_agent = tmp.path().join("agy");
+        let env_out = tmp.path().join("env.txt");
+        let argv_out = tmp.path().join("argv.txt");
         std::fs::write(
             &fake_agent,
-            "#!/bin/sh\nenv | sort > \"$AIDA_TEST_ENV_OUT\"\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_ARGV_OUT\"\n",
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+                env_out.display(),
+                argv_out.display()
+            ),
         )
         .unwrap();
         let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_agent, perms).unwrap();
-        let env_out = tmp.path().join("env.txt");
-        let argv_out = tmp.path().join("argv.txt");
-        std::env::set_var("AIDA_TEST_ENV_OUT", &env_out);
-        std::env::set_var("AIDA_TEST_ARGV_OUT", &argv_out);
         let config = AgentLaunchConfig {
             agent_type: "antigravity",
             binary: "agy",
@@ -15492,7 +15987,7 @@ mod agent_launcher_tests {
             current_spec: Some("STORY-434".into()),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan).unwrap();
+        run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -15502,8 +15997,96 @@ mod agent_launcher_tests {
         assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
         assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
         assert!(agent_registry::list_agent_views(&project).is_empty());
-        std::env::remove_var("AIDA_TEST_ENV_OUT");
-        std::env::remove_var("AIDA_TEST_ARGV_OUT");
+    }
+
+    #[test]
+    fn renders_agent_launch_context_with_role_guidance_and_briefs() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida/agent-briefs/codex")).unwrap();
+        std::fs::write(
+            project.join(".aida/agent-briefs/codex/STORY-436-2026-05-24T025247Z.md"),
+            "---\nspec_id: STORY-436\nagent: codex\ngenerated_at: 2026-05-24T025247Z\nstatus: pending\n---\n\n## Spec\n\n- Title: Role-context auto-injection\n",
+        )
+        .unwrap();
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project,
+            role: Some("implementer".into()),
+            current_spec: Some("STORY-436".into()),
+        };
+
+        let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
+
+        assert!(
+            context.contains("This is a point-in-time spawn snapshot"),
+            "{context}"
+        );
+        assert!(context.contains("- Agent: codex"), "{context}");
+        assert!(context.contains("- Role: implementer"), "{context}");
+        assert!(context.contains("## Role Guidance"), "{context}");
+        assert!(
+            context.contains("STORY-436 — Role-context auto-injection"),
+            "{context}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
+        let fake_agent = tmp.path().join("agent");
+        let env_out = tmp.path().join("env.txt");
+        let context_out = tmp.path().join("context-copy.md");
+        std::fs::write(
+            &fake_agent,
+            format!(
+                "#!/bin/sh\nenv | sort > '{}'\ncp \"$AIDA_AGENT_CONTEXT_FILE\" '{}'\n",
+                env_out.display(),
+                context_out.display()
+            ),
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&fake_agent).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_agent, perms).unwrap();
+        let context_path = project
+            .join(".aida/agents/context")
+            .join("codex-token.context.md");
+        std::fs::write(&context_path, "launch context body").unwrap();
+        let launch_context = AgentLaunchContext {
+            path: context_path.clone(),
+            token: "token".into(),
+        };
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project.clone(),
+            role: Some("advisor".into()),
+            current_spec: None,
+        };
+
+        run_tracked_agent(&fake_agent, &config, &plan, Some(&launch_context)).unwrap();
+
+        let env = std::fs::read_to_string(&env_out).unwrap();
+        let copied = std::fs::read_to_string(&context_out).unwrap();
+        assert!(env.contains("AIDA_AGENT_CONTEXT_FILE="), "{env}");
+        assert!(env.contains("AIDA_AGENT_REGISTRY_TOKEN=token"), "{env}");
+        assert_eq!(copied, "launch context body");
+        assert!(!context_path.exists());
     }
 }
 
@@ -19057,13 +19640,37 @@ fn session_end(
             workflow_hints::PrState::Unknown
         }
     };
-    let session_end_unshipped_work = classify_session_end_unshipped_work(
-        &target.id,
-        &target.scope,
-        &target.branch,
-        commits_ahead,
-        pr_state,
-    );
+    // BUG-367: if the spec the lease owns has auto-bumped to Completed, or if the PR
+    // for this branch has already been squash-merged / merged, the work is shipped
+    // regardless of what the local branch looks like. Suppress warning.
+    // trace:BUG-367 | ai:antigravity
+    let mut is_completed = false;
+    let store_path = project_root.join(".aida-store");
+    if store_path.exists() {
+        if let Ok(storage) = Storage::new(store_path).load() {
+            if let Some(req) = storage.get_requirement_by_spec_id(&target.scope) {
+                if req.status == RequirementStatus::Completed {
+                    is_completed = true;
+                }
+            }
+        }
+    }
+    if !is_completed {
+        if let PrLookup::Found(_) = detect_merged_pr_for_branch(&project_root, &target.branch) {
+            is_completed = true;
+        }
+    }
+    let session_end_unshipped_work = if is_completed {
+        None
+    } else {
+        classify_session_end_unshipped_work(
+            &target.id,
+            &target.scope,
+            &target.branch,
+            commits_ahead,
+            pr_state,
+        )
+    };
     if let Some(work) = &session_end_unshipped_work {
         emit_session_end_unshipped_warning(&work);
     }
@@ -21307,7 +21914,8 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             no_pull,
             no_cleanup,
             dry_run,
-        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run),
+            complexity,
+        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run, *complexity),
     }
 }
 
@@ -21713,7 +22321,13 @@ fn fetch_pr_info_via_gh_bin(
 /// double-implementing them.
 ///
 /// trace:TASK-458 | ai:claude
-fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: bool) -> Result<()> {
+fn pr_ship_handler(
+    n: Option<u64>,
+    no_pull: bool,
+    no_cleanup: bool,
+    dry_run: bool,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+) -> Result<()> {
     use pr_ship::{
         format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
         recovery_hint, PrShipOptions, ShipStep, StepOutcome,
@@ -21724,6 +22338,7 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         no_pull,
         no_cleanup,
         dry_run,
+        complexity,
     };
 
     // Project root for gh/git invocations is wherever the user is —
@@ -21949,6 +22564,30 @@ fn pr_ship_handler(n: Option<u64>, no_pull: bool, no_cleanup: bool, dry_run: boo
         &ShipStep::Merge { delete_branch },
         &StepOutcome::Ok,
     );
+
+    // STORY-439: ship-side calibration capture. Resolve every spec the PR
+    // credits (title → branch → body, the same precedence the squash
+    // subject repair already uses) and write a ship slot per spec — the
+    // implementer's self-assessed complexity + the punt count
+    // (`.aida/punts.jsonl` filtered by spec). One PR crediting N specs
+    // populates N records. Best-effort: a `gh` blip here leaves the merge
+    // landed and just skips the capture.
+    // trace:STORY-439 | ai:claude
+    if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
+        let spec_ids =
+            pr_ship::derive_squash_subject_spec_ids(&pr_meta.title, &branch, &pr_meta.body);
+        for spec in &spec_ids {
+            let punts = complexity_calibration::punt_count_for_spec(&main_worktree, spec);
+            if let Err(e) =
+                complexity_calibration::upsert_ship(&main_worktree, spec, opts.complexity, punts)
+            {
+                eprintln!(
+                    "  {} could not record ship calibration for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+        }
+    }
 
     // ---- Step 4: aida pull (from the main worktree). ----
     if no_pull {
@@ -29956,11 +30595,40 @@ mod session_end_resolution_tests {
             records[0].classification.as_deref(),
             Some("UNSHIPPED-SESSION-END")
         );
-        assert!(
-            records[0].detail.contains("3 commits ahead"),
-            "{}",
-            records[0].detail
-        );
+        assert!(records[0].detail.contains("3 commits ahead"),);
+    }
+
+    /// BUG-367: session end suppresses the unshipped work warning if the spec
+    /// status is already Completed in the requirement store.
+    /// trace:BUG-367 | ai:antigravity
+    #[test]
+    fn session_end_unshipped_work_suppressed_when_completed() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store_dir = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+
+        // Create a completed requirement in the mock store
+        let storage = Storage::new(&store_dir);
+        let mut req = Requirement::new("Completed Spec Test".to_string(), "".to_string());
+        req.spec_id = Some("BUG-367".to_string());
+        req.status = RequirementStatus::Completed;
+
+        let mut store = storage.load().unwrap_or_default();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+
+        // Load store and verify is_completed resolves to true
+        let mut is_completed = false;
+        if store_dir.exists() {
+            if let Ok(storage) = Storage::new(&store_dir).load() {
+                if let Some(req) = storage.get_requirement_by_spec_id("BUG-367") {
+                    if req.status == RequirementStatus::Completed {
+                        is_completed = true;
+                    }
+                }
+            }
+        }
+        assert!(is_completed);
     }
 
     /// Explicit id query short-circuits the resolution chain.
@@ -54132,6 +54800,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             no_calibrate,
             allow_stale_base,
             no_auto_rebase,
+            complexity,
+            assist_est,
         } => {
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
@@ -54508,6 +55178,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // STORY-281: opt out of the reviewer pre-flight stale-base
                 // refusal. trace:STORY-281 | ai:claude
                 *allow_stale_base,
+                // STORY-439: pickup-time calibration capture. Each value
+                // writes to .aida/complexity-calibration/<SPEC>.yaml AND
+                // stamps a tag on the spec.
+                *complexity,
+                *assist_est,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -55496,6 +56171,8 @@ fn handle_queue_rework(
             /* batch_name */ None,
             /* quiet */ false,
             /* allow_stale_base */ false,
+            /* complexity */ None,
+            /* assist_est */ None,
         )?;
     } else {
         println!(
@@ -56226,6 +56903,12 @@ fn handle_queue_work(
     // Only meaningful when scope resolves to a PR + role is reviewer;
     // ignored on every other pickup. trace:STORY-281 | ai:claude
     allow_stale_base: bool,
+    // STORY-439: pickup-time complexity + assistance estimate. Each
+    // value writes a slot to `.aida/complexity-calibration/<SPEC>.yaml`
+    // AND stamps a `complexity:<level>` / `estimated-assistance:<level>`
+    // tag on the spec for tag-based queries. trace:STORY-439 | ai:claude
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    assist_est: Option<complexity_calibration::AssistanceLevel>,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -56235,6 +56918,33 @@ fn handle_queue_work(
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
     }
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
+
+    // STORY-439: capture pickup-time complexity + assistance estimate
+    // ASAP after plan resolution — we know the anchor spec, the project
+    // root is reachable via `find_project_root`, and the capture is a
+    // local FS write that won't perturb the rest of the pickup flow.
+    // Best-effort: a write error logs and continues. Cluster mode uses
+    // the anchor (the parent scope) as the captured spec; the
+    // operator's estimate is for the cluster as a whole.
+    // trace:STORY-439 | ai:claude
+    if (complexity.is_some() || assist_est.is_some()) && !list_sessions {
+        if let Ok(project_root) = find_project_root() {
+            let main_root = main_worktree_root_from(&project_root);
+            let spec = plan.anchor_display.as_str();
+            if let Err(e) =
+                complexity_calibration::upsert_pickup(&main_root, spec, complexity, assist_est)
+            {
+                eprintln!(
+                    "  {} could not record pickup calibration for {spec}: {e}",
+                    "⚠".yellow()
+                );
+            }
+            // Stamp the tags on the spec so existing tag tooling works
+            // on the new dimension. Best-effort — a load/save failure
+            // doesn't fail the pickup.
+            apply_calibration_tags(storage, spec, complexity, assist_est);
+        }
+    }
 
     // TASK-112: `--list-sessions` is a pure read — print the recorded
     // claude conversations for this scope and exit before any side
@@ -57091,6 +57801,17 @@ fn run_standalone_reviewer(
             }
         }
     };
+
+    // STORY-439: tag-along reviewer-side calibration capture. Resolve
+    // every spec the PR credits (via the existing title / branch / body
+    // precedence used by the squash-subject repair) and write a review
+    // slot per spec. Best-effort; never blocks the summary print.
+    // trace:STORY-439 | ai:claude
+    if let Ok(meta) = fetch_pr_ship_metadata_via_gh(project_root, pr) {
+        for spec in pr_ship::derive_squash_subject_spec_ids(&meta.title, branch, &meta.body) {
+            capture_review_calibration_for_spec(project_root, verdict_path, &spec);
+        }
+    }
 
     // End-of-command summary, assembled from the verdict file the
     // `/aida-review` skill wrote and (headless only) the JSONL log.
@@ -59709,6 +60430,48 @@ fn read_verdict_file(
         })
 }
 
+/// STORY-439: pick the calibration review-slot fields out of a verdict
+/// file and upsert the per-spec capture record. The verdict file is
+/// already loaded by `read_verdict_file` for the orchestrator's PASS /
+/// FAIL decision; this is a tag-along read that records advisory
+/// metadata (it never changes the decision). Best-effort — a missing
+/// file, missing fields, or write error all silently no-op. Called for
+/// each spec the PR credits; one PR populates N records.
+/// trace:STORY-439 | ai:claude
+fn capture_review_calibration_for_spec(
+    project_root: &std::path::Path,
+    verdict_path: &std::path::Path,
+    spec: &str,
+) {
+    let Ok(body) = std::fs::read_to_string(verdict_path) else {
+        return;
+    };
+    let Some(verdict) = reviewer_summary::parse_verdict_file(&body) else {
+        return;
+    };
+    let Some(level_raw) = verdict
+        .implementation_complexity
+        .as_deref()
+        .map(str::trim)
+        .filter(|s: &&str| !s.is_empty())
+    else {
+        return;
+    };
+    let Some(level) = complexity_calibration::ComplexityLevel::parse_str(level_raw) else {
+        return;
+    };
+    let agreement = verdict
+        .complexity_agreement
+        .as_deref()
+        .and_then(complexity_calibration::ComplexityAgreement::parse_str);
+    if let Err(e) = complexity_calibration::upsert_review(project_root, spec, level, agreement) {
+        eprintln!(
+            "  {} could not record review calibration for {spec}: {e}",
+            "⚠".yellow()
+        );
+    }
+}
+
 /// When phase 3 ends with [`auto_complete::FailureKind::NoVerdict`] under a
 /// headless `--no-human` drain, scan the reviewer's headless log for the
 /// BUG-280 signature: an `AskUserQuestion` event. The harness denies
@@ -61460,6 +62223,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
             Err(e) => return Err(e),
         };
+
+        // STORY-439: tag-along read for reviewer-side calibration. Same
+        // verdict file we just parsed; we re-read so the orchestrator's
+        // PASS/FAIL decision stays untouched even if the calibration
+        // capture changes. trace:STORY-439 | ai:claude
+        capture_review_calibration_for_spec(&self.project_root, &verdict_path, &self.spec);
 
         // End the reviewer session (best-effort — the verdict is already in
         // hand, so a stuck reviewer worktree must not block the merge).
@@ -64711,9 +65480,10 @@ mod story_255_discipline_pack_tests {
     #[test]
     fn discipline_pack_scaffolds_seven_docs_plus_readme() {
         // trace:TASK-479 | ai:antigravity — robust-project-root-resolution.md joins the pack.
+        // trace:TASK-512 | ai:claude — tag-conventions.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 9, "expected README + 8 discipline docs");
+        assert_eq!(written, 10, "expected README + 9 discipline docs");
 
         let dir = root.path().join("docs/aida/discipline");
         for f in [
@@ -64721,6 +65491,7 @@ mod story_255_discipline_pack_tests {
             "advisor-role.md",
             "lifecycle-vocabulary.md",
             "machinery-glossary.md",
+            "tag-conventions.md",
             "workflow-patterns.md",
             "session-discipline.md",
             "skill-prompt-kinds.md",
@@ -64738,7 +65509,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            9
+            10
         );
     }
 

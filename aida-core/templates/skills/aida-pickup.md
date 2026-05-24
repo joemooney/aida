@@ -207,6 +207,20 @@ After the first item, you can also skip the per-item confirm when
 walking a planned cluster — the manifest IS the consent record. Surface
 each item briefly (one line) and move to mark-in-progress.
 
+#### Optional: capture a pickup complexity estimate (STORY-439)
+
+When the operator launched with `--complexity {low|med|high}` and/or
+`--assist-est {none|advisor|human}`, `aida queue work` already wrote
+the pickup slot to `.aida/complexity-calibration/<SPEC>.yaml` and
+stamped the matching tag on the spec. **Don't re-prompt** — the
+estimate is best-effort, not graded, and the capture is one operator
+action, not a per-pickup gate.
+
+If you (the implementer) read the spec and form a sharper estimate
+than what was captured, mention it as a one-liner — the user can
+re-stamp later with `aida edit <SPEC> --add-tag complexity:<level>`.
+Never silently overwrite the operator's call.
+
 ### Step 3a: Record the planned cluster (STORY-98)
 
 If the user's confirmation covers MORE than one item — i.e. they want
