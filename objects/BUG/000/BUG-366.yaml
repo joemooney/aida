@@ -42,10 +42,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:58:41.300890035Z
-modified_at: 2026-05-24T06:38:12.798237154Z
+modified_at: 2026-05-25T07:41:57.537210679Z
 req_type: Bug
 tags:
 - aida:queue:list
+- batch:queue-work-reliability
 - cli-ux
 - from-self-test
 - from-user-friction
