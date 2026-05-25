@@ -79,12 +79,12 @@ description: |-
   2026-05-24 user: 'we want some type of CASE type or INCIDENT type that we file, not a bug but something an audit could consider?' Master concurs gap is real; recommends extending findings surface (smaller slice than new spec-type).
 
   trace:STORY-X
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-25T07:10:29.207152192Z
+modified_at: 2026-05-25T07:13:43.717589446Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -346,3 +346,7 @@ comments:
   content: Commit b39d8117 references this requirement
   created_at: 2026-05-25T07:10:29.207152192Z
   modified_at: 2026-05-25T07:10:29.207152192Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-25T07:13:43.717589446Z
+  implemented_by: joe
