@@ -74239,7 +74239,10 @@ mod story_255_discipline_pack_tests {
         // script and (future) TUI tooltips.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 16, "expected README + 14 discipline docs + glossary.yaml");
+        assert_eq!(
+            written, 16,
+            "expected README + 14 discipline docs + glossary.yaml"
+        );
 
         let dir = root.path().join("docs/aida/discipline");
         for f in [
