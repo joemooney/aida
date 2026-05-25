@@ -23,7 +23,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:06.320088198Z
-modified_at: 2026-05-25T20:05:06.320088198Z
+modified_at: 2026-05-25T20:29:57.013578850Z
 req_type: Task
 tags:
 - aida:init
@@ -34,3 +34,9 @@ tags:
 - linked:TASK-510
 - onboarding-flow
 - severity:major
+comments:
+- id: 019e60d4-7595-7a60-8529-7641c1abfffe
+  author: joe
+  content: Commit 155ea983 references this requirement
+  created_at: 2026-05-25T20:29:57.013578850Z
+  modified_at: 2026-05-25T20:29:57.013578850Z
