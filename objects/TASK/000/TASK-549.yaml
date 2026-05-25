@@ -43,12 +43,12 @@ description: |-
   - STORY-462 (aida doctor — surfaced this via salvage-first)
 
   trace:TASK-X
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:04:11.292264458Z
-modified_at: 2026-05-25T06:55:26.017500321Z
+modified_at: 2026-05-25T07:09:59.064148573Z
 req_type: Task
 tags:
 - batch:overnight-orthogonal
@@ -57,3 +57,7 @@ tags:
 - mcp
 - test-coverage
 - tests
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-25T07:09:59.064148573Z
+  completion_sha: 227c311aa1598175212c7e4297360fdc0f78a9e6
