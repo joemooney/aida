@@ -1,0 +1,86 @@
+id: 019e5cf3-72fd-7331-8b4c-2dcb2ee23207
+spec_id: TASK-555
+agreed_id: TASK-555
+title: 'Cross-agent skill-invocation surface map: document which agent uses slash-commands vs CLI verbs vs other discovery'
+description: |-
+  ## Friction
+
+  Operators familiar with Claude Code's slash-command surface ('/aida-pickup', '/aida-pr', '/aida-req', etc.) instinctively try the same syntax with non-Claude agents (Codex, Antigravity, web /ultraplan, future agents). It doesn't work because each agent has its own skill-discovery mechanism:
+
+  - Claude Code: '.claude/skills/' + '.claude/commands/' (slash commands like /aida-pickup)
+  - Codex: '.codex/skills/aida-*/SKILL.md' (some skills scaffolded, NOT pickup specifically)
+  - Antigravity: nothing — uses AGENTS.md + 'aida' CLI verbs directly
+  - Web /ultraplan: container-based, opaque to local substrate
+
+  No documented map tells operators 'agent X uses syntax Y for skill Z'.
+
+  ## Reproduced 2026-05-24
+
+  Operator preparing TASK-542 dispatch to Antigravity asked: 'for agy will /aida-pickup TASK-542 work?' Master verified: no, Antigravity doesn't have slash-command syntax; functional equivalent is supervised launcher + CLI verbs. The friction is real every time the operator dispatches to a non-Claude agent.
+
+  ## Proposed shape — smallest valuable slice
+
+  Documentation-first. Add a clear cross-agent surface table to one of:
+
+  - docs/agents/cross-agent-onboarding.md (existing — extend with surface table)
+  - AGENTS.md (existing — add surface table near top)
+  - New: docs/agents/skill-invocation-surface-map.md (focused doc)
+
+  Table shape:
+
+  | Skill | Claude Code (slash) | Codex (skill) | Antigravity (CLI) |
+  |---|---|---|---|
+  | aida-pickup | /aida-pickup <SPEC> | (CLI direct) | aida queue work <SPEC> |
+  | aida-pr (ship) | /aida-pr | (CLI direct) | aida pr ship |
+  | aida-req | /aida-req | .codex/skills/aida-req | aida add ... |
+  | aida-commit | /aida-commit | .codex/skills/aida-commit | git commit + format checker |
+  | ...etc | | | |
+
+  Each row: 'what the operator types vs the agent's actual invocation'.
+
+  ## Follow-up expansion (NOT in this TASK)
+
+  After the doc lands, future work could include:
+
+  1. Scaffold equivalent skills/commands for each agent where the agent's CLI supports skill discovery (expand .codex/skills/ + add agentic discovery for Antigravity if Antigravity supports it)
+  2. First-message paste-ready templates per-agent that include the correct skill-invocation syntax
+  3. 'aida agent new <type> --show-context' enrichment: snapshot includes a 'Skill invocation conventions for this agent type' section pointing at the surface map
+
+  These are bigger surface changes; documentation is the smallest valuable slice and addresses operator-confusion immediately.
+
+  ## Acceptance
+
+  - [ ] Cross-agent skill surface table added to one of: cross-agent-onboarding.md (preferred — already exists) / AGENTS.md / new dedicated doc
+  - [ ] Table covers all currently-shipped skills (aida-pickup, aida-pr, aida-req, aida-implement, aida-commit, aida-doc, aida-search, aida-plan, aida-rebase, aida-onboard, aida-drain-queue, /aida-advise, /aida-digest, etc. — full list from .claude/skills/)
+  - [ ] Master template at aida-core/templates/docs/agents/ updated to ship in scaffolding
+  - [ ] Cross-link from CLAUDE.md + AGENTS.md to the surface map
+  - [ ] aida-chat advisor + master + other advisors can point operators at the table when the question recurs
+
+  ## Composes with
+
+  - TASK-540 (codex-mcp-setup template sync — same agent-documentation surface)
+  - BUG-375 (Codex SKILL.md scaffolding — same agent-skill class)
+  - docs/agents/cross-agent-onboarding.md (the existing doc this extends)
+  - feedback_dialog_role_responsibilities (advisor articulates the right syntax per agent type)
+  - feedback_match_operator_mode_specific_when_execution (give COMMANDS — the right command for the right agent)
+
+  ## Origin
+
+  2026-05-24 user: 'for agy will /aida-pickup TASK-542 work?' Master verified no + observation that this confusion is the recurring class as more agents get dispatched. User: 'file the UX papercut'.
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T02:25:19.101203419Z
+modified_at: 2026-05-25T02:25:19.101203419Z
+req_type: Task
+tags:
+- cross-agent
+- documentation
+- first-user-papercut
+- from-self-test
+- from-user-direction
+- scaffolding
+- skill-invocation
