@@ -49407,6 +49407,43 @@ mod queue_work_tests {
         assert_eq!(req.status, RequirementStatus::InProgress);
     }
 
+    /// TASK-547 acceptance: smart-default auto-queues an Approved-but-not-queued
+    /// spec for the current role when resolving the queue work plan, unless `--strict` is set.
+    /// trace:TASK-547 | ai:antigravity
+    #[test]
+    fn resolve_queue_work_plan_auto_queues_when_not_strict() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = aida_core::GitBackend::new(&root).unwrap();
+        let storage = Storage::new(&root);
+        let mut req = aida_core::Requirement::new("backlog item".to_string(), String::new());
+        req.spec_id = Some("BUG-376".to_string());
+        req.status = RequirementStatus::Approved;
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(req);
+        backend.save(&store).unwrap();
+
+        // 1. With strict = true, it must refuse and error out with status-aware error message
+        let res = resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, true);
+        assert!(res.is_err());
+        let err = res.unwrap_err().to_string();
+        assert!(
+            err.contains("`BUG-376` isn't queued"),
+            "expected not queued error, got: {err}"
+        );
+
+        // 2. With strict = false, it must automatically queue it and return a successful plan
+        let res = resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, false)
+            .expect("auto-queue should succeed and return plan");
+        assert_eq!(res.mode, QueueWorkMode::Item);
+        assert_eq!(res.anchor_display, "BUG-376");
+
+        // Verify it was added to the queue
+        let entries = storage.queue_list("test-user", false).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
+    }
+
     /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
     /// inner subprocess's error must name the lease + actual reason — not
     /// the canned "pass --steal" message. anyhow's `{:#}` collapses the
@@ -61703,6 +61740,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             complexity,
             assist_est,
             effort,
+            strict,
         } => {
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
@@ -62115,6 +62153,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 *complexity,
                 *assist_est,
                 *effort,
+                *strict,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -63109,6 +63148,7 @@ fn handle_queue_rework(
             /* complexity */ None,
             /* assist_est */ None,
             /* effort */ None,
+            /* strict */ false,
         )?;
     } else {
         println!(
@@ -63194,9 +63234,42 @@ fn resolve_queue_work_plan(
     user_id: &str,
     arg: Option<&str>,
     type_filter: Option<&str>,
+    strict: bool,
 ) -> Result<QueueWorkPlan> {
-    let entries = storage.queue_list(user_id, /* include_completed */ false)?;
+    let mut entries = storage.queue_list(user_id, /* include_completed */ false)?;
     let store = storage.load()?;
+
+    if let Some(arg_str) = arg {
+        if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg_str)) {
+            let is_queued = entries.iter().any(|e| e.requirement_id == req.id);
+            if !is_queued && req.status == RequirementStatus::Approved && !strict {
+                let role = std::env::var("AIDA_SESSION_ROLE")
+                    .unwrap_or_else(|_| "implementer".to_string());
+                let entry = aida_core::QueueEntry {
+                    user_id: user_id.to_string(),
+                    requirement_id: req.id.clone(),
+                    position: i64::MAX,
+                    added_by: user_id.to_string(),
+                    note: None,
+                    added_at: chrono::Utc::now(),
+                    for_role: Some(role.clone()),
+                    for_scope: None,
+                    for_session: None,
+                };
+                storage.queue_add(entry)?;
+                let display_id = req
+                    .agreed_id
+                    .as_deref()
+                    .or(req.spec_id.as_deref())
+                    .unwrap_or(arg_str);
+                record_role_activity(display_id, "queue-add");
+                println!("queued {} for role:{}", display_id, role);
+                // Reload entries to include the auto-queued entry.
+                // trace:TASK-547 | ai:antigravity
+                entries = storage.queue_list(user_id, /* include_completed */ false)?;
+            }
+        }
+    }
 
     // Head-pickup: pick the top item for the active role, honoring the
     // same filters as `queue next` (role routing + active-role scope +
@@ -63859,6 +63932,8 @@ fn handle_queue_work(
     // STORY-451: post-plan/pickup effort estimate. Captured as the plan
     // touchpoint and stamped as `effort:plan:<bucket>`.
     effort: Option<effort_calibration::EffortBucket>,
+    // trace:TASK-547 | ai:antigravity
+    strict: bool,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -63867,7 +63942,7 @@ fn handle_queue_work(
         uuid::Uuid::parse_str(sid)
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
     }
-    let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
+    let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter, strict)?;
 
     // STORY-439: capture pickup-time complexity + assistance estimate
     // ASAP after plan resolution — we know the anchor spec, the project
