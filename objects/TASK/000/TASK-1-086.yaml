@@ -3,12 +3,12 @@ spec_id: TASK-1-086
 agreed_id: TASK-37
 title: Recurrence threshold of 3 is hard-coded in the recur handler; consider making i…
 description: Recurrence threshold of 3 is hard-coded in the recur handler; consider making it configurable via [findings] promote_threshold in .aida/config.toml so projects with different signal-to-noise tolerances can tune it.
-status: Rejected
+status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T06:29:58.682708712Z
-modified_at: 2026-05-25T06:56:01.269436413Z
+modified_at: 2026-05-25T06:30:25.527504606Z
 req_type: Task
 tags:
 - aida:findings
@@ -29,8 +29,3 @@ comments:
   content: 'Recurrence #3 by joe 2026-05-25: Third sighting — should trigger the promote-it nudge.'
   created_at: 2026-05-25T06:30:25.527504606Z
   modified_at: 2026-05-25T06:30:25.527504606Z
-- id: 019e5deb-48f5-7421-b192-1a56830e8ffd
-  author: joe
-  content: 'Dismissed by joe 2026-05-25: smoke-test artifact from STORY-467 implementation; recurrence count is artificial, not three real sightings.'
-  created_at: 2026-05-25T06:56:01.269436413Z
-  modified_at: 2026-05-25T06:56:01.269436413Z
