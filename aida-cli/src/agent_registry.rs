@@ -267,6 +267,7 @@ pub(crate) fn register_spawned_agent(
     current_spec: Option<String>,
     worktree_path: PathBuf,
     binary: Option<&AgentBinaryIdentity>,
+    name: Option<String>,
 ) -> Result<AgentRegistryEntry> {
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
@@ -274,7 +275,7 @@ pub(crate) fn register_spawned_agent(
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
-        name: None,
+        name,
         tty: current_tty(),
         started_at: now,
         last_active_at: now,
@@ -287,6 +288,187 @@ pub(crate) fn register_spawned_agent(
     };
     write_entry(project_root, &entry)?;
     Ok(entry)
+}
+
+/// Validate a custom agent name or generate a default '<type>-<role>-<seq>' name.
+/// Validates uniqueness across all active (non-stale) agents.
+// trace:TASK-542 | ai:antigravity
+pub(crate) fn generate_or_validate_name(
+    project_root: &Path,
+    agent_type: &str,
+    role: Option<&str>,
+    custom_name: Option<&str>,
+) -> Result<String> {
+    let agent_type_clean = normalize_agent_type(agent_type.to_string());
+    let role_clean = role.unwrap_or("unknown").to_lowercase();
+
+    // Read all alive agents
+    let mut alive_agents = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            if let Ok(body) = std::fs::read_to_string(&path) {
+                if let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) {
+                    if crate::process_probe::pid_is_alive(record.pid) {
+                        alive_agents.push(record);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(name) = custom_name {
+        let name_trimmed = name.trim();
+        if name_trimmed.is_empty() {
+            anyhow::bail!("--name cannot be empty");
+        }
+
+        // 1. Uniqueness check across active agents
+        for agent in &alive_agents {
+            if let Some(ref active_name) = agent.name {
+                if active_name.eq_ignore_ascii_case(name_trimmed) {
+                    anyhow::bail!(
+                        "agent name `{}` is already in use by active agent process (PID {})",
+                        name_trimmed,
+                        agent.pid
+                    );
+                }
+            }
+        }
+
+        // 2. Prefix-hierarchy validation
+        let name_lower = name_trimmed.to_lowercase();
+        let is_type = name_lower == "claude"
+            || name_lower == "codex"
+            || name_lower == "antigravity"
+            || name_lower == "web";
+        if is_type {
+            anyhow::bail!(
+                "invalid agent name `{}`: conflicts with agent type prefix",
+                name_trimmed
+            );
+        }
+
+        let is_type_role_prefix =
+            ["claude-", "codex-", "antigravity-", "web-"]
+                .iter()
+                .any(|prefix| {
+                    if let Some(remainder) = name_lower.strip_prefix(prefix) {
+                        if let Some(dash_idx) = remainder.rfind('-') {
+                            let suffix = &remainder[dash_idx + 1..];
+                            !suffix.chars().all(|c| c.is_ascii_digit()) || suffix.is_empty()
+                        } else {
+                            true
+                        }
+                    } else {
+                        false
+                    }
+                });
+        if is_type_role_prefix {
+            anyhow::bail!(
+                "invalid agent name `{}`: conflicts with agent type+role prefix",
+                name_trimmed
+            );
+        }
+
+        return Ok(name_trimmed.to_string());
+    }
+
+    // Default name generation: '<type>-<role>-<seq>' using the lowest free integer starting from 1
+    let mut seq = 1;
+    loop {
+        let candidate_name = format!("{}-{}-{}", agent_type_clean, role_clean, seq);
+        let in_use = alive_agents.iter().any(|agent| {
+            if let Some(ref active_name) = agent.name {
+                active_name.eq_ignore_ascii_case(&candidate_name)
+            } else {
+                false
+            }
+        });
+        if !in_use {
+            return Ok(candidate_name);
+        }
+        seq += 1;
+    }
+}
+
+/// Resolve an agent brief target to its allowed brief directories (exact name, type-role, and type)
+/// or fall back to literal type-level routing with an ambiguity warning.
+// trace:TASK-542 | ai:antigravity
+pub(crate) fn resolve_brief_directories(
+    project_root: &Path,
+    target: &str,
+) -> (Vec<String>, Option<String>) {
+    let mut alive_agents = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            if let Ok(body) = std::fs::read_to_string(&path) {
+                if let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) {
+                    if crate::process_probe::pid_is_alive(record.pid) {
+                        alive_agents.push(record);
+                    }
+                }
+            }
+        }
+    }
+
+    // Find if target is exactly the name of an active agent (case-insensitive)
+    let found_agent = alive_agents.iter().find(|agent| {
+        if let Some(ref name) = agent.name {
+            name.eq_ignore_ascii_case(target)
+        } else {
+            false
+        }
+    });
+
+    if let Some(agent) = found_agent {
+        let name = agent.name.as_ref().unwrap();
+        let mut dirs = vec![name.clone()];
+        if let Some(ref role) = agent.role {
+            dirs.push(format!("{}-{}", agent.agent_type, role.to_lowercase()));
+        }
+        dirs.push(agent.agent_type.clone());
+        dirs.sort();
+        dirs.dedup();
+        return (dirs, None);
+    }
+
+    // Fallback: target is not an active agent's name. Check for ambiguity.
+    let mut matching_agents = Vec::new();
+    for agent in &alive_agents {
+        let type_match = agent.agent_type.eq_ignore_ascii_case(target);
+        let type_role_match = if let Some(ref role) = agent.role {
+            format!("{}-{}", agent.agent_type, role.to_lowercase()).eq_ignore_ascii_case(target)
+        } else {
+            false
+        };
+        if type_match || type_role_match {
+            if let Some(ref name) = agent.name {
+                matching_agents.push(name.clone());
+            } else {
+                matching_agents.push(format!("{}#{}", agent.agent_type, agent.pid));
+            }
+        }
+    }
+
+    let warning = if matching_agents.len() > 1 {
+        Some(format!(
+            "warning: agent target '{}' is ambiguous — matches multiple active agents: {}",
+            target,
+            matching_agents.join(", ")
+        ))
+    } else {
+        None
+    };
+
+    (vec![target.to_string()], warning)
 }
 
 /// Register a raw-launched process that was not spawned by `aida agent new`.
@@ -373,7 +555,9 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
         .iter()
         .map(|agent| {
             let elapsed = humanize_elapsed(elapsed_secs_clamped(now, agent.last_active_at));
-            let identity = if agent.source == "lease" {
+            let identity = if let Some(ref name) = agent.name {
+                name.clone()
+            } else if agent.source == "lease" {
                 let short = agent.id.trim_start_matches("lease-");
                 let short = &short[..short.len().min(8)];
                 format!("{}#{}", agent.agent_type, short)
@@ -457,10 +641,7 @@ fn classify_status(
     AgentStatus::Idle
 }
 
-/// Elapsed seconds between `now` and `at`, clamped to `>= 0` so a clock
-/// that ticked backwards (NTP step, suspend/resume) doesn't prematurely
-/// flip a fresh entry to Idle. trace:STORY-435 | ai:claude
-fn elapsed_secs_clamped(now: DateTime<Utc>, at: DateTime<Utc>) -> i64 {
+pub(crate) fn elapsed_secs_clamped(now: DateTime<Utc>, at: DateTime<Utc>) -> i64 {
     now.signed_duration_since(at).num_seconds().max(0)
 }
 
@@ -479,7 +660,7 @@ fn covers(worktrees: &[PathBuf], agent: &Path) -> bool {
     })
 }
 
-fn humanize_elapsed(secs: i64) -> String {
+pub(crate) fn humanize_elapsed(secs: i64) -> String {
     let secs = secs.max(0);
     if secs < 60 {
         format!("{secs}s")

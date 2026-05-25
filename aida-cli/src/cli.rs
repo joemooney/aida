@@ -3773,6 +3773,17 @@ pub enum AgentCommand {
         #[clap(long)]
         name: Option<String>,
     },
+
+    /// List active agent processes.
+    // trace:TASK-542 | ai:antigravity
+    Ls,
+
+    /// Stop an active agent process by name.
+    // trace:TASK-542 | ai:antigravity
+    Stop {
+        /// Name of the agent to stop.
+        name: String,
+    },
 }
 
 /// Agent-specific launchers. Each variant maps AIDA's supervision layer onto
@@ -3805,6 +3816,10 @@ pub enum AgentNewCommand {
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]
         show_context: bool,
+
+        /// Optional human-readable instance name.
+        #[clap(long)]
+        name: Option<String>,
     },
 
     /// Spawn Codex CLI with project-correct cwd/env and registry tracking.
@@ -3837,6 +3852,10 @@ pub enum AgentNewCommand {
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]
         show_context: bool,
+
+        /// Optional human-readable instance name.
+        #[clap(long)]
+        name: Option<String>,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.
@@ -3869,6 +3888,10 @@ pub enum AgentNewCommand {
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]
         show_context: bool,
+
+        /// Optional human-readable instance name.
+        #[clap(long)]
+        name: Option<String>,
     },
 }
 
