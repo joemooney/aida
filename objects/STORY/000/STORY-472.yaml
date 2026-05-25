@@ -1,0 +1,86 @@
+id: 019e60a8-d83b-7f20-89e1-211fec81f65e
+spec_id: STORY-472
+agreed_id: STORY-472
+title: 'aida release: one-verb release workflow wrapping CI-watch + PR-merge + pull + scripts/release.sh'
+description: |-
+  ## Friction
+
+  Today's release workflow is a 4-step manual sequence operator must remember:
+
+    1. gh run watch <run-id>                # confirm cross-platform CI green
+    2. gh pr merge <N> --squash --delete-branch
+    3. aida pull                             # auto-bump verify
+    4. scripts/release.sh {major|minor|patch}
+
+  Operator's stated friction 2026-05-25: 'I will likely not remember this sequence of commands and will want help repeatedly.' Recurring forgetting × multi-release-frequency = real per-release friction tax. Master assists each time via paste-ready sequence, but the substrate-grounded fix is a single verb.
+
+  ## Proposed shape
+
+    aida release [--patch | --minor | --major]  [--after-pr <N>]  [--check]  [--skip-xplat-check]
+
+  Default: --patch (smallest bump; safest fallback if operator doesn't specify).
+
+  ### Behavior
+
+  - **--check** (dry-run): print the planned sequence + current state (which PRs would merge, CI status, target version) without acting. Smallest-valuable-slice's safest entry point.
+
+  - **--after-pr <N>** (optional): wait for PR-<N>'s checks to complete + merge it before proceeding. If absent: skip merge step (assumes no in-flight PR needs landing first).
+
+  - **Sequence executed**:
+    1. If --after-pr supplied: gh run watch on the PR's latest CI; on success → gh pr merge --squash --delete-branch
+    2. aida pull (verify auto-bump + sync local main)
+    3. Verify cross-platform CI within <24h (matches scripts/pre-release-check.sh; honor --skip-xplat-check + AIDA_SKIP_XPLAT_CHECK env)
+    4. scripts/release.sh {patch|minor|major}
+
+  - **Refuses gracefully** when:
+    - On wrong branch (not main)
+    - Uncommitted changes
+    - PR-<N>'s CI is failing (suggests --check first)
+    - Cross-platform CI is red without --skip-xplat-check
+
+  ### Shell-function integration
+
+  aida is already a shell function (per 'aida dev shell-init --install'). The release verb fits naturally alongside 'aida dev' admin commands. May also be a candidate for an 'aida admin' namespace if operator wants a clearer admin/non-admin split — but smaller-slice scope is just 'aida release' as a top-level verb.
+
+  ## Composes with
+
+  - scripts/release.sh (already wraps version + changelog + tag + push)
+  - scripts/pre-release-check.sh (cross-platform CI verification)
+  - aida pull (auto-bump on main)
+  - gh pr merge + gh run watch (the GitHub-side primitives)
+
+  ## Acceptance
+
+  - [ ] 'aida release --check [--minor|--patch|--major]' prints planned sequence + current state (gh-API queries, dry-run; no mutation)
+  - [ ] 'aida release [--patch default]' executes the sequence after pre-flight gates
+  - [ ] '--after-pr <N>' waits for PR-N CI + merges before pull/release
+  - [ ] Refuses cleanly when on wrong branch / uncommitted changes / red CI without skip-flag
+  - [ ] Documented in CLAUDE.md daily-driver section
+  - [ ] Tests: dry-run with various states + clean run on simulated environment
+
+  ## Smallest valuable slice
+
+  Phase 1: --check mode + the documented sequence as a checklist (no execution; just print steps). Gives operator a single command that surfaces 'what would happen' without committing.
+
+  Phase 2: full execution mode with --after-pr handling.
+
+  Phase 1 alone solves the 'I forget the sequence' problem. Phase 2 is the convenience layer.
+
+  ## Origin
+
+  2026-05-25 operator: 'I will likely not remember this sequence of commands and will want help repeatedly. My question is whether I could have an aida admin release --minor (maybe default to patch) which would check whatever gh run is doing and do the gh pr merge and aida pull and release.' Master concurs; not overthinking — recurring forgetting + multi-release-cadence makes this a high-leverage UX consolidation.
+
+  trace:STORY-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T19:42:18.683129292Z
+modified_at: 2026-05-25T19:42:18.683129292Z
+req_type: Story
+tags:
+- admin-verb
+- aida:release
+- from-user-direction
+- ux-papercut
+- workflow-consolidation
