@@ -18,11 +18,11 @@ The strategic positioning: the IDE-embedded coding assistants (Cursor, Cline, Ai
 
 ## What you can do via MCP today
 
-AIDA's MCP server exposes **25 tools** in two clusters:
+AIDA's MCP server exposes **26 tools** in two clusters:
 
 **Important:** the canonical argument names come from `tools/list` over MCP. The list below mirrors what the server actually advertises (verified via `aida-cli/src/mcp.rs` inputSchema descriptors). If a future edit to this doc drifts from the source, **trust `tools/list`**, file a finding, and `aida` will fix the doc.
 
-### Cluster 1 — Spec graph (8 tools)
+### Cluster 1 — Spec graph (9 tools)
 
 - `list_requirements({status})` → list specs (optionally filtered)
 - `show_requirement({id})` → full spec content, relationships, comments
@@ -30,6 +30,7 @@ AIDA's MCP server exposes **25 tools** in two clusters:
 - `update_requirement({id, ...})` → edit
 - `search_requirements({query})` → FTS5 search
 - `add_comment({id, text})` → comment on a spec  *(arg is `text`, not `body`)*
+- `add_relationship({spec_id, relationship_type, target_spec_id, bidirectional?, force_parent?})` → add a typed relationship between existing specs. Built-ins include `parent`, `child`, `duplicate`, `verifies`, `verified-by`, `references`, `blocked-by`, and `blocks`; `depends-on` aliases to `blocked-by`, and custom non-empty names are accepted for CLI parity.
 - `list_features()` → list project features
 - `history({spec_id?, since?})` → structured event ledger, equivalent to `aida history --events`
 
@@ -66,7 +67,7 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
 
 These are the **agent-coordination primitives**. They're how multiple agents (you, a human, another agent) coordinate on the same spec graph without stepping on each other.
 
-> **Schemas:** all 25 tools advertise `inputSchema` and descriptor-level `outputSchema`. Runtime responses still use MCP text content envelopes; structured emission of `structuredContent` is the Path B follow-up (**STORY-399**). Treat `outputSchema` as descriptor metadata until that ships.
+> **Schemas:** all 26 tools advertise `inputSchema` and descriptor-level `outputSchema`. Runtime responses still use MCP text content envelopes; structured emission of `structuredContent` is the Path B follow-up (**STORY-399**). Treat `outputSchema` as descriptor metadata until that ships.
 
 ## How to connect (minimum viable)
 
@@ -126,6 +127,28 @@ Before claiming a spec, check `list_active_leases()`. Don't overwrite another ag
 
 If you hit a design fork you can't resolve from the spec text, the surrounding code, or the project's substrate (memories, discipline docs, prior commits): **call `post_punt` instead of guessing.** Punting is a first-class outcome, not a failure. AIDA's punt → advisor → human escalation tier (STORY-306) is designed around the assumption that agents punt when uncertain.
 
+## Cross-agent skill-invocation surface
+
+Different agent types have different conventions for invoking AIDA workflows (the bundled "skills" like `aida-pickup`, `aida-pr`, etc.). The substrate IS the same — only the operator-facing syntax varies. If you're a non-Claude agent looking at a CLAUDE.md or skill template that references `/aida-foo`, this map tells you the equivalent.
+
+| Workflow | Claude Code (slash) | Codex CLI | Antigravity CLI / MCP agents | What it does |
+|---|---|---|---|---|
+| **aida-pickup** | `/aida-pickup [SPEC]` | `aida queue work [SPEC]` (or `.codex/skills/aida-pickup` when scaffolded) | `aida queue work [SPEC]` | Read spec + transition to in-progress + drive implementation |
+| **aida-pr / pr ship** | `/aida-pr` | `aida pr ship` | `aida pr ship` | Commit + push + open PR + auto-queue reviewer story |
+| **aida-req** | `/aida-req` | `aida add --type <T> --title <S>` | `aida add ...` (or MCP `add_requirement`) | File a new spec |
+| **aida-commit** | `/aida-commit` | `git commit` with trailer | `git commit` with trailer | Enforce `[AI:tool] type(scope): subject (SPEC-ID)` format |
+| **aida-implement** | `/aida-implement [SPEC]` | `aida show <SPEC>` + edit + ship | `aida show <SPEC>` + edit + ship | Implement a spec end-to-end |
+| **aida-doc** | `/aida-doc` | manual file edits + commit | manual file edits + commit | Document architecture/design |
+| **aida-search** | `/aida-search <q>` | `aida search <q>` (or MCP `search_requirements`) | `aida search <q>` (or MCP) | FTS5 search across specs |
+| **aida-plan** | `/aida-plan [SPEC]` | `aida plan verify` / `aida ultraplan` | same | Plan an implementation; verify against template |
+| **aida-recover** | `/aida-recover` | `aida doctor` (+ `aida doctor heal <category>`) | `aida doctor` | Diagnostic + recovery for state drift |
+| **aida-findings** | (slash variants) | `aida findings add/list/promote/dismiss` (or MCP `file_finding`) | `aida findings ...` (or MCP) | Advisor observation entry + triage flow |
+| **aida-onboard** | `/aida-onboard` | read AGENTS.md + this doc | read AGENTS.md + this doc | First-session orientation |
+
+**Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. If you don't know the slash/skill name for your agent type, run the CLI verb directly. It works for every agent type.
+
+**MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 26 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph operations; use CLI for orchestration verbs (`aida session start`, `aida pr ship`, `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
+
 ## What's in flight / known rough edges
 
 Specs you'll want to track because they affect your operation:
@@ -161,7 +184,7 @@ In priority order for an agent boarding the project:
 
 AIDA's bet is that the next phase of agent collaboration isn't "smarter agents" but "shared substrate that all agents can coordinate against." Today every coding agent runs in its own isolated context window with its own scratchpads and its own private notes. Switching agents — or running multiple in parallel — means losing context.
 
-The MCP server is the **substrate-as-shared-coordination-surface** made operational. When you (Codex / Cursor / future agent) attach to an AIDA project and use these 25 tools, you're not running on AIDA's island; you're contributing to a graph that Claude Code, the human, and any other agent are also working in. Findings filed via MCP show up in `aida findings list`. Punts you raise route to the same advisor tier human punts route to. Briefs routed to you can be listed, read, and acknowledged through MCP. Specs you implement get traced via the same `trace:SPEC-ID` convention any other agent uses.
+The MCP server is the **substrate-as-shared-coordination-surface** made operational. When you (Codex / Cursor / future agent) attach to an AIDA project and use these 26 tools, you're not running on AIDA's island; you're contributing to a graph that Claude Code, the human, and any other agent are also working in. Findings filed via MCP show up in `aida findings list`. Punts you raise route to the same advisor tier human punts route to. Briefs routed to you can be listed, read, and acknowledged through MCP. Specs you implement get traced via the same `trace:SPEC-ID` convention any other agent uses.
 
 This is what makes the "agent-agnostic" positioning real rather than rhetorical. Your participation evidences it.
 
