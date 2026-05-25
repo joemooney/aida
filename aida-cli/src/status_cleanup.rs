@@ -184,10 +184,21 @@ impl CleanupReport {
     /// recovery commands per item).
     /// trace:TASK-1-099-companion | ai:claude
     pub fn summary_line(&self) -> Option<String> {
-        if self.is_empty() {
+        // Project-scoped count for the summary: excludes orphan_project_dirs
+        // (system-wide cross-project state surfaced in --cleanup instead;
+        // the dedicated 'aida session prune --orphans' verb is the
+        // canonical recovery for those).
+        let project_scoped_count = self.uncommitted_wip.len()
+            + self.sticky_in_progress.len()
+            + self.branches_ahead_no_pr.len()
+            + self.missed_auto_bump.len()
+            + self.open_prs.len()
+            + self.dormant_leases.len()
+            + self.stale_reviewer_leases.len();
+        if project_scoped_count == 0 {
             return None;
         }
-        let n = self.total();
+        let n = project_scoped_count;
         let mut lines: Vec<String> = Vec::new();
         lines.push(format!(
             "{} {} item{} need cleanup attention:",
@@ -249,18 +260,12 @@ impl CleanupReport {
                 self.stale_reviewer_leases[0].pr_number,
             ));
         }
-        if !self.orphan_project_dirs.is_empty() {
-            lines.push(format!(
-                "  • Orphan Claude Code project dirs ({}): {}",
-                self.orphan_project_dirs.len(),
-                self.orphan_project_dirs[0]
-                    .path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("?")
-                    .dimmed(),
-            ));
-        }
+        // Orphan Claude Code project dirs are intentionally OMITTED from
+        // the inline summary — the scanner is system-wide (walks
+        // ~/.claude/projects/) and surfaces cross-project state that
+        // doesn't belong in the per-project status summary. Cross-project
+        // cleanup still lives in `aida status --cleanup`'s full report
+        // and `aida session prune --orphans` is the dedicated verb.
         lines.push(format!(
             "  {} `aida status --cleanup` for full report + recovery commands.",
             "→".dimmed(),
@@ -780,14 +785,35 @@ mod tests {
     #[test]
     fn summary_line_present_when_non_empty() {
         let mut report = CleanupReport::default();
+        // Use a project-scoped category — orphan_project_dirs are
+        // deliberately excluded from the inline summary (cross-project
+        // state surfaces in --cleanup only). trace:TASK-1-099-companion
+        report.uncommitted_wip.push(UncommittedWipItem {
+            worktree_path: "/x".into(),
+            branch: "demo-branch".into(),
+            scope: Some("TASK-1".into()),
+            modified_files: 3,
+            age_hours: 5,
+        });
+        let line = report.summary_line().unwrap();
+        assert!(line.contains("1 item need"));
+        assert!(line.contains("aida status --cleanup"));
+    }
+
+    #[test]
+    fn summary_line_skips_orphan_only_reports() {
+        // Cross-project orphan Claude Code project dirs surface ONLY in
+        // --cleanup, not in the per-project status summary. A report
+        // containing nothing but orphan dirs returns None so the
+        // operator's per-project status stays uncluttered.
+        // trace:TASK-1-099-companion | ai:claude
+        let mut report = CleanupReport::default();
         report.orphan_project_dirs.push(OrphanProjectDirItem {
             path: "/tmp/foo".into(),
             decoded_cwd: "/missing".to_string(),
             jsonl_count: 2,
         });
-        let line = report.summary_line().unwrap();
-        assert!(line.contains("1 item need"));
-        assert!(line.contains("aida status --cleanup"));
+        assert!(report.summary_line().is_none());
     }
 
     #[test]
