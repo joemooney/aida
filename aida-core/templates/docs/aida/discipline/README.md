@@ -17,11 +17,12 @@ input — is learned the hard way, one papercut at a time. This pack ships
 that pattern up front so a new project starts with the discipline already
 in hand.
 
-## The nine guides
+## The guides
 
 | Guide | What it covers |
 |-------|----------------|
 | [`advisor-role.md`](advisor-role.md) | The advisor seat — its responsibilities, what it does *not* do, and the three autonomy modes |
+| [`observation-discipline.md`](observation-discipline.md) | When to file an `aida findings add` observation vs an immediate BUG/TASK; the recurrence-as-promotion signal |
 | [`lifecycle-vocabulary.md`](lifecycle-vocabulary.md) | Precise words for each lifecycle state — committed vs pushed vs merged vs completed vs released |
 | [`machinery-glossary.md`](machinery-glossary.md) | One-paragraph definitions of AIDA's orchestration / session / autonomy machinery — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode |
 | [`tag-conventions.md`](tag-conventions.md) | The `aida:<subcommand>` colon-namespaced tag convention, plus the flat behavior/provenance namespace and existing colon namespaces (`batch:`, `lifecycle:`, …) |

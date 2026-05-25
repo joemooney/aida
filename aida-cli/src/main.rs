@@ -1944,21 +1944,31 @@ fn handle_findings_command(
                 for group in &section.groups {
                     println!("  {}", group.origin.cyan().bold());
                     for row in &group.rows {
+                        // STORY-467: recurrence ≥ 2 prints a `×N` suffix; the
+                        // common N=1 case stays clean.
+                        let recur_suffix = if row.recurrence > 1 {
+                            format!(" ×{}", row.recurrence)
+                        } else {
+                            String::new()
+                        };
                         match &row.kind {
-                            // Implementer findings carry a `kind:` category —
-                            // show it; review findings don't. trace:STORY-285
+                            // Implementer + advisor findings carry a `kind:`
+                            // category; review findings don't. trace:STORY-285
+                            // trace:STORY-467
                             Some(k) => println!(
-                                "    {:<20} {:<9} {:<14} {}",
+                                "    {:<20} {:<9} {:<14} {}{}",
                                 k,
                                 row.severity.label(),
                                 row.display_id,
-                                row.title
+                                row.title,
+                                recur_suffix,
                             ),
                             None => println!(
-                                "    {:<9} {:<14} {}",
+                                "    {:<9} {:<14} {}{}",
                                 row.severity.label(),
                                 row.display_id,
-                                row.title
+                                row.title,
+                                recur_suffix,
                             ),
                         }
                     }
@@ -2067,8 +2077,8 @@ fn handle_findings_command(
             let tags: Vec<String> = req.tags.iter().cloned().collect();
             if !findings::is_finding(&tags) {
                 anyhow::bail!(
-                    "{id} is not a finding (no `from-review:`/`from-implementer:` tag) — \
-                     `aida findings` only triages headless-drain findings. \
+                    "{id} is not a finding (no `from-review:`/`from-implementer:`/`from-advisor:` tag) — \
+                     `aida findings` only triages real findings. \
                      Use `aida edit {id} --status rejected` for a general status change."
                 );
             }
@@ -2108,8 +2118,8 @@ fn handle_findings_command(
             let tags: Vec<String> = req.tags.iter().cloned().collect();
             if !findings::is_finding(&tags) {
                 anyhow::bail!(
-                    "{id} is not a finding (no `from-review:`/`from-implementer:` tag) — \
-                     `aida findings` only triages headless-drain findings. \
+                    "{id} is not a finding (no `from-review:`/`from-implementer:`/`from-advisor:` tag) — \
+                     `aida findings` only triages real findings. \
                      Use `aida edit {id} --status approved` for a general status change."
                 );
             }
@@ -2332,6 +2342,249 @@ fn handle_findings_command(
                 "Annotate: `aida findings calibration annotate <punt-id> \"<note>\"`".dimmed()
             );
         }
+
+        FindingsCommand::Add {
+            note,
+            kind,
+            title,
+            severity,
+            linked_specs,
+            tags,
+        } => handle_findings_add(
+            backend,
+            store_path,
+            note,
+            kind,
+            title.as_deref(),
+            severity.as_deref(),
+            linked_specs,
+            tags.as_deref(),
+        )?,
+
+        FindingsCommand::Recur { id, note } => {
+            handle_findings_recur(backend, store_path, id, note.as_deref())?
+        }
+    }
+    Ok(())
+}
+
+/// `aida findings add` — file an advisor observation as a `from-advisor:`
+/// finding (STORY-467). Mirrors the doc-add minimal path: build the
+/// Requirement, allocate a SPEC-ID via `update_atomically`, write the
+/// object. Skips the parent / lease / block-dispenser ceremony of
+/// `Command::Add` — an observation is unparented by design and the
+/// finding cohort doesn't need a short id.
+// trace:STORY-467 | ai:claude
+fn handle_findings_add(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    note: &str,
+    kind: &str,
+    title: Option<&str>,
+    severity: Option<&str>,
+    linked_specs: &[String],
+    extra_tags: Option<&str>,
+) -> Result<()> {
+    // `--note -` reads the body from stdin so a multi-paragraph
+    // observation doesn't need shell-quoting.
+    let note_body = if note == "-" {
+        let mut buf = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)
+            .context("reading observation note from stdin")?;
+        buf
+    } else {
+        note.to_string()
+    };
+    let note_trimmed = note_body.trim();
+    if note_trimmed.is_empty() {
+        anyhow::bail!(
+            "--note is required and must contain text — an empty observation \
+             gives the triage view nothing to act on."
+        );
+    }
+
+    // Title: explicit flag wins; otherwise the first non-empty line of the
+    // note, truncated. Keeping the title short keeps `aida findings list`
+    // readable.
+    let resolved_title = match title {
+        Some(t) if !t.trim().is_empty() => t.trim().to_string(),
+        _ => {
+            let first_line = note_trimmed
+                .lines()
+                .next()
+                .unwrap_or("Advisor observation")
+                .trim();
+            const TITLE_MAX: usize = 80;
+            if first_line.chars().count() > TITLE_MAX {
+                let truncated: String = first_line.chars().take(TITLE_MAX - 1).collect();
+                format!("{truncated}…")
+            } else {
+                first_line.to_string()
+            }
+        }
+    };
+
+    let mut req = Requirement::new(resolved_title.clone(), note_trimmed.to_string());
+    req.req_type = RequirementType::Task;
+    req.status = RequirementStatus::Draft;
+    req.owner = get_default_author();
+
+    // Origin: first linked spec, else `general`. The first spec doubles as
+    // both the `from-advisor:<origin>` value AND a `linked:` tag — the
+    // grouping key and the relationship signal stay consistent.
+    let cleaned_specs: Vec<String> = linked_specs
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let origin = cleaned_specs
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "general".to_string());
+
+    req.tags
+        .insert(format!("{}{}", findings::FROM_ADVISOR_PREFIX, origin));
+    req.tags
+        .insert(format!("{}{}", findings::KIND_PREFIX, kind.trim()));
+
+    if let Some(level) = severity.and_then(|s| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    }) {
+        // Validate against the known severity vocabulary so a typo doesn't
+        // silently land as Unknown.
+        match findings::Severity::parse(level) {
+            findings::Severity::Unknown => {
+                anyhow::bail!(
+                    "unrecognised severity `{}` — expected major, minor, or cosmetic",
+                    level
+                );
+            }
+            sev => {
+                req.tags
+                    .insert(format!("{}{}", findings::SEVERITY_PREFIX, sev.label()));
+            }
+        }
+    }
+
+    for spec in &cleaned_specs {
+        req.tags
+            .insert(format!("{}{}", findings::LINKED_PREFIX, spec));
+    }
+
+    if let Some(raw) = extra_tags {
+        for tag in raw.split(',') {
+            let trimmed = tag.trim();
+            if !trimmed.is_empty() {
+                req.tags.insert(trimmed.to_string());
+            }
+        }
+    }
+
+    // Mirror `aida doc add`'s minimal persistence path — works regardless of
+    // id_format policy (node-aware ids drop in when blocks aren't allocated).
+    let store = backend.update_atomically(|store| {
+        let type_prefix = store.get_type_prefix(&req.req_type);
+        store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
+    })?;
+    let written = store
+        .requirements
+        .last()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
+    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
+
+    let display_id = written.spec_id.as_deref().unwrap_or("?");
+    record_role_activity(display_id, "findings-add");
+    println!("Filed observation {} — {}", display_id, written.title);
+    println!(
+        "  {}",
+        format!(
+            "from-advisor:{origin} · kind:{kind} · severity:{sev}",
+            sev = severity.unwrap_or("unknown")
+        )
+        .dimmed()
+    );
+    println!(
+        "  {}",
+        "Triage: `aida findings list` · promote with `aida findings promote <ID>` · \
+         re-sight with `aida findings recur <ID>`"
+            .dimmed()
+    );
+    Ok(())
+}
+
+/// `aida findings recur` — bump the `recurrence:N` counter on an existing
+/// finding (STORY-467). The first re-sighting writes `recurrence:2`; each
+/// subsequent call increments. An optional `--note` appends a timestamped
+/// audit comment so the recurrence trail explains *what* you saw, not just
+/// *that* you saw it.
+// trace:STORY-467 | ai:claude
+fn handle_findings_recur(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    id: &str,
+    note: Option<&str>,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let tags: Vec<String> = req.tags.iter().cloned().collect();
+    if !findings::is_finding(&tags) {
+        anyhow::bail!(
+            "{id} is not a finding (no `from-review:`/`from-implementer:`/`from-advisor:` tag) — \
+             `aida findings recur` only bumps real findings. Re-file as an observation \
+             with `aida findings add --note ...` if you meant to capture a new one."
+        );
+    }
+
+    // Find and bump the existing counter; default to 2 when absent (the
+    // first sighting is implicit recurrence:1).
+    let current = findings::finding_recurrence(&tags);
+    let next = current.saturating_add(1).max(2);
+    req.tags
+        .retain(|t| !t.starts_with(findings::RECURRENCE_PREFIX));
+    req.tags
+        .insert(format!("{}{}", findings::RECURRENCE_PREFIX, next));
+
+    let now = chrono::Utc::now();
+    let author = get_default_author();
+    let comment_body = match note.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(text) => format!(
+            "Recurrence #{next} by {author} {date}: {text}",
+            date = now.format("%Y-%m-%d")
+        ),
+        None => format!(
+            "Recurrence #{next} by {author} {date}.",
+            date = now.format("%Y-%m-%d")
+        ),
+    };
+    req.comments.push(Comment {
+        id: Uuid::now_v7(),
+        content: comment_body,
+        author,
+        created_at: now,
+        modified_at: now,
+        parent_id: None,
+        replies: Vec::new(),
+        reactions: Vec::new(),
+    });
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+
+    let display_id = req.spec_id.as_deref().unwrap_or(id);
+    println!("Recurred {} — recurrence count now ×{next}.", display_id);
+    if next >= 3 {
+        println!(
+            "  {}",
+            "Recurrence ≥ 3 is the promote-it signal — consider \
+             `aida findings promote <ID>`."
+                .dimmed()
+        );
     }
     Ok(())
 }
@@ -73120,9 +73373,10 @@ mod story_255_discipline_pack_tests {
         // trace:TASK-517 | ai:codex — reserved-paths.md documents the
         // `/ultraplan` namespace-reservation prompt source.
         // trace:BUG-378 | ai:claude — brief-polling.md joins the pack.
+        // trace:STORY-467 | ai:claude — observation-discipline.md joins the pack.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 13, "expected README + 12 discipline docs");
+        assert_eq!(written, 14, "expected README + 13 discipline docs");
 
         let dir = root.path().join("docs/aida/discipline");
         for f in [
@@ -73132,6 +73386,7 @@ mod story_255_discipline_pack_tests {
             "brief-polling.md",
             "lifecycle-vocabulary.md",
             "machinery-glossary.md",
+            "observation-discipline.md",
             "tag-conventions.md",
             "workflow-patterns.md",
             "session-discipline.md",
@@ -73151,7 +73406,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            13
+            14
         );
     }
 

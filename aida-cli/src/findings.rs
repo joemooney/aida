@@ -1,13 +1,17 @@
-//! `aida findings` — triage view over findings filed by headless drain phases:
+//! `aida findings` — triage view over findings filed by headless drain phases
+//! and (STORY-467) the advisor seat:
 //! the reviewer (phase 3, STORY-278) as draft TASKs tagged `from-review:PR-N`,
-//! and the implementer (phase 1, STORY-285) as draft TASKs tagged
-//! `from-implementer:SPEC-ID`. Both phases are skill-driven (`/aida-review`
-//! step 7b and `/aida-pickup` step 5b run `aida add`); this module owns the
-//! deterministic *query* side the advisor uses to triage either source.
+//! the implementer (phase 1, STORY-285) as draft TASKs tagged
+//! `from-implementer:SPEC-ID`, and the advisor (`aida findings add`,
+//! STORY-467) as draft TASKs tagged `from-advisor:<origin>`. The drain phases
+//! are skill-driven (`/aida-review` step 7b and `/aida-pickup` step 5b run
+//! `aida add`); the advisor entry is a first-class subcommand so live-session
+//! observations don't decay with context. This module owns the deterministic
+//! *query* side the advisor uses to triage every source.
 //!
 //! "Findings" is a query, not a taxonomy — a finding is any draft requirement
-//! carrying a `from-review:` or `from-implementer:` tag.
-//! trace:STORY-278 trace:STORY-285 | ai:claude
+//! carrying a `from-review:`, `from-implementer:`, or `from-advisor:` tag.
+//! trace:STORY-278 trace:STORY-285 trace:STORY-467 | ai:claude
 
 use aida_core::RequirementSummary;
 
@@ -17,13 +21,27 @@ pub const FROM_REVIEW_PREFIX: &str = "from-review:";
 /// SPEC-ID the implementer was working when it raised the finding).
 /// trace:STORY-285
 pub const FROM_IMPLEMENTER_PREFIX: &str = "from-implementer:";
+/// Tag prefix every advisor-filed observation carries. The value is the
+/// origin bucket: the first `--linked-specs` value (a SPEC-ID), or
+/// `general` when the observation isn't anchored to one spec.
+/// trace:STORY-467
+pub const FROM_ADVISOR_PREFIX: &str = "from-advisor:";
 /// Tag prefix carrying a review finding's PR number, e.g. `from-review:PR-64`.
 const PR_TAG_PREFIX: &str = "from-review:PR-";
 /// Tag prefix carrying a finding's severity, e.g. `severity:major`.
-const SEVERITY_PREFIX: &str = "severity:";
-/// Tag prefix carrying an implementer finding's category, e.g.
-/// `kind:bug-spotted`. trace:STORY-285
-const KIND_PREFIX: &str = "kind:";
+pub(crate) const SEVERITY_PREFIX: &str = "severity:";
+/// Tag prefix carrying an implementer or advisor finding's category, e.g.
+/// `kind:bug-spotted`, `kind:observation`. trace:STORY-285 trace:STORY-467
+pub(crate) const KIND_PREFIX: &str = "kind:";
+/// Tag prefix carrying a recurrence counter, e.g. `recurrence:3`. Filed
+/// findings start without the tag (implicit recurrence:1); the first
+/// `aida findings recur <ID>` writes `recurrence:2`. trace:STORY-467
+pub const RECURRENCE_PREFIX: &str = "recurrence:";
+/// Tag prefix carrying an additional linked spec when an advisor observation
+/// names more than one (the first goes into `from-advisor:<spec>`, the rest
+/// become `linked:<spec>` so they survive grep and show up in the spec's
+/// own relationship-by-tag view). trace:STORY-467
+pub const LINKED_PREFIX: &str = "linked:";
 
 /// A finding's severity, parsed from its `severity:<level>` tag. Ordered so
 /// [`Severity::rank`] sorts a triage view major → minor → cosmetic, with
@@ -83,6 +101,10 @@ pub enum FindingSource {
     /// finding.
     // trace:STORY-285 | ai:claude
     Implementer,
+    /// Filed by the advisor via `aida findings add` — a `from-advisor:`
+    /// observation.
+    // trace:STORY-467 | ai:claude
+    Advisor,
 }
 
 impl FindingSource {
@@ -91,6 +113,7 @@ impl FindingSource {
         match self {
             Self::Review => "review",
             Self::Implementer => "implementer",
+            Self::Advisor => "advisor",
         }
     }
 
@@ -99,6 +122,7 @@ impl FindingSource {
         match self {
             Self::Review => FROM_REVIEW_PREFIX,
             Self::Implementer => FROM_IMPLEMENTER_PREFIX,
+            Self::Advisor => FROM_ADVISOR_PREFIX,
         }
     }
 }
@@ -109,22 +133,27 @@ pub fn pr_number_from_tag(tag: &str) -> Option<u32> {
     tag.strip_prefix(PR_TAG_PREFIX)?.parse().ok()
 }
 
-/// The phase that filed a finding, or `None` when `tags` carries neither
-/// finding tag (an ordinary draft, not a finding). Review wins if — against
-/// expectation — both prefixes are present.
+/// The phase that filed a finding, or `None` when `tags` carries no finding
+/// tag (an ordinary draft, not a finding). Tie-break order: review → implementer
+/// → advisor. STORY-467: the advisor variant is checked last so a drain-filed
+/// finding that picks up a `from-advisor:` linked-spec tag (unlikely in
+/// practice — drains don't write that prefix — but defensive against future
+/// changes) keeps its drain-source identity.
 pub fn finding_source(tags: &[String]) -> Option<FindingSource> {
     if tags.iter().any(|t| t.starts_with(FROM_REVIEW_PREFIX)) {
         Some(FindingSource::Review)
     } else if tags.iter().any(|t| t.starts_with(FROM_IMPLEMENTER_PREFIX)) {
         Some(FindingSource::Implementer)
+    } else if tags.iter().any(|t| t.starts_with(FROM_ADVISOR_PREFIX)) {
+        Some(FindingSource::Advisor)
     } else {
         None
     }
 }
 
-/// True when `tags` marks the requirement as a finding from either headless
-/// phase. Guards `aida findings dismiss/promote` so they only act on real
-/// findings — review *or* implementer. trace:STORY-285
+/// True when `tags` marks the requirement as a finding. Guards
+/// `aida findings dismiss/promote/recur` so they only act on real findings —
+/// review, implementer, or (STORY-467) advisor. trace:STORY-285 trace:STORY-467
 pub fn is_finding(tags: &[String]) -> bool {
     finding_source(tags).is_some()
 }
@@ -136,8 +165,9 @@ fn finding_pr(tags: &[String]) -> Option<u32> {
 }
 
 /// The thing a finding was raised against, for the triage view's sub-header:
-/// `PR-<n>` for a review finding, the SPEC-ID for an implementer finding.
-/// Falls back to a placeholder when the source tag carries no value.
+/// `PR-<n>` for a review finding, the SPEC-ID for an implementer finding,
+/// the linked-spec or `general` for an advisor observation. Falls back to a
+/// placeholder when the source tag carries no value.
 fn finding_origin(tags: &[String], source: FindingSource) -> String {
     let prefix = source.tag_prefix();
     tags.iter()
@@ -147,6 +177,7 @@ fn finding_origin(tags: &[String], source: FindingSource) -> String {
         .unwrap_or_else(|| match source {
             FindingSource::Review => "(no PR tag)".to_string(),
             FindingSource::Implementer => "(no spec tag)".to_string(),
+            FindingSource::Advisor => "(no origin tag)".to_string(),
         })
 }
 
@@ -168,6 +199,19 @@ fn finding_severity(tags: &[String]) -> Severity {
         .unwrap_or(Severity::Unknown)
 }
 
+/// A finding's recurrence count: the value of its `recurrence:N` tag, or `1`
+/// when the tag is absent (the first sighting is implicit). STORY-467: the
+/// counter increments via `aida findings recur <ID>`; the triage view shows
+/// `×N` next to any row with N > 1 so frequently-recurring observations
+/// stand out without needing an extra column for the common N=1 case.
+pub fn finding_recurrence(tags: &[String]) -> u32 {
+    tags.iter()
+        .find_map(|t| t.strip_prefix(RECURRENCE_PREFIX))
+        .and_then(|v| v.parse::<u32>().ok())
+        .filter(|n| *n >= 1)
+        .unwrap_or(1)
+}
+
 /// One row in the triage view.
 #[derive(Debug, Clone)]
 pub struct FindingRow {
@@ -175,8 +219,13 @@ pub struct FindingRow {
     pub title: String,
     pub severity: Severity,
     /// The `kind:` category, when the finding carries one (implementer
-    /// findings do; review findings don't). trace:STORY-285
+    /// findings do; review findings don't; advisor observations do).
+    /// trace:STORY-285 trace:STORY-467
     pub kind: Option<String>,
+    /// Recurrence count (`recurrence:N` tag value). Defaults to 1 for a
+    /// freshly-filed finding; `aida findings recur <ID>` increments it.
+    /// trace:STORY-467
+    pub recurrence: u32,
 }
 
 /// Findings grouped under the origin that raised them — a PR for review
@@ -224,7 +273,11 @@ pub fn build_findings_view(
     filter: &FindingsFilter,
 ) -> Vec<SourceSection> {
     let mut sections = Vec::new();
-    for source in [FindingSource::Review, FindingSource::Implementer] {
+    for source in [
+        FindingSource::Review,
+        FindingSource::Implementer,
+        FindingSource::Advisor,
+    ] {
         if let Some(want) = filter.source {
             if want != source {
                 continue;
@@ -287,6 +340,7 @@ fn build_source_section(
             title: s.title.clone(),
             severity: finding_severity(&s.tags),
             kind,
+            recurrence: finding_recurrence(&s.tags),
         };
         if !by_origin.contains_key(&origin) {
             order.push(origin.clone());
@@ -562,6 +616,134 @@ mod tests {
         assert_eq!(view[0].source, FindingSource::Review);
         assert_eq!(view[0].groups[0].origin, "PR-64");
         assert_eq!(view[0].groups[0].rows[0].display_id, "TASK-1");
+    }
+
+    #[test]
+    fn finding_source_recognises_advisor_tag() {
+        assert_eq!(
+            finding_source(&["from-advisor:STORY-9".to_string()]),
+            Some(FindingSource::Advisor)
+        );
+        assert_eq!(
+            finding_source(&["from-advisor:general".to_string()]),
+            Some(FindingSource::Advisor)
+        );
+        // Review still wins when both prefixes are present — drains never
+        // write `from-advisor:` but the defensive ordering keeps a
+        // drain-source identity if they ever do.
+        assert_eq!(
+            finding_source(&[
+                "from-review:PR-1".to_string(),
+                "from-advisor:STORY-9".to_string(),
+            ]),
+            Some(FindingSource::Review)
+        );
+    }
+
+    #[test]
+    fn is_finding_accepts_advisor_source() {
+        assert!(is_finding(&["from-advisor:STORY-9".to_string()]));
+        assert!(is_finding(&["from-advisor:general".to_string()]));
+    }
+
+    #[test]
+    fn finding_recurrence_defaults_to_one_and_parses_tag() {
+        assert_eq!(finding_recurrence(&[]), 1);
+        assert_eq!(finding_recurrence(&["clippy".to_string()]), 1);
+        assert_eq!(finding_recurrence(&["recurrence:3".to_string()]), 3);
+        // Garbled or zero values fall back to the implicit count.
+        assert_eq!(finding_recurrence(&["recurrence:0".to_string()]), 1);
+        assert_eq!(finding_recurrence(&["recurrence:abc".to_string()]), 1);
+    }
+
+    #[test]
+    fn build_findings_view_groups_advisor_by_origin() {
+        let summaries = vec![
+            summary(
+                "TASK-100",
+                "advisor obs on STORY-467",
+                &[
+                    "from-advisor:STORY-467",
+                    "kind:observation",
+                    "severity:minor",
+                ],
+            ),
+            summary(
+                "TASK-101",
+                "advisor obs on STORY-467 major",
+                &[
+                    "from-advisor:STORY-467",
+                    "kind:observation",
+                    "severity:major",
+                ],
+            ),
+            summary(
+                "TASK-102",
+                "advisor general",
+                &["from-advisor:general", "kind:observation"],
+            ),
+        ];
+        let view = build_findings_view(&summaries, &FindingsFilter::default());
+        assert_eq!(view.len(), 1);
+        assert_eq!(view[0].source, FindingSource::Advisor);
+        // Two origin groups: STORY-467 (first to appear in modified_at-DESC
+        // ordering) and `general`.
+        assert_eq!(view[0].groups.len(), 2);
+        assert_eq!(view[0].groups[0].origin, "STORY-467");
+        // Within the STORY-467 group, major sorts before minor.
+        let ids: Vec<&str> = view[0].groups[0]
+            .rows
+            .iter()
+            .map(|r| r.display_id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["TASK-101", "TASK-100"]);
+    }
+
+    #[test]
+    fn build_findings_view_orders_review_implementer_advisor() {
+        let summaries = vec![
+            summary("TASK-1", "advisor", &["from-advisor:STORY-9"]),
+            summary("TASK-2", "review", &["from-review:PR-7"]),
+            summary("TASK-3", "impl", &["from-implementer:STORY-9"]),
+        ];
+        let view = build_findings_view(&summaries, &FindingsFilter::default());
+        assert_eq!(view.len(), 3);
+        assert_eq!(view[0].source, FindingSource::Review);
+        assert_eq!(view[1].source, FindingSource::Implementer);
+        assert_eq!(view[2].source, FindingSource::Advisor);
+    }
+
+    #[test]
+    fn build_findings_view_source_filter_isolates_advisor() {
+        let summaries = vec![
+            summary("TASK-1", "review", &["from-review:PR-7"]),
+            summary(
+                "TASK-2",
+                "advisor",
+                &["from-advisor:STORY-9", "kind:observation"],
+            ),
+        ];
+        let view = build_findings_view(
+            &summaries,
+            &FindingsFilter {
+                source: Some(FindingSource::Advisor),
+                ..Default::default()
+            },
+        );
+        assert_eq!(view.len(), 1);
+        assert_eq!(view[0].source, FindingSource::Advisor);
+        assert_eq!(view[0].groups[0].rows[0].display_id, "TASK-2");
+    }
+
+    #[test]
+    fn finding_row_carries_recurrence_count() {
+        let summaries = vec![summary(
+            "TASK-1",
+            "recurring observation",
+            &["from-advisor:STORY-9", "kind:observation", "recurrence:4"],
+        )];
+        let view = build_findings_view(&summaries, &FindingsFilter::default());
+        assert_eq!(view[0].groups[0].rows[0].recurrence, 4);
     }
 
     #[test]
