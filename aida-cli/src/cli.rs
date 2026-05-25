@@ -3279,13 +3279,69 @@ pub enum QueueCommand {
     },
 }
 
-/// `aida findings` — triage findings filed by headless drain phases: the
-/// reviewer (`from-review:` tag) and the implementer (`from-implementer:`
-/// tag).
+/// `aida findings` — triage findings filed by headless drain phases (the
+/// reviewer's `from-review:` tag, the implementer's `from-implementer:`
+/// tag) and the advisor seat's `from-advisor:` observations.
 // trace:STORY-278, STORY-285 | ai:claude
 // trace:TASK-487 | ai:claude
+// trace:STORY-467 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum FindingsCommand {
+    /// File an advisor observation as a finding awaiting triage. Capture a
+    /// pattern you've spotted from a live session before the context decays;
+    /// promote, dismiss, or recur it later. The note becomes the finding's
+    /// description; the title is the first line of the note unless --title
+    /// is given.
+    // trace:STORY-467 | ai:claude
+    Add {
+        /// The observation body. Required — without a note the finding has
+        /// nothing to triage. Use `-` to read from stdin.
+        #[clap(long, value_name = "TEXT")]
+        note: String,
+
+        /// What kind of finding this is. Free-form so future kinds (e.g.
+        /// `principle-candidate`, `architectural-concern`) ship without
+        /// a code change; `observation` is the default and the only
+        /// advisor kind today.
+        #[clap(long, value_name = "KIND", default_value = "observation")]
+        kind: String,
+
+        /// One-line title. Defaults to the first line of `--note`,
+        /// truncated to 80 characters.
+        #[clap(long, value_name = "TEXT")]
+        title: Option<String>,
+
+        /// Severity — `major`, `minor`, or `cosmetic`. Absent → unknown
+        /// (sorted last in the triage view).
+        #[clap(long, value_name = "LEVEL")]
+        severity: Option<String>,
+
+        /// Comma-separated SPEC-IDs the observation is about. The first
+        /// becomes the origin (`from-advisor:<SPEC>`); the rest get
+        /// `linked:<SPEC>` tags. Omit to file as `from-advisor:general`.
+        #[clap(long, value_name = "IDS", value_delimiter = ',')]
+        linked_specs: Vec<String>,
+
+        /// Extra tags, comma-separated. Added verbatim — use the same
+        /// `aida:<subcommand>` colon-namespaced convention as elsewhere.
+        #[clap(long, value_name = "TAGS")]
+        tags: Option<String>,
+    },
+
+    /// Increment a finding's recurrence counter. Use when you spot the same
+    /// pattern again — the counter survives in the `recurrence:N` tag and
+    /// the optional `--note` appends to the audit trail. Recurrence ≥ 3 is
+    /// the promote-it signal (see `docs/aida/discipline/observation-discipline.md`).
+    // trace:STORY-467 | ai:claude
+    Recur {
+        /// The finding's ID (UUID or SPEC-ID).
+        id: String,
+
+        /// What you saw this time. Appended as a timestamped audit comment.
+        #[clap(long, value_name = "TEXT")]
+        note: Option<String>,
+    },
+
     /// List draft findings awaiting triage, grouped by source then origin and
     /// severity-sorted.
     List {
@@ -3293,13 +3349,14 @@ pub enum FindingsCommand {
         #[clap(long, value_name = "N")]
         pr: Option<u32>,
 
-        /// Narrow to findings from one phase: `review` or `implementer`.
+        /// Narrow to findings from one source: `review`, `implementer`, or
+        /// `advisor`.
         #[clap(long, value_enum)]
         source: Option<crate::findings::FindingSource>,
 
-        /// Narrow to findings carrying `kind:<value>` (implementer findings
-        /// only — `deviation`, `design-choice`, `bug-spotted`,
-        /// `followup-suggestion`).
+        /// Narrow to findings carrying `kind:<value>` — implementer kinds
+        /// (`deviation`, `design-choice`, `bug-spotted`,
+        /// `followup-suggestion`) or advisor kinds (`observation`).
         #[clap(long, value_name = "KIND")]
         kind: Option<String>,
 
