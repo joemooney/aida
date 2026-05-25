@@ -1277,12 +1277,6 @@
   added_at: 2026-05-24T21:13:01.567127458Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019e5bbe-9ba6-7c01-b377-c5939fc76973
-  position: 292000
-  added_by: joe
-  added_at: 2026-05-25T06:18:43.676105473Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e5de5-e792-7d73-9779-74e8e6909e56
   position: 293000
   added_by: joe
