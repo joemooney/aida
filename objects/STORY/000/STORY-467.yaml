@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-25T05:05:59.380706060Z
+modified_at: 2026-05-25T05:12:00.707791954Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -266,3 +266,42 @@ comments:
     — master observation 2026-05-25 early
   created_at: 2026-05-25T05:05:59.380706060Z
   modified_at: 2026-05-25T05:05:59.380706060Z
+- id: 019e5d8c-0fc3-7130-a216-c57bd33996c8
+  author: joe
+  content: |-
+    OBSERVATION 2026-05-25 (recurrence-6, sub-class: coupled-specs-bundled-ship):
+
+    Pattern: agent implements two filed specs as one cohesive ship because the implementations are architecturally coupled. Master verdict accepts the bundled scope rather than forcing split (when the implementations genuinely intertwine, splitting is artificial cost).
+
+    Empirical case 2026-05-25:
+    - TASK-542 (--name + auto-seq + type-fallback) and STORY-459 (hierarchical prefix-match routing) filed as separate specs
+    - TASK-542 had a 'backward compat type-level fallback' acceptance criterion — a MINIMAL prefix-match concept
+    - STORY-459 had FULL hierarchical 'antigravity / antigravity-implementer / antigravity-implementer-1' prefix-match with most-specific-wins
+    - Agent (Antigravity) implemented BOTH as one PR-314 (after scope-creep concerns raised by master)
+    - Master verdict: ACCEPT bundled scope because (a) implementations are foundation-vs-building (naming is the substrate prefix-match builds on), (b) splitting requires rebase+cherry-pick costs more than ledger-correction, (c) the architecture is more honest as one ship
+    - Multi-spec trailer convention used: '(TASK-542 STORY-459)' in squash commit message; auto-bump scanner catches both
+
+    Discipline interpretation: feedback_refinements_must_be_acceptance_criteria says comments aren't binding. But ALSO: when two filed specs prove to be implementation-coupled, bundling is correct architecture (not a violation of discipline). The discipline is 'each PR has clear spec coverage', not 'each PR covers exactly one spec'.
+
+    When this pattern is OK:
+    - The coupling is intrinsic to the implementation (one is the foundation the other builds on)
+    - The combined scope is one PR's worth (not multiple coherent ships forced together)
+    - Both specs' acceptance criteria are visibly addressed in the diff
+    - Multi-spec trailer used so auto-bump catches both
+
+    When it's NOT OK (real scope-creep):
+    - One spec dragged in another's scope opportunistically
+    - The combined PR is too big to review
+    - Some specs are visibly unfinished while others get credit
+
+    For substrate evolution: future filing should consider 'should these be one EPIC with sub-stories?' when specs prove this coupled. EPIC-as-PR is rare but reasonable for tightly-coupled implementation packages.
+
+    Recurrence count: 6 (across the multi-spec-PR class — first observation of THIS specific sub-pattern).
+
+    Promotion trigger: at recurrence ≥ 3 of coupled-specs-bundled-ship, document the multi-spec-trailer convention in CLAUDE.md (substrate-resident scaffolding) + add 'bundled-ship?' question to spec-filing discipline.
+
+    Linked specs: TASK-542 + STORY-459 (the bundled pair this case observed), feedback_refinements_must_be_acceptance_criteria (the discipline this case nuances), STORY-469 (structural guards — spec-ID validation would still pass with multi-spec trailer; sketch-first would have caught this at sketch-comment time).
+
+    — master observation 2026-05-25 early (post-PR-314 verdict)
+  created_at: 2026-05-25T05:12:00.707791954Z
+  modified_at: 2026-05-25T05:12:00.707791954Z
