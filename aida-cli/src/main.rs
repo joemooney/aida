@@ -17885,6 +17885,8 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             permission_mode,
             no_context,
             show_context,
+            no_default_flags,
+            extra_flags,
             name,
         }) => agent_new_claude(
             role.clone(),
@@ -17892,6 +17894,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             cwd.as_deref(),
             permission_mode,
             AgentContextOptions::new(!*no_context, *show_context),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
         ),
         AgentCommand::New(AgentNewCommand::Codex {
@@ -17901,6 +17904,8 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             bypass_sandbox,
             no_context,
             show_context,
+            no_default_flags,
+            extra_flags,
             name,
         }) => agent_new_codex(
             role.clone(),
@@ -17908,6 +17913,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
         ),
         AgentCommand::New(AgentNewCommand::Antigravity {
@@ -17917,6 +17923,8 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             bypass_sandbox,
             no_context,
             show_context,
+            no_default_flags,
+            extra_flags,
             name,
         }) => agent_new_antigravity(
             role.clone(),
@@ -17924,6 +17932,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
         ),
         AgentCommand::Register {
@@ -17972,12 +17981,40 @@ struct AgentLaunchContext {
     token: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentDefaultFlagOptions {
+    use_config_defaults: bool,
+    extra_flags: Vec<String>,
+}
+
+impl AgentDefaultFlagOptions {
+    fn new(use_config_defaults: bool, extra_flags: Vec<String>) -> Self {
+        Self {
+            use_config_defaults,
+            extra_flags,
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct AgentsFlagConfigFile {
+    #[serde(default)]
+    agents: std::collections::HashMap<String, AgentFlagConfig>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+struct AgentFlagConfig {
+    #[serde(default)]
+    default_flags: Vec<String>,
+}
+
 fn agent_new_claude(
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     permission_mode: &str,
     context: AgentContextOptions,
+    flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
     let config = AgentLaunchConfig {
@@ -17985,7 +18022,7 @@ fn agent_new_claude(
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), permission_mode.to_string()],
     };
-    agent_new_with_config(config, role, spec, cwd, context, name)
+    agent_new_with_config(config, role, spec, cwd, context, flag_options, name)
 }
 
 // trace:STORY-433 | ai:codex
@@ -17995,6 +18032,7 @@ fn agent_new_codex(
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
+    flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
     let mut default_args = Vec::new();
@@ -18006,7 +18044,7 @@ fn agent_new_codex(
         binary: "codex",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd, context, name)
+    agent_new_with_config(config, role, spec, cwd, context, flag_options, name)
 }
 
 // trace:STORY-434 | ai:codex
@@ -18016,6 +18054,7 @@ fn agent_new_antigravity(
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
+    flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
     let mut default_args = Vec::new();
@@ -18027,15 +18066,16 @@ fn agent_new_antigravity(
         binary: "agy",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd, context, name)
+    agent_new_with_config(config, role, spec, cwd, context, flag_options, name)
 }
 
 fn agent_new_with_config(
-    config: AgentLaunchConfig,
+    mut config: AgentLaunchConfig,
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
+    flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
@@ -18052,6 +18092,7 @@ fn agent_new_with_config(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = main_worktree_root_from(&discovered_root);
+    apply_agent_default_flags(&mut config, &project_root, flag_options)?;
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
 
     eprintln!(
@@ -18082,6 +18123,56 @@ fn agent_new_with_config(
     );
 
     run_tracked_agent(&binary, &config, &plan, launch_context.as_ref())
+}
+
+fn apply_agent_default_flags(
+    config: &mut AgentLaunchConfig,
+    project_root: &std::path::Path,
+    flag_options: AgentDefaultFlagOptions,
+) -> Result<()> {
+    if flag_options.use_config_defaults {
+        config
+            .default_args
+            .extend(load_agent_default_flags(project_root, config.agent_type)?);
+    }
+    config.default_args.extend(flag_options.extra_flags);
+    Ok(())
+}
+
+fn load_agent_default_flags(
+    project_root: &std::path::Path,
+    agent_type: &str,
+) -> Result<Vec<String>> {
+    let mut flags = Vec::new();
+    if let Some(home) = aida_home_dir() {
+        merge_agent_flags_from_file(&mut flags, &home.join(".aida/agents.toml"), agent_type)?;
+    }
+    merge_agent_flags_from_file(
+        &mut flags,
+        &project_root.join(".aida/agents.toml"),
+        agent_type,
+    )?;
+    Ok(flags)
+}
+
+fn merge_agent_flags_from_file(
+    flags: &mut Vec<String>,
+    path: &std::path::Path,
+    agent_type: &str,
+) -> Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let body = std::fs::read_to_string(path)
+        .with_context(|| format!("reading agent defaults config {}", path.display()))?;
+    let parsed: AgentsFlagConfigFile = toml::from_str(&body)
+        .with_context(|| format!("parsing agent defaults config {}", path.display()))?;
+    if let Some(agent) = parsed.agents.get(agent_type) {
+        // Project config is applied after user config, so replacing here
+        // implements the documented "user base, project override" rule.
+        *flags = agent.default_flags.clone();
+    }
+    Ok(())
 }
 
 fn prepare_agent_launch(
@@ -18823,6 +18914,9 @@ mod agent_launcher_tests {
             "/tmp/project",
             "--permission-mode",
             "acceptEdits",
+            "--no-default-flags",
+            "--extra-flag",
+            "--verbose",
         ])
         .unwrap();
         let Command::Agent(AgentCommand::New(AgentNewCommand::Claude {
@@ -18832,6 +18926,8 @@ mod agent_launcher_tests {
             permission_mode,
             no_context,
             show_context,
+            no_default_flags,
+            extra_flags,
             ..
         })) = cli.command
         else {
@@ -18843,6 +18939,8 @@ mod agent_launcher_tests {
         assert_eq!(permission_mode, "acceptEdits");
         assert!(!no_context);
         assert!(!show_context);
+        assert!(no_default_flags);
+        assert_eq!(extra_flags, vec!["--verbose"]);
     }
 
     #[test]
@@ -18859,6 +18957,8 @@ mod agent_launcher_tests {
             "--cwd",
             "/tmp/project",
             "--bypass-sandbox",
+            "--extra-flag",
+            "--ask-for-approval=never",
         ])
         .unwrap();
         let Command::Agent(AgentCommand::New(AgentNewCommand::Codex {
@@ -18868,6 +18968,7 @@ mod agent_launcher_tests {
             bypass_sandbox,
             no_context,
             show_context,
+            extra_flags,
             ..
         })) = cli.command
         else {
@@ -18879,6 +18980,7 @@ mod agent_launcher_tests {
         assert!(bypass_sandbox);
         assert!(!no_context);
         assert!(!show_context);
+        assert_eq!(extra_flags, vec!["--ask-for-approval=never"]);
     }
 
     #[test]
@@ -18895,6 +18997,10 @@ mod agent_launcher_tests {
             "--cwd",
             "/tmp/project",
             "--bypass-sandbox",
+            "--extra-flag",
+            "--model",
+            "--extra-flag",
+            "fast",
         ])
         .unwrap();
         let Command::Agent(AgentCommand::New(AgentNewCommand::Antigravity {
@@ -18904,6 +19010,7 @@ mod agent_launcher_tests {
             bypass_sandbox,
             no_context,
             show_context,
+            extra_flags,
             ..
         })) = cli.command
         else {
@@ -18915,6 +19022,73 @@ mod agent_launcher_tests {
         assert!(bypass_sandbox);
         assert!(!no_context);
         assert!(!show_context);
+        assert_eq!(extra_flags, vec!["--model", "fast"]);
+    }
+
+    #[test]
+    fn agent_default_flags_merge_user_base_project_override_and_extra() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            home.join(".aida/agents.toml"),
+            "[agents.codex]\ndefault_flags = [\"--user-codex\"]\n\
+             [agents.antigravity]\ndefault_flags = [\"--user-agy\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents.codex]\ndefault_flags = [\"--project-codex\"]\n",
+        )
+        .unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        let mut codex = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: vec!["--built-in".to_string()],
+        };
+        apply_agent_default_flags(
+            &mut codex,
+            &project,
+            AgentDefaultFlagOptions::new(true, vec!["--extra".to_string()]),
+        )
+        .unwrap();
+        assert_eq!(
+            codex.default_args,
+            vec!["--built-in", "--project-codex", "--extra"]
+        );
+
+        let mut antigravity = AgentLaunchConfig {
+            agent_type: "antigravity",
+            binary: "agy",
+            default_args: Vec::new(),
+        };
+        apply_agent_default_flags(
+            &mut antigravity,
+            &project,
+            AgentDefaultFlagOptions::new(true, Vec::new()),
+        )
+        .unwrap();
+        assert_eq!(antigravity.default_args, vec!["--user-agy"]);
+
+        let mut claude = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: vec!["--permission-mode".to_string(), "acceptEdits".to_string()],
+        };
+        apply_agent_default_flags(
+            &mut claude,
+            &project,
+            AgentDefaultFlagOptions::new(false, vec!["--one-shot".to_string()]),
+        )
+        .unwrap();
+        assert_eq!(
+            claude.default_args,
+            vec!["--permission-mode", "acceptEdits", "--one-shot"]
+        );
     }
 
     #[test]

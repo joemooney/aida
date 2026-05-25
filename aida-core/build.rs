@@ -42,6 +42,7 @@ fn main() {
         "templates/reserved-paths.toml",
         "reserved-paths.toml",
     );
+    embed_file(&mut code, "templates/agents.toml", "agents.toml");
 
     // Plan template (scaffolded into docs/plans/_TEMPLATE.md). trace:TASK-92
     embed_file(&mut code, "templates/plan-template.md", "plan-template.md");
