@@ -72,7 +72,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T20:13:45.004660235Z
-modified_at: 2026-05-25T20:17:15.541786327Z
+modified_at: 2026-05-25T20:24:48.285815336Z
 req_type: Bug
 tags:
 - aida:init
@@ -81,3 +81,9 @@ tags:
 - from-dogfood-test
 - from-self-test
 - scaffolding
+comments:
+- id: 019e60cf-bf9d-7f32-9c74-d9ae8f81a656
+  author: joe
+  content: Commit 6eab4081 references this requirement
+  created_at: 2026-05-25T20:24:48.285815336Z
+  modified_at: 2026-05-25T20:24:48.285815336Z
