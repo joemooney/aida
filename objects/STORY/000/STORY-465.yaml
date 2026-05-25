@@ -8,11 +8,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:24:52.915808633Z
-modified_at: 2026-05-25T07:32:23.125880911Z
+modified_at: 2026-05-25T07:42:57.477580738Z
 req_type: Story
 tags:
 - aida:status
 - batch:multi-agent-coordination
+- batch:status-surfaces
 - from-self-test
 - from-user-direction
 - human-gate
