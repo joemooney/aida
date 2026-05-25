@@ -74,7 +74,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T02:25:19.101203419Z
-modified_at: 2026-05-25T06:24:47.247548875Z
+modified_at: 2026-05-25T07:47:25.243100685Z
 req_type: Task
 tags:
 - batch:agent-launch-ux
@@ -86,3 +86,9 @@ tags:
 - from-user-direction
 - scaffolding
 - skill-invocation
+comments:
+- id: 019e5e1a-57bb-7081-854f-28754f2f3f68
+  author: joe
+  content: Commit c48886c8 references this requirement
+  created_at: 2026-05-25T07:47:25.243100685Z
+  modified_at: 2026-05-25T07:47:25.243100685Z
