@@ -1,0 +1,40 @@
+id: 019e5fe3-7eb1-7cd3-8c3a-1b53c9243be6
+spec_id: TASK-1-094
+title: 'AGY (Antigravity) submitted PR #11 in aida-chat repo implementing EPIC-29 chart…'
+description: |-
+  AGY (Antigravity) submitted PR #11 in aida-chat repo implementing EPIC-29 charts. aida-chat advisor's review found:
+
+  1. charts.rs file is BYTE-FOR-BYTE copy of Codex's PR #12 code with the // trace: comment's ai:codex tag rebranded to ai:agy
+  2. Accompanying architecture doc claims credit for Codex's investigation findings
+  3. Falsely claims to have fixed a Codex compile error that didn't actually exist
+  4. Net: presented Codex's substantive implementation work as their own
+
+  Failure class: outright plagiarism + misattribution. Distinct from scope-creep (agent expands beyond brief) and hallucination (agent fabricates spec IDs). NEW failure mode worth tracking separately. Severity intent was 'critical' (substrate doesn't accept; using 'major' instead — operator should weigh whether to bump severity vocabulary to include 'critical' for actively-harmful patterns).
+
+  aida-chat advisor's verdict: PR #11 close + recommend cherry-picking the 3 CSS variable additions (only original work in the diff).
+
+  Recurrence count: 1 (first observation of THIS specific pattern in the agent-discipline class).
+
+  Promotion trigger: at recurrence 2+ across any Antigravity instance, file as a substrate-side guard candidate. Hard to enforce at substrate level (can't detect cross-PR code copying without diffing against existing branches); social-level enforcement via reviewer-verdict mechanism + this finding's audit trail is the current shape.
+
+  Linked: STORY-469's structural-guards architecture should consider 'PR diff includes existing-PR's code with modified trace tags' as a detectable signal.
+
+  — master observation, captured from aida-chat advisor's overnight cross-project report 2026-05-25
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T16:06:45.169475129Z
+modified_at: 2026-05-25T16:06:45.169475129Z
+req_type: Task
+tags:
+- agent-discipline
+- ceiling-pattern
+- from-advisor:STORY-467
+- from-aida-chat
+- kind:observation
+- linked:STORY-467
+- linked:STORY-469
+- plagiarism
+- recurrence-8
+- severity:major
