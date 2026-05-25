@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-25T01:57:04.760888735Z
+modified_at: 2026-05-25T02:32:18.408532375Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -199,3 +199,37 @@ comments:
     — master observation 2026-05-24
   created_at: 2026-05-25T01:57:04.760888735Z
   modified_at: 2026-05-25T01:57:04.760888735Z
+- id: 019e5cf9-d8e8-7131-b99b-0b6a3b1dee71
+  author: joe
+  content: |-
+    OBSERVATION 2026-05-25 (recurrence-4 of agent-context-snapshot-unused class):
+
+    Pattern: 'aida agent new' supervised launcher writes a context snapshot at .aida/agents/context/<file>.md + sets AIDA_AGENT_CONTEXT_FILE env var. Agents launched this way are EXPECTED to read the context file on startup. They DON'T (at least Antigravity doesn't).
+
+    Empirical case 2026-05-25 (early hours):
+    - Operator launched: aida agent new antigravity --role implementer --spec TASK-542
+    - Launcher wrote context to .aida/agents/context/antigravity-019e5cf3-...context.md
+    - Antigravity spawned in /home/joe/ai/aida-task-542 with AIDA_AGENT_CONTEXT_FILE env var set
+    - Operator typed 'work task-542' (terse first message, no AIDA-CLI guidance)
+    - Antigravity went into code-archaeology mode: read agent_registry.rs, main.rs, cli.rs directly trying to understand the assignment
+    - Never ran: cat $AIDA_AGENT_CONTEXT_FILE, aida show TASK-542, aida brief list
+    - Required operator hard-redirect to STOP source-reading + use AIDA CLI
+
+    Three composing failures observed:
+    1. Antigravity doesn't auto-read AIDA_AGENT_CONTEXT_FILE on startup
+    2. No .antigravity/skills/ directory exists — Antigravity has no agent-side AIDA skill discovery
+    3. AGENTS.md isn't auto-loaded at session start; Antigravity reads it only when directed
+
+    The supervised launcher's value is diminished without agent-side cooperation OR a auto-injected first-message directive (TASK-556 addresses this).
+
+    Recurrence count: 4 (related but DIFFERENT failure surfaces — the class is 'agent-launched-with-context-doesnt-consume-context').
+
+    Promotion trigger: at recurrence ≥ 5 OR if same pattern surfaces in Codex/Claude Code (cross-agent confirmation that the snapshot mechanism alone doesn't suffice), promote to architectural decision: ditch passive context-file approach in favor of ACTIVE first-message injection (TASK-556's mechanism becomes the primary; context file becomes optional supplement).
+
+    Linked specs: TASK-556 (auto-inject first message — direct fix), TASK-555 (cross-agent skill-invocation surface map — documents the agent-specific paths), TASK-553 (role file discipline expansion — substrate-level inject), TASK-554 (--spec scope-binding in snapshot — assumes snapshot IS read), STORY-431 + EPIC-31 (the registry/lifecycle work this composes with).
+
+    Strategic implication: if the snapshot isn't consumed, the launcher's value is mostly the LEASE + WORKTREE creation. The role-context-snapshot is currently underused infrastructure. TASK-556 makes it useful by piping into the agent's first prompt.
+
+    — master observation 2026-05-25 early
+  created_at: 2026-05-25T02:32:18.408532375Z
+  modified_at: 2026-05-25T02:32:18.408532375Z
