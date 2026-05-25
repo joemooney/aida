@@ -1,0 +1,29 @@
+id: 019e60bd-d202-7861-8fbf-19b4d585686a
+spec_id: TASK-1-099
+title: 'Empirical 2026-05-25: scripts/release.sh''s ecosystem-watch verification refuses…'
+description: |-
+  Empirical 2026-05-25: scripts/release.sh's ecosystem-watch verification refuses minor/major release without 'docs/competitive-analysis/ecosystem-watch.md'. But 'aida init' does NOT scaffold that directory or a starter ecosystem-watch.md. So a fresh project's first attempt at 'scripts/release.sh minor' would hit the ecosystem-watch missing-file path (which currently warns + bypasses, but the UX is opaque).
+
+  Should aida init scaffold a starter docs/competitive-analysis/ecosystem-watch.md (with 'Last updated' set to today and a 'no ecosystem entries yet — first entry will be added on next quarterly review or critical event' placeholder) so the release-time path is consistent?
+
+  Composes with TASK-562 (release.sh ecosystem-watch prompt UX improvement) — if release.sh becomes threshold-based smart-default, then aida init should plant the seed file with today's date so first releases are auto-pass.
+
+  Not blocking; just papercut. Worth filing.
+
+  — master observation
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T20:05:13.346483215Z
+modified_at: 2026-05-25T20:05:13.346483215Z
+req_type: Task
+tags:
+- aida:init
+- aida:scaffold
+- first-user-papercut
+- from-advisor:TASK-562
+- from-self-test
+- kind:observation
+- linked:TASK-562
+- severity:minor
