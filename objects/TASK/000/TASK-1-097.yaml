@@ -1,0 +1,36 @@
+id: 019e60bd-b690-7d12-8caa-5b64cbbe6766
+spec_id: TASK-1-097
+title: 'Empirical first-user dogfood 2026-05-25: ran ''aida init'' on fresh hello-world r…'
+description: |-
+  Empirical first-user dogfood 2026-05-25: ran 'aida init' on fresh hello-world repo + 'aida status'. The onboarding task TASK-007 (from TASK-510's scaffolded enqueue) shows in 'Recent activity' as Approved but NOT in 'Queue (empty for implementer)'.
+
+  Operator's mental model: queue should have it. The onboarding task IS the first thing a new user should pick up — it should be in their queue head, not requiring 'aida queue add' first.
+
+  Per TASK-510's spec body: 'enqueueing a high-priority scaffolding commit task in the queue'. Either the enqueue isn't happening for role:implementer specifically, OR the enqueue is to a different surface than 'aida status' Queue section reads from.
+
+  Possible root causes:
+  1. TASK-510 enqueues to role='advisor' or some default; operator's shell role is 'implementer'
+  2. The enqueue went to the user's queue but the 'role:implementer' filter in status excludes it
+  3. Race condition during init — task created but not yet queued
+
+  Reproduce: mkdir /tmp/aida-first-user-test && cd && git init -b main && aida init && aida status. Observe Queue: (empty) vs Recent activity: TASK-007.
+
+  Impact: first-user runs 'aida queue work' (the natural next step per CLAUDE.md daily-driver section) + gets empty queue. They don't know to use 'aida queue work TASK-007' explicitly. They might not even realize there IS an onboarding task to start with.
+
+  — master observation, captured during operator's fresh hello-world dogfood test
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T20:05:06.320088198Z
+modified_at: 2026-05-25T20:05:06.320088198Z
+req_type: Task
+tags:
+- aida:init
+- first-user-papercut
+- from-advisor:TASK-510
+- from-self-test
+- kind:observation
+- linked:TASK-510
+- onboarding-flow
+- severity:major
