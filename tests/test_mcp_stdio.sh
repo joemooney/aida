@@ -3,12 +3,18 @@
 #
 # Builds the AIDA CLI, initializes a temporary project, starts
 # `aida mcp-serve`, and drives JSON-RPC requests like Codex or another local
-# MCP client would. Doc-vs-descriptor contract drift is covered separately by
-# tests/test_mcp_doc_consistency.sh.
+# MCP client would.
 #
-# trace:SPEC-398 | ai:codex
-# trace:TASK-455 | ai:codex
+# Default run validates the descriptor + CLI-to-MCP read direction (post-TASK-440
+# outputSchema landing), resources, and MCP error envelopes. The agent-facing
+# descriptor contract is behind `--require-agent-contract` while docs and
+# implementation converge. The MCP-write -> CLI-read and coordination stages
+# live behind `--require-mcp-write-roundtrip`; pass it through to the Python
+# suite for the full check.
+#
+# trace:TASK-451 | ai:codex
 # trace:BUG-310 | ai:codex
+# trace:TASK-549 | ai:antigravity
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
