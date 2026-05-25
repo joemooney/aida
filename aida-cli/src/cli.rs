@@ -4516,6 +4516,10 @@ pub enum Command {
         // trace:STORY-465 | ai:claude
         #[clap(long)]
         verbose: bool,
+        /// Suppress the AIDA doctor "Hygiene" section entirely.
+        // trace:STORY-464 | ai:antigravity
+        #[clap(long)]
+        no_hygiene: bool,
     },
 
     /// Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl`
