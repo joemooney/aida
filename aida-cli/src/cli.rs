@@ -2903,6 +2903,13 @@ pub enum QueueCommand {
         // trace:TASK-81 | ai:claude
         #[clap(long)]
         steal: bool,
+        /// Claim a spec whose status is ambiguous: already In Progress with
+        /// no local lease, or Needs Attention after an autonomous punt. This
+        /// mirrors `aida session start --force-claim`; terminal statuses and
+        /// Draft still refuse.
+        // trace:TASK-559 | ai:codex
+        #[clap(long)]
+        force_claim: bool,
         /// Tag-driven batch pickup: instead of resolving from `id`, pick
         /// the head queued item tagged `batch:<NAME>`. Repeat the
         /// invocation to drain the batch one session per item (each

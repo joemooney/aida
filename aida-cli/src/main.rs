@@ -28196,6 +28196,7 @@ mod story_429_auto_rebase_tests {
             no_human,
             "test-run".to_string(),
             false,
+            false,
             allow_stale_base,
             no_auto_rebase,
             auto_complete::LifecycleSkip::none(),
@@ -49834,6 +49835,18 @@ mod queue_work_tests {
         assert!(!quiet_of(&off), "quiet defaults to false");
     }
 
+    #[test]
+    fn queue_work_force_claim_flag_parses() {
+        let cli = Cli::try_parse_from(["aida", "queue", "work", "TASK-559", "--force-claim"])
+            .expect("--force-claim parses on queue work");
+        match cli.command {
+            Command::Queue(QueueCommand::Work { force_claim, .. }) => {
+                assert!(force_claim, "--force-claim should set force_claim=true");
+            }
+            other => panic!("expected queue work command, got {other:?}"),
+        }
+    }
+
     // BUG-311: the orchestrator's phase-1 `aida queue work` subprocess must
     // carry `--steal` when the outer drain was invoked with it. Without
     // threading, the inner subprocess's dormant-lease guard sees `steal=false`
@@ -49847,6 +49860,7 @@ mod queue_work_tests {
             "BUG-311",
             "0192f1c8-aaaa-7000-8000-000000000001",
             true,
+            false,
             false,
             None,
         );
@@ -49864,7 +49878,7 @@ mod queue_work_tests {
 
     #[test]
     fn implementer_phase_args_omits_steal_by_default() {
-        let args = build_implementer_phase_args("BUG-311", "uuid", false, false, None);
+        let args = build_implementer_phase_args("BUG-311", "uuid", false, false, false, None);
         assert!(
             args.iter().all(|a| a != "--steal"),
             "--steal must not appear when the outer drain did not pass it; got {:?}",
@@ -49874,8 +49888,14 @@ mod queue_work_tests {
 
     #[test]
     fn implementer_phase_args_threads_no_human_and_permission() {
-        let args =
-            build_implementer_phase_args("TASK-1", "uuid", true, true, Some("bypassPermissions"));
+        let args = build_implementer_phase_args(
+            "TASK-1",
+            "uuid",
+            true,
+            false,
+            true,
+            Some("bypassPermissions"),
+        );
         assert!(args.iter().any(|a| a == "--steal"));
         assert!(args.iter().any(|a| a == "--no-human"));
         let i = args
@@ -49885,6 +49905,21 @@ mod queue_work_tests {
         assert_eq!(
             args.get(i + 1).map(String::as_str),
             Some("bypassPermissions")
+        );
+    }
+
+    #[test]
+    fn implementer_phase_args_threads_force_claim() {
+        let args = build_implementer_phase_args("TASK-559", "uuid", false, true, false, None);
+        assert!(
+            args.iter().any(|a| a == "--force-claim"),
+            "--force-claim must be threaded to phase 1 when the outer drain set it; got {:?}",
+            args
+        );
+        assert!(
+            args.iter().all(|a| a != "--steal"),
+            "--force-claim should not imply --steal; got {:?}",
+            args
         );
     }
 
@@ -62611,6 +62646,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             base,
             force_base,
             steal,
+            force_claim,
             batch,
             batches,
             dry_run,
@@ -62844,6 +62880,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         no_human_mode,
                         escalate_mode,
                         *steal,
+                        *force_claim,
                         *allow_stale_base,
                         *no_auto_rebase,
                     );
@@ -62867,6 +62904,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         no_human_mode,
                         escalate_mode,
                         *steal,
+                        *force_claim,
                         *allow_stale_base,
                         *no_auto_rebase,
                     );
@@ -62892,6 +62930,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             no_human_mode,
                             escalate_mode,
                             *steal,
+                            *force_claim,
                             *allow_stale_base,
                             *no_auto_rebase,
                             *max_failures,
@@ -62926,6 +62965,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     no_human_mode,
                     escalate_mode,
                     *steal,
+                    *force_claim,
                     *allow_stale_base,
                     *no_auto_rebase,
                 );
@@ -63027,6 +63067,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 base.as_deref(),
                 *force_base,
                 *steal,
+                *force_claim,
                 resume.as_deref(),
                 *fresh,
                 *list_sessions,
@@ -64030,6 +64071,7 @@ fn handle_queue_rework(
             /* base */ None,
             /* force_base */ false,
             steal,
+            /* force_claim */ false,
             // Bare `--resume` → resume the scope's most recent recorded
             // claude session (`resolve_queue_work_launch` fails clean when
             // there is none). trace:BUG-236 | ai:claude
@@ -64802,6 +64844,7 @@ fn handle_queue_work(
     base: Option<&str>,
     force_base: bool,
     steal: bool,
+    force_claim: bool,
     resume: Option<&str>,
     fresh: bool,
     list_sessions: bool,
@@ -65353,7 +65396,7 @@ fn handle_queue_work(
         /* launch_name */ None,
         /* permission_mode */ &permission_mode,
         /* role */ Some(role.clone()),
-        /* force_claim */ false,
+        /* force_claim */ force_claim,
     )?;
 
     // Look up the lease we just minted: by scope, by owner=us, freshest.
@@ -66643,6 +66686,10 @@ fn handle_auto_complete(
     // BUG-311: thread the outer `--steal` through so phase 1's
     // `aida queue work` subprocess can clear a dormant lease on this scope.
     steal: bool,
+    // TASK-559: thread the outer `--force-claim` through so phase 1 can
+    // recover NeedsAttention / ambiguous InProgress specs the same way a
+    // direct `aida queue work <SPEC> --force-claim` does.
+    force_claim: bool,
     // STORY-281: thread the outer `--allow-stale-base` through so phase 3's
     // pre-flight stale-base check warns-only instead of refusing.
     allow_stale_base: bool,
@@ -66661,6 +66708,7 @@ fn handle_auto_complete(
         // STORY-301: a bare single-spec drain owns its drain-state file.
         true,
         steal,
+        force_claim,
         allow_stale_base,
         no_auto_rebase,
     );
@@ -66696,6 +66744,9 @@ fn run_auto_complete(
     // dropped on the floor and the canned "pass --steal" message recurred.
     // trace:BUG-311 | ai:claude
     steal: bool,
+    // TASK-559: pass-through of the outer `--force-claim` flag, appended to
+    // phase-1 `aida queue work` subprocesses just like `--steal`.
+    force_claim: bool,
     // STORY-281: pass-through of the outer `--allow-stale-base` flag. When
     // true, phase 3's pre-flight check warns-only instead of refusing on a
     // stale-base + file-overlap; also propagated to the reviewer subprocess.
@@ -66801,6 +66852,7 @@ fn run_auto_complete(
         no_human,
         run_token,
         steal,
+        force_claim,
         allow_stale_base,
         no_auto_rebase,
         lifecycle_skip,
@@ -66987,6 +67039,9 @@ struct RealBatchDriver<'a> {
     /// subprocess so a dormant lease on the member's scope is cleared rather
     /// than blocking the drain with the canned "pass --steal" message.
     steal: bool,
+    /// TASK-559: outer `--force-claim` flag, propagated to every member's
+    /// phase-1 subprocess so ambiguous spec status can be claimed.
+    force_claim: bool,
     /// STORY-281: outer `--allow-stale-base` flag, propagated to every
     /// member's phase-3 pre-flight check so the stale-base + overlap
     /// signal becomes a warning instead of a refusal.
@@ -67031,6 +67086,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             // file — the batch orchestrator created it.
             false,
             self.steal,
+            self.force_claim,
             self.allow_stale_base,
             self.no_auto_rebase,
         )
@@ -67061,6 +67117,8 @@ fn handle_auto_complete_batch(
     escalate_mode: auto_complete::EscalateMode,
     // BUG-311: outer `--steal`, threaded to every batch member's phase 1.
     steal: bool,
+    // TASK-559: outer `--force-claim`, threaded to every batch member's phase 1.
+    force_claim: bool,
     // STORY-281: outer `--allow-stale-base`, threaded to every batch
     // member's phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
@@ -67108,6 +67166,7 @@ fn handle_auto_complete_batch(
         no_human,
         escalate_mode,
         steal,
+        force_claim,
         allow_stale_base,
         no_auto_rebase,
     };
@@ -67158,6 +67217,7 @@ fn handle_auto_complete_batches(
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
+    force_claim: bool,
     // STORY-281: outer `--allow-stale-base`, threaded into every member's
     // RealBatchDriver via the per-batch closure below.
     allow_stale_base: bool,
@@ -67228,6 +67288,7 @@ fn handle_auto_complete_batches(
             no_human,
             escalate_mode,
             steal,
+            force_claim,
             allow_stale_base,
             no_auto_rebase,
         })
@@ -67927,6 +67988,8 @@ struct RealNextNDriver<'a> {
     escalate_mode: auto_complete::EscalateMode,
     /// BUG-311: outer `--steal`, propagated to every member's phase 1.
     steal: bool,
+    /// TASK-559: outer `--force-claim`, propagated to every member's phase 1.
+    force_claim: bool,
     /// STORY-281: outer `--allow-stale-base`, propagated to every member's
     /// phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
@@ -67953,6 +68016,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             // file — the batch orchestrator created it.
             false,
             self.steal,
+            self.force_claim,
             self.allow_stale_base,
             self.no_auto_rebase,
         )
@@ -67977,6 +68041,8 @@ fn handle_auto_complete_next_n(
     escalate_mode: auto_complete::EscalateMode,
     // BUG-311: outer `--steal`, threaded to every drained member's phase 1.
     steal: bool,
+    // TASK-559: outer `--force-claim`, threaded to every drained member's phase 1.
+    force_claim: bool,
     // STORY-281: outer `--allow-stale-base`, threaded to every drained
     // member's phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
@@ -68031,6 +68097,7 @@ fn handle_auto_complete_next_n(
         no_human,
         escalate_mode,
         steal,
+        force_claim,
         allow_stale_base,
         no_auto_rebase,
     };
@@ -69652,6 +69719,7 @@ fn build_implementer_phase_args(
     spec: &str,
     session_uuid: &str,
     steal: bool,
+    force_claim: bool,
     headless_implementer: bool,
     permission_mode: Option<&str>,
 ) -> Vec<String> {
@@ -69668,6 +69736,9 @@ fn build_implementer_phase_args(
     // symptom (the flag was passed but the inner subprocess never saw it).
     if steal {
         args.push("--steal".into());
+    }
+    if force_claim {
+        args.push("--force-claim".into());
     }
     // STORY-276: under `--no-human=both` the implementer phase runs headless;
     // `ReviewerOnly` (and a plain `--auto-complete`) leave phase 1 interactive.
@@ -69729,6 +69800,9 @@ struct RealPhaseDriver {
     /// and the orchestrator reports a generic phase-1 failure even though
     /// the user *did* pass --steal. trace:BUG-311 | ai:claude
     steal: bool,
+    /// TASK-559: thread the user's `aida queue work --auto-complete
+    /// --force-claim` flag through to the phase-1 implementer subprocess.
+    force_claim: bool,
     /// STORY-281: opt out of the reviewer pre-flight stale-base refusal.
     /// When false (default), phase 3 refuses to launch the reviewer if the
     /// PR's base is behind origin AND a file the PR touches has moved on
@@ -69762,6 +69836,7 @@ impl RealPhaseDriver {
         no_human: Option<auto_complete::NoHumanMode>,
         run_token: String,
         steal: bool,
+        force_claim: bool,
         allow_stale_base: bool,
         no_auto_rebase: bool,
         lifecycle_skip: auto_complete::LifecycleSkip,
@@ -69782,6 +69857,7 @@ impl RealPhaseDriver {
             implementer_session: None,
             implementer_worktree: None,
             steal,
+            force_claim,
             allow_stale_base,
             no_auto_rebase,
             auto_rebase_events: Vec::new(),
@@ -70199,6 +70275,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &self.spec,
             &session_uuid,
             self.steal,
+            self.force_claim,
             headless_impl,
             self.permission_mode.as_deref(),
         );
