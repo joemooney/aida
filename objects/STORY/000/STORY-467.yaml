@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-25T06:48:20.238077011Z
+modified_at: 2026-05-25T07:10:29.207152192Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -341,3 +341,8 @@ comments:
     — master observation 2026-05-25 ~02:30, real recurrence captured via comment-carrier (aida findings add verb is being shipped RIGHT NOW by master via STORY-467 — once merged, future observations file directly via the verb)
   created_at: 2026-05-25T06:48:20.238077011Z
   modified_at: 2026-05-25T06:48:20.238077011Z
+- id: 019e5df8-8757-76a2-a98d-e54ef81c0489
+  author: joe
+  content: Commit b39d8117 references this requirement
+  created_at: 2026-05-25T07:10:29.207152192Z
+  modified_at: 2026-05-25T07:10:29.207152192Z
