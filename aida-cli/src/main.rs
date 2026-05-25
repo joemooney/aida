@@ -4459,8 +4459,8 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
 
     store.add_requirement_with_id(req, None, Some("task"));
 
-    if let Some(last) = store.requirements.last_mut() {
-        let spec_id = last.spec_id.as_deref().unwrap_or("TASK-1");
+    let (requirement_uuid, spec_id_display) = if let Some(last) = store.requirements.last_mut() {
+        let spec_id = last.spec_id.as_deref().unwrap_or("TASK-1").to_string();
         last.description = format!(
             "After aida init, the scaffolded files are untracked. Run: git add . && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + !.aida/config.toml) ensure only the right files get committed. Run 'aida queue done {}' after the commit lands.",
             spec_id
@@ -4471,9 +4471,46 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
             "Enqueued".green(),
             spec_id.cyan()
         );
-    }
+        (last.id, spec_id)
+    } else {
+        return storage.save(&store);
+    };
 
     storage.save(&store)?;
+
+    // TASK-1-097 (BUG-386 sibling): also push the onboarding task onto the
+    // user's implementer queue so 'aida queue work' picks it up + 'aida
+    // status' shows it as queue head. Before this, the spec was Approved
+    // but invisible to queue surfaces — operator saw "Queue: (empty)" with
+    // the onboarding task only in "Recent activity," which is misleading
+    // first-impression UX. trace:TASK-1-097 | ai:claude
+    let user_id = current_user_id(None);
+    let queue_entry = aida_core::QueueEntry {
+        user_id: user_id.clone(),
+        requirement_id: requirement_uuid,
+        // i64::MAX = "append to bottom" sentinel; the git backend resolves
+        // to max_position + 1000 (STORY-72). New project, no other queue
+        // items, so this lands at the head naturally.
+        position: i64::MAX,
+        added_by: user_id,
+        note: Some(format!(
+            "Auto-queued by 'aida init' onboarding task ({})",
+            spec_id_display
+        )),
+        added_at: chrono::Utc::now(),
+        for_role: Some("implementer".to_string()),
+        for_scope: None,
+        for_session: None,
+    };
+    // Best-effort queue_add — the spec exists either way; queue-add failure
+    // is a softer error than the substrate write being unrecoverable.
+    if let Err(e) = storage.queue_add(queue_entry) {
+        eprintln!(
+            "  {} could not push onboarding task onto implementer queue: {}",
+            "Warning:".yellow(),
+            e
+        );
+    }
     Ok(())
 }
 
