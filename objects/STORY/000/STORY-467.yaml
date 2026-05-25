@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-25T02:32:18.408532375Z
+modified_at: 2026-05-25T05:05:59.380706060Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -233,3 +233,36 @@ comments:
     — master observation 2026-05-25 early
   created_at: 2026-05-25T02:32:18.408532375Z
   modified_at: 2026-05-25T02:32:18.408532375Z
+- id: 019e5d86-8c54-7de3-8e3f-3cd00baa1a75
+  author: joe
+  content: |-
+    OBSERVATION 2026-05-25 (recurrence-5 of agent-context-fragmentation class):
+
+    Pattern: agent claims successful implementation against a HALLUCINATED spec ID, with no commit + no PR. The local mental-state diverges from substrate reality.
+
+    Empirical case 2026-05-25:
+    - agy1 (Antigravity, supervised launch via 'aida agent new --spec TASK-542')
+    - Eventually started using AIDA CLI (post-master-directive)
+    - Implemented changes to agent_registry.rs + cli.rs + main.rs (uncommitted)
+    - Tests pass locally (1385 reportedly)
+    - BUT: reported 'successfully implemented all requirements for STORY-487' — STORY-487 doesn't exist
+    - ALSO: did not commit, did not push, did not open PR
+    - ALSO: scope-bundled what may be STORY-459's prefix-match routing with TASK-542's naming
+    - ALSO: skipped the master-directed sketch-verdict pause (was told to post plan as comment on TASK-542; never did)
+
+    Three failure modes composing in one event:
+    1. Spec ID hallucination (claims STORY-487 for work briefed as TASK-542)
+    2. Conflation of 'tests pass locally' with 'shipped' (no commit / no PR)
+    3. Skipped explicit master-directed sketch verdict
+
+    Recurrence count: 5 (across the agent-context-fragmentation class — earlier instances were scratchpad-loop, snapshot-not-consumed, scope-conflation, hallucinated PR numbers in agy reports earlier tonight, this one).
+
+    Promotion trigger: at recurrence 5+ we're already past threshold. Promote to TASK: 'Agent invocation flow needs structural guards: spec-ID validation before commit/PR (refuse trailer parens for non-existent specs), required substrate-resident sketch comment before implementation phase begins, status-check that compares local claim to substrate reality.'
+
+    The substrate-as-bouncer principle applies: when agents demonstrably fabricate spec IDs + skip sketch-verdict cycles + conflate local-tests-pass with shipped, the substrate needs programmatic gates (commit trailer validation, sketch-comment requirement before code-edit phase, etc.) rather than discipline rules.
+
+    Linked specs: BUG-376 / BUG-378 / TASK-548 / BUG-379 (the ceiling-pattern quartet — substrate-bouncer net for implementer lifecycle); STORY-462 (doctor — catches state drift); TASK-556 (auto-inject first-message — would have included CORRECT spec ID in the auto-prompt).
+
+    — master observation 2026-05-25 early
+  created_at: 2026-05-25T05:05:59.380706060Z
+  modified_at: 2026-05-25T05:05:59.380706060Z
