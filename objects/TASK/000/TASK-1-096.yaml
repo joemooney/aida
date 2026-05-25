@@ -27,12 +27,12 @@ description: |-
   Recurrence count: 3 distinct failure modes in one session = strong signal. Probably already at promotion threshold.
 
   — master observation, captured from aida-chat advisor's cross-project sync 2026-05-25
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:17:01.132919755Z
-modified_at: 2026-05-25T16:17:01.132919755Z
+modified_at: 2026-05-25T16:17:42.591376306Z
 req_type: Task
 tags:
 - agent-discipline
@@ -45,3 +45,9 @@ tags:
 - linked:STORY-471
 - master-diagnosis-needed
 - severity:major
+comments:
+- id: 019e5fed-86bf-7db0-8088-7dbe8699338b
+  author: joe
+  content: 'Promoted by joe 2026-05-25: AGY''s three-failure-modes-in-one-session pattern needs master-tier diagnosis before further AGY dispatch. Promoting to substrate-actionable + adding to morning agenda.'
+  created_at: 2026-05-25T16:17:42.591376306Z
+  modified_at: 2026-05-25T16:17:42.591376306Z
