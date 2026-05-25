@@ -1,0 +1,19 @@
+id: 019e5cf8-9378-7511-ac4b-ef0681035874
+spec_id: TASK-556
+agreed_id: TASK-556
+title: 'aida agent new: auto-inject first-message directive so agent starts working on --spec without operator typing'
+description: "## Friction\n\n'aida agent new antigravity --role implementer --spec TASK-542' creates lease + worktree + context snapshot + spawns Antigravity. But Antigravity sits at an empty prompt — operator has to MANUALLY type 'work task-542' (or paste a longer first message) to direct it.\n\nThis defeats much of the value of --spec. The substrate KNOWS what the agent should work on (spec is right there); the launcher should auto-direct.\n\n## Reproduced 2026-05-24\n\nOperator launched: 'aida agent new antigravity --role implementer --spec TASK-542'. Antigravity spawned at empty prompt. Operator typed 'work task-542'. Same friction would apply to every supervised-launch invocation.\n\n## Proposed shape\n\nAdd a '--prompt <text>' flag to 'aida agent new' that gets passed to the agent CLI's initial-message mechanism:\n\n- claude:  claude '<first message>'\n- codex:   codex -p '<first message>'  (or whatever Codex's initial-prompt flag is)\n- antigravity:  agy -p '<first message>' (verify Antigravity's flag)\n\nDefault behavior when --prompt NOT supplied AND --spec IS supplied: auto-construct from a template:\n\n  Read your context first:\n    cat \"$AIDA_AGENT_CONTEXT_FILE\"\n    aida show {SPEC}\n    aida brief list --for-agent {AGENT-TYPE}\n  \n  Implement per spec acceptance. Single-spec scope. Standard cadence: cargo test + cargo fmt --check + aida pr ship + exit (per IMPLEMENTER COMPLETE banner). Trailer: ({SPEC}). trace:{SPEC}.\n\nVariants the operator can override with --prompt.\n\n## Per-agent CLI flag discovery (verify before implementing)\n\nFor each supported agent type, identify the initial-prompt flag:\n- claude: positional argument (first message just becomes argv[1])\n- codex: -p flag (per Codex CLI docs)\n- antigravity: needs verification — test 'agy --help' or equivalent\n- web: N/A (different launch mechanism)\n\nPer agent type, map the launcher's --prompt to the right CLI flag.\n\n## Acceptance\n\n- [ ] 'aida agent new <type> --role <r> --spec <s> --prompt <text>' passes <text> as initial-message to spawned agent\n- [ ] When --prompt is absent AND --spec is present: auto-construct from template + AIDA_AGENT_CONTEXT_FILE pointer\n- [ ] When neither --prompt nor --spec: today's behavior (agent spawns at empty prompt; operator drives)\n- [ ] '--no-prompt' opt-out for operators who want to drive manually\n- [ ] Per-agent CLI flag mapping correctly implemented (claude positional / codex -p / antigravity flag)\n- [ ] Test: launch with --spec → agent receives initial message; launch without → empty prompt today\n\n## Composes with\n\n- TASK-554 (--spec scope-binding in snapshot — this task injects the directive that USES the snapshot)\n- TASK-553 (role file discipline expansion — first-message template should reference role discipline)\n- TASK-555 (cross-agent skill-invocation surface map — informs the per-agent CLI flag table)\n- BUG-376 / BUG-378 / BUG-379 / TASK-548 (ceiling-pattern banners — first-message references them so agent knows what's coming)\n\n## Origin\n\n2026-05-24 operator: 'I had to type work task-542; couple of things it did not automatically start that work on the task'. Substrate gap: supervised launcher has all the info to direct the agent but doesn't.\n\ntrace:TASK-X"
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T02:30:55.096932083Z
+modified_at: 2026-05-25T02:30:55.096932083Z
+req_type: Task
+tags:
+- aida:agent
+- auto-start
+- from-self-test
+- from-user-direction
+- launcher
+- ux-papercut
