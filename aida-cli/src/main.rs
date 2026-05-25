@@ -2,6 +2,7 @@ mod advisor;
 mod agent_registry;
 mod auto_complete;
 mod auto_complete_telemetry;
+mod awaiting_you;
 mod backlog;
 mod calibration;
 mod changelog;
@@ -1457,6 +1458,7 @@ fn run() -> Result<()> {
             ci: _,
             no_ci: _,
             cleanup: _,
+            awaiting: _,
             verbose: _,
         } => {
             handle_status_command(*no_dev_context, None, &storage)?;
@@ -4831,6 +4833,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             ci,
             no_ci,
             cleanup,
+            awaiting,
             verbose,
         } => {
             return handle_status_command_distributed(
@@ -4841,6 +4844,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *ci,
                 *no_ci,
                 *cleanup,
+                *awaiting,
                 *verbose,
                 store_path,
                 &backend,
@@ -51188,6 +51192,7 @@ fn print_status_json(
     store_path: &std::path::Path,
     queue_only: bool,
     ci_only: bool,
+    awaiting: &awaiting_you::AwaitingReport,
 ) -> Result<()> {
     use serde_json::json;
 
@@ -51254,6 +51259,10 @@ fn print_status_json(
 
     let mut out = serde_json::Map::new();
     if !queue_only && !ci_only {
+        // STORY-465: lead the JSON the same way the text view leads —
+        // human-gate items first. Always present (even when empty) so
+        // consumers can detect "no items" without a key-absence guard.
+        out.insert("awaiting".to_string(), awaiting.to_json());
         out.insert(
             "session".to_string(),
             session.unwrap_or(serde_json::Value::Null),
@@ -51554,7 +51563,7 @@ fn collect_open_prs(project_root: &std::path::Path) -> OpenPrSnapshot {
             "--limit",
             "50",
             "--json",
-            "number,title,headRefName,statusCheckRollup,mergeable",
+            "number,title,headRefName,statusCheckRollup,mergeable,reviewDecision",
         ])
         .output();
     let Ok(out) = out else {
@@ -51587,6 +51596,11 @@ fn collect_open_prs(project_root: &std::path::Path) -> OpenPrSnapshot {
             .get("mergeable")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let review_decision = pr
+            .get("reviewDecision")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
         let ci_rollup = pr
             .get("statusCheckRollup")
             .and_then(|v| v.as_array())
@@ -51599,6 +51613,7 @@ fn collect_open_prs(project_root: &std::path::Path) -> OpenPrSnapshot {
                 head_branch,
                 ci_rollup,
                 mergeable,
+                review_decision,
             },
         );
     }
@@ -52333,6 +52348,241 @@ fn collect_cleanup_report(
     }
 }
 
+/// Gather every "human-gate" item — mergeable PRs the operator still
+/// needs to merge, briefs filed for the running agent, findings awaiting
+/// triage, reviewer-queue verdicts, and `NeedsAttention` escalations —
+/// into the structured report rendered as the "Awaiting you" section.
+/// Empty (and so hidden) on a quiet day; that absence is the signal.
+/// trace:STORY-465 | ai:claude
+fn collect_awaiting_report(
+    project_root: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+    ctx: &UserStatusContext,
+    no_ci: bool,
+) -> awaiting_you::AwaitingReport {
+    // Mergeable PRs — reuse the same `gh pr list` snapshot that the cleanup
+    // report consumes, then filter via the awaiting-you classifier.
+    let mergeable_prs = if no_ci {
+        Vec::new()
+    } else {
+        let snapshot = collect_open_prs(project_root);
+        let prs: Vec<_> = snapshot.by_branch.into_values().collect();
+        awaiting_you::classify_open_prs(&prs)
+    };
+
+    // Pending briefs — prefer narrowing to the running agent so we
+    // don't spam the operator with hand-offs filed for a different
+    // agent. `detect_agent_type` returns "other" when no agent env is
+    // present (raw shell), in which case we surface every unacked brief
+    // so the operator orchestrating multiple agents still sees the
+    // backlog of hand-offs.
+    let agent_type = agent_registry::detect_agent_type();
+    let brief_filter = match agent_type.as_str() {
+        "claude" | "codex" | "antigravity" => Some(agent_type.as_str()),
+        _ => None,
+    };
+    let pending_briefs = collect_agent_briefs(project_root, brief_filter, false)
+        .ok()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|e| awaiting_you::PendingBriefItem {
+            agent: e.agent,
+            spec_id: e.spec_id,
+            path: e.path,
+        })
+        .collect();
+
+    // Findings + escalations — both need the summary list. Pull it once.
+    let summaries = backend
+        .list_summaries(&aida_core::ListFilter::default())
+        .unwrap_or_default();
+    let findings_total = findings::count_findings(&findings::build_findings_view(
+        &summaries,
+        &findings::FindingsFilter::default(),
+    ));
+    let escalations: Vec<_> = summaries
+        .iter()
+        .filter(|s| s.status.eq_ignore_ascii_case("NeedsAttention"))
+        .map(|s| awaiting_you::EscalationItem {
+            spec_id: s
+                .agreed_id
+                .clone()
+                .or_else(|| s.spec_id.clone())
+                .unwrap_or_else(|| "?".to_string()),
+            title: s.title.clone(),
+        })
+        .collect();
+
+    // Reviewer-queue items — surface queue entries where the verdict is
+    // the operator's only when the active role IS reviewer. Otherwise
+    // these would just duplicate the Queue section below.
+    let reviewer_queue_items = if matches!(ctx.role.as_deref(), Some("reviewer")) {
+        ctx.queue_head
+            .iter()
+            .filter(|r| !r.in_progress)
+            .map(|r| awaiting_you::ReviewerQueueItem {
+                spec_id: r.spec_id.clone(),
+                title: r.title.clone(),
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    awaiting_you::AwaitingReport {
+        mergeable_prs,
+        pending_briefs,
+        findings_total,
+        reviewer_queue_items,
+        escalations,
+    }
+}
+
+#[cfg(test)]
+mod story_465_awaiting_report_tests {
+    use super::*;
+    use aida_core::models::Requirement;
+    use aida_core::{CachedGitBackend, DatabaseBackend, RequirementStatus};
+    use tempfile::tempdir;
+
+    fn empty_user_ctx(role: Option<&str>) -> UserStatusContext {
+        UserStatusContext {
+            session: None,
+            role: role.map(String::from),
+            branch: None,
+            pr: None,
+            queue_head: Vec::new(),
+            queue_total: 0,
+            agents: Vec::new(),
+        }
+    }
+
+    fn open_backend(project_root: &std::path::Path) -> CachedGitBackend {
+        let store_root = project_root.join("store");
+        let cache_path = project_root.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        CachedGitBackend::open(&store_root, &cache_path).unwrap()
+    }
+
+    // STORY-465 acceptance: with no findings, no escalations, no briefs,
+    // and `--no-ci` short-circuiting the gh call, the report comes back
+    // empty so the section stays hidden. The quiet-day signal. trace:STORY-465
+    #[test]
+    fn empty_state_produces_hidden_report() {
+        let dir = tempdir().unwrap();
+        let backend = open_backend(dir.path());
+        let ctx = empty_user_ctx(Some("implementer"));
+
+        let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+        assert!(
+            report.is_empty(),
+            "fresh project must have nothing awaiting"
+        );
+        assert_eq!(report.total(), 0);
+    }
+
+    // A spec parked in NeedsAttention surfaces as an escalation line —
+    // the implementer→advisor→human cascade landing in front of the
+    // operator without them having to grep `aida list --status`.
+    #[test]
+    fn needs_attention_spec_surfaces_as_escalation() {
+        let dir = tempdir().unwrap();
+        let backend = open_backend(dir.path());
+
+        let mut parked = Requirement::new("punted overnight".into(), String::new());
+        parked.spec_id = Some("SPIKE-12".into());
+        parked.status = RequirementStatus::NeedsAttention;
+        backend.add_requirement(parked).unwrap();
+
+        let ctx = empty_user_ctx(Some("implementer"));
+        let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+
+        assert!(!report.is_empty());
+        assert_eq!(report.escalations.len(), 1);
+        assert_eq!(report.escalations[0].spec_id, "SPIKE-12");
+        assert_eq!(report.escalations[0].title, "punted overnight");
+    }
+
+    // Briefs are filed under `.aida/agent-briefs/<agent>/`. The classifier
+    // narrows to the running agent's directory when `AIDA_AGENT_TYPE` is a
+    // known value, so we set it explicitly to make detection deterministic
+    // under any test env. trace:STORY-465 | ai:claude
+    #[test]
+    fn unacked_briefs_for_running_agent_surface_in_the_report() {
+        let dir = tempdir().unwrap();
+        let backend = open_backend(dir.path());
+        let briefs_dir = dir.path().join(".aida").join("agent-briefs").join("claude");
+        std::fs::create_dir_all(&briefs_dir).unwrap();
+        std::fs::write(
+            briefs_dir.join("STORY-100.md"),
+            "---\nspec_id: STORY-100\ngenerated_at: 2026-05-25T00:00:00Z\n---\nbody\n",
+        )
+        .unwrap();
+
+        // Pin agent detection to `claude` so the classifier narrows to the
+        // dir our fixture wrote to, regardless of the test host's env.
+        let prior = std::env::var("AIDA_AGENT_TYPE").ok();
+        // SAFETY: env mutation is bounded by this test; restored on exit.
+        unsafe {
+            std::env::set_var("AIDA_AGENT_TYPE", "claude");
+        }
+
+        let ctx = empty_user_ctx(Some("implementer"));
+        let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+
+        assert_eq!(
+            report.pending_briefs.len(),
+            1,
+            "the filed brief surfaces for the running agent"
+        );
+        assert_eq!(report.pending_briefs[0].spec_id, "STORY-100");
+        assert_eq!(report.pending_briefs[0].agent, "claude");
+
+        // SAFETY: same single-threaded reasoning — restore the env.
+        unsafe {
+            match prior {
+                Some(v) => std::env::set_var("AIDA_AGENT_TYPE", v),
+                None => std::env::remove_var("AIDA_AGENT_TYPE"),
+            }
+        }
+    }
+
+    // Reviewer-role queue items only surface when the active role IS
+    // `reviewer` — otherwise the Awaiting-you section would duplicate
+    // the Queue section directly below it. trace:STORY-465 | ai:claude
+    #[test]
+    fn reviewer_queue_items_only_surface_for_reviewer_role() {
+        let dir = tempdir().unwrap();
+        let backend = open_backend(dir.path());
+
+        let queue_row = QueueRow {
+            spec_id: "PR-42".into(),
+            title: "verdict needed".into(),
+            status: "Approved".into(),
+            for_role: Some("reviewer".into()),
+            in_progress: false,
+            lease_id: None,
+            lease_started_at: None,
+        };
+
+        // Implementer role: reviewer-queue items must NOT surface here.
+        let mut ctx_impl = empty_user_ctx(Some("implementer"));
+        ctx_impl.queue_head = vec![queue_row.clone()];
+        let report = collect_awaiting_report(dir.path(), &backend, &ctx_impl, true);
+        assert!(
+            report.reviewer_queue_items.is_empty(),
+            "implementer must not see verdict items"
+        );
+
+        // Reviewer role: the same row surfaces as a verdict-needed line.
+        let mut ctx_rev = empty_user_ctx(Some("reviewer"));
+        ctx_rev.queue_head = vec![queue_row];
+        let report = collect_awaiting_report(dir.path(), &backend, &ctx_rev, true);
+        assert_eq!(report.reviewer_queue_items.len(), 1);
+        assert_eq!(report.reviewer_queue_items[0].spec_id, "PR-42");
+    }
+}
+
 #[cfg(test)]
 mod task_515_status_agent_lease_fallback_tests {
     use super::*;
@@ -52435,6 +52685,7 @@ fn handle_status_command_distributed(
     ci_only: bool,
     no_ci: bool,
     cleanup: bool,
+    awaiting: bool,
     verbose: bool,
     store_path: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
@@ -52464,8 +52715,37 @@ fn handle_status_command_distributed(
     // is not an error, it's just an absent section.
     let user_ctx = collect_user_context(&project_root, &store, backend, no_ci);
 
+    // STORY-465: `--awaiting` focuses on the human-gate report. Same
+    // contract as `--cleanup`: `--json` emits the structured report,
+    // otherwise render text and exit. trace:STORY-465 | ai:claude
+    if awaiting {
+        let report = collect_awaiting_report(&project_root, backend, &user_ctx, no_ci);
+        if json {
+            println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+        } else if report.is_empty() {
+            // Echo a quiet all-clear so `aida status --awaiting` doesn't
+            // silently exit with nothing on stdout — the focus-mode user
+            // explicitly asked.
+            println!("{}", "─── Awaiting you (0) ───".bold().dimmed());
+            println!("  Nothing awaits you right now.");
+            println!();
+        } else {
+            let stdout = std::io::stdout();
+            let _ = report.render(verbose, stdout.lock());
+        }
+        return Ok(());
+    }
+
     if json {
-        return print_status_json(&user_ctx, backend, store_path, queue_only, ci_only);
+        let awaiting_report = collect_awaiting_report(&project_root, backend, &user_ctx, no_ci);
+        return print_status_json(
+            &user_ctx,
+            backend,
+            store_path,
+            queue_only,
+            ci_only,
+            &awaiting_report,
+        );
     }
 
     if short {
@@ -52483,9 +52763,14 @@ fn handle_status_command_distributed(
         return Ok(());
     }
 
-    // Default: print every section. Lead with the user-context blocks
-    // (session/role/branch/PR/queue) so the eye lands on "where am I"
-    // before the project-wide accounting. trace:TASK-220 | ai:claude
+    // Default: print every section. The "Awaiting you" report leads —
+    // when the operator IS the bottleneck, nothing else matters until
+    // they've cleared their gates. Hidden on quiet days so the section
+    // appearing is itself the signal. trace:STORY-465 | ai:claude
+    let awaiting_report = collect_awaiting_report(&project_root, backend, &user_ctx, no_ci);
+    let stdout = std::io::stdout();
+    let _ = awaiting_report.render(verbose, stdout.lock());
+
     print_status_session_section(&user_ctx);
     print_status_branch_section(&user_ctx);
     if !no_ci {
