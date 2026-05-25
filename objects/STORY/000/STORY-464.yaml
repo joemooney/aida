@@ -88,13 +88,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:10:36.273421663Z
-modified_at: 2026-05-25T06:24:48.966785071Z
+modified_at: 2026-05-25T07:42:50.405172796Z
 req_type: Story
 tags:
 - aida:doctor
 - aida:status
 - batch:multi-agent-coordination
 - batch:overnight-orthogonal
+- batch:status-surfaces
 - from-self-test
 - from-user-direction
 - passive-surfacing
