@@ -127,6 +127,28 @@ Before claiming a spec, check `list_active_leases()`. Don't overwrite another ag
 
 If you hit a design fork you can't resolve from the spec text, the surrounding code, or the project's substrate (memories, discipline docs, prior commits): **call `post_punt` instead of guessing.** Punting is a first-class outcome, not a failure. AIDA's punt → advisor → human escalation tier (STORY-306) is designed around the assumption that agents punt when uncertain.
 
+## Cross-agent skill-invocation surface
+
+Different agent types have different conventions for invoking AIDA workflows (the bundled "skills" like `aida-pickup`, `aida-pr`, etc.). The substrate IS the same — only the operator-facing syntax varies. If you're a non-Claude agent looking at a CLAUDE.md or skill template that references `/aida-foo`, this map tells you the equivalent.
+
+| Workflow | Claude Code (slash) | Codex CLI | Antigravity CLI / MCP agents | What it does |
+|---|---|---|---|---|
+| **aida-pickup** | `/aida-pickup [SPEC]` | `aida queue work [SPEC]` (or `.codex/skills/aida-pickup` when scaffolded) | `aida queue work [SPEC]` | Read spec + transition to in-progress + drive implementation |
+| **aida-pr / pr ship** | `/aida-pr` | `aida pr ship` | `aida pr ship` | Commit + push + open PR + auto-queue reviewer story |
+| **aida-req** | `/aida-req` | `aida add --type <T> --title <S>` | `aida add ...` (or MCP `add_requirement`) | File a new spec |
+| **aida-commit** | `/aida-commit` | `git commit` with trailer | `git commit` with trailer | Enforce `[AI:tool] type(scope): subject (SPEC-ID)` format |
+| **aida-implement** | `/aida-implement [SPEC]` | `aida show <SPEC>` + edit + ship | `aida show <SPEC>` + edit + ship | Implement a spec end-to-end |
+| **aida-doc** | `/aida-doc` | manual file edits + commit | manual file edits + commit | Document architecture/design |
+| **aida-search** | `/aida-search <q>` | `aida search <q>` (or MCP `search_requirements`) | `aida search <q>` (or MCP) | FTS5 search across specs |
+| **aida-plan** | `/aida-plan [SPEC]` | `aida plan verify` / `aida ultraplan` | same | Plan an implementation; verify against template |
+| **aida-recover** | `/aida-recover` | `aida doctor` (+ `aida doctor heal <category>`) | `aida doctor` | Diagnostic + recovery for state drift |
+| **aida-findings** | (slash variants) | `aida findings add/list/promote/dismiss` (or MCP `file_finding`) | `aida findings ...` (or MCP) | Advisor observation entry + triage flow |
+| **aida-onboard** | `/aida-onboard` | read AGENTS.md + this doc | read AGENTS.md + this doc | First-session orientation |
+
+**Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. If you don't know the slash/skill name for your agent type, run the CLI verb directly. It works for every agent type.
+
+**MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 26 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph operations; use CLI for orchestration verbs (`aida session start`, `aida pr ship`, `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
+
 ## What's in flight / known rough edges
 
 Specs you'll want to track because they affect your operation:
