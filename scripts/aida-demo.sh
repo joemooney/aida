@@ -444,23 +444,42 @@ while true; do
     read -r choice
     case "${choice,,}" in
         1)
-            heading "aida queue work — the queue → /aida-pickup → ship lifecycle"
-            note "TASK-007 (the onboarding task) is still on the queue from 'aida init':"
+            heading "aida queue work — the queue → session → ship lifecycle (substrate-level demo)"
+
+            note "TASK-007 (the onboarding task) is still on the queue from 'aida init'."
+            note "TASK-007's work (committing the scaffolding) was already done in step 4."
+            note "Here we'll demonstrate the substrate-level lifecycle commands that"
+            note "'aida queue work' orchestrates — without spawning an interactive"
+            note "Claude Code session (which would halt the scripted demo)."
+            echo
             show_cmd "demo$" aida queue list
+
             echo
-            note "'aida queue work TASK-007' would:"
-            note "  1. Create a sibling worktree at ~/ai/${DEMO_REPO_NAME}-task-007"
-            note "  2. Create a session lease (.aida/sessions/<id>.toml)"
-            note "  3. Bump TASK-007 status Approved → In Progress (BUG-379)"
-            note "  4. Launch claude code in the worktree with /aida-pickup TASK-007"
-            note "  5. The implementer skill loads spec context + drives the work to completion"
-            note "  6. 'aida pr ship' opens the PR + queues a reviewer story"
-            note "  7. BUG-376's banner signals 'exit now' — Ctrl+D back to operator shell"
-            note "  8. agy2 (integrator) merges + auto-bump fires Done → Completed"
+            note "Step 1: 'aida session start --owns TASK-007 --force-claim' creates"
+            note "a sibling worktree + lease + bumps status Approved → In Progress."
+            note "(In a normal flow, this is what 'aida queue work TASK-007' invokes"
+            note "internally before launching claude code.)"
+            show_cmd "demo$" aida session start --owns TASK-007 --force-claim
+
             echo
-            note "We won't actually launch a Claude Code session in this demo (would"
-            note "be disruptive to script flow), but you can see the queue is ready:"
-            show_cmd "demo$" aida queue next
+            note "Step 2: check the lease + status transition:"
+            show_cmd "demo$" aida session leases
+
+            echo
+            note "Step 3: in a real workflow operator would 'cd' into the new sibling"
+            note "worktree, do the work in a Claude Code session driven by /aida-pickup,"
+            note "then 'aida pr ship' to open a PR. We'll skip those interactive steps"
+            note "and just close the lifecycle — TASK-007's work is already in main."
+            note "'aida queue done TASK-007' atomically marks complete + removes from queue:"
+            show_cmd "demo$" aida queue done TASK-007
+
+            echo
+            note "Closed lifecycle:"
+            show_cmd "demo$" aida queue list
+
+            echo
+            note "End-state verification — TASK-007 now Completed:"
+            show_cmd "demo$" aida show TASK-007
             ;;
         2)
             heading "aida history --events — the substrate ledger"
