@@ -1,5 +1,6 @@
 id: 019e5fe3-8eb9-7682-9c1d-3540b6c17ce4
 spec_id: TASK-1-095
+agreed_id: TASK-120
 title: aida findings add --severity vocabulary only accepts major / minor / cosmetic. …
 description: |-
   aida findings add --severity vocabulary only accepts major / minor / cosmetic. For 'critical / actively harmful' patterns (plagiarism, malicious-shape behavior, data-loss-class bugs), no severity tier above 'major' exists. Operator wanting to file a critical-class observation has to either use major (loses signal) or work around via tags. Consider adding 'critical' as a 4th tier — semantics: requires-immediate-attention beyond normal triage flow.
