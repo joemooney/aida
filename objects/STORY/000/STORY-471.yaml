@@ -1,0 +1,115 @@
+id: 019e5dfa-7db3-7330-92a9-02cbe7c99d43
+spec_id: STORY-471
+agreed_id: STORY-471
+title: 'Agent performance metrics + comparative analysis: track on-track-vs-off-track per agent type/instance for substrate-grounded dispatch decisions'
+description: |-
+  ## Strategic context
+
+  AIDA's substrate-as-learning-loop principle (per feedback_substrate_learning_loop_calibration) says: load-bearing decisions deserve record-now + compare-on-landing + fine-tune-over-rolling-delta. Predictive accuracy compounds.
+
+  Tonight's multi-agent dispatch surfaced ~7 recurrences of agent-discipline-violation patterns (captured on STORY-467 + via STORY-469's structural-guards architecture). These were observed + responded-to in real-time but the data is fragmented — each observation is a comment, not an aggregatable metric.
+
+  User direction 2026-05-25 early: 'we should add to our findings metrics when an agent went off track or how well it did so that we can have a comparative analysis.' Master concurs — pattern strength of agent-discipline observations + the new TASK-542 agent-naming + the agent registry (.aida/agents/) primitives are ready for a metrics layer on top.
+
+  ## Proposed shape
+
+  ### Phase 1: Event log
+
+  Every agent-relevant event is logged to a structured ledger (e.g., '.aida/agents/events.jsonl' or similar). Events include:
+
+  - session_started — agent X opens session on SPEC-Y
+  - brief_acked
+  - sketch_posted (substrate-resident sketch on the spec)
+  - spec_status_transitioned (Approved → In Progress → Done → Completed)
+  - commit_pushed (with SPEC-IDs in trailer)
+  - pr_opened
+  - pr_merged (via auto-bump scanner)
+  - off_track_intervention (operator hard-stopped agent via paste-ready directive)
+  - spec_id_hallucination (commit/PR/message referenced non-existent spec)
+  - scope_creep (agent expanded out of briefed batch/spec)
+  - ceiling_pattern_caught (BUG-376/378/etc. banners fired)
+  - finding_filed (observation via aida findings add)
+  - session_ended (clean exit or force-end)
+
+  Each event has: timestamp, agent identity (name + type post-TASK-542), session/lease id, spec-id(s), event-specific payload.
+
+  ### Phase 2: Metrics surface
+
+  - 'aida agent metrics' or 'aida agent stats <agent-name>' — show per-agent performance
+  - Metrics include:
+    - Ships count (commits + PRs + merges)
+    - Time-to-ship (lease start → pr merged)
+    - Off-track interventions per session (master had to hard-stop)
+    - Spec-ID hallucination count
+    - Scope-creep events (out-of-brief work)
+    - Acceptance-fidelity (ships full acceptance vs partial — measured by reviewer verdict + master comments)
+    - Ceiling-pattern catches (substrate-bouncer banners that fired on them)
+    - Discipline score (composite — lower events = higher score)
+  - 'aida agent stats --compare' — side-by-side comparison across agents
+  - Time-bucketed views (per-session, per-week, per-batch)
+
+  ### Phase 3: Comparative analysis surface
+
+  - 'aida agent stats --insights' — surface patterns like:
+    - 'Codex: 12 ships, 0 interventions, 0 hallucinations — high discipline'
+    - 'Antigravity-implementer-1: 4 ships, 3 interventions, 1 hallucination — needs scope-tight briefs'
+    - 'Antigravity has 2x higher scope-creep rate vs Codex on overnight unsupervised drains'
+  - These become substrate-grounded dispatch decisions: 'this work needs Codex (high-discipline track record)' vs 'this work is mechanical, Antigravity is fine'
+
+  ## Composes with
+
+  - STORY-467 (aida findings add — observation entry; this story aggregates findings + auto-detected events)
+  - STORY-347 / STORY-439 / TASK-340 (calibration substrate — predictive accuracy + record-now/compare-on-landing principle)
+  - TASK-542 (agent --name + auto-seq — stable identity for metrics attribution)
+  - TASK-543 (aida agent register — registry that holds the data this metrics layer aggregates)
+  - STORY-431 (agent process registry — Phase 1 foundation already shipped)
+  - STORY-435 (MCP heartbeat busy/idle tracking — event-stream foundation)
+  - STORY-469 (structural guards — emits events when guards fire)
+  - feedback_substrate_learning_loop_calibration (the principle this implements at agent-discipline scale)
+
+  ## Acceptance (phased)
+
+  ### Phase 1 (substrate foundation)
+  - [ ] Event log schema defined (.aida/agents/events.jsonl or similar)
+  - [ ] AIDA core writes events at known points (session_started/ended, brief_acked, etc.)
+  - [ ] Agent-launcher (aida agent new) emits session_started + relevant launch metadata
+  - [ ] BUG-376/378/etc. banners + scope-creep detection emit ceiling_pattern_caught events
+  - [ ] Hard-intervention path documented (operator can emit off_track_intervention event manually via 'aida agent annotate <agent> --event <kind>')
+
+  ### Phase 2 (metrics surface)
+  - [ ] 'aida agent metrics' / 'aida agent stats <name>' command
+  - [ ] Per-agent aggregation from events.jsonl
+  - [ ] Time-bucketed views (--since, --until flags)
+  - [ ] JSON emission for machine consumers
+  - [ ] Tests: synthetic event log → metrics output
+
+  ### Phase 3 (comparative insights)
+  - [ ] 'aida agent stats --compare' across agents
+  - [ ] 'aida agent stats --insights' pattern-detection layer
+  - [ ] Documentation: 'How to read agent metrics for dispatch decisions'
+
+  ## Smallest valuable slice
+
+  Phase 1 (event log) alone is valuable — operators can grep + analyze manually. Phase 2/3 builds the ergonomic surface on top. Ship Phase 1 first; Phase 2/3 as follow-up specs once Phase 1's data shape is empirically validated.
+
+  ## Origin
+
+  2026-05-25 early (overnight drain context): user observed multi-agent dispatch produces rich event data tonight but no aggregation surface exists. Master concurs; composes with calibration substrate principle + STORY-467 + TASK-542 + agent registry primitives all shipped tonight.
+
+  trace:STORY-X
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T07:12:37.811029636Z
+modified_at: 2026-05-25T07:12:37.811029636Z
+req_type: Story
+tags:
+- agent-metrics
+- calibration
+- from-self-test
+- from-user-direction
+- multi-agent
+- observability
+- phased-epic-candidate
+- substrate-learning-loop
