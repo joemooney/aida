@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-25T01:12:46.642031004Z
+modified_at: 2026-05-25T01:57:04.760888735Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -171,3 +171,31 @@ comments:
     — master observation 2026-05-24
   created_at: 2026-05-25T01:12:46.642031004Z
   modified_at: 2026-05-25T01:12:46.642031004Z
+- id: 019e5cd9-9878-74c1-91fb-acf58627b62c
+  author: joe
+  content: |-
+    OBSERVATION 2026-05-24 (recurrence-3 of advisor-binary-vs-user-binary-mismatch class):
+
+    Pattern: advisor recommends commands that shipped THIS SESSION (e.g., 'aida doctor heal') but the user's shell is running an OLDER binary that pre-dates the ship. User hits 'unrecognized subcommand' errors; has to rebuild before commands work.
+
+    This is distinct from feedback_run_help_before_suggesting_flags (which is about advisor not verifying flag names exist). Here the FLAG/COMMAND DOES exist in the latest code, just not in the binary the user happens to be running. Advisor's own shell may use a fresher binary (e.g., from a different worktree's target/), making the discrepancy invisible.
+
+    Empirical 2026-05-24:
+    - Advisor suggested 'aida doctor heal stale-leases --yes' (subcommand form post-STORY-462 ship)
+    - User's shell was on '(aida-release)' build — predates PR-305 STORY-462 ship
+    - 'aida doctor heal' returned 'unrecognized subcommand' for ~2 round-trips before advisor noticed the binary-mismatch
+
+    Recurrence count: 3 (the underlying class of 'advisor doesn't verify user's binary state'). Two prior instances in different forms: incorrect 'aida findings list --count' flag (didn't exist in user's binary), 'aida queue list --for-role' (was '--for' in actual binary).
+
+    Promotion trigger to TASK: when recurrence ≥ 4 with same root cause, file 'aida agent context-snapshot should include current binary SHA' so advisor's status surface knows what features the user's binary actually has.
+
+    Mitigation today: advisor checklist additions —
+    1. After every spec ships that adds a new CLI surface (new command/subcommand/flag), the advisor SHOULD remind themselves: 'user's shell may be on an older binary'.
+    2. When recommending a new-this-session feature, include a 'verify binary is current' bullet (cargo build + aida-on/aida-off cycle).
+    3. When user reports 'unrecognized subcommand/argument', FIRST hypothesis is binary-mismatch, not user-typo.
+
+    Linked specs: STORY-462 (the ship that surfaced this case), feedback_run_help_before_suggesting_flags (sibling class — both about advisor verifying before suggesting).
+
+    — master observation 2026-05-24
+  created_at: 2026-05-25T01:57:04.760888735Z
+  modified_at: 2026-05-25T01:57:04.760888735Z
