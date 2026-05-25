@@ -74234,9 +74234,15 @@ mod story_255_discipline_pack_tests {
         // `/ultraplan` namespace-reservation prompt source.
         // trace:BUG-378 | ai:claude — brief-polling.md joins the pack.
         // trace:STORY-467 | ai:claude — observation-discipline.md joins the pack.
+        // trace:TASK-1-100 | ai:claude — glossary.yaml joins the pack as the
+        // structured single-source vocabulary surface consumed by the demo
+        // script and (future) TUI tooltips.
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
-        assert_eq!(written, 15, "expected README + 14 discipline docs");
+        assert_eq!(
+            written, 16,
+            "expected README + 14 discipline docs + glossary.yaml"
+        );
 
         let dir = root.path().join("docs/aida/discipline");
         for f in [
@@ -74244,6 +74250,7 @@ mod story_255_discipline_pack_tests {
             "advisor-role.md",
             "backlog-grooming.md",
             "brief-polling.md",
+            "glossary.yaml",
             "implementer-discipline.md",
             "lifecycle-vocabulary.md",
             "machinery-glossary.md",
@@ -74267,7 +74274,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            15
+            16
         );
     }
 
