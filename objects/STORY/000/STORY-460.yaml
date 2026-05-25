@@ -61,11 +61,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:07:02.291738788Z
-modified_at: 2026-05-24T16:23:10.300939118Z
+modified_at: 2026-05-25T07:42:59.661069711Z
 req_type: Story
 tags:
 - advisor-discipline
 - batch:multi-agent-coordination
+- batch:substrate-architecture
 - from-user-direction
 - load-balancing
 - multi-agent
