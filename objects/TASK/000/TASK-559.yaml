@@ -27,12 +27,12 @@ description: |-
   2026-05-25 STORY-465 recovery: operator tried 'aida queue work STORY-465 --force-claim' (intuitive guess) and got 'unexpected argument' error. Workaround was 'aida session start --owns STORY-465 --force-claim' directly — works but skips the orchestrator flow.
 
   trace:TASK-X
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:21.281409585Z
-modified_at: 2026-05-25T16:18:48.662057395Z
+modified_at: 2026-05-25T16:29:48.023481205Z
 req_type: Task
 tags:
 - aida:queue
@@ -41,3 +41,7 @@ tags:
 - from-overnight-drain-2026-05-25
 - from-self-test
 - ux-papercut
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-25T16:29:48.023481205Z
+  completion_sha: 930aff5e27f333b4fc99687a3e2eeb268a0a4919
