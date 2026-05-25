@@ -65,12 +65,12 @@ description: |-
   2026-05-24 user: 'I think if you say --spec then the context your implly what we limit to that, agreed?' Master agreed; the substrate gap is that the snapshot doesn't articulate the implied scope.
 
   trace:TASK-X
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T02:20:27.944024722Z
-modified_at: 2026-05-25T06:29:22.947333861Z
+modified_at: 2026-05-25T06:37:46.873591842Z
 req_type: Task
 tags:
 - batch:agent-launch-ux
@@ -79,3 +79,7 @@ tags:
 - from-user-direction
 - launch-discipline
 - scope-articulation
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-25T06:37:46.873591842Z
+  completion_sha: 718683c709d5154661cbb1a71646fcf1f5880a42
