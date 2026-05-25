@@ -1,5 +1,6 @@
 id: 019e5e07-e6f0-7082-a492-26bcb12e4dd6
 spec_id: TASK-1-089
+agreed_id: TASK-116
 title: 'Overnight unauthorized pickup causing failure-and-shelve: agent (likely agy1) p…'
 description: |-
   Overnight unauthorized pickup causing failure-and-shelve: agent (likely agy1) picked up STORY-465 outside their briefed batch (batch:overnight-orthogonal). The session exited 1 (errored), EPIC-28's shelve-recoverable-phase-failures caught it correctly + parked STORY-465 as NeedsAttention with failure-awaiting-triage. Now BUG-379 correctly refuses fresh sessions without --force-claim.
