@@ -72,10 +72,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T20:13:45.004660235Z
-modified_at: 2026-05-25T20:13:45.004660235Z
+modified_at: 2026-05-25T20:17:15.541786327Z
 req_type: Bug
 tags:
 - aida:init
+- batch:first-user-experience
 - first-user-blocker
 - from-dogfood-test
 - from-self-test
