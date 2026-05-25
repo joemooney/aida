@@ -1,5 +1,6 @@
 id: 019e60bd-b690-7d12-8caa-5b64cbbe6766
 spec_id: TASK-1-097
+agreed_id: TASK-124
 title: 'Empirical first-user dogfood 2026-05-25: ran ''aida init'' on fresh hello-world r…'
 description: |-
   Empirical first-user dogfood 2026-05-25: ran 'aida init' on fresh hello-world repo + 'aida status'. The onboarding task TASK-007 (from TASK-510's scaffolded enqueue) shows in 'Recent activity' as Approved but NOT in 'Queue (empty for implementer)'.

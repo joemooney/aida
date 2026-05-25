@@ -1,5 +1,6 @@
 id: 019e60bd-c48a-7202-bb95-3379059e7bff
 spec_id: TASK-1-098
+agreed_id: TASK-125
 title: 'Empirical 2026-05-25: ''aida init'' followed immediately by ''aida status'' reports:'
 description: |-
   Empirical 2026-05-25: 'aida init' followed immediately by 'aida status' reports:
