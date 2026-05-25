@@ -187,6 +187,90 @@ pause() {
     fi
 }
 
+# Glossary surface — paginates docs/aida/discipline/glossary.yaml so the
+# operator can browse definitions of AIDA's vocabulary (substrate, lease,
+# auto-bump, etc.) and commands (aida pull, aida queue work, etc.) without
+# leaving the demo. The YAML is the structured single source of truth —
+# scaffolded into every aida-init'd project, embedded in the binary,
+# editable separately from this script. trace:TASK-1-100 | ai:claude
+run_glossary() {
+    local glossary="docs/aida/discipline/glossary.yaml"
+    if [ ! -f "$glossary" ]; then
+        fail "glossary file not found at $glossary (run 'aida init' first or upgrade aida)"
+        return 1
+    fi
+
+    # Extract top-level keys (one per term) in document order.
+    mapfile -t TERMS < <(awk '/^[a-z][a-z0-9_-]*: \|[[:space:]]*$/ {sub(/: \|.*$/,""); print}' "$glossary")
+    local total=${#TERMS[@]}
+    if [ "$total" -eq 0 ]; then
+        fail "no terms parsed from $glossary"
+        return 1
+    fi
+
+    local idx=0
+    local view="index"   # "index" or "term"
+
+    while true; do
+        do_clear
+        if [ "$view" = "index" ]; then
+            box_title "AIDA glossary — index" "${total} terms · source: ${glossary}"
+            echo
+            local col=0
+            local i
+            for i in "${!TERMS[@]}"; do
+                printf "  ${DIM}%2d${NC} ${CYAN}%-32s${NC}" $((i+1)) "${TERMS[$i]}"
+                col=$((col + 1))
+                if [ $((col % 2)) -eq 0 ]; then echo; fi
+            done
+            [ $((col % 2)) -ne 0 ] && echo
+            echo
+            note "Pick a term by number, or [r] to return to the explore menu."
+            printf "${DIM}Choice: ${NC}"
+            read -r nav
+            case "${nav,,}" in
+                r|return|q|quit|"") return 0 ;;
+                *[!0-9]*) dim "(invalid: $nav)"; sleep 1 ;;
+                *)
+                    if [ "$nav" -ge 1 ] 2>/dev/null && [ "$nav" -le "$total" ]; then
+                        idx=$((nav - 1)); view="term"
+                    else
+                        dim "(out of range: $nav)"; sleep 1
+                    fi
+                    ;;
+            esac
+        else
+            local term="${TERMS[$idx]}"
+            box_title "Glossary — ${term}" "term $((idx+1)) of ${total}"
+            echo
+            # Print this term's block-literal body (2-space-indented lines
+            # following the `key: |` header, until the next top-level key).
+            awk -v t="$term" '
+                $0 ~ "^"t": \\|[[:space:]]*$" { in_body=1; next }
+                in_body && /^[a-z][a-z0-9_-]*:/ { in_body=0 }
+                in_body && /^[[:space:]]/ { sub(/^[[:space:]]{2}/, ""); print "  "$0 }
+            ' "$glossary"
+            echo
+            printf "${DIM}[n]ext · [p]rev · [i]ndex · [r]eturn · Enter=next · Choice: ${NC}"
+            read -r nav
+            case "${nav,,}" in
+                ""|n|next)         idx=$(( (idx + 1) % total )) ;;
+                p|prev|previous)   idx=$(( (idx - 1 + total) % total )) ;;
+                i|index|l|list)    view="index" ;;
+                r|return|q|quit)   return 0 ;;
+                *[0-9]*)
+                    if [ "$nav" -ge 1 ] 2>/dev/null && [ "$nav" -le "$total" ]; then
+                        idx=$((nav - 1))
+                    else
+                        dim "(out of range: $nav)"; sleep 1
+                    fi
+                    ;;
+                *) dim "(unknown: $nav)"; sleep 1 ;;
+            esac
+        fi
+    done
+}
+
 # -----------------------------------------------------------------------------
 # Intro screen
 # -----------------------------------------------------------------------------
@@ -195,13 +279,15 @@ do_clear
 echo
 box_title "AIDA — first-user demo" "throwaway hello-world walkthrough · safe to abort with Ctrl+C"
 echo
-note "This walkthrough creates a temporary public GitHub repo, runs 'aida"
-note "init' to scaffold a fresh project, walks through the substrate-grounded"
-note "spec→code→commit→auto-bump loop, and prompts for cleanup at the end."
+note_box --title "What this walkthrough does" \
+  "Creates a temporary PUBLIC GitHub repo, runs 'aida init' to scaffold" \
+  "a fresh project, walks through the substrate-grounded spec→code→" \
+  "commit→auto-bump loop, and prompts for cleanup at the end."
 echo
-note "What you'll see: every command echoed inline, file contents shown when"
-note "created, and an optional 'explore' menu at the end to demonstrate"
-note "additional substrate surfaces (queue work, doctor, search, findings)."
+note_box --title "What you'll see" \
+  "Every command echoed inline, file contents shown when created, and" \
+  "an optional 'explore' menu at the end to demonstrate additional" \
+  "substrate surfaces (queue work, doctor, search, findings)."
 echo
 note "${DEMO_TOTAL_STEPS} steps total. Press Enter to advance; Ctrl+C aborts at any time."
 echo
@@ -263,13 +349,13 @@ step_header "Initialize AIDA — the one-command setup"
 show_cmd "demo$" aida init
 ok "aida init complete"
 echo
-note "What was just scaffolded:"
-note "  .aida/config.toml + orphan branch 'aida-store' + worktree .aida-store/"
-note "  .claude/skills/ + commands/ + hooks/ (Claude Code integration)"
-note "  .codex/skills/ (Codex integration)"
-note "  CLAUDE.md + AGENTS.md + .mcp.json"
-note "  docs/aida/discipline/ + docs/plans/"
-note "  META requirements + auto-enqueued onboarding task"
+note_box --title "What was just scaffolded" \
+  "  .aida/config.toml + orphan branch 'aida-store' + worktree .aida-store/" \
+  "  .claude/skills/ + commands/ + hooks/ (Claude Code integration)" \
+  "  .codex/skills/ (Codex integration)" \
+  "  CLAUDE.md + AGENTS.md + .mcp.json" \
+  "  docs/aida/discipline/ + docs/plans/" \
+  "  META requirements + auto-enqueued onboarding task"
 pause
 
 # -----------------------------------------------------------------------------
@@ -278,14 +364,19 @@ pause
 
 step_header "Push the scaffolding + orphan substrate to GitHub"
 
-note "AIDA's substrate lives in git: the spec graph is one YAML per spec"
-note "under the orphan branch 'aida-store', the conventions doc is in"
-note ".claude/AIDA.md, etc. Both code-side AND substrate-side push together:"
+note_box --title "Why both branches push together" \
+  "AIDA's substrate lives in git: the spec graph is one YAML per spec" \
+  "under the orphan branch 'aida-store', the conventions doc is in" \
+  ".claude/AIDA.md, etc. Both code-side AND substrate-side push" \
+  "together so a collaborator's 'git clone' + 'aida pull' rehydrates" \
+  "the full substrate."
 echo
 show_cmd "demo$" git add .
-note "[AI:claude] prefix on the commit subject because the scaffolded files"
-note "include trace:SPEC-ID comments (pre-commit hook flags any commit"
-note "with trace-bearing changes that lacks the AI-tool attribution)."
+note_box --title "Why the [AI:claude] prefix on this commit" \
+  "Scaffolded files include trace:SPEC-ID comments, so the pre-commit" \
+  "hook flags any commit containing trace-bearing changes that lacks" \
+  "the AI-tool attribution. Convention forces honest authorship" \
+  "labelling on every trace-touching commit."
 show_cmd "demo$" git commit -m "[AI:claude] chore(aida): scaffold AIDA into demo project" --quiet || dim "nothing to commit"
 show_cmd "demo$" git push origin main --quiet
 ok "main pushed"
@@ -298,22 +389,27 @@ ok "aida-store orphan branch pushed (substrate now lives on GitHub)"
 # -----------------------------------------------------------------------------
 
 step_header "Inspect the substrate state with 'aida status'"
-note "Single-pane summary of session / branch / PR-CI / queue / cache / scaffolding state."
-note "Use this as your default 'where am I, what's open' check."
+note_box --title "What 'aida status' tells you" \
+  "Single-pane summary of session / branch / PR-CI / queue / cache /" \
+  "scaffolding state. Use this as your default 'where am I, what's" \
+  "open' check at the start of every working session."
 echo
 show_cmd "demo$" aida status
 pause
 
 step_header "View the work backlog with 'aida list'"
-note "Lists every spec AIDA tracks as actionable work. Just-init'd projects"
-note "have a single auto-enqueued onboarding task (TASK-007). As you file"
-note "stories/tasks/bugs, they show up here, sorted, filterable, queryable."
+note_box --title "What 'aida list' shows" \
+  "Lists every spec AIDA tracks as actionable work. Just-init'd" \
+  "projects have a single auto-enqueued onboarding task (TASK-007)." \
+  "As you file stories/tasks/bugs, they show up here, sorted," \
+  "filterable, and queryable."
 echo
 show_cmd "demo$" aida list
-note "TASK-007 is the auto-enqueued onboarding task: it tells you to commit"
-note "the scaffolded files into git. We'll skip running it because the demo"
-note "already committed the scaffolding — but in a real flow you'd pick it"
-note "up via 'aida queue work TASK-007'."
+echo
+note_box --title "About TASK-007 (auto-enqueued onboarding)" \
+  "TASK-007 tells you to commit the scaffolded files into git. We'll" \
+  "skip running it because the demo already committed the scaffolding" \
+  "— but in a real flow you'd pick it up via 'aida queue work TASK-007'."
 pause
 
 step_header "View housekeeping specs with 'aida list --type meta'"
@@ -391,8 +487,13 @@ pause
 
 step_header "Commit + push with the SPEC-ID trailer convention"
 
-note "AIDA commits follow: [AI:tool] type(scope): subject (SPEC-ID)"
-note "The (SPEC-ID) at end of subject is the auto-bump scanner's read target."
+note_box --title "AIDA's commit-message convention" \
+  "Format:  [AI:tool] type(scope): subject (SPEC-ID)" \
+  "" \
+  "The (SPEC-ID) at end of subject is the auto-bump scanner's read" \
+  "target — that's how the substrate knows which spec this commit" \
+  "satisfies, and triggers the Approved/In-Progress → Done transition" \
+  "automatically when 'aida pull' runs."
 echo
 show_cmd "demo$" git add hello.sh
 show_cmd "demo$" git commit -m "[AI:claude] feat: hello world script ($HELLO_SPEC)" --quiet
@@ -423,9 +524,13 @@ note_box --title "Why 'aida pull' (vs git pull alone)" \
 echo
 show_cmd "demo$" aida pull
 echo
-note "Verify the auto-bump worked + see the substrate's code-side reference"
-note "of $HELLO_SPEC (hello.sh shows up under 'Git linkage' because of the"
-note "trace:$HELLO_SPEC comment AIDA scanned automatically):"
+note_box --title "Verify: did the auto-bump fire?" \
+  "Run 'aida show $HELLO_SPEC' and look for:" \
+  "  • Status: Completed  (auto-bumped from Approved)" \
+  "  • Git linkage: hello.sh listed — the trace:$HELLO_SPEC comment" \
+  "    was scanned automatically and bound back to the spec" \
+  "  • Recent commits: the 'feat: hello world script ($HELLO_SPEC)'" \
+  "    commit appears here"
 show_cmd "demo$" aida show "$HELLO_SPEC"
 pause
 
@@ -438,20 +543,19 @@ step_header "Final state — what the substrate tracks after the loop"
 show_cmd "demo$" aida status
 echo
 
-note "The trace-link is queryable via the substrate. Look at hello.sh's"
-note "trace comment + see the substrate side of the same link:"
+note_box --title "Inspect the code-side of the bidirectional link" \
+  "The trace-link is queryable both directions: from code (grep below)" \
+  "and from substrate (the 'Git linkage' section of 'aida show'" \
+  "$HELLO_SPEC). That's the bidirectional code↔spec link AIDA" \
+  "maintains automatically."
 echo
 show_cmd "demo$" grep -n "trace:" hello.sh
 echo
-note "And from the spec side, the Git linkage section listed hello.sh"
-note "(see 'aida show $HELLO_SPEC' output above). That's the bidirectional"
-note "code↔spec link AIDA's substrate maintains."
-echo
-note "Substrate surfaces you can now query:"
-note "  aida show $HELLO_SPEC            # spec body + git linkage"
-note "  aida history --events            # chronological substrate ledger"
-note "  aida list                        # backlog view"
-note "  aida search 'Hello'              # full-text"
+note_box --title "Substrate surfaces you can now query" \
+  "  aida show $HELLO_SPEC            # spec body + git linkage" \
+  "  aida history --events            # chronological substrate ledger" \
+  "  aida list                        # backlog view" \
+  "  aida search 'Hello'              # full-text spec search"
 note "  aida doctor                      # multi-agent state drift detect + heal"
 pause
 
@@ -470,6 +574,8 @@ while true; do
     note "  [4] aida search — full-text query across specs"
     note "  [5] aida findings add — advisor observation capture"
     note "  [6] aida queue list / next / done — queue manipulation primitives"
+    note "  [7] aida queue work --zen --auto-complete — autonomous drain (self-test)"
+    note "  [g] Glossary — definitions of AIDA terms + commands"
     note "  [s] Skip to cleanup"
     echo
     if [ ! -t 0 ]; then
@@ -549,6 +655,74 @@ while true; do
             show_cmd "demo$" aida queue list
             echo
             show_cmd "demo$" aida queue next
+            ;;
+        7)
+            heading "aida queue work --zen --auto-complete — autonomous drain"
+
+            note_box --title "What --zen + --auto-complete does" \
+              "Three autonomy modes (orthogonal axes — human present? what to ask?):" \
+              "" \
+              "  default        — pause for design forks + small ambiguities" \
+              "  --zen          — advisor-on-standby; pause ONLY for design forks," \
+              "                   roll through CI/review/merge unattended" \
+              "  --no-human     — fully headless; advisor tier resolves forks via" \
+              "                   /aida-advise, escalates non-defensible ones" \
+              "" \
+              "--auto-complete  — drive the full lifecycle: impl → CI → review →" \
+              "                   merge → pull → bump (each phase headless via" \
+              "                   'claude -p'). Composes with any autonomy mode."
+
+            echo
+            note "Step 1: Self-test — can we invoke 'claude -p' headless on this machine?"
+            note "        (the autonomous-drain primitive — runs each lifecycle phase"
+            note "        via a non-interactive 'claude -p' invocation)"
+            echo
+            if ! command -v claude >/dev/null 2>&1; then
+                fail "claude CLI not on PATH — skip this option, or install Claude Code first"
+                note "       Install: https://docs.claude.com/claude-code"
+                echo
+            else
+                ok "claude CLI found: $(command -v claude)"
+                dim "    version: $(claude --version 2>&1 | head -1)"
+                echo
+                note "Probing: claude -p 'reply with the single word OK'"
+                echo
+                probe_out=$(timeout 60 claude -p --permission-mode bypassPermissions \
+                    "reply with the single word OK" 2>&1 | tr -d '\r' | head -5)
+                probe_exit=$?
+                if [ $probe_exit -eq 0 ] && printf '%s' "$probe_out" | grep -qiE '\bOK\b'; then
+                    ok "claude -p self-test PASSED — autonomous drain is workable on this machine"
+                    dim "    probe response: $(printf '%s' "$probe_out" | head -1)"
+                    echo
+                    note_box --title "In your real project — try the drain" \
+                      "  # Tag a few low-risk specs as a batch:" \
+                      "  aida edit STORY-X --tags batch:overnight" \
+                      "  aida edit TASK-Y  --tags batch:overnight" \
+                      "" \
+                      "  # Drain the batch with advisor on standby:" \
+                      "  aida queue work --batch overnight --zen --auto-complete" \
+                      "" \
+                      "  # Or unattended overnight (advisor tier resolves forks):" \
+                      "  aida queue work --batch overnight --no-human --auto-complete" \
+                      "" \
+                      "Per-spec cost is real (CI runs + review tokens). Start with" \
+                      "1-2 small specs to calibrate before larger batches."
+                else
+                    fail "claude -p self-test FAILED (exit $probe_exit)"
+                    dim "    output: $(printf '%s' "$probe_out" | head -2)"
+                    echo
+                    note "       Common causes:"
+                    note "         • 'claude' not authenticated — run 'claude' once interactively"
+                    note "         • API key not set / network blocked"
+                    note "         • timeout (>60s) — model may be cold or rate-limited"
+                fi
+            fi
+            echo
+            note "Contract surface — what's actually behind --zen + --auto-complete:"
+            show_cmd "demo$" aida queue work --help 2>&1 | grep -E '^[[:space:]]*--(zen|auto-complete|no-human|max|batch)' | head -10
+            ;;
+        g|glossary)
+            run_glossary
             ;;
         s|skip|"")
             break

@@ -785,14 +785,35 @@ mod tests {
     #[test]
     fn summary_line_present_when_non_empty() {
         let mut report = CleanupReport::default();
+        // Use a project-scoped category — orphan_project_dirs are
+        // deliberately excluded from the inline summary (cross-project
+        // state surfaces in --cleanup only). trace:TASK-1-099-companion
+        report.uncommitted_wip.push(UncommittedWipItem {
+            worktree_path: "/x".into(),
+            branch: "demo-branch".into(),
+            scope: Some("TASK-1".into()),
+            modified_files: 3,
+            age_hours: 5,
+        });
+        let line = report.summary_line().unwrap();
+        assert!(line.contains("1 item need"));
+        assert!(line.contains("aida status --cleanup"));
+    }
+
+    #[test]
+    fn summary_line_skips_orphan_only_reports() {
+        // Cross-project orphan Claude Code project dirs surface ONLY in
+        // --cleanup, not in the per-project status summary. A report
+        // containing nothing but orphan dirs returns None so the
+        // operator's per-project status stays uncluttered.
+        // trace:TASK-1-099-companion | ai:claude
+        let mut report = CleanupReport::default();
         report.orphan_project_dirs.push(OrphanProjectDirItem {
             path: "/tmp/foo".into(),
             decoded_cwd: "/missing".to_string(),
             jsonl_count: 2,
         });
-        let line = report.summary_line().unwrap();
-        assert!(line.contains("1 item need"));
-        assert!(line.contains("aida status --cleanup"));
+        assert!(report.summary_line().is_none());
     }
 
     #[test]
