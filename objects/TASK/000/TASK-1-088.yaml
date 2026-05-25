@@ -1,5 +1,6 @@
 id: 019e5e06-64be-7c90-b672-88e5d1289027
 spec_id: TASK-1-088
+agreed_id: TASK-115
 title: Agent claims successful implementation without commit/push/PR — local-tests-pas…
 description: 'Agent claims successful implementation without commit/push/PR — local-tests-pass conflated with shipped. Recurrence-7 of agent-discipline-violation class. See STORY-467 comments for full event chain. Mitigation: STORY-469''s Guard 3 (local-vs-substrate divergence in status).'
 status: Draft
