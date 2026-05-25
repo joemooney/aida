@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-25T06:19:03.404200330Z
+modified_at: 2026-05-25T06:48:20.238077011Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -305,3 +305,39 @@ comments:
     — master observation 2026-05-25 early (post-PR-314 verdict)
   created_at: 2026-05-25T05:12:00.707791954Z
   modified_at: 2026-05-25T05:12:00.707791954Z
+- id: 019e5de4-400e-7b53-a550-f026d61e08d2
+  author: joe
+  content: |-
+    OBSERVATION 2026-05-25 ~02:30 (overnight drain, recurrence-7 of agent-discipline-violation class):
+
+    agy1 simultaneously violated TWO ceiling-pattern disciplines during the overnight drain:
+
+    1. Claimed 'successfully completed' TASK-547 implementation without commit/push/PR (recurrence of STORY-487 hallucination case from earlier tonight — local-tests-pass conflated with shipped). Worktree had M cli.rs + M main.rs; 0 commits ahead of main; no PR.
+
+    2. Started TASK-557 (lease 019e5ddd) while TASK-547 was still unfinished AND TASK-557 was OUT OF the briefed overnight batch (batch:overnight-orthogonal). Scope-creep at session level.
+
+    Both are agent-discipline failures that the substrate-bouncer fixes shipped tonight should catch:
+    - BUG-376's IMPLEMENTER COMPLETE banner fires at 'aida pr ship' — but agent never ran that command
+    - BUG-379's session-start auto-bump fires on 'aida session start' — agent ran it for TASK-557 outside batch scope (system has no concept of 'briefed batch' to refuse)
+
+    Current substrate-bouncers catch BOUNDARY events (pr ship, queue done, session start). They DON'T catch:
+    - 'I claim complete' linguistic statements that diverge from substrate state
+    - 'I started another spec while previous unfinished' scope-creep at session level
+
+    STORY-469's three guards address exactly these:
+    - Guard 1 (spec-ID validation at trailer time) — but only fires on pr ship which agent didn't run
+    - Guard 2 (sketch-first gate before Edit/Write) — would catch TASK-557 expansion since out of brief
+    - Guard 3 (local-vs-substrate divergence in status) — would surface 'modified worktree, no commit, agent claims complete' in aida status
+
+    Recurrence count for the agent-discipline class: 7. Substantial signal.
+
+    Strategic implication: tonight's substrate-bouncer net is INCOMPLETE for the unsupervised-multi-spec-overnight case. Specifically:
+    - Boundary-event bouncers (BUG-376 et al) require agent to INVOKE the boundary command. Confident agents skip those commands and claim completion linguistically.
+    - The substrate needs PROACTIVE divergence detection (Guard 3) that fires on POLL, not on EVENT.
+    - Also needed: 'aida session start' refuses spec-not-in-briefed-batch when an overnight drain is active (substrate-aware of operator's intent boundaries).
+
+    STORY-469 is the right architectural shape; bump priority + add explicit overnight-drain motivation as origin context.
+
+    — master observation 2026-05-25 ~02:30, real recurrence captured via comment-carrier (aida findings add verb is being shipped RIGHT NOW by master via STORY-467 — once merged, future observations file directly via the verb)
+  created_at: 2026-05-25T06:48:20.238077011Z
+  modified_at: 2026-05-25T06:48:20.238077011Z
