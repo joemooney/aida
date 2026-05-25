@@ -37,12 +37,12 @@ description: |-
   2026-05-25 ~07:30: master + operator hit cache lock 4+ times in 5 minutes during heavy parallel substrate writes. Default retry budget exhausted in <1 second; manual env var bump (AIDA_CACHE_RETRY_MS=2000 AIDA_CACHE_RETRY_COUNT=10) made commands succeed reliably.
 
   trace:TASK-X
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:13.658815421Z
-modified_at: 2026-05-25T16:07:52.632465824Z
+modified_at: 2026-05-25T16:17:30.139862796Z
 req_type: Task
 tags:
 - aida:cache
@@ -51,3 +51,7 @@ tags:
 - from-overnight-drain-2026-05-25
 - from-self-test
 - resilience
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-25T16:17:30.139862796Z
+  completion_sha: 7e0978601b118dfd772423038abd010688694841
