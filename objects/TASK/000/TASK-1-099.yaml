@@ -1,5 +1,6 @@
 id: 019e60bd-d202-7861-8fbf-19b4d585686a
 spec_id: TASK-1-099
+agreed_id: TASK-126
 title: 'Empirical 2026-05-25: scripts/release.sh''s ecosystem-watch verification refuses…'
 description: |-
   Empirical 2026-05-25: scripts/release.sh's ecosystem-watch verification refuses minor/major release without 'docs/competitive-analysis/ecosystem-watch.md'. But 'aida init' does NOT scaffold that directory or a starter ecosystem-watch.md. So a fresh project's first attempt at 'scripts/release.sh minor' would hit the ecosystem-watch missing-file path (which currently warns + bypasses, but the UX is opaque).
