@@ -1478,6 +1478,50 @@ impl Scaffolder {
                 FileStatus::Unmodified => overwrites.push(local_readme_artifact.path.clone()),
             }
             artifacts.push(local_readme_artifact);
+
+            // BUG-386: catch-all loop for skill templates that don't have a
+            // dedicated `include_aida_<name>_skill` flag + handwritten block
+            // above. Without this, new templates added to
+            // `aida-core/templates/skills/` never reach .claude/skills/ until
+            // someone adds matching boilerplate. The handwritten flag-gated
+            // blocks above still control the original 20 daily-driver skills
+            // for backward compat; this loop fills in anything else
+            // (aida-pickup, aida-pr, aida-doctor, aida-drain-queue, etc.)
+            // trace:BUG-386 | ai:claude
+            {
+                use crate::templates::EMBEDDED_TEMPLATES;
+                // Sort for deterministic artifact ordering across calls
+                let mut keys: Vec<&&str> = EMBEDDED_TEMPLATES.keys().collect();
+                keys.sort();
+                for key in keys {
+                    let filename = match key.strip_prefix("skills/") {
+                        Some(f) if f.ends_with(".md") => f,
+                        _ => continue,
+                    };
+                    let path = PathBuf::from(format!(".claude/skills/{}", filename));
+                    // Skip if a handwritten block already scaffolded this skill
+                    if artifacts.iter().any(|a| a.path == path) {
+                        continue;
+                    }
+                    let content = EMBEDDED_TEMPLATES.get(key.as_ref() as &str)
+                        .map(|s| s.to_string())
+                        .unwrap_or_default();
+                    let skill_name = filename.trim_end_matches(".md");
+                    let desc = format!("AIDA skill: {}", skill_name);
+                    let artifact = self.create_artifact(path.clone(), content, desc, false);
+                    match &artifact.file_status {
+                        FileStatus::New => new_files.push(path),
+                        FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                            modified_files.push(artifact.path.clone())
+                        }
+                        FileStatus::OlderVersion { .. } => {
+                            upgradeable_files.push(artifact.path.clone())
+                        }
+                        FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                    }
+                    artifacts.push(artifact);
+                }
+            }
         }
 
         // .codex/skills/ directory
@@ -2059,14 +2103,45 @@ impl Scaffolder {
             ),
         ];
 
-        command_defs
+        let mut commands: Vec<(String, String, String)> = command_defs
             .iter()
             .filter_map(|(key, name, desc)| {
                 EMBEDDED_TEMPLATES
                     .get(key)
                     .map(|content| (name.to_string(), content.to_string(), desc.to_string()))
             })
-            .collect()
+            .collect();
+
+        // BUG-386: append any command templates not in the hand-written
+        // command_defs list. Without this, new templates added to
+        // `aida-core/templates/commands/` never reach .claude/commands/
+        // until someone adds matching entries above. The hand-written
+        // entries retain their curated descriptions for backward-compat;
+        // this catch-all fills in /aida-pickup, /aida-pr, /aida-doctor, etc.
+        // with auto-generated descriptions.
+        // trace:BUG-386 | ai:claude
+        let already_listed: std::collections::HashSet<String> = commands
+            .iter()
+            .map(|(name, _, _)| name.clone())
+            .collect();
+        let mut catch_all_keys: Vec<&&str> = EMBEDDED_TEMPLATES.keys().collect();
+        catch_all_keys.sort();
+        for key in catch_all_keys {
+            let filename = match key.strip_prefix("commands/") {
+                Some(f) if f.ends_with(".md") => f,
+                _ => continue,
+            };
+            let name = filename.trim_end_matches(".md").to_string();
+            if already_listed.contains(&name) {
+                continue;
+            }
+            if let Some(content) = EMBEDDED_TEMPLATES.get(key.as_ref() as &str) {
+                let desc = format!("AIDA slash command: /{}", name);
+                commands.push((name, content.to_string(), desc));
+            }
+        }
+
+        commands
     }
 
     /// Generate aida-req skill content (loads from embedded template)
