@@ -22,6 +22,7 @@ in hand.
 | Guide | What it covers |
 |-------|----------------|
 | [`advisor-role.md`](advisor-role.md) | The advisor seat — its responsibilities, what it does *not* do, and the three autonomy modes |
+| [`implementer-discipline.md`](implementer-discipline.md) | The implementer's six rules: one-spec-per-session, exit-after-ship, poll-briefs, ship-full-acceptance, read-pending-brief-banner, advise-escape — each linked to the runtime substrate-bouncer that enforces it |
 | [`observation-discipline.md`](observation-discipline.md) | When to file an `aida findings add` observation vs an immediate BUG/TASK; the recurrence-as-promotion signal |
 | [`lifecycle-vocabulary.md`](lifecycle-vocabulary.md) | Precise words for each lifecycle state — committed vs pushed vs merged vs completed vs released |
 | [`machinery-glossary.md`](machinery-glossary.md) | One-paragraph definitions of AIDA's orchestration / session / autonomy machinery — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode |
