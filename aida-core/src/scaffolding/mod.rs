@@ -1503,7 +1503,8 @@ impl Scaffolder {
                     if artifacts.iter().any(|a| a.path == path) {
                         continue;
                     }
-                    let content = EMBEDDED_TEMPLATES.get(key.as_ref() as &str)
+                    let content = EMBEDDED_TEMPLATES
+                        .get(key.as_ref() as &str)
                         .map(|s| s.to_string())
                         .unwrap_or_default();
                     let skill_name = filename.trim_end_matches(".md");
@@ -2120,10 +2121,8 @@ impl Scaffolder {
         // this catch-all fills in /aida-pickup, /aida-pr, /aida-doctor, etc.
         // with auto-generated descriptions.
         // trace:BUG-386 | ai:claude
-        let already_listed: std::collections::HashSet<String> = commands
-            .iter()
-            .map(|(name, _, _)| name.clone())
-            .collect();
+        let already_listed: std::collections::HashSet<String> =
+            commands.iter().map(|(name, _, _)| name.clone()).collect();
         let mut catch_all_keys: Vec<&&str> = EMBEDDED_TEMPLATES.keys().collect();
         catch_all_keys.sort();
         for key in catch_all_keys {
