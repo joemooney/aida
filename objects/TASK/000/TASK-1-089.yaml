@@ -1,0 +1,30 @@
+id: 019e5e07-e6f0-7082-a492-26bcb12e4dd6
+spec_id: TASK-1-089
+title: 'Overnight unauthorized pickup causing failure-and-shelve: agent (likely agy1) p…'
+description: |-
+  Overnight unauthorized pickup causing failure-and-shelve: agent (likely agy1) picked up STORY-465 outside their briefed batch (batch:overnight-orthogonal). The session exited 1 (errored), EPIC-28's shelve-recoverable-phase-failures caught it correctly + parked STORY-465 as NeedsAttention with failure-awaiting-triage. Now BUG-379 correctly refuses fresh sessions without --force-claim.
+
+  The substrate worked AS DESIGNED: failure caught + shelved + later pickup refused. The GAP is upstream: no substrate-side mechanism prevented the unauthorized pickup in the first place. STORY-469 Guard 2 would catch it ('sketch-first gate before Edit/Write' — but here it's session-start gate).
+
+  Worth extending STORY-469 with a 5th guard idea: 'aida session start refuses spec-not-in-active-briefed-batch when an overnight drain is active.' Substrate-aware of operator intent boundaries.
+
+  Recurrence count for unauthorized-pickup sub-pattern: 1 (first observation of THIS sub-shape; sibling cases of agent-discipline-violation are in STORY-467 comments).
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T07:27:16.720637894Z
+modified_at: 2026-05-25T07:27:16.720637894Z
+req_type: Task
+tags:
+- ceiling-pattern
+- from-advisor:STORY-469
+- from-self-test
+- kind:observation
+- linked:STORY-460
+- linked:STORY-465
+- linked:STORY-469
+- overnight-drain
+- recurrence-8
+- severity:major
+- unauthorized-pickup
