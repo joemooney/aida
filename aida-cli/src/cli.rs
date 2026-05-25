@@ -3822,6 +3822,14 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
+        /// Initial message to pass to the spawned Claude session.
+        #[clap(long)]
+        prompt: Option<String>,
+
+        /// Do not auto-generate an initial message when --spec is supplied.
+        #[clap(long)]
+        no_prompt: bool,
+
         /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
         #[clap(long)]
         no_default_flags: bool,
@@ -3866,6 +3874,14 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
+        /// Initial message to pass to the spawned Codex session.
+        #[clap(long)]
+        prompt: Option<String>,
+
+        /// Do not auto-generate an initial message when --spec is supplied.
+        #[clap(long)]
+        no_prompt: bool,
+
         /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
         #[clap(long)]
         no_default_flags: bool,
@@ -3909,6 +3925,14 @@ pub enum AgentNewCommand {
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]
         show_context: bool,
+
+        /// Initial message to pass to the spawned Antigravity session.
+        #[clap(long)]
+        prompt: Option<String>,
+
+        /// Do not auto-generate an initial message when --spec is supplied.
+        #[clap(long)]
+        no_prompt: bool,
 
         /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
         #[clap(long)]
