@@ -8,10 +8,12 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:06:20.667580668Z
-modified_at: 2026-05-25T16:07:46.152844348Z
+modified_at: 2026-05-25T16:07:48.031992526Z
 req_type: Task
 tags:
+- batch:substrate-architecture
 - discovery
+- docs,substrate-properties,from-aida-chat
 - documentation-gap
 - epic-29
 - from-advisor:STORY-467
