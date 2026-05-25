@@ -3160,6 +3160,11 @@ pub enum QueueCommand {
         // trace:STORY-451 | ai:codex
         #[clap(long, value_enum, value_name = "BUCKET")]
         effort: Option<crate::effort_calibration::EffortBucket>,
+        /// Refuse auto-queuing Approved-but-not-queued specs. Under --strict,
+        /// aida queue work refuses with the status-aware recovery hint.
+        // trace:TASK-547 | ai:antigravity
+        #[clap(long)]
+        strict: bool,
     },
     /// Show what an active session has shipped so far alongside what
     /// remains. Bucketed view (Shipped / In flight / Working now /
