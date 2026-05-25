@@ -1,0 +1,19 @@
+id: 019e5e0a-3f05-7f12-a7c4-e69ada567d47
+spec_id: TASK-1-091
+title: Advisor-driven findings-add collided with operator's queue work on cache lock. …
+description: 'Advisor-driven findings-add collided with operator''s queue work on cache lock. Pattern: master fires aida findings add to capture an observation while operator simultaneously runs aida queue work. The findings-add''s schema-apply holds the cache lock long enough that operators retry-with-backoff times out. STORY-463 saved us — the lock-holder-visibility error message immediately diagnosed the cause. Mitigation: master should serialize advisor-driven writes when operator is actively running commands; batch multiple findings-add into one logical write where possible. The substrate-side fix would be: schema-apply uses a shorter critical section or a separate apply-once flag so repeat invocations don''t re-apply schema.'
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T07:29:50.341470987Z
+modified_at: 2026-05-25T07:29:50.341470987Z
+req_type: Task
+tags:
+- advisor-discipline
+- from-advisor:STORY-463
+- from-self-test
+- kind:observation
+- linked:STORY-463
+- lock-contention
+- severity:minor
