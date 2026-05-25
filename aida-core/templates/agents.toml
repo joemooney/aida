@@ -1,0 +1,17 @@
+# Per-agent launch defaults for `aida agent new`.
+#
+# All examples are commented out by default. Enable only flags you are
+# comfortable applying to every supervised launch in this project.
+#
+# User-level defaults may also be declared at ~/.aida/agents.toml.
+# Merge order: user defaults are the base; this project file overrides
+# an agent's default_flags list when the same agent appears here.
+
+# [agents.claude]
+# default_flags = []
+
+# [agents.codex]
+# default_flags = ["--ask-for-approval=never", "--sandbox=danger-full-access"]
+
+# [agents.antigravity]
+# default_flags = ["--dangerously-skip-permissions"]

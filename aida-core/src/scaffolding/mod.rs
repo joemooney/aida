@@ -893,6 +893,28 @@ impl Scaffolder {
             artifacts.push(artifact);
         }
 
+        // .aida/agents.toml — commented per-agent launch defaults for
+        // `aida agent new`. trace:TASK-557 | ai:codex
+        if let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get("agents.toml") {
+            new_dirs.insert(PathBuf::from(".aida"));
+            let path = PathBuf::from(".aida/agents.toml");
+            let artifact = self.create_artifact(
+                path.clone(),
+                body.to_string(),
+                "Per-agent launch defaults for supervised AIDA agents".to_string(),
+                false,
+            );
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+            artifacts.push(artifact);
+        }
+
         // .claude/AIDA.md — single source of truth for AIDA conventions.
         // Imported by CLAUDE.md via `@.claude/AIDA.md`, inlined into
         // AGENTS.md inside AIDA-AUTOGEN delimiters. Template-class:
@@ -1575,6 +1597,7 @@ impl Scaffolder {
                     "antigravity-brief-pickup.md",
                     "Antigravity brief pickup guide",
                 ),
+                ("per-agent-config.md", "Per-agent launch config guide"),
             ];
             for (name, desc) in agent_docs {
                 let key = format!("docs/agents/{name}");
@@ -2485,10 +2508,17 @@ mod tests {
         assert!(temp_dir.path().join("CLAUDE.md").exists());
         assert!(temp_dir.path().join("AGENTS.md").exists());
         assert!(temp_dir.path().join(".aida/reserved-paths.toml").exists());
+        assert!(temp_dir.path().join(".aida/agents.toml").exists());
         let reserved_paths =
             std::fs::read_to_string(temp_dir.path().join(".aida/reserved-paths.toml")).unwrap();
         toml::from_str::<toml::Value>(&reserved_paths)
             .expect("scaffolded reserved-paths.toml must be valid TOML");
+        let agents = std::fs::read_to_string(temp_dir.path().join(".aida/agents.toml")).unwrap();
+        toml::from_str::<toml::Value>(&agents).expect("scaffolded agents.toml must be valid TOML");
+        assert!(
+            !agents.lines().any(|line| line.starts_with("default_flags")),
+            "scaffolded agents.toml should not enable live defaults"
+        );
 
         // Check that .claude directories were created
         assert!(temp_dir.path().join(".claude/commands").exists());
@@ -2527,6 +2557,10 @@ mod tests {
             .path()
             .join("docs/agents/antigravity-brief-pickup.md")
             .exists());
+        assert!(temp_dir
+            .path()
+            .join("docs/agents/per-agent-config.md")
+            .exists());
         assert!(temp_dir.path().join("docs/extending-skills.md").exists());
     }
 
@@ -2545,8 +2579,10 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/agents/codex-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-brief-pickup.md")));
+        assert!(paths.contains(&PathBuf::from("docs/agents/per-agent-config.md")));
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
         assert!(paths.contains(&PathBuf::from(".aida/reserved-paths.toml")));
+        assert!(paths.contains(&PathBuf::from(".aida/agents.toml")));
     }
 
     /// STORY-305: `aida scaffold apply` must create `.claude/skills/local/`
