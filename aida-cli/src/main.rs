@@ -7467,6 +7467,17 @@ fn collect_agent_briefs(
     if !root.exists() {
         return Ok(Vec::new());
     }
+
+    let allowed_dirs: Option<Vec<String>> = if let Some(target) = for_agent {
+        let (dirs, warning) = agent_registry::resolve_brief_directories(project_root, target);
+        if let Some(warn) = warning {
+            eprintln!("{}", warn);
+        }
+        Some(dirs)
+    } else {
+        None
+    };
+
     let mut entries = Vec::new();
     for agent_dir in
         std::fs::read_dir(&root).with_context(|| format!("failed to read {}", root.display()))?
@@ -7476,8 +7487,10 @@ fn collect_agent_briefs(
             continue;
         }
         let agent = agent_dir.file_name().to_string_lossy().to_string();
-        if for_agent.is_some_and(|want| want != agent) {
-            continue;
+        if let Some(ref allowed) = allowed_dirs {
+            if !allowed.iter().any(|d| d.eq_ignore_ascii_case(&agent)) {
+                continue;
+            }
         }
         for file in std::fs::read_dir(agent_dir.path())? {
             let file = file?;
@@ -7743,11 +7756,20 @@ fn ack_agent_brief(brief_file: &std::path::Path) -> Result<()> {
 fn read_agent_brief(project_root: &std::path::Path, brief_file: &str, latest: bool) -> Result<()> {
     let resolved_path = if latest {
         let agent = validate_brief_agent(brief_file)?;
-        let entries = collect_agent_briefs(project_root, Some(agent), false)?;
+        let (dirs, warning) = agent_registry::resolve_brief_directories(project_root, agent);
+        if let Some(warn) = warning {
+            eprintln!("{}", warn);
+        }
+        let chosen_agent = if dirs.is_empty() {
+            agent.to_string()
+        } else {
+            dirs[0].clone()
+        };
+        let entries = collect_agent_briefs(project_root, Some(&chosen_agent), false)?;
         let last_entry = entries.last().ok_or_else(|| {
             anyhow::anyhow!(
                 "Error: no pending briefs found for agent \"{}\". Use 'aida brief list' to view available briefs.",
-                agent
+                chosen_agent
             )
         })?;
         last_entry.path.clone()
@@ -7761,10 +7783,20 @@ fn read_agent_brief(project_root: &std::path::Path, brief_file: &str, latest: bo
                 relative_path
             } else if let Some((agent, filename)) = brief_file.split_once('/') {
                 let agent = validate_brief_agent(agent)?;
+                let (dirs, warning) =
+                    agent_registry::resolve_brief_directories(project_root, agent);
+                if let Some(warn) = warning {
+                    eprintln!("{}", warn);
+                }
+                let chosen_agent = if dirs.is_empty() {
+                    agent.to_string()
+                } else {
+                    dirs[0].clone()
+                };
                 let base_path = project_root
                     .join(".aida")
                     .join("agent-briefs")
-                    .join(agent)
+                    .join(&chosen_agent)
                     .join(filename);
                 if base_path.exists() {
                     base_path
@@ -17853,12 +17885,14 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             permission_mode,
             no_context,
             show_context,
+            name,
         }) => agent_new_claude(
             role.clone(),
             spec.clone(),
             cwd.as_deref(),
             permission_mode,
             AgentContextOptions::new(!*no_context, *show_context),
+            name.clone(),
         ),
         AgentCommand::New(AgentNewCommand::Codex {
             role,
@@ -17867,12 +17901,14 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             bypass_sandbox,
             no_context,
             show_context,
+            name,
         }) => agent_new_codex(
             role.clone(),
             spec.clone(),
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            name.clone(),
         ),
         AgentCommand::New(AgentNewCommand::Antigravity {
             role,
@@ -17881,12 +17917,14 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             bypass_sandbox,
             no_context,
             show_context,
+            name,
         }) => agent_new_antigravity(
             role.clone(),
             spec.clone(),
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            name.clone(),
         ),
         AgentCommand::Register {
             pid,
@@ -17895,6 +17933,8 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             spec,
             name,
         } => agent_register(*pid, agent_type, role, spec.as_deref(), name.as_deref()),
+        AgentCommand::Ls => agent_ls(),
+        AgentCommand::Stop { name } => agent_stop(name),
     }
 }
 
@@ -17911,6 +17951,7 @@ struct AgentLaunchPlan {
     launch_cwd: std::path::PathBuf,
     role: Option<String>,
     current_spec: Option<String>,
+    name: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17937,13 +17978,14 @@ fn agent_new_claude(
     cwd: Option<&std::path::Path>,
     permission_mode: &str,
     context: AgentContextOptions,
+    name: Option<String>,
 ) -> Result<()> {
     let config = AgentLaunchConfig {
         agent_type: "claude",
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), permission_mode.to_string()],
     };
-    agent_new_with_config(config, role, spec, cwd, context)
+    agent_new_with_config(config, role, spec, cwd, context, name)
 }
 
 // trace:STORY-433 | ai:codex
@@ -17953,6 +17995,7 @@ fn agent_new_codex(
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
+    name: Option<String>,
 ) -> Result<()> {
     let mut default_args = Vec::new();
     if bypass_sandbox {
@@ -17963,7 +18006,7 @@ fn agent_new_codex(
         binary: "codex",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd, context)
+    agent_new_with_config(config, role, spec, cwd, context, name)
 }
 
 // trace:STORY-434 | ai:codex
@@ -17973,6 +18016,7 @@ fn agent_new_antigravity(
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
+    name: Option<String>,
 ) -> Result<()> {
     let mut default_args = Vec::new();
     if bypass_sandbox {
@@ -17983,7 +18027,7 @@ fn agent_new_antigravity(
         binary: "agy",
         default_args,
     };
-    agent_new_with_config(config, role, spec, cwd, context)
+    agent_new_with_config(config, role, spec, cwd, context, name)
 }
 
 fn agent_new_with_config(
@@ -17992,6 +18036,7 @@ fn agent_new_with_config(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
+    name: Option<String>,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -18007,12 +18052,13 @@ fn agent_new_with_config(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = main_worktree_root_from(&discovered_root);
-    let plan = prepare_agent_launch(&project_root, role, spec)?;
+    let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
 
     eprintln!(
-        "{} launching {} in {}",
+        "{} launching {} (stable name: {}) in {}",
         "▶".green().bold(),
         config.agent_type,
+        plan.name.cyan(),
         plan.launch_cwd.display().to_string().cyan()
     );
     if let Some(spec) = &plan.current_spec {
@@ -18042,6 +18088,8 @@ fn prepare_agent_launch(
     project_root: &std::path::Path,
     role: Option<String>,
     spec: Option<String>,
+    agent_type: &str,
+    custom_name: Option<String>,
 ) -> Result<AgentLaunchPlan> {
     match spec {
         Some(spec) => {
@@ -18100,19 +18148,37 @@ fn prepare_agent_launch(
                         spec
                     )
                 })?;
+            let plan_role = lease.role.clone().or(role.clone());
+            let name = agent_registry::generate_or_validate_name(
+                project_root,
+                agent_type,
+                plan_role.as_deref(),
+                custom_name.as_deref(),
+            )?;
             Ok(AgentLaunchPlan {
                 project_root: project_root.to_path_buf(),
                 launch_cwd: lease.worktree_path,
-                role: lease.role.or(role),
+                role: plan_role,
                 current_spec: Some(spec),
+                name,
             })
         }
-        None => Ok(AgentLaunchPlan {
-            project_root: project_root.to_path_buf(),
-            launch_cwd: project_root.to_path_buf(),
-            role,
-            current_spec: None,
-        }),
+        None => {
+            let plan_role = role.clone();
+            let name = agent_registry::generate_or_validate_name(
+                project_root,
+                agent_type,
+                plan_role.as_deref(),
+                custom_name.as_deref(),
+            )?;
+            Ok(AgentLaunchPlan {
+                project_root: project_root.to_path_buf(),
+                launch_cwd: project_root.to_path_buf(),
+                role: plan_role,
+                current_spec: None,
+                name,
+            })
+        }
     }
 }
 
@@ -18320,6 +18386,7 @@ fn run_tracked_agent(
         .current_dir(&plan.launch_cwd)
         .args(&config.default_args)
         .env("AIDA_AGENT_TYPE", config.agent_type)
+        .env("AIDA_AGENT_NAME", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
@@ -18352,6 +18419,7 @@ fn run_tracked_agent(
         plan.current_spec.clone(),
         plan.launch_cwd.clone(),
         Some(&binary),
+        Some(plan.name.clone()),
     )?;
     let signal_forwarder = install_child_signal_forwarder(child_pid)?;
     let status = child
@@ -18381,6 +18449,96 @@ fn run_tracked_agent(
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
+    Ok(())
+}
+
+// trace:TASK-542 | ai:antigravity
+fn agent_ls() -> Result<()> {
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let leases = list_leases(&project_root);
+    let agent_ctx = build_agent_classify_context(&project_root, &leases);
+    let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
+    let agents =
+        merge_agent_views_with_lease_fallback(&project_root, &leases, registry_agents, &agent_ctx);
+
+    if agents.is_empty() {
+        println!("No active agents found.");
+        return Ok(());
+    }
+
+    println!(
+        "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}",
+        "NAME/ID", "PID", "ROLE", "SPEC", "STATUS", "AGE", "WORKTREE"
+    );
+    let now = chrono::Utc::now();
+    for agent in agents {
+        let elapsed = agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(
+            now,
+            agent.last_active_at,
+        ));
+        let identity = if let Some(ref name) = agent.name {
+            name.clone()
+        } else if agent.source == "lease" {
+            let short = agent.id.trim_start_matches("lease-");
+            let short = &short[..short.len().min(8)];
+            format!("{}#{}", agent.agent_type, short)
+        } else {
+            format!("{}#{}", agent.agent_type, agent.pid)
+        };
+        let pid_str = if agent.source == "lease" {
+            "-".to_string()
+        } else {
+            agent.pid.to_string()
+        };
+        println!(
+            "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}",
+            identity,
+            pid_str,
+            agent.role.as_deref().unwrap_or("(none)"),
+            agent.current_spec.as_deref().unwrap_or("(none)"),
+            agent.status.as_str(),
+            format!("({elapsed})"),
+            agent.worktree_path.display()
+        );
+    }
+    Ok(())
+}
+
+// trace:TASK-542 | ai:antigravity
+fn agent_stop(name: &str) -> Result<()> {
+    let name_trimmed = name.trim();
+    if name_trimmed.is_empty() {
+        anyhow::bail!("stop target name cannot be empty");
+    }
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let leases = list_leases(&project_root);
+    let agent_ctx = build_agent_classify_context(&project_root, &leases);
+    let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
+
+    let found = registry_agents.into_iter().find(|agent| {
+        if let Some(ref active_name) = agent.name {
+            active_name.eq_ignore_ascii_case(name_trimmed)
+        } else {
+            let fallback_id = format!("{}#{}", agent.agent_type, agent.pid);
+            let fallback_id_alt = format!("{}-{}", agent.agent_type, agent.pid);
+            fallback_id.eq_ignore_ascii_case(name_trimmed)
+                || fallback_id_alt.eq_ignore_ascii_case(name_trimmed)
+        }
+    });
+
+    let agent = match found {
+        Some(agent) => agent,
+        None => {
+            anyhow::bail!("no active agent found with name '{}'", name_trimmed);
+        }
+    };
+
+    println!("Stopping agent '{}' (PID {})...", name_trimmed, agent.pid);
+    terminate_pids_with_grace(&[agent.pid], 5);
+    let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    println!("{} Agent '{}' stopped.", "✓".green(), name_trimmed);
     Ok(())
 }
 
@@ -18665,6 +18823,7 @@ mod agent_launcher_tests {
             permission_mode,
             no_context,
             show_context,
+            ..
         })) = cli.command
         else {
             panic!("expected agent new claude command");
@@ -18700,6 +18859,7 @@ mod agent_launcher_tests {
             bypass_sandbox,
             no_context,
             show_context,
+            ..
         })) = cli.command
         else {
             panic!("expected agent new codex command");
@@ -18735,6 +18895,7 @@ mod agent_launcher_tests {
             bypass_sandbox,
             no_context,
             show_context,
+            ..
         })) = cli.command
         else {
             panic!("expected agent new antigravity command");
@@ -18879,6 +19040,7 @@ mod agent_launcher_tests {
             None,
             tmp.path().into(),
             Some(&binary),
+            None,
         )
         .unwrap();
         let second = agent_registry::register_spawned_agent(
@@ -18889,6 +19051,7 @@ mod agent_launcher_tests {
             None,
             tmp.path().into(),
             Some(&binary),
+            None,
         )
         .unwrap();
 
@@ -18927,7 +19090,7 @@ mod agent_launcher_tests {
         assert_eq!(views[0].status, agent_registry::AgentStatus::Busy);
         let lines = agent_registry::format_agent_status_lines(&views);
         assert!(
-            lines[0].contains(&format!("web#{}", std::process::id())),
+            lines[0].contains("browser-advisor"),
             "unexpected status line: {}",
             lines[0]
         );
@@ -18973,6 +19136,7 @@ mod agent_launcher_tests {
             launch_cwd: project.clone(),
             role: Some("implementer".into()),
             current_spec: Some("STORY-433".into()),
+            name: "codex-test".to_string(),
         };
 
         run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
@@ -19034,6 +19198,7 @@ mod agent_launcher_tests {
             launch_cwd: project.clone(),
             role: Some("implementer".into()),
             current_spec: Some("STORY-434".into()),
+            name: "agy-test".to_string(),
         };
 
         run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
@@ -19074,6 +19239,7 @@ mod agent_launcher_tests {
             launch_cwd: project,
             role: Some("implementer".into()),
             current_spec: Some("STORY-436".into()),
+            name: "codex-test".to_string(),
         };
 
         let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
@@ -19132,6 +19298,7 @@ mod agent_launcher_tests {
             launch_cwd: project.clone(),
             role: Some("advisor".into()),
             current_spec: None,
+            name: "codex-test".to_string(),
         };
 
         run_tracked_agent(&fake_agent, &config, &plan, Some(&launch_context)).unwrap();
