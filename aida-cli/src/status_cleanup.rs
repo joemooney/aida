@@ -175,19 +175,98 @@ impl CleanupReport {
         self.total() == 0
     }
 
-    /// One-line summary suitable for appending to the default
-    /// `aida status` output when the report is non-empty.
+    /// Multi-line summary suitable for appending to the default
+    /// `aida status` output when the report is non-empty. Inlines
+    /// per-category counts + a single representative item per non-empty
+    /// category so the operator doesn't have to run `aida status
+    /// --cleanup` to learn what the count refers to. The hint at the
+    /// bottom still points at `--cleanup` for the full report (with
+    /// recovery commands per item).
+    /// trace:TASK-1-099-companion | ai:claude
     pub fn summary_line(&self) -> Option<String> {
         if self.is_empty() {
             return None;
         }
         let n = self.total();
-        Some(format!(
-            "{} {} item{} need cleanup attention — `aida status --cleanup` for details",
+        let mut lines: Vec<String> = Vec::new();
+        lines.push(format!(
+            "{} {} item{} need cleanup attention:",
             "⚠".yellow(),
             n,
             if n == 1 { "" } else { "s" },
-        ))
+        ));
+
+        // Per-category brief — show category name + count + first item.
+        // Order matches the --cleanup full report's stakes order so the
+        // top-listed line is the highest-impact category.
+        if !self.uncommitted_wip.is_empty() {
+            lines.push(format!(
+                "  • Uncommitted work at risk ({}): {}",
+                self.uncommitted_wip.len(),
+                self.uncommitted_wip[0].branch.dimmed(),
+            ));
+        }
+        if !self.sticky_in_progress.is_empty() {
+            lines.push(format!(
+                "  • Specs In Progress without lease ({}): {}",
+                self.sticky_in_progress.len(),
+                self.sticky_in_progress[0].spec_id.dimmed(),
+            ));
+        }
+        if !self.branches_ahead_no_pr.is_empty() {
+            lines.push(format!(
+                "  • Local branches ahead of main, no PR ({}): {}",
+                self.branches_ahead_no_pr.len(),
+                self.branches_ahead_no_pr[0].branch.dimmed(),
+            ));
+        }
+        if !self.missed_auto_bump.is_empty() {
+            lines.push(format!(
+                "  • Done specs missed by auto-bump ({}): {}",
+                self.missed_auto_bump.len(),
+                self.missed_auto_bump[0].spec_id.dimmed(),
+            ));
+        }
+        if !self.open_prs.is_empty() {
+            lines.push(format!(
+                "  • Open PRs ({}): PR-{}",
+                self.open_prs.len(),
+                self.open_prs[0].number,
+            ));
+        }
+        if !self.dormant_leases.is_empty() {
+            lines.push(format!(
+                "  • Dormant leases ({}): {} ({})",
+                self.dormant_leases.len(),
+                self.dormant_leases[0].lease_id.dimmed(),
+                self.dormant_leases[0].scope,
+            ));
+        }
+        if !self.stale_reviewer_leases.is_empty() {
+            lines.push(format!(
+                "  • Stale reviewer leases ({}): PR-{}",
+                self.stale_reviewer_leases.len(),
+                self.stale_reviewer_leases[0].pr_number,
+            ));
+        }
+        if !self.orphan_project_dirs.is_empty() {
+            lines.push(format!(
+                "  • Orphan Claude Code project dirs ({}): {}",
+                self.orphan_project_dirs.len(),
+                self.orphan_project_dirs[0]
+                    .path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?")
+                    .dimmed(),
+            ));
+        }
+        lines.push(format!(
+            "  {} `aida status --cleanup` for full report + recovery commands.",
+            "→".dimmed(),
+        ));
+
+        Some(lines.join("\n  "))
     }
 
     /// Machine-readable JSON shape. Stable contract for TUI / scripting
