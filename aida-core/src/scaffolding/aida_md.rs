@@ -22,7 +22,9 @@ impl Scaffolder {
         // survive a format string. Pieces with substitution use format!()
         // locally, then get concatenated.
         let db_filename = self.database_filename();
-        let req_count = store.requirements.len();
+        let _ = store; // TASK-1-098: req count removed from AIDA.md; `store`
+                       // is still in the signature for forward-compat (other
+                       // generators may need it).
 
         let storage_note = if self.is_sqlite_database() {
             format!(
@@ -53,10 +55,14 @@ impl Scaffolder {
              \n",
         );
         s.push_str(&storage_note);
-        s.push_str(&format!(
-            "\n\nCurrently tracking **{}** requirement(s).\n\n",
-            req_count
-        ));
+        // TASK-1-098 (BUG-386 sibling): don't embed a derived 'Currently
+        // tracking N requirements' count into .claude/AIDA.md. The count
+        // changes every time the substrate grows, which triggered STALE
+        // drift on every scaffold-status check (compared against a
+        // freshly-regenerated reference with the CURRENT count). Use
+        // `aida list` for project size; this file is conventions, not
+        // state. trace:TASK-1-098 | ai:claude
+        s.push_str("\n\n");
         s.push_str(
             "### Daily commands\n\
              \n\
