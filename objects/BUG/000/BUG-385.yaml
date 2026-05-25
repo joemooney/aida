@@ -1,0 +1,58 @@
+id: 019e609e-8712-7330-a8c6-dd11fb532d22
+spec_id: BUG-385
+agreed_id: BUG-385
+title: 'Cross-platform CI: claim_task_records_explicit_worktree_path asserts against non-canonical path (Windows + macOS fail)'
+description: |-
+  ## Symptom
+
+  Cross-platform CI fails on Windows + macOS at:
+    mcp::tests::claim_task_records_explicit_worktree_path
+    aida-cli/src/mcp.rs:4007 — assertion left == right failed
+
+  Windows panic detail:
+    left:  \\?\C:\Users\runneradmin\AppData\Local\Temp\.tmpuSZAD6\aida-task-310
+    right: C:\Users\RUNNER~1\AppData\Local\Temp\.tmpuSZAD6\aida-task-310
+
+  The 'left' is the canonical form (UNC prefix + expanded short name) stored by claim_task per TASK-504. The 'right' is the raw input sibling path.
+
+  Same failure on macOS (canonical resolves through /private/var symlink).
+
+  ## Root cause
+
+  The test asserts l.worktree_path == sibling (raw input), but claim_task canonicalizes (per TASK-504). Linux's tempdir paths are typically already canonical so the assertion accidentally passes there; Windows + macOS path normalization adds layers that diverge.
+
+  Sibling test 'claim_task_canonicalizes_explicit_worktree_path' (same file, ~50 lines below) does it correctly:
+    assert_eq!(l.worktree_path, real_worktree.canonicalize().unwrap().to_string_lossy());
+
+  ## Fix
+
+  Change the failing test's assertion from:
+    assert_eq!(l.worktree_path, sibling);
+  to:
+    assert_eq!(l.worktree_path, sibling_dir.canonicalize().unwrap().to_string_lossy());
+
+  One-line test fix. Matches the working sibling test's shape.
+
+  ## Impact
+
+  Cross-platform CI has been failing for 9h+ (last green 34h ago). Release-readiness BLOCKED (CLAUDE.md requires <24h green for releases). With 87 commits ahead of v0.9.1 + this regression's fix simple, this is the unblock.
+
+  ## Acceptance
+
+  - [ ] Test assertion uses canonicalized form (matches sibling test)
+  - [ ] Cross-platform CI passes on Windows + macOS + Linux
+  - [ ] cargo test --workspace stays green locally
+
+  trace:BUG-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T19:31:02.546217866Z
+modified_at: 2026-05-25T19:31:02.546217866Z
+req_type: Bug
+tags:
+- ci
+- cross-platform
+- release-blocker
+- test-fix
