@@ -122,6 +122,36 @@ ok() { printf "${GREEN}✓ %s${NC}\n" "$*"; }
 fail() { printf "${YELLOW}✗ %s${NC}\n" "$*" >&2; }
 dim() { printf "${DIM}%s${NC}\n" "$*"; }
 
+# note_box [--title TEXT] LINE [LINE ...] — render a multi-line educational
+# callout inside Unicode box-drawing characters. Used for the biggest
+# narration moments (trace-comment explainer, META-as-housekeeping framing,
+# aida pull lifecycle breakdown, etc.) — keeps multi-paragraph content
+# visually demarcated from the surrounding command-output flow.
+note_box() {
+    local title=""
+    if [ "$1" = "--title" ]; then
+        title="$2"
+        shift 2
+    fi
+    local width=70
+    # Top border (with optional title pill)
+    if [ -n "$title" ]; then
+        local title_len=${#title}
+        local left=2
+        local right=$((width - title_len - left - 2))
+        [ "$right" -lt 0 ] && right=0
+        printf "${YELLOW}╭"; repeat "─" "$left"; printf "┤ ${BOLD}%s${NC}${YELLOW} ├" "$title"; repeat "─" "$right"; printf "╮${NC}\n"
+    else
+        printf "${YELLOW}╭"; repeat "─" "$width"; printf "╮${NC}\n"
+    fi
+    # Body lines
+    for line in "$@"; do
+        printf "${YELLOW}│${NC} %s\n" "$line"
+    done
+    # Bottom border
+    printf "${YELLOW}╰"; repeat "─" "$width"; printf "╯${NC}\n"
+}
+
 # show_cmd PROMPT_PREFIX CMD [ARGS...] — echo a command in a shell-prompt-like
 # form then execute it. Operator sees both the command AND its output, which
 # matters for a walkthrough demo (otherwise the output looks like magic).
@@ -287,17 +317,21 @@ note "up via 'aida queue work TASK-007'."
 pause
 
 step_header "View housekeeping specs with 'aida list --type meta'"
-note "By default 'aida list' hides Meta-type specs because they're"
-note "HOUSEKEEPING / configuration, not work-to-do. They're the AI prompt"
-note "templates AIDA uses for its own self-customization (e.g., the prompt"
-note "that runs when you 'aida evaluate' a spec, or the prompt 'aida suggest"
-note "relationships' uses). Edit META-002's description to customize how"
-note "AIDA evaluates your specs — it stays editable like any other spec."
+
+note_box --title "Why 'aida list' hides Meta-type" \
+  "META-* specs are HOUSEKEEPING / configuration — not work-to-do." \
+  "They're the AI prompt templates AIDA uses for its own self-" \
+  "customization (e.g., the prompt that runs when you 'aida evaluate'" \
+  "a spec, or 'aida suggest relationships'). Edit META-002's" \
+  "description to customize how AIDA evaluates your specs; it stays" \
+  "editable like any other spec."
 echo
 show_cmd "demo$" aida list --type meta
-note "These five seeded prompts are the AI-customization layer. Project size"
-note "the operator cares about (real specs to ship): 1 (TASK-007). Total"
-note "specs including housekeeping: 7 (5 META + TASK-007 + 1 admin)."
+echo
+note_box --title "What's actually in this fresh project" \
+  "Real work-specs (what the operator cares about): 1 — TASK-007." \
+  "Housekeeping specs (META-001..006 AI prompt templates): 6." \
+  "Total: 7. Default 'aida list' only shows work-specs (the 1)."
 pause
 
 # -----------------------------------------------------------------------------
@@ -322,17 +356,17 @@ pause
 
 step_header "Implement the spec — write hello.sh with a trace comment"
 
-note "AIDA's superpower: bidirectional code↔spec linking. Every"
-note "implementation file gets an inline trace comment:"
-echo
-dim "    // trace:<SPEC-ID> | ai:<tool>[:confidence]"
-echo
-note "Format breakdown:"
-note "  trace:STORY-1         ← the spec ID this code implements"
-note "  ai:claude             ← who wrote it (claude / codex / human / antigravity / etc.)"
-note "  [:high|med|low]       ← optional confidence (high implied; med = 40-80% AI; low = <40%)"
-echo
-note "Below: writing hello.sh with the trace comment included from the start."
+note_box --title "AIDA's superpower: bidirectional code↔spec linking" \
+  "Every implementation file gets an inline trace comment:" \
+  "" \
+  "    // trace:<SPEC-ID> | ai:<tool>[:confidence]" \
+  "" \
+  "Format breakdown:" \
+  "  trace:STORY-1   ← the spec ID this code implements" \
+  "  ai:claude       ← who wrote it (claude / codex / human / antigravity)" \
+  "  [:high|med|low] ← optional confidence (high implied)" \
+  "" \
+  "Below: writing hello.sh with the trace comment included from the start."
 cat > hello.sh <<EOF
 #!/usr/bin/env bash
 # trace:$HELLO_SPEC | ai:claude
@@ -344,13 +378,15 @@ echo
 note "Run it to verify it works:"
 show_cmd "demo$" ./hello.sh
 echo
-note "Why the trace comment matters:"
-note "  • 'aida show $HELLO_SPEC' later will list hello.sh under 'Git linkage'"
-note "    (substrate sees the code-side reference automatically)"
-note "  • 'aida search Hello' finds the spec via the trace web — not just title match"
-note "  • Code reviewer / future-you can grep 'trace:$HELLO_SPEC' to find every"
-note "    file that implements this spec"
-note "  • Refactoring is safe: rename the function, the trace stays bound to the SPEC-ID"
+note_box --title "Why the trace comment matters" \
+  "• 'aida show $HELLO_SPEC' later will list hello.sh under 'Git" \
+  "  linkage' — substrate sees the code-side reference automatically" \
+  "• 'aida search Hello' finds the spec via the trace web — not" \
+  "  just title match" \
+  "• Code reviewer / future-you can grep 'trace:$HELLO_SPEC' to find" \
+  "  every file that implements this spec" \
+  "• Refactoring is safe: rename the function, the trace stays bound" \
+  "  to the SPEC-ID"
 pause
 
 step_header "Commit + push with the SPEC-ID trailer convention"
@@ -370,19 +406,20 @@ pause
 
 step_header "Sync the substrate + auto-bump spec status via 'aida pull'"
 
-note "Why we run 'aida pull' here:"
-note "  1. It pulls the code branch (main) from origin — same as 'git pull'"
-note "  2. It pulls the orphan store (aida-store) from origin — keeps the"
-note "     substrate's spec graph in sync across collaborators / machines"
-note "  3. It runs the AUTO-BUMP SCANNER: walks recent commits on the"
-note "     default branch, parses (SPEC-ID) trailers, and transitions"
-note "     each referenced spec's status:"
-note "        Approved / In Progress → Done (when a commit references it)"
-note "        Done → Completed       (when that commit lands on main)"
-echo
-note "Our 'feat: hello world script ($HELLO_SPEC)' commit lives on main now,"
-note "so the scanner should auto-bump $HELLO_SPEC's status. This is how spec"
-note "lifecycle closes without manual 'aida edit --status' commands."
+note_box --title "Why 'aida pull' (vs git pull alone)" \
+  "1. Pulls code branch (main) from origin — same as 'git pull'" \
+  "2. Pulls the orphan store (aida-store) from origin — keeps the" \
+  "   substrate's spec graph in sync across collaborators + machines" \
+  "3. Runs the AUTO-BUMP SCANNER: walks recent commits on the default" \
+  "   branch, parses (SPEC-ID) trailers, transitions each referenced" \
+  "   spec's status:" \
+  "" \
+  "      Approved / In Progress → Done       (commit references it)" \
+  "      Done → Completed                    (that commit lands on main)" \
+  "" \
+  "Our 'feat: hello world script ($HELLO_SPEC)' commit is on main now," \
+  "so the scanner auto-bumps $HELLO_SPEC. This is how spec lifecycle" \
+  "closes without manual 'aida edit --status' commands."
 echo
 show_cmd "demo$" aida pull
 echo
