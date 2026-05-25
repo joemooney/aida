@@ -1,0 +1,80 @@
+id: 019e5cef-01a8-7f52-8b6a-c613357b7413
+spec_id: TASK-554
+agreed_id: TASK-554
+title: 'Context snapshot: when --spec is supplied, Active Session section makes scope-binding explicit'
+description: |-
+  ## Friction
+
+  When 'aida agent new <type> --role implementer --spec TASK-X' is invoked, the launcher creates a worktree + lease + populates Active Session in the context snapshot as 'TASK-X'. But the snapshot doesn't ARTICULATE what --spec MEANS. The agent has to INFER scope-binding from lease/worktree conventions.
+
+  Operators end up adding scope disclaimers to every per-dispatch first message ('Single-spec scope; don't pick up other specs from this session') because the substrate doesn't say it for them. That's per-dispatch friction the substrate should eliminate.
+
+  ## User's diagnosis 2026-05-24
+
+  User: 'I think if you say --spec then the context [should] imply what we limit to that, agreed?'
+
+  Master concurs. --spec is unambiguous intent: 'this agent works THIS spec'. The context snapshot should reflect that directly.
+
+  ## Proposed shape
+
+  When --spec is supplied to 'aida agent new', the Active Session section in the context snapshot gains explicit scope-binding text:
+
+  ### Today
+
+    ## Active Session
+    - Spec: TASK-542
+    - Branch: task-542
+    - Worktree: /home/joe/ai/aida-task-542
+
+  ### Proposed
+
+    ## Active Session
+    - **Spec: TASK-542 (your scope for this session)**
+    - Branch: task-542
+    - Worktree: /home/joe/ai/aida-task-542
+
+    **SCOPE BINDING**: This session was launched with --spec TASK-542. You are scoped to TASK-542. Drive it to completion, then exit (per BUG-376's IMPLEMENTER COMPLETE banner). Don't pick up other specs from this session — even if queue head looks tempting after pr ship. If you finish TASK-542 + want next pickup, that's a fresh 'aida agent new ... --spec NEXT-ID'.
+
+  When --spec is NOT supplied (open-ended implementer launch), Active Session shows the today behavior ('No spec was provided at launch; start from the relevant queue head or pending brief.') — that's correct for the open-ended case.
+
+  ## Acceptance
+
+  - [ ] Context snapshot renderer detects when --spec was passed to aida agent new
+  - [ ] When present: Active Session section includes the SCOPE BINDING text
+  - [ ] When absent: today's open-ended messaging preserved
+  - [ ] Snapshot diff visible via 'aida agent new --show-context --spec TASK-X' — confirm the scope-binding text renders
+  - [ ] Test: launch with --spec, verify snapshot contains SCOPE BINDING; launch without, verify it shows the open-ended hint
+
+  ## Composes with
+
+  - TASK-553 (role file general discipline expansion — this task is the per-launch specific case)
+  - BUG-376 (the IMPLEMENTER COMPLETE banner this text references)
+  - BUG-378 (pending-brief banner)
+  - TASK-548 (skip-confirm)
+  - BUG-379 (session-start auto-bump)
+  - feedback_substrate_as_bouncer_not_rules (substrate articulates the rule at the right moment, not just enforces at runtime)
+
+  ## Smaller than TASK-553
+
+  TASK-553 expands the role file with general discipline (applies to all implementer launches regardless of --spec). This task is targeted: when --spec is supplied, snapshot articulates the implied scope-binding. They compose — both add discipline articulation, just at different layers (role-level vs launch-level).
+
+  This is the higher-priority + smaller-scope fix. TASK-553 can ship later or even subsume this if convenient.
+
+  ## Origin
+
+  2026-05-24 user: 'I think if you say --spec then the context your implly what we limit to that, agreed?' Master agreed; the substrate gap is that the snapshot doesn't articulate the implied scope.
+
+  trace:TASK-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T02:20:27.944024722Z
+modified_at: 2026-05-25T02:20:27.944024722Z
+req_type: Task
+tags:
+- context-snapshot
+- from-self-test
+- from-user-direction
+- launch-discipline
+- scope-articulation
