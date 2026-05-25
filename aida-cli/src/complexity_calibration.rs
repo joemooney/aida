@@ -99,6 +99,9 @@ impl AssistanceLevel {
         }
     }
 
+    // TASK-552: kept for STORY-439 tag/import consumers; current write paths
+    // use clap `ValueEnum`, while persisted/freeform inputs still need this.
+    #[allow(dead_code)]
     pub fn parse_str(raw: &str) -> Option<Self> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "none" | "no" => Some(AssistanceLevel::None),
@@ -181,6 +184,9 @@ pub const ASSISTANCE_TAG_PREFIX: &str = "estimated-assistance:";
 
 /// Parse the first `complexity:*` tag, when present. Mirrors the scan
 /// idiom in `crate::findings::pr_number_from_tag`.
+// TASK-552: reserved for STORY-439 calibration readers that derive estimates
+// from existing spec tags during mismatch/reporting flows.
+#[allow(dead_code)]
 pub fn complexity_from_tags(tags: &[String]) -> Option<ComplexityLevel> {
     tags.iter()
         .find_map(|t| t.strip_prefix(COMPLEXITY_TAG_PREFIX))
@@ -188,6 +194,9 @@ pub fn complexity_from_tags(tags: &[String]) -> Option<ComplexityLevel> {
 }
 
 /// Parse the first `estimated-assistance:*` tag, when present.
+// TASK-552: reserved alongside `complexity_from_tags` for calibration
+// reporting/import paths that consume existing `estimated-assistance:*` tags.
+#[allow(dead_code)]
 pub fn assistance_est_from_tags(tags: &[String]) -> Option<AssistanceLevel> {
     tags.iter()
         .find_map(|t| t.strip_prefix(ASSISTANCE_TAG_PREFIX))

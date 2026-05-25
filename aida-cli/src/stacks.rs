@@ -65,6 +65,9 @@ impl StackGraph {
         self.entries.is_empty()
     }
 
+    // TASK-552: kept as the direct lookup API for future stack subcommands;
+    // current cascade/list code mainly walks the whole graph.
+    #[allow(dead_code)]
     pub fn get(&self, branch: &str) -> Option<&StackEntry> {
         self.entries.get(branch)
     }
@@ -206,6 +209,9 @@ fn walk_paths<'a>(
 /// base just merged into main and needs rebasing onto main. Returned in
 /// bottom-up order (chain-root-adjacent first) so the cascade can rebase
 /// dependencies before dependents.
+// TASK-552: retained as the pure selection helper for stacked-PR cascade
+// callers; current implementation computes equivalent state inline.
+#[allow(dead_code)]
 pub fn parents_merged_in(graph: &StackGraph, merged_branches: &HashSet<String>) -> Vec<StackEntry> {
     let mut hits: Vec<StackEntry> = graph
         .entries
