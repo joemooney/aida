@@ -18244,6 +18244,9 @@ fn render_agent_launch_context(
 
     out.push_str("## Active Session\n\n");
     if let Some(spec) = &plan.current_spec {
+        out.push_str(&format!(
+            "- **Spec: {spec} (your scope for this session)**\n"
+        ));
         let lease = list_leases(&plan.project_root)
             .into_iter()
             .filter(|lease| lease.scope.eq_ignore_ascii_case(spec))
@@ -18259,6 +18262,12 @@ fn render_agent_launch_context(
         } else {
             out.push_str(&format!("- No active lease found for {spec}.\n"));
         }
+        out.push_str(&format!(
+            "\n**SCOPE BINDING**: This session was launched with `--spec {spec}`. \
+You are scoped to {spec}. Drive it to completion, then exit after `aida pr ship` \
+and the IMPLEMENTER COMPLETE banner. Do not pick up other specs from this \
+session; if you need the next pickup, start a fresh `aida agent new ... --spec NEXT-ID` session.\n"
+        ));
     } else {
         out.push_str("- No spec was provided at launch; start from the relevant queue head or pending brief.\n");
     }
@@ -19252,9 +19261,47 @@ mod agent_launcher_tests {
         assert!(context.contains("- Role: implementer"), "{context}");
         assert!(context.contains("## Role Guidance"), "{context}");
         assert!(
+            context.contains("- **Spec: STORY-436 (your scope for this session)**"),
+            "{context}"
+        );
+        assert!(context.contains("**SCOPE BINDING**"), "{context}");
+        assert!(
+            context.contains("Do not pick up other specs from this session"),
+            "{context}"
+        );
+        assert!(
             context.contains("STORY-436 — Role-context auto-injection"),
             "{context}"
         );
+    }
+
+    #[test]
+    fn agent_launch_context_without_spec_preserves_open_ended_hint() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project,
+            role: Some("implementer".into()),
+            current_spec: None,
+            name: "codex-test".to_string(),
+        };
+
+        let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
+
+        assert!(
+            context.contains(
+                "No spec was provided at launch; start from the relevant queue head or pending brief."
+            ),
+            "{context}"
+        );
+        assert!(!context.contains("SCOPE BINDING"), "{context}");
     }
 
     #[cfg(unix)]
