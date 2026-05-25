@@ -31,11 +31,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:50:38.005547744Z
-modified_at: 2026-05-24T15:50:38.005547744Z
+modified_at: 2026-05-25T07:42:46.331248446Z
 req_type: Story
 tags:
 - aida:status
 - batch:aida-status
+- batch:status-surfaces
 - from-self-test
 - multi-agent
 - story-385-followup
