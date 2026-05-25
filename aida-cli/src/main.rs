@@ -18138,6 +18138,8 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             permission_mode,
             no_context,
             show_context,
+            prompt,
+            no_prompt,
             no_default_flags,
             extra_flags,
             name,
@@ -18147,6 +18149,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             cwd.as_deref(),
             permission_mode,
             AgentContextOptions::new(!*no_context, *show_context),
+            AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
         ),
@@ -18157,6 +18160,8 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             bypass_sandbox,
             no_context,
             show_context,
+            prompt,
+            no_prompt,
             no_default_flags,
             extra_flags,
             name,
@@ -18166,6 +18171,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
         ),
@@ -18176,6 +18182,8 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             bypass_sandbox,
             no_context,
             show_context,
+            prompt,
+            no_prompt,
             no_default_flags,
             extra_flags,
             name,
@@ -18185,6 +18193,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
         ),
@@ -18205,6 +18214,13 @@ struct AgentLaunchConfig {
     agent_type: &'static str,
     binary: &'static str,
     default_args: Vec<String>,
+    prompt_style: AgentPromptStyle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AgentPromptStyle {
+    Positional,
+    Flag(&'static str),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18232,6 +18248,21 @@ impl AgentContextOptions {
 struct AgentLaunchContext {
     path: std::path::PathBuf,
     token: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentPromptOptions {
+    explicit_prompt: Option<String>,
+    auto_prompt: bool,
+}
+
+impl AgentPromptOptions {
+    fn new(explicit_prompt: Option<String>, no_prompt: bool) -> Self {
+        Self {
+            explicit_prompt: if no_prompt { None } else { explicit_prompt },
+            auto_prompt: !no_prompt,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18267,6 +18298,7 @@ fn agent_new_claude(
     cwd: Option<&std::path::Path>,
     permission_mode: &str,
     context: AgentContextOptions,
+    prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
@@ -18274,8 +18306,9 @@ fn agent_new_claude(
         agent_type: "claude",
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), permission_mode.to_string()],
+        prompt_style: AgentPromptStyle::Positional,
     };
-    agent_new_with_config(config, role, spec, cwd, context, flag_options, name)
+    agent_new_with_config(config, role, spec, cwd, context, prompt, flag_options, name)
 }
 
 // trace:STORY-433 | ai:codex
@@ -18285,6 +18318,7 @@ fn agent_new_codex(
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
+    prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
@@ -18296,8 +18330,9 @@ fn agent_new_codex(
         agent_type: "codex",
         binary: "codex",
         default_args,
+        prompt_style: AgentPromptStyle::Positional,
     };
-    agent_new_with_config(config, role, spec, cwd, context, flag_options, name)
+    agent_new_with_config(config, role, spec, cwd, context, prompt, flag_options, name)
 }
 
 // trace:STORY-434 | ai:codex
@@ -18307,6 +18342,7 @@ fn agent_new_antigravity(
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
+    prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
@@ -18318,8 +18354,9 @@ fn agent_new_antigravity(
         agent_type: "antigravity",
         binary: "agy",
         default_args,
+        prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
     };
-    agent_new_with_config(config, role, spec, cwd, context, flag_options, name)
+    agent_new_with_config(config, role, spec, cwd, context, prompt, flag_options, name)
 }
 
 fn agent_new_with_config(
@@ -18328,6 +18365,7 @@ fn agent_new_with_config(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
+    prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
@@ -18347,6 +18385,7 @@ fn agent_new_with_config(
     let project_root = main_worktree_root_from(&discovered_root);
     apply_agent_default_flags(&mut config, &project_root, flag_options)?;
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
+    let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
 
     eprintln!(
         "{} launching {} (stable name: {}) in {}",
@@ -18375,7 +18414,13 @@ fn agent_new_with_config(
         config.agent_type
     );
 
-    run_tracked_agent(&binary, &config, &plan, launch_context.as_ref())
+    run_tracked_agent(
+        &binary,
+        &config,
+        &plan,
+        launch_context.as_ref(),
+        &prompt_args,
+    )
 }
 
 fn apply_agent_default_flags(
@@ -18426,6 +18471,46 @@ fn merge_agent_flags_from_file(
         *flags = agent.default_flags.clone();
     }
     Ok(())
+}
+
+fn agent_initial_prompt_args(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    options: &AgentPromptOptions,
+) -> Vec<String> {
+    let prompt = if let Some(prompt) = options
+        .explicit_prompt
+        .as_deref()
+        .filter(|prompt| !prompt.trim().is_empty())
+    {
+        Some(prompt.to_string())
+    } else if options.auto_prompt {
+        plan.current_spec
+            .as_deref()
+            .map(|spec| render_agent_initial_prompt(config.agent_type, spec))
+    } else {
+        None
+    };
+    let Some(prompt) = prompt else {
+        return Vec::new();
+    };
+    match config.prompt_style {
+        AgentPromptStyle::Positional => vec![prompt],
+        AgentPromptStyle::Flag(flag) => vec![flag.to_string(), prompt],
+    }
+}
+
+fn render_agent_initial_prompt(agent_type: &str, spec: &str) -> String {
+    format!(
+        "Read your AIDA launch context first:\n\
+         cat \"$AIDA_AGENT_CONTEXT_FILE\"\n\
+         aida show {spec}\n\
+         aida brief list --for-agent {agent_type}\n\n\
+         Implement {spec} per its acceptance criteria. Stay in single-spec scope for {spec}. \
+         Standard cadence: inspect context, make bounded changes, run relevant tests, run \
+         cargo fmt --all --check, commit with trailer ({spec}) and trace:{spec}, then use \
+         aida pr ship and exit after the IMPLEMENTER COMPLETE banner."
+    )
 }
 
 fn prepare_agent_launch(
@@ -18733,11 +18818,13 @@ fn run_tracked_agent(
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,
     launch_context: Option<&AgentLaunchContext>,
+    prompt_args: &[String],
 ) -> Result<()> {
     let mut command = std::process::Command::new(binary);
     command
         .current_dir(&plan.launch_cwd)
         .args(&config.default_args)
+        .args(prompt_args)
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
@@ -19167,6 +19254,8 @@ mod agent_launcher_tests {
             "/tmp/project",
             "--permission-mode",
             "acceptEdits",
+            "--prompt",
+            "review STORY-432",
             "--no-default-flags",
             "--extra-flag",
             "--verbose",
@@ -19179,6 +19268,8 @@ mod agent_launcher_tests {
             permission_mode,
             no_context,
             show_context,
+            prompt,
+            no_prompt,
             no_default_flags,
             extra_flags,
             ..
@@ -19192,6 +19283,8 @@ mod agent_launcher_tests {
         assert_eq!(permission_mode, "acceptEdits");
         assert!(!no_context);
         assert!(!show_context);
+        assert_eq!(prompt.as_deref(), Some("review STORY-432"));
+        assert!(!no_prompt);
         assert!(no_default_flags);
         assert_eq!(extra_flags, vec!["--verbose"]);
     }
@@ -19210,6 +19303,7 @@ mod agent_launcher_tests {
             "--cwd",
             "/tmp/project",
             "--bypass-sandbox",
+            "--no-prompt",
             "--extra-flag",
             "--ask-for-approval=never",
         ])
@@ -19221,6 +19315,7 @@ mod agent_launcher_tests {
             bypass_sandbox,
             no_context,
             show_context,
+            no_prompt,
             extra_flags,
             ..
         })) = cli.command
@@ -19233,6 +19328,7 @@ mod agent_launcher_tests {
         assert!(bypass_sandbox);
         assert!(!no_context);
         assert!(!show_context);
+        assert!(no_prompt);
         assert_eq!(extra_flags, vec!["--ask-for-approval=never"]);
     }
 
@@ -19302,6 +19398,7 @@ mod agent_launcher_tests {
             agent_type: "codex",
             binary: "codex",
             default_args: vec!["--built-in".to_string()],
+            prompt_style: AgentPromptStyle::Positional,
         };
         apply_agent_default_flags(
             &mut codex,
@@ -19318,6 +19415,7 @@ mod agent_launcher_tests {
             agent_type: "antigravity",
             binary: "agy",
             default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
         };
         apply_agent_default_flags(
             &mut antigravity,
@@ -19331,6 +19429,7 @@ mod agent_launcher_tests {
             agent_type: "claude",
             binary: "claude",
             default_args: vec!["--permission-mode".to_string(), "acceptEdits".to_string()],
+            prompt_style: AgentPromptStyle::Positional,
         };
         apply_agent_default_flags(
             &mut claude,
@@ -19342,6 +19441,76 @@ mod agent_launcher_tests {
             claude.default_args,
             vec!["--permission-mode", "acceptEdits", "--one-shot"]
         );
+    }
+
+    #[test]
+    fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
+        let tmp = TempDir::new().unwrap();
+        let plan = AgentLaunchPlan {
+            project_root: tmp.path().to_path_buf(),
+            launch_cwd: tmp.path().to_path_buf(),
+            role: Some("implementer".into()),
+            current_spec: Some("TASK-556".into()),
+            name: "agent-test".to_string(),
+        };
+        let claude = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        let codex = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        let antigravity = AgentLaunchConfig {
+            agent_type: "antigravity",
+            binary: "agy",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        };
+
+        let claude_args = agent_initial_prompt_args(
+            &claude,
+            &plan,
+            &AgentPromptOptions::new(Some("work TASK-556".into()), false),
+        );
+        assert_eq!(claude_args, vec!["work TASK-556"]);
+
+        let codex_args =
+            agent_initial_prompt_args(&codex, &plan, &AgentPromptOptions::new(None, false));
+        assert_eq!(codex_args.len(), 1);
+        assert!(codex_args[0].contains("cat \"$AIDA_AGENT_CONTEXT_FILE\""));
+        assert!(codex_args[0].contains("aida show TASK-556"));
+        assert!(codex_args[0].contains("aida brief list --for-agent codex"));
+        assert!(codex_args[0].contains("trace:TASK-556"));
+
+        let antigravity_args = agent_initial_prompt_args(
+            &antigravity,
+            &plan,
+            &AgentPromptOptions::new(Some("work TASK-556".into()), false),
+        );
+        assert_eq!(
+            antigravity_args,
+            vec!["--prompt-interactive", "work TASK-556"]
+        );
+
+        let opted_out = agent_initial_prompt_args(
+            &codex,
+            &plan,
+            &AgentPromptOptions::new(Some("ignored".into()), true),
+        );
+        assert!(opted_out.is_empty());
+
+        let no_spec_plan = AgentLaunchPlan {
+            current_spec: None,
+            ..plan
+        };
+        let no_spec =
+            agent_initial_prompt_args(&codex, &no_spec_plan, &AgentPromptOptions::new(None, false));
+        assert!(no_spec.is_empty());
     }
 
     #[test]
@@ -19566,6 +19735,7 @@ mod agent_launcher_tests {
             agent_type: "codex",
             binary: "codex",
             default_args: vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
+            prompt_style: AgentPromptStyle::Positional,
         };
         let plan = AgentLaunchPlan {
             project_root: project.clone(),
@@ -19575,7 +19745,9 @@ mod agent_launcher_tests {
             name: "codex-test".to_string(),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
+        let prompt_args =
+            agent_initial_prompt_args(&config, &plan, &AgentPromptOptions::new(None, false));
+        run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -19587,6 +19759,8 @@ mod agent_launcher_tests {
             argv.contains("--dangerously-bypass-approvals-and-sandbox"),
             "{argv}"
         );
+        assert!(argv.contains("aida show STORY-433"), "{argv}");
+        assert!(argv.contains("trace:STORY-433"), "{argv}");
         assert!(agent_registry::list_agent_views(
             &project,
             &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
@@ -19628,6 +19802,7 @@ mod agent_launcher_tests {
             agent_type: "antigravity",
             binary: "agy",
             default_args: vec!["--dangerously-skip-permissions".to_string()],
+            prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
         };
         let plan = AgentLaunchPlan {
             project_root: project.clone(),
@@ -19637,7 +19812,12 @@ mod agent_launcher_tests {
             name: "agy-test".to_string(),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan, None).unwrap();
+        let prompt_args = agent_initial_prompt_args(
+            &config,
+            &plan,
+            &AgentPromptOptions::new(Some("work STORY-434".into()), false),
+        );
+        run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args).unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -19646,6 +19826,8 @@ mod agent_launcher_tests {
         assert!(env.contains("AIDA_SESSION_SCOPE=STORY-434"), "{env}");
         assert!(env.contains("AIDA_PROJECT_ROOT="), "{env}");
         assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
+        assert!(argv.contains("--prompt-interactive"), "{argv}");
+        assert!(argv.contains("work STORY-434"), "{argv}");
         assert!(agent_registry::list_agent_views(
             &project,
             &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
@@ -19669,6 +19851,7 @@ mod agent_launcher_tests {
             agent_type: "codex",
             binary: "codex",
             default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
         };
         let plan = AgentLaunchPlan {
             project_root: project.clone(),
@@ -19711,6 +19894,7 @@ mod agent_launcher_tests {
             agent_type: "codex",
             binary: "codex",
             default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
         };
         let plan = AgentLaunchPlan {
             project_root: project.clone(),
@@ -19766,6 +19950,7 @@ mod agent_launcher_tests {
             agent_type: "codex",
             binary: "codex",
             default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
         };
         let plan = AgentLaunchPlan {
             project_root: project.clone(),
@@ -19775,7 +19960,16 @@ mod agent_launcher_tests {
             name: "codex-test".to_string(),
         };
 
-        run_tracked_agent(&fake_agent, &config, &plan, Some(&launch_context)).unwrap();
+        let prompt_args =
+            agent_initial_prompt_args(&config, &plan, &AgentPromptOptions::new(None, false));
+        run_tracked_agent(
+            &fake_agent,
+            &config,
+            &plan,
+            Some(&launch_context),
+            &prompt_args,
+        )
+        .unwrap();
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let copied = std::fs::read_to_string(&context_out).unwrap();
