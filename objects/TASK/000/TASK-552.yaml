@@ -1,0 +1,72 @@
+id: 019e5ce7-1846-7db0-bcb8-e760ede4e321
+spec_id: TASK-552
+agreed_id: TASK-552
+title: Clean up 8 dead-code warnings in aida-cli (audit intent + add allow attrs or remove per-item)
+description: |-
+  ## Friction
+
+  'cargo build -p aida-cli' emits 8 dead_code warnings in three files. They accumulate noise in build output + risk masking REAL warnings as the codebase grows. CI runs build with warnings-not-errors today, but cleaner builds are first-user-onboarding QoL.
+
+  ## The 8 warnings
+
+  aida-cli/src/auto_complete.rs:
+  1.  (line 1660) — public function, never called
+  2.  struct fields ,  (lines 2001-2002) — never read
+  3.  field  (line 2011) — never read
+
+  aida-cli/src/complexity_calibration.rs:
+  4.  (line 102) — never used
+  5.  (line 184) — never used
+  6.  (line 191) — never used
+
+  aida-cli/src/stacks.rs:
+  7.  method (line 68) — never used
+  8.  function (line 209) — never used
+
+  ## Per-item audit approach (NOT blanket removal)
+
+  Each warning is a judgment call between three actions:
+
+  A. **Remove** — confirmed dead, no future plan, no external use
+  B. **#[allow(dead_code)] + intent comment** — intentionally retained as future-API surface or stable-shape struct
+  C. **Wire up the missing caller** — should be in use but isn't (real bug, not just warning)
+
+  Likely intent breakdown (verify by reading nearby code + git blame for context):
+
+  - complexity_calibration.rs functions: probably STORY-347 / STORY-439 calibration future-API. Likely B (allow + comment 'reserved for STORY-X calibration consumer').
+  - stacks.rs methods: probably stacked-PR substrate that's not yet wired (deferred). Likely B (allow + comment 'public API for future stacks consumer').
+  - auto_complete.rs orchestrate: depends — could be legacy or future. Read git blame + check refs.
+  - BatchChain* structs: deferred-batch-integration. Likely B (allow + comment 'shape of future batch-chain telemetry; populated by deferred integration').
+
+  ## Acceptance
+
+  - [ ] All 8 dead_code warnings resolved (cargo build -p aida-cli emits 0 warnings)
+  - [ ] Each resolution documented: remove (with reasoning in commit message) OR allow + intent comment in source
+  - [ ] If any are 'should be in use': wire them up in a separate commit
+  - [ ] cargo test --workspace stays green
+  - [ ] cargo fmt --all -- --check clean
+
+  ## Composes with
+
+  - General build hygiene (no specific upstream spec)
+  - STORY-347 / STORY-439 / TASK-340 (calibration substrate — if complexity_calibration.rs intent is preserved here)
+  - Stacked-PR work (if stacks.rs intent is preserved here)
+
+  ## Origin
+
+  2026-05-24 master noticed 8 dead_code warnings during a rebuild + activate cycle after STORY-462/463 shipped. User: 'we should probably clean up the warnings'.
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T02:11:49.446234402Z
+modified_at: 2026-05-25T02:11:49.446234402Z
+req_type: Task
+tags:
+- build-hygiene
+- dead-code
+- first-user-papercut
+- lints
+- maintenance
