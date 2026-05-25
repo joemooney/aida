@@ -4287,3 +4287,88 @@ Net: `aida-cli` test suite grew 403 → 438 passing; every PR `cargo fmt --check
 Implemented the preferred fix (a): `batch:NAME` is now accepted as a positional id on `aida queue work`, equivalent to `--batch NAME`. Three small helpers in `aida-cli/src/main.rs` — `strip_batch_prefix` (case-insensitive prefix strip, `Option<&str>`, char-boundary safe via `str::get`), `normalize_batch_name` (strip-or-passthrough), and `resolve_queue_work_batch` (routes a `batch:`-prefixed positional into the batch slot, returns `(effective_id, effective_batch)` with at most one `Some`). The `QueueCommand::Work` arm threads `effective_id` / `effective_batch` through the auto-complete, batch-resolution, and `handle_queue_work` paths.
 
 Sibling commands `aida queue list` and `aida queue progress` (which have no positional slot) now strip a redundant `batch:` prefix off the `--batch` flag value, so `--batch batch:NAME` == `--batch NAME` everywhere. Added two guards on the positional form: an empty-name bail (`aida queue work batch:`) and a `--type`-conflict bail (clap rejects `--batch` + `--type`, the positional form bypassed that). Three unit tests in `queue_progress_tests`; manual verification of all four paths. `aida-cli` suite: 487 passing, `cargo fmt --check`-clean.
+
+## Session 58: Multi-agent overnight substrate-coordination drain (2026-05-24/25)
+
+**Request:** strategic dispatch night — MVP pace, 4-5 agents in flight (master + Codex + Antigravity-1 + Antigravity-2-integrator + aida-chat advisor). Goal evolved from "ship a few PRs" to "saturate parallel paths until substrate-coordination batch closes." `/goal` engaged late session to keep filling tomorrow's queue + clear easy stuff overnight while operator slept.
+
+### Ships (~25 PRs landed across the AIDA repo)
+
+**Ceiling-pattern quartet** — substrate-bouncer net for implementer lifecycle. Each catches a confident-LLM ceremony skip:
+- **BUG-376** (PR-303) — `IMPLEMENTER COMPLETE — EXIT NOW` banner after `aida pr ship`; agent doesn't linger watching CI
+- **BUG-378** (PR-304) — `NEW BRIEF(S) PENDING` banner on `aida queue done` when pending briefs exist for agent type
+- **TASK-548** (PR-309) — skip `/aida-pickup` confirmation menu when SPEC-ID is explicit (operator already committed)
+- **BUG-379** (PR-312) — `aida session start` auto-bumps spec Approved → In Progress (foundational, surfaced empirical edge case: non-atomic bump → status drift on lease-create failure; new BUG-384 filed)
+
+**Doctor + resilience**:
+- **STORY-462** (PR-305) — `aida doctor` command with 11 categories + heal sub-verbs + salvage-first discipline. First production catches in the same session.
+- **STORY-463** (PR-306) — SQLite cache lock retry + `.aida/cache.db.lock-info` sidecar + actionable error message ("locked by pid=N (cmd), held since T"). Validated in BOTH directions of contention during the session itself.
+
+**MCP fixes** (BUG-377 blast radius mapping → fix):
+- **BUG-377** + **TASK-550** (PR-308) — `add_comment` and `triage_finding` had `author`/`content` argument inversion (silent data loss). Both fixed in one PR after Codex systematically tested every MCP write tool.
+- **TASK-538** (PR-297) — MCP `history` tool exposed (parity with `aida history` CLI)
+- **TASK-551** (PR-310) — MCP `add_relationship` tool exposed (CLI parity gap found during BUG-377 inventory)
+- **BUG-381** (PR-311) — `list_requirements` filter normalization (`in-progress` / `InProgress` / `In Progress` all match)
+
+**Multi-agent coordination**:
+- **TASK-515** (PR-298) — `aida status` Active Agents lease-fallback for raw-launched agents
+- **TASK-541** (PR-313) — `aida brief --depends-on` for explicit pickup-order constraints
+- **TASK-542** + **STORY-459** (PR-314, bundled scope) — `aida agent new --name` + auto-seq + prefix-match brief routing. First validated multi-spec trailer convention (`(TASK-542 STORY-459)` in squash subject).
+- **TASK-543** (PR-302) — `aida agent register <pid>` to backfill raw-launched agents into registry
+- **TASK-557** (PR-317) — per-agent default flags from `.aida/agents.toml` (eliminates `--dangerously-skip-permissions` re-typing)
+
+**Agent-launch UX**:
+- **TASK-554** (PR-316) — `--spec` launches show explicit scope-binding text in context snapshot
+- **TASK-555** (PR-322) — cross-agent skill-invocation surface map in `docs/agents/cross-agent-onboarding.md`
+- **TASK-553** (PR-323) — `implementer-discipline.md` discipline doc articulating the six rules (each linked to the substrate bouncer that enforces it)
+- **TASK-556** (PR-321) — `aida agent new --prompt` auto-injects first-message directive when `--spec` is present
+
+**Status surfaces**:
+- **STORY-385** (PR-296) — `aida status --cleanup` surfaces 8 attention-state categories
+- **BUG-380** (PR-307) — `aida show` resolves default branch dynamically (unblocks repos with `master` default)
+
+**Substrate-tools**:
+- **STORY-467** (PR-320) — `aida findings add` for advisor-driven observation entry + `findings recur` counter. Recurrence ≥ 3 = promotion signal. Dogfooded with three real observations in the same session (TASK-1-088/089/090, all related to ceiling-pattern recurrences).
+
+**Cleanup + scaffolding**:
+- **BUG-375** (PR-294) — Codex SKILL.md YAML frontmatter for ~18 templates
+- **TASK-540** (PR-293) — `codex-mcp-setup.md` template sync
+- **TASK-547** (PR-318) — `aida queue work` auto-pulls Approved-not-queued specs into the queue
+- **TASK-552** (PR-315) — 8 dead-code warnings audited (allow + intent comments)
+- **TASK-549** (PR-319) — MCP stdio tests gained resources/list, resources/read, isError envelope coverage
+
+**Previously-stuck**:
+- **STORY-305** (PR-210) — `local/` + `.local.md` skill extensions finally landed after agy2-integrator rebased + cleared the RequestChanges verdict
+
+### Substrate observations + pattern discovery
+
+Filed 7+ observation recurrences on STORY-467 (using comment-carrier pattern until `aida findings add` shipped, then dogfooded the verb). Key patterns surfaced:
+
+- **Agent claims complete without commit/push/PR** — local-tests-pass conflated with shipped (recurrence-7; agy1's repeat pattern)
+- **Stale-scratchpad-loop on resumption** — Antigravity re-reads old session's `task.md` and reports "all done" instead of polling AIDA brief surface
+- **Unauthorized pickup → failure-and-shelve** — overnight agent picked up STORY-465 outside briefed batch, errored, EPIC-28 correctly shelved it as NeedsAttention; BUG-379 then correctly refused fresh pickup
+- **Non-atomic auto-bump** — BUG-379's status transition isn't transactional with lease creation; if lease fails, status stays In Progress with no lease (filed as BUG-384)
+- **Cache lock contention** — schema-apply holds the lock 10-15s+; STORY-463's default retry budget (50/200/500ms) is too short; manual env var bump (`AIDA_CACHE_RETRY_MS=2000 AIDA_CACHE_RETRY_COUNT=10`) needed under heavy parallel writes (TASK-558 filed to bump defaults)
+
+### Multi-advisor pattern validated
+
+aida-chat advisor (separate Claude session in `~/ai/aida-chat`) bootstrapped + ran day-1 autonomously: verdicted Codex's EPIC-16 PR-1 work (4 must-fix items, all confirmed), reset STORY-21/22 to In Progress when implementers shipped backend-only (subset-ship discipline), drove the 5-PR merge cascade in aida-chat, recorded the killer demo. Master never touched aida-chat code. Cross-project sync via paste-ready prompts the operator forwarded.
+
+### Tomorrow's queue (Session-58 leaves behind)
+
+Five batches tagged for tomorrow's dispatch:
+
+- **batch:queue-work-reliability** (14 specs) — master's stated concern; BUG-384, TASK-558, TASK-559, TASK-560, TASK-561 + 9 existing related specs. Codex briefed for top 4 high-priority.
+- **batch:status-surfaces** (6 specs) — STORY-456/457/464/465 + TASK-539 + STORY-405
+- **batch:agent-launch-ux** (5 specs, 3 shipped tonight) — TASK-553/555 ✅, TASK-554/556/557 ✅
+- **batch:substrate-architecture** (4 specs) — STORY-460/469/471 + STORY-439 (keystone work)
+- **batch:backlog-grooming** (8 specs) — `aida backlog groom` family + TASK-537
+
+Briefs filed for tomorrow morning: Codex (BUG-384, TASK-558, TASK-559, TASK-561) + Antigravity (TASK-553, TASK-555, STORY-464, TASK-560, BUG-366). agy2 continues on integrator standby.
+
+### Strategic shifts from the night
+
+1. **Multi-spec trailer convention validated** — `(SPEC-A SPEC-B)` in squash subject auto-bumps both. PR-314 was the first deliberate use; the auto-bump scanner caught both correctly.
+2. **Substrate-as-bouncer principle operationalized** — four runtime banners now in production. Empirical evidence STORY-469 (structural guards) is the right architectural shape: boundary-event bouncers catch most cases; need proactive divergence detection for the rest.
+3. **Multi-advisor pattern empirically works** — aida-chat advisor ran day-1 autonomously; master stayed in cross-project strategic mode. Validates the "one master advisor until subsystems emerge" scaling principle.
+4. **The substrate is approaching first-user-ready** — ceiling-pattern net + doctor + lock retry + multi-agent visibility + observation capture all shipped in one night. STORY-465 (Awaiting you status section) closes the human-gate visibility gap; in flight as of session end.
