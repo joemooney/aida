@@ -1,0 +1,77 @@
+id: 019e5ced-b015-7113-b98e-2c79e74f31fb
+spec_id: TASK-553
+agreed_id: TASK-553
+title: 'Implementer role file: expand to include explicit one-spec-per-lease + exit-after-ship + brief-poll discipline (defense-in-depth alongside runtime ceiling-pattern banners)'
+description: |-
+  ## Friction
+
+  Today's implementer role file has a single-line purpose:
+    Heads-down coding on a specific feature or fix. Drive a requirement to completed.
+
+  This IMPLIES single-spec focus but doesn't explicitly state the discipline rules that the runtime ceiling-pattern banners (BUG-376/378, TASK-548, BUG-379) enforce. Agent sees the discipline AT RUNTIME via banners, not at launch context.
+
+  aida-chat advisor's recent feedback to the operator surfaced this gap explicitly. When the operator asked 'does the context supplied say work this spec to completion then exit' — the answer was no. The runtime banners enforce; the role file doesn't articulate.
+
+  ## Why this matters
+
+  Per feedback_substrate_as_bouncer_not_rules: substrate enforces (runtime banners), rules are advisory. The current state is actually correct on that principle — banners are the load-bearing piece.
+
+  BUT defense-in-depth has value: if the agent KNOWS the rules at launch, they're less likely to hit the banner surprise + recovery. Pre-loading discipline is cheap; runtime enforcement is the fallback.
+
+  ## Proposed shape
+
+  Expand 'purpose' field OR add a structured 'discipline' field to role TOML files. For implementer role:
+
+    purpose = '''Heads-down coding on a specific feature or fix. Drive a requirement to completed.
+
+  Discipline (substrate enforces these; rules below are pre-warning for context):
+
+  1. ONE SPEC PER SESSION/LEASE. The session lease declares the spec you own. Don't pick up additional specs from the same session.
+
+  2. EXIT AFTER 'aida pr ship'. Don't poll CI; don't watch the merge. The orchestrator/integrator handles downstream phases. The IMPLEMENTER COMPLETE banner will tell you when to exit.
+
+  3. POLL AIDA BRIEF SURFACE, NOT LOCAL SCRATCHPAD. 'aida brief list --for-agent <your-type>' is ground truth. Your CLI scratchpad files do NOT auto-sync.
+
+  4. SHIP FULL ACCEPTANCE, NOT SUBSET. The spec's acceptance criteria are binding; ship every bullet, not just the easy ones.
+
+  5. WHEN PENDING-BRIEF BANNER FIRES: read the brief BEFORE exiting. Don't queue done with pending briefs un-read.
+
+  6. WHEN ROLE MISMATCH (spike at implementer queue head, etc.): use the option-3 advise-escape; route to advisor.'''
+
+  Tradeoff considered: STRUCTURED 'discipline' field (option C above) is cleaner per-rule but requires renderer changes + schema migration. Inline in 'purpose' (option B) is zero-schema-change + ships fast.
+
+  ## Acceptance
+
+  - [ ] Implementer role file at /home/joe/.aida/roles/implementer.toml updated with discipline rules (either inline in purpose OR as new 'discipline' field)
+  - [ ] Master role template at aida-core/templates/roles/implementer.toml (if scaffolded — verify) updated to match
+  - [ ] Reviewer role file gets sibling treatment (TASK-291 + ceiling-pattern variants for reviewer)
+  - [ ] Dialog/advisor role file similarly updated (per feedback_dialog_role_responsibilities)
+  - [ ] Context snapshot renderer surfaces the rules clearly (under 'Role Guidance' section)
+  - [ ] Test: 'aida agent new <type> --role implementer --show-context' shows the discipline rules in output
+
+  ## Composes with
+
+  - BUG-376 / BUG-378 / TASK-548 / BUG-379 (the runtime banners these rules pre-warn about)
+  - TASK-359 (implementer finish-checkpoint UX — option-3 advise-escape mentioned in rule 6)
+  - feedback_dialog_role_responsibilities (advisor role discipline articulation — sibling task)
+  - feedback_substrate_as_bouncer_not_rules (this is DEFENSE-IN-DEPTH not REPLACEMENT for runtime enforcement)
+
+  ## Origin
+
+  2026-05-24 user asked: 'does the context supplied say [work this spec to completion then exit]?' Master verified: no, role file is one terse line. The runtime ceiling-pattern banners enforce; role file doesn't articulate.
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T02:19:01.525711396Z
+modified_at: 2026-05-25T02:19:01.525711396Z
+req_type: Task
+tags:
+- defense-in-depth
+- from-self-test
+- from-user-direction
+- implementer-discipline
+- role
+- scaffolding
