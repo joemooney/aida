@@ -69,12 +69,12 @@ description: |-
   2026-05-24 user: 'for agy will /aida-pickup TASK-542 work?' Master verified no + observation that this confusion is the recurring class as more agents get dispatched. User: 'file the UX papercut'.
 
   trace:TASK-X
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T02:25:19.101203419Z
-modified_at: 2026-05-25T07:47:25.243100685Z
+modified_at: 2026-05-25T16:00:12.187586734Z
 req_type: Task
 tags:
 - batch:agent-launch-ux
