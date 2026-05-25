@@ -1,0 +1,43 @@
+id: 019e5e14-ca01-7401-9a75-71faef0f53b7
+spec_id: TASK-559
+agreed_id: TASK-559
+title: aida queue work --force-claim flag forwarding to internal session start invocation
+description: |-
+  TASK-1-090 finding promoted: aida queue work should accept --force-claim and forward to aida session start. Today operators hitting 'spec is In Progress, no lease' must either bump status manually (aida edit --status approved) or drop down to lower-level aida session start --force-claim — neither smooth.
+
+  ## Fix
+
+  Add --force-claim to aida queue work clap definition. When present, forward to the internal session-start invocation. Other claim-related flags (--steal for live-lease takeover) already exist on queue work; --force-claim should compose similarly.
+
+  ## Acceptance
+
+  - [ ] 'aida queue work SPEC --force-claim' accepts the flag, forwards to session start
+  - [ ] When --force-claim present + spec is NeedsAttention OR In-Progress-without-local-lease: claim succeeds
+  - [ ] When --force-claim present + spec is Done/Completed/Rejected/Draft: still refuses (matches session-start --force-claim semantics)
+  - [ ] Test: claim NeedsAttention spec via queue work; verify lease created + status transitions correctly (assuming companion BUG-on-non-atomicity fix shipped first)
+
+  ## Composes with
+
+  - TASK-1-090 (the finding this promotes)
+  - BUG-379 + companion BUG (non-atomic auto-bump fix) — without that fix, --force-claim takeover still leaves drift if mid-flight fails
+  - 'aida queue work --auto-complete --force-claim' should compose cleanly once the conflict guards are right
+
+  ## Origin
+
+  2026-05-25 STORY-465 recovery: operator tried 'aida queue work STORY-465 --force-claim' (intuitive guess) and got 'unexpected argument' error. Workaround was 'aida session start --owns STORY-465 --force-claim' directly — works but skips the orchestrator flow.
+
+  trace:TASK-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T07:41:21.281409585Z
+modified_at: 2026-05-25T07:41:21.281409585Z
+req_type: Task
+tags:
+- aida:queue
+- batch:queue-work-reliability
+- flag-forwarding
+- from-overnight-drain-2026-05-25
+- from-self-test
+- ux-papercut
