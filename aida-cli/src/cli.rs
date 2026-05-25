@@ -3817,6 +3817,14 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
+        /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
+        #[clap(long)]
+        no_default_flags: bool,
+
+        /// Append one additional raw flag to the spawned Claude argv.
+        #[clap(long = "extra-flag", value_name = "FLAG", allow_hyphen_values = true)]
+        extra_flags: Vec<String>,
+
         /// Optional human-readable instance name.
         #[clap(long)]
         name: Option<String>,
@@ -3853,6 +3861,14 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
+        /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
+        #[clap(long)]
+        no_default_flags: bool,
+
+        /// Append one additional raw flag to the spawned Codex argv.
+        #[clap(long = "extra-flag", value_name = "FLAG", allow_hyphen_values = true)]
+        extra_flags: Vec<String>,
+
         /// Optional human-readable instance name.
         #[clap(long)]
         name: Option<String>,
@@ -3888,6 +3904,14 @@ pub enum AgentNewCommand {
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]
         show_context: bool,
+
+        /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
+        #[clap(long)]
+        no_default_flags: bool,
+
+        /// Append one additional raw flag to the spawned Antigravity argv.
+        #[clap(long = "extra-flag", value_name = "FLAG", allow_hyphen_values = true)]
+        extra_flags: Vec<String>,
 
         /// Optional human-readable instance name.
         #[clap(long)]
