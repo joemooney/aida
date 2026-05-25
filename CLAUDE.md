@@ -282,6 +282,8 @@ AIDA has a dual-copy template system. Master templates live in `aida-core/templa
 
 Hook commands in `settings.json` should use `$CLAUDE_PROJECT_DIR/...` paths so they resolve regardless of CWD when Claude Code invokes them.
 
+For hook control-flow semantics, keep `docs/agents/session-communication.md` current. In particular, `continue: false` is terminal, a blocked `PreToolUse` call cannot produce a later `PostToolUse`, and headless approval gates should use `permissionDecision: "defer"` plus an external resume loop rather than a prompt that nobody can answer.
+
 ## CLI reference (authoritative)
 
 Always verify CLI arguments with `aida <command> --help`. Common parameters:

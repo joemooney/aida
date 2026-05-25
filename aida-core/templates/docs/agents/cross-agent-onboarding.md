@@ -4,6 +4,11 @@
 
 This brief is what you need to know to participate productively in an AIDA project. It assumes you can speak MCP, run shell commands, and read/write files in a worktree.
 
+For agent-session communication details that cut across Claude, Codex, and
+Antigravity, see `docs/agents/session-communication.md`. That file is the
+durable reference for hook pause/abort/defer behavior, brief routing, and
+which substrate channel to use when an agent must stop, ask, or resume.
+
 ## What AIDA is
 
 AIDA (AI Design Assistant) is a **spec-graph-backed agent-collaboration layer**. The visible surface is a Rust CLI (`aida`) and a small TUI; the actual product is the substrate underneath:

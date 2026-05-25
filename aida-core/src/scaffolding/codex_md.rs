@@ -15,6 +15,7 @@ mod tests {
 
         assert!(md.contains("## Codex Operating Discipline"));
         assert!(md.contains("docs/agents/codex-mcp-setup.md"));
+        assert!(md.contains("docs/agents/session-communication.md"));
         assert!(md.contains("[AI:codex]"));
         assert!(md.contains("SPEC-410"));
         assert!(md.contains("BUG-345"));
@@ -71,7 +72,8 @@ place. Content outside the marked block is project-owned guidance.
 Use `OVERVIEW.md` for product/architecture context and
 `docs/agents/cross-agent-onboarding.md` for the shared MCP operating
 model. Use `docs/agents/codex-mcp-setup.md` when configuring Codex
-against AIDA's MCP server.
+against AIDA's MCP server. Use `docs/agents/session-communication.md`
+for agent pause/abort/defer semantics.
 
 {aida_block}
 
@@ -113,6 +115,11 @@ Use AIDA MCP for substrate operations: `show_requirement`,
 and directive tools. Trust MCP `tools/list` for argument names. Current
 responses are text envelopes; parse defensively until structuredContent
 ships.
+
+For cross-agent communication semantics, especially Claude Code
+`PreToolUse` / `PostToolUse`, `continue: false`, `ask`, and `defer`, use
+`docs/agents/session-communication.md`. Do not assume a later hook can ask
+whether to continue after an earlier hook has halted the run.
 
 ### Worktree And Session Discipline
 
