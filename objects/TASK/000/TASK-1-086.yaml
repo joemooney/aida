@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T06:29:58.682708712Z
-modified_at: 2026-05-25T06:29:58.682708712Z
+modified_at: 2026-05-25T06:30:12.317818936Z
 req_type: Task
 tags:
 - aida:findings
@@ -15,4 +15,11 @@ tags:
 - kind:observation
 - linked:STORY-467
 - observation-self-test
+- recurrence:2
 - severity:minor
+comments:
+- id: 019e5dd3-a65d-7fa0-97e1-72d6efb0a381
+  author: joe
+  content: 'Recurrence #2 by joe 2026-05-25: Confirmed during dogfood that the literal  ties the discipline doc''s promote-it signal to code.'
+  created_at: 2026-05-25T06:30:12.317818936Z
+  modified_at: 2026-05-25T06:30:12.317818936Z
