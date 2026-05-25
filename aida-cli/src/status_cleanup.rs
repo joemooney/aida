@@ -110,6 +110,11 @@ pub(crate) struct OpenPrItem {
     pub head_branch: String,
     pub ci_rollup: Option<String>,
     pub mergeable: Option<String>,
+    /// `reviewDecision` from `gh pr list`: `APPROVED`, `CHANGES_REQUESTED`,
+    /// `REVIEW_REQUIRED`, or `""`/None when no review is set up on the repo.
+    /// The "Awaiting you" classifier excludes `CHANGES_REQUESTED` PRs.
+    /// trace:STORY-465 | ai:claude
+    pub review_decision: Option<String>,
 }
 
 /// A dormant lease (worktree present, no live process, <24h old).
@@ -741,6 +746,7 @@ mod tests {
             head_branch: "b4".into(),
             ci_rollup: Some("pass".into()),
             mergeable: Some("clean".into()),
+            review_decision: None,
         });
         report.dormant_leases.push(DormantLeaseItem {
             lease_id: "abc".into(),

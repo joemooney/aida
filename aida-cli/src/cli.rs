@@ -4500,12 +4500,21 @@ pub enum Command {
         /// awaiting merge). Default `aida status` adds a one-line summary
         /// at the bottom when the section is non-empty.
         // trace:STORY-385 | ai:claude
-        #[clap(long, conflicts_with_all = ["queue", "ci", "short"])]
+        #[clap(long, conflicts_with_all = ["queue", "ci", "short", "awaiting"])]
         cleanup: bool,
+        /// Focus on the "Awaiting you" section only — every human-gate item
+        /// (mergeable PRs with no pending CI / requested changes, unacked
+        /// briefs, findings awaiting triage, NeedsAttention escalations).
+        /// On default `aida status` this section also leads the report.
+        // trace:STORY-465 | ai:claude
+        #[clap(long, conflicts_with_all = ["queue", "ci", "short", "cleanup"])]
+        awaiting: bool,
         /// With `--cleanup`: list every item per category instead of the
-        /// first 3. No-op without `--cleanup`.
+        /// first 3. With `--awaiting` (or on default status): lift the
+        /// 5-item cap on the "Awaiting you" section to show every item.
         // trace:STORY-385 | ai:claude
-        #[clap(long, requires = "cleanup")]
+        // trace:STORY-465 | ai:claude
+        #[clap(long)]
         verbose: bool,
     },
 
