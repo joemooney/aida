@@ -3,12 +3,12 @@ spec_id: BUG-384
 agreed_id: BUG-384
 title: Auto-bump on aida session start is non-atomic — status drifts to In Progress when lease creation subsequently fails
 description: "BUG-379 ships the auto-bump (Approved → In Progress on session start), but the implementation is not transactional. Sequence:\n\n1. aida session start --owns SPEC bumps spec status Approved → In Progress\n2. If lease creation OR worktree creation fails (cache lock contention, disk error, etc.), the operation returns error\n3. The status bump from step 1 is NOT rolled back\n4. Spec is now In Progress with NO active lease\n\nReproduced 2026-05-25 multiple times in one session: STORY-465's session-start-via-orchestrator failed 3+ times due to cache lock contention; each failure left STORY-465 in In Progress without a lease. Subsequent attempts hit the BUG-379 'already In Progress, --force-claim' guard which is correct discipline but masks the underlying transactional gap.\n\nDoctor's 'spec-status-drift' category surfaces it (In Progress + no lease = drift), but heal is reactive. The substrate-correct shape: make status-bump + lease-create atomic OR bump status LAST after all other session-start steps succeed.\n\n## Fix\n\nOption A: Move the auto-bump to AFTER lease + worktree creation succeeds. Order of operations:\n  1. Create worktree\n  2. Create lease  \n  3. THEN bump status\n\nOption B: Implement transactional rollback. If lease or worktree creation fails, restore the prior status.\n\nOption A is simpler + matches the principle 'make the persistent state-change last so failures don't leave half-state'.\n\n## Acceptance\n\n- [ ] aida session start --owns SPEC bumps status only AFTER lease + worktree exist\n- [ ] Test: simulate worktree-creation failure (e.g., readonly disk dir), verify status stays Approved\n- [ ] Test: simulate cache-lock contention beyond retry budget, verify status stays Approved\n- [ ] Test: success path — status transitions to In Progress after lease+worktree confirmed\n\n## Composes with\n\n- BUG-379 (the spec that shipped the original auto-bump)\n- STORY-462 (doctor's spec-status-drift category — currently reactive; this fix makes the drift not happen in the first place)\n- STORY-463 (lock retry — gives this transaction longer to succeed under contention)\n\n## Origin\n\n2026-05-25 multi-agent dispatch session: STORY-465 hit this 3+ times in 30 minutes while operator tried to take over a NeedsAttention spec; each failure compounded the status-drift problem.\n\ntrace:BUG-X"
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:05.629882721Z
-modified_at: 2026-05-25T15:56:04.053797277Z
+modified_at: 2026-05-25T16:07:10.927576069Z
 req_type: Bug
 tags:
 - aida:session
@@ -17,3 +17,7 @@ tags:
 - ceiling-pattern
 - from-overnight-drain-2026-05-25
 - from-self-test
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-25T16:07:10.927576069Z
+  completion_sha: 1023d3fa0177a296e4beda7e964e6a02f659776b
