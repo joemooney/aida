@@ -46,6 +46,19 @@ aida init --force              # Overwrite existing files
 
 `aida init` creates: orphan branch `aida-store` + worktree at `.aida-store/`, `.aida/config.toml`, `.aida/cache.db`, META requirements seeded into the orphan store, `.mcp.json`, `CLAUDE.md`, `AGENTS.md` (Codex), `.claude/skills/` + `commands/` + `hooks/`, `docs/plans/`, `docs/aida/discipline/`.
 
+### First-user demo — `scripts/aida-demo.sh` (TASK-563)
+
+To validate that `aida` is operational end-to-end on a fresh project — without polluting your real workspace — run the bundled demo script:
+
+```bash
+bash scripts/aida-demo.sh              # interactive walkthrough (Enter-to-continue between sections)
+bash scripts/aida-demo.sh --auto-cleanup  # skip cleanup prompt (for CI / scripted runs)
+```
+
+The script creates a throwaway public GitHub repo (timestamped name like `aida-demo-20260525-...`), clones it locally, runs `aida init`, walks through filing a spec + implementing + committing with the `(SPEC-ID)` trailer convention + `aida pull` auto-bump, then prompts for cleanup (defaults to keep so you can poke around). Useful for: first-user evaluation, demo recordings, sanity-checking a fresh `aida` build initializes cleanly.
+
+Prerequisites: `aida` on PATH (run `aida-on` first if using the dev build), `gh` CLI authenticated, `git` configured with `user.name` + `user.email`.
+
 ### Starter discipline pack (STORY-255)
 
 `aida init` ships AIDA-using *discipline* — the habits and vocabulary that make an AIDA project run well — as scaffolding, so a new project inherits it instead of re-discovering the same friction. Three channels:
