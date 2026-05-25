@@ -1,0 +1,49 @@
+id: 019e5e15-020d-7b93-af40-495176fb03da
+spec_id: TASK-561
+agreed_id: TASK-561
+title: 'aida doctor heal spec-status-drift: when In Progress + no active lease, revert status to Approved (currently ambiguous)'
+description: |-
+  Doctor's spec-status-drift category surfaces 'X is In Progress but no lease holds it' — but the heal action description today is ambiguous ('confirm and end lease' doesn't apply when there IS no lease). Need explicit heal for the 'In-Progress-orphan' sub-case: revert status to Approved + (optionally) clean any worktree referenced but not lease-tied.
+
+  Composes with the BUG-379-non-atomic fix: that fix prevents the drift from happening; this heal recovers when drift already accumulated.
+
+  ## Reproduced 2026-05-25
+
+  STORY-465 stuck in In Progress with no lease 3+ times during recovery loop. Doctor surfaced the drift correctly but operator had to manually run 'aida edit --status approved' — not via doctor heal.
+
+  ## Fix
+
+  Doctor heal logic for spec-status-drift:
+  - If status is In Progress AND no lease references the spec: bump status back to Approved + emit log line. Optionally check for orphan worktree at <repo-parent>/<repo-name>-<spec-slug>/ and offer to remove.
+  - If status is Done AND lease still active: end the lease (today's behavior — preserve).
+
+  ## Acceptance
+
+  - [ ] doctor heal spec-status-drift handles the In-Progress-orphan sub-case explicitly
+  - [ ] Log line: 'reverted SPEC from In Progress to Approved (no active lease found)'
+  - [ ] Optional worktree cleanup with confirmation
+  - [ ] Test: synthetic In-Progress + no-lease → heal → Approved
+
+  ## Composes with
+
+  - STORY-462 (doctor framework)
+  - BUG-379 + non-atomic-bump-fix (this heals the symptom; that fixes the source)
+
+  ## Origin
+
+  2026-05-25 STORY-465 recovery: doctor flagged the drift but operator manually fixed via aida edit. The heal action wasn't actionable as documented.
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T07:41:35.629415197Z
+modified_at: 2026-05-25T07:41:35.629415197Z
+req_type: Task
+tags:
+- aida:doctor
+- batch:queue-work-reliability
+- from-overnight-drain-2026-05-25
+- from-self-test
+- heal-action
