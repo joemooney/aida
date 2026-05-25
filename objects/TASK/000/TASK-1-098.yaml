@@ -1,0 +1,41 @@
+id: 019e60bd-c48a-7202-bb95-3379059e7bff
+spec_id: TASK-1-098
+title: 'Empirical 2026-05-25: ''aida init'' followed immediately by ''aida status'' reports:'
+description: |-
+  Empirical 2026-05-25: 'aida init' followed immediately by 'aida status' reports:
+
+    ─── Scaffolding ───
+      Templates compared: 80 total, 80 present in project
+      Status:             STALE — 1 AIDA-owned file(s) differ from the embedded templates
+        - .claude/AIDA.md
+      Refresh with:       aida scaffold apply --force
+
+  Should be clean at init time. The drift on .claude/AIDA.md immediately after the file was JUST written by 'aida init' suggests:
+
+  1. The init-time write and the embedded-template diverge (template-vs-init-time generation mismatch)
+  2. Or the file is auto-generated with timestamps/user-specific content that the embedded template doesn't have placeholders for
+
+  Sibling pattern to TASK-540 (codex-mcp-setup.md template sync). The 'init scaffolded a file that doesn't match its own template' shape is recurring.
+
+  Empirically valuable: this is the FIRST IMPRESSION of an AIDA project. A clean init should report scaffolding healthy. STALE-on-arrival is the Trojan-horse positioning's worst case (operator sees clutter where they should see depth).
+
+  Reproduce: fresh aida init + aida status. Observe immediate STALE on .claude/AIDA.md.
+
+  — master observation, captured during operator's fresh hello-world dogfood test
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T20:05:09.898436885Z
+modified_at: 2026-05-25T20:05:09.898436885Z
+req_type: Task
+tags:
+- aida:init
+- aida:scaffold
+- first-user-papercut
+- from-advisor:TASK-540
+- from-self-test
+- kind:observation
+- linked:TASK-540
+- severity:minor
+- template-sync
