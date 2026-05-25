@@ -21508,7 +21508,11 @@ mod session_start_args_tests {
 /// BUG-379: pre-flight spec-status gate tests. trace:BUG-379 | ai:claude
 #[cfg(test)]
 mod preflight_spec_status_tests {
-    use super::{preflight_spec_status, PreflightDecision, RequirementStatus};
+    use super::{
+        preflight_spec_status, session_start_status_bump_preconditions_met, PreflightDecision,
+        RequirementStatus,
+    };
+    use tempfile::TempDir;
 
     #[test]
     fn no_spec_match_just_allows() {
@@ -21650,6 +21654,70 @@ mod preflight_spec_status_tests {
             PreflightDecision::AllowWithWarning(_)
         ));
     }
+
+    #[test]
+    fn status_bump_waits_for_worktree_and_lease() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("worktree");
+        let lease = tmp.path().join("lease.toml");
+
+        assert!(
+            !session_start_status_bump_preconditions_met(
+                Some(&RequirementStatus::Approved),
+                &worktree,
+                &lease,
+            ),
+            "missing worktree + lease must not permit Approved -> In Progress"
+        );
+
+        std::fs::create_dir_all(&worktree).unwrap();
+        assert!(
+            !session_start_status_bump_preconditions_met(
+                Some(&RequirementStatus::Approved),
+                &worktree,
+                &lease,
+            ),
+            "worktree without lease must not permit Approved -> In Progress"
+        );
+
+        std::fs::write(&lease, "id = \"test\"\n").unwrap();
+        assert!(
+            session_start_status_bump_preconditions_met(
+                Some(&RequirementStatus::Approved),
+                &worktree,
+                &lease,
+            ),
+            "Approved -> In Progress is allowed only after worktree + lease exist"
+        );
+    }
+
+    #[test]
+    fn status_bump_preconditions_ignore_non_approved_statuses() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("worktree");
+        let lease = tmp.path().join("lease.toml");
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(&lease, "id = \"test\"\n").unwrap();
+
+        for status in [
+            RequirementStatus::Planned,
+            RequirementStatus::InProgress,
+            RequirementStatus::NeedsAttention,
+            RequirementStatus::Done,
+            RequirementStatus::Completed,
+            RequirementStatus::Rejected,
+            RequirementStatus::Draft,
+        ] {
+            assert!(
+                !session_start_status_bump_preconditions_met(Some(&status), &worktree, &lease),
+                "{status:?} must not be auto-bumped by session start"
+            );
+        }
+        assert!(
+            !session_start_status_bump_preconditions_met(None, &worktree, &lease),
+            "non-spec scopes have no status to bump"
+        );
+    }
 }
 
 /// Walk a candidate list of branch names and return the first that's free
@@ -21784,6 +21852,16 @@ fn preflight_spec_status(
         RequirementStatus::Approved => PreflightDecision::AllowAndBump,
         RequirementStatus::Planned => PreflightDecision::Allow,
     }
+}
+
+fn session_start_status_bump_preconditions_met(
+    preflight_status: Option<&RequirementStatus>,
+    worktree_path: &std::path::Path,
+    lease_file: &std::path::Path,
+) -> bool {
+    matches!(preflight_status, Some(RequirementStatus::Approved))
+        && worktree_path.exists()
+        && lease_file.exists()
 }
 
 fn session_start(
@@ -22439,7 +22517,12 @@ fn session_start(
     // (manual edit, doctor heal, another path) we leave the status alone.
     // Failure is logged, not fatal — the doctor's spec-status-drift
     // category is the backstop. trace:BUG-379 | ai:claude
-    let bumped_to_in_progress = if matches!(preflight_status, Some(RequirementStatus::Approved)) {
+    let can_bump_status = session_start_status_bump_preconditions_met(
+        preflight_status.as_ref(),
+        &worktree_path,
+        &lease_file,
+    );
+    let bumped_to_in_progress = if can_bump_status {
         let storage = Storage::new(project_root.join(".aida-store"));
         match storage.load().and_then(|mut store| {
             let mut bumped = false;
