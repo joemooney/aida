@@ -27,7 +27,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:09.898436885Z
-modified_at: 2026-05-25T20:05:09.898436885Z
+modified_at: 2026-05-25T20:28:18.077192032Z
 req_type: Task
 tags:
 - aida:init
@@ -39,3 +39,9 @@ tags:
 - linked:TASK-540
 - severity:minor
 - template-sync
+comments:
+- id: 019e60d2-f31d-75d3-8a3e-62fcdd6580b2
+  author: joe
+  content: Commit 44c99a00 references this requirement
+  created_at: 2026-05-25T20:28:18.077192032Z
+  modified_at: 2026-05-25T20:28:18.077192032Z
