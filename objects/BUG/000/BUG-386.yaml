@@ -1,0 +1,82 @@
+id: 019e60c5-a0ac-7563-84f4-f631a9fa3844
+spec_id: BUG-386
+agreed_id: BUG-386
+title: aida init scaffolds only 20 of 38 .claude/skills/ templates — /aida-pickup + ~17 others missing on fresh init
+description: |-
+  ## Symptom
+
+  Fresh 'aida init' on a new project scaffolds only ~half the expected .claude/skills/ files. Verified 2026-05-25 on /home/joe/ai/aida-hello-world:
+
+  - Templates available (aida-core/templates/skills/): 38
+  - Actually written to .claude/skills/ on disk: 20
+
+  Missing critical daily-drivers including:
+  - aida-pickup.md (the queue-work + drive-to-completion skill)
+  - aida-pr.md (the ship-via-PR skill)
+  - aida-drain-queue.md
+  - aida-rebase.md
+  - aida-advise.md
+  - (probably ~13 more — full diff needed)
+
+  Present:
+  aida-backlog-groom, aida-capture, aida-commit, aida-digest, aida-docs, aida-docs-review, aida-evaluate, aida-implement, aida-import-plan, aida-onboard, aida-plan, aida-recover, aida-release, aida-req, aida-review, aida-search, aida-sprint, aida-standup, aida-sync, aida-test (20 files + 'local' directory)
+
+  ## Impact
+
+  CRITICAL for first-user. The whole 'aida queue work SPEC' → '/aida-pickup SPEC' Claude Code flow is BROKEN on fresh projects. The user's first 'aida queue work TASK-007' attempt failed with:
+
+    Unknown command: /aida-pickup
+    Args from unknown skill: TASK-007
+
+  Operator hit this immediately on hello-world testing. Trojan-horse-positioning worst-case: visible product breaks before depth surfaces.
+
+  ## Possible root causes
+
+  1. build.rs doesn't embed all templates (selective inclusion)
+  2. ensure_claude_scaffold_apply (or equivalent) filters templates by some criterion
+  3. Template-set mismatch between aida-core/templates/skills/ + the embedded set
+  4. Scaffolding runs but fails partway through for some files without error
+
+  ## Acceptance
+
+  - [ ] aida init scaffolds ALL 38 (or whatever current count) skill templates
+  - [ ] aida init scaffolds ALL command templates (current scaffolds 17 of N — verify)
+  - [ ] Verify on fresh hello-world: ls .claude/skills | wc -l matches ls aida-core/templates/skills | wc -l
+  - [ ] Add a test: post-aida-init, count(.claude/skills/*) == count(aida-core/templates/skills/*)
+  - [ ] Document in CLAUDE.md what gets scaffolded vs what doesn't (if any selection IS intentional)
+
+  ## Reproduce
+
+    mkdir /tmp/aida-init-skills-test
+    cd /tmp/aida-init-skills-test
+    git init
+    echo "# test" > README.md && git add . && git commit -m 'init'
+    aida init
+    ls .claude/skills | wc -l    # current: ~20; expected: ~38
+    ls aida-core/templates/skills | wc -l   # but you'd need aida repo for this comparison
+
+  ## Composes with
+
+  - BUG-375 (Codex SKILL.md frontmatter — sibling scaffolding-quality bug)
+  - TASK-1-098 (.claude/AIDA.md STALE-on-init derived-value drift)
+  - TASK-540 (codex-mcp-setup.md template sync)
+  - The whole 'first-user-papercut' batch — these compound on early-impression UX
+
+  ## Origin
+
+  2026-05-25 operator ran 'aida queue work TASK-007' on a fresh hello-world repo per master's walkthrough. The launched Claude Code session reported 'Unknown command: /aida-pickup' because the skill wasn't scaffolded. Master investigated; found 20 of 38 skills present. This is the single highest-impact first-user-experience bug surfaced tonight.
+
+  trace:BUG-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T20:13:45.004660235Z
+modified_at: 2026-05-25T20:13:45.004660235Z
+req_type: Bug
+tags:
+- aida:init
+- first-user-blocker
+- from-dogfood-test
+- from-self-test
+- scaffolding
