@@ -257,6 +257,93 @@ note "  aida doctor                      # multi-agent state drift detect + heal
 pause
 
 # -----------------------------------------------------------------------------
+# Explore menu — let the operator pick what to demonstrate next
+# -----------------------------------------------------------------------------
+
+heading "Optional — explore more substrate surfaces"
+
+while true; do
+    echo
+    note "Pick a surface to demonstrate (or skip to cleanup):"
+    note "  [1] aida queue work — the queue → /aida-pickup → ship lifecycle"
+    note "  [2] aida history --events — the substrate event ledger"
+    note "  [3] aida doctor — multi-agent state drift detect + heal"
+    note "  [4] aida search — full-text query across specs"
+    note "  [5] aida findings add — advisor observation capture"
+    note "  [6] aida queue list / next / done — queue manipulation primitives"
+    note "  [s] Skip to cleanup"
+    echo
+    if [ ! -t 0 ]; then
+        # Non-interactive (CI / piped): skip the menu entirely.
+        dim "(non-interactive shell — skipping explore menu)"
+        break
+    fi
+    printf "${DIM}Choice: ${NC}"
+    read -r choice
+    case "${choice,,}" in
+        1)
+            heading "aida queue work — the queue → /aida-pickup → ship lifecycle"
+            note "TASK-007 (the onboarding task) is still on the queue from 'aida init':"
+            show_cmd "demo$" aida queue list
+            echo
+            note "'aida queue work TASK-007' would:"
+            note "  1. Create a sibling worktree at ~/ai/${DEMO_REPO_NAME}-task-007"
+            note "  2. Create a session lease (.aida/sessions/<id>.toml)"
+            note "  3. Bump TASK-007 status Approved → In Progress (BUG-379)"
+            note "  4. Launch claude code in the worktree with /aida-pickup TASK-007"
+            note "  5. The implementer skill loads spec context + drives the work to completion"
+            note "  6. 'aida pr ship' opens the PR + queues a reviewer story"
+            note "  7. BUG-376's banner signals 'exit now' — Ctrl+D back to operator shell"
+            note "  8. agy2 (integrator) merges + auto-bump fires Done → Completed"
+            echo
+            note "We won't actually launch a Claude Code session in this demo (would"
+            note "be disruptive to script flow), but you can see the queue is ready:"
+            show_cmd "demo$" aida queue next
+            ;;
+        2)
+            heading "aida history --events — the substrate ledger"
+            note "Every status transition, comment, tag edit shows up as an event:"
+            show_cmd "demo$" aida history --events --limit 10
+            ;;
+        3)
+            heading "aida doctor — multi-agent state drift detect + heal"
+            note "Read-only diagnostic by default; --heal applies safe fixes per category."
+            show_cmd "demo$" aida doctor
+            ;;
+        4)
+            heading "aida search — full-text search across specs"
+            show_cmd "demo$" aida search Hello
+            echo
+            note "Substrate-grounded search — finds specs by description content, not just title."
+            ;;
+        5)
+            heading "aida findings add — advisor observation capture"
+            note "Capture a pattern you've spotted without making it a full BUG yet."
+            note "Recurrence ≥ 3 promotes to a substrate-actionable spec (STORY-467)."
+            show_cmd "demo$" aida findings add --kind observation --severity minor \
+                --note "Demo finding — captured during aida-demo.sh walkthrough. Safe to dismiss." \
+                --tags demo,from-aida-demo
+            echo
+            show_cmd "demo$" aida findings list
+            ;;
+        6)
+            heading "aida queue list / next / done — queue primitives"
+            show_cmd "demo$" aida queue list
+            echo
+            show_cmd "demo$" aida queue next
+            ;;
+        s|skip|"")
+            break
+            ;;
+        *)
+            dim "(unknown choice: $choice)"
+            ;;
+    esac
+    echo
+    note "Pick another, or 's' to skip to cleanup."
+done
+
+# -----------------------------------------------------------------------------
 # Cleanup
 # -----------------------------------------------------------------------------
 
