@@ -15970,6 +15970,19 @@ fn collect_doctor_findings(
         }
     }
 
+    for item in &cleanup.sticky_in_progress {
+        push(DoctorFinding {
+            category: "spec-status-drift".to_string(),
+            id: item.spec_id.clone(),
+            summary: format!(
+                "{} is In Progress but no active lease holds it",
+                item.spec_id
+            ),
+            action: "revert spec to Approved (no active lease found)".to_string(),
+            safe_heal: true,
+        });
+    }
+
     for item in &cleanup.uncommitted_wip {
         let Some(scope) = item.scope.as_ref() else {
             continue;
@@ -16309,28 +16322,36 @@ fn heal_doctor_spec_status(
 ) -> Result<DoctorHealResult> {
     let storage = Storage::new(project_root.join(".aida-store"));
     let mut store = storage.load()?;
-    let mut changed = false;
+    let mut action = None;
     for req in &mut store.requirements {
         if req.spec_id.as_deref() != Some(finding.id.as_str()) {
             continue;
         }
-        if matches!(req.status, RequirementStatus::Approved) {
+        if matches!(req.status, RequirementStatus::Approved)
+            && finding.action.starts_with("bump spec to In Progress")
+        {
             req.status = RequirementStatus::InProgress;
             req.modified_at = chrono::Utc::now();
-            changed = true;
+            action = Some("bumped Approved spec to In Progress".to_string());
+        } else if matches!(req.status, RequirementStatus::InProgress)
+            && finding.action.contains("no active lease")
+        {
+            req.status = RequirementStatus::Approved;
+            req.modified_at = chrono::Utc::now();
+            action = Some(format!(
+                "reverted {} from In Progress to Approved (no active lease found)",
+                finding.id
+            ));
         }
     }
-    if changed {
+    if action.is_some() {
         storage.save(&store)?;
     }
+    let changed = action.is_some();
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
-        action: if changed {
-            "bumped Approved spec to In Progress".to_string()
-        } else {
-            "no automatic status change applied".to_string()
-        },
+        action: action.unwrap_or_else(|| "no automatic status change applied".to_string()),
         status: if changed { "healed" } else { "skipped" }.to_string(),
         detail: None,
     })
@@ -16627,6 +16648,88 @@ mod story_462_doctor_tests {
         .unwrap();
         assert_eq!(result.status, "healed");
         assert!(!lock_info_path.exists());
+    }
+
+    #[test]
+    fn doctor_heals_in_progress_without_lease_back_to_approved() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path();
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
+        let storage = Storage::new(project_root.join(".aida-store"));
+        let mut req = Requirement::new("orphaned in-progress".into(), String::new());
+        req.spec_id = Some("TASK-561".into());
+        req.status = RequirementStatus::InProgress;
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![req];
+        storage.save(&store).unwrap();
+
+        let finding = DoctorFinding {
+            category: "spec-status-drift".to_string(),
+            id: "TASK-561".to_string(),
+            summary: "TASK-561 is In Progress but no active lease holds it".to_string(),
+            action: "revert spec to Approved (no active lease found)".to_string(),
+            safe_heal: true,
+        };
+        let result = heal_doctor_finding(
+            project_root,
+            &finding,
+            &DoctorRunOptions {
+                heal: true,
+                yes: true,
+                category: Some("spec-status-drift".to_string()),
+                json: false,
+                force: false,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.status, "healed");
+        assert_eq!(
+            result.action,
+            "reverted TASK-561 from In Progress to Approved (no active lease found)"
+        );
+        let reloaded = storage.load().unwrap();
+        assert_eq!(reloaded.requirements[0].status, RequirementStatus::Approved);
+    }
+
+    #[test]
+    fn doctor_skips_stale_in_progress_orphan_finding_after_manual_fix() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path();
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
+        let storage = Storage::new(project_root.join(".aida-store"));
+        let mut req = Requirement::new("already fixed".into(), String::new());
+        req.spec_id = Some("TASK-561".into());
+        req.status = RequirementStatus::Approved;
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![req];
+        storage.save(&store).unwrap();
+
+        let finding = DoctorFinding {
+            category: "spec-status-drift".to_string(),
+            id: "TASK-561".to_string(),
+            summary: "TASK-561 is In Progress but no active lease holds it".to_string(),
+            action: "revert spec to Approved (no active lease found)".to_string(),
+            safe_heal: true,
+        };
+        let result = heal_doctor_finding(
+            project_root,
+            &finding,
+            &DoctorRunOptions {
+                heal: true,
+                yes: true,
+                category: Some("spec-status-drift".to_string()),
+                json: false,
+                force: false,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.status, "skipped");
+        let reloaded = storage.load().unwrap();
+        assert_eq!(reloaded.requirements[0].status, RequirementStatus::Approved);
     }
 
     #[test]
