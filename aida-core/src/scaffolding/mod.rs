@@ -1598,6 +1598,10 @@ impl Scaffolder {
                     "Antigravity brief pickup guide",
                 ),
                 ("per-agent-config.md", "Per-agent launch config guide"),
+                (
+                    "session-communication.md",
+                    "Agent session communication guide",
+                ),
             ];
             for (name, desc) in agent_docs {
                 let key = format!("docs/agents/{name}");
@@ -2561,6 +2565,10 @@ mod tests {
             .path()
             .join("docs/agents/per-agent-config.md")
             .exists());
+        assert!(temp_dir
+            .path()
+            .join("docs/agents/session-communication.md")
+            .exists());
         assert!(temp_dir.path().join("docs/extending-skills.md").exists());
     }
 
@@ -2580,6 +2588,7 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-brief-pickup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/per-agent-config.md")));
+        assert!(paths.contains(&PathBuf::from("docs/agents/session-communication.md")));
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
         assert!(paths.contains(&PathBuf::from(".aida/reserved-paths.toml")));
         assert!(paths.contains(&PathBuf::from(".aida/agents.toml")));
