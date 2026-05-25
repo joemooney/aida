@@ -74,10 +74,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T02:25:19.101203419Z
-modified_at: 2026-05-25T02:32:59.643039591Z
+modified_at: 2026-05-25T06:24:47.247548875Z
 req_type: Task
 tags:
 - batch:agent-launch-ux
+- batch:overnight-orthogonal
 - cross-agent
 - documentation
 - first-user-papercut
