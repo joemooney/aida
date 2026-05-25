@@ -35,5 +35,5 @@ Branch deletion is not part of normal safe healing. It requires both `--yes` and
 - `orphan-worktrees`: Git worktree exists but no lease references it.
 - `orphan-branches`: local work branch is ahead of main with no open PR.
 - `stale-reviewer-leases`: reviewer lease points at a PR that already merged.
-- `stale-locks`: stale `.aida/cache.db.lock-info` sidecar from a dead cache writer.
+- `stale-locks`: stale `.aida/cache.db.lock-info` sidecar from a dead cache writer. See [`cache-locks.md`](cache-locks.md) for retry tuning and override guidance.
 - `OBE-briefs`: obsolete briefs for completed or rejected specs.

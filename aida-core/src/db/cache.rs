@@ -122,7 +122,7 @@ const SCHEMA_VERSION: &str = "2";
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
 const META_KEY_BUILT_AT: &str = "built_at";
-const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[50, 200, 500];
+const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[100, 200, 400, 800, 1600, 3200, 6400, 12800];
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub struct CacheLockInfo {
@@ -1059,6 +1059,35 @@ mod tests {
     }
 
     #[test]
+    fn default_cache_retry_budget_is_patient_enough_for_schema_contention() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+
+        let delays = cache_retry_delays()
+            .into_iter()
+            .map(|duration| duration.as_millis())
+            .collect::<Vec<_>>();
+
+        assert_eq!(delays, vec![100, 200, 400, 800, 1600, 3200, 6400, 12800]);
+        assert!(
+            delays.iter().sum::<u128>() >= 10_000,
+            "default retry budget should cover 10-15s production cache locks"
+        );
+    }
+
+    #[test]
+    fn cache_retry_count_zero_keeps_empty_retry_budget() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
+        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+
+        assert!(cache_retry_delays().is_empty());
+
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+    }
+
+    #[test]
     fn cache_lock_info_round_trips_sidecar_path() {
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -1167,5 +1196,50 @@ mod tests {
         remove_cache_lock_info(&cache_path);
 
         std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+    }
+
+    #[test]
+    fn cache_retry_exhaustion_keeps_lock_holder_hint() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "2");
+        std::env::set_var("AIDA_CACHE_RETRY_MS", "1");
+
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = cache_lock_info_path(&cache_path);
+        let other = CacheLockInfo {
+            pid: std::process::id().saturating_add(1),
+            command: "aida queue work".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            user: "tester".to_string(),
+            session_id: None,
+        };
+        std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
+
+        let mut attempts = 0usize;
+        let err = match with_cache_retry(&cache_path, "apply cache schema", || {
+            attempts += 1;
+            Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error {
+                    code: rusqlite::ErrorCode::DatabaseLocked,
+                    extended_code: 6,
+                },
+                None,
+            )))
+        }) {
+            Ok(()) => panic!("lock should exhaust retries"),
+            Err(err) => err,
+        };
+
+        assert_eq!(attempts, 3);
+        let msg = err.to_string();
+        assert!(msg.contains("database is locked"), "{msg}");
+        assert!(msg.contains("pid="), "{msg}");
+        assert!(msg.contains("aida queue work"), "{msg}");
+        assert!(msg.contains("aida doctor heal stale-locks"), "{msg}");
+        remove_cache_lock_info(&cache_path);
+
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+        std::env::remove_var("AIDA_CACHE_RETRY_MS");
     }
 }
