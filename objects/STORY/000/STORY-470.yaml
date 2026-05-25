@@ -1,0 +1,26 @@
+id: 019e5de5-e792-7d73-9779-74e8e6909e56
+spec_id: STORY-470
+agreed_id: STORY-470
+title: 'Review PR-317: [AI:codex] feat(agent): load per-agent default launch flags (TASK-557)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e5ddd`) for branch `task-557`.
+
+  - PR: <https://github.com/joemooney/aida/pull/317>
+  - Branch: `task-557` → `main`
+
+  ## Covers
+
+  - TASK-557
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 317` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T06:50:08.658684552Z
+modified_at: 2026-05-25T06:50:08.658684552Z
+req_type: Story
