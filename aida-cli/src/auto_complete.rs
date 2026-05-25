@@ -1657,6 +1657,10 @@ fn resume_after_advisor(
 /// the per-phase timing the telemetry layer (TASK-266) records.
 /// trace:STORY-246 | ai:claude
 /// trace:TASK-266 | ai:claude
+// TASK-552: retained as the public no-skip orchestration entry point; current
+// CLI paths use the lifecycle-aware wrapper but tests/future callers need this
+// stable facade.
+#[allow(dead_code)]
 pub(crate) fn orchestrate(
     driver: &mut dyn PhaseDriver,
     spec: &str,
@@ -1998,7 +2002,13 @@ pub(crate) struct BatchDrainResult {
 /// One completed segment of a multi-batch drain. trace:TASK-310 | ai:codex
 #[derive(Debug, Clone)]
 pub(crate) struct BatchChainStep {
+    // TASK-552: retained for per-batch telemetry/rendering once the chain
+    // summary grows beyond aggregate fields.
+    #[allow(dead_code)]
     pub(crate) batch_name: String,
+    // TASK-552: retained with `batch_name` as the stable per-step result shape
+    // for future detailed multi-batch summaries.
+    #[allow(dead_code)]
     pub(crate) result: BatchDrainResult,
 }
 
@@ -2008,6 +2018,9 @@ pub(crate) struct BatchChainStep {
 /// trace:TASK-310 | ai:codex
 #[derive(Debug, Clone)]
 pub(crate) struct BatchChainDrainResult {
+    // TASK-552: retained for future detailed rendering of each chained batch;
+    // aggregate fields are what the current CLI consumes.
+    #[allow(dead_code)]
     pub(crate) steps: Vec<BatchChainStep>,
     pub(crate) shipped: Vec<String>,
     pub(crate) punted: Vec<String>,
