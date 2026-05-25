@@ -57,6 +57,23 @@ note() { printf "${YELLOW}ℹ %s${NC}\n" "$*"; }
 ok() { printf "${GREEN}✓ %s${NC}\n" "$*"; }
 fail() { printf "${YELLOW}✗ %s${NC}\n" "$*" >&2; }
 dim() { printf "${DIM}%s${NC}\n" "$*"; }
+# show_cmd PROMPT_PREFIX CMD [ARGS...] — echo a command in a shell-prompt-like
+# form then execute it. Operator sees both the command AND its output, which
+# matters for a walkthrough demo (otherwise the output looks like magic).
+show_cmd() {
+    local prefix="$1"
+    shift
+    printf "${DIM}%s${NC} ${GREEN}\$ %s${NC}\n" "$prefix" "$*"
+    "$@"
+}
+# show_file PATH — display a file's contents in a labelled box. For showing
+# what implementation work was done in scripted demos.
+show_file() {
+    local path="$1"
+    printf "${DIM}--- contents of %s ---${NC}\n" "$path"
+    cat "$path"
+    printf "${DIM}--- end of %s ---${NC}\n" "$path"
+}
 pause() {
     if [ -t 0 ]; then
         printf "${DIM}--- Press Enter to continue (or Ctrl+C to abort) ---${NC}"
@@ -113,9 +130,8 @@ cd "$DEMO_LOCAL_DIR"
 # -----------------------------------------------------------------------------
 
 heading "Initializing AIDA (the one-command setup)"
-dim "Running: aida init"
 
-aida init 2>&1 | tail -20
+show_cmd "demo$" aida init
 ok "aida init complete"
 echo
 note "What was just scaffolded:"
@@ -133,12 +149,12 @@ pause
 
 heading "Pushing scaffolding + orphan substrate to GitHub"
 
-git add .
-git commit -m "chore(aida): scaffold AIDA into demo project" --quiet || dim "nothing to commit"
-git push origin main --quiet
+show_cmd "demo$" git add .
+show_cmd "demo$" git commit -m "chore(aida): scaffold AIDA into demo project" --quiet || dim "nothing to commit"
+show_cmd "demo$" git push origin main --quiet
 ok "main pushed"
 
-git push origin aida-store --quiet 2>&1 | tail -3 || true
+show_cmd "demo$" git push origin aida-store --quiet
 ok "aida-store orphan branch pushed (substrate now lives on GitHub)"
 
 # -----------------------------------------------------------------------------
@@ -146,16 +162,17 @@ ok "aida-store orphan branch pushed (substrate now lives on GitHub)"
 # -----------------------------------------------------------------------------
 
 heading "Initial substrate state"
-note "Run: aida status"
-aida status
+show_cmd "demo$" aida status
 pause
 
 heading "What's in the substrate after init"
-note "Run: aida list"
-aida list
+show_cmd "demo$" aida list
+note "By default 'aida list' hides Meta-type specs (config/AI-prompt templates,"
+note "not work-to-do). Reveal them explicitly:"
 echo
-note "The 5 META-* specs are AI prompt templates AIDA uses for self-customization"
-note "TASK-N is the auto-enqueued onboarding task (file scaffolding into git)"
+show_cmd "demo$" aida list --type meta
+note "These META-* are AI prompt templates AIDA uses for self-customization."
+note "TASK-007 is the auto-enqueued onboarding task (file scaffolding into git)."
 pause
 
 # -----------------------------------------------------------------------------
@@ -164,7 +181,7 @@ pause
 
 heading "Filing the first real spec — STORY for hello.sh"
 
-aida add --type story --status approved --priority medium \
+show_cmd "demo$" aida add --type story --status approved --priority medium \
     --title "Print 'Hello, World!' from hello.sh" \
     --description "Add hello.sh that prints 'Hello, World!' to stdout. Acceptance: ./hello.sh prints the literal string and exits 0."
 
@@ -180,18 +197,22 @@ pause
 
 heading "Implementing — write + commit hello.sh"
 
+note "Writing hello.sh with a trace:SPEC-ID comment linking the code back to the spec:"
 cat > hello.sh <<EOF
 #!/usr/bin/env bash
-# trace:$HELLO_SPEC | ai:demo-operator
+# trace:$HELLO_SPEC | ai:claude
 echo "Hello, World!"
 EOF
 chmod +x hello.sh
-note "Created hello.sh with trace:$HELLO_SPEC | ai:demo-operator comment"
-./hello.sh
+show_file hello.sh
+echo
+show_cmd "demo$" ./hello.sh
 
-git add hello.sh
-git commit -m "feat: hello world script ($HELLO_SPEC)" --quiet
-git push origin main --quiet
+show_cmd "demo$" git add hello.sh
+note "Commit subject ends with (SPEC-ID) — the auto-bump scanner reads it. Prefix"
+note "is [AI:claude] because hello.sh has an 'ai:claude' trace comment."
+show_cmd "demo$" git commit -m "[AI:claude] feat: hello world script ($HELLO_SPEC)" --quiet
+show_cmd "demo$" git push origin main --quiet
 ok "Committed + pushed with trailer ($HELLO_SPEC) — auto-bump will pick this up"
 pause
 
@@ -201,24 +222,38 @@ pause
 
 heading "Auto-bump via aida pull"
 note "AIDA's pull scans recent commits for (SPEC-ID) trailers and bumps Done → Completed"
-aida pull
+show_cmd "demo$" aida pull
 echo
-note "Now verify $HELLO_SPEC's status:"
-aida show "$HELLO_SPEC" 2>/dev/null | head -10 || aida show "STORY-1" 2>/dev/null | head -10
+note "Verify $HELLO_SPEC's status — should show Done (or Completed if the auto-bump"
+note "scanner picked up the commit), plus a 'Git linkage' section listing hello.sh"
+note "since the file has a 'trace:$HELLO_SPEC' comment:"
+show_cmd "demo$" aida show "$HELLO_SPEC"
 pause
 
 # -----------------------------------------------------------------------------
 # Final state
 # -----------------------------------------------------------------------------
 
-heading "Final state"
-aida status
+heading "Final state — what the substrate now tracks"
+
+show_cmd "demo$" aida status
 echo
-note "Notice the substrate tracks:"
-note "  - Your spec ($HELLO_SPEC) with status, priority, type, tags"
-note "  - The trace link from hello.sh to $HELLO_SPEC"
-note "  - The commit lineage via git log + (SPEC-ID) trailers"
-note "  - All of this is queryable via 'aida show / list / search / history --events'"
+
+note "The trace-link is queryable via the substrate. Look at hello.sh's"
+note "trace comment + see the substrate side of the same link:"
+echo
+show_cmd "demo$" grep -n "trace:" hello.sh
+echo
+note "And from the spec side, the Git linkage section listed hello.sh"
+note "(see 'aida show $HELLO_SPEC' output above). That's the bidirectional"
+note "code↔spec link AIDA's substrate maintains."
+echo
+note "Substrate surfaces you can now query:"
+note "  aida show $HELLO_SPEC            # spec body + git linkage"
+note "  aida history --events            # chronological substrate ledger"
+note "  aida list                        # backlog view"
+note "  aida search 'Hello'              # full-text"
+note "  aida doctor                      # multi-agent state drift detect + heal"
 pause
 
 # -----------------------------------------------------------------------------
