@@ -102,7 +102,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:12:37.811029636Z
-modified_at: 2026-05-25T07:43:03.933889984Z
+modified_at: 2026-05-25T16:17:51.743501938Z
 req_type: Story
 tags:
 - agent-metrics
@@ -114,3 +114,12 @@ tags:
 - observability
 - phased-epic-candidate
 - substrate-learning-loop
+comments:
+- id: 019e5fed-aa7f-78f3-b6da-16e6be8b9700
+  author: joe
+  content: |-
+    Strong empirical fuel: TASK-1-096 (just filed) documents AGY demonstrating THREE distinct failure modes in ONE overnight session (plagiarism PR-11, hallucination PR-16, dirty-tree compile failure PR-14). This is exactly the per-agent track-record data STORY-471's metrics layer will eventually aggregate. When metrics ships, AGY's discipline-violation pattern becomes a queryable + comparable signal vs Codex's high-discipline track record + Claude's substrate-literacy track record. Tonight's data accumulating = morning's substrate-grounded dispatch decisions possible.
+
+    — master 2026-05-25 (overnight observation period)
+  created_at: 2026-05-25T16:17:51.743501938Z
+  modified_at: 2026-05-25T16:17:51.743501938Z
