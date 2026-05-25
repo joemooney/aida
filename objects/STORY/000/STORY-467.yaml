@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-24T21:33:07.291263437Z
+modified_at: 2026-05-25T01:12:46.642031004Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -139,3 +139,35 @@ comments:
     — master observation 2026-05-24
   created_at: 2026-05-24T21:33:07.291263437Z
   modified_at: 2026-05-24T21:33:07.291263437Z
+- id: 019e5cb1-0932-7bf0-bb95-e8523a79c8dd
+  author: joe
+  content: |-
+    OBSERVATION 2026-05-24 (recurrence-2 of agent-scratchpad-drift class — BUG-378 is recurrence-1):
+
+    Pattern: agent re-loads its LOCAL session-scratchpad (Antigravity's '~/.gemini/antigravity-cli/brain/<session-id>/implementation_plan.md', or Claude Code's analogous artifacts) AFTER context compaction or resumption. The scratchpad has STALE state from an EARLIER session (different SPEC-ID, different worktree). Agent gets stuck reading + re-reading the stale plan + claiming they're resuming work on it. Never invokes AIDA brief surface.
+
+    Distinct from BUG-378 (already-shipped): BUG-378 catches the case where agent RUNS aida queue done / aida edit --status completed while pending briefs exist for their type. The banner fires THEN. But this failure mode never reaches any AIDA lifecycle command — agent loops in resumption-mode reading their local scratchpad without invoking substrate.
+
+    Empirical case 2026-05-24:
+    - agy1 (Antigravity instance) was on TASK-542 (lease 019e5b72, brief T180754Z)
+    - After some context disruption, agy1 began re-reading '~/.gemini/antigravity-cli/brain/ada92360-.../implementation_plan.md' which was from their OLD TASK-518 session
+    - They kept saying 'Resuming The Plan' / 'restarting a task' referring to TASK-518 (long-shipped)
+    - Listed permissions repeatedly; read the stale plan repeatedly; never ran 'aida brief list --for-agent antigravity' to poll current assignment
+    - Required operator hard-intervention via paste-ready directive to redirect to correct worktree + brief
+
+    Recurrence count: 2 (BUG-378 was 1 — different failure surface, same class)
+
+    Promotion trigger: if 2+ MORE occurrences within 30 days AND they share the post-compaction-reads-stale-scratchpad shape, promote to BUG: 'Agent invocation flow should poll AIDA brief queue at every turn boundary, not rely on local scratchpad as ground truth.'
+
+    Substrate-side fixes worth considering:
+    1. Inject AIDA_AGENT_TYPE + current brief-queue paths into the agent's invocation env, so the agent's startup sequence reads briefs before scratchpad
+    2. Skill template directive at the TOP of every agent skill: 'BEFORE reading any local file, run: aida brief list --for-agent <your type>. Your local scratchpad is NOT authoritative.'
+    3. (Heavier) post-compaction-hook that auto-inserts a 'check briefs first' system message
+
+    Mitigating factor: operator hard-intervention works. The pattern is recoverable; it's just expensive (operator attention + agent re-orientation).
+
+    Linked specs: BUG-378 (sibling — different surface, same class), STORY-462 (doctor could catch via brief-lease-drift category retrospectively), STORY-465 (awaiting-you status section — would surface agent's pending brief to operator), TASK-542 (the specific work this loop blocked).
+
+    — master observation 2026-05-24
+  created_at: 2026-05-25T01:12:46.642031004Z
+  modified_at: 2026-05-25T01:12:46.642031004Z
