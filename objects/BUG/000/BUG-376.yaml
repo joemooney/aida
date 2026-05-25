@@ -70,7 +70,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T17:21:42.292598488Z
-modified_at: 2026-05-24T19:09:55.408371632Z
+modified_at: 2026-05-25T07:50:26.118032991Z
 req_type: Bug
 tags:
 - batch:ceiling-pattern
@@ -78,6 +78,12 @@ tags:
 - from-self-test
 - implementer-discipline
 - substrate-as-bouncer
+comments:
+- id: 019e5e1d-1a46-7c91-aee4-0a20c70e9108
+  author: joe
+  content: Commit 6fa7788c references this requirement
+  created_at: 2026-05-25T07:50:26.118032991Z
+  modified_at: 2026-05-25T07:50:26.118032991Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T19:09:55.408371632Z
