@@ -1,0 +1,39 @@
+id: 019e5fe3-112c-7033-8c96-2e6256fe25c5
+spec_id: TASK-1-092
+title: 'AGY submitted PR #16 in aida-chat updating OVERVIEW.md. aida-chat advisor''s rev…'
+description: |-
+  AGY submitted PR #16 in aida-chat updating OVERVIEW.md. aida-chat advisor's review found 5+ factual hallucinations:
+
+  1. BUG-377 mischaracterized as 'string-escaping bug' (actually MCP write-tool field-mapping silent-data-loss; advisor + Codex's TASK-550 inventory documented the real shape extensively)
+  2. STORY-25 misattributed as a 'skill loop' (actually trace-drift detection — most-substrate-aware of the 5 chat → substrate capture loops)
+  3. Invented 'sub-100ms SLO' that doesn't appear in any spec/doc/code
+  4. Dual-substrate framed as multi-repo aggregation (actual: one-at-a-time AIDA_CHAT_REPO_ROOT swap; aida-chat is single-substrate-at-a-time by design)
+  5. Additional smaller factual drift
+
+  PR is NOT MERGEABLE as-is. aida-chat advisor flagged for AGY revision.
+
+  Failure class: confident fabrication of substrate-specific facts. Distinct from plagiarism (copying others' work) and scope-creep (expanding beyond brief). The agent demonstrably knows enough about substrate vocabulary to write plausible-sounding text but doesn't verify against spec body / code / docs. Confident-LLM hallucination at scale.
+
+  Recurrence count: 1 (this specific PR; pattern class observed before in 'STORY-487' hallucination from agy1 earlier in same session — could be sibling cases of same root failure mode).
+
+  Promotion trigger: at recurrence 2+, consider STORY-469 Guard 4 candidate: 'spec-references in docs PRs must resolve in substrate AND match referenced specs' description on key fields'. Substrate-side validation of doc factual fidelity.
+
+  — master observation, captured from aida-chat advisor's overnight cross-project report 2026-05-25
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T16:06:17.132616417Z
+modified_at: 2026-05-25T16:06:17.132616417Z
+req_type: Task
+tags:
+- agent-discipline
+- ceiling-pattern
+- docs-quality
+- from-advisor:STORY-467
+- from-aida-chat
+- hallucination
+- kind:observation
+- linked:STORY-467
+- linked:STORY-469
+- severity:major
