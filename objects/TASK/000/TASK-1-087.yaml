@@ -2,14 +2,20 @@ id: 019e5dd4-175b-7551-a97a-b65d587b532f
 spec_id: TASK-1-087
 title: Smoke-test observation — will be dismissed.
 description: Smoke-test observation — will be dismissed.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T06:30:41.243609293Z
-modified_at: 2026-05-25T06:30:41.243609293Z
+modified_at: 2026-05-25T06:30:54.687863829Z
 req_type: Task
 tags:
 - from-advisor:STORY-467
 - kind:observation
 - linked:STORY-467
+comments:
+- id: 019e5dd4-4bdf-70e2-a26c-b3f2ef952a64
+  author: joe
+  content: 'Dismissed by joe 2026-05-25: smoke-test: verifying dismiss works on advisor findings'
+  created_at: 2026-05-25T06:30:54.687863829Z
+  modified_at: 2026-05-25T06:30:54.687863829Z
