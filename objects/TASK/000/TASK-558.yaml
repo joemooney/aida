@@ -1,0 +1,53 @@
+id: 019e5e14-ac3a-7061-b92c-33827f4bd735
+spec_id: TASK-558
+agreed_id: TASK-558
+title: 'STORY-463 retry budget: bump defaults to handle production schema-apply contention (50/200/500ms → exponential up to ~30s)'
+description: |-
+  STORY-463 ships lock retry-with-backoff at AIDA_CACHE_RETRY_MS + AIDA_CACHE_RETRY_COUNT. Defaults are 50/200/500ms (~750ms total). Empirically insufficient.
+
+  Reproduced 2026-05-25 ~07:30: schema-apply on cache held lock for 14s+ during 'aida findings add' invocation. User's parallel 'aida queue work' hit retry-exhausted within 750ms; failed multiple times. Operator manually bumped via AIDA_CACHE_RETRY_MS=2000 AIDA_CACHE_RETRY_COUNT=10 (~20s budget) — succeeded.
+
+  ## Fix
+
+  Bump defaults to handle real production contention without operator intervention. Options:
+
+  A. Linear bump: 200/500/1000/2000/4000 (5 attempts, ~7.5s total)
+  B. Exponential bump: 100/200/400/800/1600/3200/6400/12800 (8 attempts, ~25s total)
+  C. Configurable preset: AIDA_CACHE_RETRY_PROFILE=fast|default|patient with sensible defaults per profile
+
+  Option B is master's recommendation — handles longer contention gracefully without per-invocation env-var fiddling.
+
+  Operators who want fail-fast (CI, tests) can still set AIDA_CACHE_RETRY_COUNT=0.
+
+  ## Acceptance
+
+  - [ ] Default retry budget raises to handle ~10-15s lock holds without operator-set env vars
+  - [ ] AIDA_CACHE_RETRY_COUNT=0 still works as fail-fast for tests/CI
+  - [ ] Documentation: 'When to override AIDA_CACHE_RETRY_MS/COUNT' guide
+  - [ ] Test: synthetic 5s lock hold, default retry completes; 30s lock hold, retry exhausts with helpful error (still includes lock-holder info)
+
+  ## Composes with
+
+  - STORY-463 (the retry layer this tunes)
+  - STORY-462 (doctor catches stale-locks as a separate failure mode)
+  - Tonight's repeated cache-lock errors during multi-agent + multi-write parallel work
+
+  ## Origin
+
+  2026-05-25 ~07:30: master + operator hit cache lock 4+ times in 5 minutes during heavy parallel substrate writes. Default retry budget exhausted in <1 second; manual env var bump (AIDA_CACHE_RETRY_MS=2000 AIDA_CACHE_RETRY_COUNT=10) made commands succeed reliably.
+
+  trace:TASK-X
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T07:41:13.658815421Z
+modified_at: 2026-05-25T07:41:13.658815421Z
+req_type: Task
+tags:
+- aida:cache
+- batch:queue-work-reliability
+- defaults
+- from-overnight-drain-2026-05-25
+- from-self-test
+- resilience
