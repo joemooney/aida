@@ -1,0 +1,306 @@
+# AIDA glossary — structured single source for the demo script, TUI
+# tooltips, and any other surface that needs short authoritative
+# definitions of AIDA's vocabulary.
+#
+# Companion to:
+#   - machinery-glossary.md   — full prose definitions of machinery terms
+#   - lifecycle-vocabulary.md — full prose definitions of lifecycle verbs
+#
+# Each top-level key is the term or command name. The value uses YAML's
+# `|` block-literal scalar (preserved-newlines) so consumers can render
+# multi-line definitions verbatim. A simple awk parser also works:
+#   awk -v t="<term>" '/^[a-z]/ {flag=($0~"^"t":")} flag && /^  / {print}'
+#
+# Sections are visual only — every term sits at the top level for
+# easy keyed lookup. The order below is the intended reading order
+# when paginating through the glossary surface.
+#
+# trace:TASK-1-100 | ai:claude
+
+
+# ── Substrate concepts ─────────────────────────────────────────────────
+
+substrate: |
+  The git-canonical spec graph (one YAML file per spec under the
+  orphan 'aida-store' branch), the SQLite cache at .aida/cache.db,
+  and inline trace comments in code. The substrate is the SINGLE
+  SOURCE OF TRUTH — code and conversations are derivative artifacts.
+
+spec: |
+  Short for "specification" or "requirement". A typed, identified
+  unit of tracked work (EPIC, STORY, TASK, BUG, SPIKE, FOLDER, META,
+  DOC). Has stable ID (e.g. TASK-007), title, description, status,
+  tags, parent/child relations, and git linkage.
+
+trace-comment: |
+  An inline code↔spec link of the form:
+      // trace:<SPEC-ID> | ai:<tool>[:<confidence>]
+  AIDA scans these to build the bidirectional graph: code knows which
+  spec it implements; spec's 'Git linkage' lists every file that
+  references it. Refactoring is safe — the trace binds to SPEC-ID,
+  not function name.
+
+auto-bump: |
+  The scanner that walks recent commits on the default branch, parses
+  (SPEC-ID) trailers in commit subjects, and transitions referenced
+  specs through their lifecycle:
+      Approved / In Progress → Done       (commit references it)
+      Done → Completed                    (commit lands on main)
+  Runs as part of 'aida pull'. Manual replay: 'aida db reconcile-status'.
+
+orphan-branch: |
+  The 'aida-store' branch — a git orphan branch (no shared commit
+  history with main) holding one YAML file per spec under
+  objects/TYPE/000/SPEC-ID.yaml. Live worktree at .aida-store/.
+  Synced via 'aida db sync --pull --push' or the substrate leg of
+  'aida pull'.
+
+cache: |
+  A rebuildable SQLite read-projection at .aida/cache.db (gitignored).
+  Makes list/filter/search sub-millisecond without scanning hundreds
+  of YAMLs. Writes always go to git first (substrate-of-truth), then
+  the cache (write-through). Stale → auto-rebuild on next read.
+
+
+# ── Sessions & leases ──────────────────────────────────────────────────
+
+session: |
+  A bounded period of work with an active scope (the SPEC-ID being
+  worked on), a role (implementer / reviewer / advisor), and a
+  worktree. 'aida session start' opens one; 'aida session end' closes
+  it. Sessions are how AIDA distinguishes "what am I working on now"
+  from the full backlog.
+
+lease: |
+  An exclusive claim on a spec for a worktree. Records who's working
+  it (user_id), where (worktree path), and which spec (scope). Prevents
+  two agents accidentally implementing the same spec in parallel.
+  Acquired by 'aida session start'; released by 'aida session end'.
+
+worktree: |
+  A git working tree (one of N for a single repo) where a session
+  does its work. AIDA's session model creates a sibling worktree per
+  spec so multiple specs can be worked simultaneously without branch-
+  switching. See 'git worktree' for the underlying mechanism.
+
+scope: |
+  The SPEC-ID a session is currently working on. Set by
+  'aida session start --owns <SPEC-ID>'; shown in 'aida session
+  leases' and the statusline. Determines which spec inherits commit
+  trailers, status auto-bumps, and trace-comment linkage by default.
+
+role: |
+  The seat an agent occupies in a session: implementer (codes the
+  spec), reviewer (judges the PR), advisor (the user-facing identity
+  of the dialog role — routes work, captures friction, escalates
+  forks). Set via 'aida role enter <name>'.
+
+
+# ── Orchestrator & drain ───────────────────────────────────────────────
+
+orchestrator: |
+  The running 'aida queue work --auto-complete' process. A state
+  machine driving the six-phase pipeline for ONE spec at a time:
+      (1) implementer → (2) CI → (3) reviewer → (4) merge
+      (5) pull + auto-bump → (6) build
+  Each --auto-complete invocation is one orchestrator instance.
+
+phase: |
+  One of the orchestrator's six pipeline stages. Phases 1 and 3 spawn
+  Claude Code sessions (interactive or headless). Phases 2, 4, 5, 6
+  run deterministic commands (gh pr checks, gh pr merge, git pull,
+  cargo build) — no model. A phase failure halts the orchestrator
+  with the queue intact for retry.
+
+drain: |
+  Running 'aida queue work --auto-complete' until the queue (or a
+  --batch / --max boundary) is empty. Each spec gets its own
+  orchestrator instance, sequentially. The classic overnight pattern:
+      aida queue work --batch overnight --no-human --auto-complete
+
+batch: |
+  Specs sharing a 'batch:NAME' tag (via 'aida edit --tags batch:NAME').
+  Composes with two commands:
+      aida queue work  --batch NAME    # drain only this batch
+      aida queue progress --batch NAME # bucketed lifecycle view
+
+punt: |
+  An implementer admitting "I can't resolve this design fork safely
+  — escalate". Runs '/aida-punt', parks the spec in NeedsAttention.
+  In --no-human=both mode, the orchestrator detects the punt and
+  spawns a headless advisor that either resolves the fork or
+  escalates it to a human.
+
+finding: |
+  An advisor observation captured ahead of becoming a full spec.
+  'aida findings add' files one; recurrence ≥ 3 promotes it to a
+  substrate-actionable spec. The capture-before-build discipline:
+  observe first, decide later whether it warrants engineering effort.
+
+
+# ── Autonomy ladder ────────────────────────────────────────────────────
+
+autonomy-mode-default: |
+  Interactive mode: orchestrator pauses for human input at design
+  forks AND small ambiguities. Best for "I want to drive the
+  important decisions" sessions.
+
+autonomy-mode-zen: |
+  Advisor-on-standby mode (--zen): orchestrator pauses ONLY for
+  genuine design forks, rolls through CI/review/merge unattended.
+  Human present, but not interrupted by mechanical details.
+
+autonomy-mode-no-human: |
+  Headless mode (--no-human): orchestrator runs implementer + reviewer
+  phases via 'claude -p'. On a design fork the implementer punts;
+  a headless advisor tier resolves it (or escalates to morning
+  triage). For overnight drains on calibrated batches.
+
+auto-complete: |
+  The flag that turns 'aida queue work' from a single-session launcher
+  into a full orchestrator run. Variants:
+      --auto-complete                # phases 1-6 (full lifecycle)
+      --auto-complete=through-ci     # stops after phase 2
+      --auto-complete=through-merge  # stops after phase 4
+
+advisor: |
+  The user-facing identity of the 'dialog' role. Six responsibilities:
+  route work, capture friction as filings, articulate mental models,
+  detect strategic gaps, garden the queue, curate memory. NOT a code-
+  implementer. The headless advisor tier ('/aida-advise') is a cold-
+  boot variant launched by the orchestrator on a punt.
+
+
+# ── Spec types ─────────────────────────────────────────────────────────
+
+type-meta: |
+  Housekeeping spec — AI prompt templates AIDA uses for its own self-
+  customization (META-002 'Evaluate Requirement', META-003 'Find
+  Duplicates', etc.). Edit the description to customize behavior.
+  Hidden from default 'aida list' (which shows work-specs only).
+
+type-folder: |
+  Stateless organizational container — hierarchical grouping for
+  hundreds of specs. Has children but no status of its own (it
+  doesn't get implemented). Used for "Auth", "Billing", feature-area
+  namespacing.
+
+type-doc: |
+  Living document — narrative explanation linked to other specs via
+  'aida doc add --about <SPEC-ID>'. Different from inline spec
+  descriptions: docs persist beyond a single spec's lifecycle.
+
+type-epic-story-task-bug-spike: |
+  The agile types. EPIC = multi-story scope. STORY = user-facing
+  capability. TASK = chore/tooling/docs/work that doesn't fit a
+  traditional requirement. BUG = defect. SPIKE = time-boxed
+  investigation answering an open question.
+
+
+# ── Lifecycle states ───────────────────────────────────────────────────
+
+state-approved: |
+  Spec exists, is well-formed, and is OK to start work on. Default
+  starting state for 'aida add --status approved'. Transitions to
+  'in-progress' when 'aida session start --owns' claims it.
+
+state-in-progress: |
+  Active work — a lease is held on this spec, a session is open. Set
+  automatically by 'aida session start'. The statusline shows it.
+
+state-done: |
+  Work is finished on a branch (set by 'aida queue done' or implied
+  by a commit subject's (SPEC-ID) trailer being scanned). Not yet
+  merged.
+
+state-completed: |
+  Merged to the default branch. Set automatically by the auto-bump
+  scanner when 'aida pull' detects the (SPEC-ID) trailer commit landed
+  on main. You usually don't set Completed manually.
+
+
+# ── Daily-driver commands ──────────────────────────────────────────────
+
+cmd-aida-init: |
+  Scaffold AIDA into a project. Creates:
+      .aida/config.toml + orphan branch 'aida-store' + .aida-store/
+      .claude/skills/ + commands/ + hooks/
+      CLAUDE.md + AGENTS.md + .mcp.json
+      docs/aida/discipline/ + docs/plans/
+      META requirements + auto-enqueued onboarding task
+  Variants: --centralized (legacy), --sibling (multi-repo workspace),
+  --with-memories (opt-in starter pack), --force (overwrite).
+
+cmd-aida-status: |
+  Single-pane summary: session / branch / PR-CI / queue depth / cache
+  freshness / scaffolding state. Use this as the default "where am I,
+  what's open" check at the start of every session.
+
+cmd-aida-list: |
+  List actionable work-specs. Default hides META + completed. Filter
+  with --status / --type / --tag / --priority. Cache-backed so
+  sub-millisecond on projects with hundreds of specs.
+
+cmd-aida-show: |
+  Show a single spec's body, tags, parent/child relations, comments,
+  AND its 'Git linkage' (commits + files + branch + PR derived from
+  trace comments and (SPEC-ID) trailers). --no-git skips git linkage;
+  --verbose expands it.
+
+cmd-aida-pull: |
+  Three operations in one command:
+      1. git pull on the code branch
+      2. git pull on the orphan 'aida-store' branch (substrate)
+      3. Auto-bump scanner: walks new commits, transitions referenced
+         specs Approved/In-Progress → Done → Completed
+  The mechanism that closes the spec lifecycle without manual
+  'aida edit --status' calls.
+
+cmd-aida-add: |
+  File a new spec. Required: --title. Common: --type / --status /
+  --priority / --tags / --description. Stable SPEC-ID assigned
+  automatically.
+
+cmd-aida-edit: |
+  Modify an existing spec — status, priority, tags, description,
+  parent/child links. The most common edit is status transitions
+  ('aida edit STORY-1 --status in-progress').
+
+cmd-aida-queue-work: |
+  Pick the next spec routed to the current role and start working it.
+  Without --auto-complete: launches phase 1 (implementer session) and
+  exits. With --auto-complete: drives the full six-phase orchestrator
+  pipeline. Composes with --zen, --no-human, --batch, --max.
+
+cmd-aida-session-start: |
+  Open a session: claim a lease on a spec (--owns SPEC-ID), create
+  a sibling worktree, bump status Approved → In Progress, set the
+  active scope. Equivalent to the lease-taking step inside
+  'aida queue work'.
+
+cmd-aida-session-end: |
+  Release the active session's lease, optionally remove the worktree.
+  Pairs with 'aida session start'. Does NOT auto-bump status — use
+  'aida queue done' to mark work complete.
+
+cmd-aida-findings: |
+  Capture an advisor observation that isn't (yet) a full BUG/STORY.
+      aida findings add --kind observation --severity minor --note "..."
+      aida findings list
+      aida findings calibration   # the --calibrate drain audit log
+  Recurrence ≥ 3 promotes a finding to a substrate-actionable spec.
+
+cmd-aida-doctor: |
+  Multi-agent state drift detect + heal. 11 categories: orphaned
+  worktrees, stale leases, sticky in-progress specs, missed auto-
+  bumps, etc. Read-only by default; --heal applies safe fixes per
+  category.
+
+cmd-aida-search: |
+  Full-text search across all specs (title + description + tags).
+  Cache-backed FTS5 so fast on large projects.
+
+cmd-aida-history: |
+  Chronological substrate event ledger. Every status transition,
+  comment, tag edit shows up. --events --limit N for a tail view;
+  --spec SPEC-ID for one spec's history.
