@@ -1,0 +1,66 @@
+id: 019e60c6-d2f8-7e22-a46d-61c1e650432f
+spec_id: TASK-563
+agreed_id: TASK-563
+title: 'scripts/aida-demo.sh: gh-backed throwaway hello-world walkthrough for first-user testing'
+description: |-
+  ## Friction
+
+  Today there's no clean way to demonstrate AIDA to a first-time user / evaluator without polluting the operator's actual project tree. The walkthrough requires manual gh repo creation + mkdir + clone + aida init + manual cleanup. Each step is small but the sequence isn't documented or scripted.
+
+  ## Proposed shape
+
+  scripts/aida-demo.sh — a guided walkthrough that:
+
+  1. Pre-flight checks (aida on PATH, gh authenticated, git configured)
+  2. Creates a throwaway public GitHub repo via 'gh repo create' with timestamped name (aida-demo-YYYYMMDD-HHMMSS)
+  3. Clones locally to ~/ai/<name>
+  4. Runs aida init + commits the scaffolding + pushes
+  5. Shows initial aida status + aida list
+  6. Walks through filing a STORY + implementing hello.sh + committing with trailer
+  7. Demonstrates auto-bump via aida pull
+  8. Optional final-state inspection
+  9. Confirmation-prompted cleanup: rm -rf local dir + gh repo delete
+
+  ## Acceptance
+
+  - [ ] scripts/aida-demo.sh exists + is executable
+  - [ ] Pre-flight checks fail cleanly with helpful errors if aida/gh/git missing
+  - [ ] Repo creation + push works without operator intervention beyond initial prompt
+  - [ ] Walkthrough pauses between sections (Enter-to-continue) so operator can read each state
+  - [ ] Cleanup requires explicit 'y' confirmation (safety against destructive default)
+  - [ ] Script handles aborts gracefully (Ctrl+C mid-script doesn't leave half-state)
+  - [ ] Documented usage in CLAUDE.md daily-driver section
+  - [ ] Tested manually on operator's machine (aida-debug build, gh auth'd, fresh dir)
+
+  ## Known limitations (tonight's substrate state)
+
+  BUG-386 (just filed): aida init scaffolds only 20/38 skills, so /aida-pickup will fail in the demo. Until BUG-386 ships, the demo script's walkthrough uses commit-trailer + manual aida pull for the auto-bump path (NOT aida queue work which depends on /aida-pickup). Once BUG-386 ships, the demo can showcase the full /aida-pickup → /aida-pr flow.
+
+  ## Composes with
+
+  - BUG-386 (skill-scaffolding gap — when shipped, demo can use /aida-pickup)
+  - TASK-1-098 (.claude/AIDA.md STALE-on-init — demo gracefully ignores)
+  - TASK-1-099 (docs/competitive-analysis/ not scaffolded — demo doesn't trigger release path)
+  - CLAUDE.md daily-driver section (where to surface the demo verb)
+  - Future: 'aida demo' subcommand wrapper around this script (one-verb command for any installation)
+
+  ## Origin
+
+  2026-05-25 operator: 'I want to create a little hello world repo where I can test aida and see how easily I can get operational... we should have this demo as maybe a bash script that we walk through... I want something that someone can follow to get a sense of aida and confirm it is operational in the real world.'
+
+  Master agrees — pure-bash-script as smallest valuable slice; future 'aida demo' subcommand for the operator-experience evolution.
+
+  trace:TASK-X
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T20:15:03.416213758Z
+modified_at: 2026-05-25T20:15:03.416213758Z
+req_type: Task
+tags:
+- demo
+- first-user-experience
+- from-user-direction
+- onboarding
+- scripts
