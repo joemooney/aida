@@ -1,0 +1,19 @@
+id: 019e60cd-e713-7fa1-b399-83578711a33d
+spec_id: TASK-564
+agreed_id: TASK-564
+title: Document cross-agent hook pause/abort/defer semantics
+description: 'Create and link a durable reference for communicating with agent sessions, starting with Claude Code hook semantics: continue:false is terminal, PreToolUse cannot rely on a later PostToolUse, and the correct patterns are interactive permissionDecision:ask, unattended notify-then-halt, or headless permissionDecision:defer plus external resume. Cover how this maps to AIDA''s Claude/Codex/Antigravity coordination docs so future agents do not rediscover the same sequencing mistake.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-25T20:22:47.315933714Z
+modified_at: 2026-05-25T20:22:47.315933714Z
+req_type: Task
+tags:
+- agents
+- claude-code
+- codex
+- cross-agent-communication
+- docs
+- hooks
