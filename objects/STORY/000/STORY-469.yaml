@@ -8,12 +8,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T05:06:01.183127589Z
-modified_at: 2026-05-25T05:06:01.183127589Z
+modified_at: 2026-05-25T06:48:22.677954553Z
 req_type: Story
 tags:
 - agent-discipline
 - batch:multi-agent-coordination
 - ceiling-pattern
+- from-overnight-drain-2026-05-25
 - from-self-test
 - promoted-from-STORY-467
 - structural-guards
