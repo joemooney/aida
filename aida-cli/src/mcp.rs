@@ -3998,13 +3998,22 @@ mod tests {
         assert!(claim.starts_with("claimed:"), "{}", claim);
 
         // Round-trip through the on-disk TOML — that's what `aida add`'s
-        // hint reads via `list_leases` + `active_lease_for_cwd`.
+        // hint reads via `list_leases` + `active_lease_for_cwd`. TASK-504
+        // canonicalizes the path at write-time, so compare against the
+        // canonical form (matches sibling test
+        // `claim_task_canonicalizes_explicit_worktree_path`). Without
+        // canonicalizing first this fails on Windows (UNC `\\?\` prefix +
+        // `RUNNER~1` → `runneradmin` short-name expansion) and macOS
+        // (`/var` → `/private/var` symlink resolution). trace:BUG-385 | ai:claude
         let leases = list_leases(dir.path());
         let l = leases
             .iter()
             .find(|l| l.scope == "TASK-310")
             .expect("the claim should have written a lease");
-        assert_eq!(l.worktree_path, sibling);
+        assert_eq!(
+            l.worktree_path,
+            sibling_dir.canonicalize().unwrap().to_string_lossy()
+        );
     }
 
     /// TASK-504: claim_task canonicalizes the recorded `worktree_path` so a
