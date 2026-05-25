@@ -1460,6 +1460,7 @@ fn run() -> Result<()> {
             cleanup: _,
             awaiting: _,
             verbose: _,
+            no_hygiene: _,
         } => {
             handle_status_command(*no_dev_context, None, &storage)?;
         }
@@ -4835,6 +4836,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             cleanup,
             awaiting,
             verbose,
+            no_hygiene,
         } => {
             return handle_status_command_distributed(
                 *no_dev_context,
@@ -4846,6 +4848,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *cleanup,
                 *awaiting,
                 *verbose,
+                *no_hygiene,
                 store_path,
                 &backend,
             );
@@ -52674,6 +52677,79 @@ mod task_515_status_agent_lease_fallback_tests {
         assert_eq!(views[0].id, "codex-123");
         assert_eq!(views[0].source, "agent-launcher");
     }
+
+    #[test]
+    fn test_status_hygiene_section_healthy() {
+        let project = tempfile::tempdir().unwrap();
+        let store = aida_core::models::RequirementsStore::new();
+        let res = print_status_hygiene_section(project.path(), &store, false, false);
+        assert!(res.is_ok());
+    }
+}
+
+fn print_status_hygiene_section(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    verbose: bool,
+    no_hygiene: bool,
+) -> Result<()> {
+    if no_hygiene {
+        return Ok(());
+    }
+
+    let mut findings = collect_doctor_findings(project_root, store, None)?;
+
+    // Filter findings
+    if !verbose {
+        findings.retain(|f| {
+            matches!(
+                f.category.as_str(),
+                "spec-status-drift" | "stale-locks" | "orphan-worktrees" | "orphan-branches"
+            )
+        });
+    }
+
+    if findings.is_empty() {
+        return Ok(());
+    }
+
+    // Sort findings by priority: spec-status-drift > stale-locks > orphan-worktrees > orphan-branches > others
+    fn category_priority(cat: &str) -> usize {
+        match cat {
+            "spec-status-drift" => 0,
+            "stale-locks" => 1,
+            "orphan-worktrees" => 2,
+            "orphan-branches" => 3,
+            _ => 4,
+        }
+    }
+
+    findings.sort_by(|a, b| {
+        category_priority(&a.category)
+            .cmp(&category_priority(&b.category))
+            .then_with(|| a.category.cmp(&b.category))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+
+    let total = findings.len();
+    let limit = if verbose { total } else { 2 };
+
+    println!("{}", "─── Hygiene ───".bold());
+
+    for finding in findings.iter().take(limit) {
+        let heal_mode = if finding.safe_heal { "safe" } else { "manual" };
+        println!("  • {}", finding.category.cyan());
+        println!("    - {} [{}]", finding.summary, heal_mode.dimmed());
+        println!("      {} {}", "→".yellow(), finding.action.dimmed());
+    }
+
+    if total > limit {
+        let overflow = total - limit;
+        println!("    • +{} more (run aida doctor)", overflow);
+    }
+    println!();
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -52687,6 +52763,7 @@ fn handle_status_command_distributed(
     cleanup: bool,
     awaiting: bool,
     verbose: bool,
+    no_hygiene: bool,
     store_path: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
@@ -52904,6 +52981,10 @@ fn handle_status_command_distributed(
     if !no_dev_context && is_aida_repo(&project_root) {
         print_aida_dev_context(&project_root);
     }
+
+    // STORY-464: passive doctor scan integrated into `aida status` under `Hygiene` section
+    // trace:STORY-464 | ai:antigravity
+    print_status_hygiene_section(&project_root, &store, verbose, no_hygiene)?;
 
     // STORY-385: one-line summary at the bottom of default `aida status`
     // when the cleanup report is non-empty — silent otherwise. Points the
