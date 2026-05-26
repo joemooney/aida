@@ -904,10 +904,21 @@ When done, print the single line: DONE — committed $GOODBYE_SPEC"
             show_cmd "demo$" aida doctor
             ;;
         4)
-            heading "aida search — full-text search across specs"
-            show_cmd "demo$" aida search Hello
+            box_title "aida search — full-text search across specs" \
+                      "FTS5-indexed, cache-backed, sub-millisecond"
             echo
-            note "Substrate-grounded search — finds specs by description content, not just title."
+            note_box --title "What 'aida search' queries" \
+              "Cache-backed FTS5 (SQLite full-text search) across every" \
+              "spec's title + description + tags + comments. Results" \
+              "ranked by relevance, not lexical match." \
+              "" \
+              "Substrate-grounded search — finds specs by description" \
+              "content, not just title. Useful when you remember 'something" \
+              "about lease cleanup' but don't recall the SPEC-ID or exact" \
+              "title. The cache rebuilds on stale-detection so newly-filed" \
+              "specs surface within one read of the cache."
+            echo
+            show_cmd "demo$" aida search Hello
             ;;
         5)
             box_title "aida findings add — advisor observation capture" \
