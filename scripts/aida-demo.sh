@@ -1071,17 +1071,23 @@ done
 # Cleanup
 # -----------------------------------------------------------------------------
 
-heading "Demo complete"
-echo "Local dir: $DEMO_LOCAL_DIR"
-echo "GitHub repo: https://github.com/$GH_USER/$DEMO_REPO_NAME"
+do_clear
+box_title "Demo complete" "decide what happens to the demo state"
+echo
+note_box --title "Demo artifacts" \
+  "  Local dir   : $DEMO_LOCAL_DIR" \
+  "  GitHub repo : https://github.com/$GH_USER/$DEMO_REPO_NAME"
 echo
 
 if [ "$AUTO_CLEANUP" = "1" ]; then
     confirm="y"
 else
-    note "Cleanup will:"
-    note "  - Delete the local directory ($DEMO_LOCAL_DIR)"
-    note "  - Delete the GitHub repo ($GH_USER/$DEMO_REPO_NAME)"
+    note_box --title "Cleanup will" \
+      "  - Delete the local directory ($DEMO_LOCAL_DIR)" \
+      "  - Delete the GitHub repo ($GH_USER/$DEMO_REPO_NAME)" \
+      "" \
+      "Default is N — keep the demo state so you can poke around" \
+      "(re-run 'bash scripts/aida-demo.sh' creates a fresh repo)."
     echo
     printf "Clean up now? [y/N]: "
     read -r confirm
