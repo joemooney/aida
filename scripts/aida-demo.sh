@@ -137,22 +137,27 @@ repeat() {
     while [ "$i" -lt "$n" ]; do printf '%s' "$c"; i=$((i + 1)); done
 }
 
-# box_title TITLE [SUBTITLE] — print a boxed heading. Used for the top-of-
-# demo intro screen.
+# box_title TITLE [SUBTITLE] — print a boxed heading. Uses the same
+# min_width as note_box (80 fill chars between corners) so a box_title
+# stacked above a note_box has matching rails. Keeps the heavy ╔══╗║
+# borders and CYAN+BOLD styling for visual distinction from the lighter
+# YELLOW ╭──╮│ note_box callouts.
 box_title() {
     local title="$1" subtitle="${2:-}"
-    local pad=2
+    # Match note_box's default width so stacked boxes align column-for-
+    # column. content_width grows past min if title/subtitle exceed.
+    local min_width=80
     local title_len=${#title} sub_len=${#subtitle}
-    local content_width=$title_len
-    [ "$sub_len" -gt "$content_width" ] && content_width=$sub_len
-    local total_width=$((content_width + pad * 2))
+    local content_width=$((min_width - 4))   # 4 = 2 left pad + 2 right pad
+    [ "$title_len" -gt "$content_width" ] && content_width=$title_len
+    [ "$sub_len"   -gt "$content_width" ] && content_width=$sub_len
+    local total_width=$((content_width + 4))
 
     printf "${CYAN}╔"; repeat "═" "$total_width"; printf "╗${NC}\n"
     printf "${CYAN}║${NC}"; repeat " " "$total_width"; printf "${CYAN}║${NC}\n"
-    # Body lines: use explicit pad (chars not bytes) so Unicode em-dash
-    # etc. in the title aligns the right rail with the subtitle's rail.
-    # printf %-Ns pads to BYTES; %s%*s with bash's char-counted ${#var}
-    # pads to COLUMNS. Same pattern as note_box.
+    # Body lines: use explicit char-counted pad (bash ${#var} is char-
+    # aware in UTF-8 locale) so Unicode em-dash etc. don't push the
+    # right rail. printf %-Ns pads to BYTES — wrong for multi-byte glyphs.
     local tpad=$((content_width - ${#title}))
     printf "${CYAN}║${NC}  ${BOLD}%s%*s${NC}  ${CYAN}║${NC}\n" "$title" "$tpad" ""
     if [ -n "$subtitle" ]; then
