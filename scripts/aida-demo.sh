@@ -665,6 +665,9 @@ note_box --title "Why 'aida pull' (vs git pull alone)" \
 echo
 show_cmd "demo$" aida pull
 echo
+step_pause "Press Enter — read the pull output, then we'll verify the auto-bump"
+do_clear
+
 note_box --title "Verify: did the auto-bump fire?" \
   "Run 'aida show $HELLO_SPEC' and look for:" \
   "  • Status: Completed  (auto-bumped from Approved)" \
@@ -672,6 +675,7 @@ note_box --title "Verify: did the auto-bump fire?" \
   "    was scanned automatically and bound back to the spec" \
   "  • Recent commits: the 'feat: hello world script ($HELLO_SPEC)'" \
   "    commit appears here"
+echo
 show_cmd "demo$" aida show "$HELLO_SPEC"
 
 # -----------------------------------------------------------------------------
