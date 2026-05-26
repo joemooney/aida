@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: 236-Uncategorized
 created_at: 2026-02-23T05:49:01.227228469Z
-modified_at: 2026-02-23T05:49:18.702404260Z
+modified_at: 2026-05-26T04:16:12.552487814Z
 req_type: Task
 tags:
 - docker
@@ -19,3 +19,8 @@ comments:
   content: 'Committed in 04c79b1, hook fix in be5d467. Plan: docs/plans/2026-02-22-auto-export-yaml-hook.md'
   created_at: 2026-02-23T05:49:18.702398977Z
   modified_at: 2026-02-23T05:49:18.702398977Z
+- id: 019e627f-5508-7372-b76b-c3894e448678
+  author: joe
+  content: Commit bbb6e1f7 references this requirement
+  created_at: 2026-05-26T04:16:12.552487814Z
+  modified_at: 2026-05-26T04:16:12.552487814Z
