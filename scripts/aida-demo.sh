@@ -13,11 +13,15 @@
 # Usage:
 #   bash scripts/aida-demo.sh
 #
-# Known limitations (per BUG-386, filed 2026-05-25):
-#   `aida init` currently scaffolds only ~20 of ~38 .claude/skills/ templates,
-#   so /aida-pickup and /aida-pr won't be available in the demo. This script
-#   uses the manual commit-trailer + auto-bump path instead. When BUG-386
-#   ships, this script can showcase the full /aida-pickup → /aida-pr flow.
+# Design note:
+#   This script uses the manual commit-trailer + auto-bump path for the
+#   main flow (steps 1-12) to keep the demo scripted-friendly (interactive
+#   Claude Code sessions would halt a scripted demo). Option [1] of the
+#   explore menu shows the equivalent flow using `claude -p` directly,
+#   which is what `aida queue work --no-human=both` invokes for phase 1.
+#   BUG-386 (full 38-skill scaffolding) shipped in this demo's authoring
+#   session, so /aida-pickup and /aida-pr ARE available in fresh projects
+#   for the interactive path.
 #
 # Cleanup is OPT-IN — script defaults to 'no, keep the demo state' so you
 # can poke around afterwards. Re-run with --auto-cleanup to skip the prompt.
@@ -1106,9 +1110,21 @@ fi
 # Past this point, the abort trap should NOT re-offer cleanup.
 DEMO_COMPLETE=1
 
-heading "Notes"
-note "Tonight's known gap (BUG-386): aida init scaffolds only ~20/38 .claude/skills/."
-note "/aida-pickup and /aida-pr aren't available yet in fresh projects."
-note "Once BUG-386 ships, this demo can showcase the full /aida-pickup → /aida-pr flow."
 echo
-ok "Demo done. Run again any time: bash scripts/aida-demo.sh"
+note_box --title "Where to go from here" \
+  "BUG-386 shipped during this demo's authoring session — fresh" \
+  "'aida init' projects now scaffold ALL 38 .claude/skills/ + 37" \
+  "/.claude/commands/ templates. /aida-pickup and /aida-pr are" \
+  "available out of the box." \
+  "" \
+  "To see the interactive implementer experience the demo's option" \
+  "[1] simulates with 'claude -p':" \
+  "" \
+  "  cd $DEMO_LOCAL_DIR     # or your real AIDA project" \
+  "  aida queue work TASK-N           # claims lease, launches claude" \
+  "  # claude opens with active scope; /aida-pickup reads the spec" \
+  "  # implement, commit, then 'aida pr ship' opens a PR" \
+  "" \
+  "Re-run this demo any time: bash scripts/aida-demo.sh"
+echo
+ok "Demo done."
