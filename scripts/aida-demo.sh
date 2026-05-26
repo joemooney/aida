@@ -99,9 +99,17 @@ box_title() {
     printf "${CYAN}╚"; repeat "═" "$total_width"; printf "╝${NC}\n"
 }
 
-# step_header TITLE — major section header with step counter, clears screen
-# first, and prints a boxed "[N of M] TITLE" line.
+# step_header TITLE — major section header with step counter. Auto-pauses
+# at the END of the previous step (so the operator reads it before the
+# screen clears) for steps 2..N. Skips the pause for step 1 — the intro
+# screen already prompted "Press Enter to begin".
 step_header() {
+    if [ "$DEMO_STEP" -gt 0 ] && [ -t 0 ]; then
+        echo
+        printf "${DIM}──── Step %d/%d complete · Press Enter to advance to step %d · Ctrl+C to abort ────${NC}" \
+            "$DEMO_STEP" "$DEMO_TOTAL_STEPS" "$((DEMO_STEP + 1))"
+        read -r _
+    fi
     DEMO_STEP=$((DEMO_STEP + 1))
     do_clear
     local title="$1"
@@ -133,20 +141,45 @@ note_box() {
         title="$2"
         shift 2
     fi
-    local width=70
+    # Auto-sized true box: width grows to fit the longest body line (or the
+    # title-pill row), so the box is a perfect rectangle even when one line
+    # is longer than the default. Total visible columns per line = width + 2
+    # (the corners). Body lines: │ <content padded to width-2 cols> │.
+    # Bash ${#var} counts characters (not bytes) under a UTF-8 locale, so
+    # Unicode glyphs (→ ← ✓ etc.) pad correctly without leaking the right
+    # edge. trace:demo-tui-polish | ai:claude
+    local min_width=80
+    local width=$min_width
+    # Grow to fit body lines: each needs width >= ${#line} + 2 (the two
+    # padding spaces around content).
+    for line in "$@"; do
+        local need=$((${#line} + 2))
+        [ "$need" -gt "$width" ] && width="$need"
+    done
+    # Grow to fit title pill: pill consumes title_len + 4 (┤ + 2 spaces + ├)
+    # plus a 2-char left-fill margin → minimum width = title_len + 6.
+    if [ -n "$title" ]; then
+        local title_need=$((${#title} + 6))
+        [ "$title_need" -gt "$width" ] && width="$title_need"
+    fi
     # Top border (with optional title pill)
     if [ -n "$title" ]; then
-        local title_len=${#title}
         local left=2
-        local right=$((width - title_len - left - 2))
+        local right=$((width - left - ${#title} - 4))
         [ "$right" -lt 0 ] && right=0
-        printf "${YELLOW}╭"; repeat "─" "$left"; printf "┤ ${BOLD}%s${NC}${YELLOW} ├" "$title"; repeat "─" "$right"; printf "╮${NC}\n"
+        printf "${YELLOW}╭"
+        repeat "─" "$left"
+        printf "┤ ${BOLD}%s${NC}${YELLOW} ├" "$title"
+        repeat "─" "$right"
+        printf "╮${NC}\n"
     else
         printf "${YELLOW}╭"; repeat "─" "$width"; printf "╮${NC}\n"
     fi
-    # Body lines
+    # Body lines — pad each to (width - 2) interior columns, close with │
     for line in "$@"; do
-        printf "${YELLOW}│${NC} %s\n" "$line"
+        local pad=$((width - ${#line} - 2))
+        [ "$pad" -lt 0 ] && pad=0
+        printf "${YELLOW}│${NC} %s%*s ${YELLOW}│${NC}\n" "$line" "$pad" ""
     done
     # Bottom border
     printf "${YELLOW}╰"; repeat "─" "$width"; printf "╯${NC}\n"
@@ -356,7 +389,6 @@ note_box --title "What was just scaffolded" \
   "  CLAUDE.md + AGENTS.md + .mcp.json" \
   "  docs/aida/discipline/ + docs/plans/" \
   "  META requirements + auto-enqueued onboarding task"
-pause
 
 # -----------------------------------------------------------------------------
 # Push initial scaffolding + orphan store to remote
@@ -395,7 +427,6 @@ note_box --title "What 'aida status' tells you" \
   "open' check at the start of every working session."
 echo
 show_cmd "demo$" aida status
-pause
 
 step_header "View the work backlog with 'aida list'"
 note_box --title "What 'aida list' shows" \
@@ -410,7 +441,6 @@ note_box --title "About TASK-007 (auto-enqueued onboarding)" \
   "TASK-007 tells you to commit the scaffolded files into git. We'll" \
   "skip running it because the demo already committed the scaffolding" \
   "— but in a real flow you'd pick it up via 'aida queue work TASK-007'."
-pause
 
 step_header "View housekeeping specs with 'aida list --type meta'"
 
@@ -428,7 +458,6 @@ note_box --title "What's actually in this fresh project" \
   "Real work-specs (what the operator cares about): 1 — TASK-007." \
   "Housekeeping specs (META-001..006 AI prompt templates): 6." \
   "Total: 7. Default 'aida list' only shows work-specs (the 1)."
-pause
 
 # -----------------------------------------------------------------------------
 # File the first real spec
@@ -444,7 +473,6 @@ show_cmd "demo$" aida add --type story --status approved --priority medium \
 HELLO_SPEC=$(aida list --type story 2>/dev/null | awk '/Hello, World/ {print $1; exit}')
 [ -z "$HELLO_SPEC" ] && HELLO_SPEC="STORY-1"
 ok "Filed as $HELLO_SPEC"
-pause
 
 # -----------------------------------------------------------------------------
 # Implement
@@ -483,7 +511,6 @@ note_box --title "Why the trace comment matters" \
   "  every file that implements this spec" \
   "• Refactoring is safe: rename the function, the trace stays bound" \
   "  to the SPEC-ID"
-pause
 
 step_header "Commit + push with the SPEC-ID trailer convention"
 
@@ -499,7 +526,6 @@ show_cmd "demo$" git add hello.sh
 show_cmd "demo$" git commit -m "[AI:claude] feat: hello world script ($HELLO_SPEC)" --quiet
 show_cmd "demo$" git push origin main --quiet
 ok "Committed + pushed with trailer ($HELLO_SPEC)"
-pause
 
 # -----------------------------------------------------------------------------
 # Auto-bump via aida pull
@@ -532,7 +558,6 @@ note_box --title "Verify: did the auto-bump fire?" \
   "  • Recent commits: the 'feat: hello world script ($HELLO_SPEC)'" \
   "    commit appears here"
 show_cmd "demo$" aida show "$HELLO_SPEC"
-pause
 
 # -----------------------------------------------------------------------------
 # Final state
