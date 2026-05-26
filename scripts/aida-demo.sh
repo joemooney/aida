@@ -910,9 +910,44 @@ When done, print the single line: DONE — committed $GOODBYE_SPEC"
             note "Substrate-grounded search — finds specs by description content, not just title."
             ;;
         5)
-            heading "aida findings add — advisor observation capture"
-            note "Capture a pattern you've spotted without making it a full BUG yet."
-            note "Recurrence ≥ 3 promotes to a substrate-actionable spec (STORY-467)."
+            box_title "aida findings add — advisor observation capture" \
+                      "the feedback-loop primitive that makes AIDA learn"
+            echo
+            note_box --title "What 'aida findings' is for" \
+              "Capture a pattern you've spotted without making it a full" \
+              "BUG yet — a friction point, a confusing flow, a recurring" \
+              "papercut. Cheap to file, no decision required at capture" \
+              "time about whether it warrants engineering effort." \
+              "" \
+              "Recurrence ≥ 3 promotes the finding to a substrate-" \
+              "actionable spec (STORY-467). Auto-decay after 30 days no" \
+              "recurrence keeps the backlog honest."
+            echo
+            note_box --title "Why this matters — the AIDA feedback loop" \
+              "An AI agent (Claude, Codex, Antigravity, this demo's" \
+              "advisor) will TYPICALLY use 'aida findings add' to file" \
+              "the patterns it notices during work: 'I had to ask the" \
+              "operator three times what they meant by X', 'the queue" \
+              "head misled me about Y', 'I tried flag Z which doesn't" \
+              "exist'. Each filed finding becomes substrate." \
+              "" \
+              "That substrate flows two directions:" \
+              "" \
+              "  • Forward — the next session sees prior findings and" \
+              "    avoids the same mistake (substrate as nightclub-" \
+              "    bouncer, not a rule in a CLAUDE.md a confident LLM" \
+              "    can ignore)." \
+              "  • Backward — patterns that recur enough get promoted" \
+              "    to specs and FIXED in code (BUG-386 began as an" \
+              "    observation, became a spec, shipped a fix)." \
+              "" \
+              "Result: AIDA gets better the more it's used. The agent" \
+              "captures friction, the substrate retains it, future" \
+              "operations either route around it or close it. That's" \
+              "the feedback loop that compounds over weeks."
+            echo
+            step_pause "Press Enter to file a demo finding"
+
             show_cmd "demo$" aida findings add --kind observation --severity minor \
                 --note "Demo finding — captured during aida-demo.sh walkthrough. Safe to dismiss." \
                 --tags demo,from-aida-demo
