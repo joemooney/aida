@@ -899,8 +899,25 @@ When done, print the single line: DONE — committed $GOODBYE_SPEC"
             show_cmd "demo$" aida history --events --limit 10
             ;;
         3)
-            heading "aida doctor — multi-agent state drift detect + heal"
-            note "Read-only diagnostic by default; --heal applies safe fixes per category."
+            box_title "aida doctor — multi-agent state drift detect + heal" \
+                      "11 categories scanned, safe heal per category"
+            echo
+            note_box --title "What 'aida doctor' is for" \
+              "Read-only diagnostic by default; --heal applies safe fixes" \
+              "per category." \
+              "" \
+              "Scans 11 categories of drift that accumulate when multiple" \
+              "agents (Claude, Codex, Antigravity) share the same backlog:" \
+              "uncommitted WIP at risk, sticky In-Progress specs without" \
+              "a lease, branches ahead of main without a PR, missed auto-" \
+              "bumps, open PRs, dormant leases, stale reviewer leases," \
+              "orphan worktrees, etc." \
+              "" \
+              "Designed to be safe to run frequently — read-only by" \
+              "default surfaces what's drifted; --heal applies the" \
+              "boring, mechanical fixes (close lease, prune worktree)" \
+              "without touching anything that needs operator judgement."
+            echo
             show_cmd "demo$" aida doctor
             ;;
         4)
