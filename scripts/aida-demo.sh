@@ -34,6 +34,9 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 DEMO_REPO_NAME="aida-demo-$TIMESTAMP"
 DEMO_LOCAL_DIR="$HOME/ai/$DEMO_REPO_NAME"
 AUTO_CLEANUP=0
+# DEMO_COMPLETE flips to 1 after the normal cleanup-or-keep section runs,
+# so the abort trap knows not to re-fire when the script exits normally.
+DEMO_COMPLETE=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -45,6 +48,61 @@ for arg in "$@"; do
         *) echo "unknown flag: $arg (see --help)" >&2; exit 1 ;;
     esac
 done
+
+# Abort trap — fires on Ctrl-C (INT) or kill (TERM). Inventories any
+# partial demo state and offers to clean it up before exiting, so an
+# aborted run doesn't leave a stray GitHub repo + sibling dir lying
+# around. A second Ctrl-C during the prompt exits immediately without
+# acting. Skipped after DEMO_COMPLETE=1 (normal cleanup already ran).
+cleanup_on_abort() {
+    local exit_code=$?
+    # Already past normal cleanup? Trap should not re-act.
+    [ "$DEMO_COMPLETE" = "1" ] && exit "$exit_code"
+
+    # Re-trap INT so a second Ctrl-C during the prompt exits fast
+    # rather than re-entering this handler.
+    trap 'exit 130' INT
+
+    echo
+    echo
+    printf "\033[0;33m✗ Demo aborted\033[0m (exit %d)\n" "$exit_code"
+
+    local dir_exists=0 repo_exists=0
+    [ -n "${DEMO_LOCAL_DIR:-}" ] && [ -d "$DEMO_LOCAL_DIR" ] && dir_exists=1
+    if [ -n "${GH_USER:-}" ] && [ -n "${DEMO_REPO_NAME:-}" ]; then
+        gh repo view "$GH_USER/$DEMO_REPO_NAME" >/dev/null 2>&1 && repo_exists=1
+    fi
+
+    if [ "$dir_exists" = "0" ] && [ "$repo_exists" = "0" ]; then
+        printf "\033[2m(no demo state created yet — nothing to clean up)\033[0m\n"
+        exit "$exit_code"
+    fi
+
+    printf "\nPartial demo state:\n"
+    [ "$dir_exists" = "1" ] && printf "  local dir   : %s\n" "$DEMO_LOCAL_DIR"
+    [ "$repo_exists" = "1" ] && printf "  GitHub repo : https://github.com/%s/%s\n" "$GH_USER" "$DEMO_REPO_NAME"
+    echo
+
+    local resp="y"
+    if [ -t 0 ]; then
+        printf "Clean it up? [Y/n] (Enter = yes): "
+        read -r resp
+    fi
+
+    if [ -z "$resp" ] || [ "${resp,,}" = "y" ] || [ "${resp,,}" = "yes" ]; then
+        # cd out of the dir we're about to delete so rm doesn't fail.
+        cd "$HOME" 2>/dev/null
+        [ "$dir_exists" = "1" ] && rm -rf "$DEMO_LOCAL_DIR" 2>/dev/null
+        [ "$repo_exists" = "1" ] && gh repo delete "$GH_USER/$DEMO_REPO_NAME" --yes >/dev/null 2>&1
+        printf "\033[0;32m✓ Cleaned up.\033[0m\n"
+    else
+        printf "\033[0;33mKept partial state. Manual cleanup:\033[0m\n"
+        [ "$dir_exists" = "1" ] && printf "  rm -rf %s\n" "$DEMO_LOCAL_DIR"
+        [ "$repo_exists" = "1" ] && printf "  gh repo delete %s/%s --yes\n" "$GH_USER" "$DEMO_REPO_NAME"
+    fi
+    exit "$exit_code"
+}
+trap cleanup_on_abort INT TERM
 
 # Colors (degrade gracefully on non-TTY)
 if [ -t 1 ]; then
@@ -91,9 +149,15 @@ box_title() {
 
     printf "${CYAN}╔"; repeat "═" "$total_width"; printf "╗${NC}\n"
     printf "${CYAN}║${NC}"; repeat " " "$total_width"; printf "${CYAN}║${NC}\n"
-    printf "${CYAN}║${NC}  ${BOLD}%-${content_width}s${NC}${CYAN}║${NC}\n" "$title"
+    # Body lines: use explicit pad (chars not bytes) so Unicode em-dash
+    # etc. in the title aligns the right rail with the subtitle's rail.
+    # printf %-Ns pads to BYTES; %s%*s with bash's char-counted ${#var}
+    # pads to COLUMNS. Same pattern as note_box.
+    local tpad=$((content_width - ${#title}))
+    printf "${CYAN}║${NC}  ${BOLD}%s%*s${NC}  ${CYAN}║${NC}\n" "$title" "$tpad" ""
     if [ -n "$subtitle" ]; then
-        printf "${CYAN}║${NC}  ${DIM}%-${content_width}s${NC}${CYAN}║${NC}\n" "$subtitle"
+        local spad=$((content_width - ${#subtitle}))
+        printf "${CYAN}║${NC}  ${DIM}%s%*s${NC}  ${CYAN}║${NC}\n" "$subtitle" "$spad" ""
     fi
     printf "${CYAN}║${NC}"; repeat " " "$total_width"; printf "${CYAN}║${NC}\n"
     printf "${CYAN}╚"; repeat "═" "$total_width"; printf "╝${NC}\n"
@@ -639,20 +703,21 @@ pause
 # Explore menu — let the operator pick what to demonstrate next
 # -----------------------------------------------------------------------------
 
-heading "Optional — explore more substrate surfaces"
-
 while true; do
+    do_clear
+    box_title "Optional — explore more substrate surfaces" \
+              "pick a topic · [s] skips to cleanup"
     echo
-    note "Pick a surface to demonstrate (or skip to cleanup):"
-    note "  [1] Anatomy of 'aida queue work' — dissect what it does internally"
-    note "  [2] aida history --events — the substrate event ledger"
-    note "  [3] aida doctor — multi-agent state drift detect + heal"
-    note "  [4] aida search — full-text query across specs"
-    note "  [5] aida findings add — advisor observation capture"
-    note "  [6] aida queue list / next / done — queue manipulation primitives"
-    note "  [7] aida queue work --zen --auto-complete — autonomous drain (self-test)"
-    note "  [g] Glossary — definitions of AIDA terms + commands"
-    note "  [s] Skip to cleanup"
+    note_box --title "Pick a surface to demonstrate" \
+      "  [1] Anatomy of 'aida queue work' — dissect what it does internally" \
+      "  [2] aida history --events       — the substrate event ledger" \
+      "  [3] aida doctor                 — multi-agent state drift detect + heal" \
+      "  [4] aida search                 — full-text query across specs" \
+      "  [5] aida findings add           — advisor observation capture" \
+      "  [6] aida queue list / next / done — queue manipulation primitives" \
+      "  [7] aida queue work --zen --auto-complete — autonomous drain (self-test)" \
+      "  [g] Glossary                    — definitions of AIDA terms + commands" \
+      "  [s] Skip to cleanup"
     echo
     if [ ! -t 0 ]; then
         # Non-interactive (CI / piped): skip the menu entirely.
@@ -888,10 +953,14 @@ while true; do
             ;;
         *)
             dim "(unknown choice: $choice)"
+            sleep 1
+            continue
             ;;
     esac
+    # Pause AFTER the picked option completes so the operator can read
+    # its output. Next loop iteration clears the screen + re-shows menu.
     echo
-    note "Pick another, or 's' to skip to cleanup."
+    step_pause "Press Enter to return to the explore menu"
 done
 
 # -----------------------------------------------------------------------------
@@ -924,6 +993,8 @@ else
     dim "  rm -rf $DEMO_LOCAL_DIR"
     dim "  gh repo delete $GH_USER/$DEMO_REPO_NAME --yes"
 fi
+# Past this point, the abort trap should NOT re-offer cleanup.
+DEMO_COMPLETE=1
 
 heading "Notes"
 note "Tonight's known gap (BUG-386): aida init scaffolds only ~20/38 .claude/skills/."
