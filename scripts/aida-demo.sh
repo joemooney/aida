@@ -695,13 +695,16 @@ note_box --title "Inspect the code-side of the bidirectional link" \
 echo
 show_cmd "demo$" grep -n "trace:" hello.sh
 echo
+step_pause "Press Enter — see the substrate surfaces you can now query"
+
 note_box --title "Substrate surfaces you can now query" \
   "  aida show $HELLO_SPEC            # spec body + git linkage" \
   "  aida history --events            # chronological substrate ledger" \
   "  aida list                        # backlog view" \
-  "  aida search 'Hello'              # full-text spec search"
-note "  aida doctor                      # multi-agent state drift detect + heal"
-pause
+  "  aida search 'Hello'              # full-text spec search" \
+  "  aida doctor                      # multi-agent state drift detect + heal"
+echo
+step_pause "Press Enter — open the explore menu"
 
 # -----------------------------------------------------------------------------
 # Explore menu — let the operator pick what to demonstrate next
