@@ -220,6 +220,18 @@ pause() {
     fi
 }
 
+# step_pause [PROMPT] — pause within a step, between a command's output and
+# its explanation (so the operator reads the output before the explainer
+# scrolls in). Lighter prompt than `pause` (which is for step boundaries).
+step_pause() {
+    if [ -t 0 ]; then
+        local prompt="${1:-Press Enter to continue}"
+        printf "${DIM}──── ${prompt} ────${NC}"
+        read -r _
+        echo
+    fi
+}
+
 # Glossary surface — paginates docs/aida/discipline/glossary.yaml so the
 # operator can browse definitions of AIDA's vocabulary (substrate, lease,
 # auto-bump, etc.) and commands (aida pull, aida queue work, etc.) without
@@ -227,10 +239,28 @@ pause() {
 # scaffolded into every aida-init'd project, embedded in the binary,
 # editable separately from this script. trace:TASK-1-100 | ai:claude
 run_glossary() {
+    # Primary path: the scaffolded copy in the current project. Present when
+    # 'aida init' ran from a binary whose templates include glossary.yaml.
     local glossary="docs/aida/discipline/glossary.yaml"
     if [ ! -f "$glossary" ]; then
-        fail "glossary file not found at $glossary (run 'aida init' first or upgrade aida)"
-        return 1
+        # Fallback: the script-relative templates source. Works when the
+        # demo runs from inside the aida source tree but the local 'aida'
+        # binary predates the glossary template (e.g. user hasn't yet
+        # rebuilt after pulling the templates change).
+        local script_dir; script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+        local fallback="${script_dir}/../aida-core/templates/docs/aida/discipline/glossary.yaml"
+        if [ -f "$fallback" ]; then
+            mkdir -p docs/aida/discipline
+            cp "$fallback" "$glossary"
+            ok "glossary scaffolded from source tree (rebuild aida to embed it in init)"
+            echo
+        else
+            fail "glossary file not found at $glossary"
+            dim "   try: 'aida init' (with an up-to-date aida binary), or"
+            dim "        cp <aida-src>/aida-core/templates/docs/aida/discipline/glossary.yaml \\"
+            dim "           $(pwd)/$glossary"
+            return 1
+        fi
     fi
 
     # Extract top-level keys (one per term) in document order.
@@ -357,18 +387,28 @@ ok "git configured: $(git config --global user.name) <$(git config --global user
 # -----------------------------------------------------------------------------
 
 step_header "Create a throwaway GitHub repo for the walkthrough"
-note "This creates a PUBLIC repo at https://github.com/$GH_USER/$DEMO_REPO_NAME"
-note "It will be cleaned up at the end (with confirmation) or you can keep it for exploration."
-pause
 
-gh repo create "$GH_USER/$DEMO_REPO_NAME" \
+note_box --title "About to do — read before pressing Enter" \
+  "This creates a PUBLIC repo at:" \
+  "    https://github.com/$GH_USER/$DEMO_REPO_NAME" \
+  "" \
+  "It's tagged in its description as a safe-to-delete demo artifact." \
+  "Cleanup is OPT-IN at the end — you can keep it for exploration."
+echo
+note "Commands about to run:"
+dim "    gh repo create $GH_USER/$DEMO_REPO_NAME --public --add-readme"
+dim "    gh repo clone  $GH_USER/$DEMO_REPO_NAME $DEMO_LOCAL_DIR"
+step_pause "Press Enter to create the repo (Ctrl+C to abort)"
+
+show_cmd "demo$" gh repo create "$GH_USER/$DEMO_REPO_NAME" \
     --public \
     --description "Throwaway AIDA demo (created by scripts/aida-demo.sh — safe to delete)" \
-    --add-readme >/dev/null
+    --add-readme
 ok "GitHub repo created"
 dim "   https://github.com/$GH_USER/$DEMO_REPO_NAME"
 
-gh repo clone "$GH_USER/$DEMO_REPO_NAME" "$DEMO_LOCAL_DIR" -- --quiet
+echo
+show_cmd "demo$" gh repo clone "$GH_USER/$DEMO_REPO_NAME" "$DEMO_LOCAL_DIR" -- --quiet
 ok "Cloned to $DEMO_LOCAL_DIR"
 
 cd "$DEMO_LOCAL_DIR"
@@ -593,7 +633,7 @@ heading "Optional — explore more substrate surfaces"
 while true; do
     echo
     note "Pick a surface to demonstrate (or skip to cleanup):"
-    note "  [1] aida queue work — the queue → /aida-pickup → ship lifecycle"
+    note "  [1] Anatomy of 'aida queue work' — dissect what it does internally"
     note "  [2] aida history --events — the substrate event ledger"
     note "  [3] aida doctor — multi-agent state drift detect + heal"
     note "  [4] aida search — full-text query across specs"
@@ -612,42 +652,125 @@ while true; do
     read -r choice
     case "${choice,,}" in
         1)
-            heading "aida queue work — the queue → session → ship lifecycle (substrate-level demo)"
+            do_clear
+            box_title "Anatomy of 'aida queue work'" "what happens behind the single command"
+            echo
+            note_box --title "What this walk-through shows (and doesn't)" \
+              "'aida queue work TASK-007' in real use does FIVE things in sequence:" \
+              "" \
+              "  (1) pick the queued head      → CLI primitive" \
+              "  (2) claim a lease + worktree  → 'aida session start' under the hood" \
+              "  (3) launch Claude Code        → spawns interactive session" \
+              "  (4) operator codes + commits  → human/AI loop (skipped here)" \
+              "  (5) mark done                 → 'aida queue done' under the hood" \
+              "" \
+              "We can't run (3)+(4) in a scripted demo — Claude Code is" \
+              "interactive and would halt the script. So we'll run (1), (2)," \
+              "and (5) DIRECTLY, with the bare substrate commands that" \
+              "'aida queue work' calls internally."
+            echo
+            step_pause "Press Enter to begin step (1) — peek at the queue"
 
-            note "TASK-007 (the onboarding task) is still on the queue from 'aida init'."
-            note "TASK-007's work (committing the scaffolding) was already done in step 4."
-            note "Here we'll demonstrate the substrate-level lifecycle commands that"
-            note "'aida queue work' orchestrates — without spawning an interactive"
-            note "Claude Code session (which would halt the scripted demo)."
+            # ── Substep 1: peek at the queue ───────────────────────────────
+            do_clear
+            note_box --title "Substep (1) of 5 — peek at the queue head" \
+              "'aida queue list' shows everything routed to your role." \
+              "'aida queue next' shows just the next item — what 'queue work'" \
+              "would pick if you ran it without an explicit SPEC-ID."
             echo
             show_cmd "demo$" aida queue list
-
             echo
-            note "Step 1: 'aida session start --owns TASK-007 --force-claim' creates"
-            note "a sibling worktree + lease + bumps status Approved → In Progress."
-            note "(In a normal flow, this is what 'aida queue work TASK-007' invokes"
-            note "internally before launching claude code.)"
+            show_cmd "demo$" aida queue next
+            echo
+            step_pause "Press Enter — explanation of what just happened"
+
+            note_box --title "What you just saw" \
+              "TASK-007 is the auto-enqueued onboarding task ('commit AIDA" \
+              "scaffolding'). It's at the head of the implementer-role queue." \
+              "'aida queue work' (with no SPEC-ID) would claim THIS one next."
+            echo
+            step_pause "Press Enter to run substep (2) — claim a lease + worktree"
+
+            # ── Substep 2: claim a lease ───────────────────────────────────
+            do_clear
+            note_box --title "Substep (2) of 5 — claim a lease + create a worktree" \
+              "Internally, 'aida queue work TASK-007' calls something" \
+              "equivalent to 'aida session start --owns TASK-007'. This:" \
+              "" \
+              "  • creates a sibling git worktree (separate dir, same repo)" \
+              "  • writes a lease file → no other agent can grab TASK-007" \
+              "  • bumps spec status: Approved → In Progress" \
+              "" \
+              "We pass --force-claim because we already created a session" \
+              "earlier; --force-claim wins the lease unconditionally."
+            echo
             show_cmd "demo$" aida session start --owns TASK-007 --force-claim
-
             echo
-            note "Step 2: check the lease + status transition:"
+            step_pause "Press Enter — verify the lease was created"
+
             show_cmd "demo$" aida session leases
-
             echo
-            note "Step 3: in a real workflow operator would 'cd' into the new sibling"
-            note "worktree, do the work in a Claude Code session driven by /aida-pickup,"
-            note "then 'aida pr ship' to open a PR. We'll skip those interactive steps"
-            note "and just close the lifecycle — TASK-007's work is already in main."
-            note "'aida queue done TASK-007' atomically marks complete + removes from queue:"
+            note_box --title "Why the lease matters" \
+              "The lease is the substrate primitive that makes multi-agent" \
+              "work safe. With Claude + Codex + Antigravity all driving the" \
+              "same backlog, the lease guarantees only ONE agent can claim" \
+              "a given spec at a time. 'aida doctor' detects stale leases" \
+              "(category 'dormant_leases') and offers to clean them up."
+            echo
+            step_pause "Press Enter — explain what (3) and (4) would do"
+
+            # ── Substeps 3+4: explain the skipped interactive work ─────────
+            do_clear
+            note_box --title "Substeps (3) and (4) of 5 — SKIPPED (interactive)" \
+              "In real use, 'aida queue work' now does:" \
+              "" \
+              "  (3) cd into the new worktree (above: ...-task-007)" \
+              "      then launch 'claude' there → opens an interactive" \
+              "      Claude Code session with active scope=TASK-007" \
+              "" \
+              "  (4) operator + AI collaborate to do the actual work:" \
+              "        • /aida-pickup reads the active scope + brief" \
+              "        • implements per the spec" \
+              "        • adds // trace:TASK-007 comments" \
+              "        • commits with [AI:claude] feat: ... (TASK-007)" \
+              "        • 'aida pr ship' opens a PR" \
+              "" \
+              "We're skipping (3) and (4) because they'd halt this scripted" \
+              "demo. In step 9 of the main demo we DID run the equivalent" \
+              "manually for STORY-1 (writing hello.sh + commit + push +" \
+              "auto-bump). That's the actual value loop — this option just" \
+              "shows the queue plumbing around it."
+            echo
+            step_pause "Press Enter to run substep (5) — close the loop"
+
+            # ── Substep 5: mark done ───────────────────────────────────────
+            do_clear
+            note_box --title "Substep (5) of 5 — mark complete + release lease" \
+              "Once work lands, 'aida queue work' (or the operator) runs" \
+              "'aida queue done <spec>'. Atomically:" \
+              "" \
+              "  • status: In Progress → Done" \
+              "  • removes from the queue" \
+              "  • flags ready for auto-bump (the next 'aida pull' detects" \
+              "    the (SPEC-ID) trailer in main commits and bumps Done →" \
+              "    Completed)" \
+              "" \
+              "We're calling this on TASK-007 even though no commit landed" \
+              "with the (TASK-007) trailer in this demo, so the auto-bump" \
+              "to Completed won't fire. In real use it would."
+            echo
             show_cmd "demo$" aida queue done TASK-007
-
             echo
-            note "Closed lifecycle:"
+            step_pause "Press Enter — verify the lifecycle closed"
+
             show_cmd "demo$" aida queue list
-
             echo
-            note "End-state verification — TASK-007 now Completed:"
-            show_cmd "demo$" aida show TASK-007
+            note_box --title "End state" \
+              "Queue is empty (TASK-007 removed). Spec status is Done. The" \
+              "auto-bump to Completed waits for a (TASK-007)-tagged commit" \
+              "to land on main. The full 'aida queue work' contract is now" \
+              "demystified: it's queue-pick + session-start + interactive" \
+              "work + queue-done, glued together with sensible defaults."
             ;;
         2)
             heading "aida history --events — the substrate ledger"
