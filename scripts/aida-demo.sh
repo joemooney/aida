@@ -593,6 +593,14 @@ show_cmd "demo$" aida add --type story --status approved --priority medium \
 HELLO_SPEC=$(aida list --type story 2>/dev/null | awk '/Hello, World/ {print $1; exit}')
 [ -z "$HELLO_SPEC" ] && HELLO_SPEC="STORY-1"
 ok "Filed as $HELLO_SPEC"
+echo
+step_pause "Press Enter — see the new spec in the backlog"
+
+note_box --title "Verify: $HELLO_SPEC is now in the work backlog" \
+  "'aida list' (default view) shows actionable work-specs. The new" \
+  "STORY should appear at status 'Approved', ready to implement next."
+echo
+show_cmd "demo$" aida list
 
 # -----------------------------------------------------------------------------
 # Implement
