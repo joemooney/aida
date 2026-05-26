@@ -449,7 +449,18 @@ note_box --title "Why the [AI:claude] prefix on this commit" \
   "hook flags any commit containing trace-bearing changes that lacks" \
   "the AI-tool attribution. Convention forces honest authorship" \
   "labelling on every trace-touching commit."
-show_cmd "demo$" git commit -m "[AI:claude] chore(aida): scaffold AIDA into demo project" --quiet || dim "nothing to commit"
+echo
+note_box --title "Why we pass AIDA_RELEASE=1 here" \
+  "The scaffolded files carry trace:SPEC-ID comments inherited from" \
+  "AIDA's master templates (BUG-73, EPIC-21, etc. — specs in AIDA's" \
+  "OWN repo, not this demo project's substrate). Without the env var," \
+  "the hook would warn 'consider including one' and suggest specs" \
+  "that don't exist locally. AIDA_RELEASE=1 is the existing escape" \
+  "hatch for 'mechanical commit, inherited traces don't apply' — the" \
+  "release script uses it too. (Filed as a finding: a substrate-aware" \
+  "hook should distinguish local vs foreign trace IDs and only warn" \
+  "on the local ones.)"
+show_cmd "demo$" env AIDA_RELEASE=1 git commit -m "[AI:claude] chore(aida): scaffold AIDA into demo project" --quiet || dim "nothing to commit"
 show_cmd "demo$" git push origin main --quiet
 ok "main pushed"
 
