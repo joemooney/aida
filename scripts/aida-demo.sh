@@ -738,9 +738,17 @@ while true; do
     fi
     printf "${DIM}Choice: ${NC}"
     read -r choice
+    # 's' / empty: operator wants out. Break BEFORE the do_clear so the
+    # cleanup flow renders against a meaningful state.
+    case "${choice,,}" in
+        s|skip|"") break ;;
+    esac
+    # Clear the menu before the picked option's output, so the operator
+    # sees the option's content on a fresh screen instead of underneath
+    # the menu. Then dispatch the option.
+    do_clear
     case "${choice,,}" in
         1)
-            do_clear
             box_title "Anatomy of 'aida queue work'" "what happens behind the single command"
             echo
             note_box --title "What this walk-through shows (and doesn't)" \
@@ -960,13 +968,9 @@ while true; do
         g|glossary)
             run_glossary
             ;;
-        s|skip|"")
-            break
-            ;;
         *)
-            dim "(unknown choice: $choice)"
+            dim "(unknown choice: $choice — pick a number 1-7, 'g' for glossary, or 's' to skip)"
             sleep 1
-            continue
             ;;
     esac
     # Pause AFTER the picked option completes so the operator can read
