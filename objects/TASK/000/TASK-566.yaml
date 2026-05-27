@@ -3,12 +3,12 @@ spec_id: TASK-566
 agreed_id: TASK-566
 title: Document AIDA MCP install matrix for major agent clients
 description: 'Create a living install/adaptation matrix for AIDA MCP across Claude Code, Codex, Cursor, Windsurf, Continue, GitHub Copilot, Cline, Aider, Devin, and Sourcegraph/Amp where applicable. Acceptance: each row records instruction-file convention, MCP config command/path, hook/permission model, marketplace/package model, write-tool safety stance, known caveats, source links, and last-verified date; release checklist warns when the matrix is stale.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:52.304894264Z
-modified_at: 2026-05-27T07:06:22.788162319Z
+modified_at: 2026-05-27T07:17:28.667262839Z
 req_type: Task
 tags:
 - agents
@@ -20,3 +20,7 @@ relationships:
 - rel_type: Child
   target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
   created_at: 2026-05-27T06:57:02.421997120Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-27T07:17:28.667262839Z
+  completion_sha: 0b9eacf5f6b7d50d00fe9cd5774ef6aad8f0ea8a
