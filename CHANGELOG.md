@@ -4,6 +4,110 @@ All notable changes to this project are documented here. Generated
 mechanically from the spec graph (`aida changelog refresh`) — do not edit
 by hand; regenerate after merging.
 
+## [v0.10.0] — 2026-05-25
+
+Specs merged since v0.9.1 (82):
+
+### Features
+
+- **TASK-559** — aida queue work --force-claim flag forwarding to internal session start invocation (#329)
+- **STORY-464** — aida status integrates passive aida doctor scan — surface 1-2 findings under a 'Hygiene' section (#328)
+- **STORY-465** — aida status: top-priority 'Awaiting you' section aggregating all human-gate items (PRs ready to merge, briefs for you, findings to triage, escalations) (#325)
+- **TASK-556** — aida agent new: auto-inject first-message directive so agent starts working on --spec without operator typing (#321)
+- **TASK-549** — Integrate orphan-worktree salvage patch: MCP stdio test additions (resources/list, resources/read, isError envelopes) (#319)
+- **TASK-547** — aida queue work: pull from backlog with one verb (eliminate the two-step add + work) (#318)
+- **TASK-557** — aida agent new: read per-agent config for default flags (skip-permissions etc.) — eliminates manual flag re-typing (#317)
+- **TASK-554** — Context snapshot: when --spec is supplied, Active Session section makes scope-binding explicit (#316)
+- **TASK-541** — aida brief --depends-on <SPEC>: explicit pickup-order constraint between briefs (#313)
+- **TASK-551** — MCP server: expose 'add_relationship' tool (CLI parity gap surfaced by BUG-377 blast-radius mapping) (#310)
+- **STORY-463** — SQLite cache lock: retry with backoff + lock-holder visibility + stale-lock → aida doctor heal path (#306)
+- **STORY-462** — aida doctor — diagnostic + heal command for multi-agent state drift (orphan leases, brief/spec/lease disconnects, stale branches) (#305)
+- **TASK-543** — aida agent register <pid> [--type <type>] [--role <role>]: backfill registry for already-running raw-launched agents (#302)
+- **TASK-518** — aida brief <agent> <PR-N>: resolve PR number to backing spec (parallel to BUG-366 for queue work) (#286, #287, #288, #299, #301)
+- **TASK-515** — aida status: derive agent visibility from active leases when launcher-provenance is absent (lease-as-agent fallback) (#298)
+- **TASK-538** — MCP server: expose 'history' tool (parity with 'aida history' CLI) (#297)
+- **TASK-510** — aida init: enqueue an 'initial commit' TASK so new users know the next step is to commit the scaffolded files (#289)
+- **TASK-517** — aida ultraplan: include 'Reserved namespaces and conventions' in assembled prompt so /ultraplan avoids namespace collisions up-front (#285)
+- **STORY-451** — Effort estimation at four lifecycle touchpoints + queue/backlog load aggregates + calibration trend (re-filed after STORY-447 ID-allocation race) (#283)
+- **STORY-444** — /aida-backlog-groom skill + aida backlog CLI: curate Approved items into queue with risk + conflict analysis (#282)
+- **TASK-506** — aida brief read <PATH>: CLI verb to read a brief without a direct file read (matches list + ack pattern) (#279)
+- **STORY-442** — Lifecycle short-circuit tags: lifecycle:no-ci-wait / no-review / no-build / trivial for small-blast-radius specs (#276)
+- **STORY-325** — Punt ledger — record every design-fork decision as structured metadata; analyze for patterns that become recorded principles (#275)
+- **STORY-248** — Stacked-branch awareness: aida queue work --stack + auto-rebase on pull for parallel implementation pipelining (#272)
+- **STORY-244** — TUI architecture pivot: launcher + bash-wrapper re-entry (replaces PTY-host model) (#269)
+- **STORY-436** — Role-context auto-injection on agent session start (EPIC-31 Phase 5, optional) (#266)
+- **STORY-435** — MCP heartbeat busy/idle tracking for agent registry (EPIC-31 Phase 4) (#263)
+- **TASK-503** — Pre-commit git hook runs cargo fmt --all (substrate-as-bouncer for the recurring fmt-CI failure pattern) (#258)
+- **STORY-434** — aida agent new antigravity — Antigravity CLI launcher (EPIC-31 Phase 3b) (#257)
+- **STORY-433** — aida agent new codex — Codex CLI launcher (EPIC-31 Phase 3a) (#256)
+- **STORY-432** — aida agent new claude — Claude Code launcher with role context (EPIC-31 Phase 2) (#255)
+- **TASK-490** — aida status: surface In Progress queue items prominently (currently buried in '... 11 more') (#253)
+- **TASK-499** — aida session start: accept --spec as alias for --owns (CLI flag-name consistency with rest of substrate) (#251)
+- **STORY-431** — Agent process registry + aida status integration (EPIC-31 Phase 1, subsumes TASK-498) (#249)
+- **TASK-491** — aida queue move <id> --to-top: explicit operator control over queue head priority (#248)
+- **TASK-493** — aida mcp-serve: detect binary update + advise/auto-restart so long-running MCP servers don't serve stale code (#247)
+- **STORY-385** — aida status --cleanup: surface cleanup-actionable state (stale leases, sticky In-Progress, missed auto-bumps, open PRs, orphan dirs)
+- **STORY-441** — Rethink aida history filter model: introduce archive concept + show recent terminal-status by default
+- **STORY-448** — Shelve-on-orchestrator-failure into NeedsAttention with FailureReason
+- **STORY-449** — Dependency-aware batch drain — continue past shelved, skip dependents
+- **STORY-459** — aida queue: add --for-agent routing to complement --for-role (per-agent queue dispatch)
+- **STORY-467** — aida findings add: advisor-driven observation entry — capture 'noticed but not yet actionable' patterns for audit/triage
+- **TASK-542** — aida agent new --name <name>: explicit naming + default <agent>-<role>-<seq> auto-naming
+- **TASK-548** — aida-pickup: skip 'confirm pickup' step when SPEC-ID is explicit (operator already committed)
+
+### Fixes
+
+- **BUG-385** — Cross-platform CI: claim_task_records_explicit_worktree_path asserts against non-canonical path (Windows + macOS fail) (#331)
+- **TASK-561** — aida doctor heal spec-status-drift: when In Progress + no active lease, revert status to Approved (currently ambiguous) (#330)
+- **TASK-558** — STORY-463 retry budget: bump defaults to handle production schema-apply contention (50/200/500ms → exponential up to ~30s) (#327)
+- **BUG-384** — Auto-bump on aida session start is non-atomic — status drifts to In Progress when lease creation subsequently fails (#326)
+- **BUG-379** — Implementer ceiling: 'aida session start --owns SPEC' creates lease but doesn't bump spec status from Approved to In Progress (#312)
+- **BUG-381** — MCP list_requirements silently returns empty on any status filter (#311)
+- **BUG-377** — MCP add_comment misroutes text arg to author field; silent data loss (#308)
+- **TASK-550** — Map BUG-377 blast radius: systematic test of all MCP write tools for field-mapping inversions (#308)
+- **BUG-378** — Antigravity/Codex scratchpad drift: agent re-reads its local task.md and reports 'done' while ignoring AIDA brief queue (#304)
+- **BUG-376** — Implementer ceiling: agent ships + queue-done correctly, then lingers watching CI instead of exiting (interactive variant of BUG-361 family) (#303)
+- **BUG-375** — Codex skills scaffolded by 'aida init' missing YAML frontmatter — 18 skills skipped on Codex launch (#294)
+- **TASK-504** — claim_task should canonicalize worktree_path at record-time (or lease_covers_cwd should canonicalize both sides) (#290)
+- **BUG-374** — Headless implementer text-question-and-clean-exit recurrence (BUG-354 family) — orchestrator misclassifies as phase-1 failure (#284)
+- **BUG-273** — Phase 2 'gh run watch' pollutes tee-captured drain logs with hundreds of redrawn blocks (#281)
+- **BUG-372** — Two clones claimed STORY-446 independently (ID-allocation race despite TASK-281 block-claim) — re-file after orphan-store rebase lost BUG-1-085 (#280)
+- **BUG-369** — Implementer cannot punt when spec is still Approved during early phase 1 (forces clean exit, drain counts as failure) (#274)
+- **TASK-508** — FR-0226 pre-commit hook: remove leftover DEBUG echoes from production hook (substrate-as-bouncer gitignored path check) (#265)
+- **TASK-509** — aida-validate-commit hook: accept multi-agent attribution like [AI:antigravity+claude] (#264)
+- **BUG-352** — Queue cluster-derivation routes new spec to active lease's scope without checking appropriateness (caused TASK-488 failure) (#261)
+- **BUG-357** — Orchestrator reconcile-against-reality misattributes another spec's merged PR to the dispatched spec (#260)
+- **BUG-367** — session end warns about unshipped commits after squash-merged aida pr ship (#259)
+- **BUG-364** — stale-base re-check after auto-rebase fires against stale gh pr view cache (false-positive phase-3 failure) (#252)
+- **TASK-474** — aida add scope-detection heuristic misroutes hints when cwd has no lease (#250)
+- **BUG-380** — aida show <ID> emits 'fatal: Not a valid object name main' inline on repos with non-main default branch
+
+### Documentation
+
+- **TASK-512** — Document aida:<subcommand> tag-namespace convention in docs/aida/ + CLAUDE.md + scaffolding-pack (#271)
+- **STORY-443** — Reshape aida init docs/ namespace: discipline pack to docs/aida/, keep docs/plans/ for project-authored plans (#268)
+- **TASK-476** — docs/multi-node.md: replace line-ref to current_user_id with symbol-ref (#262)
+- **TASK-540** — Sync docs/agents/codex-mcp-setup.md live copy → master template
+
+### Infrastructure
+
+- **TASK-552** — Clean up 8 dead-code warnings in aida-cli (audit intent + add allow attrs or remove per-item) (#315)
+- **TASK-511** — Migrate aida-* flat tags to aida:* colon-namespaced convention (matches batch: lifecycle: severity: pattern) (#278)
+- **TASK-505** — make build (and build-release) kill running aida mcp-serve processes so clients respawn with the fresh binary (#254)
+
+### Internal
+
+- **TASK-501** — TASK-491 regression test exercises --to N path, not --top arithmetic (#291)
+- **TASK-521** — Audit AIDA_TEST_* process-global env var usage in tests; isolate via per-test temp paths (BUG-371 root-cause sweep) (#277)
+- **TASK-514** — aida ultraplan: accept --copy as no-op alias (clipboard is the default; flag explicitly affirms the action)
+
+### Other
+
+- STORY-439: three-way complexity calibration substrate (#270)
+- [STORY-305] feat(scaffolding): per-project skill extensions via local/ + .local.md (#210)
+- [TASK-553] docs(discipline): implementer-discipline.md — six rules + bouncer map
+- [TASK-555] docs(agents): cross-agent skill-invocation surface map
+
 ## [v0.9.1] — 2026-05-23
 
 Specs merged since v0.9.0 (22):
