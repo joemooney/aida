@@ -1,0 +1,18 @@
+id: 019e6838-2c53-7d20-94f7-041435dbb93d
+spec_id: STORY-474
+agreed_id: STORY-474
+title: MCP tool profiles and safe default surface
+description: 'Add named MCP tool profiles so AIDA can expose a conservative surface to untrusted or exploratory clients while keeping full coordination/admin tools available to trusted agents. Acceptance: aida mcp-serve supports profiles such as read-only, coordination, operator, admin, and full; tools advertise/profile metadata; read-only excludes all write tools; tests verify tools/list filtering; docs recommend safe defaults for marketplace installs.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-27T06:56:12.371919361Z
+modified_at: 2026-05-27T06:56:12.371919361Z
+req_type: Story
+tags:
+- codex
+- marketplace
+- mcp
+- profiles
+- security
