@@ -3,12 +3,12 @@ spec_id: TASK-565
 agreed_id: TASK-565
 title: 'Marketplace research refresh: AIDA positioning + improvement roadmap'
 description: Research the current AI coding-agent and MCP marketplace landscape, compare it against AIDA's positioning, and produce a durable improvement roadmap. Output should update docs/competitive-analysis with current sources and file follow-up AIDA tasks for actionable system improvements. trace:TASK-NEW
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:52:48.869228104Z
-modified_at: 2026-05-27T06:59:50.921170633Z
+modified_at: 2026-05-27T07:05:49.494066601Z
 req_type: Task
 tags:
 - codex
@@ -45,3 +45,7 @@ comments:
   content: 'Marketplace research memo drafted at docs/competitive-analysis/2026-05-26-marketplace-research.md. Filed linked follow-ups: STORY-473 (Claude plugin), STORY-474 (MCP profiles), STORY-475 (remote/auth MCP), TASK-566 (install matrix), TASK-567 (marketplace security checklist), STORY-476 (external issue refs), STORY-477 (agent-lift metrics).'
   created_at: 2026-05-27T06:59:50.921170633Z
   modified_at: 2026-05-27T06:59:50.921170633Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-27T07:05:49.494066601Z
+  completion_sha: 8a3d1d7f94442401c54ad2dd1545089d209e6641
