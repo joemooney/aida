@@ -136,6 +136,8 @@ For non-Claude MCP client setup and marketplace/distribution surfaces, keep
 `docs/agents/aida-mcp-install-matrix.md` current. It is the operational matrix
 for connecting AIDA to Claude Code, Codex, Cursor, Windsurf, Continue, Cline,
 Copilot, Devin, Sourcegraph/Amp, and adjacent agent clients.
+Before publishing AIDA through a marketplace or registry, run
+`docs/security/marketplace-publication-checklist.md`.
 
 `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
 the first-class capture wrapper for demos, training corpus material, and

@@ -79,6 +79,8 @@ For per-client MCP setup and marketplace/distribution notes, see
 `docs/agents/aida-mcp-install-matrix.md`. It records the current config
 surface for Claude Code, Codex, Cursor, Windsurf, Continue, Cline, Copilot,
 Devin, Sourcegraph/Amp, and adjacent clients.
+Before publishing AIDA through a marketplace or registry, run
+`docs/security/marketplace-publication-checklist.md`.
 
 Prefer `aida agent new <type>` for supervised agent launches. It
 registers the spawned process, writes a point-in-time launch context to
