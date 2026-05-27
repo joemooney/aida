@@ -51,12 +51,12 @@ description: |-
   Master agrees — pure-bash-script as smallest valuable slice; future 'aida demo' subcommand for the operator-experience evolution.
 
   trace:TASK-X
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T20:15:03.416213758Z
-modified_at: 2026-05-25T20:17:20.093894361Z
+modified_at: 2026-05-27T07:00:16.876021422Z
 req_type: Task
 tags:
 - batch:first-user-experience
