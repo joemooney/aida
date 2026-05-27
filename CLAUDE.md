@@ -132,6 +132,11 @@ lease/spec, pending brief paths with titles, and queue-head hints. Use
 launch. The file is a startup snapshot only; keep polling briefs/MCP for
 work filed after launch.
 
+For non-Claude MCP client setup and marketplace/distribution surfaces, keep
+`docs/agents/aida-mcp-install-matrix.md` current. It is the operational matrix
+for connecting AIDA to Claude Code, Codex, Cursor, Windsurf, Continue, Cline,
+Copilot, Devin, Sourcegraph/Amp, and adjacent agent clients.
+
 `aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
 the first-class capture wrapper for demos, training corpus material, and
 autonomous-drain audit trails. It no-ops gracefully when `asciinema` is
