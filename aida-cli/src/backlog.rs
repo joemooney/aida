@@ -19,9 +19,8 @@ use aida_core::{
 use crate::cli::BacklogCommand;
 use crate::{
     apply_tag_deltas, batch_tag_of, current_user_id, find_plan_files_for_spec, find_project_root,
-    format_tag_chip, is_terminal_status, normalize_batch_name, parse_plan_critical_files,
-    parse_priority, parse_requirement_type, scan_trace_graph, tag_matches_exact,
-    tag_matches_prefix,
+    format_tag_chip, normalize_batch_name, parse_plan_critical_files, parse_priority,
+    parse_requirement_type, scan_trace_graph, tag_matches_exact, tag_matches_prefix,
 };
 
 const LOW_RISK_TAGS: &[&str] = &[
@@ -163,8 +162,9 @@ fn collect_backlog_candidates(
     let mut out: Vec<Requirement> = store
         .requirements
         .iter()
+        // Approved is non-terminal by definition; no defense-in-depth
+        // !is_terminal_status filter needed. trace:TASK-536 | ai:claude
         .filter(|r| matches!(r.status, RequirementStatus::Approved))
-        .filter(|r| !is_terminal_status(&r.status))
         .filter(|r| !r.archived)
         .filter(|r| !queued_ids.contains(&r.id))
         .cloned()
@@ -496,7 +496,7 @@ fn handle_analyze(storage: &Storage, ids: &[String], json: bool) -> Result<()> {
     let mut resolved: Vec<(String, BTreeSet<String>)> = Vec::new();
     for raw in ids {
         let req = lookup_spec(&store, raw).ok_or_else(|| {
-            anyhow!("spec `{raw}` not found — pass a SPEC-ID (`STORY-444`), agreed id, or UUID")
+            anyhow!("spec `{raw}` not found — pass a SPEC-ID (e.g. `STORY-N`), agreed id, or UUID")
         })?;
         let spec = display_id(req).to_string();
         if resolved.iter().any(|(s, _)| s == &spec) {
@@ -604,7 +604,7 @@ fn handle_groom(
     let mut to_groom: Vec<Requirement> = Vec::new();
     for raw in ids {
         let req = lookup_spec(&store, raw).ok_or_else(|| {
-            anyhow!("spec `{raw}` not found — pass a SPEC-ID (`STORY-444`), agreed id, or UUID")
+            anyhow!("spec `{raw}` not found — pass a SPEC-ID (e.g. `STORY-N`), agreed id, or UUID")
         })?;
         if !matches!(req.status, RequirementStatus::Approved) {
             anyhow::bail!(

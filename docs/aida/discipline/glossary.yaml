@@ -304,3 +304,49 @@ cmd-aida-history: |
   Chronological substrate event ledger. Every status transition,
   comment, tag edit shows up. --events --limit N for a tail view;
   --spec SPEC-ID for one spec's history.
+
+
+# ── Memory taxonomy (cognitive-science vocabulary) ─────────────────────
+#
+# Imported from the agent-memory-libraries competitive analysis
+# (docs/competitive-analysis/2026-05-26-agent-memory-libraries.md).
+# Five kinds of memory, each backed by a different AIDA substrate.
+# trace:DOC-1-101 | ai:claude
+
+kind-episodic: |
+  Memory of specific events tied to time + place. AIDA's episodic
+  substrate is the git history of the orphan 'aida-store' branch +
+  'aida history --events' + the punt ledger (STORY-325) + the
+  calibration substrate (STORY-347) + usage telemetry. Each transition,
+  decision, or observation is a timestamped record. The substrate
+  answers "what did I believe last month?" via git history.
+
+kind-semantic-project: |
+  Decontextualized facts about the project — the spec graph. One YAML
+  per spec under orphan 'aida-store' branch, with SQLite cache
+  projection for read speed. Accessed via 'aida add', 'aida edit',
+  'aida list', 'aida search', 'aida show'. Stable SPEC-IDs survive
+  refactors and rename operations.
+
+kind-procedural: |
+  Knowing-how, encoded as behavioral disposition not as a retrievable
+  fact. AIDA's procedural substrate is the discipline pack
+  (docs/aida/discipline/), CLAUDE.md, AGENTS.md, skills (.claude/
+  skills/) and hooks. Mechanism: context-injection at session-start,
+  not vector-store retrieval. The same mechanism LangMem uses for its
+  prompt optimizer, scaffolded by 'aida init' into every project.
+
+kind-prospective: |
+  Memory FOR THE FUTURE — "when condition X next appears, do Y". AIDA's
+  prospective substrate: briefs ('aida brief <agent> <spec>'), queue +
+  lease + role routing, auto-filed followups on Done (TASK-96), punt →
+  advisor → resume handshake (STORY-306). The article 'agent memory:
+  an anatomy' notes this is rare in production memory libraries; AIDA
+  ships it as a first-class primitive.
+
+kind-autobiographical-user: |
+  Facts about the user held on their behalf — preferences, project
+  context, recurring feedback. AIDA's autobiographical-user substrate
+  is ~/.claude/projects/<slug>/memory/ — the feedback_*.md, user_*.md,
+  project_*.md, reference_*.md files with frontmatter. What most
+  production memory libraries (Mem0, LangMem, Graphiti) hold.
