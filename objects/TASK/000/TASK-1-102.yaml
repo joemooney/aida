@@ -1,0 +1,29 @@
+id: 019e6837-a9fd-7271-a699-92ea0f67a14f
+spec_id: TASK-1-102
+title: verify_trace_drift's per-site LLM calls blow Tier 1 rate limit on dense SPECs
+description: |-
+  Discovered during end-to-end validation 2026-05-26. verify_trace_drift issues one focused LLM call per trace site (up to N=10 per the brief cap). For a SPEC like EPIC-16 with ~5 trace sites, the 5 serial calls within ~17 seconds blow Anthropic's 30k input-tokens/min Tier 1 budget when combined with another tool call earlier in the same minute (e.g. a chart_status that just ran).
+
+  Repro: start aida-chat on anthropic-api Tier 1, run chart_status, then immediately request verify_trace_drift on EPIC-16. Observe 429 mid-execution.
+
+  Behavior: the first tool's audit captures the 429 cleanly via STORY-14 inspector (duration_ms, ok=false, full error text) — error handling is correct. But the verification result is incomplete.
+
+  Possible fixes (preference order): (1) single combined LLM call asking for a JSON array of findings across all sites (1 call instead of N — larger prompt but fewer round-trips); (2) per-site call with Retry-After / backoff; (3) Tier 2 upgrade as a UI hint on first 429.
+
+  Impact: blocks the verify-drift demo on Tier 1 budgets. Non-issue on Tier 2. Surfaced by: aida-chat advisor during 24h autonomous validation post-overnight-merges.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-27T06:55:39.005508926Z
+modified_at: 2026-05-27T06:55:39.005508926Z
+req_type: Task
+tags:
+- aida-chat
+- from-advisor:STORY-25
+- kind:observation
+- linked:STORY-25
+- rate-limit
+- severity:minor
+- tier-1-budget
+- verify-trace-drift
