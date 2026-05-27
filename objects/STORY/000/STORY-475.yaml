@@ -17,3 +17,7 @@ tags:
 - marketplace
 - mcp
 - remote
+relationships:
+- rel_type: Child
+  target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
+  created_at: 2026-05-27T06:56:36.970562696Z
