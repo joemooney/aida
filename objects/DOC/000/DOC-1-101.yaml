@@ -7,10 +7,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:54:48.258713838Z
-modified_at: 2026-05-27T06:54:48.258713838Z
+modified_at: 2026-05-27T06:58:15.284865664Z
 req_type: Doc
 tags:
 - competitive-analysis
 - from-research
 - kind:doc
 - memory-libraries
+comments:
+- id: 019e683a-0c74-7990-a032-9304552852b2
+  author: joe
+  content: Commit 3da49358 references this requirement
+  created_at: 2026-05-27T06:58:15.284865664Z
+  modified_at: 2026-05-27T06:58:15.284865664Z
