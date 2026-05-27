@@ -1,6 +1,6 @@
 # Signals to Watch: Future Landscape Refresh Triggers
 
-**Last updated**: 2026-05-22  
+**Last updated**: 2026-05-26  
 **Ecosystem Cadence**: Scan triggered by critical events defined below
 
 Because the AI developer tooling landscape moves with extreme velocity, a static landscape scan quickly becomes outdated. To maintain AIDA's strategic positioning and prevent context rot, this document outlines the **critical signals** that will trigger an immediate re-evaluation and refresh of AIDA's competitive analysis.
@@ -56,3 +56,11 @@ We track the growth of `byronxlg/skillfold` across two key metrics:
 Model Context Protocol (MCP) is currently a highly fragmented ecosystem of custom local servers. We monitor for:
 *   **Centralized MCP Registries**: Standardized registries (e.g., Anthropic or community-driven hubs) that consolidate MCP server discovery.
 *   **Unified Authentication Specs**: Standardized protocols for credentials sharing and secure local filesystem access across multiple MCP-connected applications.
+
+### Agent Extension Marketplace Maturity:
+We monitor whether agent clients make installable extension packages the default discovery path rather than a power-user escape hatch.
+
+*   **Claude Code plugin marketplace growth**: If Claude Code plugin marketplaces become a common distribution channel for skills, hooks, commands, MCP servers, and agents, AIDA should maintain a first-class plugin package rather than relying only on `aida init` scaffolding.
+*   **MCP registry metadata requirements**: If official or de facto MCP registries standardize server metadata, auth declarations, tool profiles, or security review fields, AIDA should conform quickly so its MCP surface remains discoverable.
+*   **Tool-surface caps and profile controls**: If major clients cap MCP tools or require allowlists, AIDA should bias toward named profiles (`read-only`, `coordination`, `operator`, `admin`) instead of one flat exported tool list.
+*   **Remote MCP auth/OAuth convergence**: If cloud agents and IDEs converge on OAuth/DCR or a simpler token profile, AIDA should evaluate remote MCP support beyond local stdio.
