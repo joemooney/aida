@@ -13,12 +13,12 @@ description: |
   re-naming on every pack addition).
 
   Pure rename — no behavior change.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T07:38:56.826228125Z
-modified_at: 2026-05-24T07:38:56.826228125Z
+modified_at: 2026-05-27T06:59:00.431676750Z
 req_type: Task
 tags:
 - from-review:PR-282
