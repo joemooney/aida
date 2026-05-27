@@ -3,12 +3,12 @@ spec_id: TASK-1-086
 agreed_id: TASK-37
 title: Recurrence threshold of 3 is hard-coded in the recur handler; consider making i…
 description: Recurrence threshold of 3 is hard-coded in the recur handler; consider making it configurable via [findings] promote_threshold in .aida/config.toml so projects with different signal-to-noise tolerances can tune it.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T06:29:58.682708712Z
-modified_at: 2026-05-27T07:03:18.709841974Z
+modified_at: 2026-05-27T07:03:52.696659228Z
 req_type: Task
 tags:
 - aida:findings
