@@ -1644,6 +1644,10 @@ impl Scaffolder {
                 ),
                 ("per-agent-config.md", "Per-agent launch config guide"),
                 (
+                    "aida-mcp-install-matrix.md",
+                    "AIDA MCP client install matrix",
+                ),
+                (
                     "session-communication.md",
                     "Agent session communication guide",
                 ),
@@ -2641,6 +2645,10 @@ mod tests {
             .exists());
         assert!(temp_dir
             .path()
+            .join("docs/agents/aida-mcp-install-matrix.md")
+            .exists());
+        assert!(temp_dir
+            .path()
             .join("docs/agents/session-communication.md")
             .exists());
         assert!(temp_dir.path().join("docs/extending-skills.md").exists());
@@ -2662,6 +2670,7 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-mcp-setup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/antigravity-brief-pickup.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/per-agent-config.md")));
+        assert!(paths.contains(&PathBuf::from("docs/agents/aida-mcp-install-matrix.md")));
         assert!(paths.contains(&PathBuf::from("docs/agents/session-communication.md")));
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
         assert!(paths.contains(&PathBuf::from(".aida/reserved-paths.toml")));
