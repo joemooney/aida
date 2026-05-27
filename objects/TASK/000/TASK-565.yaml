@@ -16,3 +16,7 @@ tags:
 - marketplace
 - positioning
 - research
+relationships:
+- rel_type: Parent
+  target_id: 019e6838-2c53-7d20-94f7-041435dbb93d
+  created_at: 2026-05-27T06:56:19.756995401Z
