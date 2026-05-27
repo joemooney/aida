@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T06:29:58.682708712Z
-modified_at: 2026-05-25T06:30:25.527504606Z
+modified_at: 2026-05-27T07:03:18.709841974Z
 req_type: Task
 tags:
 - aida:findings
@@ -29,3 +29,8 @@ comments:
   content: 'Recurrence #3 by joe 2026-05-25: Third sighting — should trigger the promote-it nudge.'
   created_at: 2026-05-25T06:30:25.527504606Z
   modified_at: 2026-05-25T06:30:25.527504606Z
+- id: 019e683e-adb5-7970-a2fb-97f04f803bcf
+  author: joe
+  content: Commit 4af532b5 references this requirement
+  created_at: 2026-05-27T07:03:18.709841974Z
+  modified_at: 2026-05-27T07:03:18.709841974Z
