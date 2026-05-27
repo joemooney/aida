@@ -1,5 +1,6 @@
 id: 019e6836-e3c2-7c91-9262-6077a1386120
 spec_id: DOC-1-101
+agreed_id: DOC-1
 title: 'Competitive analysis: agent memory libraries (Mem0/LangMem/Graphiti/Cognee/Letta/Dreams)'
 description: 'docs/competitive-analysis/2026-05-26-agent-memory-libraries.md — applies the extractor/store/retriever anatomy + 4-kinds taxonomy to production memory libraries. AIDA''s 5-kind memory framework (semantic-project, procedural, episodic, prospective, autobiographical-user) + git-canonical substrate + prospective-memory primitives are unclaimed differentiators. Identified gap: offline consolidation (Dreams/Letta-style scheduled reflection). 5 scoped opportunities tabled. Refresh cadence: signal-triggered.'
 status: Approved

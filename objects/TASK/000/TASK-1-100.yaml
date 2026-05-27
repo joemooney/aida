@@ -1,5 +1,6 @@
 id: 019e6262-2f8d-79b2-9bfe-c37ebc6ece05
 spec_id: TASK-1-100
+agreed_id: TASK-128
 title: Scaffold commits emit 'Staged files trace to:' warnings listing FOREIGN trace I…
 description: 'Scaffold commits emit ''Staged files trace to:'' warnings listing FOREIGN trace IDs (BUG-73, EPIC-21, etc. — from AIDA''s master templates, not from the local substrate). The commit-msg hook can''t tell local from foreign refs. Workaround: AIDA_RELEASE=1 (existing mechanical-commit escape hatch, used by scripts/release.sh and now aida-demo.sh scaffold commit). Proper fix: hook resolves each SPEC-ID against the local substrate (aida-store branch) before warning — warn only on locally-resolved refs, silently ignore foreign ones. Surfaced during the 2026-05-25 first-user demo dogfood.'
 status: Draft
