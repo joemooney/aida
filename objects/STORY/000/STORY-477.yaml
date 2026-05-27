@@ -1,0 +1,18 @@
+id: 019e683a-359c-7a73-a6ec-cbbf76fad2b4
+spec_id: STORY-477
+agreed_id: STORY-477
+title: Agent-lift metrics report for AIDA dogfood proof
+description: 'Productize AIDA''s dogfood telemetry into a report that proves coordination value. Acceptance: aida metrics agent-lift --since <window> reports manual interventions per drain, stale-base recoveries, unshipped commits caught, brief-to-PR time, auto-bump success rate, coordinated agent count, and trace coverage where available; markdown export supports release notes/case studies; docs explain metric limitations.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-27T06:58:25.820595517Z
+modified_at: 2026-05-27T06:58:25.820595517Z
+req_type: Story
+tags:
+- agent-lift
+- codex
+- marketplace
+- metrics
+- telemetry
