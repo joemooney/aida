@@ -130,6 +130,7 @@ if [ "$is_major_or_minor" = "1" ]; then
     fi
     
     echo "  Reminder: Major and minor releases require an ecosystem scan and refresh."
+    echo "  If marketplace/package metadata changed, also run docs/security/marketplace-publication-checklist.md."
     if [ "$auto_yes" = "1" ]; then
         echo "  auto-confirm: --yes (or AIDA_RELEASE_YES=1) — bypassing ecosystem check."
     elif [ ! -t 0 ]; then
