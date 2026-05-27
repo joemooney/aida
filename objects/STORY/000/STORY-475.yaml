@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:30.740409919Z
-modified_at: 2026-05-27T06:56:30.740409919Z
+modified_at: 2026-05-27T07:32:47.955510316Z
 req_type: Story
 tags:
 - audit
@@ -21,3 +21,20 @@ relationships:
 - rel_type: Child
   target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
   created_at: 2026-05-27T06:56:36.970562696Z
+comments:
+- id: 019e6859-acd3-7890-a5f4-71d163d21c06
+  author: joe
+  content: |-
+    Architecture sketch for remote/auth-capable MCP transport (Codex, 2026-05-26):
+
+    1. Phase 1 should be local HTTP only: aida mcp-serve --transport http --bind 127.0.0.1:<port> --token-env AIDA_MCP_TOKEN. Keep stdio as default. No LAN/cloud bind by default.
+    2. Reuse the same tool registry and profile filter from STORY-474 so HTTP transport cannot accidentally expose a larger surface than stdio. Require explicit --profile for HTTP; recommend read-only unless token + project trust are configured.
+    3. Authentication: bearer token header for v1. Token can come from env or generated one-shot local config. Refuse write-capable profiles without token. OAuth/DCR should be a follow-up spike, not v1.
+    4. Audit: append JSONL under .aida/audit/mcp-tools.jsonl with timestamp, transport, profile, caller if known, tool name, spec IDs parsed from args/result where safe, success/error, and duration_ms. Avoid logging secrets or full free-form text bodies by default.
+    5. Project scoping: server root is the cwd/project root where mcp-serve starts; reject requests that target paths outside the project. Do not support multi-project HTTP daemon in v1.
+    6. Tests: HTTP initialize/tools/list/call smoke; missing token rejected for write profile; read-only over HTTP lists only read tools; audit row written for success and error; token value never appears in audit.
+    7. Docs: update aida-mcp-install-matrix rows for Copilot/Devin/cloud clients to say HTTP token transport is the minimum safe bridge, not local stdio.
+
+    Open question for master: should HTTP transport bind default be disabled unless --transport http is passed (recommended), or should a config file enable it per-project?
+  created_at: 2026-05-27T07:32:47.955510316Z
+  modified_at: 2026-05-27T07:32:47.955510316Z
