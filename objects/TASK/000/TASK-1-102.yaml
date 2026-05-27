@@ -1,5 +1,6 @@
 id: 019e6837-a9fd-7271-a699-92ea0f67a14f
 spec_id: TASK-1-102
+agreed_id: TASK-127
 title: verify_trace_drift's per-site LLM calls blow Tier 1 rate limit on dense SPECs
 description: |-
   Discovered during end-to-end validation 2026-05-26. verify_trace_drift issues one focused LLM call per trace site (up to N=10 per the brief cap). For a SPEC like EPIC-16 with ~5 trace sites, the 5 serial calls within ~17 seconds blow Anthropic's 30k input-tokens/min Tier 1 budget when combined with another tool call earlier in the same minute (e.g. a chart_status that just ran).
