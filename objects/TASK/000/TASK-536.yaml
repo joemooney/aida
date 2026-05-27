@@ -16,12 +16,12 @@ description: |
   enum changes — leave a comment naming that.
 
   Pure refactor, no behavior change. One-line delete.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T07:39:27.946340980Z
-modified_at: 2026-05-24T07:39:27.946340980Z
+modified_at: 2026-05-27T06:59:11.845535905Z
 req_type: Task
 tags:
 - dead-code
