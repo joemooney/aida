@@ -1,9 +1,38 @@
 # AIDA Ecosystem Watch Log
 
-**Last updated**: 2026-05-18  
+**Last updated**: 2026-05-26  
 **Ecosystem Cadence**: Scan triggered by critical events or quarterly reviews
 
 This document serves as our chronological ledger of ecosystem capability updates from platform providers (Anthropic, OpenAI) and neighbor tools (Cursor, Windsurf, Aider, Cline). Each entry evaluates a specific feature through AIDA's strategic lens, maps its classification, and documents the resulting feedback loop to our product backlog.
+
+---
+
+## 2026-05-26: Marketplace and MCP Distribution Scan
+
+See [2026-05-26-marketplace-research.md](2026-05-26-marketplace-research.md) for the full memo.
+
+### Classification
+
+**Integrate / Compete-on-substrate**. Agent extension marketplaces and MCP registries are now meaningful distribution surfaces, but they mostly distribute horizontal capabilities. AIDA should integrate with those channels while competing on the repo-local intent/control-plane layer: spec graph, lifecycle state, leases, briefs, punts, findings, traceability, status, and doctor.
+
+### Key Signals
+
+- Claude Code plugin marketplaces package skills, agents, hooks, MCP servers, and commands into installable bundles.
+- Linear, Sourcegraph, GitHub Copilot cloud agent, Windsurf, Continue, and Cline all treat MCP as an agent integration seam.
+- Enterprise-facing tools emphasize OAuth, tool whitelists, scoped access, audit logs, and consumption controls.
+- Sourcegraph and Windsurf both show that MCP tool-surface size is an operational constraint, not just an implementation detail.
+
+### Action and Backlog Loop
+
+Filed and linked under TASK-565:
+
+- STORY-473: publish AIDA as a Claude Code plugin/marketplace package.
+- STORY-474: add MCP tool profiles and a safe default surface.
+- STORY-475: add remote/auth-capable AIDA MCP transport.
+- TASK-566: document AIDA MCP install matrix for major agent clients.
+- TASK-567: create marketplace publication security checklist.
+- STORY-476: add external issue refs for Linear/Jira/GitHub composition.
+- STORY-477: add agent-lift metrics report for dogfood proof.
 
 ---
 
