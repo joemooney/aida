@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:12.371919361Z
-modified_at: 2026-05-27T06:56:12.371919361Z
+modified_at: 2026-05-27T07:32:36.445625465Z
 req_type: Story
 tags:
 - codex
@@ -20,3 +20,20 @@ relationships:
 - rel_type: Child
   target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
   created_at: 2026-05-27T06:56:19.756995401Z
+comments:
+- id: 019e6859-7fdd-75e0-b72f-cf04891c7f6b
+  author: joe
+  content: |-
+    Architecture sketch for MCP tool profiles (Codex, 2026-05-26):
+
+    1. Add a small enum MpcToolProfile/ToolProfile in aida-cli/src/mcp.rs with ordered levels: read-only, coordination, operator, admin, full. Default should remain full for backward compatibility unless a marketplace/package path opts into read-only/coordination.
+    2. Add --profile <name> to aida mcp-serve; invalid profile fails before serving and prints valid names. Config env fallback can be AIDA_MCP_PROFILE for plugin/marketplace installs.
+    3. Annotate each tool descriptor with the minimum profile required. Suggested mapping: read-only = list/show/search/history/resources/list_features; coordination = comments, relationships, briefs, findings, punts, claim/release/list leases; operator = directives, queue/session/status/doctor if/when exposed; admin = destructive/broad mutation.
+    4. Filter tools/list by selected profile and reject direct calls to hidden tools with isError/text response. This protects clients that cache tool names or manually invoke hidden methods.
+    5. Keep outputSchema/text-envelope behavior unchanged; this is exposure control, not response-shape work.
+    6. Tests: unit table for every tool -> profile; tools/list under read-only excludes every write tool; coordination includes comments/findings/punts/briefs but not operator/admin; direct call to filtered tool returns a clear profile error; docs update in aida-mcp-install-matrix.
+    7. Backward compatibility: existing local clients using no flag see today's full surface; marketplace docs recommend read-only until remote auth/audit ships.
+
+    Open question for master: should the marketplace Claude plugin switch immediately to read-only once this lands, or coordination? My recommendation: read-only until remote/auth work lands, coordination for supervised local aida agent new sessions.
+  created_at: 2026-05-27T07:32:36.445625465Z
+  modified_at: 2026-05-27T07:32:36.445625465Z
