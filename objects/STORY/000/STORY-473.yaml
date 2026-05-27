@@ -3,12 +3,12 @@ spec_id: STORY-473
 agreed_id: STORY-473
 title: Publish AIDA as a Claude Code plugin/marketplace package
 description: 'Package AIDA for Claude Code''s plugin marketplace/distribution surface. The package should install or guide setup for AIDA skills, hooks, MCP config, setup guidance, and the first-project workflow. Acceptance: publishable .claude-plugin/marketplace.json or dedicated package layout; includes SETUP.md for MCP/aida init; validates with Claude plugin validation; documents local executable/MCP write-tool permissions; includes container seed guidance for teams.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:55:39.712313175Z
-modified_at: 2026-05-27T07:24:54.928778853Z
+modified_at: 2026-05-27T07:31:40.038511196Z
 req_type: Story
 tags:
 - claude-code
@@ -21,3 +21,7 @@ relationships:
   target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
   created_at: 2026-05-27T06:58:51.740622929Z
   created_by: joe
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-27T07:31:40.038511196Z
+  completion_sha: bdc7228f95f62bdfe7e14c9d3bba9dcb4d51afae
