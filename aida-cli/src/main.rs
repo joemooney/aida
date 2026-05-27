@@ -74225,8 +74225,14 @@ mod story_255_discipline_pack_tests {
     //! trace:STORY-255 | STORY-443 | ai:claude
     use super::*;
 
+    /// Verifies the embedded discipline pack scaffolds the full set
+    /// of canonical files into a new project's docs/aida/discipline/
+    /// directory. The expected count grows as the pack grows; the test
+    /// name was renamed from `_seven_docs_plus_readme` to a stable form
+    /// so adding a doc no longer requires renaming the test.
+    /// trace:TASK-534 | ai:claude
     #[test]
-    fn discipline_pack_scaffolds_seven_docs_plus_readme() {
+    fn discipline_pack_scaffolds_full_set() {
         // trace:TASK-479 | ai:antigravity — robust-project-root-resolution.md joins the pack.
         // trace:TASK-512 | ai:claude — tag-conventions.md joins the pack.
         // trace:STORY-444 | ai:claude — backlog-grooming.md joins the pack.
