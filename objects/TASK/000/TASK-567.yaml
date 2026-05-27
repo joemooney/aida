@@ -3,12 +3,12 @@ spec_id: TASK-567
 agreed_id: TASK-567
 title: Marketplace publication security checklist
 description: 'Create a security/release checklist for publishing AIDA through third-party marketplaces and registries. Acceptance: checklist covers hidden network calls, filesystem write scope, shell execution, MCP write-tool exposure, source visibility, update behavior, credentials, trust prompts, and validation commands; release checklist links it; CI or scripts validate plugin/registry manifests where feasible.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:57:12.575969499Z
-modified_at: 2026-05-27T07:18:03.771236170Z
+modified_at: 2026-05-27T07:23:53.329573395Z
 req_type: Task
 tags:
 - codex
@@ -19,3 +19,7 @@ relationships:
 - rel_type: Child
   target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
   created_at: 2026-05-27T06:57:27.041291724Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-27T07:23:53.329573395Z
+  completion_sha: 93f15024caf0041aa93c6298507e6ec8480cf59f
