@@ -400,6 +400,7 @@ Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Lin
 | [Why AIDA?](docs/WHY-AIDA.md) | Problem statement and competitive positioning |
 | [Future Vision](docs/future-vision.md) | AIDA in the agentic coding era |
 | [Skills vs Commands](docs/UNDERSTANDING_SKILLS.md) | How Claude Code skills and commands differ |
+| [Claude Code Plugin Package](docs/agents/claude-plugin-package.md) | Marketplace/package skeleton for installing AIDA's Claude Code-facing setup |
 | [`docs/plans/`](docs/plans/) | Implementation plan archive (chronological) |
 
 ## License

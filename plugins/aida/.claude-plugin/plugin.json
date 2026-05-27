@@ -1,0 +1,19 @@
+{
+  "name": "aida",
+  "displayName": "AIDA",
+  "description": "Connect Claude Code to AIDA's git-native spec graph, MCP server, and agent-collaboration workflow.",
+  "version": "0.10.0",
+  "author": {
+    "name": "AIDA maintainers"
+  },
+  "homepage": "https://github.com/joemooney/aida",
+  "repository": "https://github.com/joemooney/aida",
+  "license": "MIT",
+  "keywords": ["aida", "mcp", "requirements", "agents", "traceability"],
+  "mcpServers": {
+    "aida": {
+      "command": "aida",
+      "args": ["mcp-serve"]
+    }
+  }
+}
