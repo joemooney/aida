@@ -3,12 +3,12 @@ spec_id: TASK-565
 agreed_id: TASK-565
 title: 'Marketplace research refresh: AIDA positioning + improvement roadmap'
 description: Research the current AI coding-agent and MCP marketplace landscape, compare it against AIDA's positioning, and produce a durable improvement roadmap. Output should update docs/competitive-analysis with current sources and file follow-up AIDA tasks for actionable system improvements. trace:TASK-NEW
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:52:48.869228104Z
-modified_at: 2026-05-27T06:52:48.869228104Z
+modified_at: 2026-05-27T06:53:20.065678736Z
 req_type: Task
 tags:
 - codex
