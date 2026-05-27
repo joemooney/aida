@@ -212,6 +212,55 @@ pub fn finding_recurrence(tags: &[String]) -> u32 {
         .unwrap_or(1)
 }
 
+/// Default recurrence count above which the recur handler emits the
+/// promote-it hint. Configurable via `[findings] promote_threshold = N`
+/// in `.aida/config.toml`. trace:TASK-37 | ai:claude
+pub const DEFAULT_PROMOTE_THRESHOLD: u32 = 3;
+
+/// Resolve the promote-it threshold for a project. Reads
+/// `[findings] promote_threshold = N` from `.aida/config.toml` (clamped
+/// to >= 1; values <= 0 fall back to the default). Returns the default
+/// (`DEFAULT_PROMOTE_THRESHOLD`) when the file is absent or the key
+/// isn't set. Errors are swallowed — config reading never blocks the
+/// caller. trace:TASK-37 | ai:claude
+pub fn promote_threshold_for_project(project_dir: Option<&std::path::Path>) -> u32 {
+    let Some(dir) = project_dir else {
+        return DEFAULT_PROMOTE_THRESHOLD;
+    };
+    let path = dir.join(".aida").join("config.toml");
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return DEFAULT_PROMOTE_THRESHOLD;
+    };
+    parse_promote_threshold(&content).unwrap_or(DEFAULT_PROMOTE_THRESHOLD)
+}
+
+/// Parse `[findings] promote_threshold = N` out of a TOML string.
+/// Returns `Some(N)` for any N >= 1, `None` otherwise. Mirrors
+/// `parse_telemetry_enabled` in `usage.rs` — a hand-rolled TOML-ish
+/// parser so the read path never pulls a full TOML dependency just to
+/// look up one value. trace:TASK-37 | ai:claude
+pub fn parse_promote_threshold(content: &str) -> Option<u32> {
+    let mut in_findings = false;
+    for raw in content.lines() {
+        let line = raw.split('#').next()?.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_findings = rest.trim_end_matches(']').trim() == "findings";
+            continue;
+        }
+        if !in_findings {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("promote_threshold") {
+            let val = rest.split('=').nth(1)?.trim().trim_matches('"');
+            return val.parse::<u32>().ok().filter(|n| *n >= 1);
+        }
+    }
+    None
+}
+
 /// One row in the triage view.
 #[derive(Debug, Clone)]
 pub struct FindingRow {
@@ -654,6 +703,36 @@ mod tests {
         // Garbled or zero values fall back to the implicit count.
         assert_eq!(finding_recurrence(&["recurrence:0".to_string()]), 1);
         assert_eq!(finding_recurrence(&["recurrence:abc".to_string()]), 1);
+    }
+
+    #[test]
+    fn parse_promote_threshold_finds_explicit_value() {
+        let toml = "[findings]\npromote_threshold = 5\n";
+        assert_eq!(parse_promote_threshold(toml), Some(5));
+    }
+
+    #[test]
+    fn parse_promote_threshold_absent_returns_none() {
+        let toml = "[findings]\nother_key = 42\n";
+        assert_eq!(parse_promote_threshold(toml), None);
+        // Wrong section is also a miss.
+        let toml = "[telemetry]\npromote_threshold = 5\n";
+        assert_eq!(parse_promote_threshold(toml), None);
+    }
+
+    #[test]
+    fn parse_promote_threshold_rejects_zero_and_garbage() {
+        // 0 isn't a meaningful threshold — fall back to default.
+        let toml = "[findings]\npromote_threshold = 0\n";
+        assert_eq!(parse_promote_threshold(toml), None);
+        let toml = "[findings]\npromote_threshold = abc\n";
+        assert_eq!(parse_promote_threshold(toml), None);
+    }
+
+    #[test]
+    fn parse_promote_threshold_ignores_comments_and_blank_lines() {
+        let toml = "# comment\n\n[findings]\n# threshold comment\npromote_threshold = 7\n";
+        assert_eq!(parse_promote_threshold(toml), Some(7));
     }
 
     #[test]

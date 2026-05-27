@@ -2581,12 +2581,17 @@ fn handle_findings_recur(
 
     let display_id = req.spec_id.as_deref().unwrap_or(id);
     println!("Recurred {} — recurrence count now ×{next}.", display_id);
-    if next >= 3 {
+    // Threshold is configurable via [findings] promote_threshold in
+    // .aida/config.toml; default 3. trace:TASK-37 | ai:claude
+    let threshold = findings::promote_threshold_for_project(Some(store_path));
+    if next >= threshold {
         println!(
             "  {}",
-            "Recurrence ≥ 3 is the promote-it signal — consider \
-             `aida findings promote <ID>`."
-                .dimmed()
+            format!(
+                "Recurrence ≥ {threshold} is the promote-it signal — consider \
+                 `aida findings promote <ID>`."
+            )
+            .dimmed()
         );
     }
     Ok(())
