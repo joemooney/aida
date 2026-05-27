@@ -1,0 +1,26 @@
+{
+  "name": "aida-plugins",
+  "description": "AIDA marketplace packages for Claude Code: git-native spec graph, MCP setup, and agent-collaboration workflow guidance.",
+  "version": "0.10.0",
+  "owner": {
+    "name": "AIDA maintainers"
+  },
+  "plugins": [
+    {
+      "name": "aida",
+      "displayName": "AIDA",
+      "source": "./plugins/aida",
+      "description": "Connect Claude Code to AIDA's local spec graph and agent-coordination substrate.",
+      "version": "0.10.0",
+      "author": {
+        "name": "AIDA maintainers"
+      },
+      "homepage": "https://github.com/joemooney/aida",
+      "repository": "https://github.com/joemooney/aida",
+      "license": "MIT",
+      "category": "development",
+      "tags": ["aida", "mcp", "requirements", "agents", "traceability"],
+      "keywords": ["aida", "mcp", "requirements", "agents", "traceability"]
+    }
+  ]
+}
