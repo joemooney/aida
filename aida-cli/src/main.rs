@@ -7414,6 +7414,7 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | QueueCommand::Clear { .. }
                 | QueueCommand::Done { .. }
                 | QueueCommand::Rework { .. }
+                | QueueCommand::Prune { .. }
         ),
         // STORY-444: `aida backlog groom` writes (queue + tag); list /
         // analyze are read-only. trace:STORY-444 | ai:claude
@@ -62052,6 +62053,98 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 println!("{} Cleared completed items from queue", "✓".green());
             } else {
                 println!("{} Cleared all items from queue", "✓".green());
+            }
+        }
+        // Prune queue entries matching a predicate. Today only `--orphaned`
+        // is supported — removes entries pointing at deleted/missing specs
+        // (the "??? (deleted)" ghosts from auto-queued reviewer items).
+        // trace:TASK-537 | ai:claude
+        QueueCommand::Prune {
+            orphaned,
+            dry_run,
+            user,
+            r#for,
+        } => {
+            if !*orphaned {
+                anyhow::bail!(
+                    "no prune predicate specified — pass `--orphaned` to remove queue \
+                     entries whose backing spec no longer exists"
+                );
+            }
+            let user_id = get_user(user);
+            let entries = storage.queue_list(&user_id, /* include_completed */ false)?;
+            let store = storage.load()?;
+            let existing_ids: std::collections::HashSet<uuid::Uuid> =
+                store.requirements.iter().map(|r| r.id).collect();
+
+            // Find queue entries whose backing requirement isn't in the store
+            // and (optionally) match the role filter.
+            let orphans: Vec<&aida_core::models::QueueEntry> = entries
+                .iter()
+                .filter(|e| !existing_ids.contains(&e.requirement_id))
+                .filter(|e| match (r#for.as_deref(), e.for_role.as_deref()) {
+                    (None, _) => true,
+                    (Some(want), Some(have)) => want.eq_ignore_ascii_case(have),
+                    (Some(_), None) => false,
+                })
+                .collect();
+
+            if orphans.is_empty() {
+                println!(
+                    "{} No orphan queue entries found{}",
+                    "✓".green(),
+                    if r#for.is_some() {
+                        format!(" for role {}", r#for.as_deref().unwrap())
+                    } else {
+                        String::new()
+                    }
+                );
+            } else {
+                let n = orphans.len();
+                println!(
+                    "{} {} orphan queue entr{} ({})",
+                    if *dry_run {
+                        "ℹ".yellow()
+                    } else {
+                        "✗".yellow()
+                    },
+                    n.to_string().bold(),
+                    if n == 1 { "y" } else { "ies" },
+                    if *dry_run { "would remove" } else { "removing" },
+                );
+                for e in &orphans {
+                    let note = e
+                        .note
+                        .as_deref()
+                        .map(|n| format!(" — {}", n.dimmed()))
+                        .unwrap_or_default();
+                    let role = e
+                        .for_role
+                        .as_deref()
+                        .map(|r| format!(" [for:{r}]"))
+                        .unwrap_or_default();
+                    println!(
+                        "  pos {:2}  {} {}{}",
+                        e.position,
+                        e.requirement_id.to_string().dimmed(),
+                        role,
+                        note,
+                    );
+                }
+                if *dry_run {
+                    println!();
+                    println!("  {}", "Re-run without --dry-run to remove.".dimmed());
+                } else {
+                    for e in &orphans {
+                        storage.queue_remove(&user_id, &e.requirement_id)?;
+                    }
+                    println!(
+                        "{} Removed {} orphan queue entr{}",
+                        "✓".green(),
+                        n.to_string().bold(),
+                        if n == 1 { "y" } else { "ies" },
+                    );
+                }
             }
         }
         // trace:EPIC-1-001 | ai:claude
