@@ -40,12 +40,12 @@ description: |-
   ## Origin
 
   2026-05-19 — TASK-299's verification script tripped on this; the implementer self-corrected with an absolute path.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:08:25.950472276Z
-modified_at: 2026-05-20T05:08:25.950472276Z
+modified_at: 2026-05-28T15:53:57.131664649Z
 req_type: Task
 tags:
 - backlog
