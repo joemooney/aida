@@ -1,0 +1,30 @@
+id: 019e6f71-a9c2-77c1-9547-1776620e6acd
+spec_id: TASK-1-110
+title: 'TASK-268 ''both-at-once trap'' recurred a 3rd time on 2026-05-28. Pattern: I add …'
+description: |-
+  TASK-268 'both-at-once trap' recurred a 3rd time on 2026-05-28. Pattern: I add a new clap subcommand variant, write the trace marker as the LAST line of the /// doc comment block. clap pulls the whole doc block into --help text; the trace: marker leaks. Caught only when CI exercises the source_doc_comments_carry_no_trace_token + help_text_carries_no_trace_markers tests. Recurrences this session:
+
+    1. TASK-537 (commit 129ad84e) — Prune variant, doc-comment leak. CAUGHT BY PR-342 CI.
+    2. TASK-1-109 (commit c8fd579e) — first attempt at queue clear help; self-caught mid-flight when I noticed it BEFORE pushing.
+    3. (And the previous historical recurrence that motivated TASK-268 itself.)
+
+  The CLAUDE.md guidance + the test-enforcement gate are BOTH in place, yet I keep repeating the mistake. The gap: CLAUDE.md instructions don't gate; the source-test ONLY fires in CI. A pre-commit hook OR a clippy-style lint would catch this at the moment of writing.
+
+  Promote candidate (recurrence 3+): substrate-as-bouncer for the trace-marker convention. Either a pre-commit hook that grep-scans for '/// ...\n/// trace:' patterns in clap-decorated structs, or a clippy lint.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-28T16:36:20.546911728Z
+modified_at: 2026-05-28T16:36:20.546911728Z
+req_type: Task
+tags:
+- clap-doc-trap
+- from-advisor:TASK-268
+- from-self-test
+- kind:observation
+- linked:TASK-268
+- recurring-discipline-gap
+- severity:major
+- substrate-as-bouncer
+- task-268
