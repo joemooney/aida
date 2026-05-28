@@ -46,11 +46,23 @@ pub const LINKED_PREFIX: &str = "linked:";
 /// A finding's severity, parsed from its `severity:<level>` tag. Ordered so
 /// [`Severity::rank`] sorts a triage view major → minor → cosmetic, with
 /// unknown (no/garbled tag) last.
+///
+/// Vocabulary (in descending sort-priority order):
+///   - major     — should fix; the finding describes a real defect or risk
+///   - minor     — should fix; smaller scope than major
+///   - cosmetic  — could fix; nice-to-have polish
+///   - observation — pattern noted, not a defect; capture-only (TASK-120)
+///   - note      — informational only, low-priority capture (TASK-120)
+///   - unknown   — no/garbled tag
+///
+/// trace:STORY-467 trace:TASK-120 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     Major,
     Minor,
     Cosmetic,
+    Observation,
+    Note,
     Unknown,
 }
 
@@ -61,7 +73,9 @@ impl Severity {
             Self::Major => 0,
             Self::Minor => 1,
             Self::Cosmetic => 2,
-            Self::Unknown => 3,
+            Self::Observation => 3,
+            Self::Note => 4,
+            Self::Unknown => 5,
         }
     }
 
@@ -71,6 +85,8 @@ impl Severity {
             Self::Major => "major",
             Self::Minor => "minor",
             Self::Cosmetic => "cosmetic",
+            Self::Observation => "observation",
+            Self::Note => "note",
             Self::Unknown => "unknown",
         }
     }
@@ -82,6 +98,8 @@ impl Severity {
             "major" => Self::Major,
             "minor" => Self::Minor,
             "cosmetic" => Self::Cosmetic,
+            "observation" => Self::Observation,
+            "note" => Self::Note,
             _ => Self::Unknown,
         }
     }
@@ -457,7 +475,11 @@ mod tests {
     fn severity_rank_orders_major_minor_cosmetic() {
         assert!(Severity::Major.rank() < Severity::Minor.rank());
         assert!(Severity::Minor.rank() < Severity::Cosmetic.rank());
-        assert!(Severity::Cosmetic.rank() < Severity::Unknown.rank());
+        // TASK-120: lighter-weight findings rank below cosmetic but
+        // above unknown, so they still surface in the triage view.
+        assert!(Severity::Cosmetic.rank() < Severity::Observation.rank());
+        assert!(Severity::Observation.rank() < Severity::Note.rank());
+        assert!(Severity::Note.rank() < Severity::Unknown.rank());
     }
 
     #[test]
@@ -465,8 +487,29 @@ mod tests {
         assert_eq!(Severity::parse("major"), Severity::Major);
         assert_eq!(Severity::parse("  Cosmetic "), Severity::Cosmetic);
         assert_eq!(Severity::parse("MINOR"), Severity::Minor);
+        // TASK-120: observation + note added to the vocabulary.
+        assert_eq!(Severity::parse("observation"), Severity::Observation);
+        assert_eq!(Severity::parse("  Observation "), Severity::Observation);
+        assert_eq!(Severity::parse("OBSERVATION"), Severity::Observation);
+        assert_eq!(Severity::parse("note"), Severity::Note);
+        assert_eq!(Severity::parse("NOTE"), Severity::Note);
         assert_eq!(Severity::parse("bogus"), Severity::Unknown);
         assert_eq!(Severity::parse(""), Severity::Unknown);
+    }
+
+    #[test]
+    fn severity_label_round_trips() {
+        // Each variant's label parses back to the same variant — guards
+        // against future drift between label() and parse(). trace:TASK-120
+        for sev in [
+            Severity::Major,
+            Severity::Minor,
+            Severity::Cosmetic,
+            Severity::Observation,
+            Severity::Note,
+        ] {
+            assert_eq!(Severity::parse(sev.label()), sev);
+        }
     }
 
     #[test]

@@ -2459,11 +2459,13 @@ fn handle_findings_add(
         }
     }) {
         // Validate against the known severity vocabulary so a typo doesn't
-        // silently land as Unknown.
+        // silently land as Unknown. trace:TASK-120 — vocabulary extended
+        // with observation + note for lighter-weight findings.
         match findings::Severity::parse(level) {
             findings::Severity::Unknown => {
                 anyhow::bail!(
-                    "unrecognised severity `{}` — expected major, minor, or cosmetic",
+                    "unrecognised severity `{}` — expected one of: \
+                     major, minor, cosmetic, observation, note",
                     level
                 );
             }
