@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T16:22:11.120922103Z
-modified_at: 2026-05-28T16:22:11.120922103Z
+modified_at: 2026-05-28T16:27:58.941210933Z
 req_type: Task
 tags:
 - aida:queue:clear
@@ -26,3 +26,9 @@ tags:
 - kind:observation
 - linked:TASK-537
 - severity:minor
+comments:
+- id: 019e6f6a-025d-7d13-b9d7-0b46e9c868a1
+  author: joe
+  content: Commit c63a0344 references this requirement
+  created_at: 2026-05-28T16:27:58.941210933Z
+  modified_at: 2026-05-28T16:27:58.941210933Z
