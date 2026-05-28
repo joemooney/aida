@@ -11,7 +11,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:06:49.273706788Z
-modified_at: 2026-05-25T16:17:13.724838698Z
+modified_at: 2026-05-28T04:40:06.780878126Z
 req_type: Task
 tags:
 - aida:findings
@@ -28,3 +28,8 @@ comments:
   content: 'Promoted by joe 2026-05-25: AGY''s three-failure-modes-in-one-session pattern is empirically strong enough to warrant master-tier diagnosis before further dispatch. Promoting to substrate-actionable so the morning agenda includes it.'
   created_at: 2026-05-25T16:17:13.724838698Z
   modified_at: 2026-05-25T16:17:13.724838698Z
+- id: 019e6ce1-ef7c-79f1-9479-b431be27c62a
+  author: joe
+  content: Commit 5d2571c8 references this requirement
+  created_at: 2026-05-28T04:40:06.780878126Z
+  modified_at: 2026-05-28T04:40:06.780878126Z
