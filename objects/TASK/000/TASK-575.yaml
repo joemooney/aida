@@ -1,0 +1,26 @@
+id: 019e6f6e-f2b9-7e93-a670-803da07f4255
+spec_id: TASK-575
+agreed_id: TASK-575
+title: disable-model-invocation frontmatter on destructive skills
+description: |-
+  Per 'Beyond the Prompt: Claude Code', skills with side effects should set 'disable-model-invocation: true' so they run ONLY when the operator explicitly types the slash command — never when Claude decides it's relevant. Cheap defensive UX.
+
+  Acceptance:
+    • Audit AIDA's scaffolded skills for destructive shapes (ship, force-push, delete, drain)
+    • Add 'disable-model-invocation: true' to the candidate set (/aida-pr ship, /aida-changelog generate when --released-as, anything that calls 'aida queue work --auto-complete --no-human=both')
+    • Document the convention in docs/aida/discipline/skill-prompt-kinds.md
+
+  Source: docs/competitive-analysis/2026-05-26-... (Tier 2 actionable, defensive UX).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:33:22.617001090Z
+modified_at: 2026-05-28T16:33:22.617001090Z
+req_type: Task
+tags:
+- defensive-ux
+- disable-model-invocation
+- from-research
+- scaffolding
+- skills
