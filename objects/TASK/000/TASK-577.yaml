@@ -1,0 +1,27 @@
+id: 019e6f6f-4db3-7351-b85f-6a16b9a7837a
+spec_id: TASK-577
+agreed_id: TASK-577
+title: /aida-insights skill wrapper around 'aida usage' for monthly pattern view
+description: |-
+  Per 'Beyond the Prompt: Claude Code', /insights analyzes usage patterns and is recommended monthly. AIDA has 'aida usage' (top-20 commands in 30d) and 'aida usage --auto-complete' (orchestrator telemetry), but no skill wrapper. A skill makes it discoverable.
+
+  Acceptance:
+    • /aida-insights skill scaffolded by 'aida init'
+    • Skill invokes 'aida usage' + 'aida usage --auto-complete' + 'aida findings calibration --stats'
+    • Surfaces the three top-line signals: most-used commands, drain success rate, advisor calibration agreement %
+    • Suggests next actions (deprecation candidates, calibration-gap memories to write, etc.)
+
+  Source: docs/competitive-analysis/2026-05-26-... (Tier 3 actionable, discoverability).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:33:45.907718596Z
+modified_at: 2026-05-28T16:33:45.907718596Z
+req_type: Task
+tags:
+- from-research
+- insights
+- scaffolding
+- skills
+- telemetry
