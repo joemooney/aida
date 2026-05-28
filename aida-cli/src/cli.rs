@@ -2749,7 +2749,8 @@ pub enum QueueCommand {
     /// Prune queue entries matching a predicate. Today the only predicate is
     /// `--orphaned` (queue entries pointing at deleted/missing specs); future
     /// predicates may be added. Use `--dry-run` to preview before applying.
-    /// trace:TASK-537 | ai:claude
+    // trace:TASK-537 | ai:claude — plain `//` so SPEC-ID doesn't leak into
+    // user-facing --help output per TASK-268 convention.
     Prune {
         /// Remove queue entries whose backing spec no longer exists in the
         /// store (the "??? (deleted)" ghosts in `aida queue list`). Auto-
