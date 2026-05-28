@@ -21824,10 +21824,14 @@ mod preflight_spec_status_tests {
 
     #[test]
     fn in_progress_with_force_claim_warns_and_allows() {
+        // TASK-1-108: warning is mechanism-neutral (works for both
+        // explicit --force-claim AND orchestrator-corroborated auto-
+        // claim). Assert the spec ID + the claim verb survived, not
+        // the literal --force-claim string.
         match preflight_spec_status("BUG-379", Some(&RequirementStatus::InProgress), true) {
             PreflightDecision::AllowWithWarning(m) => {
                 assert!(m.contains("BUG-379"), "{m}");
-                assert!(m.contains("--force-claim"), "{m}");
+                assert!(m.contains("claim"), "{m}");
             }
             other => panic!("expected AllowWithWarning, got {:?}", other),
         }
@@ -22032,11 +22036,20 @@ fn preflight_spec_status(
              Transition it to Approved first (`aida edit {} --status approved`).",
             owns, owns
         )),
+        // trace:TASK-1-108 | ai:claude — message refined to acknowledge
+        // the more common cause: stuck state from a prior orchestrator
+        // run that didn't clean up the InProgress status. "Another
+        // worktree" is possible but rare; the substrate has no way to
+        // tell which case it is, so cover both honestly.
         RequirementStatus::InProgress if !force_claim => PreflightDecision::Refuse(format!(
-            "spec `{}` is already In Progress but no local lease holds it — another \
-             worktree or machine likely owns it. Re-run with --force-claim if you intend \
-             to take over.",
-            owns
+            "spec `{}` is InProgress but no local lease holds it. Two common causes: \
+             (a) a prior `aida queue work` or `--auto-complete` run left the status \
+             stuck (the parent died after the Approved → InProgress bump without ever \
+             saving a lease), or (b) another worktree / machine genuinely owns the work. \
+             Recovery: `aida queue work {} --force-claim` to take over here, or \
+             `aida edit {} --status approved` to reset the substrate first if you know \
+             no other worktree owns it.",
+            owns, owns, owns
         )),
         RequirementStatus::NeedsAttention if !force_claim => PreflightDecision::Refuse(format!(
             "spec `{}` is in NeedsAttention — punted by an autonomous agent for advisor \
@@ -22044,9 +22057,15 @@ fn preflight_spec_status(
              to claim anyway.",
             owns
         )),
+        // Message stays mechanism-neutral: this branch fires for both
+        // explicit --force-claim AND orchestrator-corroborated auto-claim
+        // (via effective_force_claim_for_session_start). Saying
+        // "--force-claim" specifically would be wrong when the user
+        // didn't pass that flag (orchestrator-spawned child).
+        // trace:TASK-1-108 | ai:claude
         RequirementStatus::InProgress | RequirementStatus::NeedsAttention => {
             PreflightDecision::AllowWithWarning(format!(
-                "spec `{}` is {:?} — proceeding under --force-claim",
+                "spec `{}` is {:?} — claiming it anyway",
                 owns, status
             ))
         }
