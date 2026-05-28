@@ -1,0 +1,31 @@
+id: 019e6f6e-79ed-7a41-af6a-d6ca16be78a3
+spec_id: TASK-572
+agreed_id: TASK-572
+title: 'CLAUDE.local.md scaffolding: ''aida init'' should write a structured personal-notes template + auto-gitignore'
+description: |-
+  Per 'Beyond the Prompt: Claude Code' (Arpan Patel, 2026-05-26), CLAUDE.local.md is the under-used companion to CLAUDE.md — same auto-load mechanism, but per-machine and gitignored. The article describes using it for two distinct purposes: PR-feedback capture (rules from reviewer comments) and personal habits to correct.
+
+  Currently 'aida init' doesn't scaffold CLAUDE.local.md, so operators don't know it exists or what to put there.
+
+  Acceptance:
+    • 'aida init' writes CLAUDE.local.md with a structured template
+    • Two sections in the template: 'Project review feedback (private)' + 'Personal habits to correct'
+    • Sections include brief inline guidance ('e.g.', 'tip:' lines) so operators see the shape
+    • 'aida init' adds 'CLAUDE.local.md' to .gitignore (or asserts it's already there)
+    • Idempotent: re-running 'aida init' doesn't overwrite existing CLAUDE.local.md
+    • '--force' overwrites with a backup
+
+  Source: docs/competitive-analysis/2026-05-26-... (Tier 1 actionable, first-user UX gap).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:32:51.693725962Z
+modified_at: 2026-05-28T16:32:51.693725962Z
+req_type: Task
+tags:
+- aida:init
+- claude-local
+- first-user-experience
+- from-research
+- scaffolding
