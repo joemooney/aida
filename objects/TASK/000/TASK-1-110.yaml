@@ -1,5 +1,6 @@
 id: 019e6f71-a9c2-77c1-9547-1776620e6acd
 spec_id: TASK-1-110
+agreed_id: TASK-135
 title: 'TASK-268 ''both-at-once trap'' recurred a 3rd time on 2026-05-28. Pattern: I add …'
 description: |-
   TASK-268 'both-at-once trap' recurred a 3rd time on 2026-05-28. Pattern: I add a new clap subcommand variant, write the trace marker as the LAST line of the /// doc comment block. clap pulls the whole doc block into --help text; the trace: marker leaks. Caught only when CI exercises the source_doc_comments_carry_no_trace_token + help_text_carries_no_trace_markers tests. Recurrences this session:

@@ -1,5 +1,6 @@
 id: 019e6f52-358c-7290-9792-402f7235580f
 spec_id: TASK-1-108
+agreed_id: TASK-133
 title: aida queue work phase-1 startup transitions status before acquiring lease — lea…
 description: |-
   aida queue work phase-1 startup transitions status before acquiring lease — leaves spec parked in NeedsAttention with no clean recovery path. Empirical 2026-05-28: filed TASK-570 (Approved) at 08:57:51; user ran 'aida queue work TASK-570 --zen --auto-complete'; substrate transitioned Approved → InProgress at 08:59:31 (commit bc2e2e3a) and then InProgress → NeedsAttention at 08:59:40 (commit 6a05db98). No active lease was ever recorded. The 9-second window between InProgress and NeedsAttention suggests phase-1 startup bumped status, tried to acquire the lease, failed, and the failure path parked the spec.
