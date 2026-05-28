@@ -443,6 +443,11 @@ pub enum FileStatus {
 pub struct ScaffoldConfig {
     /// Generate CLAUDE.md project instructions
     pub generate_claude_md: bool,
+    /// Generate CLAUDE.local.md — per-machine, gitignored companion to
+    /// CLAUDE.md. Scaffolded with a two-section template (project
+    /// review feedback + personal habits to correct). Never overwrites
+    /// an existing CLAUDE.local.md. trace:TASK-572 | ai:claude
+    pub generate_claude_local_md: bool,
     /// Generate AGENTS.md project instructions for Codex-compatible agents
     pub generate_agents_md: bool,
     /// Generate .claude/commands/ directory with slash commands
@@ -529,6 +534,8 @@ impl Default for ScaffoldConfig {
     fn default() -> Self {
         Self {
             generate_claude_md: true,
+            // trace:TASK-572 | ai:claude
+            generate_claude_local_md: true,
             generate_agents_md: true,
             generate_commands: true,
             generate_skills: true,
@@ -843,6 +850,30 @@ impl Scaffolder {
                     FileStatus::New
                 },
             });
+        }
+
+        // CLAUDE.local.md — per-machine, gitignored. Two-section starter
+        // template (project review feedback + personal habits). NEVER
+        // overwrites an existing file — it's personal notes accumulated
+        // over time. Operator can delete to re-scaffold or use --force
+        // (the global ScaffoldConfig.force isn't plumbed for this file
+        // since the protection is the whole point — personal notes
+        // shouldn't be silently overwritten). trace:TASK-572 | ai:claude
+        if self.config.generate_claude_local_md {
+            let path = PathBuf::from("CLAUDE.local.md");
+            let full_path = self.project_root.join(&path);
+            let exists = full_path.exists();
+            if !exists {
+                let content = generate_claude_local_md();
+                new_files.push(path.clone());
+                artifacts.push(ScaffoldArtifact {
+                    path,
+                    content,
+                    description: "Personal Claude Code notes (gitignored, per-machine)".to_string(),
+                    exists: false,
+                    file_status: FileStatus::New,
+                });
+            }
         }
 
         // AGENTS.md - Note: AGENTS.md is user-edited, so no AIDA header
@@ -2486,6 +2517,72 @@ impl std::fmt::Display for ScaffoldError {
 
 impl std::error::Error for ScaffoldError {}
 
+/// Generate the starter CLAUDE.local.md template. Two sections (project
+/// review feedback + personal habits) with brief inline guidance so the
+/// operator sees the shape. Inspired by Arpan Patel's "Beyond the
+/// Prompt: Claude Code" article (2026-05-26). trace:TASK-572 | ai:claude
+pub(crate) fn generate_claude_local_md() -> String {
+    r#"# CLAUDE.local.md — Personal notes for Claude Code
+
+This file is **per-machine** and **gitignored**. It loads at the start of every
+Claude Code session in this project, just like `CLAUDE.md`, but it never leaves
+your machine. Use it for project-specific rules and personal-habit reminders
+that belong to you, not the team.
+
+If you're new to this file: the pattern comes from the Claude Code
+community. After every PR review, dump the feedback here. Over time it
+becomes a personalized rule file capturing exactly the kind of mistakes
+you make most often. Reviewer nits drop noticeably within a couple
+weeks of consistent use.
+
+---
+
+## Project review feedback (private)
+
+Rules you've learned from reviewer comments on YOUR PRs in this repo.
+Add new lines as you see the feedback. Phrase each as an imperative rule.
+
+<!-- Examples — replace with your own:
+- New SQS consumers need a DLQ and alarms in the same PR
+- Use `Optional<T>` over null returns
+- Tests for new endpoints must include the auth-failure case
+- Prefer named tuples over plain dicts for return types with 3+ fields
+-->
+
+## Personal habits to correct
+
+Things YOU keep doing that you want Claude to remind you about (or just
+do for you). These are about your interaction style and shortcuts, not
+project conventions.
+
+<!-- Examples — replace with your own:
+- Stop using `console.log`; use the project logger instead
+- Always update the OpenAPI spec when adding endpoints
+- Run `bun run typecheck` before claiming done (Claude does this for you)
+-->
+
+---
+
+## Tips for maintaining this file
+
+- **Keep sections clearly separated.** Project feedback ≠ personal habits.
+- **Prune every few weeks.** Things that have become muscle memory can go.
+  The file should capture what you're still learning, not what you already
+  do automatically.
+- **For PROJECT-WIDE rules** (everyone on the team needs them) — those
+  belong in `CLAUDE.md` (which is committed), not here.
+- **For GENERAL AIDA patterns** that apply across all your AIDA projects —
+  those belong in `~/.claude/projects/<slug>/memory/feedback_*.md`, not
+  here.
+- **`aida findings add`** is the right verb for a pattern observation that
+  hasn't earned its rule status yet. Let recurrence promote it.
+
+The `/aida-learn` skill (scaffolded by `aida init`) walks through the
+routing decision when you don't know which substrate a rule belongs in.
+"#
+    .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2589,6 +2686,22 @@ mod tests {
         // Check that CLAUDE.md was created
         assert!(temp_dir.path().join("CLAUDE.md").exists());
         assert!(temp_dir.path().join("AGENTS.md").exists());
+        // trace:TASK-572 | ai:claude — CLAUDE.local.md scaffolds the
+        // structured personal-notes template.
+        let claude_local = temp_dir.path().join("CLAUDE.local.md");
+        assert!(
+            claude_local.exists(),
+            "CLAUDE.local.md should be scaffolded by default"
+        );
+        let claude_local_content = std::fs::read_to_string(&claude_local).unwrap();
+        assert!(
+            claude_local_content.contains("Project review feedback"),
+            "CLAUDE.local.md should have the PR-feedback section"
+        );
+        assert!(
+            claude_local_content.contains("Personal habits to correct"),
+            "CLAUDE.local.md should have the personal-habits section"
+        );
         assert!(temp_dir.path().join(".aida/reserved-paths.toml").exists());
         assert!(temp_dir.path().join(".aida/agents.toml").exists());
         let reserved_paths =
@@ -2652,6 +2765,33 @@ mod tests {
             .join("docs/agents/session-communication.md")
             .exists());
         assert!(temp_dir.path().join("docs/extending-skills.md").exists());
+    }
+
+    /// trace:TASK-572 | ai:claude — CLAUDE.local.md must never overwrite
+    /// existing personal notes. The whole point of the file is that
+    /// operators accumulate rules in it over time; silently dropping
+    /// that on a re-run would be catastrophic.
+    #[test]
+    fn claude_local_md_never_overwrites_existing_personal_notes() {
+        let temp_dir = TempDir::new().unwrap();
+        let existing_path = temp_dir.path().join("CLAUDE.local.md");
+        let personal_notes = "# My accumulated rules\n\n- One: never push to main directly\n";
+        std::fs::write(&existing_path, personal_notes).unwrap();
+
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        let result = scaffolder.apply(&preview);
+        assert!(result.is_ok());
+
+        // The existing CLAUDE.local.md should be UNCHANGED — the scaffold
+        // path takes the not-exists branch only.
+        let after = std::fs::read_to_string(&existing_path).unwrap();
+        assert_eq!(
+            after, personal_notes,
+            "scaffold must not overwrite existing CLAUDE.local.md personal notes"
+        );
     }
 
     #[test]
