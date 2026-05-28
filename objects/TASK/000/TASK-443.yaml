@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T01:20:32.911886168Z
-modified_at: 2026-05-28T04:51:15.919672165Z
+modified_at: 2026-05-28T04:51:17.168184432Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e484c-43a1-7f63-a02a-a5ddb375bcd3
   created_at: 2026-05-22T01:20:36.966996610Z
+comments:
+- id: 019e6cec-2a30-7843-ab63-445646a30216
+  author: joe
+  content: 'Dropped from queue head 2026-05-27: spec body text says ''Defer until --keep_fork_jsonls case surfaces''. Out of queue head until a recurrence demonstrates the need. Not lost — re-approve when JSONLs pile up.'
+  created_at: 2026-05-28T04:51:17.168184432Z
+  modified_at: 2026-05-28T04:51:17.168184432Z
