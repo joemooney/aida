@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:33:08.323277210Z
-modified_at: 2026-05-19T16:33:08.323277210Z
+modified_at: 2026-05-28T04:50:37.779669733Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -73,3 +73,4 @@ tags:
 - integrate-pass
 - rebase
 - strategy-selector
+human_only: true
