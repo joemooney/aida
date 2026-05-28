@@ -4933,6 +4933,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             include_next,
             include_process,
             out,
+            copy,
             reset,
         } => {
             let store = backend.load()?;
@@ -4943,6 +4944,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *include_next,
                 *include_process,
                 out.clone(),
+                *copy,
                 *reset,
                 &store,
             );
@@ -45616,6 +45618,7 @@ fn handle_digest_command(
     include_next: Option<bool>,
     include_process: Option<bool>,
     out: Option<std::path::PathBuf>,
+    copy: bool,
     reset: bool,
     store: &RequirementsStore,
 ) -> Result<()> {
@@ -45640,6 +45643,45 @@ fn handle_digest_command(
         include_process,
         out,
     };
+    // TASK-381: when --copy is set, render to a string and try the
+    // system clipboard; fall through to stdout if no clipboard tool
+    // is found. --copy is a no-op on --reset (which clears the marker
+    // without rendering anything). Composes with --out: writes the
+    // file AND copies. trace:TASK-381 | ai:claude
+    if copy {
+        if reset {
+            digest::run(opts, &project_root, store, reset)?;
+            println!(
+                "{} --copy was a no-op (--reset cleared the cadence marker; nothing rendered)",
+                "ℹ".yellow()
+            );
+            return Ok(());
+        }
+        let rendered = digest::render_string(&opts, &project_root, store)?;
+        // Also honor --out if supplied — write file before copying.
+        if let Some(path) = &opts.out {
+            aida_core::write_atomic(path, &rendered)
+                .with_context(|| format!("Failed to write {}", path.display()))?;
+            eprintln!("Wrote digest to {}", path.display());
+        }
+        if copy_to_clipboard(&rendered) {
+            println!(
+                "{} copied digest to clipboard ({} chars)",
+                "✓".green(),
+                rendered.chars().count(),
+            );
+        } else {
+            println!(
+                "{} no clipboard tool found (wl-copy/xclip/xsel/pbcopy/clip) — printing instead",
+                "⚠".yellow()
+            );
+            print!("{rendered}");
+            if !rendered.ends_with('\n') {
+                println!();
+            }
+        }
+        return Ok(());
+    }
     digest::run(opts, &project_root, store, reset)
 }
 

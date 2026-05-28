@@ -1196,36 +1196,33 @@ mod json_shapes {
 // Orchestrator.
 // ============================================================================
 
-pub fn run(
-    opts: DigestOptions,
+/// Render the digest to a string without writing it anywhere. Used by
+/// the --copy flow in main.rs which needs the text content for the
+/// clipboard. Also used by `run` (which writes the text to stdout/file).
+/// Does NOT touch the cadence marker. trace:TASK-381 | ai:claude
+pub fn render_string(
+    opts: &DigestOptions,
     project_root: &Path,
     store: &RequirementsStore,
-    reset: bool,
-) -> Result<()> {
-    if reset {
-        DigestMarker::clear(project_root)?;
-        eprintln!("Cleared digest marker.");
-        return Ok(());
-    }
-
+) -> Result<String> {
     let releases = list_release_tags(project_root, opts.since, opts.until);
-    let completed = collect_completed(store, &opts);
+    let completed = collect_completed(store, opts);
     let commits = scan_commits(project_root, opts.since, opts.until);
     let interesting: Vec<CommitRec> = commits
         .into_iter()
         .filter(|c| !is_noise_commit(&c.subject))
         .collect();
     let cluster_prs = collapse_cluster_prs(&interesting);
-    let strategic = collect_strategic(store, &opts);
-    let pivots = collect_rejected_pivots(store, &opts);
+    let strategic = collect_strategic(store, opts);
+    let pivots = collect_rejected_pivots(store, opts);
     let next = if opts.include_next {
         collect_next(store, project_root)
     } else {
         NextSection::default()
     };
-    let plans = collect_plans(project_root, &opts);
+    let plans = collect_plans(project_root, opts);
     let process = if opts.include_process {
-        collect_process(project_root, &opts)
+        collect_process(project_root, opts)
     } else {
         Vec::new()
     };
@@ -1243,12 +1240,27 @@ pub fn run(
         process,
     };
 
-    let text = match opts.format {
-        DigestFormat::Markdown => render_markdown(&report, &opts),
-        DigestFormat::Plain => render_plain(&report, &opts),
-        DigestFormat::Brief => render_brief(&report, &opts),
-        DigestFormat::Json => render_json(&report, &opts)?,
-    };
+    Ok(match opts.format {
+        DigestFormat::Markdown => render_markdown(&report, opts),
+        DigestFormat::Plain => render_plain(&report, opts),
+        DigestFormat::Brief => render_brief(&report, opts),
+        DigestFormat::Json => render_json(&report, opts)?,
+    })
+}
+
+pub fn run(
+    opts: DigestOptions,
+    project_root: &Path,
+    store: &RequirementsStore,
+    reset: bool,
+) -> Result<()> {
+    if reset {
+        DigestMarker::clear(project_root)?;
+        eprintln!("Cleared digest marker.");
+        return Ok(());
+    }
+
+    let text = render_string(&opts, project_root, store)?;
 
     match &opts.out {
         Some(path) => {

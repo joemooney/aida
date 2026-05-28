@@ -93,6 +93,26 @@ aida add --title "smoke" --type story --status approved
 aida show STORY-X | grep -i status     # expect: Completed
 ```
 
+**Worktree-aware binary path** (TASK-388). When a verification recipe
+needs to invoke the built `aida` binary directly (not via PATH), do NOT
+use bare `target/debug/aida` — AIDA's cargo setup puts build output at
+the **main repo's** `target/`, so a worktree's CWD has no local `target/`
+and the relative path resolves to nothing. Use one of:
+
+```bash
+# Option A — absolute path from anywhere in this repo (recommended)
+AIDA_BIN="$(git rev-parse --show-toplevel)/target/debug/aida"
+
+# Option B — explicit absolute path (clearer in copy-paste recipes)
+AIDA_BIN=/home/<user>/path/to/aida/target/debug/aida
+
+# Option C — `aida-on`'d shell already on PATH
+AIDA_BIN=aida
+```
+
+The bare `target/debug/aida` form has bitten verification recipes from
+worktrees enough times to file a spec; pick A or C as the default.
+
 ## Followups
 
 Out-of-scope items the implementer should NOT do now. Lighter than child

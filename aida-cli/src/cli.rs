@@ -4650,6 +4650,13 @@ pub enum Command {
         /// Write digest to this file instead of stdout.
         #[clap(long, value_name = "PATH")]
         out: Option<PathBuf>,
+        /// Copy the rendered digest to the system clipboard. Tries
+        /// wl-copy / xclip / xsel / pbcopy / clip in turn; falls back
+        /// to a warning and stdout if no clipboard tool is found.
+        /// Composes with --out (writes both); composes with --format.
+        // trace:TASK-381 | ai:claude
+        #[clap(long)]
+        copy: bool,
         /// Clear the cadence marker and exit without rendering. Use when the
         /// next digest should not auto-resume from the current window_end.
         #[clap(long)]
