@@ -4092,8 +4092,22 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          # any <skill>.local.md file; the whole team should pick them up on\n\
          # `git pull`. See docs/extending-skills.md. trace:STORY-305 | ai:claude\n";
 
+    // trace:TASK-572 | ai:claude — CLAUDE.local.md is per-machine,
+    // gitignored. Pattern mirrors CLAUDE.md but personal notes are
+    // never team-shared. Comment block explains the convention so
+    // operators new to the file see why.
+    let claude_local_entry = "\n# Personal Claude Code notes — per-machine, never team-shared.\n\
+         # CLAUDE.local.md loads alongside CLAUDE.md at session start but\n\
+         # stays out of git so reviewer-feedback dumps + personal-habit\n\
+         # reminders stay private. See the scaffolded file's own header\n\
+         # for usage guidance.\n\
+         CLAUDE.local.md\n";
+
     if !gitignore_path.exists() {
-        std::fs::write(&gitignore_path, format!("{}{}", store_entry, runtime_entry))?;
+        std::fs::write(
+            &gitignore_path,
+            format!("{}{}{}", store_entry, runtime_entry, claude_local_entry),
+        )?;
         return Ok(false);
     }
 
@@ -4108,6 +4122,17 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
     }
     if !has_aida_runtime_deny_pattern(&content) {
         file.write_all(runtime_entry.as_bytes())?;
+        wrote = true;
+    }
+    // trace:TASK-572 | ai:claude — only append if not already covered.
+    // Match against the bare filename to detect both this scaffolded
+    // form and operator-added entries like `**/CLAUDE.local.md`.
+    if !content.lines().any(|line| {
+        line.trim()
+            .trim_end_matches('/')
+            .ends_with("CLAUDE.local.md")
+    }) {
+        file.write_all(claude_local_entry.as_bytes())?;
         wrote = true;
     }
     Ok(wrote)
