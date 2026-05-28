@@ -350,3 +350,24 @@ kind-autobiographical-user: |
   is ~/.claude/projects/<slug>/memory/ — the feedback_*.md, user_*.md,
   project_*.md, reference_*.md files with frontmatter. What most
   production memory libraries (Mem0, LangMem, Graphiti) hold.
+
+
+# ── Automation gating ──────────────────────────────────────────────────
+
+human-only: |
+  A typed boolean field on every spec (`human_only: bool`, default
+  false). When true:
+    • 'aida queue work' / '--auto-complete' SKIP the spec — the
+      pre-pickup pickability gate (aida_core::pickability) returns
+      Blocked(HumanOnly) so the orchestrator never spawns a doomed
+      phase-1 implementer.
+    • Status doesn't matter — Approved / In Progress / NeedsAttention
+      stays unpickable as long as the flag is set.
+    • Set via 'aida edit <SPEC-ID> --human-only'; clear via
+      '--no-human-only'. Persists in the YAML; never auto-cleared.
+  Use for work no agent can do — design decisions without defensible
+  defaults, brand/naming, marketing copy, community replies, license
+  changes, sign-off, physical activity, or pure-observation captures.
+  Decomposition pattern: split into a design-only human-only spec +
+  an implementation child linked via BlockedBy → the child unblocks
+  only after the human decision lands. trace:STORY-333 | ai:claude
