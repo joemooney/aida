@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T07:27:16.720637894Z
-modified_at: 2026-05-25T07:42:30.085569146Z
+modified_at: 2026-05-28T04:36:54.049817007Z
 req_type: Task
 tags:
 - batch:queue-work-reliability
@@ -31,3 +31,4 @@ tags:
 - recurrence-8
 - severity:major
 - unauthorized-pickup
+human_only: true
