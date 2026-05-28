@@ -1,0 +1,31 @@
+id: 019e6f73-3b8a-7b02-a981-137f77586555
+spec_id: TASK-578
+agreed_id: TASK-578
+title: 'aida queue work --drain: convenience alias for --auto-complete --no-human=both --max N'
+description: |-
+  User confusion 2026-05-28: 'is there anything like aida queue work --drain that will just try to work everything it can in order in the queue and skip over items that it cannot work?'
+
+  The behavior exists ('aida queue work --auto-complete --no-human=both --max N' does this — the cluster-skip logic already handles human-only / blocked-by / NeedsAttention items). But the invocation is verbose AND discoverability is low (operator didn't know it existed despite the help-flag hint).
+
+  Acceptance:
+    • New flag '--drain' on 'aida queue work' that expands to '--auto-complete --no-human=both --max <queue-size>' (or --max 99 if size unknown)
+    • OR a top-level 'aida drain' subcommand that wraps the same
+    • --drain composes with --batch / --tag / --priority (filter the drain set)
+    • --drain composes with --max-failures (cap the shelving budget)
+    • Help text mentions --drain prominently as the discoverable name
+    • Existing --auto-complete behavior unchanged (--drain is sugar)
+
+  Source: operator empirical 2026-05-28 in the TASK-570 session.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:38:03.402773762Z
+modified_at: 2026-05-28T16:38:03.402773762Z
+req_type: Task
+tags:
+- aida:queue:work
+- convenience-alias
+- discoverability
+- from-user-friction
+- ux-papercut
