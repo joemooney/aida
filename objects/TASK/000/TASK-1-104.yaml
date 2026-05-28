@@ -2,12 +2,12 @@ id: 019e6ce1-75b3-7c33-ac5c-bd792aa736ca
 spec_id: TASK-1-104
 title: test of new observation severity — safe to dismiss
 description: test of new observation severity — safe to dismiss
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:39:35.603116422Z
-modified_at: 2026-05-28T04:39:35.603116422Z
+modified_at: 2026-05-28T04:40:01.816304442Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -15,3 +15,9 @@ tags:
 - kind:observation
 - severity:observation
 - test
+comments:
+- id: 019e6ce1-dc18-75c3-9a0d-02ae358e442d
+  author: joe
+  content: 'Dismissed by joe 2026-05-28: self-test of TASK-120 severity vocabulary extension — safe to drop'
+  created_at: 2026-05-28T04:40:01.816304442Z
+  modified_at: 2026-05-28T04:40:01.816304442Z
