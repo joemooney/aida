@@ -33,7 +33,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:17:01.132919755Z
-modified_at: 2026-05-25T16:17:42.591376306Z
+modified_at: 2026-05-28T04:36:55.941086010Z
 req_type: Task
 tags:
 - agent-discipline
@@ -52,3 +52,4 @@ comments:
   content: 'Promoted by joe 2026-05-25: AGY''s three-failure-modes-in-one-session pattern needs master-tier diagnosis before further AGY dispatch. Promoting to substrate-actionable + adding to morning agenda.'
   created_at: 2026-05-25T16:17:42.591376306Z
   modified_at: 2026-05-25T16:17:42.591376306Z
+human_only: true
