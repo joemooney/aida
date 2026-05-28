@@ -13,12 +13,12 @@ description: |-
   Diagnostic mode: 'aida doctor' surfaces them with a per-orphan line so operators know they exist before running --heal. Heal mode: removes them. No --force needed (deleting an entry that points at nothing is safe).
 
   Surfaced 2026-05-28 by operator: 'aida doctor --heal should repair [the two ??? (deleted) entries]'.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:57:47.684036219Z
-modified_at: 2026-05-28T16:21:19.887454343Z
+modified_at: 2026-05-28T16:21:29.943633015Z
 req_type: Task
 tags:
 - aida:doctor
@@ -47,3 +47,7 @@ comments:
     Test status: 12/12 doctor tests green; full aida-cli test suite has 2 pre-existing failures in cli.rs:2729 (a /// trace:TASK-537 leak introduced by TASK-537's PR — not from this work).
   created_at: 2026-05-28T16:20:32.919716570Z
   modified_at: 2026-05-28T16:20:32.919716570Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-28T16:21:29.943633015Z
+  implemented_by: joe
