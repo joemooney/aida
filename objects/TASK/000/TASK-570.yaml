@@ -1,0 +1,28 @@
+id: 019e6f4e-5f24-7331-8634-ab66da75de85
+spec_id: TASK-570
+agreed_id: TASK-570
+title: aida doctor --heal should detect + clean up orphan queue entries (delegate to aida queue prune --orphaned)
+description: |-
+  Recurring user friction: ghost queue entries ('??? (deleted)' rows whose backing spec was removed) sit in 'aida queue list' until manually cleared. TASK-537 shipped 'aida queue prune --orphaned' as the direct cleanup verb. But 'aida doctor --heal' is the operator's default 'fix what's drifted' command — orphan queue entries fit that category exactly.
+
+  Proposed:
+    1. collect_doctor_findings (aida-cli/src/main.rs:15896) scans for queue entries whose requirement_id isn't in the store, pushes a DoctorFinding with category 'orphan-queue-entries' and action 'aida queue prune --orphaned'.
+    2. The match arm in heal_doctor_finding handles the new category by delegating to the same logic 'aida queue prune --orphaned' uses (storage.queue_list + filter + queue_remove).
+    3. Tests: doctor_detects_orphan_queue_entries / doctor_heals_orphan_queue_entries.
+
+  Diagnostic mode: 'aida doctor' surfaces them with a per-orphan line so operators know they exist before running --heal. Heal mode: removes them. No --force needed (deleting an entry that points at nothing is safe).
+
+  Surfaced 2026-05-28 by operator: 'aida doctor --heal should repair [the two ??? (deleted) entries]'.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T15:57:47.684036219Z
+modified_at: 2026-05-28T15:57:47.684036219Z
+req_type: Task
+tags:
+- aida:doctor
+- aida:queue:prune
+- from-user-direction
+- heal-integration
+- queue-hygiene
