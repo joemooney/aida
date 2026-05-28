@@ -13,12 +13,12 @@ description: |-
   Diagnostic mode: 'aida doctor' surfaces them with a per-orphan line so operators know they exist before running --heal. Heal mode: removes them. No --force needed (deleting an entry that points at nothing is safe).
 
   Surfaced 2026-05-28 by operator: 'aida doctor --heal should repair [the two ??? (deleted) entries]'.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:57:47.684036219Z
-modified_at: 2026-05-28T15:57:47.684036219Z
+modified_at: 2026-05-28T15:59:29.725008056Z
 req_type: Task
 tags:
 - aida:doctor
