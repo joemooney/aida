@@ -167,6 +167,34 @@ Without a sentinel the orchestrator can't tell *"session paused for human
 input"* from *"session finished its work cleanly"* — both look like an
 idle Claude Code process. The sentinel is the explicit "I'm done" signal.
 
+### NeedsAttention
+
+An off-mainline spec status (distinct from the seven primary lifecycle
+states: Draft → Approved → Planned → InProgress → Done → Completed /
+Rejected). A spec moves to NeedsAttention when a phase failure isn't
+shelvable (the implementer punted on a design-fork it couldn't resolve;
+the headless advisor escalated; CI red persists past retry budget; a
+session left dangling state nobody owns). The drain *continues* past it
+(the dependent specs skip via the pickability gate); the parked spec
+waits for human-or-advisor triage.
+
+Distinguishes "I'm working on this" (InProgress) from "this work
+needs a decision before it can move" (NeedsAttention). Triage:
+
+- `aida findings list` surfaces the parked punt + the reason (when
+  the orchestrator recorded one).
+- `aida queue work <SPEC> --resume` retries from where the prior
+  phase failed.
+- `aida edit <SPEC> --status approved` resets to Approved (clears
+  the parking); use when the original failure no longer applies.
+- `aida edit <SPEC> --status rejected` if the spec is no longer
+  worth pursuing.
+
+NeedsAttention is **not** the same as `human_only` (a typed boolean
+field marking specs no agent should ever pick). NeedsAttention is a
+transient parking state; `human_only` is a permanent classification.
+trace:STORY-332 trace:STORY-333 trace:TASK-350 | ai:claude
+
 ### complexity (tag convention)
 
 `complexity:low | complexity:med | complexity:high` — a spec tag the
