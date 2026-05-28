@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T04:42:10.844770931Z
-modified_at: 2026-05-28T15:48:01.135312059Z
+modified_at: 2026-05-28T15:48:02.349602388Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e3232-c973-7c03-889b-81c3ff0ef9c1
   created_at: 2026-05-20T04:42:14.591533717Z
+comments:
+- id: 019e6f45-70ad-7521-8971-4c52b94d429e
+  author: joe
+  content: Duplicate of TASK-374. Both filed independently; the older keeps the canonical scope. trace:triage-2026-05-28 | ai:claude
+  created_at: 2026-05-28T15:48:02.349602388Z
+  modified_at: 2026-05-28T15:48:02.349602388Z
 human_only: true
