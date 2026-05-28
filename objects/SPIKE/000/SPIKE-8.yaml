@@ -113,7 +113,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:15:02.335601702Z
-modified_at: 2026-05-17T07:15:02.335601702Z
+modified_at: 2026-05-28T04:45:41.357254576Z
 req_type: Spike
 tags:
 - evidence
@@ -122,3 +122,4 @@ tags:
 - research
 - spike
 - ultraplan
+human_only: true
