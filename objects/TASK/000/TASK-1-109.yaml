@@ -1,0 +1,28 @@
+id: 019e6f64-b3b0-7753-9603-0b7bab9bbc92
+spec_id: TASK-1-109
+title: aida queue clear --completed is a no-op on the git-canonical backend (the defau…
+description: |-
+  aida queue clear --completed is a no-op on the git-canonical backend (the default and recommended backend). The git_backend's queue_clear ignores its completed_only argument (parameter is prefixed _ — aida-core/src/db/git_backend.rs:682) and unconditionally deletes the entire queue YAML file. The sqlite backend (legacy) does respect completed_only with a JOIN against requirement.status = 'Completed'.
+
+  Empirical 2026-05-28: operator surveying the queue family asked 'what does aida queue clear do?' — discovering the help text was uninformative AND that --completed is broken on the canonical backend.
+
+  Two fix paths: (a) implement completed-only in git_backend by reading the queue YAML, filtering entries whose requirement_id has status Completed, and rewriting; (b) drop the --completed flag entirely and document that 'aida queue done <SPEC>' is the per-spec atomic mark-and-remove (use that in a loop, or extend queue done to accept multiple SPECs / a status filter).
+
+  Help text was updated in the same commit to flag the no-op behavior so operators don't silently expect it to filter.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-28T16:22:11.120922103Z
+modified_at: 2026-05-28T16:22:11.120922103Z
+req_type: Task
+tags:
+- aida:queue:clear
+- backend-divergence
+- from-advisor:TASK-537
+- from-self-test
+- from-user-friction
+- help-bug
+- kind:observation
+- linked:TASK-537
+- severity:minor
