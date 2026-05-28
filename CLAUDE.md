@@ -21,6 +21,8 @@ For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For 
 - Cache: `.aida/cache.db` (gitignored)
 - Manage cache: `aida cache status`, `aida cache rebuild`
 
+**Per-spec transition history lives INSIDE the YAML.** Every `objects/TYPE/000/SPEC-ID.yaml` carries a `history:` array of `HistoryEntry` records, each with `id` (UUID), `author`, `timestamp`, and a `changes:` list of `{field_name, old_value, new_value}` triples. Every status flip, priority change, tag edit, owner change, etc. lands here as a structured row. **This is the source-of-truth for spec-state time series** — `aida history --events` and `--spec <id>` read from it; reviewers building burn-down charts or status-flow analyses should walk these arrays directly rather than approximating from `modified_at`. The cache (`.aida/cache.db`) is a derived read-projection and does NOT currently expose history rows; for substrate-grounded time series, read the YAML or the orphan-branch git log. trace:TASK-121 | ai:claude
+
 **`.gitignore` convention for `.aida/`:** deny-by-default. The `.gitignore` block scaffolded by `aida init` is `.aida/*` plus an explicit `!.aida/config.toml` allow-list. Anything new under `.aida/` is runtime per-clone state by convention; tracking a new project-config file requires adding a `!.aida/<name>` line. This avoids the recurring "new feature wrote a new runtime file, session-end refuses on the untracked path" papercut. trace:BUG-73 | ai:claude
 
 PostgreSQL is opt-in via the `postgres` feature flag. Legacy standalone YAML/SQLite backends still exist for the deprecated `aida init --centralized` opt-in path; they print a deprecation warning at init time. **Don't** add new code paths that use them.
