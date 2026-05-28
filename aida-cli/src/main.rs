@@ -21662,14 +21662,58 @@ mod session_start_args_tests {
     }
 }
 
+/// TASK-1-108: when the current process is the orchestrator-spawned phase-1
+/// child (corroborated via AIDA_AUTO_COMPLETE + AIDA_AUTO_COMPLETE_TOKEN
+/// against the live drain-state file), the parent has already bumped
+/// status to InProgress before spawning us — so the InProgress-without-
+/// lease state we'll see at preflight isn't "another worktree owns it",
+/// it's "the orchestrator's about to spawn the implementer". Promote
+/// force_claim to true in that case so preflight doesn't bounce work the
+/// parent already authorized. Returns `force_claim` unchanged when not
+/// orchestrator-corroborated (interactive runs keep the existing safety
+/// gate). trace:TASK-1-108 | ai:claude
+fn effective_force_claim_for_session_start(
+    explicit_force_claim: bool,
+    orchestrator_corroborated: bool,
+) -> bool {
+    explicit_force_claim || orchestrator_corroborated
+}
+
 /// BUG-379: pre-flight spec-status gate tests. trace:BUG-379 | ai:claude
 #[cfg(test)]
 mod preflight_spec_status_tests {
     use super::{
-        preflight_spec_status, session_start_status_bump_preconditions_met, PreflightDecision,
-        RequirementStatus,
+        effective_force_claim_for_session_start, preflight_spec_status,
+        session_start_status_bump_preconditions_met, PreflightDecision, RequirementStatus,
     };
     use tempfile::TempDir;
+
+    /// trace:TASK-1-108 | ai:claude
+    #[test]
+    fn effective_force_claim_is_true_when_explicit() {
+        // Operator passed --force-claim → honor it regardless of
+        // orchestrator context.
+        assert!(effective_force_claim_for_session_start(true, false));
+        assert!(effective_force_claim_for_session_start(true, true));
+    }
+
+    /// trace:TASK-1-108 | ai:claude
+    #[test]
+    fn effective_force_claim_is_true_when_orchestrator_corroborated() {
+        // No --force-claim, but we're the orchestrator's phase-1 child.
+        // The parent already bumped status — claim without bouncing.
+        assert!(effective_force_claim_for_session_start(false, true));
+    }
+
+    /// trace:TASK-1-108 | ai:claude
+    #[test]
+    fn effective_force_claim_is_false_in_interactive_session() {
+        // Bare `aida session start` (no orchestrator, no --force-claim).
+        // The InProgress-without-lease gate stays in place for safety —
+        // a stale state from another machine could otherwise be silently
+        // overwritten.
+        assert!(!effective_force_claim_for_session_start(false, false));
+    }
 
     #[test]
     fn no_spec_match_just_allows() {
@@ -22162,7 +22206,21 @@ fn session_start(
                     .get_requirement_by_spec_id(owns)
                     .map(|r| r.status.clone())
             });
-    match preflight_spec_status(owns, preflight_status.as_ref(), force_claim) {
+    // TASK-1-108: when we're a corroborated orchestrator subprocess (the
+    // parent --auto-complete process already bumped status to InProgress
+    // via prepare_auto_complete_phase1_status before spawning us, per
+    // BUG-369), the InProgress-without-lease state means "the orchestrator
+    // owns this spec and is about to spawn the implementer subprocess",
+    // not "another worktree has it". Treat that case as --force-claim so
+    // the preflight refusal at line 21991 doesn't bounce work the parent
+    // already authorized. Surfaced 2026-05-28 by operator running
+    // `aida queue work TASK-570 --zen --auto-complete` repeatedly and
+    // hitting "spec is already In Progress" on every retry.
+    // trace:TASK-1-108 | ai:claude
+    let orchestrator_corroborated = orchestrator::detect(&project_root).is_orchestrated();
+    let force_claim_effective =
+        effective_force_claim_for_session_start(force_claim, orchestrator_corroborated);
+    match preflight_spec_status(owns, preflight_status.as_ref(), force_claim_effective) {
         PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),
         PreflightDecision::AllowWithWarning(msg) => {
             eprintln!("{} {}", "⚠".yellow().bold(), msg);
