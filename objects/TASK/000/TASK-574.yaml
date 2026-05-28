@@ -19,10 +19,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:14.687379035Z
-modified_at: 2026-05-28T16:33:14.687379035Z
+modified_at: 2026-05-28T16:53:14.617552856Z
 req_type: Task
 tags:
 - aida:init
+- batch:scaffolding-2026-05-28
 - from-research
 - helper-subfolders
 - scaffolding
