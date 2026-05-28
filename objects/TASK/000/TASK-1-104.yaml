@@ -1,0 +1,17 @@
+id: 019e6ce1-75b3-7c33-ac5c-bd792aa736ca
+spec_id: TASK-1-104
+title: test of new observation severity — safe to dismiss
+description: test of new observation severity — safe to dismiss
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-28T04:39:35.603116422Z
+modified_at: 2026-05-28T04:39:35.603116422Z
+req_type: Task
+tags:
+- from-advisor:general
+- from-task-120
+- kind:observation
+- severity:observation
+- test
