@@ -1,0 +1,31 @@
+id: 019e6f52-358c-7290-9792-402f7235580f
+spec_id: TASK-1-108
+title: aida queue work phase-1 startup transitions status before acquiring lease — lea…
+description: |-
+  aida queue work phase-1 startup transitions status before acquiring lease — leaves spec parked in NeedsAttention with no clean recovery path. Empirical 2026-05-28: filed TASK-570 (Approved) at 08:57:51; user ran 'aida queue work TASK-570 --zen --auto-complete'; substrate transitioned Approved → InProgress at 08:59:31 (commit bc2e2e3a) and then InProgress → NeedsAttention at 08:59:40 (commit 6a05db98). No active lease was ever recorded. The 9-second window between InProgress and NeedsAttention suggests phase-1 startup bumped status, tried to acquire the lease, failed, and the failure path parked the spec.
+
+  Recovery for the operator: 'aida edit <SPEC> --status approved' to reset, or 'aida queue work <SPEC> --force-claim' to bypass the lease check (per PR-329).
+
+  Reproduction pattern (recurrence-3+): same shape on TASK-425, TASK-424, TASK-483 earlier this session. All three were finding-promoted (status Approved at promotion), then drained, ended up NeedsAttention with no lease.
+
+  Root-cause hypothesis: the phase-1 startup sequence should be (1) acquire lease, (2) bump status. Today it appears to be (1) bump status, (2) acquire lease — failing at step 2 strands the substrate in InProgress (then NeedsAttention via the failure handler). Sibling finding: the error message at this failure point says 'spec is already In Progress' — should say 'phase-1 startup failed to acquire lease (current status: <actual>)'.
+
+  Pair with TASK-115 (agent-discipline ceiling pattern) and TASK-116 (overnight unauthorized pickup) — same root cause expressed in different operator flows.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-28T16:01:59.180510461Z
+modified_at: 2026-05-28T16:01:59.180510461Z
+req_type: Task
+tags:
+- aida:queue:work
+- from-advisor:TASK-570
+- from-self-test
+- from-user-direction
+- kind:observation
+- lease-acquisition
+- linked:TASK-570
+- phase-1-startup
+- severity:major
+- status-transition-order
