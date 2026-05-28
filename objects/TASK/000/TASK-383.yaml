@@ -34,7 +34,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:00:12.783237551Z
-modified_at: 2026-05-20T05:00:12.783237551Z
+modified_at: 2026-05-28T15:47:00.304209366Z
 req_type: Task
 tags:
 - advisor-discipline
@@ -43,3 +43,4 @@ tags:
 - papercut
 - planning-pass
 - workflow
+human_only: true
