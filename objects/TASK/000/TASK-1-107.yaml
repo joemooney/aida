@@ -1,0 +1,27 @@
+id: 019e6f4b-4bc2-7083-905b-7e03774d9d79
+spec_id: TASK-1-107
+title: aida list multi-filter is broken — appears to use OR not AND between flags. Emp…
+description: |-
+  aida list multi-filter is broken — appears to use OR not AND between flags. Empirical 2026-05-28: 'aida list --status approved --priority low --type task' returned TASK-569 as the first row, with Type=Task, Status=Approved, but Priority=Medium. --priority low should have excluded it. Repro: any combination of --status + --priority + --type. The --type or --status filter seems to dominate; --priority is silently ignored when combined with --type.
+
+  Pattern: this is a substrate filter/display bug, sibling to TASK-1-106 (queue list shows stale status). The list-rendering layer in aida-cli appears to have multiple filter-composition gaps.
+
+  Likely root cause to investigate: aida-cli's list command may build filters as a Vec<Filter>::any-of instead of all-of, OR the cache query joins filters with UNION instead of INTERSECT. Worth a code-level fix that adds tests for the AND combinations operators rely on.
+
+  Immediate workaround: pipe through awk/grep — 'aida list --status approved --type task | awk $4=="Low"'.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-28T15:54:26.114824266Z
+modified_at: 2026-05-28T15:54:26.114824266Z
+req_type: Task
+tags:
+- aida:list
+- filter-bug
+- from-advisor:TASK-1-106
+- from-self-test
+- from-user-friction
+- kind:observation
+- linked:TASK-1-106
+- severity:major
