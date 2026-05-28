@@ -12,12 +12,12 @@ description: |-
   Not blocking; just papercut. Worth filing.
 
   — master observation
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:13.346483215Z
-modified_at: 2026-05-25T20:05:13.346483215Z
+modified_at: 2026-05-28T15:43:01.366948552Z
 req_type: Task
 tags:
 - aida:init
@@ -28,3 +28,9 @@ tags:
 - kind:observation
 - linked:TASK-562
 - severity:minor
+comments:
+- id: 019e6f40-d8f6-71f1-b913-6a9ba13e4937
+  author: joe
+  content: 'Promoted by joe 2026-05-28: Bounded scaffolding fix: aida init should plant a starter docs/competitive-analysis/ecosystem-watch.md so first ''scripts/release.sh minor'' on a fresh project passes the ecosystem-watch verification cleanly.'
+  created_at: 2026-05-28T15:43:01.366948552Z
+  modified_at: 2026-05-28T15:43:01.366948552Z
