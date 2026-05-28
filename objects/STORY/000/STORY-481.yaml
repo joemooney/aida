@@ -1,0 +1,33 @@
+id: 019e6f6f-30ad-7381-81d6-74347d9d3aff
+spec_id: STORY-481
+agreed_id: STORY-481
+title: '/aida-techdebt skill: end-of-session duplication scan'
+description: |-
+  Per 'Beyond the Prompt: Claude Code', Boris recommends a /techdebt skill run at the end of every session to find and kill duplicated code.
+
+  For AIDA, this could include:
+    • Duplicated trace comments (same SPEC-ID in suspicious mass)
+    • Spec-graph duplicates (TASK-N == TASK-M by title similarity)
+    • Dead code paths (trace:SPEC-X where SPEC-X is Rejected)
+    • Orphan files (no SPEC reference anywhere)
+
+  Acceptance:
+    • /aida-techdebt skill scaffolded by 'aida init'
+    • Runs read-only scan, surfaces findings
+    • Each finding has a one-line recommendation + filing-as-spec verb
+    • Composes with 'aida findings add' so observations get captured
+
+  Source: docs/competitive-analysis/2026-05-26-... (Tier 3 actionable, session-end hygiene).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:33:38.477595577Z
+modified_at: 2026-05-28T16:33:38.477595577Z
+req_type: Story
+tags:
+- from-research
+- scaffolding
+- session-end
+- skills
+- techdebt
