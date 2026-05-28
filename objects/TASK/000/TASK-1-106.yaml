@@ -8,10 +8,11 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:54:51.704744157Z
-modified_at: 2026-05-28T15:42:58.480070431Z
+modified_at: 2026-05-28T16:53:04.069841274Z
 req_type: Task
 tags:
 - aida:queue:list
+- batch:scaffolding-2026-05-28
 - display-bug
 - from-advisor:TASK-425
 - from-self-test
