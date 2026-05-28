@@ -16135,6 +16135,46 @@ fn collect_doctor_findings(
         }
     }
 
+    // TASK-570: surface orphan queue entries — rows whose backing spec
+    // was deleted ("??? (deleted)" ghosts from auto-queued reviewer items).
+    // `aida queue prune --orphaned` (TASK-537) is the direct cleanup verb;
+    // the doctor mirrors its detection so `--heal` can route through this
+    // category as part of the default "fix what's drifted" sweep.
+    // trace:TASK-570 | ai:claude
+    let queue_user_id = current_user_id(None);
+    let queue_storage = Storage::new(project_root.join(".aida-store"));
+    if let Ok(queue_entries) =
+        queue_storage.queue_list(&queue_user_id, /* include_completed */ false)
+    {
+        let existing_ids: std::collections::HashSet<uuid::Uuid> =
+            store.requirements.iter().map(|r| r.id).collect();
+        for entry in &queue_entries {
+            if existing_ids.contains(&entry.requirement_id) {
+                continue;
+            }
+            let role = entry
+                .for_role
+                .as_deref()
+                .map(|r| format!(" [for:{r}]"))
+                .unwrap_or_default();
+            let note = entry
+                .note
+                .as_deref()
+                .map(|n| format!(" — {n}"))
+                .unwrap_or_default();
+            push(DoctorFinding {
+                category: "orphan-queue-entries".to_string(),
+                id: entry.requirement_id.to_string(),
+                summary: format!(
+                    "queue position {}{} points at deleted spec{}",
+                    entry.position, role, note
+                ),
+                action: "remove orphan queue entry (aida queue prune --orphaned)".to_string(),
+                safe_heal: true,
+            });
+        }
+    }
+
     let pending_briefs = collect_agent_briefs(project_root, None, false)?;
     let lease_scopes: std::collections::HashSet<String> =
         leases.iter().map(|lease| lease.scope.clone()).collect();
@@ -16196,10 +16236,16 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         }
         "stale-lock" | "stale-locks" | "locks" => "stale-locks",
         "obe-brief" | "obe-briefs" | "obsolete-briefs" => "OBE-briefs",
+        // TASK-570: orphan queue entries — "??? (deleted)" ghosts in
+        // `aida queue list`. trace:TASK-570 | ai:claude
+        "orphan-queue" | "orphan-queue-entry" | "orphan-queue-entries" | "queue-orphans" => {
+            "orphan-queue-entries"
+        }
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
-             orphan-branches, stale-reviewer-leases, stale-locks, OBE-briefs)",
+             orphan-branches, orphan-queue-entries, stale-reviewer-leases, stale-locks, \
+             OBE-briefs)",
             other
         ),
     };
@@ -16325,6 +16371,7 @@ fn heal_doctor_finding(
         }
         "spec-status-drift" => heal_doctor_spec_status(project_root, finding),
         "orphan-worktrees" => heal_doctor_orphan_worktree(project_root, finding),
+        "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
         "orphan-branches" if opts.force && opts.yes => {
             heal_doctor_orphan_branch(project_root, finding)
@@ -16452,6 +16499,40 @@ fn heal_doctor_orphan_worktree(
         action: "removed orphan worktree".to_string(),
         status: if status.success() { "healed" } else { "failed" }.to_string(),
         detail: salvage.map(|p| format!("salvage patch: {}", p.display())),
+    })
+}
+
+// TASK-570: heal an orphan queue entry by routing through the same
+// `storage.queue_remove` primitive that `aida queue prune --orphaned`
+// (TASK-537) uses. Idempotent — a re-run after the entry is already gone
+// reports `skipped`. trace:TASK-570 | ai:claude
+fn heal_doctor_orphan_queue_entry(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let user_id = current_user_id(None);
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let entry_uuid: uuid::Uuid = finding
+        .id
+        .parse()
+        .with_context(|| format!("parsing queue entry id {}", finding.id))?;
+    let entries = storage.queue_list(&user_id, /* include_completed */ false)?;
+    if !entries.iter().any(|e| e.requirement_id == entry_uuid) {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: "orphan queue entry already removed".to_string(),
+            status: "skipped".to_string(),
+            detail: None,
+        });
+    }
+    storage.queue_remove(&user_id, &entry_uuid)?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "removed orphan queue entry".to_string(),
+        status: "healed".to_string(),
+        detail: None,
     })
 }
 
@@ -16806,6 +16887,121 @@ mod story_462_doctor_tests {
         assert_eq!(result.status, "skipped");
         let reloaded = storage.load().unwrap();
         assert_eq!(reloaded.requirements[0].status, RequirementStatus::Approved);
+    }
+
+    // TASK-570: doctor detects orphan queue entries — rows whose backing
+    // spec is no longer in the store. trace:TASK-570 | ai:claude
+    #[test]
+    fn doctor_detects_orphan_queue_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path();
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
+
+        let storage = Storage::new(project_root.join(".aida-store"));
+        let store = aida_core::models::RequirementsStore::new();
+        storage.save(&store).unwrap();
+
+        let user_id = current_user_id(None);
+        let orphan_id = uuid::Uuid::new_v4();
+        let entry = aida_core::models::QueueEntry {
+            user_id: user_id.clone(),
+            requirement_id: orphan_id,
+            position: 1,
+            added_by: user_id.clone(),
+            note: Some("auto-queued by aida pr".into()),
+            added_at: chrono::Utc::now(),
+            for_role: Some("reviewer".into()),
+            for_scope: None,
+            for_session: None,
+        };
+        storage.queue_add(entry).unwrap();
+
+        let findings =
+            collect_doctor_findings(project_root, &store, Some("orphan-queue-entries")).unwrap();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].category, "orphan-queue-entries");
+        assert_eq!(findings[0].id, orphan_id.to_string());
+        assert!(findings[0].summary.contains("position 1"));
+        assert!(findings[0].summary.contains("[for:reviewer]"));
+        assert!(findings[0].summary.contains("auto-queued by aida pr"));
+        assert!(findings[0].safe_heal);
+    }
+
+    // TASK-570: --heal removes the orphan queue entry, mirroring the
+    // behaviour of `aida queue prune --orphaned`. Re-running on a clean
+    // queue is a no-op (skipped). trace:TASK-570 | ai:claude
+    #[test]
+    fn doctor_heals_orphan_queue_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path();
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
+
+        let storage = Storage::new(project_root.join(".aida-store"));
+        let store = aida_core::models::RequirementsStore::new();
+        storage.save(&store).unwrap();
+
+        let user_id = current_user_id(None);
+        let orphan_id = uuid::Uuid::new_v4();
+        let entry = aida_core::models::QueueEntry {
+            user_id: user_id.clone(),
+            requirement_id: orphan_id,
+            position: 1,
+            added_by: user_id.clone(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: Some("reviewer".into()),
+            for_scope: None,
+            for_session: None,
+        };
+        storage.queue_add(entry).unwrap();
+
+        let finding = DoctorFinding {
+            category: "orphan-queue-entries".to_string(),
+            id: orphan_id.to_string(),
+            summary: "queue position 1 [for:reviewer] points at deleted spec".to_string(),
+            action: "remove orphan queue entry (aida queue prune --orphaned)".to_string(),
+            safe_heal: true,
+        };
+        let opts = DoctorRunOptions {
+            heal: true,
+            yes: true,
+            category: Some("orphan-queue-entries".to_string()),
+            json: false,
+            force: false,
+        };
+        let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
+        assert_eq!(result.status, "healed");
+        assert_eq!(result.action, "removed orphan queue entry");
+
+        let entries = storage.queue_list(&user_id, false).unwrap();
+        assert!(
+            entries.iter().all(|e| e.requirement_id != orphan_id),
+            "orphan entry should be removed from the queue"
+        );
+
+        // Idempotent: a second heal on an already-clean queue reports skipped.
+        let result2 = heal_doctor_finding(project_root, &finding, &opts).unwrap();
+        assert_eq!(result2.status, "skipped");
+    }
+
+    // TASK-570: the orphan-queue-entries alias set normalizes the way the
+    // other doctor categories do. trace:TASK-570 | ai:claude
+    #[test]
+    fn doctor_orphan_queue_aliases_normalize() {
+        assert_eq!(
+            normalize_doctor_category("orphan-queue").unwrap(),
+            "orphan-queue-entries"
+        );
+        assert_eq!(
+            normalize_doctor_category("queue-orphans").unwrap(),
+            "orphan-queue-entries"
+        );
+        assert_eq!(
+            normalize_doctor_category("orphan_queue_entry").unwrap(),
+            "orphan-queue-entries"
+        );
     }
 
     #[test]
