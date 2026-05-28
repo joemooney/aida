@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T07:25:37.854381279Z
-modified_at: 2026-05-28T04:36:52.217804893Z
+modified_at: 2026-05-28T16:02:03.236534022Z
 req_type: Task
 tags:
 - agent-discipline
@@ -20,5 +20,12 @@ tags:
 - linked:BUG-376
 - linked:BUG-378
 - linked:STORY-469
+- recurrence:2
 - severity:major
+comments:
+- id: 019e6f52-4564-79d1-ac9f-21a5c5dc5140
+  author: joe
+  content: 'Recurrence #2 by joe 2026-05-28: Recurrence 2026-05-28 from TASK-570 incident: phase-1 startup parks spec in NeedsAttention with no lease. Same root cause; different operator flow.'
+  created_at: 2026-05-28T16:02:03.236534022Z
+  modified_at: 2026-05-28T16:02:03.236534022Z
 human_only: true
