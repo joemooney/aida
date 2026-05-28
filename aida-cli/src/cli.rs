@@ -2714,12 +2714,40 @@ pub enum QueueCommand {
         #[clap(long)]
         force: bool,
     },
-    /// Clear queue entries
+    /// Bulk-remove ALL queue entries for the user (DOES NOT touch the specs
+    /// themselves — their status, content, and relationships stay intact;
+    /// only the queue-membership records are removed). The next
+    /// `aida queue list` shows an empty queue; affected specs survive in
+    /// `aida list`. The destructive verb in the queue family — there is no
+    /// undo short of re-adding each entry with `aida queue add`.
+    ///
+    /// Sibling verbs (use one of these instead when the scope is narrower):
+    ///   • `aida queue remove <id>`     — remove ONE specific entry
+    ///   • `aida queue prune --orphaned` — remove entries whose backing
+    ///                                     spec was deleted (the
+    ///                                     "??? (deleted)" ghosts)
+    ///   • `aida queue done <id>`       — atomic "mark complete + remove"
+    ///
+    /// On the git-canonical backend (the default), `--completed` is
+    /// currently a NO-OP — the entire queue is cleared regardless. The
+    /// flag honors the completed-only predicate on the legacy SQLite
+    /// backend.
+    // trace:TASK-1-109 | ai:claude — plain `//` (not `///`) so the
+    // trace marker doesn't leak into user-facing --help output per
+    // TASK-268. The user-facing prose above is intentionally SPEC-ID-
+    // free.
     Clear {
-        /// User ID (defaults to AIDA_USER or system user)
+        /// User ID whose queue to clear (defaults to AIDA_USER or the
+        /// shell's $USER). Does not affect other users' queues.
         #[clap(long)]
         user: Option<String>,
-        /// Only clear completed requirements
+        /// Only remove queue entries whose backing spec has status
+        /// `Completed`. Useful for tidying up after a batch ship.
+        /// NOTE: currently honored ONLY on the legacy SQLite backend;
+        /// the git-canonical backend (default) clears the entire queue
+        /// regardless.
+        // trace:TASK-1-109 | ai:claude — plain `//` so SPEC-ID stays
+        // out of --help output (TASK-268 convention).
         #[clap(long)]
         completed: bool,
     },
