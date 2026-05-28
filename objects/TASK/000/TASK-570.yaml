@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:57:47.684036219Z
-modified_at: 2026-05-28T16:05:20.226807539Z
+modified_at: 2026-05-28T16:20:32.919716570Z
 req_type: Task
 tags:
 - aida:doctor
@@ -26,3 +26,19 @@ tags:
 - from-user-direction
 - heal-integration
 - queue-hygiene
+comments:
+- id: 019e6f63-3417-7e23-a3aa-7a98b6b133f2
+  author: joe
+  content: |-
+    Implemented via commit 9377ce71:
+
+    - collect_doctor_findings: walks the queue, pushes a DoctorFinding (category `orphan-queue-entries`, safe_heal=true) for any entry whose requirement_id is missing from the store. Mirrors the detection in `aida queue prune --orphaned` (TASK-537).
+    - heal_doctor_finding: new match arm `orphan-queue-entries` → `heal_doctor_orphan_queue_entry`, which delegates to `storage.queue_remove`. Idempotent — re-run on a clean queue reports `skipped`.
+    - normalize_doctor_category: aliases `orphan-queue`, `queue-orphans`, `orphan-queue-entry` → `orphan-queue-entries`; updated the unknown-category error list.
+    - Tests: doctor_detects_orphan_queue_entries, doctor_heals_orphan_queue_entries, doctor_orphan_queue_aliases_normalize (all green).
+
+    End-to-end smoke (delete a spec → `aida doctor` surfaces the ghost → `aida doctor --heal --yes` removes it → re-run reports no drift) verified against a fresh `aida init` project.
+
+    Test status: 12/12 doctor tests green; full aida-cli test suite has 2 pre-existing failures in cli.rs:2729 (a /// trace:TASK-537 leak introduced by TASK-537's PR — not from this work).
+  created_at: 2026-05-28T16:20:32.919716570Z
+  modified_at: 2026-05-28T16:20:32.919716570Z
