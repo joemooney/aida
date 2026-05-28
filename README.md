@@ -2,7 +2,7 @@
 
 **A hidden kernel that maintains a stable, queryable graph of what exists, served to AI through MCP and to you through a small CLI.**
 
-**Without it**, *"why did we choose X?"* gets re-debated for years; cross-references between code and intent rot silently; coding agents (when you use them) start every session cold. **With it**, both questions are one query away — and AI-assisted work becomes auditable instead of opaque, since every line traces to a spec and every commit names what it implements.
+**Without it**, *"why did we choose X?"* gets re-debated; cross-references between code and intent rot silently; coding agents (when you use them) start every session cold. **With it**, both questions are one query away — and AI-assisted work becomes auditable instead of opaque, since every line traces to a spec and every commit names what it implements.
 
 ```rust
 // trace:FR-042 | ai:claude
