@@ -1,5 +1,6 @@
 id: 019e6f4b-4bc2-7083-905b-7e03774d9d79
 spec_id: TASK-1-107
+agreed_id: TASK-132
 title: aida list multi-filter is broken — appears to use OR not AND between flags. Emp…
 description: |-
   aida list multi-filter is broken — appears to use OR not AND between flags. Empirical 2026-05-28: 'aida list --status approved --priority low --type task' returned TASK-569 as the first row, with Type=Task, Status=Approved, but Priority=Medium. --priority low should have excluded it. Repro: any combination of --status + --priority + --type. The --type or --status filter seems to dominate; --priority is silently ignored when combined with --type.
