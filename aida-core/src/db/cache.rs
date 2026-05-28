@@ -67,6 +67,12 @@ pub struct ListFilter {
     /// Case-insensitive equality match on req_type (matches the Debug
     /// formatting used during projection — e.g. "Functional", "Bug").
     pub req_type: Option<String>,
+    /// Case-insensitive equality match on priority (High / Medium / Low).
+    /// trace:TASK-1-107 | ai:claude — was silently dropped before; the
+    /// CLI accepted --priority but the cache query never received it,
+    /// so `aida list --priority low --type task` was equivalent to
+    /// `--type task` alone.
+    pub priority: Option<String>,
     /// Exact match on owner (handle).
     pub owner: Option<String>,
     /// Exact match on feature.
@@ -567,6 +573,12 @@ impl Cache {
         if let Some(t) = &filter.req_type {
             sql.push_str(" AND LOWER(req_type) = LOWER(?)");
             args.push(t.clone());
+        }
+        // trace:TASK-1-107 | ai:claude — priority filter that was
+        // missing before.
+        if let Some(p) = &filter.priority {
+            sql.push_str(" AND LOWER(priority) = LOWER(?)");
+            args.push(p.clone());
         }
         if let Some(o) = &filter.owner {
             sql.push_str(" AND owner = ?");

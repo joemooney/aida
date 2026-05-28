@@ -5051,6 +5051,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::List {
             status,
             r#type,
+            priority,
             feature,
             tags,
             no_scope,
@@ -5118,6 +5119,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let filter = aida_core::ListFilter {
                 status: effective_status.clone(),
                 req_type: r#type.clone(),
+                // trace:TASK-1-107 | ai:claude — was missing before;
+                // CLI accepted --priority but it never reached the query.
+                priority: priority.clone(),
                 feature: feature.clone(),
                 tags: effective_tags,
                 archive,
