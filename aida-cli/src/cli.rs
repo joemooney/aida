@@ -2728,10 +2728,6 @@ pub enum QueueCommand {
     ///                                     "??? (deleted)" ghosts)
     ///   • `aida queue done <id>`       — atomic "mark complete + remove"
     ///
-    /// On the git-canonical backend (the default), `--completed` is
-    /// currently a NO-OP — the entire queue is cleared regardless. The
-    /// flag honors the completed-only predicate on the legacy SQLite
-    /// backend.
     // trace:TASK-1-109 | ai:claude — plain `//` (not `///`) so the
     // trace marker doesn't leak into user-facing --help output per
     // TASK-268. The user-facing prose above is intentionally SPEC-ID-
@@ -2742,12 +2738,11 @@ pub enum QueueCommand {
         #[clap(long)]
         user: Option<String>,
         /// Only remove queue entries whose backing spec has status
-        /// `Completed`. Useful for tidying up after a batch ship.
-        /// NOTE: currently honored ONLY on the legacy SQLite backend;
-        /// the git-canonical backend (default) clears the entire queue
-        /// regardless.
-        // trace:TASK-1-109 | ai:claude — plain `//` so SPEC-ID stays
-        // out of --help output (TASK-268 convention).
+        /// `Completed`. Useful for tidying up after a batch ship: keeps
+        /// the in-flight Approved / InProgress / Done entries, removes
+        /// the ones whose work is already shipped. Orphan entries
+        /// (backing spec deleted) are left in place — clean those up
+        /// with `aida queue prune --orphaned`.
         #[clap(long)]
         completed: bool,
     },

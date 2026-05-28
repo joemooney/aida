@@ -15,7 +15,9 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 use super::traits::{BackendType, DatabaseBackend};
-use crate::models::{DispenserHandle, QueueEntry, Requirement, RequirementsStore};
+use crate::models::{
+    DispenserHandle, QueueEntry, Requirement, RequirementStatus, RequirementsStore,
+};
 use crate::object_store;
 
 /// Git-backed storage backend.
@@ -679,18 +681,68 @@ impl DatabaseBackend for GitBackend {
         Ok(())
     }
 
-    fn queue_clear(&self, user_id: &str, _completed_only: bool) -> Result<()> {
+    // TASK-1-109: --completed used to be a no-op on the git backend
+    // (parameter was named _completed_only, indicating intentional
+    // ignore). Implementing per the sqlite_backend semantics — when
+    // completed_only is true, keep entries whose backing spec is NOT
+    // Completed; remove only the ones whose spec is. Orphan entries
+    // (backing spec deleted) are left in place; use
+    // `aida queue prune --orphaned` (TASK-537) for those. Failure to
+    // look up a requirement (transient I/O error) errs on the safe
+    // side: keep the entry. trace:TASK-1-109 | ai:claude
+    fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
         let path = self
             .root
             .join("registry/queues")
             .join(format!("{}.yaml", user_id));
-        if path.exists() {
+        if !path.exists() {
+            return Ok(());
+        }
+
+        if !completed_only {
+            // Original behavior: nuke the entire queue file.
             std::fs::remove_file(&path)?;
             self.auto_commit_paths(
                 "clear queue",
                 &[&format!("registry/queues/{}.yaml", user_id)],
             );
+            return Ok(());
         }
+
+        // --completed: filter entries by backing spec status.
+        let content = std::fs::read_to_string(&path)?;
+        let entries: Vec<QueueEntry> = serde_yaml::from_str(&content).unwrap_or_default();
+        let original_len = entries.len();
+        let kept: Vec<QueueEntry> = entries
+            .into_iter()
+            .filter(|entry| {
+                // Keep unless the spec exists AND is Completed.
+                // Orphan or read error → keep (let prune handle those).
+                match self.get_requirement(&entry.requirement_id) {
+                    Ok(Some(req)) => !matches!(req.status, RequirementStatus::Completed),
+                    _ => true,
+                }
+            })
+            .collect();
+
+        if kept.len() == original_len {
+            // No completed entries to remove — nothing to do.
+            return Ok(());
+        }
+
+        if kept.is_empty() {
+            // Every queued entry's backing spec is Completed — delete
+            // the file (matches the full-clear behavior).
+            std::fs::remove_file(&path)?;
+        } else {
+            let yaml = serde_yaml::to_string(&kept)?;
+            std::fs::write(&path, yaml)?;
+        }
+
+        self.auto_commit_paths(
+            "clear completed queue entries",
+            &[&format!("registry/queues/{}.yaml", user_id)],
+        );
         Ok(())
     }
 }
@@ -1037,6 +1089,121 @@ mod tests {
     /// exactly this shape: `aida add` of TASK-0396 deleted six other specs
     /// in the same commit. trace:BUG-96 | ai:claude
     #[test]
+    /// TASK-1-109: queue_clear's completed_only flag was a no-op on this
+    /// backend; now it filters queue entries by their backing requirement's
+    /// status, removing only the entries whose spec is Completed.
+    /// trace:TASK-1-109 | ai:claude
+    #[test]
+    fn queue_clear_completed_only_filters_by_backing_spec_status() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        // Set up two requirements: one Completed, one Approved.
+        let mut store = RequirementsStore::new();
+        let mut done_req = Requirement::new("done work".into(), "shipped".into());
+        done_req.spec_id = Some("TASK-1".into());
+        done_req.status = RequirementStatus::Completed;
+        let mut todo_req = Requirement::new("pending work".into(), "still queued".into());
+        todo_req.spec_id = Some("TASK-2".into());
+        todo_req.status = RequirementStatus::Approved;
+        let done_id = done_req.id;
+        let todo_id = todo_req.id;
+        store.requirements.push(done_req);
+        store.requirements.push(todo_req);
+        backend.save(&store).unwrap();
+
+        // Queue both requirements for the same user.
+        let user = "alice";
+        backend
+            .queue_add(QueueEntry {
+                user_id: user.into(),
+                requirement_id: done_id,
+                position: 0,
+                added_by: user.into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: None,
+                for_scope: None,
+                for_session: None,
+            })
+            .unwrap();
+        backend
+            .queue_add(QueueEntry {
+                user_id: user.into(),
+                requirement_id: todo_id,
+                position: 1,
+                added_by: user.into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: None,
+                for_scope: None,
+                for_session: None,
+            })
+            .unwrap();
+        let before = backend.queue_list(user, true).unwrap();
+        assert_eq!(before.len(), 2, "both entries should be queued");
+
+        // Run --completed clear.
+        backend
+            .queue_clear(user, /* completed_only */ true)
+            .unwrap();
+
+        // The Completed-backed entry should be gone; the Approved-backed
+        // entry should still be queued.
+        let after = backend.queue_list(user, true).unwrap();
+        assert_eq!(
+            after.len(),
+            1,
+            "only the Completed-backed entry should be removed"
+        );
+        assert_eq!(
+            after[0].requirement_id, todo_id,
+            "the surviving entry should reference the still-Approved requirement"
+        );
+    }
+
+    /// trace:TASK-1-109 | ai:claude
+    #[test]
+    fn queue_clear_without_completed_flag_wipes_everything() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut r = Requirement::new("any work".into(), "queued".into());
+        r.spec_id = Some("TASK-1".into());
+        r.status = RequirementStatus::Approved;
+        let req_id = r.id;
+        store.requirements.push(r);
+        backend.save(&store).unwrap();
+
+        let user = "bob";
+        backend
+            .queue_add(QueueEntry {
+                user_id: user.into(),
+                requirement_id: req_id,
+                position: 0,
+                added_by: user.into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: None,
+                for_scope: None,
+                for_session: None,
+            })
+            .unwrap();
+
+        backend
+            .queue_clear(user, /* completed_only */ false)
+            .unwrap();
+
+        let after = backend.queue_list(user, true).unwrap();
+        assert!(
+            after.is_empty(),
+            "bare queue_clear should remove every entry regardless of status"
+        );
+    }
+
     fn test_save_preserves_unparseable_alongside_new_add() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
