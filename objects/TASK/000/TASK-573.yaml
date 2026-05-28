@@ -1,0 +1,27 @@
+id: 019e6f6e-9717-7a33-b210-e3507df99b59
+spec_id: TASK-573
+agreed_id: TASK-573
+title: '@path imports in scaffolded CLAUDE.md to trim per-session context budget'
+description: |-
+  Per 'Beyond the Prompt: Claude Code', Claude Code's CLAUDE.md supports '@path' syntax to import other files. AIDA's scaffolded CLAUDE.md currently inlines the discipline pack discovery section, which costs context budget every session.
+
+  Acceptance:
+    • Scaffolded CLAUDE.md uses '@docs/aida/discipline/README.md' instead of inlining the discipline section
+    • Other long-form sections that can be @-imported (e.g. machinery-glossary, lifecycle-vocabulary) get the same treatment when they exceed ~30 lines
+    • Verify Claude Code actually resolves the @-imports (smoke test by running a session and checking what's in context)
+    • Net token reduction documented (before/after measurement)
+
+  Source: docs/competitive-analysis/2026-05-26-... (Tier 2 actionable, cheap perf win on per-session context cost).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:32:59.159476838Z
+modified_at: 2026-05-28T16:32:59.159476838Z
+req_type: Task
+tags:
+- aida:init
+- claude-md
+- context-budget
+- from-research
+- scaffolding
