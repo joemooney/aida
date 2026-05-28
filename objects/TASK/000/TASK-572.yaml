@@ -16,12 +16,12 @@ description: |-
     • '--force' overwrites with a backup
 
   Source: docs/competitive-analysis/2026-05-26-... (Tier 1 actionable, first-user UX gap).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:32:51.693725962Z
-modified_at: 2026-05-28T16:32:51.693725962Z
+modified_at: 2026-05-28T16:43:14.619215803Z
 req_type: Task
 tags:
 - aida:init
