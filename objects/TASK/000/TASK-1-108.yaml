@@ -16,7 +16,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T16:01:59.180510461Z
-modified_at: 2026-05-28T16:01:59.180510461Z
+modified_at: 2026-05-28T16:08:42.163940668Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -29,3 +29,9 @@ tags:
 - phase-1-startup
 - severity:major
 - status-transition-order
+comments:
+- id: 019e6f58-5bb3-7413-8a98-5f72224293e5
+  author: joe
+  content: Commit 98ba8187 references this requirement
+  created_at: 2026-05-28T16:08:42.163940668Z
+  modified_at: 2026-05-28T16:08:42.163940668Z
