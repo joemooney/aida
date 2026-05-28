@@ -16,12 +16,12 @@ description: |-
     • Idempotent: re-running on the same mistake updates the existing rule instead of duplicating
 
   Substrate-aware version of the article's compounding engineering pattern. Source: docs/competitive-analysis/2026-05-26-... (Arpan Patel 'Beyond the Prompt: Claude Code', Tier 1 actionable).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:32:44.278965881Z
-modified_at: 2026-05-28T16:32:44.278965881Z
+modified_at: 2026-05-28T16:43:10.567498869Z
 req_type: Story
 tags:
 - aida:learn
