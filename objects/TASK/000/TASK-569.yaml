@@ -1,0 +1,22 @@
+id: 019e6f48-c602-7073-93ce-0259981307ae
+spec_id: TASK-569
+agreed_id: TASK-569
+title: 'aida list --show-tags: surface spec tags in the list view'
+description: |-
+  aida list shows ID/Type/Status/Priority/Title but not Tags. Operators routinely want to see tags inline (severity, batch, kind, automation routing) without 'aida show <ID>' per row. Currently the list view is compact for readability — adding a --show-tags flag opt-in surfaces the tag set per row.
+
+  Proposed: aida list --show-tags prints tags right of the Title column (truncated to ~3 chips with '+N more' suffix), or as a second line under each row. Composes with existing --status/--type/--tag/--priority filters.
+
+  Surfaced 2026-05-28 by operator: 'aida list does not show tags, perhaps an aida list --show-tags'.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T15:51:40.802903364Z
+modified_at: 2026-05-28T15:51:40.802903364Z
+req_type: Task
+tags:
+- aida:list
+- from-user-direction
+- tag-visibility
+- ux-papercut
