@@ -1,6 +1,6 @@
-id: 019e6cee-2883-74a3-b615-c438941e4573
-spec_id: BUG-389
-agreed_id: BUG-389
+id: 019e6cee-2e4b-7670-bb2e-b39ff547615f
+spec_id: BUG-390
+agreed_id: BUG-390
 title: 'auto-complete failure: phase 1 (implementer) on TASK-483'
 description: |
   Auto-drafted by `aida queue work TASK-483 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
@@ -17,14 +17,14 @@ description: |
 
   ## Phase durations
 
-    - phase 1 (implementer): 7515 ms
+    - phase 1 (implementer): 4606 ms
 
   ## Telemetry entry
 
   The line appended to `~/.aida/auto-complete.jsonl` for this run:
 
   ```json
-  {"spec_id":"TASK-483","started_at":"2026-05-28T04:53:18.931122922+00:00","completed_at":"2026-05-28T04:53:27.771604040+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"failed","failure_message":"the implementer session exited 1 — it was aborted or errored","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":7515}],"total_ms":7515,"binary_sha":"0426c4f2"}
+  {"spec_id":"TASK-483","started_at":"2026-05-28T04:53:22.186207294+00:00","completed_at":"2026-05-28T04:53:29.239013192+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"failed","failure_message":"the implementer session exited 1 — it was aborted or errored","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":4606}],"total_ms":4607,"binary_sha":"0426c4f2"}
   ```
 
   ## Recurse-fix
@@ -34,8 +34,8 @@ status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-28T04:53:27.811789350Z
-modified_at: 2026-05-28T04:53:27.811789350Z
+created_at: 2026-05-28T04:53:29.291955094Z
+modified_at: 2026-05-28T04:53:29.291955094Z
 req_type: Bug
 tags:
 - auto-complete
