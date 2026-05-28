@@ -1,0 +1,29 @@
+id: 019e6f6e-d3bf-79b1-b37c-a9e4fd84db8f
+spec_id: TASK-574
+agreed_id: TASK-574
+title: 'Skill helper subfolders: allow .claude/skills/<name>/{SKILL.md, templates/, examples/}'
+description: |-
+  Per 'Beyond the Prompt: Claude Code', Claude Code skills can be folders containing SKILL.md PLUS supporting files (templates/, examples/, helper scripts). AIDA's scaffolded skills are currently SKILL.md-only.
+
+  Allowing skill folders to carry templates would let, e.g., /aida-plan ship templates/plan-skeleton.md alongside the SKILL.md prompt. Or /aida-pr could ship examples/pr-description-template.md.
+
+  Acceptance:
+    • aida-core/templates/skills/ allows skill SUBFOLDERS (not just .md files)
+    • Scaffolding writes the whole subfolder tree
+    • Existing flat skills migrate to folder-form if they would benefit from templates/
+    • Discipline pack documents the helper-folder pattern
+
+  Source: docs/competitive-analysis/2026-05-26-... (Tier 2 actionable, richer per-skill scaffolding).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:33:14.687379035Z
+modified_at: 2026-05-28T16:33:14.687379035Z
+req_type: Task
+tags:
+- aida:init
+- from-research
+- helper-subfolders
+- scaffolding
+- skills
