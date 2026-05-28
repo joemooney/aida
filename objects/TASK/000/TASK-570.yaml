@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:57:47.684036219Z
-modified_at: 2026-05-28T16:21:29.943633015Z
+modified_at: 2026-05-28T16:24:51.712308453Z
 req_type: Task
 tags:
 - aida:doctor
@@ -51,3 +51,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-28T16:21:29.943633015Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-342: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 26587386762 — view it: `gh run view 26587386762`. Push fixups to the same branch: `aida queue work TASK-570 --branch task-570 --steal`'
+  shelved_by: implementer
+  shelved_at: 2026-05-28T16:24:51.712308453Z
