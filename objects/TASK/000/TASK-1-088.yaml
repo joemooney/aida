@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T07:25:37.854381279Z
-modified_at: 2026-05-25T07:42:28.391338881Z
+modified_at: 2026-05-28T04:36:52.217804893Z
 req_type: Task
 tags:
 - agent-discipline
@@ -21,3 +21,4 @@ tags:
 - linked:BUG-378
 - linked:STORY-469
 - severity:major
+human_only: true
