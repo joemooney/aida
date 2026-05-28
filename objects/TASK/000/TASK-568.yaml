@@ -1,0 +1,24 @@
+id: 019e6f45-a41d-7632-bab4-edfcf046a370
+spec_id: TASK-568
+agreed_id: TASK-568
+title: 'aida list --tree: parent/child clustering view (parallel to aida queue list --tree)'
+description: |-
+  aida queue list --tree groups queue entries by parent EPIC for visual clustering (TASK-X under EPIC-Y, sorted by item count desc, with an Unscoped group at the end). The same affordance is missing from aida list. Use case: surveying the backlog for an EPIC's outstanding work, or seeing all children of FOLDER-X at a glance.
+
+  Proposed: aida list --tree shows requirements grouped by parent EPIC (or first-parent typed relationship), preserving the existing --type/--status/--priority/--tag filters. Unscoped (no parent) appear under a final Unscoped group. Visual shape mirrors queue list --tree for consistency.
+
+  Surfaced 2026-05-28 by operator: 'we have aida queue list --tree but not aida list --tree, open a task if we should have that also'.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T15:48:15.517785477Z
+modified_at: 2026-05-28T15:48:15.517785477Z
+req_type: Task
+tags:
+- aida:list
+- aida:queue:list
+- from-user-direction
+- parent-clustering
+- tree-view
+- ux-papercut
