@@ -3,15 +3,19 @@ spec_id: DOC-1-103
 agreed_id: DOC-2
 title: 'Competitive analysis: AI coding agents (Cline/Aider/Plandex/Goose/Continue) — framework lens'
 description: 'docs/competitive-analysis/2026-05-26-ai-coding-agents.md — five-axis framework (task-model / state / linkage / autonomy / multi-agent) applied to single-agent CLI coding tools. Source-verified against each project''s repo/docs. Identifies AIDA''s structured spec graph + git-canonical substrate + trace-comment linkage + queue/lease coordination + lifecycle-as-substrate as the unclaimed combination. 5 scoped opportunities from neighbors: Aider auto-commit-per-turn, Plandex sandbox diff before apply, Continue declarative reviewer checks, Goose recipe compile target, Cline coordinator+specialist subagents.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T07:07:48.782982236Z
-modified_at: 2026-05-27T07:07:48.782982236Z
+modified_at: 2026-05-28T04:52:34.148820719Z
 req_type: Doc
 tags:
 - coding-agents
 - competitive-analysis
 - from-research
 - kind:doc
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-28T04:52:34.148820719Z
+  completion_sha: 4d0dc937740c748a97035cf4a8180542fc43499d
