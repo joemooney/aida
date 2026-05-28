@@ -13,10 +13,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:51:40.802903364Z
-modified_at: 2026-05-28T15:51:40.802903364Z
+modified_at: 2026-05-28T16:53:09.024505862Z
 req_type: Task
 tags:
 - aida:list
+- batch:scaffolding-2026-05-28
 - from-user-direction
 - tag-visibility
 - ux-papercut
