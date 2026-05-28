@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:54:51.704744157Z
-modified_at: 2026-05-28T16:53:57.429991569Z
+modified_at: 2026-05-28T17:06:56.771697617Z
 req_type: Task
 tags:
 - aida:queue:list
@@ -25,3 +25,8 @@ comments:
   content: 'Promoted by joe 2026-05-28: Substrate display bug with clear root-cause hypothesis (queue list reads cache.db queue-entry rows but doesn''t join against requirement.status). Major severity — caused this session''s dispatch misfire. Bounded engineering work.'
   created_at: 2026-05-28T15:42:58.480070431Z
   modified_at: 2026-05-28T15:42:58.480070431Z
+- id: 019e6f8d-ae83-7423-89e5-fe234dec75e4
+  author: joe
+  content: Commit 90b6743e references this requirement
+  created_at: 2026-05-28T17:06:56.771697617Z
+  modified_at: 2026-05-28T17:06:56.771697617Z
