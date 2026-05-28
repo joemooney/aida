@@ -1,0 +1,27 @@
+id: 019e6f6f-10ae-73a3-bc0a-00b59c507e8a
+spec_id: TASK-576
+agreed_id: TASK-576
+title: Headless drain forwards --bare to claude -p (10x startup perf)
+description: |-
+  Per 'Beyond the Prompt: Claude Code', 'claude -p --bare' gives up to 10x faster startup vs 'claude -p' alone. AIDA's orchestrator spawns 'claude -p' for phases 1 and 3 of --auto-complete; forwarding --bare would compound on every drained spec.
+
+  Acceptance:
+    • Orchestrator-spawned 'claude -p' invocations include '--bare' by default
+    • Opt-out via AIDA_BARE=0 (or per-phase config) for debugging cases that need richer output
+    • Measure before/after wall-clock on a 3-spec drain
+    • Compatible with --no-human=both (the headless implementer + reviewer path)
+
+  Source: docs/competitive-analysis/2026-05-26-... (Tier 3 actionable, small perf win that compounds).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:33:30.286804471Z
+modified_at: 2026-05-28T16:33:30.286804471Z
+req_type: Task
+tags:
+- aida:queue:work
+- auto-complete
+- from-research
+- headless
+- perf
