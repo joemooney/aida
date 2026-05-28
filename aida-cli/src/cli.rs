@@ -2723,6 +2723,30 @@ pub enum QueueCommand {
         #[clap(long)]
         completed: bool,
     },
+    /// Prune queue entries matching a predicate. Today the only predicate is
+    /// `--orphaned` (queue entries pointing at deleted/missing specs); future
+    /// predicates may be added. Use `--dry-run` to preview before applying.
+    /// trace:TASK-537 | ai:claude
+    Prune {
+        /// Remove queue entries whose backing spec no longer exists in the
+        /// store (the "??? (deleted)" ghosts in `aida queue list`). Auto-
+        /// queued reviewer entries from `aida pr` / `session end` can become
+        /// orphans when the spec they cover is later deleted or rejected.
+        #[clap(long)]
+        orphaned: bool,
+        /// Preview the entries that would be removed; don't actually remove
+        /// them. Pair with `--orphaned` for safe inspection.
+        #[clap(long)]
+        dry_run: bool,
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+        /// Restrict prune to entries routed to this role. Default: all roles
+        /// (with the active-role default applied). Useful when only the
+        /// reviewer queue has orphan entries.
+        #[clap(long = "for", visible_alias = "for-role")]
+        r#for: Option<String>,
+    },
     /// Peek at the top item in your queue without removing it. When a role
     /// is active and --role is not passed, defaults to filtering on it.
     /// Use this between work items to see what's next. Considers local +
