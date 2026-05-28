@@ -1,0 +1,48 @@
+id: 019e6f64-8b7d-7091-989d-94cd5786bc79
+spec_id: TASK-571
+agreed_id: TASK-571
+title: cli.rs:2729 leaks /// trace:TASK-537 into --help (pre-existing test fail on main)
+description: |
+  ## Surfaced
+
+  While drain-merging TASK-570, the full `cargo test -p aida-cli --bin aida` suite has 2 failing tests on main:
+
+    - `cli::tests::source_doc_comments_carry_no_trace_token`
+    - `cli::tests::help_text_carries_no_trace_markers`
+
+  Root cause: TASK-537's PR (commit 129ad84e) introduced a `/// trace:TASK-537 | ai:claude` doc comment at aida-cli/src/cli.rs:2729 (immediately above the `Prune` variant of `QueueCommand`). Because it's a `///` not `//`, the trace marker leaks into `--help` output, violating the rule TASK-268 / `source_doc_comments_carry_no_trace_token` enforces.
+
+  ## Fix
+
+  Demote the one offending line from `///` → `//` (or reword the prose to drop the literal `trace:` token). One-character edit.
+
+    ```
+        /// `--orphaned` (queue entries pointing at deleted/missing specs); future
+        /// predicates may be added. Use `--dry-run` to preview before applying.
+    -   /// trace:TASK-537 | ai:claude
+    +   // trace:TASK-537 | ai:claude
+        Prune {
+    ```
+
+  ## Acceptance
+
+  - [ ] aida-cli/src/cli.rs:2729 demoted from `///` to `//`
+  - [ ] `cargo test -p aida-cli --bin aida cli::tests` green
+  - [ ] `aida queue prune --help` no longer shows the trace marker
+
+  ## Notes
+
+  This is a follow-up from TASK-570 implementation; the CI run for PR-342 (TASK-570) will likely fail on these tests until this lands.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:22:00.829658042Z
+modified_at: 2026-05-28T16:22:00.829658042Z
+req_type: Task
+tags:
+- aida:cli
+- from-self-test
+- from-task-570
+- papercut
+- trace-leak
