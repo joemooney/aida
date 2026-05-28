@@ -1,0 +1,31 @@
+id: 019e6f6e-5cf6-71f3-9be1-30c7f3c253c6
+spec_id: STORY-479
+agreed_id: STORY-479
+title: '/aida-learn skill: substrate-aware ''update CLAUDE.md so you don''t repeat this'' verb'
+description: |-
+  Boris Cherny's single most-repeated tip from 'Beyond the Prompt: Claude Code': every time Claude makes a mistake, end the prompt with 'Update CLAUDE.md so you do not repeat this' — Claude is 'eerily good at writing rules for itself' from its own failures. This is the 'Compounding Engineering' pattern.
+
+  AIDA's memory pack + discipline pack already capture this concept ad-hoc; this story ships the streamlined verb.
+
+  Acceptance:
+    • /aida-learn slash command scaffolded by 'aida init' (added to .claude/commands/ + .claude/skills/aida-learn/SKILL.md)
+    • Skill takes the operator's description of what just went wrong (or pulls from the most recent agent error if -)
+    • Routes the rule to the right substrate: project CLAUDE.md (project-wide rules), discipline pack docs (general AIDA patterns), feedback_*.md memory (user-personal preferences), or a finding (recurring observations awaiting promotion)
+    • Generates the addition with cross-references to related rules
+    • Captures the rule WITH a trace back to the originating session
+    • Idempotent: re-running on the same mistake updates the existing rule instead of duplicating
+
+  Substrate-aware version of the article's compounding engineering pattern. Source: docs/competitive-analysis/2026-05-26-... (Arpan Patel 'Beyond the Prompt: Claude Code', Tier 1 actionable).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-28T16:32:44.278965881Z
+modified_at: 2026-05-28T16:32:44.278965881Z
+req_type: Story
+tags:
+- aida:learn
+- compounding-engineering
+- from-research
+- scaffolding
+- skill
