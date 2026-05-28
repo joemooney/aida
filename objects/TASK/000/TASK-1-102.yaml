@@ -12,12 +12,12 @@ description: |-
   Possible fixes (preference order): (1) single combined LLM call asking for a JSON array of findings across all sites (1 call instead of N — larger prompt but fewer round-trips); (2) per-site call with Retry-After / backoff; (3) Tier 2 upgrade as a UI hint on first 429.
 
   Impact: blocks the verify-drift demo on Tier 1 budgets. Non-issue on Tier 2. Surfaced by: aida-chat advisor during 24h autonomous validation post-overnight-merges.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-27T06:55:39.005508926Z
-modified_at: 2026-05-27T06:55:39.005508926Z
+modified_at: 2026-05-28T15:43:03.212586044Z
 req_type: Task
 tags:
 - aida-chat
@@ -28,3 +28,9 @@ tags:
 - severity:minor
 - tier-1-budget
 - verify-trace-drift
+comments:
+- id: 019e6f40-e02c-7e82-b049-7c2ff39c87b4
+  author: joe
+  content: 'Dismissed by joe 2026-05-28: Out of scope for this repo — verify_trace_drift''s rate-limit issue lives in aida-chat. If actionable there, file directly in aida-chat''s substrate. Closing in AIDA.'
+  created_at: 2026-05-28T15:43:03.212586044Z
+  modified_at: 2026-05-28T15:43:03.212586044Z
