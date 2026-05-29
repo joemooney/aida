@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:46:13.320093082Z
-modified_at: 2026-05-29T07:15:59.087535672Z
+modified_at: 2026-05-29T07:35:18.600954651Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -58,6 +58,26 @@ comments:
     Verdict: reshape, do not kill. Next design pass should confirm saved workflow API, define substrate callbacks, and prove recoverability before any divest from auto_complete.rs.
   created_at: 2026-05-29T07:11:16.870892278Z
   modified_at: 2026-05-29T07:11:16.870892278Z
+- id: 019e72a8-b148-78e2-95b3-06e2a23ea1d9
+  author: codex
+  content: |-
+    Resume-bridge investigation verdict: existing STORY-306 punt handshake can bridge punt detection, but not exact workflow-agent resume.
+
+    Evidence:
+    - `AIDA_PUNT_SIGNAL_FILE` payload is `PuntSignal { spec, category, detail, lean }` only (`aida-cli/src/punt.rs`). It does not carry a Claude session id, workflow run id, or cwd.
+    - Exact resume is implemented in `RealPhaseDriver::resume_implementer` using `self.implementer_session` + `self.implementer_worktree`, both captured only because AIDA itself spawned `queue work --session-id <uuid>` for phase 1.
+    - `claude_headless_resume_args` requires `claude -p --resume <session-id>`, and the spawn must run from the original worktree cwd so Claude's project slug finds the persisted JSONL.
+
+    Prototype call-out shape that works partially:
+    1. A workflow implementer `agent()` can be prompted to run `aida punt` or use MCP `post_punt`; if `AIDA_PUNT_SIGNAL_FILE` is present in the agent environment and propagated by Claude workflows, AIDA can detect the punt exactly like today.
+    2. AIDA can still run the advisor tier and write `.aida/punts/<spec>.response.json`.
+    3. The workflow can resume only if it owns the continuation itself: e.g. return `{status:"punted", response_path}` from the agent step, stop, then a later workflow invocation reads the resolved response and starts a new implementer step with the advisor answer.
+
+    What does not work with today's known surfaces: AIDA cannot externally `claude -p --resume` the punted workflow subagent, because the workflow `agent()` result does not expose a resumable Claude session id/cwd to the substrate. The existing signal file also has no field for that identity.
+
+    Recommendation for SPIKE-32: reshape the compiler around substrate checkpoint/retry rather than exact run-local resume. Compile workflows should treat punts as terminal checkpoint events: write substrate punt, stop with a machine-readable status, let AIDA/advisor resolve, then rerun/continue from `.aida/punts/<spec>.response.json` and skip already-completed phases from substrate state. Exact STORY-306-style resume should stay parked until Claude workflows expose subagent resume handles or a programmatic workflow resume API.
+  created_at: 2026-05-29T07:35:18.600954651Z
+  modified_at: 2026-05-29T07:35:18.600954651Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-29T07:15:59.087535672Z
