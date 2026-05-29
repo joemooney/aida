@@ -1,0 +1,17 @@
+id: 019e7291-3812-77d3-bca0-38111eedca92
+spec_id: SPIKE-42
+agreed_id: SPIKE-42
+title: Compose AIDA lease snapshot with Claude Code checkpointing for state-aware /rewind
+description: 'Claude Code''s checkpointing tracks file edits made by Claude''s tools across the session; /rewind opens a menu to restore code+conversation, restore conversation only, restore code only, or summarize forward/backward. Does NOT track bash command file mods or external changes. Per-prompt checkpoint granularity. AIDA''s lease state isn''t part of the checkpoint — if operator rewinds, the lease (which spec the session ''owns'') stays at the post-rewind value. Could pair AIDA snapshots (via PreCompact-style hook on prompt submit?) with checkpointing so /rewind restores lease state alongside code state. Lower priority than channels/hooks because /rewind is operator-driven and the lease inconsistency is recoverable via ''aida session show''. Reference: code.claude.com/docs/en/checkpointing. trace:strategic-recompose-round-3'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T07:09:40.242799956Z
+modified_at: 2026-05-29T07:09:40.242799956Z
+req_type: Spike
+tags:
+- checkpointing
+- claude-code-compose
+- from-strategic-recompose-round-3
+- priority:low
