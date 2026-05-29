@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:45.907718596Z
-modified_at: 2026-05-29T04:05:57.032949511Z
+modified_at: 2026-05-29T22:32:26.118733059Z
 req_type: Task
 tags:
 - batch:scaffolding-2026-05-28
@@ -37,6 +37,11 @@ comments:
   content: Commit 79b31d83 references this requirement
   created_at: 2026-05-29T04:00:29.456145096Z
   modified_at: 2026-05-29T04:00:29.456145096Z
+- id: 019e75de-0906-7be3-85a8-10bd4a6c7370
+  author: joe
+  content: 'DEFERRED (slop-audit follow-through, 2026-05-29). Per docs/aida/skill-catalog-audit-2026-05-29.md: /aida-insights is read-only and defensible, but it''s an interpretation-layer over existing CLI (`aida usage` + `findings calibration --stats`) — the class of skill that, multiplied, becomes catalog-selection-budget noise. With the catalog at ~40 skills and the operator steering against slop, NOT merging now. PR-348 left open (not closed) so it can be revived on demand — i.e. when there''s real pull for a monthly attention-pattern surface. Reversible decision: merge PR-348 anytime if the demand shows up. Sibling of STORY-481 (shipped — novel substrate-aware debt detection earns its slot) and the recover→doctor merge (net -1 skill).'
+  created_at: 2026-05-29T22:32:26.118733059Z
+  modified_at: 2026-05-29T22:32:26.118733059Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-29T04:01:03.984663953Z
