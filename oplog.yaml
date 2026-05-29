@@ -10639,5 +10639,13 @@ operations:
   timestamp: 2026-05-29T03:34:15.465919750Z
   kind: !SetStatus
     status: In Progress
-clock: 1154
+- id: 019e71d6-788b-7c10-a141-7da071bbc118
+  target_id: 019e71d5-fd89-7b32-8f6f-2adb1aba1a87
+  author: aida
+  node_id: '1'
+  lamport: 1155
+  timestamp: 2026-05-29T03:45:41.515975971Z
+  kind: !SetTitle
+    title: 'README: trim narrative metadata to push loaded-context delta negative'
+clock: 1155
 node_id: '1'

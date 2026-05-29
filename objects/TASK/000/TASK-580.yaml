@@ -1,15 +1,21 @@
 id: 019e71d5-fd89-7b32-8f6f-2adb1aba1a87
 spec_id: TASK-580
 agreed_id: TASK-580
-title: 'File a TASK: `README: trim narrative metadata (Why this exists, Companion'
+title: 'README: trim narrative metadata to push loaded-context delta negative'
 description: ''
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:45:10.025970424Z
-modified_at: 2026-05-29T03:45:10.025970424Z
+modified_at: 2026-05-29T03:45:41.454043303Z
 req_type: Task
+tags:
+- aida:init
+- batch:scaffolding-2026-05-28
+- claude-md
+- context-budget
+- scaffolding
 relationships:
 - rel_type: Child
   target_id: 019e6f6e-9717-7a33-b210-e3507df99b59
