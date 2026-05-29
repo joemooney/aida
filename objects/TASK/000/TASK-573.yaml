@@ -26,6 +26,10 @@ tags:
 - context-budget
 - from-research
 - scaffolding
+relationships:
+- rel_type: Parent
+  target_id: 019e71d5-fd89-7b32-8f6f-2adb1aba1a87
+  created_at: 2026-05-29T03:45:21.194652071Z
 comments:
 - id: 019e71cb-e41c-7a41-96e6-a47ea849c91c
   author: joe
