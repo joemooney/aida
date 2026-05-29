@@ -1,0 +1,22 @@
+id: 019e71c0-ded4-7fd2-a668-065d46b85a28
+spec_id: SPIKE-19
+agreed_id: SPIKE-19
+title: Claude Code background sessions — state persistence, pinned vs unpinned, idle eviction, /resume
+description: |-
+  Decompose 2.1.147 (pinned background sessions stay alive on idle, restarted in place), 2.1.144 (/resume for background sessions), 2.1.143 (background session model/effort preservation), 2.1.141 (background agent permission mode preservation), 2.1.132 (resumed session state preservation). Read: code.claude.com/docs/en/sessions.
+
+  Map to AIDA: aida session start/end + lease registry + .aida/sessions/. Compare: state persistence axis (what survives restart?), recovery semantics, eviction policy.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/06-background-sessions.md
+  Acceptance: enumerated 'what persists' field list, AIDA session-state diff.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:22:05.908885261Z
+modified_at: 2026-05-29T03:22:05.908885261Z
+req_type: Spike
+tags:
+- batch:research-claude-overlap-2026-05-29
+- claude-code-2.1.154
+- sessions
