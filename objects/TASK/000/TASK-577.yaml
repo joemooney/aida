@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:45.907718596Z
-modified_at: 2026-05-29T03:56:29.725267537Z
+modified_at: 2026-05-29T04:00:29.456145096Z
 req_type: Task
 tags:
 - batch:scaffolding-2026-05-28
@@ -26,3 +26,9 @@ tags:
 - scaffolding
 - skills
 - telemetry
+comments:
+- id: 019e71e4-0510-72b0-84dd-f5a0dbe04219
+  author: joe
+  content: Commit 79b31d83 references this requirement
+  created_at: 2026-05-29T04:00:29.456145096Z
+  modified_at: 2026-05-29T04:00:29.456145096Z
