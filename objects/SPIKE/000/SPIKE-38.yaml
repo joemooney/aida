@@ -1,0 +1,18 @@
+id: 019e727e-1dd5-7851-a354-316ad2629720
+spec_id: SPIKE-38
+agreed_id: SPIKE-38
+title: Publish aida-review GitHub Action wrapping claude-code-action@v1
+description: 'anthropics/claude-code-action@v1 is the published GitHub Action. AIDA could publish ''joemooney/aida-action'' or similar that wraps it with AIDA-specific defaults: --mcp-config pointing at AIDA MCP server, --append-system-prompt with AIDA discipline pack, plugin install for AIDA skills. Lets other AIDA-using projects compose AIDA reviewer behavior into their CI without local install. Pre-req: AIDA discipline pack as a plugin marketplace entry. trace:strategic-recompose-round-2'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T06:48:48.340994675Z
+modified_at: 2026-05-29T06:48:48.340994675Z
+req_type: Spike
+tags:
+- claude-code-compose
+- distribution
+- from-strategic-recompose-round-2
+- priority:4
+- reviewer
