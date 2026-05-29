@@ -12,12 +12,12 @@ description: |-
   3. Leftover thinking-comment: rules_sync/main.rs delegated_reviewer_tests has a '// wait, ... is not valid JSON under standard serde_json' comment that reads as half-finished thought. Tidy.
 
   Origin: master review 2026-05-29.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T07:35:06.658254796Z
-modified_at: 2026-05-29T07:35:06.658254796Z
+modified_at: 2026-05-29T13:56:10.212607384Z
 req_type: Task
 tags:
 - aida:review
