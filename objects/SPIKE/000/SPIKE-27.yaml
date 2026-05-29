@@ -1,0 +1,22 @@
+id: 019e71c1-d14d-7541-85b6-f97db18aa766
+spec_id: SPIKE-27
+agreed_id: SPIKE-27
+title: Antigravity (AGY) CLI — architecture overview, registry, configuration surface
+description: |-
+  Read: official AGY docs, current AGY CLI surface ('antigravity --help' if available). Cross-reference: aida-core/templates/docs/agents/antigravity-mcp-setup.md, antigravity-brief-pickup.md (TASK-485), TASK-123 (AGY failure modes — three distinct failure shapes in one overnight drain), TASK-119/122 (AGY plagiarism + hallucination observations).
+
+  Map to AIDA: AIDA dispatches to AGY via briefs; AGY launcher is 'aida agent new antigravity' (STORY-434). Compare: AGY's native capabilities vs the failure-mode pattern AIDA observed.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/14-agy-architecture.md
+  Acceptance: AGY's substrate model + failure-mode root causes analyzed, recommendations for AIDA's AGY-dispatch policy.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:23:07.981823234Z
+modified_at: 2026-05-29T03:23:07.981823234Z
+req_type: Spike
+tags:
+- antigravity
+- architecture
+- batch:research-claude-overlap-2026-05-29
