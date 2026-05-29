@@ -4828,6 +4828,7 @@ fn read_id_format_settings(
     (policy, scope)
 }
 
+// trace:TASK-583 | ai:antigravity
 fn extract_bughunter_severity(body: &str) -> Option<serde_json::Value> {
     for marker in &[
         "bughunter-severity:",
@@ -4962,29 +4963,29 @@ mode = "delegated" # inline comment
 
     #[test]
     fn test_extract_bughunter_severity() {
-        let valid_json = r#"some text bughunter-severity: {"critical": 0, "normal": 2, "cosmetic": 1} trailing text"#;
+        let valid_json = r#"some text bughunter-severity: {"normal": 2, "nit": 1, "pre_existing": 0} trailing text"#;
         let parsed = extract_bughunter_severity(valid_json).unwrap();
-        assert_eq!(parsed["critical"].as_i64().unwrap(), 0);
         assert_eq!(parsed["normal"].as_i64().unwrap(), 2);
-        assert_eq!(parsed["cosmetic"].as_i64().unwrap(), 1);
+        assert_eq!(parsed["nit"].as_i64().unwrap(), 1);
+        assert_eq!(parsed["pre_existing"].as_i64().unwrap(), 0);
 
-        let quoted_json =
-            r#"some text "bughunter-severity": {"critical": 1, "normal": 0} trailing"#;
+        let quoted_json = r#"some text "bughunter-severity": {"normal": 0, "nit": 3, "pre_existing": 1} trailing"#;
         let parsed_quoted = extract_bughunter_severity(quoted_json).unwrap();
-        assert_eq!(parsed_quoted["critical"].as_i64().unwrap(), 1);
         assert_eq!(parsed_quoted["normal"].as_i64().unwrap(), 0);
+        assert_eq!(parsed_quoted["nit"].as_i64().unwrap(), 3);
+        assert_eq!(parsed_quoted["pre_existing"].as_i64().unwrap(), 1);
 
         let single_quoted_json =
-            r#"some text 'bughunter-severity': {'critical': 0, 'normal': 5} trailing"#;
+            r#"some text 'bughunter-severity': {'normal': 5, 'nit': 0} trailing"#;
         // single quotes inside JSON are technically malformed but our helper searches for start brace and extracts valid JSON
-        // wait, 'bughunter-severity': {'critical': 0, 'normal': 5} is not valid JSON under standard serde_json unless keys are double quoted
+        // Standard JSON does not allow single quoted keys/values.
         assert!(extract_bughunter_severity(single_quoted_json).is_none());
-        // let's test a valid JSON with single quoted marker
-        let single_quoted_marker =
-            r#"some text 'bughunter-severity': {"critical": 0, "normal": 5} trailing"#;
+        // Let's test a valid JSON with single quoted marker
+        let single_quoted_marker = r#"some text 'bughunter-severity': {"normal": 5, "nit": 0, "pre_existing": 2} trailing"#;
         let parsed_sq = extract_bughunter_severity(single_quoted_marker).unwrap();
-        assert_eq!(parsed_sq["critical"].as_i64().unwrap(), 0);
         assert_eq!(parsed_sq["normal"].as_i64().unwrap(), 5);
+        assert_eq!(parsed_sq["nit"].as_i64().unwrap(), 0);
+        assert_eq!(parsed_sq["pre_existing"].as_i64().unwrap(), 2);
 
         let missing = r#"no severity tally here"#;
         assert!(extract_bughunter_severity(missing).is_none());
@@ -72490,16 +72491,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             if let Some(data) = severity_data {
                 if let Some(obj) = data.as_object() {
                     let normal = obj.get("normal").and_then(|n| n.as_i64()).unwrap_or(0);
-                    let critical = obj.get("critical").and_then(|c| c.as_i64()).unwrap_or(0);
 
-                    eprintln!(
-                        "  {} Tally resolved: normal={}, critical={}",
-                        "✓".green(),
-                        normal,
-                        critical
-                    );
+                    eprintln!("  {} Tally resolved: normal={}", "✓".green(), normal);
 
-                    if normal > 0 || critical > 0 {
+                    if normal > 0 {
                         eprintln!(
                             "  {} Major/critical issues detected; requesting changes",
                             "✗".red()
