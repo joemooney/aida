@@ -1,0 +1,22 @@
+id: 019e71c0-865a-72a0-8474-d00eed34672a
+spec_id: SPIKE-16
+agreed_id: SPIKE-16
+title: Claude Code skills system — frontmatter schema, disable-model-invocation, helper subfolders, /reload-skills
+description: |-
+  Decompose skill surface across 2.1.152 (/reload-skills, disallowed-tools), 2.1.121 (/skills search), 2.1.126 (skill_activated OTEL), 2.1.120 (CLAUDE_EFFORT in skills). Read: code.claude.com/docs/en/skills, mattpocock/skills repo, Anthropic skill cookbook.
+
+  Map to AIDA: aida-core/templates/skills/. Compare: frontmatter schema completeness, helper-folder support (templates/, examples/), invocation control, telemetry.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/03-skills-system.md
+  Acceptance: complete frontmatter field list, AIDA gap analysis (TASK-574 + TASK-575 already filed cover some), recommendations.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:21:43.258647695Z
+modified_at: 2026-05-29T03:21:43.258647695Z
+req_type: Spike
+tags:
+- batch:research-claude-overlap-2026-05-29
+- claude-code-2.1.154
+- skills
