@@ -1,0 +1,17 @@
+id: 019e7290-dfa3-7323-a637-cf252c2896f9
+spec_id: SPIKE-40
+agreed_id: SPIKE-40
+title: Publish aida-channel MCP server that pushes spec-status-changed events to Claude sessions
+description: 'Claude Code Channels are MCP servers that push events INTO a Claude session via ''notifications/claude/channel''. Events arrive wrapped in a <channel source=''...'' meta-key=''...''>body</channel> tag and Claude reacts. Two-way channels add a reply tool + permission relay for remote tool approval. AIDA could publish an ''aida-channel'' MCP server that pushes: ''spec X moved to Done'', ''PR opened for spec Y'', ''reviewer requested changes on Z'', ''queue empty'', ''orchestrator stalled''. Operator''s Claude session reacts in real-time without polling. Two-way variant: permission relay lets operator approve/deny AIDA actions from their phone via the channel. Compose: AIDA''s auto-bump + brief delivery + escalation cascade all become push-events. Reference: code.claude.com/docs/en/channels-reference. trace:strategic-recompose-round-3'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T07:09:17.603815605Z
+modified_at: 2026-05-29T07:09:17.603815605Z
+req_type: Spike
+tags:
+- channels
+- claude-code-compose
+- from-strategic-recompose-round-3
+- priority:medium
