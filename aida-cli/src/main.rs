@@ -11,6 +11,7 @@ mod cli;
 #[cfg(feature = "remote")]
 mod client;
 mod complexity_calibration;
+mod deep_link;
 mod digest;
 mod docs;
 mod drain_state;
@@ -1058,6 +1059,7 @@ fn run() -> Result<()> {
         queue_empty,
         copy,
         invoke,
+        as_deep_link,
     } = &cli.command
     {
         return handle_goal_command(
@@ -1068,6 +1070,7 @@ fn run() -> Result<()> {
             queue_empty.as_deref(),
             *copy,
             *invoke,
+            *as_deep_link,
         );
     }
 
@@ -1360,6 +1363,7 @@ fn run() -> Result<()> {
             spec,
             note,
             depends_on,
+            as_deep_link,
             cmd,
         } => {
             let store = storage.load()?;
@@ -1370,6 +1374,7 @@ fn run() -> Result<()> {
                 spec.as_deref(),
                 note.as_deref(),
                 depends_on.as_deref(),
+                *as_deep_link,
                 cmd,
                 &store,
                 &project_root,
@@ -4917,6 +4922,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             spec,
             note,
             depends_on,
+            as_deep_link,
             cmd,
         } => {
             let store = backend.load()?;
@@ -4928,6 +4934,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 spec.as_deref(),
                 note.as_deref(),
                 depends_on.as_deref(),
+                *as_deep_link,
                 cmd,
                 &store,
                 project_root,
@@ -7520,6 +7527,7 @@ fn handle_brief_command(
     spec: Option<&str>,
     note: Option<&str>,
     depends_on: Option<&str>,
+    as_deep_link: bool,
     cmd: &Option<BriefCommand>,
     store: &RequirementsStore,
     project_root: &std::path::Path,
@@ -7549,6 +7557,13 @@ fn handle_brief_command(
                 depends_on,
             )?;
             println!("{}", path.display());
+            // SPIKE-33: also print a claude-cli:// deep link the operator
+            // can click → opens Claude Code in the spec's worktree (or
+            // project root) with a short pickup prompt referencing the
+            // brief file. Inert until Enter. trace:SPIKE-33 | ai:claude
+            if as_deep_link {
+                emit_brief_deep_link(project_root, agent, &effective_spec, &path)?;
+            }
             Ok(())
         }
         Some(BriefCommand::List {
@@ -7560,6 +7575,48 @@ fn handle_brief_command(
             read_agent_brief(project_root, brief_file, *latest)
         }
     }
+}
+
+/// SPIKE-33: render a `claude-cli://open` URL pointing at the agent's
+/// expected worktree (active lease for the spec, else project_root) with
+/// a short prompt that tells the receiving Claude session to read the
+/// brief file and pick the work up. The brief body itself isn't inlined
+/// in `q=` — even modest briefs blow past the 5000-char ceiling — and
+/// AIDA's existing brief workflow already establishes that the agent
+/// reads the file. trace:SPIKE-33 | ai:claude
+fn emit_brief_deep_link(
+    project_root: &std::path::Path,
+    agent: &str,
+    spec_id: &str,
+    brief_path: &std::path::Path,
+) -> Result<()> {
+    let rel = brief_path
+        .strip_prefix(project_root)
+        .unwrap_or(brief_path)
+        .display()
+        .to_string();
+    let worktree = list_leases(project_root)
+        .into_iter()
+        .find(|l| l.scope == spec_id && !l.worktree_path.as_os_str().is_empty())
+        .map(|l| l.worktree_path)
+        .unwrap_or_else(|| project_root.to_path_buf());
+    let prompt = format!(
+        "Pick up brief at {} ({} on {}). Acknowledge with `aida brief ack {}` when done.",
+        rel, agent, spec_id, rel
+    );
+    let rendered = deep_link::DeepLink::new()
+        .with_prompt(&prompt)
+        .with_cwd(&worktree)
+        .render();
+    if rendered.exceeds {
+        eprintln!(
+            "{} brief deep-link prompt exceeded Claude Code's 5000-char URL ceiling — \
+             link may fail to open",
+            "⚠".yellow()
+        );
+    }
+    println!("{}", rendered.url);
+    Ok(())
 }
 
 fn read_brief_note(note: Option<&str>) -> Result<Option<String>> {
@@ -8320,12 +8377,14 @@ mod task_492_brief_tests {
                 spec,
                 note,
                 depends_on,
+                as_deep_link,
                 cmd,
             } => {
                 assert_eq!(agent.as_deref(), Some("codex"));
                 assert_eq!(spec.as_deref(), Some("TASK-492"));
                 assert_eq!(note.as_deref(), Some("ship it"));
                 assert_eq!(depends_on, None);
+                assert!(!as_deep_link);
                 assert!(cmd.is_none());
             }
             other => panic!("unexpected command: {other:?}"),
@@ -43441,6 +43500,7 @@ fn handle_goal_command(
     queue_empty: Option<&str>,
     copy: bool,
     invoke: bool,
+    as_deep_link: bool,
 ) -> Result<()> {
     let clauses = build_goal_clauses(batch, epic, spec, pr, queue_empty)?;
     let condition = assemble_goal_condition(&clauses);
@@ -43449,6 +43509,27 @@ fn handle_goal_command(
     // --invoke: bare line only, for `$(aida goal --invoke ...)`.
     if invoke {
         println!("{}", goal_line);
+        return Ok(());
+    }
+
+    // SPIKE-33: emit a claude-cli:// deep link whose `q=` is the assembled
+    // /goal line. Opens Claude Code in the current dir with the prompt
+    // pre-filled (inert until Enter). trace:SPIKE-33 | ai:claude
+    if as_deep_link {
+        let cwd = std::env::current_dir().ok();
+        let mut link = deep_link::DeepLink::new().with_prompt(&goal_line);
+        if let Some(c) = cwd {
+            link = link.with_cwd(c);
+        }
+        let rendered = link.render();
+        if rendered.exceeds {
+            println!(
+                "{} the assembled /goal line exceeds Claude Code's 5000-char URL ceiling — \
+                 emitting anyway, but the link may fail to open",
+                "⚠".yellow()
+            );
+        }
+        println!("{}", rendered.url);
         return Ok(());
     }
 

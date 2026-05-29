@@ -4977,6 +4977,14 @@ pub enum Command {
         #[clap(long = "depends-on")]
         depends_on: Option<String>,
 
+        /// Print a `claude-cli://open` deep link after writing the brief.
+        /// Click → Claude Code opens in the spec's worktree with a
+        /// short pickup prompt (inert until Enter). Eliminates the
+        /// paste step. Requires Claude Code v2.1.91+ for the URL scheme.
+        // trace:SPIKE-33 | ai:claude
+        #[clap(long = "as-deep-link")]
+        as_deep_link: bool,
+
         #[clap(subcommand)]
         cmd: Option<BriefCommand>,
     },
@@ -5640,6 +5648,13 @@ pub enum Command {
         /// for scripting / command substitution.
         #[clap(long)]
         invoke: bool,
+
+        /// Print a `claude-cli://open` deep link with the `/goal …` line
+        /// pre-filled. Click → Claude Code opens in cwd with the prompt
+        /// ready (inert until Enter). Requires Claude Code v2.1.91+.
+        // trace:SPIKE-33 | ai:claude
+        #[clap(long = "as-deep-link", conflicts_with_all = ["copy", "invoke"])]
+        as_deep_link: bool,
     },
 
     /// List all commands (including the less-common ones hidden from
