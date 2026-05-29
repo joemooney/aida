@@ -15,10 +15,32 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:46:13.320093082Z
-modified_at: 2026-05-29T06:46:17.259589746Z
+modified_at: 2026-05-29T07:00:06.255029291Z
 req_type: Spike
 tags:
 - claude-code-compose
 - from-strategic-recompose
 - orchestrator
 - priority:3
+comments:
+- id: 019e7288-75ef-7ab2-8958-f14969e0b23c
+  author: joe
+  content: |-
+    Codex second-opinion on saved-script workflow compiler thesis (2026-05-28):
+
+    Verdict: saved-script lane is directionally sound, but only if scoped as a POC compiler for a narrow deterministic drain skeleton, not a wholesale orchestrator replacement yet. Claude workflows make orchestration repeatable as script, but the official docs also say workflow scripts cannot directly access filesystem/shell and cannot accept mid-run user input except permission prompts, so AIDA's substrate callbacks/failure routing remain load-bearing outside the script.
+
+    Top objections:
+    1. Failure-routing may not fit inside workflow.js. AIDA's CI red, punt, advisor, human ack, stale-base, and salvage paths are richer than a phase script. Evidence needed: hand-written .claude/workflows/aida-spec-drain.js that can reach a red-CI or punt case and leave AIDA substrate recoverable.
+    2. Checked-in generated artifact may be the wrong persistence unit. If the workflow is mostly generic plus spec ID args, committing per-spec JS creates churn/conflicts without much determinism benefit. Evidence needed: compare diffs from 5 real specs; if only literals change, prefer one checked-in template plus content-addressed generated run files.
+    3. Runtime observability/API may be insufficient. /workflows is TUI-first; if AIDA cannot get structured run status, supervisor observation becomes screen-scrape/manual. Evidence needed: confirm whether saved workflow runs expose JSON/log/state files AIDA can consume.
+
+    Hidden assumptions:
+    - AIDA assumes Claude-only execution is acceptable for this lane; Codex/AGY still need the Rust/CLI substrate or separate adapters.
+    - AIDA assumes workflow agents can safely call non-interactive AIDA CLI verbs without permission/prompt deadlocks.
+
+    Demo proposal: edit one acceptance criterion, run aida workflow compile SPIKE-X, show git diff where only the compiled .claude/workflows/aida-SPIKE-X.js phase prompt/check changes, then run the saved /aida-SPIKE-X workflow and show AIDA status observing the same SPEC-ID lifecycle.
+
+    Recommendation: reshape, do not kill. Ship a months-not-weeks design pass plus one POC workflow, before any divest from auto_complete.rs. The first artifact should answer: generic template vs per-spec artifact, recoverability on failure, and machine-readable observation.
+  created_at: 2026-05-29T07:00:06.255029291Z
+  modified_at: 2026-05-29T07:00:06.255029291Z
