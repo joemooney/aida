@@ -1,0 +1,18 @@
+id: 019e727d-e260-7da3-b3da-e47dbbb115f3
+spec_id: SPIKE-36
+agreed_id: SPIKE-36
+title: Parse bughunter-severity from Code Review check run as orchestrator phase 3 gate
+description: 'Claude Code Code Review writes a machine-readable severity tally to its check run''s Details: last line is ''bughunter-severity: {"normal":N,"nit":M,"pre_existing":K}''. AIDA orchestrator phase 3 (reviewer) can parse this via ''gh api repos/OWNER/REPO/check-runs/CHECK_RUN_ID --jq ...'' and use it as the merge-gate decision: normal>0 → request changes, normal==0 + nit acceptable → approve. Delegates the multi-agent review work to Anthropic''s infrastructure; AIDA reads the verdict + applies lifecycle rules. trace:strategic-recompose-round-2'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T06:48:33.120198062Z
+modified_at: 2026-05-29T06:48:33.120198062Z
+req_type: Spike
+tags:
+- claude-code-compose
+- from-strategic-recompose-round-2
+- orchestrator
+- priority:2
+- reviewer
