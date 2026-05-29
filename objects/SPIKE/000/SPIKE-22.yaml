@@ -1,0 +1,22 @@
+id: 019e71c1-35e6-7f61-b1f0-41c1f6f143e9
+spec_id: SPIKE-22
+agreed_id: SPIKE-22
+title: Claude Code permissions / auto mode — autoMode.hard_deny, parentSettingsBehavior, agent permissionMode
+description: |-
+  Decompose 2.1.136 (autoMode.hard_deny rules), 2.1.133 (parentSettingsBehavior first-wins|merge), 2.1.119 (--agent honors permissionMode), 2.1.118 ( in auto mode rules). Read: code.claude.com/docs/en/permissions, code.claude.com/docs/en/auto-mode.
+
+  Map to AIDA: AIDA inherits Claude Code's permission model + uses bypassPermissions in worktrees. Compare: how AIDA's trust ladder (default/--zen/--no-human) composes with Claude Code's permission tiers.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/09-permissions-auto-mode.md
+  Acceptance: trust ladder mapping, recommendations for AIDA's autonomy-mode docs.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:22:28.198013991Z
+modified_at: 2026-05-29T03:22:28.198013991Z
+req_type: Spike
+tags:
+- batch:research-claude-overlap-2026-05-29
+- claude-code-2.1.154
+- permissions
