@@ -6,6 +6,7 @@ mod awaiting_you;
 mod backlog;
 mod calibration;
 mod changelog;
+mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
@@ -51763,6 +51764,140 @@ fn print_status_agents_section(ctx: &UserStatusContext) {
     println!();
 }
 
+/// SPIKE-30: query `claude agents --json` and cross-reference live Claude
+/// Code sessions against AIDA's lease registry. Surfaces three signals the
+/// existing hygiene scan can't:
+///   - Linked: AIDA lease ↔ live Claude session pair (the healthy case)
+///   - Untracked: Claude session running in a project worktree with no
+///     matching AIDA lease (interactive shell, or a rogue launch)
+///   - Section-wide counts: cross-substrate one-glance view
+///
+/// Skips silently when `claude` isn't on PATH (cross-tool, optional dep).
+/// Dormant leases (lease present, no Claude session) are intentionally
+/// NOT re-reported here — the Hygiene section already covers them via
+/// process_probe.rs; duplicating would dilute both signals.
+/// trace:SPIKE-30 | ai:claude
+fn print_status_claude_code_section(project_root: &std::path::Path) {
+    let Some(entries) = claude_agents::list_agents() else {
+        return;
+    };
+    if entries.is_empty() {
+        return;
+    }
+    let leases = list_leases(project_root);
+    let worktree_paths: Vec<std::path::PathBuf> =
+        leases.iter().map(|l| l.worktree_path.clone()).collect();
+    let (in_scope, elsewhere) =
+        claude_agents::partition_by_project(&entries, project_root, &worktree_paths);
+
+    let manifests = session_manifest::list_all(project_root);
+
+    // Build claude_session_id → lease lookup via manifest join, with cwd
+    // fallback when the manifest doesn't carry the join key (legacy leases
+    // pre-dating TASK-112's claude_session_id recording).
+    let mut linked: Vec<(claude_agents::ClaudeAgentEntry, SessionLease)> = Vec::new();
+    let mut untracked: Vec<claude_agents::ClaudeAgentEntry> = Vec::new();
+    for entry in &in_scope {
+        let manifest = manifests
+            .iter()
+            .find(|m| m.claude_session_id.as_deref() == Some(entry.session_id.as_str()));
+        let lease = manifest
+            .and_then(|m| {
+                leases
+                    .iter()
+                    .find(|l| l.id.starts_with(&m.session_id) || m.session_id.starts_with(&l.id))
+            })
+            .or_else(|| leases.iter().find(|l| l.worktree_path == entry.cwd));
+        match lease {
+            Some(l) => linked.push((entry.clone(), l.clone())),
+            None => untracked.push(entry.clone()),
+        }
+    }
+
+    println!("{}", "─── Claude Code ───".bold());
+    println!(
+        "  Live: {} in project, {} elsewhere",
+        in_scope.len().to_string().cyan(),
+        elsewhere.len().to_string().dimmed(),
+    );
+    if !linked.is_empty() {
+        println!(
+            "  Linked (lease ↔ Claude session): {}",
+            linked.len().to_string().green()
+        );
+        for (entry, lease) in &linked {
+            let role = lease.role.as_deref().unwrap_or("?");
+            println!(
+                "    {}  {}  ({})  {}",
+                entry.short_session_id().yellow(),
+                lease.scope.cyan(),
+                role.dimmed(),
+                claude_status_chip(entry),
+            );
+        }
+    }
+    // Split untracked into:
+    //   - cwd == project_root → interactive shells (the user's terminals);
+    //     collapsed to a count because these are expected and high-volume
+    //   - cwd in a worktree but no matching lease → drift (rogue launches,
+    //     lease cleaned up while Claude still alive); always shown in full
+    let (shell_count, drift): (usize, Vec<_>) =
+        untracked
+            .iter()
+            .fold((0, Vec::new()), |(mut shells, mut drift), entry| {
+                if entry.cwd == project_root {
+                    shells += 1;
+                } else {
+                    drift.push(entry.clone());
+                }
+                (shells, drift)
+            });
+    if shell_count > 0 {
+        println!(
+            "  Interactive shells in project root: {}",
+            shell_count.to_string().dimmed(),
+        );
+    }
+    if !drift.is_empty() {
+        println!(
+            "  In worktree without lease ({}): {}",
+            drift.len().to_string().yellow(),
+            "rogue Claude or stale lease cleanup".dimmed(),
+        );
+        for entry in drift.iter().take(5) {
+            println!(
+                "    {}  {}  {}",
+                entry.short_session_id().yellow(),
+                entry.cwd.display().to_string().dimmed(),
+                claude_status_chip(entry),
+            );
+        }
+        if drift.len() > 5 {
+            println!(
+                "    {}",
+                format!("... and {} more", drift.len() - 5).dimmed()
+            );
+        }
+    }
+    println!();
+}
+
+/// SPIKE-30 helper: render a compact status chip from a Claude agent entry.
+/// Uses `status` when set; falls back to `kind` (e.g. "interactive") when
+/// not — the live JSON for a freshly-spawned session typically omits status
+/// for the first few seconds.
+fn claude_status_chip(entry: &claude_agents::ClaudeAgentEntry) -> String {
+    let label = entry.status.as_deref().unwrap_or(entry.kind.as_str());
+    let painted = match label {
+        "busy" | "working" | "Working" => label.green().to_string(),
+        "idle" | "Idle" => label.dimmed().to_string(),
+        "blocked" | "Needs input" => label.yellow().to_string(),
+        "failed" | "Failed" => label.red().to_string(),
+        _ => label.normal().to_string(),
+    };
+    format!("• {}", painted)
+}
+
 fn print_status_short(ctx: &UserStatusContext) {
     let role = ctx.role.as_deref().unwrap_or("-");
     let scope = ctx
@@ -51936,9 +52071,79 @@ fn print_status_json(
                 "rows": cache.requirement_count().unwrap_or(0),
             }),
         );
+
+        // SPIKE-30: emit the same Claude Code cross-substrate view machine-
+        // readable when the operator passes `--json`. Absent when the
+        // `claude` binary isn't on PATH — graceful no-op, not an error key.
+        if let Some(value) = claude_code_status_json() {
+            out.insert("claude_code".to_string(), value);
+        }
     }
     println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
+}
+
+/// SPIKE-30 JSON projection: same cross-substrate view as
+/// `print_status_claude_code_section`, structured for machine consumers.
+/// Returns `None` (caller omits the key) when `claude` isn't available.
+fn claude_code_status_json() -> Option<serde_json::Value> {
+    use serde_json::json;
+
+    let entries = claude_agents::list_agents()?;
+    let project_root = std::env::current_dir().ok()?;
+    let leases = list_leases(&project_root);
+    let worktree_paths: Vec<std::path::PathBuf> =
+        leases.iter().map(|l| l.worktree_path.clone()).collect();
+    let (in_scope, elsewhere) =
+        claude_agents::partition_by_project(&entries, &project_root, &worktree_paths);
+    let manifests = session_manifest::list_all(&project_root);
+
+    let mut linked = Vec::new();
+    let mut shells = 0usize;
+    let mut drift = Vec::new();
+    for entry in &in_scope {
+        let manifest = manifests
+            .iter()
+            .find(|m| m.claude_session_id.as_deref() == Some(entry.session_id.as_str()));
+        let lease = manifest
+            .and_then(|m| {
+                leases
+                    .iter()
+                    .find(|l| l.id.starts_with(&m.session_id) || m.session_id.starts_with(&l.id))
+            })
+            .or_else(|| leases.iter().find(|l| l.worktree_path == entry.cwd));
+        match lease {
+            Some(l) => linked.push(json!({
+                "session_id": entry.session_id,
+                "pid": entry.pid,
+                "cwd": entry.cwd.display().to_string(),
+                "kind": entry.kind,
+                "status": entry.status,
+                "started_at_ms": entry.started_at_ms,
+                "lease_id": l.id,
+                "scope": l.scope,
+                "role": l.role,
+                "branch": l.branch,
+            })),
+            None if entry.cwd == project_root => shells += 1,
+            None => drift.push(json!({
+                "session_id": entry.session_id,
+                "pid": entry.pid,
+                "cwd": entry.cwd.display().to_string(),
+                "kind": entry.kind,
+                "status": entry.status,
+                "started_at_ms": entry.started_at_ms,
+            })),
+        }
+    }
+
+    Some(json!({
+        "live_in_project": in_scope.len(),
+        "live_elsewhere": elsewhere.len(),
+        "linked": linked,
+        "interactive_shells_in_root": shells,
+        "drift_in_worktree": drift,
+    }))
 }
 
 #[cfg(test)]
@@ -53480,6 +53685,7 @@ fn handle_status_command_distributed(
     }
 
     print_status_agents_section(&user_ctx);
+    print_status_claude_code_section(&project_root);
 
     println!("{}", "─── Project ───".bold());
     let name = if store.name.is_empty() {
