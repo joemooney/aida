@@ -1,0 +1,31 @@
+id: 019e71aa-37df-7451-887e-9f94e15c36bc
+spec_id: TASK-579
+agreed_id: TASK-579
+title: 'aida findings promote: warn / auto-bump when origin-ID already shipped'
+description: |-
+  When 'aida findings promote' turns a finding into a real spec but the underlying fix has already merged to main referencing the **origin ID** (e.g. TASK-1-097), the new spec (e.g. TASK-124) is born with no shipped commits referencing it — so the Done→Completed auto-bump can't fire and the spec lingers In Progress / Approved indefinitely.
+
+  Concrete trigger this session: TASK-124 was promoted on 2026-05-28 from finding TASK-1-097. The fix shipped on 2026-05-25 via commit 155ea983 ("fix(init): push onboarding task onto implementer queue (TASK-1-097)"). Result: TASK-124 was picked up by the batch:scaffolding-2026-05-28 drain as a no-op — code already in place at aida-cli/src/main.rs:4513-4545, nothing to implement, just mark done.
+
+  Suggested behavior for 'aida findings promote':
+  1. Scan git log for commits referencing the origin ID (here TASK-1-097)
+  2. If matching commit is on main → either bump the promoted spec straight to Completed (preferred), or warn the operator with --auto-complete flag
+  3. Optional --force to promote anyway (for cases where the user wants to reopen / extend)
+
+  Or alternatively: 'aida db reconcile-status' could be widened to also match origin IDs after a promotion.
+
+  Raised by the implementer while working TASK-124.
+  Branch: task-124  ·  Commit: (none — no-op pickup)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T02:57:21.375969787Z
+modified_at: 2026-05-29T02:57:21.375969787Z
+req_type: Task
+tags:
+- aida:findings:promote
+- auto-bump
+- from-implementer:TASK-124
+- kind:bug-spotted
+- severity:minor
