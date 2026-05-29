@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:22.617001090Z
-modified_at: 2026-05-29T03:57:28.935489556Z
+modified_at: 2026-05-29T03:58:17.765736768Z
 req_type: Task
 tags:
 - batch:scaffolding-2026-05-28
@@ -31,6 +31,17 @@ comments:
   content: Commit a80f1058 references this requirement
   created_at: 2026-05-29T03:57:28.935489556Z
   modified_at: 2026-05-29T03:57:28.935489556Z
+- id: 019e71e2-02a5-7882-ba97-dd5de5a190e2
+  author: joe
+  content: |-
+    Implemented via commit a80f1058 (PR forthcoming):
+
+    - Added `disable-model-invocation: true` to 8 scaffolded skills with destructive shapes: drain (/aida-drain-queue, /aida-pickup, /aida-implement), delete (/aida-doctor, /aida-recover), force-push (/aida-rebase), substrate-write (/aida-learn), state-mutation (/aida-punt). Joins the existing 6 (advise/commit/pr/release/review/sync) — total now 14.
+    - Documented the convention in docs/aida/discipline/skill-prompt-kinds.md with the destructive-category table, the proactive-skill exclusion list, and the "if Claude misinterprets a stray sentence, what's the worst it can do in 30 seconds?" decision heuristic.
+
+    Test status: cargo fmt --all -- --check green (no Rust touched in this diff).
+  created_at: 2026-05-29T03:58:17.765736768Z
+  modified_at: 2026-05-29T03:58:17.765736768Z
 failure_reason:
   phase: implementer
   phase_index: 1
