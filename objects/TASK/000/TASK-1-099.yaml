@@ -12,12 +12,12 @@ description: |-
   Not blocking; just papercut. Worth filing.
 
   — master observation
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:13.346483215Z
-modified_at: 2026-05-29T08:01:54.067178016Z
+modified_at: 2026-05-29T08:01:58.525068073Z
 req_type: Task
 tags:
 - aida:init
@@ -50,6 +50,8 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-29T03:08:04.898693371Z
   implemented_by: joe
+  completed_at: 2026-05-29T08:01:58.525068073Z
+  completion_sha: 49c6e946137a3182e4a2a2ac6887fcbc89272b6c
 failure_reason:
   phase: reviewer
   phase_index: 3
