@@ -18695,6 +18695,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             no_default_flags,
             extra_flags,
             name,
+            bg,
         }) => agent_new_claude(
             role.clone(),
             spec.clone(),
@@ -18704,6 +18705,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
+            *bg,
         ),
         AgentCommand::New(AgentNewCommand::Codex {
             role,
@@ -18782,6 +18784,11 @@ struct AgentLaunchPlan {
     role: Option<String>,
     current_spec: Option<String>,
     name: String,
+    /// SPIKE-34: id of the lease created by `prepare_agent_launch` when
+    /// `--spec` was supplied. None otherwise. Lets the `--bg` dispatch
+    /// path attach Claude Code's sessionId back to the AIDA manifest so
+    /// `aida status` cross-references the right pair. trace:SPIKE-34
+    lease_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18853,14 +18860,27 @@ fn agent_new_claude(
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
+    bg: bool,
 ) -> Result<()> {
+    let mut default_args = vec!["--permission-mode".to_string(), permission_mode.to_string()];
+    // SPIKE-34: when `--bg` is set, append it to the argv so `claude --bg`
+    // dispatches the session to the background supervisor instead of
+    // running foreground in this terminal. Forces the bg-aware dispatch
+    // path below. trace:SPIKE-34 | ai:claude
+    if bg {
+        default_args.push("--bg".to_string());
+    }
     let config = AgentLaunchConfig {
         agent_type: "claude",
         binary: "claude",
-        default_args: vec!["--permission-mode".to_string(), permission_mode.to_string()],
+        default_args,
         prompt_style: AgentPromptStyle::Positional,
     };
-    agent_new_with_config(config, role, spec, cwd, context, prompt, flag_options, name)
+    if bg {
+        agent_new_bg_dispatch(config, role, spec, cwd, context, prompt, flag_options, name)
+    } else {
+        agent_new_with_config(config, role, spec, cwd, context, prompt, flag_options, name)
+    }
 }
 
 // trace:STORY-433 | ai:codex
@@ -18973,6 +18993,220 @@ fn agent_new_with_config(
         launch_context.as_ref(),
         &prompt_args,
     )
+}
+
+/// SPIKE-34: shape-mirror of `agent_new_with_config` for the `claude --bg`
+/// dispatch path. The semantic difference is fundamental:
+///   - Foreground: AIDA spawns claude, waits for exit, owns the PID.
+///   - Background: `claude --bg` returns ~immediately after handing the
+///     session to Claude Code's per-user supervisor; the PID AIDA would
+///     see is the launcher, not the session.
+///
+/// So we don't call `run_tracked_agent` here — we shell out, capture
+/// stdout, parse the `backgrounded · <short-id>` line, write the
+/// captured sessionId onto the lease's manifest (when one exists), and
+/// return success. After that, `aida status`'s SPIKE-30 cross-substrate
+/// section + `claude agents` both see the session.
+/// trace:SPIKE-34 | ai:claude
+fn agent_new_bg_dispatch(
+    mut config: AgentLaunchConfig,
+    role: Option<String>,
+    spec: Option<String>,
+    cwd: Option<&std::path::Path>,
+    context: AgentContextOptions,
+    prompt: AgentPromptOptions,
+    flag_options: AgentDefaultFlagOptions,
+    name: Option<String>,
+) -> Result<()> {
+    let binary = find_executable_on_path(config.binary).ok_or_else(|| {
+        anyhow::anyhow!(
+            "`claude` is not on PATH — install Claude Code (or activate the \
+             environment that provides it), then retry `aida agent new claude --bg`"
+        )
+    })?;
+    let base = cwd
+        .map(std::path::PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let discovered_root = find_aida_project_root_from(&base)?;
+    let project_root = main_worktree_root_from(&discovered_root);
+    apply_agent_default_flags(&mut config, &project_root, flag_options)?;
+    let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
+    let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
+
+    eprintln!(
+        "{} dispatching {} (stable name: {}) to Claude Code's background supervisor in {}",
+        "▶".green().bold(),
+        config.agent_type,
+        plan.name.cyan(),
+        plan.launch_cwd.display().to_string().cyan()
+    );
+    if let Some(spec) = &plan.current_spec {
+        eprintln!("  {}: {}", "spec".bold(), spec.cyan());
+    }
+    if let Some(role) = &plan.role {
+        eprintln!("  {}: {}", "role".bold(), role.cyan());
+    }
+
+    let launch_context = prepare_agent_launch_context(&config, &plan, context)?;
+    if let Some(ctx) = &launch_context {
+        eprintln!(
+            "  {}: {}",
+            "context".bold(),
+            ctx.path.display().to_string().cyan()
+        );
+    }
+
+    let mut command = std::process::Command::new(&binary);
+    command
+        .current_dir(&plan.launch_cwd)
+        .args(&config.default_args)
+        .args(&prompt_args)
+        .env("AIDA_AGENT_TYPE", config.agent_type)
+        .env("AIDA_AGENT_NAME", &plan.name)
+        .env("AIDA_PROJECT_ROOT", &plan.project_root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(role) = &plan.role {
+        command.env("AIDA_SESSION_ROLE", role);
+    }
+    if let Some(spec) = &plan.current_spec {
+        command.env("AIDA_SESSION_SCOPE", spec);
+    }
+    if let Some(ctx) = &launch_context {
+        command
+            .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
+            .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
+    }
+
+    let output = command
+        .output()
+        .with_context(|| format!("failed to spawn {}", binary.display()))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    if !output.status.success() {
+        eprintln!("{}", stderr.trim_end());
+        anyhow::bail!(
+            "`claude --bg` exited with status {}",
+            output.status.code().unwrap_or(-1)
+        );
+    }
+    // Mirror claude's own output so the operator sees the helper
+    // commands (`claude attach <id>`, `claude logs <id>`, etc.) without
+    // an extra step. trace:SPIKE-34 | ai:claude
+    print!("{stdout}");
+    if !stderr.is_empty() {
+        eprint!("{stderr}");
+    }
+
+    let session_id = parse_bg_session_id(&stdout);
+    match (&session_id, &plan.lease_id) {
+        (Some(sid), Some(lease_id)) => {
+            // Update or create the manifest. trace:SPIKE-34 | ai:claude
+            let manifest_path = session_manifest::manifest_path(&plan.project_root, lease_id);
+            let mut manifest = session_manifest::load(&manifest_path).unwrap_or_else(|_| {
+                session_manifest::SessionManifest {
+                    session_id: lease_id.clone(),
+                    planned_at: chrono::Utc::now(),
+                    plan_source: "agent new --bg".to_string(),
+                    claude_session_id: None,
+                    batch_name: None,
+                    plan: None,
+                    items: Vec::new(),
+                }
+            });
+            manifest.claude_session_id = Some(sid.clone());
+            if let Err(err) = session_manifest::save(&manifest_path, &manifest) {
+                eprintln!(
+                    "  {} couldn't record claude sessionId on lease manifest: {err}",
+                    "warning:".yellow().bold()
+                );
+            } else {
+                eprintln!(
+                    "  {}: lease {} ↔ claude {}",
+                    "linked".green().bold(),
+                    &lease_id[..lease_id.len().min(8)].yellow(),
+                    sid.chars().take(8).collect::<String>().yellow()
+                );
+            }
+        }
+        (Some(_), None) => {} // no lease to link
+        (None, _) => {
+            eprintln!(
+                "  {} couldn't parse `backgrounded · <id>` line from claude output \
+                 — lease will not be linked to the Claude session",
+                "warning:".yellow().bold()
+            );
+        }
+    }
+
+    // The session is now owned by Claude's daemon. AIDA doesn't track
+    // its PID here — `aida status` (SPIKE-30) reads `claude agents
+    // --json` for the truth and joins via the manifest's
+    // claude_session_id we just wrote.
+    Ok(())
+}
+
+/// SPIKE-34: pull the short sessionId from `claude --bg`'s stdout. The
+/// observed format is one `backgrounded · <8-hex>` line among the
+/// helper-command rows. trace:SPIKE-34 | ai:claude
+fn parse_bg_session_id(stdout: &str) -> Option<String> {
+    for line in stdout.lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix("backgrounded") else {
+            continue;
+        };
+        let id = rest.trim_start_matches(|c: char| !c.is_ascii_alphanumeric());
+        if !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
+            return Some(id.to_string());
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod spike_34_bg_dispatch_tests {
+    use super::parse_bg_session_id;
+
+    #[test]
+    fn parses_short_id_from_real_claude_bg_output() {
+        // Captured live 2026-05-29 against claude 2.1.156 — the operative
+        // shape the bg-dispatch path joins on. trace:SPIKE-34 | ai:claude
+        let sample = "Starting background service…\n\
+                      backgrounded · c9021427\n  \
+                      claude agents             list sessions\n  \
+                      claude attach c9021427    open in this terminal\n  \
+                      claude logs c9021427      show recent output\n  \
+                      claude stop c9021427      stop this session\n";
+        assert_eq!(parse_bg_session_id(sample).as_deref(), Some("c9021427"));
+    }
+
+    #[test]
+    fn returns_none_when_no_backgrounded_line() {
+        assert!(parse_bg_session_id("some unrelated output\n").is_none());
+        assert!(parse_bg_session_id("").is_none());
+    }
+
+    #[test]
+    fn tolerates_leading_whitespace_and_non_separator_chars() {
+        // Defensive: claude could change separator from `·` to `:` or
+        // drop the bullet entirely without changing the contract.
+        assert_eq!(
+            parse_bg_session_id("backgrounded: deadbeef").as_deref(),
+            Some("deadbeef")
+        );
+        assert_eq!(
+            parse_bg_session_id("  backgrounded   abc12345  ").as_deref(),
+            Some("abc12345")
+        );
+    }
+
+    #[test]
+    fn rejects_non_hex_id() {
+        // If claude prints `backgrounded · ZZZ` we'd rather return None
+        // than emit a bogus sessionId onto a lease.
+        assert!(parse_bg_session_id("backgrounded · ZZZZZZ").is_none());
+    }
 }
 
 fn apply_agent_default_flags(
@@ -19136,12 +19370,14 @@ fn prepare_agent_launch(
                 plan_role.as_deref(),
                 custom_name.as_deref(),
             )?;
+            let lease_id = Some(lease.id.clone());
             Ok(AgentLaunchPlan {
                 project_root: project_root.to_path_buf(),
                 launch_cwd: lease.worktree_path,
                 role: plan_role,
                 current_spec: Some(spec),
                 name,
+                lease_id,
             })
         }
         None => {
@@ -19158,6 +19394,7 @@ fn prepare_agent_launch(
                 role: plan_role,
                 current_spec: None,
                 name,
+                lease_id: None,
             })
         }
     }
@@ -20004,6 +20241,7 @@ mod agent_launcher_tests {
             role: Some("implementer".into()),
             current_spec: Some("TASK-556".into()),
             name: "agent-test".to_string(),
+            lease_id: None,
         };
         let claude = AgentLaunchConfig {
             agent_type: "claude",
@@ -20295,6 +20533,7 @@ mod agent_launcher_tests {
             role: Some("implementer".into()),
             current_spec: Some("STORY-433".into()),
             name: "codex-test".to_string(),
+            lease_id: None,
         };
 
         let prompt_args =
@@ -20362,6 +20601,7 @@ mod agent_launcher_tests {
             role: Some("implementer".into()),
             current_spec: Some("STORY-434".into()),
             name: "agy-test".to_string(),
+            lease_id: None,
         };
 
         let prompt_args = agent_initial_prompt_args(
@@ -20411,6 +20651,7 @@ mod agent_launcher_tests {
             role: Some("implementer".into()),
             current_spec: Some("STORY-436".into()),
             name: "codex-test".to_string(),
+            lease_id: None,
         };
 
         let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
@@ -20454,6 +20695,7 @@ mod agent_launcher_tests {
             role: Some("implementer".into()),
             current_spec: None,
             name: "codex-test".to_string(),
+            lease_id: None,
         };
 
         let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
@@ -20510,6 +20752,7 @@ mod agent_launcher_tests {
             role: Some("advisor".into()),
             current_spec: None,
             name: "codex-test".to_string(),
+            lease_id: None,
         };
 
         let prompt_args =
