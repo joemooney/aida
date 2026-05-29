@@ -19,12 +19,12 @@ description: |-
   Impact: first-user runs 'aida queue work' (the natural next step per CLAUDE.md daily-driver section) + gets empty queue. They don't know to use 'aida queue work TASK-007' explicitly. They might not even realize there IS an onboarding task to start with.
 
   — master observation, captured during operator's fresh hello-world dogfood test
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:06.320088198Z
-modified_at: 2026-05-29T03:01:26.401142955Z
+modified_at: 2026-05-29T07:31:31.235508421Z
 req_type: Task
 tags:
 - aida:init
