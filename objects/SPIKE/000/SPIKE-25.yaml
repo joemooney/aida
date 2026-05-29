@@ -1,0 +1,22 @@
+id: 019e71c1-9611-7f12-82e5-6aacd6770984
+spec_id: SPIKE-25
+agreed_id: SPIKE-25
+title: Codex MCP + tool model — protocol parity with Claude Code + AIDA's mcp-serve
+description: |-
+  Read: Codex MCP docs, openai cookbook for Codex tool patterns. Cross-reference: aida-core/templates/docs/agents/codex-mcp-setup.md, codex-mcp-roundtrip-verdict.md.
+
+  Map to AIDA: AIDA's mcp-serve exposes the spec graph + briefs. Compare: tool registration shape, environment variable conventions (CLAUDE_PROJECT_DIR equivalent), authentication.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/12-codex-mcp.md
+  Acceptance: protocol diff documented, recommendations for AIDA's Codex-MCP scaffolding.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:22:52.817068713Z
+modified_at: 2026-05-29T03:22:52.817068713Z
+req_type: Spike
+tags:
+- batch:research-claude-overlap-2026-05-29
+- codex
+- mcp
