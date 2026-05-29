@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:32:59.159476838Z
-modified_at: 2026-05-29T03:32:25.460010651Z
+modified_at: 2026-05-29T03:34:08.156684979Z
 req_type: Task
 tags:
 - aida:init
@@ -26,6 +26,17 @@ tags:
 - context-budget
 - from-research
 - scaffolding
+comments:
+- id: 019e71cb-e41c-7a41-96e6-a47ea849c91c
+  author: joe
+  content: |-
+    Advisor resolved the punted design-fork (STORY-306).
+
+    Decision: Proceed with the @-import plan as scoped, but DROP the README trim. Concretely: (1) Replace the body of `discipline_section()` in `aida-core/src/scaffolding/claude_md.rs` with a 3-line section (heading + 1-sentence pointer + `@docs/aida/discipline/README.md`). (2) Update the `generated_claude_md_has_discipline_section` test (line 78 of the same file) to assert on the @-import line, not the previously inlined bullet text. (3) Smoke-test via `aida init` in a throwaway dir and confirm the @-import line lands in the scaffolded CLAUDE.md (acceptance criterion 3). (4) Record the before/after measurement (source-bytes table from the analysis is sufficient; acceptance criterion 4 asks for it to be documented, not positive). Do NOT modify `aida-core/templates/docs/aida/discipline/README.md` in this PR. If the loaded-context savings later prove to matter, file it as a follow-up TASK (`README: trim narrative metadata to push loaded-context delta positive`) in the Followups section of the plan.
+
+    Reasoning: Type A — the acceptance criteria literally name `@docs/aida/discipline/README.md` (criterion 1) and 'when they exceed ~30 lines' (criterion 2, which the implementer's investigation correctly resolved to 'none' — the AIDA conventions block is already @-imported). The mechanical @-import + test update fully satisfies criteria 1-4. Recorded-B grounds dropping the README trim: the recorded preference in `feedback_refinements_must_be_acceptance_criteria.md` says refinements not in the acceptance list belong in a follow-up TASK, not bundled into the current spec. The README trim is the implementer's optional addition to push loaded-context-delta from 'roughly neutral' to 'positive'; criterion 4 asks for the measurement to be *documented*, not positive, so the trim is genuinely out of scope here. The acceptance contract is clean; ship that, file the rest.
+  created_at: 2026-05-29T03:34:08.156684979Z
+  modified_at: 2026-05-29T03:34:08.156684979Z
 attention_reason:
   category: design-fork
   detail: 'headless implementer exited without opening a PR after asking a plain-text decision question: Want me to proceed?'
