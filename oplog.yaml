@@ -10735,5 +10735,20 @@ operations:
   timestamp: 2026-05-29T06:45:26.274029301Z
   kind: !SetStatus
     status: Done
-clock: 1166
+- id: 019e727b-cfee-7ae1-a98f-c79e6eafb585
+  target_id: 019e720d-e348-77e3-8130-6aa30984aeec
+  author: aida
+  node_id: '1'
+  lamport: 1167
+  timestamp: 2026-05-29T06:46:17.326753780Z
+  kind: !SetDescription
+    description: |-
+      Largest open architectural surface from the 2026-05-29 strategic-recompose synthesis. **Positioning correction (2026-05-29 user)**: Claude Code's Dynamic Workflows are the DYNAMIC-GENERATION surface (decide fan-out at runtime per invocation). The DETERMINISTIC orchestration lane is the opposite — save a run's script as a command and rerun the FIXED script. AIDA's 'compile spec → emit workflow.js' thesis lives in the SAVED-SCRIPT lane, not the dynamic-generation lane.
+
+      Architecturally: AIDA's spec graph is the source; the compiler runs once per spec change and produces a workflow.js artifact; that artifact gets checked in alongside the spec; Claude Code's workflow runtime executes the checked-in script. Build-step → build-artifact → replay, same shape as Cargo.lock.
+
+      `aida workflow compile <SPEC>` emits a Claude Code meta.js workflow that imports children as phases, runs implementer→reviewer→merger as agent() calls, uses pipeline() for resumability. The workflow.js becomes a checked-in build artifact next to the spec — reruns deterministic because they hit the same saved script, not because the compile is regenerating something.
+
+      AIDA's orchestrator transitions from runtime to compile-target generator. Claude Code owns execution (16-concurrent, 1000-total, structured output, intra-session resume); AIDA owns substrate + lifecycle book-keeping + saved-script emission. Months-not-weeks. File now to keep the design space public; DO NOT START until SPIKE-30 + SPIKE-31 confirm the compose direction works (they have — both Completed). trace:SPIKE-14 trace:SPIKE-32
+clock: 1167
 node_id: '1'
