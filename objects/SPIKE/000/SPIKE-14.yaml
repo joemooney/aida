@@ -1,0 +1,23 @@
+id: 019e71c0-4c42-71f2-8117-b8606c167abc
+spec_id: SPIKE-14
+agreed_id: SPIKE-14
+title: Claude Code 2.1.154 dynamic workflows — mechanism + workflow definition format + AIDA composition path
+description: |-
+  Decompose 2.1.154's 'ask Claude to create a workflow and it orchestrates work across tens to hundreds of agents in the background' claim into substantive understanding. Read: code.claude.com/docs/en/changelog (2.1.154 entry), official workflow docs if exposed (code.claude.com/docs/en/workflows), 'claude /workflows --help' output (operator will paste post-upgrade).
+
+  Map to AIDA equivalent: aida queue work --batch X --auto-complete --no-human=both. Compare on axes: state persistence between phases, recovery from transient failures, agent dispatch primitive, completion-condition tracking.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/01-dynamic-workflows.md
+  Acceptance: source-quoted findings, AIDA equivalent named, compete/compose/ignore classification with rationale, concrete proposal (if compose: prototype shape; if compete: differentiator to harden; if ignore: why).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:21:28.386557757Z
+modified_at: 2026-05-29T03:21:28.386557757Z
+req_type: Spike
+tags:
+- batch:research-claude-overlap-2026-05-29
+- claude-code-2.1.154
+- competitive-analysis
+- dynamic-workflows
