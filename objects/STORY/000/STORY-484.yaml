@@ -1,0 +1,109 @@
+id: 019e71e0-7fe4-7871-b46d-ef5dd50c8028
+spec_id: STORY-484
+agreed_id: STORY-484
+title: 'Reshape aida init docs/ namespace: discipline pack → docs/aida/, keep docs/plans/ for project plans'
+description: |-
+  ## Why now
+
+  User confirmed 2026-05-23: 'there are no real users of aida at the moment, so now is the time to make the right choice.' The no-existing-users window means architectural cleanup can land without migration burden — but only until we have real users. Apply the right shape now.
+
+  ## The architectural insight
+
+  'aida init' currently scaffolds two doc directories that look similar but have different ownership:
+
+  - docs/aida-discipline/ — AIDA-owned content (master templates shipped from aida-core/templates/docs/aida-discipline/)
+  - docs/plans/ — PROJECT-owned content (user-authored plans; AIDA only provides the template + naming convention)
+
+  Conflating them under sibling subdirs is the design mistake. The discipline pack IS AIDA content (versioned with AIDA, refreshed via 'aida init --refresh'). Plans ARE project content (every plan is the user's design; AIDA just provides the convention slot).
+
+  ## Proposed shape
+
+
+
+  ## Why this and not 'move everything under .aida/'
+
+  Considered moving the discipline pack into .aida/discipline/ for purer namespacing. Rejected because:
+
+  1. .aida/* is deny-by-default gitignore — adding the discipline pack means more allow-list entries
+  2. Files in .aida/ signal 'runtime / system' by convention — the discipline pack is operating MANUAL for humans, intended to be read
+  3. Hidden directories aren't naturally browsed — discoverability hit for a doc set whose purpose is to be read
+
+  The user's contributors should land in docs/ and find the AIDA discipline pack there.
+
+  ## What changes
+
+  Master template paths (in aida-core/templates/):
+  - aida-core/templates/docs/aida-discipline/* → aida-core/templates/docs/aida/*
+
+  build.rs embedded paths:
+  - search for 'aida-discipline' embed strings, change to 'aida'
+
+  Scaffolding pipeline (aida-core/src/scaffolding/):
+  - mod.rs scaffold artifact paths: docs/aida-discipline/ → docs/aida/
+  - ensure_discipline_pack_scaffold function path constants
+
+  CLAUDE.md template:
+  - Any references to 'docs/aida-discipline/' → 'docs/aida/'
+  - The scaffolded CLAUDE.md's Discipline section path reference
+
+  Internal cross-references in the discipline pack itself:
+  - READMEs that link to sibling docs use relative paths — should be unaffected, but verify
+
+  Dogfood copy in this repo:
+  - mv docs/aida-discipline/ to docs/aida/
+  - update any references in repo docs (README, CLAUDE.md, OVERVIEW.md)
+  - update any aida-discipline references in skill templates
+
+  Tests:
+  - ensure_discipline_pack_scaffold tests asserting paths
+  - aida plan verify tests if any reference docs/aida-discipline/
+
+  ## Migration for this repo (the only AIDA project today)
+
+
+
+  ## Acceptance
+
+  - [ ] Master templates moved: aida-core/templates/docs/aida-discipline/ → aida-core/templates/docs/aida/
+  - [ ] build.rs embed paths updated
+  - [ ] Scaffolding pipeline emits docs/aida/ artifacts
+  - [ ] aida init scaffolds discipline pack to docs/aida/
+  - [ ] CLAUDE.md template references docs/aida/
+  - [ ] This repo migrated: docs/aida-discipline/ → docs/aida/ + all internal refs updated
+  - [ ] Tests updated to assert new paths
+  - [ ] No remaining references to 'aida-discipline' in code, templates, or scaffolded docs (excepting historical artifacts: dated SPIKE outputs, PROMPT_HISTORY, spec comments, commit messages — per feedback_dated_artifacts_immutable)
+  - [ ] aida init in a new project produces the new shape
+  - [ ] aida init --refresh in an existing project (if any) does the right thing — likely skip the migration in --refresh and require manual mv
+
+  ## Out of scope
+
+  - Migration helper for hypothetical existing user projects — there are none today
+  - Renaming 'discipline pack' as a concept (the term stays; only the directory path changes)
+  - Reorganizing files within the pack (the 9 guides keep their current names)
+
+  ## Composes with
+
+  - feedback_dated_artifacts_immutable — historical refs to docs/aida-discipline/ in commits / PROMPT_HISTORY / SPIKE outputs are immutable; do NOT rewrite them
+  - TASK-510 (just-filed onboarding TASK) — sibling init UX improvement
+  - STORY-441 (archive concept rethink) — broader 'right shape now since no users' theme
+
+  ## Origin
+
+  2026-05-23 user: 'docs seems like it is in the wrong place, maybe they should go under .aida and not conflict with any of the projects (user of aida) own docs. Thoughts?' Refined via design discussion: discipline pack is AIDA-owned content that should be namespaced; plans are PROJECT content that belong at the natural docs/plans/ slot. Option F (docs/aida/ + docs/plans/) is the architecturally clean answer given the no-existing-users window.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:56:38.756646757Z
+modified_at: 2026-05-29T03:56:38.756646757Z
+req_type: Story
+tags:
+- architecture
+- breaking-change
+- docs
+- from-self-test
+- from-user-direction
+- init
+- namespace
+- no-existing-users-window
+- scaffolding
