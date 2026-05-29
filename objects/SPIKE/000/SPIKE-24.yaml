@@ -1,0 +1,22 @@
+id: 019e71c1-7334-79f1-b516-58033b261c5c
+spec_id: SPIKE-24
+agreed_id: SPIKE-24
+title: Codex CLI — architecture overview + AGENTS.md bilingual scaffolding + native multi-agent surface
+description: |-
+  Decompose Codex CLI's current state (2026 timeframe). Read: openai.com/codex, github.com/openai/codex if public, official Codex docs. Cross-reference AIDA's existing bilingual scaffolding (aida-core/templates/docs/agents/codex-mcp-setup.md, codex-brief-pickup.md per TASK-485).
+
+  Map to AIDA: AIDA scaffolds AGENTS.md for Codex compatibility, files briefs at .aida/agent-briefs/codex/. Compare: Codex's task-state model, persistent context, MCP surface, multi-agent registry.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/11-codex-architecture.md
+  Acceptance: Codex's substrate model named, AIDA's Codex-integration gap analysis.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:22:43.892452044Z
+modified_at: 2026-05-29T03:22:43.892452044Z
+req_type: Spike
+tags:
+- architecture
+- batch:research-claude-overlap-2026-05-29
+- codex
