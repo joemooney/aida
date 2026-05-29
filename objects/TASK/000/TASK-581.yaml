@@ -1,0 +1,18 @@
+id: 019e7217-20ba-7863-8059-96e629a9413f
+spec_id: TASK-581
+agreed_id: TASK-581
+title: Codex .codex/skills/<name>/ helper-file parity for folder-form skills
+description: 'Follow-up to TASK-574. Folder-form skills (<name>/SKILL.md + templates/ + examples/) now scaffold their whole subfolder tree into .claude/skills/, but .codex/skills/ generation scaffolds a fixed list of flat skills (SKILL.md only) and does not copy helper files. Bring the Codex surface to parity: copy templates/ and examples/ helpers alongside SKILL.md. Touch point: aida-core/src/scaffolding/mod.rs codex_skill_defs loop.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T04:56:18.874433207Z
+modified_at: 2026-05-29T04:56:18.874433207Z
+req_type: Task
+tags:
+- from-self-test
+- helper-subfolders
+- parent:TASK-574
+- scaffolding
+- skills
