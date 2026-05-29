@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:32:59.159476838Z
-modified_at: 2026-05-29T03:45:04.748429929Z
+modified_at: 2026-05-29T03:45:25.436753403Z
 req_type: Task
 tags:
 - aida:init
@@ -46,6 +46,13 @@ comments:
   content: Commit 602c2f82 references this requirement
   created_at: 2026-05-29T03:43:16.552137293Z
   modified_at: 2026-05-29T03:43:16.552137293Z
+- id: 019e71d6-3c26-77e0-af3b-5094fc9eaf73
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-28-task-573-claude-md-at-import.md
+    filed 1 task(s): TASK-580
+  created_at: 2026-05-29T03:45:26.054264480Z
+  modified_at: 2026-05-29T03:45:26.054264480Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-29T03:45:04.748429929Z
