@@ -4265,6 +4265,16 @@ pub enum Command {
         // trace:STORY-244 | ai:claude
         #[clap(long, hide = true)]
         json: bool,
+
+        /// Group the listing by parent EPIC for visual clustering —
+        /// children indented under their EPIC, groups sorted by item
+        /// count desc, requirements with no EPIC parent under a final
+        /// "Unscoped" group. Mirrors `aida queue list --tree`. Composes
+        /// with the --status / --type / --priority / --tags / --parent
+        /// filters. Mutually exclusive with --json.
+        // trace:TASK-568 | ai:claude
+        #[clap(long, conflicts_with = "json")]
+        tree: bool,
     },
 
     /// Show details for a specific requirement
