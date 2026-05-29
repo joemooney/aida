@@ -3967,6 +3967,16 @@ pub enum AgentNewCommand {
         /// Optional human-readable instance name.
         #[clap(long)]
         name: Option<String>,
+
+        /// Dispatch to Claude Code's background supervisor via `claude
+        /// --bg`. The session detaches from this terminal and shows up
+        /// in `claude agents` (and `aida status`). When `--spec` is
+        /// also passed, AIDA records the captured sessionId on the
+        /// lease so the cross-substrate view links them automatically.
+        /// Without `--bg`, the foreground launch path is unchanged.
+        // trace:SPIKE-34 | ai:claude
+        #[clap(long = "bg")]
+        bg: bool,
     },
 
     /// Spawn Codex CLI with project-correct cwd/env and registry tracking.
