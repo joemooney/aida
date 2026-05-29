@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:45:58.485187062Z
-modified_at: 2026-05-29T05:14:52.791776734Z
+modified_at: 2026-05-29T05:14:55.282535572Z
 req_type: Spike
 tags:
 - claude-code-compose
 - from-strategic-recompose
 - priority:2
 - substrate-as-bouncer
+comments:
+- id: 019e7228-29b2-7b53-a637-750298445b75
+  author: joe
+  content: Commit a2b73214 references this requirement
+  created_at: 2026-05-29T05:14:55.282535572Z
+  modified_at: 2026-05-29T05:14:55.282535572Z
