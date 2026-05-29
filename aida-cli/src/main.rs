@@ -4788,6 +4788,172 @@ fn read_id_format_settings(
     (policy, scope)
 }
 
+fn extract_bughunter_severity(body: &str) -> Option<serde_json::Value> {
+    for marker in &[
+        "bughunter-severity:",
+        "\"bughunter-severity\":",
+        "'bughunter-severity':",
+    ] {
+        if let Some(idx) = body.find(marker) {
+            let rest = &body[idx + marker.len()..];
+            if let Some(start_brace) = rest.find('{') {
+                if let Some(end_brace) = rest[start_brace..].find('}') {
+                    let json_str = &rest[start_brace..=start_brace + end_brace];
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+                        return Some(val);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn file_reviewer_verdict_unavailable_finding(
+    project_root: &std::path::Path,
+    pr_number: u32,
+) -> anyhow::Result<()> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        anyhow::bail!("no distributed store found");
+    };
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    let title = format!("Reviewer verdict unavailable for PR {}", pr_number);
+    let note = format!(
+        "The delegated reviewer failed to provide a verdict. \
+         Check-run or bughunter-severity data was missing, malformed, or timed out."
+    );
+    let mut req = aida_core::Requirement::new(title, note);
+    req.req_type = aida_core::RequirementType::Task;
+    req.status = aida_core::RequirementStatus::Draft;
+    req.owner = get_default_author();
+
+    req.tags.insert(format!("from-review:PR-{}", pr_number));
+    req.tags
+        .insert("kind:ReviewerVerdictUnavailable".to_string());
+    req.tags.insert("severity:major".to_string());
+
+    let store = backend.update_atomically(|store| {
+        let type_prefix = store.get_type_prefix(&req.req_type);
+        store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
+    })?;
+    let written = store
+        .requirements
+        .last()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
+    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
+
+    let display_id = written.spec_id.as_deref().unwrap_or("?");
+    record_role_activity(display_id, "findings-add");
+    Ok(())
+}
+
+fn read_review_mode(project_root: &std::path::Path) -> String {
+    let path = project_root.join(".aida").join("config.toml");
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return "local".to_string();
+    };
+    parse_review_mode(&content)
+}
+
+fn parse_review_mode(content: &str) -> String {
+    let mut in_review = false;
+    for raw in content.lines() {
+        let line = match raw.split('#').next() {
+            Some(l) => l.trim(),
+            None => continue,
+        };
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_review = rest.trim_end_matches(']').trim() == "review";
+            continue;
+        }
+        if !in_review {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("mode") {
+            let val = match rest.split('=').nth(1) {
+                Some(v) => v.trim().trim_matches('"').trim_matches('\'').to_string(),
+                None => continue,
+            };
+            return val;
+        }
+    }
+    "local".to_string()
+}
+
+#[cfg(test)]
+mod delegated_reviewer_tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_review_mode() {
+        let content_local = r#"
+[review]
+mode = "local"
+"#;
+        assert_eq!(parse_review_mode(content_local), "local");
+
+        let content_delegated = r#"
+[review]
+mode = "delegated"
+"#;
+        assert_eq!(parse_review_mode(content_delegated), "delegated");
+
+        let content_default = r#"
+[behavior]
+permission_mode = "acceptEdits"
+"#;
+        assert_eq!(parse_review_mode(content_default), "local");
+
+        let content_comments = r#"
+# some comment
+[review] # another comment
+mode = "delegated" # inline comment
+"#;
+        assert_eq!(parse_review_mode(content_comments), "delegated");
+    }
+
+    #[test]
+    fn test_extract_bughunter_severity() {
+        let valid_json = r#"some text bughunter-severity: {"critical": 0, "normal": 2, "cosmetic": 1} trailing text"#;
+        let parsed = extract_bughunter_severity(valid_json).unwrap();
+        assert_eq!(parsed["critical"].as_i64().unwrap(), 0);
+        assert_eq!(parsed["normal"].as_i64().unwrap(), 2);
+        assert_eq!(parsed["cosmetic"].as_i64().unwrap(), 1);
+
+        let quoted_json =
+            r#"some text "bughunter-severity": {"critical": 1, "normal": 0} trailing"#;
+        let parsed_quoted = extract_bughunter_severity(quoted_json).unwrap();
+        assert_eq!(parsed_quoted["critical"].as_i64().unwrap(), 1);
+        assert_eq!(parsed_quoted["normal"].as_i64().unwrap(), 0);
+
+        let single_quoted_json =
+            r#"some text 'bughunter-severity': {'critical': 0, 'normal': 5} trailing"#;
+        // single quotes inside JSON are technically malformed but our helper searches for start brace and extracts valid JSON
+        // wait, 'bughunter-severity': {'critical': 0, 'normal': 5} is not valid JSON under standard serde_json unless keys are double quoted
+        assert!(extract_bughunter_severity(single_quoted_json).is_none());
+        // let's test a valid JSON with single quoted marker
+        let single_quoted_marker =
+            r#"some text 'bughunter-severity': {"critical": 0, "normal": 5} trailing"#;
+        let parsed_sq = extract_bughunter_severity(single_quoted_marker).unwrap();
+        assert_eq!(parsed_sq["critical"].as_i64().unwrap(), 0);
+        assert_eq!(parsed_sq["normal"].as_i64().unwrap(), 5);
+
+        let missing = r#"no severity tally here"#;
+        assert!(extract_bughunter_severity(missing).is_none());
+
+        let malformed = r#"bughunter-severity: {invalid_json}"#;
+        assert!(extract_bughunter_severity(malformed).is_none());
+    }
+}
+
 /// Read node_id from the store's node.toml; defaults to 1 for unregistered nodes.
 fn load_node_id(store_path: &std::path::Path) -> String {
     use aida_core::NodeConfig;
@@ -59152,6 +59318,12 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
             forge.as_deref(),
             write.as_deref(),
         ),
+        ReviewCommand::Assemble { output } => {
+            let project_root = find_project_root()?;
+            let out_path = rules_sync::assemble_review_md(&project_root, output.as_deref())?;
+            println!("✓ Assembled root REVIEW.md at {}", out_path.display());
+            Ok(())
+        }
     }
 }
 
@@ -71953,6 +72125,160 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     break;
                 }
             }
+        }
+
+        let mode = read_review_mode(&self.project_root);
+        if mode == "delegated" {
+            eprintln!(
+                "  {} Review mode set to 'delegated' — triggering remote review on PR {}",
+                "ⓘ".cyan(),
+                pr
+            );
+
+            let gh = resolve_gh_binary().ok_or_else(|| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::MissingTool,
+                    "`gh` is not on PATH — cannot trigger delegated review",
+                )
+            })?;
+
+            // 1. Trigger review via PR comment: gh pr comment <PR> --body "@claude review once"
+            let comment_status = std::process::Command::new(&gh)
+                .current_dir(&self.project_root)
+                .args([
+                    "pr",
+                    "comment",
+                    &pr.to_string(),
+                    "--body",
+                    "@claude review once",
+                ])
+                .status()
+                .map_err(|e| {
+                    auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::Spawn,
+                        format!("could not spawn `gh pr comment`: {e}"),
+                    )
+                })?;
+
+            if !comment_status.success() {
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "failed to comment on PR {pr} to trigger delegated review"
+                )));
+            }
+
+            // 2. Poll check-runs on the head SHA
+            let sha = current_branch_head_sha(&self.project_root).ok_or_else(|| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    "could not resolve head SHA of the current branch",
+                )
+            })?;
+
+            eprintln!(
+                "  {} Head SHA is {}; polling check-runs for severity tally...",
+                "ⓘ".cyan(),
+                sha
+            );
+
+            let start_poll = std::time::Instant::now();
+            let timeout = std::time::Duration::from_secs(600); // 10 minutes timeout
+            let interval = std::time::Duration::from_secs(10); // poll every 10 seconds
+            let mut severity_data: Option<serde_json::Value> = None;
+
+            while start_poll.elapsed() < timeout {
+                let cmd_output = std::process::Command::new(&gh)
+                    .current_dir(&self.project_root)
+                    .args([
+                        "api",
+                        &format!("repos/:owner/:repo/commits/{}/check-runs", sha),
+                    ])
+                    .output();
+
+                match cmd_output {
+                    Ok(output) if output.status.success() => {
+                        let body = String::from_utf8_lossy(&output.stdout);
+                        if let Some(parsed) = extract_bughunter_severity(&body) {
+                            severity_data = Some(parsed);
+                            break;
+                        }
+                    }
+                    Ok(output) => {
+                        let err_msg = String::from_utf8_lossy(&output.stderr);
+                        eprintln!(
+                            "    {} Poll error: gh api returned non-zero status: {}",
+                            "⚠".yellow(),
+                            err_msg.trim()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "    {} Poll error: could not execute gh api: {}",
+                            "⚠".yellow(),
+                            e
+                        );
+                    }
+                }
+
+                std::thread::sleep(interval);
+            }
+
+            // 3. Process outcomes / fail-safe
+            if let Some(data) = severity_data {
+                if let Some(obj) = data.as_object() {
+                    let normal = obj.get("normal").and_then(|n| n.as_i64()).unwrap_or(0);
+                    let critical = obj.get("critical").and_then(|c| c.as_i64()).unwrap_or(0);
+
+                    eprintln!(
+                        "  {} Tally resolved: normal={}, critical={}",
+                        "✓".green(),
+                        normal,
+                        critical
+                    );
+
+                    if normal > 0 || critical > 0 {
+                        eprintln!(
+                            "  {} Major/critical issues detected; requesting changes",
+                            "✗".red()
+                        );
+                        return Ok(auto_complete::ReviewerOutcome::Verdict(
+                            auto_complete::Verdict::RequestChanges,
+                        ));
+                    } else {
+                        eprintln!(
+                            "  {} No major/critical issues detected; approving",
+                            "✓".green()
+                        );
+                        return Ok(auto_complete::ReviewerOutcome::Verdict(
+                            auto_complete::Verdict::Approved,
+                        ));
+                    }
+                } else {
+                    eprintln!("  {} bughunter-severity data is malformed", "⚠".yellow());
+                }
+            } else {
+                eprintln!(
+                    "  {} bughunter-severity polling timed out or was missing",
+                    "⚠".yellow()
+                );
+            }
+
+            // Fail-safe trigger: file a finding & park in NeedsAttention
+            eprintln!(
+                "  {} Triggering fail-safe: filing ReviewerVerdictUnavailable finding...",
+                "ⓘ".cyan()
+            );
+            if let Err(e) = file_reviewer_verdict_unavailable_finding(&self.project_root, pr) {
+                eprintln!(
+                    "    {} could not file ReviewerVerdictUnavailable finding: {}",
+                    "⚠".yellow(),
+                    e
+                );
+            }
+
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoVerdict,
+                "delegated review failed: check-run or bughunter-severity was missing, malformed, or timed out",
+            ));
         }
 
         // Verdict handshake: the `/aida-review` skill writes the verdict

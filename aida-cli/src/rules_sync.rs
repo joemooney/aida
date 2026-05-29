@@ -192,6 +192,15 @@ pub struct TracedFile {
 /// Substrate-as-bouncer for the reviewer surface — same shape as
 /// SPIKE-31 for path-gated rules but targeting Code Review's reviewer
 /// pipeline rather than implementer file-loads. trace:SPIKE-35
+fn review_fragments_root(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("review")
+}
+
+/// SPIKE-35 v2: emit per-spec `REVIEW` fragments under `.aida/review/<SPEC-ID>.md`.
+/// Discovers active specs that carry trace comments, renders their fragment,
+/// and reconciles `.aida/review/` against the active set (writes new/changed,
+/// removes stale specs).
+/// trace:SPIKE-35 | ai:antigravity
 pub fn sync_review_md(
     project_root: &Path,
     backend: &aida_core::CachedGitBackend,
@@ -212,9 +221,7 @@ pub fn sync_review_md(
         }
     }
 
-    // Gather active spec IDs that have at least one trace hit, in stable
-    // sort order. Stability matters: REVIEW.md is committed, so a
-    // non-deterministic order would thrash git diffs across machines.
+    // Gather active specs with trace comments
     let mut active: Vec<(&str, &RequirementSummary, &Vec<TracedFile>)> = Vec::new();
     for (spec_id, files) in trace_graph {
         let Some(summary) = by_id.get(spec_id.as_str()) else {
@@ -230,33 +237,183 @@ pub fn sync_review_md(
     }
     active.sort_by_key(|(id, _, _)| id.to_string());
 
-    let body = render_review_md(&active, backend);
-    let path = project_root.join("REVIEW.md");
-    let unchanged = std::fs::read_to_string(&path).is_ok_and(|s| s == body);
-    let mut report = ReviewMdReport {
-        path: path.clone(),
-        written: false,
-        unchanged,
+    let dir = review_fragments_root(project_root);
+    if !dry_run && !active.is_empty() {
+        std::fs::create_dir_all(&dir)
+            .with_context(|| format!("create review fragments dir {}", dir.display()))?;
+    }
+
+    // Discover existing fragment files on disk
+    let existing: HashMap<String, PathBuf> = if dir.is_dir() {
+        std::fs::read_dir(&dir)
+            .ok()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path();
+                let stem = path.file_stem()?.to_str()?.to_string();
+                if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                    Some((stem, path))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    } else {
+        HashMap::new()
+    };
+
+    let mut written_count = 0;
+    let mut unchanged_count = 0;
+    let mut desired_keys = HashSet::new();
+
+    for (spec_id, summary, files) in &active {
+        desired_keys.insert(spec_id.to_string());
+        let body = render_spec_fragment(spec_id, summary, backend, files);
+        let path = dir.join(format!("{}.md", spec_id));
+        let is_unchanged = std::fs::read_to_string(&path).is_ok_and(|s| s == body);
+
+        if is_unchanged {
+            unchanged_count += 1;
+        } else {
+            if !dry_run {
+                std::fs::write(&path, &body)
+                    .with_context(|| format!("write review fragment {}", path.display()))?;
+            }
+            written_count += 1;
+        }
+    }
+
+    // Remove stale fragments
+    let mut removed_any = false;
+    for (spec_id, path) in &existing {
+        if desired_keys.contains(spec_id) {
+            continue;
+        }
+        if !dry_run {
+            let _ = std::fs::remove_file(path);
+        }
+        removed_any = true;
+    }
+
+    let report = ReviewMdReport {
+        path: dir,
+        written: written_count > 0 || removed_any,
+        unchanged: written_count == 0 && !removed_any && unchanged_count > 0,
         specs_included: active.iter().map(|(id, _, _)| id.to_string()).collect(),
     };
-    if unchanged {
-        return Ok(report);
-    }
-    if !dry_run {
-        std::fs::write(&path, &body)
-            .with_context(|| format!("write REVIEW.md at {}", path.display()))?;
-    }
-    report.written = true;
+
     Ok(report)
 }
 
-fn render_review_md(
-    active: &[(&str, &RequirementSummary, &Vec<TracedFile>)],
+fn render_spec_fragment(
+    spec_id: &str,
+    summary: &RequirementSummary,
     backend: &aida_core::CachedGitBackend,
+    files: &[TracedFile],
 ) -> String {
     let mut out = String::new();
+    out.push_str(&format!("### {}: {}\n\n", spec_id, summary.title));
+    out.push_str(&format!("**Status**: {}\n\n", summary.status));
+    let full = backend
+        .get_requirement_by_spec_id(spec_id)
+        .ok()
+        .flatten()
+        .or_else(|| {
+            summary
+                .spec_id
+                .as_deref()
+                .and_then(|id| backend.get_requirement_by_spec_id(id).ok().flatten())
+        });
+    let description = full
+        .as_ref()
+        .map(|r| r.description.as_str())
+        .unwrap_or(summary.description.as_str())
+        .trim();
+    // Prefer the Acceptance section when present; fall back to
+    // the full description.
+    if let Some(section) = description.lines().map(|l| l.trim_start()).position(|t| {
+        (t.starts_with("## ") && t[3..].trim_start().starts_with("Acceptance"))
+            || (t.starts_with("### ") && t[4..].trim_start().starts_with("Acceptance"))
+    }) {
+        let mut accept = String::new();
+        for line in description.lines().skip(section + 1) {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("## ") || trimmed.starts_with("### ") {
+                break;
+            }
+            accept.push_str(line);
+            accept.push('\n');
+        }
+        let trimmed = accept.trim();
+        if !trimmed.is_empty() {
+            out.push_str("**Acceptance criteria:**\n\n");
+            out.push_str(trimmed);
+            out.push_str("\n\n");
+        }
+    } else if !description.is_empty() {
+        // No explicit Acceptance section — surface the spec
+        // description as the criteria proxy so reviewers see
+        // the spec's expectations. Truncate at first heading
+        // to keep REVIEW.md compact.
+        let body: String = description
+            .lines()
+            .take_while(|l| !l.trim_start().starts_with("## "))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let trimmed = body.trim();
+        if !trimmed.is_empty() {
+            out.push_str("**Spec description (no explicit Acceptance section):**\n\n");
+            out.push_str(trimmed);
+            out.push_str("\n\n");
+        }
+    }
+
+    // Surface the paths the spec touches so the reviewer knows
+    // which files to scrutinize against the criteria.
+    let mut paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    paths.sort();
+    paths.dedup();
+    if !paths.is_empty() {
+        out.push_str("**Files in scope:**\n\n");
+        for p in &paths {
+            out.push_str(&format!("- `{}`\n", p));
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// SPIKE-35: Assemble all active fragments under `.aida/review/` into a root `REVIEW.md`
+/// and save it to `output_path` (defaulting to `<project_root>/REVIEW.md`).
+/// trace:SPIKE-35 | ai:antigravity
+pub fn assemble_review_md(project_root: &Path, output_path: Option<&Path>) -> Result<PathBuf> {
+    let dir = review_fragments_root(project_root);
+    let mut fragments: Vec<(String, String)> = Vec::new();
+    if dir.is_dir() {
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                let spec_id = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                let body = std::fs::read_to_string(&path)?;
+                fragments.push((spec_id, body));
+            }
+        }
+    }
+    // Stable spec ordering by SPEC-ID so concurrent assembles don't produce different bytes.
+    fragments.sort_by_key(|(spec_id, _)| spec_id.clone());
+
+    let mut out = String::new();
     out.push_str("# Review instructions\n\n");
-    out.push_str("<!-- This file is auto-generated by `aida rules sync --review-md` from the AIDA spec graph. -->\n");
+    out.push_str(
+        "<!-- This file is auto-generated by `aida review assemble` from per-spec fragments. -->\n",
+    );
     out.push_str(
         "<!-- Edit specs (acceptance criteria), not this file. trace:SPIKE-35 | ai:claude -->\n\n",
     );
@@ -282,82 +439,18 @@ fn render_review_md(
         "- Files traced to a spec NOT listed below are out-of-scope churn — flag as 🔴 Important.\n\n",
     );
 
-    if active.is_empty() {
+    if fragments.is_empty() {
         out.push_str("## Active specs\n\n");
         out.push_str("_No active specs (In Progress or Done) have trace comments in the codebase right now. \
                       Review the diff against general project conventions in `CLAUDE.md`._\n\n");
     } else {
         out.push_str(&format!(
             "## Active specs in scope for this PR ({})\n\n",
-            active.len()
+            fragments.len()
         ));
-        for (spec_id, summary, files) in active {
-            out.push_str(&format!("### {}: {}\n\n", spec_id, summary.title));
-            out.push_str(&format!("**Status**: {}\n\n", summary.status));
-            let full = backend
-                .get_requirement_by_spec_id(spec_id)
-                .ok()
-                .flatten()
-                .or_else(|| {
-                    summary
-                        .spec_id
-                        .as_deref()
-                        .and_then(|id| backend.get_requirement_by_spec_id(id).ok().flatten())
-                });
-            let description = full
-                .as_ref()
-                .map(|r| r.description.as_str())
-                .unwrap_or(summary.description.as_str())
-                .trim();
-            // Prefer the Acceptance section when present; fall back to
-            // the full description.
-            if let Some(section) = description.lines().map(|l| l.trim_start()).position(|t| {
-                (t.starts_with("## ") && t[3..].trim_start().starts_with("Acceptance"))
-                    || (t.starts_with("### ") && t[4..].trim_start().starts_with("Acceptance"))
-            }) {
-                let mut accept = String::new();
-                for line in description.lines().skip(section + 1) {
-                    let trimmed = line.trim_start();
-                    if trimmed.starts_with("## ") || trimmed.starts_with("### ") {
-                        break;
-                    }
-                    accept.push_str(line);
-                    accept.push('\n');
-                }
-                let trimmed = accept.trim();
-                if !trimmed.is_empty() {
-                    out.push_str("**Acceptance criteria:**\n\n");
-                    out.push_str(trimmed);
-                    out.push_str("\n\n");
-                }
-            } else if !description.is_empty() {
-                // No explicit Acceptance section — surface the spec
-                // description as the criteria proxy so reviewers see
-                // the spec's expectations. Truncate at first heading
-                // to keep REVIEW.md compact.
-                let body: String = description
-                    .lines()
-                    .take_while(|l| !l.trim_start().starts_with("## "))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let trimmed = body.trim();
-                if !trimmed.is_empty() {
-                    out.push_str("**Spec description (no explicit Acceptance section):**\n\n");
-                    out.push_str(trimmed);
-                    out.push_str("\n\n");
-                }
-            }
-
-            // Surface the paths the spec touches so the reviewer knows
-            // which files to scrutinize against the criteria.
-            let mut paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
-            paths.sort();
-            paths.dedup();
-            if !paths.is_empty() {
-                out.push_str("**Files in scope:**\n\n");
-                for p in &paths {
-                    out.push_str(&format!("- `{}`\n", p));
-                }
+        for (_, body) in &fragments {
+            out.push_str(body);
+            if !body.ends_with("\n\n") {
                 out.push('\n');
             }
         }
@@ -377,7 +470,15 @@ fn render_review_md(
         "Open the review with a one-line tally — e.g. `2 Important, 4 Nit, 0 Pre-existing` — \
          and if no Important findings exist, lead with `No blocking issues against active spec criteria.`\n",
     );
-    out
+
+    let output = output_path
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| project_root.join("REVIEW.md"));
+
+    std::fs::write(&output, &out)
+        .with_context(|| format!("write REVIEW.md at {}", output.display()))?;
+
+    Ok(output)
 }
 
 fn render_rule(
@@ -563,5 +664,26 @@ mod tests {
         assert!(r.contains("**Status**: In Progress"));
         assert!(r.contains("handle_x, handle_y"));
         assert!(r.contains("trace:SPIKE-31"));
+    }
+
+    #[test]
+    fn test_assemble_review_md_stability() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let project_root = tempdir.path();
+        let review_dir = project_root.join(".aida").join("review");
+        std::fs::create_dir_all(&review_dir).unwrap();
+
+        std::fs::write(review_dir.join("STORY-1.md"), "### STORY-1\n").unwrap();
+        std::fs::write(review_dir.join("TASK-2.md"), "### TASK-2\n").unwrap();
+
+        let output = assemble_review_md(project_root, None).unwrap();
+        assert!(output.exists());
+        let content = std::fs::read_to_string(output).unwrap();
+        assert!(content.contains("STORY-1"));
+        assert!(content.contains("TASK-2"));
+        // Stable sort order: STORY-1 then TASK-2
+        let story_pos = content.find("STORY-1").unwrap();
+        let task_pos = content.find("TASK-2").unwrap();
+        assert!(story_pos < task_pos);
     }
 }

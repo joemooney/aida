@@ -8,6 +8,7 @@ Drive a PR review to completion — checklist, verdicts, fix-forward, merge, mar
 /aida-review              From inside a reviewer session whose scope is PR-N, auto-detect
 /aida-review --pr 7       Explicit PR number
 /aida-review --merge-only Skip the per-spec walk, just gate on CI and merge if green
+/aida-review --delegated  Opt-in to delegated review via @claude review once trigger
 ```
 
 ## Instructions
