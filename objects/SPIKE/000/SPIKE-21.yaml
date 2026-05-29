@@ -1,0 +1,22 @@
+id: 019e71c1-17ca-73a2-ac82-27e0dcc09d0a
+spec_id: SPIKE-21
+agreed_id: SPIKE-21
+title: Claude Code /goal + completion tracking — overlay panel, composition with workflows + auto mode
+description: |-
+  Decompose 2.1.141 (/goal command, overlay), 2.1.140 (/goal hanging fix, disableAllHooks compat), 2.1.154 (workflows). Read: code.claude.com/docs/en/goal.
+
+  Map to AIDA: 'aida goal' (TASK-242). Compare: completion-condition expressiveness, integration with workflows, integration with /loop and /schedule.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/08-goal-completion-tracking.md
+  Acceptance: 'aida goal' vs '/goal' feature parity table, recommended changes if /goal exceeds.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:22:20.490198910Z
+modified_at: 2026-05-29T03:22:20.490198910Z
+req_type: Spike
+tags:
+- batch:research-claude-overlap-2026-05-29
+- claude-code-2.1.154
+- goal-tracking
