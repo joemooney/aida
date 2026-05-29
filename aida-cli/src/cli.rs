@@ -367,6 +367,14 @@ pub enum ReviewCommand {
         #[clap(long, value_name = "PATH")]
         write: Option<String>,
     },
+
+    /// Assemble active review fragments into a root REVIEW.md file.
+    // trace:SPIKE-35 | ai:antigravity
+    Assemble {
+        /// Output path for the assembled REVIEW.md file (default: REVIEW.md in project root).
+        #[clap(long, short = 'o', value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
 }
 
 // trace:FR-1-043 | ai:claude
