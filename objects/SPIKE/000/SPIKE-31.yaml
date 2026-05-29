@@ -3,12 +3,12 @@ spec_id: SPIKE-31
 agreed_id: SPIKE-31
 title: Emit path-gated `.claude/rules/` from the spec graph (substrate-as-bouncer)
 description: 'Compose move from the 2026-05-29 strategic-recompose synthesis. Generate `.claude/rules/spec-SPEC-ID.md` files with `paths:` glob frontmatter matching the spec''s `// trace:` comment locations. Each rule carries spec description + acceptance criteria + reviewer notes. Claude Code''s runtime loads these on-demand when working on a matching file. Makes the spec graph self-enforcing during implementer work — substrate-as-bouncer in nightclub form (advisor recommendation, not policy). Auto-regenerate when spec changes. Reference: /large-codebases doc section ''Choose between per-directory CLAUDE.md and path-scoped rules''. trace:SPIKE-14'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:45:58.485187062Z
-modified_at: 2026-05-29T05:14:55.282535572Z
+modified_at: 2026-05-29T05:16:17.354710655Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -21,3 +21,7 @@ comments:
   content: Commit a2b73214 references this requirement
   created_at: 2026-05-29T05:14:55.282535572Z
   modified_at: 2026-05-29T05:14:55.282535572Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-29T05:16:17.354710655Z
+  completion_sha: a2b73214e97f40c2ff5703b87e979b4ad603990f
