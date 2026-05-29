@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:14.687379035Z
-modified_at: 2026-05-29T05:16:06.824693756Z
+modified_at: 2026-05-29T23:04:33.323972258Z
 req_type: Task
 tags:
 - aida:init
@@ -34,6 +34,20 @@ comments:
   content: 'Implemented in PR #343 (https://github.com/joemooney/aida/pull/343). Folder-form skills: build.rs recurses to preserve subfolder structure in embedded keys; classify_skill_key() centralizes the embedded-key→(name,rel_path,is_prompt) mapping used by the scaffolding catch-all loop and the skill↔command parity test; aida-pr migrated to aida-pr/SKILL.md + examples/pr-description-template.md as the proof. Discipline pack documents the pattern. 1192 aida-core lib tests green, fmt clean, check-templates OK. Follow-ups: TASK-581, TASK-582.'
   created_at: 2026-05-29T05:12:17.915280790Z
   modified_at: 2026-05-29T05:12:17.915280790Z
+- id: 019e75fb-712b-7af3-b0e2-b1b5c9d570b9
+  author: joe
+  content: |-
+    TRIAGE (2026-05-29, slop-audit follow-through). Held for an IMPLEMENTER session — not a clean master-merge. Findings:
+
+    1. CI red (PR-350, run 26619373730) is TWO issues, neither a simple code bug:
+       - BUG-103: "cargo did not resolve to the real cargo binary (stale rustup-init cache)" — flaky CI infra, often clears on re-run.
+       - `error: untracked working tree files would be overwritten by merge` — the file→directory transition that IS this feature: .claude/skills/aida-pr.md → .claude/skills/aida-pr/ (folder-form). The checkout collides because the old .md and the new dir coexist. The branch likely needs `git rm` of the old single-file skill where it converts to folder form, and build.rs/embed handling for the SKILL.md-in-subdir layout.
+
+    2. Stale + conflicting: 23 commits behind main; touches scaffolding/mod.rs, templates.rs, build.rs, Makefile — the same files just refactored by TASK-584 (aida-recover removal) and TASK-481 (techdebt scaffold). A rebase WILL conflict in scaffolding/mod.rs + templates.rs, and resolving requires authoring-level understanding of the folder-form-skills logic (not mine to resolve blind).
+
+    Route: implementer session — `aida queue work TASK-574 --branch task-574 --steal` → rebase onto main, resolve scaffolding/mod.rs + templates.rs + build.rs conflicts, fix the aida-pr.md→aida-pr/ file/dir transition (git rm old form), green CI, then ship. Left NeedsAttention (correctly shelved) pending that.
+  created_at: 2026-05-29T23:04:33.323972258Z
+  modified_at: 2026-05-29T23:04:33.323972258Z
 failure_reason:
   phase: ci
   phase_index: 2
