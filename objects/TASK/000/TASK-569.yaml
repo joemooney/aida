@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:51:40.802903364Z
-modified_at: 2026-05-29T03:24:12.248149392Z
+modified_at: 2026-05-29T07:53:53.132463183Z
 req_type: Task
 tags:
 - aida:list
@@ -21,6 +21,12 @@ tags:
 - from-user-direction
 - tag-visibility
 - ux-papercut
+comments:
+- id: 019e72b9-b2ec-7c00-b21b-3c0534a1a14f
+  author: joe
+  content: 'DRAIN SKIP (2026-05-29 overnight): rebase onto main conflicts in aida-cli/src/cli.rs + main.rs against TASK-568 (aida list --tree, merged PR-351). Both add an ''aida list'' flag + render-loop branch in the same regions. Mechanically resolvable (keep both flags, interleave both render additions) but requires authoring-level understanding of the list-render logic to merge without silently breaking --tree or --show-tags. Held for keyboard-time rebase-resolve rather than unsupervised overnight conflict resolution in foreign code. Branch task-569 / PR-345 unchanged (rebase aborted clean).'
+  created_at: 2026-05-29T07:53:53.132463183Z
+  modified_at: 2026-05-29T07:53:53.132463183Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-29T03:19:53.059494183Z
