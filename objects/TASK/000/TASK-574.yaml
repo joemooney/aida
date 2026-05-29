@@ -14,12 +14,12 @@ description: |-
     • Discipline pack documents the helper-folder pattern
 
   Source: docs/competitive-analysis/2026-05-26-... (Tier 2 actionable, richer per-skill scaffolding).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:14.687379035Z
-modified_at: 2026-05-29T05:12:17.915280790Z
+modified_at: 2026-05-29T05:16:06.824693756Z
 req_type: Task
 tags:
 - aida:init
@@ -34,3 +34,10 @@ comments:
   content: 'Implemented in PR #343 (https://github.com/joemooney/aida/pull/343). Folder-form skills: build.rs recurses to preserve subfolder structure in embedded keys; classify_skill_key() centralizes the embedded-key→(name,rel_path,is_prompt) mapping used by the scaffolding catch-all loop and the skill↔command parity test; aida-pr migrated to aida-pr/SKILL.md + examples/pr-description-template.md as the proof. Discipline pack documents the pattern. 1192 aida-core lib tests green, fmt clean, check-templates OK. Follow-ups: TASK-581, TASK-582.'
   created_at: 2026-05-29T05:12:17.915280790Z
   modified_at: 2026-05-29T05:12:17.915280790Z
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-350: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 26619373730 — view it: `gh run view 26619373730`. Push fixups to the same branch: `aida queue work TASK-574 --branch task-574 --steal`'
+  shelved_at: 2026-05-29T05:16:06.824693756Z
