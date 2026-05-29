@@ -138,7 +138,7 @@ with destructive or hard-to-reverse shapes:
 | **ship** | Commits land, PRs open, releases tag — public state mutation Claude shouldn't trigger on a stray "let's ship this" | `/aida-commit`, `/aida-pr`, `/aida-release`, `/aida-review` |
 | **drain** | Multi-spec autonomous workloads kick off — Claude shouldn't trigger an unattended run from "what should I work on?" | `/aida-drain-queue`, `/aida-pickup`, `/aida-implement` |
 | **force-push / rewrite** | Branch history mutates non-reversibly | `/aida-rebase` |
-| **delete / heal** | Stale leases, orphan briefs, sessions are removed — operator-initiated state may look "stale" to an over-eager auto-trigger | `/aida-doctor`, `/aida-recover`, `/aida-sync` |
+| **delete / heal** | Stale leases, orphan briefs, sessions are removed — operator-initiated state may look "stale" to an over-eager auto-trigger | `/aida-doctor`, `/aida-sync` |
 | **state-mutation** | Spec lifecycle parks (NeedsAttention), substrate writes (memory, CLAUDE.md), advisor binding decisions | `/aida-punt`, `/aida-learn`, `/aida-advise` |
 
 ### Categories that should stay auto-invocable
