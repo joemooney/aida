@@ -1,0 +1,55 @@
+id: 019e7205-91e7-7903-838b-8a4714fcb076
+spec_id: SPIKE-29
+agreed_id: SPIKE-29
+title: Claude Code agent teams (EXPERIMENTAL) — a third orchestration surface beyond subagents + workflows
+description: |-
+  Discovered 2026-05-29: in addition to subagents (within-session workers) and dynamic workflows (JavaScript scripts orchestrating subagents), Claude Code 2.1.32+ ships agent teams — MULTIPLE INDEPENDENT CLAUDE CODE SESSIONS coordinating via shared task list + direct teammate messaging. Currently behind CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1.
+
+  Crucial finding: agent teams' substrate looks remarkably like AIDA's queue + lease + brief model:
+    - Shared task list with file-based claiming (race-free via file locks)
+    - Teammate-to-teammate messaging via mailbox
+    - Lead session coordinates + spawns teammates
+    - Task dependencies (blocking + auto-unblock)
+    - Tasks have states: pending / in-progress / completed
+    - Storage: ~/.claude/teams/{team-name}/config.json + ~/.claude/tasks/{team-name}/
+    - Subagent definitions can be used as teammate role templates
+    - Hooks: TeammateIdle / TaskCreated / TaskCompleted (exit 2 = block + feedback)
+
+  Known limitations Anthropic documented:
+    - Experimental, behind env-var flag
+    - /resume doesn't restore in-process teammates (cross-session persistence missing)
+    - Task status can lag
+    - Slow shutdown
+    - One team at a time
+    - No nested teams
+    - Lead is fixed (no leadership transfer)
+    - Permissions set at spawn (no per-teammate spawn-time modes)
+
+  These are EXACTLY the substrate problems AIDA has worked through and solved (lease management, status reconciliation, cross-session persistence via git-canonical store, recovery semantics).
+
+  Strategic implication: agent teams is what AIDA's queue + leases + briefs ARE, but Anthropic is building it within Claude Code's process model. AIDA's git-canonical substrate is strictly more capable for cross-session, multi-machine, multi-agent scenarios. But the IN-SESSION teammate dispatch is now native.
+
+  Source: https://code.claude.com/docs/en/agent-teams
+
+  Acceptance:
+    • Detailed comparison of agent teams' substrate vs AIDA's queue+lease+brief substrate (capability matrix)
+    • Identify integration paths: can AIDA's substrate be the source-of-truth that an agent-teams config loads? Can AIDA subagent definitions land in .claude/agents/ as teammate role templates?
+    • Identify divestment paths: should AIDA stop building cross-tool multi-agent coordination if Claude Code is shipping a version natively?
+    • Document the gaps Claude Code's agent teams have that AIDA closes (cross-session persistence, multi-machine, multi-tool dispatch beyond Claude Code itself)
+    • Compose / compete / ignore verdict with rationale
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/15a-agent-teams.md (numbered 15a to slot before existing SPIKE-15 agent view)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T04:37:08.199602449Z
+modified_at: 2026-05-29T04:37:08.199602449Z
+req_type: Spike
+tags:
+- agent-teams
+- batch:research-claude-overlap-2026-05-29
+- claude-code-2.1.154
+- competitive-analysis
+- experimental
+- multi-agent
