@@ -1,5 +1,6 @@
 id: 019e71dd-6882-7772-b2a5-0c1af3fe03fc
 spec_id: TASK-1-112
+agreed_id: TASK-137
 title: Phase 3 reviewer anchors on the original implementer SPEC-ID instead of the PR …
 description: |-
   Phase 3 reviewer anchors on the original implementer SPEC-ID instead of the PR or auto-filed reviewer story. Empirical 2026-05-28 drain of batch:scaffolding-2026-05-28: TASK-573 shipped at phase 1, PR-346 opened, STORY-483 auto-filed as the reviewer story. Phase 3 then ran 'aida queue work TASK-573' which failed with 'TASK-573 isn't queued — status is Done.' The orchestrator's own workflow-hint at end of phase 2 said the right thing: 'PR #346 next: aida queue work PR-346'. But phase 3 didn't take its own advice.
