@@ -1,0 +1,18 @@
+id: 019e7217-33cc-76c3-ab3a-12146474808c
+spec_id: TASK-582
+agreed_id: TASK-582
+title: Migrate more flat skills to folder-form where a template/example helps
+description: 'Follow-up to TASK-574, which landed folder-form skills and migrated aida-pr as the proof (ships examples/pr-description-template.md). Sweep the skill catalog for prompts that inline a template/example a user copies (e.g. aida-plan could ship templates/plan-skeleton.md) and move those to <name>/SKILL.md + helper. No pipeline changes needed — classify_skill_key + the catch-all loop handle folder-form by name. Note: the catch-all loop currently only scaffolds .md helpers; non-.md helper scripts would need create_artifact to skip the AIDA markdown header.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T04:56:23.756002357Z
+modified_at: 2026-05-29T04:56:23.756002357Z
+req_type: Task
+tags:
+- from-self-test
+- helper-subfolders
+- parent:TASK-574
+- scaffolding
+- skills
