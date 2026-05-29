@@ -335,7 +335,7 @@ mod tests {
         // Keep this list short and re-evaluate any addition. (Today the
         // master templates have full parity, so the allowlist is empty.)
         let command_only: HashSet<&str> = HashSet::new();
-        let skill_only: HashSet<&str> = ["aida-pickup", "aida-recover"].iter().copied().collect();
+        let skill_only: HashSet<&str> = ["aida-pickup"].iter().copied().collect();
 
         let skills: HashSet<String> = EMBEDDED_TEMPLATES
             .keys()

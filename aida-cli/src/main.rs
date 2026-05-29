@@ -4259,7 +4259,6 @@ fn complete_init_scaffolding(
         config.include_aida_capture_skill = false;
         config.include_aida_docs_skill = false;
         config.include_aida_release_skill = false;
-        config.include_aida_recover_skill = false;
         config.include_aida_evaluate_skill = false;
         config.include_aida_commit_skill = false;
         config.include_aida_sync_skill = false;

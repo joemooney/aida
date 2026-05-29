@@ -470,8 +470,6 @@ pub struct ScaffoldConfig {
     pub include_aida_docs_review_skill: bool,
     /// Include aida-release skill for release management
     pub include_aida_release_skill: bool,
-    /// Include aida-recover skill for advisor diagnostic playbook
-    pub include_aida_recover_skill: bool,
     /// Include aida-evaluate skill for requirement quality evaluation
     pub include_aida_evaluate_skill: bool,
     /// Include aida-commit skill for commit with requirement linking
@@ -547,7 +545,6 @@ impl Default for ScaffoldConfig {
             include_aida_docs_skill: true,
             include_aida_docs_review_skill: true,
             include_aida_release_skill: true,
-            include_aida_recover_skill: true,
             include_aida_evaluate_skill: true,
             include_aida_commit_skill: true,
             include_aida_sync_skill: true,
@@ -1170,30 +1167,6 @@ impl Scaffolder {
                 artifacts.push(artifact);
             }
 
-            // Add aida-recover skill
-            if self.config.include_aida_recover_skill {
-                let path = PathBuf::from(".claude/skills/aida-recover.md");
-                let artifact = self.create_artifact(
-                    path.clone(),
-                    self.generate_aida_recover_skill(),
-                    "Skill for session, orchestrator, and runtime state recovery".to_string(),
-                    false,
-                );
-
-                match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
-                        modified_files.push(artifact.path.clone())
-                    }
-                    FileStatus::OlderVersion { .. } => {
-                        upgradeable_files.push(artifact.path.clone())
-                    }
-                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
-                }
-
-                artifacts.push(artifact);
-            }
-
             // Add aida-evaluate skill
             if self.config.include_aida_evaluate_skill {
                 let path = PathBuf::from(".claude/skills/aida-evaluate.md");
@@ -1571,7 +1544,6 @@ impl Scaffolder {
                     self.config.include_aida_docs_review_skill,
                 ),
                 ("aida-release", self.config.include_aida_release_skill),
-                ("aida-recover", self.config.include_aida_recover_skill),
                 ("aida-evaluate", self.config.include_aida_evaluate_skill),
                 ("aida-commit", self.config.include_aida_commit_skill),
                 ("aida-sync", self.config.include_aida_sync_skill),
@@ -2249,15 +2221,6 @@ impl Scaffolder {
             .unwrap_or_else(|| {
                 "# AIDA Release Management Skill\n\n(template not found)".to_string()
             })
-    }
-
-    /// Generate aida-recover skill content (loads from embedded template)
-    fn generate_aida_recover_skill(&self) -> String {
-        use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES
-            .get("skills/aida-recover.md")
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "# AIDA Recovery Skill\n\n(template not found)".to_string())
     }
 
     /// Generate aida-evaluate skill content (loads from embedded template)
