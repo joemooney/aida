@@ -1,0 +1,31 @@
+id: 019e72a3-eeb6-7e03-a934-c02fe0e0af95
+spec_id: TASK-1-113
+title: 'aida db reconcile-status: dry-run and apply DIVERGE for specs whose agreed_id ≠…'
+description: |-
+  aida db reconcile-status: dry-run and apply DIVERGE for specs whose agreed_id ≠ spec_id (node-aware origin ID).
+
+  Empirical 2026-05-29: shipped PR-343 for TASK-131 (spec_id TASK-1-106, agreed_id TASK-131). Squash commit subject `...(TASK-131) (#343)` landed on main. The post-merge auto-bump did NOT flip Done→Completed. Recovery `aida db reconcile-status --spec TASK-131` printed NOTHING and flipped nothing. `--since v0.10.0 --dry-run` correctly reported "would flip TASK-131 (commit 403612f)", but the real (non-dry-run) apply silently no-op'd — exit 0, zero output, YAML stayed status: Done. Cache was FRESH, lease released, worktree removed — no lingering guards. SPIKE-33/SPIKE-34 (whose spec_id == agreed_id) flipped fine in the same reconcile run.
+
+  Root-cause hypothesis: the dry-run scanner matches the commit's `(TASK-131)` token against the agreed_id and reports flippable; the apply path looks up / writes the spec by a different ID (spec_id TASK-1-106) and the match fails or the write is keyed wrong, so nothing persists. The divergence means EVERY node-aware-origin-ID spec silently fails auto-bump + reconcile after merge and needs a manual `aida edit <id> --status completed`.
+
+  Blast radius: high for multi-node / merge-gate projects where agreed_id ≠ spec_id is the norm. In this batch, TASK-126 (TASK-1-099) shares the trait and will hit the same miss.
+
+  Workaround used: manual `aida edit TASK-131 --status completed`.
+
+  Fix direction: the apply path must resolve + match the SAME ID space as the dry-run (agreed_id-aware), and reconcile-status apply should never silently no-op when its own dry-run reports flippable rows — at minimum emit "matched N, flipped M, M<N because ..." so a silent divergence is impossible.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-29T07:30:06.646327865Z
+modified_at: 2026-05-29T07:30:06.646327865Z
+req_type: Task
+tags:
+- aida:db:reconcile-status
+- auto-bump
+- from-advisor:TASK-131
+- from-self-test
+- kind:observation
+- linked:TASK-131
+- papercut
+- severity:major
