@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:51:40.802903364Z
-modified_at: 2026-05-29T03:19:53.059494183Z
+modified_at: 2026-05-29T03:24:12.248149392Z
 req_type: Task
 tags:
 - aida:list
@@ -25,3 +25,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-05-29T03:19:53.059494183Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-345: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 26615894259 — view it: `gh run view 26615894259`. Push fixups to the same branch: `aida queue work TASK-569 --branch task-569 --steal`'
+  shelved_by: implementer
+  shelved_at: 2026-05-29T03:24:12.248149392Z
