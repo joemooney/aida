@@ -1,0 +1,17 @@
+id: 019e720d-592f-7472-bb82-d2033a4d7efc
+spec_id: SPIKE-30
+agreed_id: SPIKE-30
+title: Integrate `claude agents --json` into `aida status`
+description: 'Cheapest, highest-leverage compose move from the 2026-05-29 strategic-recompose synthesis (see docs/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md). Query `claude agents --json` (schema: pid, cwd, kind, startedAt, sessionId, name, status) and cross-reference against AIDA''s lease registry (.aida/sessions/). Surface unified state in `aida status`. Detect + surface drift: leases without processes, processes without leases. Operator gains single-command visibility into running Claude Code work + AIDA lifecycle state. trace:SPIKE-15'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T04:45:37.967507610Z
+modified_at: 2026-05-29T04:45:37.967507610Z
+req_type: Spike
+tags:
+- aida:status
+- claude-code-compose
+- from-strategic-recompose
+- priority:1
