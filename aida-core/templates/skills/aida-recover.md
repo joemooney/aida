@@ -1,6 +1,7 @@
 ---
 name: aida-recover
 description: Scrapes session, orchestrator, worktree, PR, and spec graphs to detect state divergence and walks the operator through a detailed diagnostic playbook. Always run when a session is stuck, a PR is unmerged despite passing checks, or orchestrator queues/leases get out of sync.
+disable-model-invocation: true
 allowed-tools:
   - Bash
   - Read
