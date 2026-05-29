@@ -1,0 +1,31 @@
+id: 019e71dd-6882-7772-b2a5-0c1af3fe03fc
+spec_id: TASK-1-112
+title: Phase 3 reviewer anchors on the original implementer SPEC-ID instead of the PR …
+description: |-
+  Phase 3 reviewer anchors on the original implementer SPEC-ID instead of the PR or auto-filed reviewer story. Empirical 2026-05-28 drain of batch:scaffolding-2026-05-28: TASK-573 shipped at phase 1, PR-346 opened, STORY-483 auto-filed as the reviewer story. Phase 3 then ran 'aida queue work TASK-573' which failed with 'TASK-573 isn't queued — status is Done.' The orchestrator's own workflow-hint at end of phase 2 said the right thing: 'PR #346 next: aida queue work PR-346'. But phase 3 didn't take its own advice.
+
+  Three possible fixes:
+    (1) Phase 3 anchor on PR-N (uses 'aida queue work PR-346' shape — picks up the reviewer queue entry filed by phase 2)
+    (2) Phase 3 anchor on STORY-N (the reviewer story filed at session-end)
+    (3) Pickability gate accepts 'Done with open PR' as a queue-able state via a queue_work --as-reviewer mode
+
+  The drain DID correctly classify this as shelvable and advance to TASK-575 (good — EPIC-28 resilience working). So this is a different failure mode than yesterday's GH-API stall — both belong on the Pattern-A advisor wrapper STORY but are independent bugs.
+
+  Sibling pattern: TASK-1-108 (orchestrator-corroborated auto-claim) was the phase-1 startup bug. This is the phase-3 startup bug. Worth a sweep through every phase's startup pre-flight to see whether each correctly targets the right anchor for that phase.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-29T03:53:16.162269855Z
+modified_at: 2026-05-29T03:53:16.162269855Z
+req_type: Task
+tags:
+- aida:queue:work
+- from-advisor:TASK-1-108
+- from-self-test
+- kind:observation
+- linked:TASK-1-108
+- orchestrator
+- phase-3-reviewer
+- severity:major
+- wrong-anchor
