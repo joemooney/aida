@@ -1346,6 +1346,14 @@ pub enum RulesCommand {
         /// Compute what would change without touching disk.
         #[clap(long)]
         dry_run: bool,
+
+        /// SPIKE-35: also emit a project-root `REVIEW.md` that
+        /// aggregates every active spec's acceptance criteria as
+        /// the highest-priority injection into Anthropic's managed
+        /// Code Review pipeline. One file, committed.
+        // trace:SPIKE-35 | ai:claude
+        #[clap(long = "review-md")]
+        review_md: bool,
     },
 }
 

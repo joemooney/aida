@@ -13169,7 +13169,7 @@ fn handle_rules_command(
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
     match cmd {
-        cli::RulesCommand::Sync { dry_run } => {
+        cli::RulesCommand::Sync { dry_run, review_md } => {
             let project_root = find_project_root()?;
             // Pull every spec id that has a trace comment by passing the
             // full set of known ids and letting scan_trace_graph filter.
@@ -13199,7 +13199,14 @@ fn handle_rules_command(
                 })
                 .collect();
 
-            let report = rules_sync::sync(&project_root, backend, &trace_graph, *dry_run)?;
+            let mut report = rules_sync::sync(&project_root, backend, &trace_graph, *dry_run)?;
+
+            // SPIKE-35: emit REVIEW.md alongside .claude/rules/ when
+            // the operator passes --review-md. trace:SPIKE-35 | ai:claude
+            if *review_md {
+                let r = rules_sync::sync_review_md(&project_root, backend, &trace_graph, *dry_run)?;
+                report.review_md = Some(r);
+            }
 
             let prefix = if *dry_run {
                 "→ dry-run:".cyan().to_string()
@@ -13227,6 +13234,25 @@ fn handle_rules_command(
                     "skipped:".dimmed(),
                     report.skipped_no_traces.len(),
                 );
+            }
+            if let Some(rmd) = &report.review_md {
+                let rel = rmd.path.strip_prefix(&project_root).unwrap_or(&rmd.path);
+                if rmd.unchanged {
+                    println!(
+                        "  {} {} ({} spec(s) included)",
+                        "unchanged".dimmed(),
+                        rel.display(),
+                        rmd.specs_included.len(),
+                    );
+                } else if rmd.written {
+                    let verb = if *dry_run { "write" } else { "wrote" };
+                    println!(
+                        "  {} {} ({} spec(s) included)",
+                        verb.green(),
+                        rel.display(),
+                        rmd.specs_included.len(),
+                    );
+                }
             }
         }
     }
