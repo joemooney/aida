@@ -3,12 +3,12 @@ spec_id: SPIKE-35
 agreed_id: SPIKE-35
 title: Emit REVIEW.md from spec graph (substrate-as-bouncer for managed Code Review)
 description: 'Claude Code''s managed Code Review (Team/Enterprise) reads REVIEW.md as highest-priority instruction injected into every reviewer agent in the pipeline. Like SPIKE-31''s .claude/rules/, but for reviewer behavior. AIDA can generate REVIEW.md from active spec context: acceptance criteria the PR must satisfy, severity calibration tied to spec status (InProgress vs Done), skip-rules pulled from spec graph (don''t flag changes to files that trace to OTHER specs). Substrate-as-bouncer for the PR-review surface. trace:strategic-recompose-round-2'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T06:48:25.304021607Z
-modified_at: 2026-05-29T07:37:48.130745332Z
+modified_at: 2026-05-29T07:37:52.756862241Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -17,3 +17,7 @@ tags:
 - priority:1
 - reviewer
 - substrate-as-bouncer
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-29T07:37:52.756862241Z
+  completion_sha: 85cacb462e23335db1237ee1b4a26ec4cbad023a
