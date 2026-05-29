@@ -3,12 +3,12 @@ spec_id: SPIKE-34
 agreed_id: SPIKE-34
 title: Re-shape `aida agent new claude` as a `claude --bg --agent <subagent-def>` wrapper
 description: 'Divest move from the 2026-05-29 strategic-recompose synthesis. Claude Code''s `claude --bg --name ''...'' --agent <subagent-def>` ships native dispatch + worktree isolation + supervisor process. AIDA''s current `aida agent new claude` re-implements much of this. Re-shape as a wrapper: keep only role-context snapshot file + brief-polling + lease registration; strip parts that now duplicate `claude --bg`. Reduces surface area without reducing capability. Pre-req: `.claude/agents/<role>.md` scaffolding from AIDA''s role defs (separate STORY). trace:SPIKE-15'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:46:33.337118296Z
-modified_at: 2026-05-29T06:36:50.583916906Z
+modified_at: 2026-05-29T06:45:26.209238609Z
 req_type: Spike
 tags:
 - claude-code-compose
