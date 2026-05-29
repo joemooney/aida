@@ -1,5 +1,6 @@
 id: 019e72a3-eeb6-7e03-a934-c02fe0e0af95
 spec_id: TASK-1-113
+agreed_id: TASK-138
 title: 'aida db reconcile-status: dry-run and apply DIVERGE for specs whose agreed_id ≠…'
 description: |-
   aida db reconcile-status: dry-run and apply DIVERGE for specs whose agreed_id ≠ spec_id (node-aware origin ID).
