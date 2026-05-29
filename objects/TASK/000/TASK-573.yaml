@@ -12,12 +12,12 @@ description: |-
     • Net token reduction documented (before/after measurement)
 
   Source: docs/competitive-analysis/2026-05-26-... (Tier 2 actionable, cheap perf win on per-session context cost).
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:32:59.159476838Z
-modified_at: 2026-05-29T03:34:08.156684979Z
+modified_at: 2026-05-29T03:34:15.403648318Z
 req_type: Task
 tags:
 - aida:init
@@ -37,9 +37,3 @@ comments:
     Reasoning: Type A — the acceptance criteria literally name `@docs/aida/discipline/README.md` (criterion 1) and 'when they exceed ~30 lines' (criterion 2, which the implementer's investigation correctly resolved to 'none' — the AIDA conventions block is already @-imported). The mechanical @-import + test update fully satisfies criteria 1-4. Recorded-B grounds dropping the README trim: the recorded preference in `feedback_refinements_must_be_acceptance_criteria.md` says refinements not in the acceptance list belong in a follow-up TASK, not bundled into the current spec. The README trim is the implementer's optional addition to push loaded-context-delta from 'roughly neutral' to 'positive'; criterion 4 asks for the measurement to be *documented*, not positive, so the trim is genuinely out of scope here. The acceptance contract is clean; ship that, file the rest.
   created_at: 2026-05-29T03:34:08.156684979Z
   modified_at: 2026-05-29T03:34:08.156684979Z
-attention_reason:
-  category: design-fork
-  detail: 'headless implementer exited without opening a PR after asking a plain-text decision question: Want me to proceed?'
-  lean: review the punted analysis and choose the implementation path
-  raised_by: implementer
-  raised_at: 2026-05-29T03:32:25.460010651Z
