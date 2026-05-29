@@ -62510,6 +62510,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         aida_core::pickability::BlockedReason::HumanOnly => {
                             reason_label.magenta().to_string()
                         }
+                        // TASK-131: needs-triage gets magenta+bold to match
+                        // the `⚠ Needs Attention` status badge palette, so
+                        // a punted spec reads visually as "decide something
+                        // here" in both surfaces. trace:TASK-131 | ai:claude
+                        aida_core::pickability::BlockedReason::NeedsTriage => {
+                            reason_label.magenta().bold().to_string()
+                        }
                         aida_core::pickability::BlockedReason::UnsatisfiedBlocker { .. } => {
                             reason_label.yellow().to_string()
                         }
@@ -63254,17 +63261,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     // is "what should I pick up", and the answer is
                     // never "this Completed thing". trace:TASK-46 | ai:claude
                     //
-                    // STORY-332: a NeedsAttention spec is paused awaiting
-                    // triage — also not "what to pick up next". It is not
-                    // terminal (it resumes), so it still shows in `queue
-                    // list` and surfaces in `aida findings`; it is just
-                    // excluded from the actionable head. trace:STORY-332
+                    // NeedsAttention is gated by `pickability` below (one
+                    // step down in this chain) so it surfaces as a
+                    // skipped-with-reason entry rather than disappearing
+                    // silently. trace:STORY-332 trace:TASK-131
                     let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
                     else {
                         return true;
                     };
                     !is_terminal_status(&req.status)
-                        && !matches!(req.status, RequirementStatus::NeedsAttention)
                 })
                 .filter(|e| {
                     // STORY-333: pre-pickup gate. A spec that is blocked-by

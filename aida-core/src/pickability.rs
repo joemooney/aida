@@ -4,7 +4,7 @@
 //! checks scattered across the queue layer with one truth, so every pickup
 //! site applies the same rules.
 //!
-//! Two un-pickable categories:
+//! Three un-pickable categories:
 //!
 //! - **Blocked** — the spec has a `BlockedBy` relationship to a target that
 //!   has not reached `Completed`. Cleared automatically when the blocker
@@ -15,9 +15,17 @@
 //!   it is work no agent can do (a sign-off, a physical task, a moderated
 //!   user test). Never auto-unblocks; the human marks it complete by normal
 //!   `aida edit --status` when they finish.
+//! - **Needs triage** — the spec's status is [`RequirementStatus::NeedsAttention`].
+//!   A punt parked it mid-work; an advisor or human must resolve the fork
+//!   before the spec can re-enter the pickable head. Without this gate the
+//!   spec still sat at the top of `aida queue list` with a `⚠` badge — visible
+//!   but rendered alongside actionable items, so a dispatcher reading the
+//!   head still misfired drains on it. trace:TASK-131
 //!
-//! When both apply, `HumanOnly` takes precedence — a human-only spec is
-//! still human-only when its blocker clears.
+//! Precedence when multiple apply: `HumanOnly` > `NeedsTriage` > `BlockedBy`.
+//! Human-only is the durable reason (still human-only after a punt resolves
+//! or a blocker clears); needs-triage outranks BlockedBy because the punt
+//! itself needs deciding before the dependency math matters.
 //!
 //! The helper takes a `&RequirementsStore` so it can resolve `BlockedBy`
 //! target uuids back to the target spec's status + display id. A dangling
@@ -48,6 +56,12 @@ pub enum BlockedReason {
     PermanentlyBlocked { target_spec: String },
     /// The `human_only: bool` flag is set on the spec. Never auto-clears.
     HumanOnly,
+    /// Status is [`RequirementStatus::NeedsAttention`] — paused mid-work by
+    /// a punt. An advisor or human must resolve the fork before the spec
+    /// re-enters the pickable head. Distinct from `HumanOnly`: this is a
+    /// transient state (resumes after triage), whereas `HumanOnly` is the
+    /// durable nature of the work. trace:TASK-131 | ai:claude
+    NeedsTriage,
 }
 
 /// The result of a pickability check. `Pickable` is the only state in which
@@ -72,13 +86,21 @@ impl Pickability {
 ///
 /// 1. `human_only` first — a human-only spec stays un-pickable even when
 ///    its blocker clears, so we report that as the durable reason.
-/// 2. `BlockedBy` edges — walked once; first `PermanentlyBlocked`
+/// 2. `NeedsAttention` status — a punted spec is paused awaiting triage.
+///    Gated here (not just at the `aida queue next` site) so `queue list`
+///    surfaces it in its Blocked section instead of inline at the head,
+///    where a dispatcher misreads it as drainable. trace:TASK-131 | ai:claude
+/// 3. `BlockedBy` edges — walked once; first `PermanentlyBlocked`
 ///    (Rejected target) wins over `UnsatisfiedBlocker` (still-in-flight
 ///    target) so the UI surfaces the louder failure mode.
-/// 3. Otherwise pickable.
+/// 4. Otherwise pickable.
 pub fn pickability(req: &Requirement, store: &RequirementsStore) -> Pickability {
     if req.human_only {
         return Pickability::Blocked(BlockedReason::HumanOnly);
+    }
+
+    if matches!(req.status, RequirementStatus::NeedsAttention) {
+        return Pickability::Blocked(BlockedReason::NeedsTriage);
     }
 
     let blocked_by_edges: Vec<&Relationship> = req
@@ -136,6 +158,7 @@ pub fn pickability(req: &Requirement, store: &RequirementsStore) -> Pickability 
 pub fn pickability_reason_label(reason: &BlockedReason) -> String {
     match reason {
         BlockedReason::HumanOnly => "human-only".to_string(),
+        BlockedReason::NeedsTriage => "needs-triage".to_string(),
         BlockedReason::PermanentlyBlocked { target_spec } => {
             format!("blocked-by {} (REJECTED — needs re-scoping)", target_spec)
         }
@@ -295,6 +318,10 @@ mod tests {
             "human-only"
         );
         assert_eq!(
+            pickability_reason_label(&BlockedReason::NeedsTriage),
+            "needs-triage"
+        );
+        assert_eq!(
             pickability_reason_label(&BlockedReason::PermanentlyBlocked {
                 target_spec: "STORY-B".into()
             }),
@@ -306,6 +333,50 @@ mod tests {
                 target_status: RequirementStatus::InProgress,
             }),
             "blocked-by STORY-B (In Progress)"
+        );
+    }
+
+    // TASK-131: NeedsAttention specs must surface in the Blocked section,
+    // not inline at the head of `aida queue list`. Until this gate moved
+    // into pickability, a dispatcher reading the numbered head still
+    // saw shelved specs at positions #1-3 and misfired drains on them.
+    // trace:TASK-131 | ai:claude
+    #[test]
+    fn pickability_needs_attention_reports_needs_triage() {
+        let r = make_req("TASK-X", RequirementStatus::NeedsAttention);
+        let store = store_with(vec![r.clone()]);
+        assert_eq!(
+            pickability(&r, &store),
+            Pickability::Blocked(BlockedReason::NeedsTriage)
+        );
+    }
+
+    #[test]
+    fn pickability_needs_attention_precedes_blocked_by() {
+        // A NeedsAttention spec with an unsatisfied blocker still reports
+        // NeedsTriage — the punt itself needs deciding before the
+        // dependency math matters. trace:TASK-131
+        let blocker = make_req("STORY-B", RequirementStatus::InProgress);
+        let mut dependent = make_req("STORY-A", RequirementStatus::NeedsAttention);
+        add_blocked_by(&mut dependent, blocker.id);
+        let store = store_with(vec![blocker, dependent.clone()]);
+        assert_eq!(
+            pickability(&dependent, &store),
+            Pickability::Blocked(BlockedReason::NeedsTriage)
+        );
+    }
+
+    #[test]
+    fn pickability_human_only_takes_precedence_over_needs_attention() {
+        // Human-only is the durable reason — even if the spec is also
+        // NeedsAttention (e.g. a human punted on a human-only spec),
+        // the surfaced reason stays human-only. trace:TASK-131
+        let mut r = make_req("TASK-H", RequirementStatus::NeedsAttention);
+        r.human_only = true;
+        let store = store_with(vec![r.clone()]);
+        assert_eq!(
+            pickability(&r, &store),
+            Pickability::Blocked(BlockedReason::HumanOnly)
         );
     }
 }
