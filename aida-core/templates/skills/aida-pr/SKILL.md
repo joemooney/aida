@@ -298,6 +298,10 @@ up front that the PR bundles every batch member shipped on the branch.
 The `## Per-spec` section still has one entry per REQ-ID (all batch
 members the commit-log walk found); no spec is dropped.
 
+A copy-paste skeleton ships alongside this skill at
+`examples/pr-description-template.md` — fill the placeholders, delete the
+comments, and pass it to `gh pr create --body-file -`.
+
 **Body sections:**
 
 ```markdown
