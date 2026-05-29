@@ -2852,6 +2852,42 @@ mod tests {
         );
     }
 
+    /// STORY-481: the `/aida-techdebt` skill (end-of-session duplication
+    /// scan) must be scaffolded by `aida init` — both the skill and its
+    /// matching slash command. It rides the BUG-386 catch-all loop (it's
+    /// not a flag-gated daily driver), so this test also guards that loop
+    /// for a Claude-only skill. trace:STORY-481 | ai:claude
+    #[test]
+    fn test_techdebt_skill_and_command_scaffolded() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).expect("scaffolding apply");
+
+        let skill = temp_dir.path().join(".claude/skills/aida-techdebt.md");
+        let command = temp_dir.path().join(".claude/commands/aida-techdebt.md");
+        assert!(skill.is_file(), "aida-techdebt skill should be scaffolded");
+        assert!(
+            command.is_file(),
+            "aida-techdebt command should be scaffolded"
+        );
+
+        // The skill must keep its acceptance contract: a read-only scan
+        // that composes with `aida findings add`.
+        let body = std::fs::read_to_string(&skill).unwrap();
+        assert!(
+            body.contains("aida findings add"),
+            "techdebt skill should compose with `aida findings add`"
+        );
+        assert!(
+            body.to_lowercase().contains("read-only"),
+            "techdebt skill should describe a read-only scan"
+        );
+    }
+
     /// STORY-305: applying the scaffolder a second time MUST NOT touch a
     /// pre-existing project-owned local skill under `.claude/skills/local/`,
     /// nor a pre-existing `<name>.local.md` extension alongside a stock
