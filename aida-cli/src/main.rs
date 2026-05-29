@@ -5298,6 +5298,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             all,
             archived,
             json,
+            tree,
             ..
         } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -5446,6 +5447,121 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&out)?);
+                return Ok(());
+            }
+
+            // TASK-568: --tree groups the (already-filtered) listing by
+            // parent EPIC for visual clustering, mirroring the shape of
+            // `aida queue list --tree`. Children indent under their EPIC,
+            // groups sort by item count desc then name, and requirements
+            // with no EPIC parent fall into a final "Unscoped" group.
+            // Summaries don't carry relationships (the cache is a flat
+            // projection), so we load the full store once to resolve each
+            // row's parent epic via derive_parent_epic_label — the same
+            // opt-in YAML-read tradeoff `aida show --tree` accepts.
+            // trace:TASK-568 | ai:claude
+            if *tree {
+                if reqs.is_empty() {
+                    println!("No requirements found.");
+                    if archived_hidden_count > 0 {
+                        println!(
+                            "  {}",
+                            format!(
+                                "({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
+                            )
+                            .dimmed()
+                        );
+                    }
+                    return Ok(());
+                }
+                let store = backend.load()?;
+                let by_uuid: std::collections::HashMap<Uuid, &aida_core::Requirement> =
+                    store.requirements.iter().map(|r| (r.id, r)).collect();
+
+                use std::collections::BTreeMap;
+                let unscoped_key = "~unscoped".to_string();
+                let mut groups: BTreeMap<String, Vec<&aida_core::RequirementSummary>> =
+                    BTreeMap::new();
+                for summary in &reqs {
+                    let key = by_uuid
+                        .get(&summary.id)
+                        .and_then(|req| derive_parent_epic_label(req, &store))
+                        .unwrap_or_else(|| unscoped_key.clone());
+                    groups.entry(key).or_default().push(summary);
+                }
+                // Sort groups: real EPICs by count desc then name; unscoped last.
+                let mut ordered: Vec<(String, Vec<&aida_core::RequirementSummary>)> =
+                    groups.into_iter().collect();
+                ordered.sort_by(|a, b| {
+                    let a_unscoped = a.0 == unscoped_key;
+                    let b_unscoped = b.0 == unscoped_key;
+                    match (a_unscoped, b_unscoped) {
+                        (true, false) => std::cmp::Ordering::Greater,
+                        (false, true) => std::cmp::Ordering::Less,
+                        _ => b.1.len().cmp(&a.1.len()).then_with(|| a.0.cmp(&b.0)),
+                    }
+                });
+
+                for (key, group) in &ordered {
+                    let header = if key == &unscoped_key {
+                        "Unscoped".to_string()
+                    } else {
+                        key.clone()
+                    };
+                    println!();
+                    println!(
+                        "{} ({} item{})",
+                        header.cyan().bold(),
+                        group.len(),
+                        if group.len() == 1 { "" } else { "s" }
+                    );
+                    let id_col_width = group
+                        .iter()
+                        .map(|r| {
+                            r.agreed_id
+                                .as_deref()
+                                .or(r.spec_id.as_deref())
+                                .unwrap_or("???")
+                                .len()
+                        })
+                        .max()
+                        .unwrap_or(0);
+                    for (i, summary) in group.iter().enumerate() {
+                        let is_last = i + 1 == group.len();
+                        let display_id = summary
+                            .agreed_id
+                            .as_deref()
+                            .or(summary.spec_id.as_deref())
+                            .unwrap_or("???");
+                        let status_badge = status_display::status_badge(&summary.status);
+                        let glyph = if is_last { "└─" } else { "├─" };
+                        let pad = " ".repeat(id_col_width.saturating_sub(display_id.len()));
+                        let tag_set: std::collections::HashSet<String> =
+                            summary.tags.iter().cloned().collect();
+                        let tag_chip = format_tag_chip(&tag_set)
+                            .map(|c| format!("  {}", format!("[{}]", c).dimmed()))
+                            .unwrap_or_default();
+                        println!(
+                            "  {} {}{}  {}  [{}]{}",
+                            glyph.dimmed(),
+                            display_id.bold(),
+                            pad,
+                            summary.title,
+                            status_badge,
+                            tag_chip,
+                        );
+                    }
+                }
+                println!("\n{} requirements", reqs.len());
+                if archived_hidden_count > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
+                        )
+                        .dimmed()
+                    );
+                }
                 return Ok(());
             }
 
