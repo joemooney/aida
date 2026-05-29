@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:46:13.320093082Z
-modified_at: 2026-05-29T07:09:23.907432454Z
+modified_at: 2026-05-29T07:11:16.870892278Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -44,3 +44,17 @@ comments:
     Recommendation: reshape, do not kill. Ship a months-not-weeks design pass plus one POC workflow, before any divest from auto_complete.rs. The first artifact should answer: generic template vs per-spec artifact, recoverability on failure, and machine-readable observation.
   created_at: 2026-05-29T07:00:06.255029291Z
   modified_at: 2026-05-29T07:00:06.255029291Z
+- id: 019e7292-b186-7a11-99c0-db292a4afd9b
+  author: joe
+  content: |-
+    Codex SPIKE-32 narrow POC result (2026-05-29):
+
+    Added docs/architecture/spike-32-workflow-poc/spec-30-drain.workflow.js targeting shipped SPIKE-30 plus README verdict. Local validation: `node docs/architecture/spike-32-workflow-poc/spec-30-drain.workflow.js` returns happy_path_complete with implementer -> CI stub -> reviewer -> merger phases and structured phase outcomes.
+
+    Happy path is clean enough to justify continuing the saved-script lane. Awkward part: Claude's public workflows docs confirm behavior and saved `.claude/workflows/*.js` artifacts, but do not publish the full JS helper signature. The POC uses `agent(prompt, { label })` based on installed workflow guidance mentioning `opts.label`; exact runtime syntax still needs a real saved workflow sample.
+
+    Failure-routing probe: punt reroute is expressible only with structured agent output; shelve branching is easy but marking NeedsAttention needs AIDA CLI/MCP callback or supervisor; resume is awkward because Claude workflow resume is run-local while AIDA punt resolution is substrate-local and may happen after workflow stop.
+
+    Verdict: reshape, do not kill. Next design pass should confirm saved workflow API, define substrate callbacks, and prove recoverability before any divest from auto_complete.rs.
+  created_at: 2026-05-29T07:11:16.870892278Z
+  modified_at: 2026-05-29T07:11:16.870892278Z
