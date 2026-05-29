@@ -1,0 +1,35 @@
+id: 019e71a8-6312-7d62-a24e-b0a6dafc2e7f
+spec_id: TASK-1-111
+title: 12-hour drain stall after single transient GH API failure during phase-1 verifi…
+description: |-
+  12-hour drain stall after single transient GH API failure during phase-1 verification. Empirical 2026-05-28: launched aida queue work --batch scaffolding-2026-05-28 --auto-complete --no-human=both --max 10 in the evening; on return 12 hours later only TASK-131 had progressed (work shipped to Done, PR-343 opened, ~14 min wall-clock, ~$6.35 of compute). 9 remaining specs untouched.
+
+  Cause: orchestrator's phase-1 verification step couldn't reach api.github.com to confirm the PR existed. Treated as 'inconclusive' (not 'failure', not 'success') and PAUSED THE ENTIRE BATCH. Wrote 'transient — retry once the GH API is reachable' to log and exited.
+
+  By design — but the design is wrong for unattended overnight runs. A single transient API hiccup blocks 9 specs for 12 hours. The conservative 'pause when can't verify' choice should compose with a continue-after-N-retries-with-backoff policy for batch drains.
+
+  Three remediation options:
+    (1) Retry GH API verification with exponential backoff (30s, 1m, 5m, 15m) before declaring inconclusive
+    (2) Skip-and-shelve: park the inconclusive spec, advance the drain to the next batch member, return to the inconclusive one at end of batch
+    (3) Substrate-corroboration fallback: if the branch was pushed to origin AND a commit reference can be verified via plain git (no API), treat as 'likely shipped' with a warning rather than 'inconclusive'
+
+  Operator impact this incident: 12 hours of work lost, no progress signal during the pause, only discovered on manual queue progress check. The orchestrator should have either retried or surfaced an immediate signal (push notification, exit-with-known-code) so the user could resume.
+
+  Source: operator direct frustration on return — 'this is disappointing'.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-29T02:55:21.362693521Z
+modified_at: 2026-05-29T02:55:21.362693521Z
+req_type: Task
+tags:
+- aida:queue:work
+- from-advisor:TASK-131
+- from-user-friction
+- kind:observation
+- linked:TASK-131
+- orchestrator
+- reliability
+- severity:major
+- unattended-drain
