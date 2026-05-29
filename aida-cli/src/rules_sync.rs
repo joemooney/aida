@@ -52,7 +52,7 @@ pub struct ReviewMdReport {
 /// typically have no code yet (no trace comments to gate on), and
 /// `Completed`/`Released`/`Rejected`/`Draft` specs aren't active scope.
 pub fn is_active_for_rules(status: &str) -> bool {
-    matches!(status, "In Progress" | "Done")
+    matches!(status, "In Progress" | "InProgress" | "Done")
 }
 
 fn rules_root(project_root: &Path) -> PathBuf {
