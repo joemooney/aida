@@ -1,6 +1,7 @@
 ---
 name: aida-implement
 description: Implement an approved requirement with full traceability. Use when user wants to implement a feature, fix a bug, or work on a requirement.
+disable-model-invocation: true
 allowed-tools:
   - Bash
   - Read
