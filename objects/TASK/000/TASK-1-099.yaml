@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:13.346483215Z
-modified_at: 2026-05-29T03:01:39.110283379Z
+modified_at: 2026-05-29T03:07:23.545626868Z
 req_type: Task
 tags:
 - aida:init
@@ -35,3 +35,8 @@ comments:
   content: 'Promoted by joe 2026-05-28: Bounded scaffolding fix: aida init should plant a starter docs/competitive-analysis/ecosystem-watch.md so first ''scripts/release.sh minor'' on a fresh project passes the ecosystem-watch verification cleanly.'
   created_at: 2026-05-28T15:43:01.366948552Z
   modified_at: 2026-05-28T15:43:01.366948552Z
+- id: 019e71b3-6819-76f0-8d19-4b004f0a4d70
+  author: joe
+  content: Commit 0fafea3d references this requirement
+  created_at: 2026-05-29T03:07:23.545626868Z
+  modified_at: 2026-05-29T03:07:23.545626868Z
