@@ -13,12 +13,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:48:15.517785477Z
-modified_at: 2026-05-29T05:33:27.006761366Z
+modified_at: 2026-05-29T07:46:49.683124605Z
 req_type: Task
 tags:
 - aida:list
 - aida:queue:list
 - batch:scaffolding-2026-05-28
+- effort:impl:1h
 - from-user-direction
 - parent-clustering
 - tree-view
