@@ -105,6 +105,74 @@ operative mode and design-forks always pause.
   skills are a follow-up.
 - `docs/autonomous-drain.md` — the three-mode table + when to use each.
 
+## Operator-explicit invocation — `disable-model-invocation` (TASK-575)
+
+The autonomy `kind:` annotation above governs **what happens once a skill
+runs** — does this prompt pause or auto-resolve. A second, stricter axis
+governs **whether the skill runs at all without an operator typing
+`/<skill-name>`**: the `disable-model-invocation` frontmatter key.
+
+```yaml
+---
+name: aida-pickup
+description: …
+disable-model-invocation: true
+allowed-tools:
+  - Bash
+---
+```
+
+When the frontmatter sets `disable-model-invocation: true`, Claude Code
+will **never auto-invoke** the skill from a description match — the
+skill runs only when the operator types `/aida-pickup` (or whatever the
+slash command is). Set this on any skill whose side effects make
+auto-invocation unsafe.
+
+### Categories that warrant it
+
+Borrowed from *Beyond the Prompt: Claude Code* — defensive UX for skills
+with destructive or hard-to-reverse shapes:
+
+| Category | What can go wrong | Skills in this category |
+|---|---|---|
+| **ship** | Commits land, PRs open, releases tag — public state mutation Claude shouldn't trigger on a stray "let's ship this" | `/aida-commit`, `/aida-pr`, `/aida-release`, `/aida-review` |
+| **drain** | Multi-spec autonomous workloads kick off — Claude shouldn't trigger an unattended run from "what should I work on?" | `/aida-drain-queue`, `/aida-pickup`, `/aida-implement` |
+| **force-push / rewrite** | Branch history mutates non-reversibly | `/aida-rebase` |
+| **delete / heal** | Stale leases, orphan briefs, sessions are removed — operator-initiated state may look "stale" to an over-eager auto-trigger | `/aida-doctor`, `/aida-recover`, `/aida-sync` |
+| **state-mutation** | Spec lifecycle parks (NeedsAttention), substrate writes (memory, CLAUDE.md), advisor binding decisions | `/aida-punt`, `/aida-learn`, `/aida-advise` |
+
+### Categories that should stay auto-invocable
+
+The point of skill auto-invocation is the *proactive* surface — captures
+and reviews Claude is supposed to fire from context, not wait to be
+asked. Don't set the flag on:
+
+- **Read-only** skills (`/aida-search`, `/aida-status`, `/aida-queue`,
+  `/aida-show`, `/aida-standup`, `/aida-digest`, `/aida-onboard`)
+- **Proactive-capture** skills designed to fire from conversation
+  (`/aida-req`, `/aida-capture`, `/aida-doc`)
+- **Quality / analysis** skills with no destructive side effect
+  (`/aida-evaluate`, `/aida-grill`, `/aida-architecture`,
+  `/aida-compiler-warnings`, `/aida-code-review`, `/aida-docs-review`)
+
+### How to decide for a new skill
+
+Ask: *"if Claude misinterprets a stray sentence in conversation and
+fires this skill, what is the worst it can do in 30 seconds?"*
+
+- **Modify the working tree, branch, queue, spec lifecycle, or
+  substrate files** → set `disable-model-invocation: true`. The cost of
+  forcing the operator to type `/<skill>` is small; the cost of an
+  unwanted auto-invocation can be a lost branch, a parked spec, a
+  re-shuffled queue, or a memory file the operator didn't approve.
+- **Print things, query state, suggest filings without writing** → leave
+  it off. The proactive surface is the whole point.
+
+The frontmatter is independent of `kind:` annotations — a
+`disable-model-invocation: true` skill still classifies its
+`AskUserQuestion` prompts as `confirmation` or `design-fork` for `--zen`
+mode once the operator has explicitly invoked it.
+
 ## The orchestrator exit signal (TASK-329)
 
 A `kind:confirmation` prompt under `--zen` auto-resolves to option 1 — but

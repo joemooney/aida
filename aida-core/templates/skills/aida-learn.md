@@ -1,6 +1,7 @@
 ---
 name: aida-learn
 description: Capture a rule, lesson, or convention from a mistake (or about-to-be mistake) and route it to the right AIDA substrate. Use when Claude does something wrong, when a reviewer flags a recurring pattern, or when the operator says "remember this", "update CLAUDE.md so you don't repeat this", or "add a rule".
+disable-model-invocation: true
 allowed-tools:
   - Bash
   - Read
