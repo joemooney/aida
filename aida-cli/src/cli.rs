@@ -4275,6 +4275,14 @@ pub enum Command {
         // trace:TASK-568 | ai:claude
         #[clap(long, conflicts_with = "json")]
         tree: bool,
+
+        /// Surface each row's tags as an extra column right of Title.
+        /// The chip set is truncated to the first three tags with a
+        /// "+N more" suffix when more exist. Composes with every
+        /// existing filter (`--tags`, `--status`, `--type`, …).
+        // trace:TASK-569 | ai:claude
+        #[clap(long)]
+        show_tags: bool,
     },
 
     /// Show details for a specific requirement

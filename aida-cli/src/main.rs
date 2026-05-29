@@ -5339,6 +5339,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             archived,
             json,
             tree,
+            show_tags,
             ..
         } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -5623,12 +5624,25 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // Replaces the older two-column-by-default layout where
                 // both columns were FR-NNN-shaped and confusing to grep
                 // against. trace:FR-1-070 | ai:claude
+                // TASK-569: --show-tags adds a "Tags" column right of
+                // Title. Title is truncated to a fixed width so the tag
+                // chips have room without breaking word-wrap on narrow
+                // terminals; chip set itself is truncated to 3 with a
+                // "+N more" suffix. trace:TASK-569 | ai:claude
+                let title_max = if *show_tags { 50 } else { usize::MAX };
                 if *show_origin {
-                    println!(
-                        "{:<12} {:<14} {:<12} {:<10} {}",
-                        "ID", "Origin ID", "Type", "Status", "Title"
-                    );
-                    println!("{}", "─".repeat(78));
+                    if *show_tags {
+                        println!(
+                            "{:<12} {:<14} {:<12} {:<10} {:<50} {}",
+                            "ID", "Origin ID", "Type", "Status", "Title", "Tags"
+                        );
+                    } else {
+                        println!(
+                            "{:<12} {:<14} {:<12} {:<10} {}",
+                            "ID", "Origin ID", "Type", "Status", "Title"
+                        );
+                    }
+                    println!("{}", "─".repeat(if *show_tags { 110 } else { 78 }));
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -5654,17 +5668,38 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             &format!("{:<10}", req.status),
                             &req.status,
                         );
-                        println!(
-                            "{:<12} {}{:<12} {} {}",
-                            display_id, origin_cell, req.req_type, status_cell, req.title,
-                        );
+                        if *show_tags {
+                            let title_cell = truncate(&req.title, title_max);
+                            let tags_cell = format_tags_inline(&req.tags, 3);
+                            println!(
+                                "{:<12} {}{:<12} {} {:<50} {}",
+                                display_id,
+                                origin_cell,
+                                req.req_type,
+                                status_cell,
+                                title_cell,
+                                tags_cell.dimmed(),
+                            );
+                        } else {
+                            println!(
+                                "{:<12} {}{:<12} {} {}",
+                                display_id, origin_cell, req.req_type, status_cell, req.title,
+                            );
+                        }
                     }
                 } else {
-                    println!(
-                        "{:<14} {:<12} {:<10} {:<10} {}",
-                        "ID", "Type", "Status", "Priority", "Title"
-                    );
-                    println!("{}", "─".repeat(74));
+                    if *show_tags {
+                        println!(
+                            "{:<14} {:<12} {:<10} {:<10} {:<50} {}",
+                            "ID", "Type", "Status", "Priority", "Title", "Tags"
+                        );
+                    } else {
+                        println!(
+                            "{:<14} {:<12} {:<10} {:<10} {}",
+                            "ID", "Type", "Status", "Priority", "Title"
+                        );
+                    }
+                    println!("{}", "─".repeat(if *show_tags { 108 } else { 74 }));
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -5677,10 +5712,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             &format!("{:<10}", req.status),
                             &req.status,
                         );
-                        println!(
-                            "{:<14} {:<12} {} {:<10} {}",
-                            display_id, req.req_type, status_cell, req.priority, req.title,
-                        );
+                        if *show_tags {
+                            let title_cell = truncate(&req.title, title_max);
+                            let tags_cell = format_tags_inline(&req.tags, 3);
+                            println!(
+                                "{:<14} {:<12} {} {:<10} {:<50} {}",
+                                display_id,
+                                req.req_type,
+                                status_cell,
+                                req.priority,
+                                title_cell,
+                                tags_cell.dimmed(),
+                            );
+                        } else {
+                            println!(
+                                "{:<14} {:<12} {} {:<10} {}",
+                                display_id, req.req_type, status_cell, req.priority, req.title,
+                            );
+                        }
                     }
                 }
                 println!("\n{} requirements", reqs.len());
@@ -14601,6 +14650,65 @@ fn truncate(s: &str, max: usize) -> String {
     } else {
         let clipped: String = s.chars().take(max.saturating_sub(1)).collect();
         format!("{}…", clipped)
+    }
+}
+
+// Compact inline rendering for the `aida list --show-tags` column: show
+// the first `max_chips` tags joined by ", ", append " +N more" when the
+// row carries additional tags, return empty string for a tagless row.
+// trace:TASK-569 | ai:claude
+fn format_tags_inline(tags: &[String], max_chips: usize) -> String {
+    if tags.is_empty() || max_chips == 0 {
+        return String::new();
+    }
+    let shown = tags
+        .iter()
+        .take(max_chips)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let extra = tags.len().saturating_sub(max_chips);
+    if extra > 0 {
+        format!("{shown} +{extra} more")
+    } else {
+        shown
+    }
+}
+
+#[cfg(test)]
+mod format_tags_inline_tests {
+    use super::format_tags_inline;
+
+    fn s(items: &[&str]) -> Vec<String> {
+        items.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn empty_tags_render_empty() {
+        assert_eq!(format_tags_inline(&[], 3), "");
+    }
+
+    #[test]
+    fn fewer_than_cap_renders_all_with_no_suffix() {
+        assert_eq!(format_tags_inline(&s(&["a", "b"]), 3), "a, b");
+    }
+
+    #[test]
+    fn exactly_at_cap_renders_all_with_no_suffix() {
+        assert_eq!(format_tags_inline(&s(&["a", "b", "c"]), 3), "a, b, c");
+    }
+
+    #[test]
+    fn over_cap_truncates_with_more_suffix() {
+        assert_eq!(
+            format_tags_inline(&s(&["a", "b", "c", "d", "e"]), 3),
+            "a, b, c +2 more"
+        );
+    }
+
+    #[test]
+    fn zero_cap_renders_empty() {
+        assert_eq!(format_tags_inline(&s(&["a", "b"]), 0), "");
     }
 }
 
