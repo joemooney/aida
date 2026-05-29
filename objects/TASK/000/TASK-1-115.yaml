@@ -1,0 +1,26 @@
+id: 019e74aa-b98c-7d31-8df3-d8d3f4d3fb5c
+spec_id: TASK-1-115
+title: 'aida pr ship squash-subject mismatch: PR-347 (TASK-575) merged with the WRONG s…'
+description: |-
+  aida pr ship squash-subject mismatch: PR-347 (TASK-575) merged with the WRONG subject line.
+
+  The squash commit 778f0293 has subject '[AI:claude] docs(aida): skill-catalog slop audit — trio verdict + doctor/recover overlap (TASK-575)' — which is the subject of an UNRELATED commit (71546ee4, the audit doc that was main's tip when ship ran), with a (TASK-575) trailer appended. The BODY is correct (TASK-575's disable-model-invocation work). So subject came from one place, body from another.
+
+  Content is 100% correct — only the subject line is misleading. Not worth a history-rewrite on main to fix.
+
+  Hypothesis: aida pr ship's squash-message construction derived the subject from main's tip (git log -1 on the base?) rather than the PR branch's head commit, while taking the body from the branch. The other 6 PRs shipped tonight (343/351/344/346/345/353) all got correct subjects — the differentiator may be that PR-347 was created during the original batch drain (stale PR title) vs ship creating a fresh PR. Worth checking whether `aida pr ship` on a PRE-EXISTING PR uses the stale PR title as the squash subject while regenerating the body. Low priority (cosmetic), but a wrong commit subject pollutes git archaeology + changelog generation.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-29T16:56:46.220862956Z
+modified_at: 2026-05-29T16:56:46.220862956Z
+req_type: Task
+tags:
+- aida:pr:ship
+- from-advisor:TASK-575
+- from-self-test
+- kind:observation
+- linked:TASK-575
+- papercut
+- severity:minor
