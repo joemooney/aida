@@ -1369,3 +1369,10 @@
   note: auto-queued by `session end` (019e71ae); covers 1 spec
   added_at: 2026-05-29T03:13:16.644755710Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e71da-89ad-77b1-a45d-4c77dd469cb7
+  position: 314000
+  added_by: joe
+  note: auto-queued by `session end` (019e71c3); covers 1 spec
+  added_at: 2026-05-29T03:50:31.705600486Z
+  for_role: reviewer
