@@ -1,0 +1,22 @@
+id: 019e71c1-54b6-75a1-92c7-4e9dedcfa5ee
+spec_id: SPIKE-23
+agreed_id: SPIKE-23
+title: Claude Code plugins + marketplace — dependency cascades, manifests, distribution layer
+description: |-
+  Decompose 2.1.144 (plugin dependency enforcement), 2.1.143 (dependency cascade logic), 2.1.129 (--plugin-url, manifests nest themes/monitors under experimental), 2.1.128 (--plugin-dir accepts .zip). Read: code.claude.com/docs/en/plugins, claudemarketplaces.com.
+
+  Map to AIDA: AIDA scaffolds skills/commands/hooks via 'aida init' but doesn't have a marketplace surface. Compare: distribution patterns, opportunities to package AIDA as a plugin.
+
+  Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/10-plugins-marketplace.md
+  Acceptance: plugin distribution gap, packaging recommendation (or rejection rationale).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:22:36.086909551Z
+modified_at: 2026-05-29T03:22:36.086909551Z
+req_type: Spike
+tags:
+- batch:research-claude-overlap-2026-05-29
+- claude-code-2.1.154
+- plugins
