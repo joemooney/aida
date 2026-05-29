@@ -49,6 +49,21 @@ Use this skill when the operator suspects AIDA's coordination substrate has drif
 - Treat diagnostic-only categories as routing advice, not permission to improvise destructive cleanup.
 - If the report says branch deletion is manual, ask the operator before deleting anything.
 
+## PR-state divergence (not automated by `aida doctor`)
+
+`aida doctor` covers lease / worktree / branch / spec-status / lock drift. It does **not** inspect pull-request state — so when a session looks stuck on the PR side, diagnose that surface by hand:
+
+```bash
+gh pr list --state open
+gh pr view --json state,statusCheckRollup,mergeable,commits,headRefName
+```
+
+- **Open PR with a stale base** (behind `main`, conflicts) → `aida pr rebase <N>` (rebases in a temp worktree and force-pushes-with-lease).
+- **Green CI but unmerged** (stuck on approval / ceiling rules) → `aida pr ship <N>` (watch CI → squash-merge → pull), or `gh pr merge <N> --squash`.
+- **Unpushed local branch** (commits exist, no remote) → `git push -u origin HEAD`.
+
+After a merge lands, if the spec is still `Done`, run `aida db reconcile-status --since <ref>` to replay the `Done → Completed` auto-bump the pull may have missed.
+
 ## JSON Mode
 
 For advisor scripting or automation:
