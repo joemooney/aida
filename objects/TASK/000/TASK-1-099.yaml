@@ -17,12 +17,13 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:13.346483215Z
-modified_at: 2026-05-29T03:13:28.047263531Z
+modified_at: 2026-05-29T08:01:54.067178016Z
 req_type: Task
 tags:
 - aida:init
 - aida:scaffold
 - batch:scaffolding-2026-05-28
+- effort:impl:1h
 - first-user-papercut
 - from-advisor:TASK-562
 - from-self-test
