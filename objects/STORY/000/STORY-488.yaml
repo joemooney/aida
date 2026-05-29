@@ -1,0 +1,26 @@
+id: 019e7238-b5f4-74d3-9766-b212c2c2efa7
+spec_id: STORY-488
+agreed_id: STORY-488
+title: 'Review PR-351: [AI:claude] feat(cli): aida list --tree parent/child clustering view (TASK-568)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e7229`) for branch `task-568`.
+
+  - PR: <https://github.com/joemooney/aida/pull/351>
+  - Branch: `task-568` → `main`
+
+  ## Covers
+
+  - TASK-568
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 351` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T05:32:59.764024493Z
+modified_at: 2026-05-29T05:32:59.764024493Z
+req_type: Story
