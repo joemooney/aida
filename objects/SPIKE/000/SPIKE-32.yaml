@@ -1,0 +1,17 @@
+id: 019e720d-e348-77e3-8130-6aa30984aeec
+spec_id: SPIKE-32
+agreed_id: SPIKE-32
+title: Compile spec graph to workflow.js targeting Claude Code's workflows runtime
+description: Largest open architectural surface from the 2026-05-29 strategic-recompose synthesis. `aida workflow compile <SPEC>` emits a Claude Code `meta.js` workflow that imports children as phases, runs implementer→reviewer→merger as `agent()` calls, uses `pipeline()` for resumability. AIDA's orchestrator transitions from runtime to compile-target generator. Claude Code owns execution (16-concurrent, 1000-total, structured output, intra-session resume); AIDA owns substrate + lifecycle book-keeping. Months-not-weeks. File now to keep the design space public; DO NOT START until SPIKE-30 + SPIKE-31 confirm the compose direction works. trace:SPIKE-14
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T04:46:13.320093082Z
+modified_at: 2026-05-29T04:46:13.320093082Z
+req_type: Spike
+tags:
+- claude-code-compose
+- from-strategic-recompose
+- orchestrator
+- priority:3
