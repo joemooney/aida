@@ -10,12 +10,12 @@ description: |-
   `aida workflow compile <SPEC>` emits a Claude Code meta.js workflow that imports children as phases, runs implementer→reviewer→merger as agent() calls, uses pipeline() for resumability. The workflow.js becomes a checked-in build artifact next to the spec — reruns deterministic because they hit the same saved script, not because the compile is regenerating something.
 
   AIDA's orchestrator transitions from runtime to compile-target generator. Claude Code owns execution (16-concurrent, 1000-total, structured output, intra-session resume); AIDA owns substrate + lifecycle book-keeping + saved-script emission. Months-not-weeks. File now to keep the design space public; DO NOT START until SPIKE-30 + SPIKE-31 confirm the compose direction works (they have — both Completed). trace:SPIKE-14 trace:SPIKE-32
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:46:13.320093082Z
-modified_at: 2026-05-29T07:11:16.870892278Z
+modified_at: 2026-05-29T07:15:59.087535672Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -58,3 +58,7 @@ comments:
     Verdict: reshape, do not kill. Next design pass should confirm saved workflow API, define substrate callbacks, and prove recoverability before any divest from auto_complete.rs.
   created_at: 2026-05-29T07:11:16.870892278Z
   modified_at: 2026-05-29T07:11:16.870892278Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-29T07:15:59.087535672Z
+  completion_sha: 266eb5bb6f5e1cd36aba0bfdc29804bafddbadd9
