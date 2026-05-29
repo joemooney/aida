@@ -18,12 +18,12 @@ description: |-
     • Composes with 'aida findings add' so observations get captured
 
   Source: docs/competitive-analysis/2026-05-26-... (Tier 3 actionable, session-end hygiene).
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:38.477595577Z
-modified_at: 2026-05-28T16:53:13.426374234Z
+modified_at: 2026-05-29T04:06:08.217626939Z
 req_type: Story
 tags:
 - batch:scaffolding-2026-05-28
