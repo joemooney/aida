@@ -1,0 +1,26 @@
+id: 019e71e2-7fe3-7691-9e0c-2bdd52fb3712
+spec_id: STORY-485
+agreed_id: STORY-485
+title: 'Review PR-347: TASK-575: disable-model-invocation on destructive skills'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e71db`) for branch `task-575`.
+
+  - PR: <https://github.com/joemooney/aida/pull/347>
+  - Branch: `task-575` → `main`
+
+  ## Covers
+
+  - TASK-575
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 347` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T03:58:49.827434711Z
+modified_at: 2026-05-29T03:58:49.827434711Z
+req_type: Story
