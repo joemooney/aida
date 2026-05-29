@@ -1,0 +1,17 @@
+id: 019e727e-0081-7d03-97ce-b872a3a4bcec
+spec_id: SPIKE-37
+agreed_id: SPIKE-37
+title: Trigger Code Review via '@claude review once' from /aida-review
+description: 'Code Review supports manual triggers via PR comments: ''@claude review'' subscribes the PR to push-triggered reviews; ''@claude review once'' runs a single review without subscribing. AIDA''s /aida-review skill (orchestrator phase 3) could comment ''@claude review once'' on the PR instead of doing the analysis itself — delegates the heavy lifting to Anthropic''s managed service, then SPIKE-36 parses the verdict. Combines with SPIKE-35 (REVIEW.md injection) for spec-grounded reviewing. trace:strategic-recompose-round-2'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-29T06:48:40.833583517Z
+modified_at: 2026-05-29T06:48:40.833583517Z
+req_type: Spike
+tags:
+- claude-code-compose
+- from-strategic-recompose-round-2
+- priority:3
+- reviewer
