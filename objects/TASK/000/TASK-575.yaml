@@ -11,12 +11,12 @@ description: |-
     • Document the convention in docs/aida/discipline/skill-prompt-kinds.md
 
   Source: docs/competitive-analysis/2026-05-26-... (Tier 2 actionable, defensive UX).
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:22.617001090Z
-modified_at: 2026-05-29T03:56:07.999038551Z
+modified_at: 2026-05-29T03:56:10.725619553Z
 req_type: Task
 tags:
 - batch:scaffolding-2026-05-28
@@ -25,3 +25,10 @@ tags:
 - from-research
 - scaffolding
 - skills
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: failed
+  detail: the implementer session exited 1 — it was aborted or errored
+  recovery_hint: 'Continue the implementer session: `aida queue work TASK-575 --resume`'
+  shelved_at: 2026-05-29T03:56:10.725619553Z
