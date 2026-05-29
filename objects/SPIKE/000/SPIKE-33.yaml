@@ -3,12 +3,12 @@ spec_id: SPIKE-33
 agreed_id: SPIKE-33
 title: Emit `claude-cli://` deep links from `aida brief` + paste-ready prompts
 description: Compose move from the 2026-05-29 strategic-recompose synthesis. Claude Code ships a URL scheme `claude-cli://open?cwd=&q=&repo=` that is inert until the operator presses Enter (preserves user-in-the-loop invariant). `aida brief <agent> <SPEC> --as-deep-link` emits the URL; click opens Claude Code in the right `cwd` with the brief pre-filled. Same compose for `aida goal --copy`, `aida ultraplan --stdout`. Eliminates one paste step per work item. Small effort, real papercut elimination.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:46:23.640094422Z
-modified_at: 2026-05-29T05:21:49.823848847Z
+modified_at: 2026-05-29T07:27:21.966087296Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -21,3 +21,7 @@ comments:
   content: Commit 241cfe36 references this requirement
   created_at: 2026-05-29T05:21:49.823848847Z
   modified_at: 2026-05-29T05:21:49.823848847Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-29T07:27:21.966087296Z
+  completion_sha: 241cfe3696106bc69361748f2f23f23f405d5bcd
