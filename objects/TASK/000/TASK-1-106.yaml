@@ -3,12 +3,12 @@ spec_id: TASK-1-106
 agreed_id: TASK-131
 title: aida queue list displays spec status as '▸ Approved' even when the underlying r…
 description: 'aida queue list displays spec status as ''▸ Approved'' even when the underlying requirement is actually NeedsAttention. Empirical 2026-05-27: master dispatched drain on TASK-425/424/483 because queue list showed all three as Approved with bounded shape. Actual status of all three was NeedsAttention (pre-shelved by prior drain attempts). Drain bailed instantly on each (''already In Progress but no local lease'' / ''shelved (failure:implementer)'') — no API tokens wasted (good safety), but operator cognitive load + dispatch effort wasted. This is a substrate display bug: queue position state and requirement status are different fields; the queue list should surface the latter at least when divergent. Probable root cause: queue list reads cache.db queue-entry rows but doesn''t join against the live requirement.status for display. Mitigation: ''aida show <SPEC>'' for the true status; until fixed, dispatchers must individually check each queue item before scheduling unattended work. Recovery for the three parked specs: ''aida queue work <SPEC> --resume'' to retry from where prior drain failed.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:54:51.704744157Z
-modified_at: 2026-05-29T07:25:51.644246833Z
+modified_at: 2026-05-29T07:29:28.825510356Z
 req_type: Task
 tags:
 - aida:queue:list
