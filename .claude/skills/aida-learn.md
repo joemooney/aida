@@ -1,1 +1,1 @@
-/home/joe/ai/aida/aida-core/templates/skills/aida-learn.md
+../../aida-core/templates/skills/aida-learn.md
