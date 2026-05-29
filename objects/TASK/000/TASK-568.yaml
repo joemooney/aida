@@ -8,12 +8,12 @@ description: |-
   Proposed: aida list --tree shows requirements grouped by parent EPIC (or first-parent typed relationship), preserving the existing --type/--status/--priority/--tag filters. Unscoped (no parent) appear under a final Unscoped group. Visual shape mirrors queue list --tree for consistency.
 
   Surfaced 2026-05-28 by operator: 'we have aida queue list --tree but not aida list --tree, open a task if we should have that also'.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:48:15.517785477Z
-modified_at: 2026-05-28T16:53:15.812335966Z
+modified_at: 2026-05-29T05:16:13.513879956Z
 req_type: Task
 tags:
 - aida:list
