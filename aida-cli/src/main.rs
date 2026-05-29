@@ -39768,16 +39768,21 @@ mod add_aida_gitignore_entries_tests {
         assert!(content.contains("!.aida/config.toml"), "{}", content);
     }
 
-    /// Existing .gitignore that already covers both blocks → no write,
-    /// returns Ok(false). trace:BUG-73 | ai:claude
+    /// Existing .gitignore that already covers ALL three blocks (store,
+    /// runtime, CLAUDE.local.md) → no write, returns Ok(false). The third
+    /// block (CLAUDE.local.md) was added in commit bf50e7c0 for TASK-572's
+    /// personal-notes scaffolding. trace:BUG-73 trace:TASK-572 | ai:claude
     #[test]
     fn idempotent_when_both_blocks_present() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join(".gitignore");
-        let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\n";
+        let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n";
         std::fs::write(&path, original).unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
-        assert!(!updated);
+        assert!(
+            !updated,
+            "all three blocks already present → expected no append"
+        );
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, original);
     }
