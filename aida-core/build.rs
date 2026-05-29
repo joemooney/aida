@@ -66,6 +66,16 @@ fn main() {
         "docs/extending-skills.md",
     );
 
+    // Starter ecosystem-watch log. `scripts/release.sh` reads the file's
+    // `Last updated` line to verify the ecosystem review is recent enough
+    // for a major/minor release; scaffolding the file at init time keeps
+    // a fresh project's first release path clean. trace:TASK-126
+    embed_file(
+        &mut code,
+        "templates/docs/competitive-analysis/ecosystem-watch.md",
+        "docs/competitive-analysis/ecosystem-watch.md",
+    );
+
     // Starter memory pack — generic AIDA-using discipline written to the
     // Claude Code project memory dir by `aida init --with-memories`.
     // trace:STORY-255
@@ -91,6 +101,9 @@ fn main() {
     );
     code.push_str(
         "    (\"docs/extending-skills.md\", \"Per-project skill extension guide scaffolded into docs/\"),\n",
+    );
+    code.push_str(
+        "    (\"docs/competitive-analysis/ecosystem-watch.md\", \"Starter ecosystem-watch log read by scripts/release.sh\"),\n",
     );
     code.push_str("    (\"memories\", \"Starter memory pack - generic discipline for `aida init --with-memories`\"),\n");
     code.push_str("];\n");

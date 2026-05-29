@@ -3798,6 +3798,34 @@ fn ensure_discipline_pack_scaffold(root: &std::path::Path, force: bool) -> Resul
     Ok(written)
 }
 
+/// Scaffold a starter `docs/competitive-analysis/ecosystem-watch.md` with
+/// today's local date stamped into the `Last updated` line. Idempotent:
+/// leaves an existing file alone unless `force` is set. Returns `true` if
+/// the file was written.
+///
+/// `scripts/release.sh` reads the `Last updated` line to verify the
+/// ecosystem review is recent enough for a major/minor release; without
+/// this scaffold, a fresh project's first `release.sh minor` would hit the
+/// missing-file warning path (TASK-126 origin).
+// trace:TASK-126 | ai:claude
+fn ensure_ecosystem_watch_scaffold(root: &std::path::Path, force: bool) -> Result<bool> {
+    let dir = root.join("docs").join("competitive-analysis");
+    let dest = dir.join("ecosystem-watch.md");
+    if dest.exists() && !force {
+        return Ok(false);
+    }
+    let Some(template) = aida_core::templates::EMBEDDED_TEMPLATES
+        .get("docs/competitive-analysis/ecosystem-watch.md")
+    else {
+        return Ok(false);
+    };
+    std::fs::create_dir_all(&dir)?;
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let content = template.replace("{{LAST_UPDATED}}", &today);
+    std::fs::write(&dest, content)?;
+    Ok(true)
+}
+
 /// FNV-1a 64-bit hash, lowercase hex. Used as the starter memory pack's
 /// "edited since scaffold?" fingerprint — deterministic across releases and
 /// platforms, no dependency. trace:STORY-255 | ai:claude
@@ -4310,6 +4338,11 @@ fn complete_init_scaffolding(
     // AIDA-using guidance, written for every init mode. trace:STORY-255 | STORY-443
     let discipline_written = ensure_discipline_pack_scaffold(root, force).unwrap_or(0);
 
+    // Scaffold a starter ecosystem-watch log so a fresh project's first
+    // `scripts/release.sh minor` doesn't trip the missing-file warning
+    // path. trace:TASK-126
+    let ecosystem_watch_written = ensure_ecosystem_watch_scaffold(root, force).unwrap_or(false);
+
     // Auto-configure Codex MCP if codex is installed
     if std::process::Command::new("codex")
         .arg("--version")
@@ -4423,6 +4456,13 @@ fn complete_init_scaffolding(
             discipline_written.to_string().green(),
             if discipline_written == 1 { "" } else { "s" },
             "docs/aida/discipline/".dimmed(),
+        );
+    }
+
+    if ecosystem_watch_written {
+        println!(
+            "  starter ecosystem-watch log scaffolded to {}",
+            "docs/competitive-analysis/ecosystem-watch.md".dimmed(),
         );
     }
 
@@ -75845,6 +75885,44 @@ mod story_255_discipline_pack_tests {
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
             16
+        );
+    }
+
+    #[test]
+    fn ecosystem_watch_scaffold_writes_with_todays_date_and_is_idempotent() {
+        // trace:TASK-126 — fresh init must plant docs/competitive-analysis/
+        // ecosystem-watch.md with today's local date in the `Last updated`
+        // line so `scripts/release.sh`'s ecosystem-watch verification has a
+        // file to read on a fresh project's first major/minor cut.
+        let root = tempfile::tempdir().unwrap();
+        let written = ensure_ecosystem_watch_scaffold(root.path(), false).unwrap();
+        assert!(written, "expected the starter file to be written");
+
+        let dest = root
+            .path()
+            .join("docs/competitive-analysis/ecosystem-watch.md");
+        assert!(dest.is_file(), "missing ecosystem-watch.md");
+        let body = std::fs::read_to_string(&dest).unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        assert!(
+            body.contains(&format!("**Last updated**: {today}")),
+            "expected today's date in Last updated line; got:\n{body}"
+        );
+        assert!(
+            !body.contains("{{LAST_UPDATED}}"),
+            "placeholder must be substituted"
+        );
+
+        // Idempotent: a second call without --force leaves the file alone.
+        assert!(
+            !ensure_ecosystem_watch_scaffold(root.path(), false).unwrap(),
+            "second call without --force must not overwrite"
+        );
+
+        // --force re-writes.
+        assert!(
+            ensure_ecosystem_watch_scaffold(root.path(), true).unwrap(),
+            "--force must re-write"
         );
     }
 
