@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:14.687379035Z
-modified_at: 2026-05-29T04:18:45.637026328Z
+modified_at: 2026-05-29T05:12:17.915280790Z
 req_type: Task
 tags:
 - aida:init
@@ -28,3 +28,9 @@ tags:
 - helper-subfolders
 - scaffolding
 - skills
+comments:
+- id: 019e7225-c2fb-7fe3-aca9-e2ea4f12109e
+  author: joe
+  content: 'Implemented in PR #343 (https://github.com/joemooney/aida/pull/343). Folder-form skills: build.rs recurses to preserve subfolder structure in embedded keys; classify_skill_key() centralizes the embedded-key→(name,rel_path,is_prompt) mapping used by the scaffolding catch-all loop and the skill↔command parity test; aida-pr migrated to aida-pr/SKILL.md + examples/pr-description-template.md as the proof. Discipline pack documents the pattern. 1192 aida-core lib tests green, fmt clean, check-templates OK. Follow-ups: TASK-581, TASK-582.'
+  created_at: 2026-05-29T05:12:17.915280790Z
+  modified_at: 2026-05-29T05:12:17.915280790Z
