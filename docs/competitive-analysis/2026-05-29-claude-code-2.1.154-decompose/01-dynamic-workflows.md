@@ -181,3 +181,54 @@ Drop the output of `claude /workflows --help` and `claude /effort --help` here s
 - Whether `/workflows` exposes a JSON or programmatic interface (an `aida` integration would need this)
 - The exact schema of a saved workflow script (what AIDA's compiler would emit)
 - Whether `/effort ultracode` exposes its triggering rules (could AIDA tag specs to auto-promote to workflow when picked up)
+
+---
+
+## Update 2026-05-29: confirmed at the operator's keyboard (Claude Code 2.1.156)
+
+Operator dropped `/workflows --help`, `/effort --help`, `/deep-research --help` output from the actually-installed binary. Confirms and sharpens the earlier doc-only analysis:
+
+### Verified surface
+
+- **`/workflows`** opens a TUI dashboard, NOT a JSON-emitting command. Keybindings: `↑/↓` select · `Enter/→` drill · `Esc` back · `j/k` scroll · `p` pause/resume · `x` stop · `r` restart agent · **`s` save run as script**. No programmatic interface — operator can't pipe `/workflows` output.
+- **Save artifact format**: pressing `s` saves the run's script to either `.claude/workflows/<name>.js` (project, team-shared via git) or `~/.claude/workflows/<name>.js` (personal). **Project workflows win on name collision**. Saved workflows become `/<name>` slash commands automatically.
+- **`/effort ultracode`**: confirmed as a composed tier — *"combines xhigh reasoning effort with automatic workflow orchestration. With it on, Claude plans a workflow for each substantive task instead of waiting for you to ask."* Single request can produce several workflows in sequence (understand → change → verify). Available ONLY on models supporting `xhigh` effort. NOT in `claude --help`'s `--effort` choices list — confirms it's session-scoped via `/effort ultracode`, not CLI-flag-triggerable.
+- **`/deep-research`**: the one bundled workflow. Fans out web searches across angles, fetches + cross-checks sources, votes on each claim, returns cited report with non-surviving claims filtered. Requires WebSearch tool. Triggers Claude Code's permission prompt before running.
+- **Trigger surface**:
+  - In-session: `/workflows`, `/deep-research`, saved `/<name>` commands
+  - Any prompt containing the word `workflow` triggers a one-off workflow run
+  - **Alt+W** ignores false trigger of the word in current prompt
+  - `/effort ultracode` makes workflows the default for substantive tasks
+- **Cross-cutting constraints** (verified):
+  - Subagents a workflow spawns **always run in `acceptEdits` mode regardless of session mode** — load-bearing for AIDA's substrate-callback design (workflow agents can call `aida edit --status ...` without permission prompts)
+  - Subagents inherit the session's tool allowlist
+  - Available on Anthropic API, Bedrock, Vertex AI, Foundry — full multi-cloud, important for GovCloud/regulated contexts
+  - Disable: `disableWorkflows: true` in managed settings or `CLAUDE_CODE_DISABLE_WORKFLOWS=1`
+
+### Sharpened recommendations
+
+The verified-by-keyboard details collapse one design decision:
+
+> **AIDA's workflow compiler doesn't need a new format.** It just writes a `.js` file to `.claude/workflows/<name>.js`. That's the same shape Claude Code's `s`-save would produce. AIDA-emitted workflows ride on the existing save infrastructure. `/aida-batch-drain` becomes a slash command the same way `/deep-research` is a slash command.
+
+And clarifies one constraint:
+
+> **The substrate-callback CLI surface MUST be permission-free.** Workflow agents run in `acceptEdits`. They can edit files, run bash, and invoke AIDA's CLI. AIDA's `aida edit --status`, `aida session start`, `aida queue done` etc. all already work non-interactively — no UX work needed. But anything that today prompts (e.g. `aida queue done <SPEC>` confirmation, `aida session end` cleanup prompt) needs a `--yes` flag forwarded by the workflow's spawning code.
+
+### One follow-up SPIKE to file
+
+**SPIKE: AIDA workflow compiler proof-of-concept** — write a hand-crafted `.claude/workflows/aida-spec-drain.js` script that:
+1. Takes a `SPEC-ID` from the prompt
+2. Runs 6 phases as workflow agents (impl / CI / review / merge / pull / build)
+3. Each phase agent calls `aida` CLI commands to read/update substrate
+4. The advisor wrapper (Pattern A) is itself a phase agent that watches the others
+
+If the hand-crafted version works, the compiler is just templating that JS file from spec metadata.
+
+### What we still need to learn
+
+- **The runtime API surface for workflow scripts** — what helpers do workflow JS scripts have? `agent()` to spawn, `parallel()`/`pipeline()` to compose, but the FULL set isn't in `/workflows --help`. Would need to look at `.claude/workflows/<name>.js` from a saved `/deep-research` run, OR pull from official runtime docs.
+- **Whether workflow scripts can read AIDA's substrate** — they can shell out to `aida list`, `aida show`, etc. (since `acceptEdits` + tool allowlist), but is there a way for the runtime to inject substrate state at workflow start, or does every phase agent re-load?
+- **Cross-session persistence** — operator exiting Claude Code mid-workflow loses it. Can AIDA's substrate snapshot enough state that resuming from a clean session re-attaches?
+
+**Next concrete step when convenient**: run `/deep-research What is dynamic workflows` to trigger a real workflow run, then in `/workflows` view press `s` to save the script. Paste the resulting `.claude/workflows/deep-research-clone.js` — that's the canonical runtime API surface AIDA needs to compile against.
