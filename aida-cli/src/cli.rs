@@ -1335,6 +1335,20 @@ pub enum CacheCommand {
     Status,
 }
 
+/// SPIKE-31: Claude Code path-gated rules sync.
+// trace:SPIKE-31 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum RulesCommand {
+    /// Reconcile `.claude/rules/aida-specs/` against the current spec
+    /// graph: write a rule for every active spec with trace comments,
+    /// remove rules whose spec is no longer active.
+    Sync {
+        /// Compute what would change without touching disk.
+        #[clap(long)]
+        dry_run: bool,
+    },
+}
+
 /// Project the graph into a layered docs tree.
 // trace:FR-1-077 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -5285,6 +5299,17 @@ pub enum Command {
     // trace:FR-1-077 | ai:claude
     #[clap(subcommand)]
     Docs(DocsCommand),
+
+    /// Sync Claude Code path-gated rules from the spec graph. For each
+    /// active spec (In Progress or Done) with spec-id markers in the code,
+    /// emit `.claude/rules/aida-specs/<SPEC-ID>.md` with a `paths:` glob
+    /// matching the marked files. Claude Code's runtime loads the rule
+    /// on-demand when the implementer reads or edits one of those files —
+    /// so the spec's scope + acceptance land in context exactly when
+    /// load-bearing.
+    // trace:SPIKE-31 | ai:claude
+    #[clap(subcommand)]
+    Rules(RulesCommand),
 
     /// Living-documentation entries — narrative captured during work
     /// (rationale, scenarios, recipes, gotchas) linked to the specs they
