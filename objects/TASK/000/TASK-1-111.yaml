@@ -1,5 +1,6 @@
 id: 019e71a8-6312-7d62-a24e-b0a6dafc2e7f
 spec_id: TASK-1-111
+agreed_id: TASK-136
 title: 12-hour drain stall after single transient GH API failure during phase-1 verifi…
 description: |-
   12-hour drain stall after single transient GH API failure during phase-1 verification. Empirical 2026-05-28: launched aida queue work --batch scaffolding-2026-05-28 --auto-complete --no-human=both --max 10 in the evening; on return 12 hours later only TASK-131 had progressed (work shipped to Done, PR-343 opened, ~14 min wall-clock, ~$6.35 of compute). 9 remaining specs untouched.
