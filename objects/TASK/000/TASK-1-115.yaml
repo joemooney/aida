@@ -1,5 +1,6 @@
 id: 019e74aa-b98c-7d31-8df3-d8d3f4d3fb5c
 spec_id: TASK-1-115
+agreed_id: TASK-140
 title: 'aida pr ship squash-subject mismatch: PR-347 (TASK-575) merged with the WRONG s…'
 description: |-
   aida pr ship squash-subject mismatch: PR-347 (TASK-575) merged with the WRONG subject line.
