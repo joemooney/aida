@@ -8,12 +8,12 @@ description: |-
   Proposed: aida list --show-tags prints tags right of the Title column (truncated to ~3 chips with '+N more' suffix), or as a second line under each row. Composes with existing --status/--type/--tag/--priority filters.
 
   Surfaced 2026-05-28 by operator: 'aida list does not show tags, perhaps an aida list --show-tags'.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:51:40.802903364Z
-modified_at: 2026-05-29T03:13:42.252194035Z
+modified_at: 2026-05-29T03:19:53.059494183Z
 req_type: Task
 tags:
 - aida:list
@@ -21,3 +21,7 @@ tags:
 - from-user-direction
 - tag-visibility
 - ux-papercut
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-29T03:19:53.059494183Z
+  implemented_by: joe
