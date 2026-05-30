@@ -38566,6 +38566,52 @@ mod auto_bump_done_tests {
         );
     }
 
+    /// TASK-1-113: the reconcile-status APPLY path must match `agreed_id`,
+    /// not just `spec_id`. A node-aware spec stores the canonical id
+    /// (FR-1-042) but is referenced in commit subjects by its agreed id
+    /// (FR-42). The candidate/dry-run path uses `get_requirement_by_spec_id`
+    /// (agreed-aware) and reported "would flip"; the apply write-loop matched
+    /// only `r.spec_id` and silently skipped every agreed≠canonical spec —
+    /// so dry-run and apply diverged. trace:TASK-1-113 | ai:claude
+    #[test]
+    fn reconcile_status_flips_node_aware_spec_by_agreed_id() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        seed_done_spec(&store_path, "FR-1-042");
+        {
+            // Give it an agreed id distinct from its canonical spec_id.
+            let storage = Storage::new(store_path.clone());
+            let mut store = storage.load().unwrap();
+            let r = store
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some("FR-1-042"))
+                .unwrap();
+            r.agreed_id = Some("FR-42".to_string());
+            storage.save(&store).unwrap();
+        }
+
+        // A commit references the spec by its AGREED id.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", "feat: implement thing (FR-42)"],
+        );
+
+        let r = handle_db_reconcile_status(&store_path, None, None, false);
+        assert!(r.is_ok(), "reconcile-status failed: {:?}", r.err());
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id("FR-42").unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "reconcile-status must flip a node-aware spec matched by agreed_id \
+             (FR-42 → FR-1-042); was {:?}",
+            req.status
+        );
+    }
+
     /// BUG-94 acceptance check: `aida db sync --pull` calls
     /// `auto_bump_done_to_completed` with `pre_sha = None`. The helper's
     /// HEAD~50 fallback range must catch any spec-referencing commit
@@ -49827,11 +49873,18 @@ fn handle_db_reconcile_status(
     let stale_for_write = stale_review_flips.clone();
     storage.update_atomically(|s| {
         for flip in &flips_for_write {
-            if let Some(r) = s
-                .requirements
-                .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(flip.spec_id.as_str()))
-            {
+            // TASK-1-113: match agreed_id as well as spec_id. flip.spec_id is
+            // harvested from the commit subject's `(SPEC-ID)` ref, which is
+            // the AGREED id (e.g. TASK-131); for a node-aware spec the stored
+            // `spec_id` is the canonical form (e.g. TASK-1-106). Matching only
+            // `spec_id` here silently skipped every agreed≠canonical spec —
+            // the dry-run/candidate path uses `get_requirement_by_spec_id`
+            // (agreed-aware), so the apply diverged from the preview.
+            // trace:TASK-1-113 | ai:claude
+            if let Some(r) = s.requirements.iter_mut().find(|r| {
+                r.spec_id.as_deref() == Some(flip.spec_id.as_str())
+                    || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
+            }) {
                 if !auto_bump_eligible_status(&r.status) {
                     continue;
                 }
