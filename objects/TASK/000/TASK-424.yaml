@@ -16,12 +16,12 @@ description: |
 
   Raised by the implementer while working TASK-421.
   Branch: task-421  ·  Commit: 002410bec156b426b3c818cd3a10783afbe5c556  (PR link added on merge)
-status: NeedsAttention
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:05:50.669239132Z
-modified_at: 2026-05-30T03:04:34.194282770Z
+modified_at: 2026-05-30T03:04:35.263373597Z
 req_type: Task
 tags:
 - from-implementer:TASK-421
@@ -40,11 +40,3 @@ comments:
   content: 'Rejected 2026-05-29 (operator triage). Blanket #![deny(warnings)] in workspace Cargo.toml is a known anti-pattern — brittle across toolchain/clippy bumps (a new lint in a future compiler breaks all local builds, not just CI). Zero-warnings is already maintained by the drain + review discipline. If belt-and-suspenders enforcement is ever wanted, the right form is CI-only RUSTFLAGS=-D warnings (catches regressions without breaking local dev across toolchains) — but that''s not worth filing now. Closing.'
   created_at: 2026-05-30T03:04:34.194282770Z
   modified_at: 2026-05-30T03:04:34.194282770Z
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: failed
-  detail: the implementer session exited 1 — it was aborted or errored
-  recovery_hint: 'Continue the implementer session: `aida queue work TASK-424 --resume`'
-  shelved_by: implementer
-  shelved_at: 2026-05-28T04:53:09.488433607Z
