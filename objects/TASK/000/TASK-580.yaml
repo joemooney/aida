@@ -3,12 +3,12 @@ spec_id: TASK-580
 agreed_id: TASK-580
 title: 'README: trim narrative metadata to push loaded-context delta negative'
 description: ''
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:45:10.025970424Z
-modified_at: 2026-05-30T02:05:47.456127108Z
+modified_at: 2026-05-30T02:05:50.223872284Z
 req_type: Task
 tags:
 - aida:init
@@ -27,3 +27,7 @@ comments:
   content: Commit 92c78c9e references this requirement
   created_at: 2026-05-30T02:01:16.247123729Z
   modified_at: 2026-05-30T02:01:16.247123729Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-30T02:05:50.223872284Z
+  completion_sha: 283374d46bd42b28111362fa3efc8da6d7ae92b1
