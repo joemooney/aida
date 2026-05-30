@@ -1,0 +1,33 @@
+id: 019e7a2d-fe72-79c0-b3a8-86f62cf7095b
+spec_id: BUG-404
+agreed_id: BUG-404
+title: 'aida pr ship: auto-bump misses the just-merged spec — in-process pull reports ''Already up to date'', spec stays Done'
+description: |-
+  When `aida pr ship N` squash-merges a PR and then runs its own post-merge `aida pull`, the pull reports 'Already up to date' / '(no new commits)' and the done→completed auto-bump trailer-scan never fires. The merged spec stays Done and needs a manual `aida db reconcile-status --spec <id>` chaser after EVERY ship.
+
+  ## Repro (observed 2026-05-30, BUG-366 / PR-359)
+  1. `aida edit BUG-366 --status done`
+  2. `aida pr ship 359` — CI green, squash-merged, 'code pull complete / Already up to date / (no new commits)'.
+  3. `aida show BUG-366` → still Status: Done.
+  4. `aida db reconcile-status --spec BUG-366` → 'auto-bumped 1 spec → Completed: BUG-366 (was Done, commit 36e60c0)'. Recovers cleanly.
+
+  Confirmed NOT the known classes: commit 36e60c06 IS on local main; BUG-366 is not the agreed_id≠spec_id divergence (TASK-138); lease was clean ('no AIDA lease for branch bug-366'); PR title carries the (BUG-366) trailer (not the cluster-title BUG-106 case).
+
+  ## Root-cause hypothesis (verify during fix)
+  `aida pr ship`'s merge step advances local main to the squash commit (via gh merge + fetch/ff) BEFORE the bump-scanning `aida pull` runs. The auto-bump scan is gated on commits *newly pulled this invocation*; since ship already consumed them, the pull sees 'Already up to date' and the scan window is empty. Fix direction: ship should run an explicit reconcile/auto-bump pass over the merge commit it just landed (or the bump scan should not be gated solely on the pull's new-commit set). Sibling of BUG-106/BUG-113/BUG-219/BUG-328 but a distinct (ship-owns-the-merge) trigger.
+
+  ## Impact
+  Recurring correctness papercut on the core ship path: every `aida pr ship` leaves the spec at Done until a manual chaser. Recovery is non-destructive (reconcile-status), so medium not high.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-30T18:38:15.154048169Z
+modified_at: 2026-05-30T18:38:15.154048169Z
+req_type: Bug
+tags:
+- aida:pr:ship
+- auto-bump
+- from-self-test
+- kind:bug-spotted
+- papercut
