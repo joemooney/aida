@@ -18,6 +18,55 @@ use std::path::{Path, PathBuf};
 // Include the auto-generated embedded templates
 include!(concat!(env!("OUT_DIR"), "/embedded_templates.rs"));
 
+/// A classified `EMBEDDED_TEMPLATES` entry under the `skills/` prefix.
+///
+/// Skills come in two on-disk shapes (TASK-574):
+///   * flat:        `skills/<name>.md`        — the prompt body itself.
+///   * folder-form: `skills/<name>/SKILL.md`  — the prompt body, plus
+///                  `skills/<name>/<support>` — helper files (`templates/`,
+///                  `examples/`, scripts) shipped alongside the prompt.
+///
+/// Centralizing this mapping keeps the scaffolding loop and the skill↔command
+/// parity invariant from re-deriving the convention divergently. trace:TASK-574
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SkillKey<'a> {
+    /// Canonical skill name (folder name, or flat file stem), e.g. `aida-pr`.
+    pub name: &'a str,
+    /// Path relative to `.claude/skills/` the entry scaffolds to,
+    /// e.g. `aida-pr/examples/pr-description-template.md`.
+    pub rel_path: &'a str,
+    /// True when this entry is the skill's prompt body (flat `.md` or
+    /// folder-form `SKILL.md`); false for helper files.
+    pub is_prompt: bool,
+}
+
+/// Classify an `EMBEDDED_TEMPLATES` key as a skill entry.
+///
+/// Returns `None` for keys outside the `skills/` prefix and for the
+/// per-project local-extensions helper (`skills/local/README.md`), which is
+/// scaffolding furniture, not a skill. trace:TASK-574
+pub fn classify_skill_key(key: &str) -> Option<SkillKey<'_>> {
+    let rest = key.strip_prefix("skills/")?;
+    // The local/ extensions README is generated separately and is not a skill.
+    if rest == "local/README.md" {
+        return None;
+    }
+    match rest.split_once('/') {
+        // Folder-form: skills/<name>/<subpath>
+        Some((name, sub)) => Some(SkillKey {
+            name,
+            rel_path: rest,
+            is_prompt: sub == "SKILL.md",
+        }),
+        // Flat: skills/<name>.md
+        None => rest.strip_suffix(".md").map(|name| SkillKey {
+            name,
+            rel_path: rest,
+            is_prompt: true,
+        }),
+    }
+}
+
 /// Information about an embedded template
 #[derive(Debug, Clone)]
 pub struct TemplateInfo {
@@ -314,6 +363,52 @@ mod tests {
     }
 
     #[test]
+    fn test_folder_form_skill_embedded() {
+        // aida-pr is the folder-form proof: SKILL.md plus an examples/ helper.
+        // The recursive embed (build.rs) must preserve the subfolder structure
+        // in the key. trace:TASK-574
+        assert!(
+            EMBEDDED_TEMPLATES.contains_key("skills/aida-pr/SKILL.md"),
+            "folder-form skill prompt must embed as skills/aida-pr/SKILL.md"
+        );
+        assert!(
+            EMBEDDED_TEMPLATES.contains_key("skills/aida-pr/examples/pr-description-template.md"),
+            "folder-form skill helper files must embed under the skill folder"
+        );
+        // The flat key must NOT exist after migration.
+        assert!(!EMBEDDED_TEMPLATES.contains_key("skills/aida-pr.md"));
+    }
+
+    #[test]
+    fn test_classify_skill_key() {
+        // Flat skill → prompt body, name == stem.
+        let flat = classify_skill_key("skills/aida-req.md").expect("flat skill");
+        assert_eq!(flat.name, "aida-req");
+        assert_eq!(flat.rel_path, "aida-req.md");
+        assert!(flat.is_prompt);
+
+        // Folder-form prompt body.
+        let prompt = classify_skill_key("skills/aida-pr/SKILL.md").expect("folder prompt");
+        assert_eq!(prompt.name, "aida-pr");
+        assert_eq!(prompt.rel_path, "aida-pr/SKILL.md");
+        assert!(prompt.is_prompt);
+
+        // Folder-form helper file → belongs to the skill, not a prompt.
+        let helper = classify_skill_key("skills/aida-pr/examples/pr-description-template.md")
+            .expect("folder helper");
+        assert_eq!(helper.name, "aida-pr");
+        assert_eq!(
+            helper.rel_path,
+            "aida-pr/examples/pr-description-template.md"
+        );
+        assert!(!helper.is_prompt);
+
+        // Non-skill keys and the local/ README are rejected.
+        assert!(classify_skill_key("commands/aida-status.md").is_none());
+        assert!(classify_skill_key("skills/local/README.md").is_none());
+    }
+
+    #[test]
     fn test_template_loader_fallback() {
         let mut loader = TemplateLoader::new();
         // Should fall back to embedded
@@ -337,11 +432,15 @@ mod tests {
         let command_only: HashSet<&str> = HashSet::new();
         let skill_only: HashSet<&str> = ["aida-pickup"].iter().copied().collect();
 
+        // Folder-form skills (`skills/<name>/SKILL.md`) and flat skills
+        // (`skills/<name>.md`) both reduce to their canonical name via the
+        // classifier; helper files (examples/, templates/) are not prompts and
+        // must not masquerade as skills. trace:TASK-574
         let skills: HashSet<String> = EMBEDDED_TEMPLATES
             .keys()
-            .filter_map(|k| k.strip_prefix("skills/"))
-            .filter_map(|k| k.strip_suffix(".md"))
-            .map(|s| s.to_string())
+            .filter_map(|k| classify_skill_key(k))
+            .filter(|s| s.is_prompt)
+            .map(|s| s.name.to_string())
             .collect();
         let commands: HashSet<String> = EMBEDDED_TEMPLATES
             .keys()
@@ -384,10 +483,13 @@ mod tests {
             ('⏵', "alternate-path glyph ⏵ — use ⇒ instead"),
             ('🚪', "stop/exit glyph 🚪 — use ⏸ instead"),
         ];
-        for skill in ["aida-pickup.md", "aida-pr.md", "aida-review.md"] {
-            let key = format!("skills/{skill}");
+        for key in &[
+            "skills/aida-pickup.md",
+            "skills/aida-pr/SKILL.md",
+            "skills/aida-review.md",
+        ] {
             let content = EMBEDDED_TEMPLATES
-                .get(key.as_str())
+                .get(*key)
                 .unwrap_or_else(|| panic!("missing embedded template: {key}"));
             for &(glyph, why) in RETIRED {
                 assert!(!content.contains(glyph), "{key} still uses retired {why}");
