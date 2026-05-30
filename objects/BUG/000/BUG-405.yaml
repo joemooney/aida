@@ -17,12 +17,12 @@ description: |-
 
   ## Impact
   In multi-agent flows a shelved-then-fixed-and-merged spec silently strands at NeedsAttention with a misleading 'CI is red' finding — the queue/findings views lie about a spec that actually shipped. Medium: recovery exists (manual walk) but it's non-obvious and the stale finding is actively misleading.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-30T18:40:02.916268041Z
-modified_at: 2026-05-30T20:46:49.619949384Z
+modified_at: 2026-05-30T20:54:03.198372970Z
 req_type: Bug
 tags:
 - aida:pr
@@ -37,3 +37,7 @@ comments:
   content: Commit 5e178bbc references this requirement
   created_at: 2026-05-30T20:46:20.728803136Z
   modified_at: 2026-05-30T20:46:20.728803136Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-30T20:54:03.198372970Z
+  completion_sha: c1f6900da653233b50889600a49a7f82f9ce6e9d
