@@ -37,12 +37,12 @@ description: |-
 
   - TASK-499 (aida session start --spec alias — same flag-consistency family)
   - Operator-UX cluster (TASK-489 / TASK-490 / TASK-494 / TASK-499)
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:58:41.300890035Z
-modified_at: 2026-05-25T07:41:57.537210679Z
+modified_at: 2026-05-30T18:26:52.771272028Z
 req_type: Bug
 tags:
 - aida:queue:list
