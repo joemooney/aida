@@ -483,7 +483,11 @@ mod tests {
             ('⏵', "alternate-path glyph ⏵ — use ⇒ instead"),
             ('🚪', "stop/exit glyph 🚪 — use ⏸ instead"),
         ];
-        for key in &["skills/aida-pickup.md", "skills/aida-pr/SKILL.md", "skills/aida-review.md"] {
+        for key in &[
+            "skills/aida-pickup.md",
+            "skills/aida-pr/SKILL.md",
+            "skills/aida-review.md",
+        ] {
             let content = EMBEDDED_TEMPLATES
                 .get(*key)
                 .unwrap_or_else(|| panic!("missing embedded template: {key}"));
