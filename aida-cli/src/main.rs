@@ -37755,6 +37755,74 @@ mod auto_bump_done_tests {
         assert!(info.completed_at.is_some(), "completed_at should be set");
     }
 
+    /// BUG-405: a spec the drain shelved into NeedsAttention (with a
+    /// populated FailureReason) whose referencing commit then lands on the
+    /// default branch graduates to Completed, and the stale FailureReason is
+    /// cleared so `aida findings list` stops surfacing a "CI is red" finding
+    /// for work that actually shipped. trace:BUG-405 | ai:claude
+    #[test]
+    fn auto_bump_completes_needs_attention_spec_and_clears_failure_reason() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_spec_at(&store_path, "TASK-9021", "Needs Attention");
+
+        // Stamp a shelving FailureReason, exactly as the drain does on CI red.
+        {
+            let storage = Storage::new(store_path.clone());
+            let mut store = storage.load().unwrap();
+            let r = store
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+                .unwrap();
+            r.failure_reason = Some(aida_core::FailureReason {
+                phase: "ci".to_string(),
+                phase_index: 2,
+                kind: "ci-red".to_string(),
+                detail: format!("CI is red on PR for {}", spec_id),
+                recovery_hint: None,
+                shelved_by: None,
+                shelved_at: chrono::Utc::now(),
+            });
+            storage.save(&store).unwrap();
+        }
+
+        // A later session fixes CI and the PR merges — the spec's commit
+        // lands on the default branch.
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        std::fs::write(project_root.join("fix.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "fix.txt"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                &format!("fix: ship after reshelving ({})", spec_id),
+            ],
+        );
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+
+        assert!(
+            has_flip(&flips, &spec_id),
+            "a NeedsAttention spec with a merged commit should flip"
+        );
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "status should be Completed, was {:?}",
+            req.status
+        );
+        assert!(
+            req.failure_reason.is_none(),
+            "stale FailureReason must be cleared once the spec completes"
+        );
+    }
+
     /// BUG-328: direct spec refs at Approved/Planned/InProgress now
     /// graduate to Completed when their commit lands on main. Draft
     /// preserves the approval signal; terminal statuses stay untouched.
@@ -49056,6 +49124,15 @@ fn auto_bump_eligible_status(status: &RequirementStatus) -> bool {
             | RequirementStatus::Planned
             | RequirementStatus::InProgress
             | RequirementStatus::Done
+            // BUG-405: a spec the drain shelved into NeedsAttention (e.g. CI
+            // red) whose PR a later session/sibling-agent then fixed and
+            // merged is otherwise stranded — auto-bump skipped it and the
+            // state machine blocks a direct NeedsAttention→Completed flip, so
+            // it sits forever with a stale "CI is red" finding. A commit
+            // referencing it on the default branch is the authoritative "it
+            // shipped" signal, same as for any other eligible status.
+            // trace:BUG-405 | ai:claude
+            | RequirementStatus::NeedsAttention
     )
 }
 
@@ -49500,11 +49577,17 @@ fn auto_bump_done_to_completed(
     let stale_for_write = stale_review_flips.clone();
     storage.update_atomically(|s| {
         for flip in &flips_for_write {
-            if let Some(r) = s
-                .requirements
-                .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(flip.spec_id.as_str()))
-            {
+            // TASK-1-113: match agreed_id as well as spec_id — the
+            // eligibility scan above resolves via the agreed-aware
+            // `get_requirement_by_spec_id`, so a node-aware spec whose
+            // commit subject carries the agreed_id (e.g. `(BUG-42)` for
+            // canonical `BUG-1-099`) must re-find by the same key here or
+            // the flip is silently dropped. Mirrors the reconcile-status
+            // fix. trace:BUG-405 | ai:claude
+            if let Some(r) = s.requirements.iter_mut().find(|r| {
+                r.spec_id.as_deref() == Some(flip.spec_id.as_str())
+                    || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
+            }) {
                 // Re-check inside the atomic window — concurrent edits
                 // may have moved it off an eligible status.
                 if !auto_bump_eligible_status(&r.status) {
@@ -49512,6 +49595,13 @@ fn auto_bump_done_to_completed(
                 }
                 r.set_status_from_str("Completed");
                 r.modified_at = now;
+                // BUG-405: a Completed spec must not carry a stale
+                // FailureReason — it drives the "CI is red" finding that
+                // `aida findings list` surfaces. Clearing it on completion
+                // mirrors the manual NeedsAttention→…→Completed edit path,
+                // which already nulls `failure_reason` on leaving
+                // NeedsAttention. trace:BUG-405 | ai:claude
+                r.failure_reason = None;
                 let info = r
                     .implementation_info
                     .get_or_insert_with(aida_core::ImplementationInfo::default);
