@@ -1,23 +1,8 @@
 # Discipline for AIDA-using sessions
 
-These docs describe how to work effectively with AIDA — the habits,
-vocabulary, and workflow patterns that make an AIDA project run smoothly.
-They are *not* about AIDA's own internals; they apply to **any** project
-that uses AIDA to track requirements and drive AI coding sessions.
+How to work effectively with AIDA — habits, vocabulary, and workflow patterns for any project that uses AIDA (not about AIDA's internals). Scaffolded by `aida init`; edit them to fit your team — `aida init --refresh` won't overwrite your edits.
 
-They were scaffolded into this project by `aida init`. They are yours now —
-edit them to fit your team. `aida init --refresh` will not overwrite them
-once you have made them your own.
-
-## Why this exists
-
-A project that adopts AIDA gets the tool immediately, but the *use pattern*
-— how to route work, how to talk about lifecycle state, when to pause for
-input — is learned the hard way, one papercut at a time. This pack ships
-that pattern up front so a new project starts with the discipline already
-in hand.
-
-## The nine guides
+## The guides
 
 | Guide | What it covers |
 |-------|----------------|
@@ -32,11 +17,4 @@ in hand.
 | [`robust-project-root-resolution.md`](robust-project-root-resolution.md) | Project-root resolution fallbacks, explaining how skill-rendering gracefully handles missing git repositories |
 | [`test-isolation.md`](test-isolation.md) | Parallel-test isolation under `cargo test` — the `EnvVarGuard` helper for process-global env mutation, the per-test temp-path pattern for subprocess plumbing |
 
-## The companion: the starter memory pack
-
-`aida init --with-memories` writes the same discipline as a set of
-persistent *memory* files (one fact per file) into the Claude Code project
-memory directory, so the habits surface automatically during a session
-rather than only when someone reads these docs. The memory pack and these
-docs say the same things; the docs are the long form, the memories are the
-in-session nudge.
+**Companion:** `aida init --with-memories` writes the same discipline as persistent *memory* files (one fact per file), so the habits surface in-session — not only when these docs are read.
