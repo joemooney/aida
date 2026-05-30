@@ -13,12 +13,12 @@ description: |
   - Accept the structural limitation explicitly in the spec (close the bullet as documented N/A rather than as a missing test).
 
   Raised in review of PR-210: https://github.com/joemooney/aida/pull/210#issuecomment-4523279133
-status: NeedsAttention
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:11:56.696199463Z
-modified_at: 2026-05-30T03:04:30.571644637Z
+modified_at: 2026-05-30T03:04:32.137775321Z
 req_type: Task
 tags:
 - from-review:PR-210
@@ -31,11 +31,3 @@ comments:
   content: Rejected 2026-05-29 (operator triage). The .local.md append-merge happens INSIDE Claude Code at skill-load time, not in any AIDA build step (docs/extending-skills.md:36-41) — so there's nothing in AIDA's build to integration-test. The indirect proxy (test_aida_md_documents_local_extension + the discovery/re-sync tests) already covers what AIDA can verify. Not feasible/valuable as a separate test here; closing.
   created_at: 2026-05-30T03:04:30.571644637Z
   modified_at: 2026-05-30T03:04:30.571644637Z
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: failed
-  detail: the implementer session exited 1 — it was aborted or errored
-  recovery_hint: 'Continue the implementer session: `aida queue work TASK-483 --resume`'
-  shelved_by: implementer
-  shelved_at: 2026-05-28T04:53:28.298977873Z
