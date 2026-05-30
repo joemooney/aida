@@ -483,10 +483,9 @@ mod tests {
             ('⏵', "alternate-path glyph ⏵ — use ⇒ instead"),
             ('🚪', "stop/exit glyph 🚪 — use ⏸ instead"),
         ];
-        for skill in ["aida-pickup.md", "aida-pr.md", "aida-review.md"] {
-            let key = format!("skills/{skill}");
+        for key in &["skills/aida-pickup.md", "skills/aida-pr/SKILL.md", "skills/aida-review.md"] {
             let content = EMBEDDED_TEMPLATES
-                .get(key.as_str())
+                .get(*key)
                 .unwrap_or_else(|| panic!("missing embedded template: {key}"));
             for &(glyph, why) in RETIRED {
                 assert!(!content.contains(glyph), "{key} still uses retired {why}");
