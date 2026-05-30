@@ -28,6 +28,10 @@ tags:
 - helper-subfolders
 - scaffolding
 - skills
+relationships:
+- rel_type: Parent
+  target_id: 019e7a2e-fc66-72f0-b896-3a68166c55e3
+  created_at: 2026-05-30T18:39:24.127899130Z
 comments:
 - id: 019e7225-c2fb-7fe3-aca9-e2ea4f12109e
   author: joe
