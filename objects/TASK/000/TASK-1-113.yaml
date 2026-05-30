@@ -14,12 +14,12 @@ description: |-
   Workaround used: manual `aida edit TASK-131 --status completed`.
 
   Fix direction: the apply path must resolve + match the SAME ID space as the dry-run (agreed_id-aware), and reconcile-status apply should never silently no-op when its own dry-run reports flippable rows — at minimum emit "matched N, flipped M, M<N because ..." so a silent divergence is impossible.
-status: Draft
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T07:30:06.646327865Z
-modified_at: 2026-05-29T07:30:06.646327865Z
+modified_at: 2026-05-30T01:41:21.093968144Z
 req_type: Task
 tags:
 - aida:db:reconcile-status
