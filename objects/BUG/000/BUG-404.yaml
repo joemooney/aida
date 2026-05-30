@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-30T18:38:15.154048169Z
-modified_at: 2026-05-30T20:35:54.730596019Z
+modified_at: 2026-05-30T20:41:01.652508019Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -31,3 +31,24 @@ tags:
 - from-self-test
 - kind:bug-spotted
 - papercut
+comments:
+- id: 019e7a9e-65d4-7f62-86a2-000117be20d8
+  author: joe
+  content: |-
+    CORRECTION after deeper investigation — the filed root-cause is contradicted by evidence; do NOT implement the 'empty scan range' fix as written.
+
+    Evidence against the original hypothesis:
+    1. git reflog shows ship step-4's pull DID fast-forward local main 030277eb→36e60c06 ('pull --ff-only origin main: Fast-forward'). So pre_code_sha=030277eb and HEAD=36e60c06 — the scan range INCLUDED the BUG-366 commit. Not an empty range.
+    2. BUG-366 is NOT node-aware: spec_id == agreed_id == BUG-366. So this is not the TASK-1-113 agreed_id-match class either.
+    3. auto_bump_done_to_completed uses get_requirement_by_spec_id (agreed-aware) + extract_spec_ids_from_commit, and is covered by passing unit tests (auto_bump_picks_up_subject_refs_on_default_branch). The helper works given a Done spec + matching subject + valid range.
+    4. All recently-merged specs (TASK-132/573/580/569/126) reached Completed; none is permanently stranded.
+
+    Confounders in the single observed miss (PR-359/BUG-366):
+    - I bundled 'aida edit BUG-366 --status done' and 'aida pr ship 359' into ONE background bash blob; the edit's store/cache visibility at the code-leg auto-bump moment is uncertain.
+    - The captured stdout 'Already up to date' contradicts the reflog FF — likely partial/interleaved capture, not a reliable signal.
+
+    Remaining real-but-unconfirmed hypothesis: a CACHE read-projection timing issue — get_requirement_by_spec_id may read .aida/cache.db, and a just-created+Done spec might not be reflected when the code-leg auto-bump runs mid-pull (before the store leg / cache rebuild). Needs a clean, un-confounded reproduction (ship a pre-existing Done spec, NOT one edited to Done in the same invocation) before any fix.
+
+    Action: reframing from confirmed BUG to observation-pending-reproduction; lowering priority. Watch for recurrence on a clean ship; if it recurs, capture the FULL ship stdout+stderr + 'aida cache status' at miss time.
+  created_at: 2026-05-30T20:41:01.652508019Z
+  modified_at: 2026-05-30T20:41:01.652508019Z
