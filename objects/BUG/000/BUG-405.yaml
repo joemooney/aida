@@ -1,0 +1,33 @@
+id: 019e7a2f-a364-7b60-adce-1f32ef0e1a9c
+spec_id: BUG-405
+agreed_id: BUG-405
+title: 'auto-bump: a NeedsAttention spec whose referencing PR merges is stranded — never promoted to Completed (BUG-328 sibling)'
+description: |-
+  When a drain shelves a spec into NeedsAttention (e.g. CI red) and a later session/sibling-agent fixes CI and merges the PR, the spec is stranded at NeedsAttention forever. Neither `aida pull` auto-bump nor `aida db reconcile-status` promotes it — both only scan Done (and, since BUG-328, Approved-with-merged-PR) specs. The stale `failure:ci` finding also persists. The only recovery is a manual triage walk NeedsAttention → In Progress → Done → Completed, which the state machine forces (NeedsAttention can only go to Approved/InProgress/Rejected, so a direct →Completed is blocked).
+
+  ## Repro (observed 2026-05-30, TASK-574 / PR-350)
+  1. Drain shelved TASK-574 on CI red (run 26619373730) → NeedsAttention + `failure:ci` finding.
+  2. A briefed implementer rebased, got CI green, merged PR-350 (mergedAt 2026-05-30T03:07:17Z; squash 030277eb on main).
+  3. `aida show TASK-574` → still NeedsAttention; `aida findings list` → stale 'CI is red on PR-350' finding still shown.
+  4. `aida db reconcile-status --since HEAD~5` → 'No eligible flips' (NeedsAttention not scanned).
+  5. `aida edit TASK-574 --status completed` → blocked: 'a Needs Attention spec can only be triaged to Approved, In Progress, or Rejected'. Manual walk required.
+
+  ## Fix direction
+  Extend the auto-bump / reconcile-status scan to also promote a NeedsAttention spec when a commit referencing it lands on the default branch (mirror BUG-328's Approved-with-merged-PR handling), and clear/resolve the spec's stale shelving finding on promotion. Sibling of BUG-106/BUG-113/BUG-219/BUG-328; the distinct trigger here is *merged-while-shelved*. High-value for multi-agent drains where one agent shelves and another lands the fix.
+
+  ## Impact
+  In multi-agent flows a shelved-then-fixed-and-merged spec silently strands at NeedsAttention with a misleading 'CI is red' finding — the queue/findings views lie about a spec that actually shipped. Medium: recovery exists (manual walk) but it's non-obvious and the stale finding is actively misleading.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-30T18:40:02.916268041Z
+modified_at: 2026-05-30T18:40:02.916268041Z
+req_type: Bug
+tags:
+- aida:pr
+- auto-bump
+- from-self-test
+- kind:bug-spotted
+- multi-agent
+- papercut
