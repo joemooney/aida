@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:25:56.023469640Z
-modified_at: 2026-05-28T15:43:14.415880016Z
+modified_at: 2026-05-30T02:59:52.313637113Z
 req_type: Task
 tags:
 - autonomy-keystone
@@ -96,4 +96,9 @@ comments:
   content: 'Advisor''s escalation verdict accepted: this spec is user-authoring work, not implementer-pickup work. Leaving parked at NeedsAttention with the existing 019e50d9 lease. Lease + worktree intentionally retained for when operator picks up the writing pass. Removing from auto-pickup eligibility via the punt verdict; will not appear in standard queue routing until operator status-flips to in-progress and works it themselves.'
   created_at: 2026-05-22T20:31:46.247262512Z
   modified_at: 2026-05-22T20:31:46.247262512Z
+- id: 019e76d2-e179-7d43-99ae-12a3aade55c8
+  author: joe
+  content: 'Rejected 2026-05-29 (operator). Premature: the autonomy keystone needs more stability before it''s worth a public demo/narrative — recording a keystone drain now would showcase the very bugs we''re clearing. The capture TOOLING already exists ( generates a cast), so demo recording is NOT blocked on tooling; it''s gated on stability. Operator''s stated phase: clear out all known bugs first, achieve stability, THEN consider marketing/visibility. Revive this (or re-file) once the bug backlog is cleared and the keystone runs clean.'
+  created_at: 2026-05-30T02:59:52.313637113Z
+  modified_at: 2026-05-30T02:59:52.313637113Z
 human_only: true
