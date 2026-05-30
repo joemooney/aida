@@ -123,7 +123,15 @@ fn embed_file(code: &mut String, file_path: &str, key: &str) {
 }
 
 fn embed_directory(code: &mut String, dir: &str, prefix: &str) {
-    let dir_path = Path::new(dir);
+    embed_directory_rec(code, Path::new(dir), prefix);
+}
+
+// Recurse so a skill (or any template category) can be a *folder* carrying
+// supporting files alongside its prompt, e.g.
+// `templates/skills/aida-pr/{SKILL.md, examples/pr-description-template.md}`.
+// Subdirectory structure is preserved in the embedded key
+// (`skills/aida-pr/examples/pr-description-template.md`). trace:TASK-574
+fn embed_directory_rec(code: &mut String, dir_path: &Path, prefix: &str) {
     if !dir_path.exists() {
         return;
     }
@@ -135,10 +143,12 @@ fn embed_directory(code: &mut String, dir: &str, prefix: &str) {
 
         for entry in sorted_entries {
             let path = entry.path();
-            if path.is_file() {
-                let file_name = path.file_name().unwrap().to_str().unwrap();
-                let key = format!("{}/{}", prefix, file_name);
+            let name = path.file_name().unwrap().to_str().unwrap();
+            let key = format!("{}/{}", prefix, name);
 
+            if path.is_dir() {
+                embed_directory_rec(code, &path, &key);
+            } else if path.is_file() {
                 // Use include_str! for compile-time embedding
                 let rel_path = path.to_str().unwrap().replace("\\", "/");
                 code.push_str(&format!(

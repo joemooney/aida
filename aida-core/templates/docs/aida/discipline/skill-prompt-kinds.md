@@ -239,3 +239,30 @@ tunable via `AIDA_EXIT_POLL_MS` / `AIDA_EXIT_GRACE_MS`. Implementation:
   implementer should pause on design-laden choices; `--zen` keeps that for
   `design-fork`, drops it for `confirmation`.
 - `feedback_pushback_on_overengineering.md` — the option-1 convention.
+
+## Skill structure: flat file vs helper folder
+
+A skill is either a **flat file** or a **helper folder** (TASK-574):
+
+- **Flat** — `<name>.md` is the whole skill. The default; use it when the
+  prompt is self-contained.
+- **Folder-form** — `<name>/SKILL.md` is the prompt, and the folder carries
+  supporting files the prompt points at:
+
+  ```
+  skills/aida-pr/
+  ├── SKILL.md                              # the prompt body
+  └── examples/pr-description-template.md   # a copy-paste helper the prompt cites
+  ```
+
+  Reach for folder-form when a skill benefits from shipping a **template,
+  example, or helper script** next to its prompt — e.g. `/aida-pr` shipping a
+  PR-description skeleton. The prompt references the helper by its
+  folder-relative path (`examples/…`, `templates/…`). The whole subfolder
+  tree is embedded at build time and scaffolded verbatim into
+  `.claude/skills/<name>/`, so a fresh `aida init` lands the prompt *and* its
+  helpers.
+
+  Only `SKILL.md` (or a flat `<name>.md`) counts as the prompt — keep the
+  prompt body there. Migrate a flat skill to folder-form by moving `<name>.md`
+  to `<name>/SKILL.md` and adding the helpers; no per-skill wiring is needed.
