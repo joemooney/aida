@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-30T18:38:15.154048169Z
-modified_at: 2026-05-30T20:54:09.045917669Z
+modified_at: 2026-05-30T20:54:11.502274290Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -52,3 +52,19 @@ comments:
     Action: reframing from confirmed BUG to observation-pending-reproduction; lowering priority. Watch for recurrence on a clean ship; if it recurs, capture the FULL ship stdout+stderr + 'aida cache status' at miss time.
   created_at: 2026-05-30T20:41:01.652508019Z
   modified_at: 2026-05-30T20:41:01.652508019Z
+- id: 019e7aaa-732e-77a1-8682-6776fa6eb754
+  author: joe
+  content: |-
+    REVERSAL of the prior correction — BUG-404 IS REAL, now reproduced cleanly and de-confounded.
+
+    Clean repro 2026-05-30 (PR-360 / BUG-405):
+    - Set BUG-405 → Done as a STANDALONE step (separate invocation, NOT bundled with ship — eliminates the prior confounder).
+    - Ran 'aida pr ship 360' as its own invocation. PR merged; ship's pull fast-forwarded local main 36e60c06 → c1f6900d (reflog confirms 'pull --ff-only origin main: Fast-forward').
+    - Result: BUG-405 STILL Done after the ship. NOT auto-bumped.
+    - 'aida db reconcile-status --spec BUG-405 --dry-run' → 'would flip 1 spec → Completed: BUG-405 (commit c1f6900)'. So the spec/commit match + eligibility are fine with a WIDE scan range; only the ship-time pull's NARROW-range scan misses.
+
+    So the prior 'empty scan range' note was wrong about the mechanism (reflog shows a correct FF range 36e60c06..c1f6900d that INCLUDES the commit), but RIGHT that ship's pull misses. The real divergence is between the code-leg pull's Some(pre_sha) scan (misses) and reconcile's wider scan (matches), despite the narrow range nominally including the commit. Mechanism still to pin down — candidates: (a) storage.load() in the code-leg auto-bump reads a store/cache where the spec isn't yet Done; (b) leg ordering (store-leg vs code-leg) interaction; (c) the FF completes after pre_sha capture in a way that yields an empty effective range. Next: instrument the code-leg auto-bump (full untruncated ship output + a targeted repro) before coding a fix — do NOT guess again.
+
+    Confirmed twice now (BUG-366 + BUG-405). Restoring to Approved / Medium.
+  created_at: 2026-05-30T20:54:11.502274290Z
+  modified_at: 2026-05-30T20:54:11.502274290Z
