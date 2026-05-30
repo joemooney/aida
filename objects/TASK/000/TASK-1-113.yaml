@@ -19,11 +19,12 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T07:30:06.646327865Z
-modified_at: 2026-05-30T01:44:10.291898984Z
+modified_at: 2026-05-30T01:49:29.055079302Z
 req_type: Task
 tags:
 - aida:db:reconcile-status
 - auto-bump
+- effort:impl:1h
 - from-advisor:TASK-131
 - from-self-test
 - kind:observation
