@@ -14,7 +14,9 @@ use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::models::{Requirement, RequirementsStore};
+use crate::models::{
+    Requirement, RequirementPriority, RequirementStatus, RequirementType, RequirementsStore,
+};
 
 /// Lightweight projection of a Requirement, sourced from the cache rather
 /// than from canonical YAML. Contains just the fields needed for list /
@@ -868,6 +870,52 @@ mod tests {
             })
             .unwrap();
         assert_eq!(everything.len(), 3);
+    }
+
+    /// trace:TASK-132 | ai:codex
+    #[test]
+    fn list_summaries_combines_status_type_and_priority_with_and() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut exact = sample_req("TASK-132-001", "approved low task");
+        exact.status = RequirementStatus::Approved;
+        exact.priority = RequirementPriority::Low;
+        exact.req_type = RequirementType::Task;
+
+        let mut wrong_priority = sample_req("TASK-132-002", "approved medium task");
+        wrong_priority.status = RequirementStatus::Approved;
+        wrong_priority.priority = RequirementPriority::Medium;
+        wrong_priority.req_type = RequirementType::Task;
+
+        let mut wrong_status = sample_req("TASK-132-003", "planned low task");
+        wrong_status.status = RequirementStatus::Planned;
+        wrong_status.priority = RequirementPriority::Low;
+        wrong_status.req_type = RequirementType::Task;
+
+        let mut wrong_type = sample_req("BUG-132-004", "approved low bug");
+        wrong_type.status = RequirementStatus::Approved;
+        wrong_type.priority = RequirementPriority::Low;
+        wrong_type.req_type = RequirementType::Bug;
+
+        store.requirements.push(exact);
+        store.requirements.push(wrong_priority);
+        store.requirements.push(wrong_status);
+        store.requirements.push(wrong_type);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                status: Some("approved".into()),
+                req_type: Some("Task".into()),
+                priority: Some("low".into()),
+                ..Default::default()
+            })
+            .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec_id.as_deref(), Some("TASK-132-001"));
     }
 
     /// trace:STORY-441 | ai:claude
