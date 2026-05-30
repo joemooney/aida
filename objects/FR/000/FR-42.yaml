@@ -10,7 +10,7 @@ priority: Medium
 owner: joe
 feature: 14-NAV
 created_at: 2025-11-25T22:36:17.393702816Z
-modified_at: 2026-05-04T19:28:18.967145553Z
+modified_at: 2026-05-30T01:44:08.093433616Z
 req_type: Functional
 tags:
 - gui
@@ -29,6 +29,11 @@ comments:
   content: ''
   created_at: 2026-05-04T19:28:18.016807786Z
   modified_at: 2026-05-04T19:28:18.016807786Z
+- id: 019e768d-8a9d-7921-a814-0dde2015ab0a
+  author: joe
+  content: Commit 8d282b28 references this requirement
+  created_at: 2026-05-30T01:44:08.093433616Z
+  modified_at: 2026-05-30T01:44:08.093433616Z
 history:
 - id: 92a50b21-6053-4e7c-9919-0724aadbea36
   author: Unknown User
