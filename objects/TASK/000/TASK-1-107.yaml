@@ -10,12 +10,12 @@ description: |-
   Likely root cause to investigate: aida-cli's list command may build filters as a Vec<Filter>::any-of instead of all-of, OR the cache query joins filters with UNION instead of INTERSECT. Worth a code-level fix that adds tests for the AND combinations operators rely on.
 
   Immediate workaround: pipe through awk/grep — 'aida list --status approved --type task | awk $4=="Low"'.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T15:54:26.114824266Z
-modified_at: 2026-05-28T15:54:26.114824266Z
+modified_at: 2026-05-30T02:48:53.192347123Z
 req_type: Task
 tags:
 - aida:list
