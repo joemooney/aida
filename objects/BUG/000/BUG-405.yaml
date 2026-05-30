@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-30T18:40:02.916268041Z
-modified_at: 2026-05-30T18:40:02.916268041Z
+modified_at: 2026-05-30T20:46:20.728803136Z
 req_type: Bug
 tags:
 - aida:pr
@@ -31,3 +31,9 @@ tags:
 - kind:bug-spotted
 - multi-agent
 - papercut
+comments:
+- id: 019e7aa3-4438-78c1-b8a7-02c21b2ef28f
+  author: joe
+  content: Commit 5e178bbc references this requirement
+  created_at: 2026-05-30T20:46:20.728803136Z
+  modified_at: 2026-05-30T20:46:20.728803136Z
