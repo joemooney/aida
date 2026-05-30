@@ -43273,6 +43273,17 @@ mod bug_229_display_matrix_tests {
 /// the git-only bucketing; this adds the `gh` PR-state lookups and
 /// prints each bucket with a concrete `▶ Next` action.
 ///
+/// BUG-366: the "start review" hint must name a command that survives an
+/// operator's reflexive flags. Bare `aida queue work PR-N` resolves to the
+/// review story (TASK-85), but operators habitually append implementer-drain
+/// flags (`--auto-complete --no-human`) — and the auto-complete preflight
+/// can't resolve a PR number into a spec. Naming `--for reviewer` makes the
+/// reviewer intent explicit so the implementer-drain flags don't get bolted
+/// on to a review pickup. trace:BUG-366 | ai:claude
+fn review_pickup_hint(pr_number: u64) -> String {
+    format!("aida queue work PR-{pr_number} --for reviewer")
+}
+
 /// TASK-250: each open-PR branch is sub-classified into one of four
 /// PR-lifecycle states — review not started / in progress / approved /
 /// merged-awaiting-pull — so the next-action hint matches reality
@@ -43362,7 +43373,7 @@ fn render_in_flight_grouped(
                     InFlightPrDisplay::AwaitingReview => println!(
                         "    {} start review (`{}`)",
                         "▶ Next:".bold(),
-                        format!("aida queue work PR-{}", pr.number).cyan()
+                        review_pickup_hint(pr.number).cyan()
                     ),
                 }
             }
@@ -50744,6 +50755,17 @@ mod queue_work_tests {
         assert!(spec_matches(&r, "BUG-42")); // agreed_id
         assert!(spec_matches(&r, "bug-42"));
         assert!(!spec_matches(&r, "BUG-99"));
+    }
+
+    /// BUG-366: the "awaiting review" hint must be an unambiguous reviewer
+    /// pickup, not a bare `aida queue work PR-N` that invites implementer-drain
+    /// flags the PR-N path can't resolve. trace:BUG-366 | ai:claude
+    #[test]
+    fn review_pickup_hint_names_reviewer_role() {
+        assert_eq!(
+            review_pickup_hint(250),
+            "aida queue work PR-250 --for reviewer"
+        );
     }
 
     fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
