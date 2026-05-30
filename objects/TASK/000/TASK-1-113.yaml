@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T07:30:06.646327865Z
-modified_at: 2026-05-30T01:41:21.093968144Z
+modified_at: 2026-05-30T01:44:10.291898984Z
 req_type: Task
 tags:
 - aida:db:reconcile-status
@@ -30,3 +30,9 @@ tags:
 - linked:TASK-131
 - papercut
 - severity:major
+comments:
+- id: 019e768d-9333-73f0-a410-c7e616a62e22
+  author: joe
+  content: Commit 8d282b28 references this requirement
+  created_at: 2026-05-30T01:44:10.291898984Z
+  modified_at: 2026-05-30T01:44:10.291898984Z
