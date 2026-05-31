@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T21:11:40.068419354Z
-modified_at: 2026-05-10T02:24:27.837400481Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019e0e73-bb76-7ab1-9f09-51140a1ae2fd
@@ -31,3 +31,5 @@ comments:
   content: Commit ad365bc references this requirement
   created_at: 2026-05-10T02:24:27.837400481Z
   modified_at: 2026-05-10T02:24:27.837400481Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
