@@ -1,0 +1,19 @@
+id: 019e7e5d-8a87-78c2-a0f7-475a59e7f61c
+spec_id: BUG-414
+agreed_id: BUG-414
+title: lifecycle:no-ci-wait silently ignored — orchestrator always blocks on CI
+description: 'Found by the 2026-05-31 orchestrator-drain review (verified). LifecycleSkip parses ''lifecycle:no-ci-wait'' (and lifecycle:trivial) into no_ci_wait=true and the kickoff banner shows it, but orchestrate_with_lifecycle_skip (auto_complete.rs) NEVER checked the flag — Phase 2 (CI wait) ran unconditionally. So the documented STORY-442 feature (skip the blocking CI-wait; CI still runs remotely) was silently dead; lifecycle:trivial users still blocked on CI. The existing trivial test even encoded the bug (asserted Phase::Ci ran). Fix: wrap Phase 2 in ''if lifecycle_skip.no_ci_wait { skip } else { wait }'', mirroring the no_review/no_build skips; merge+pull (integrity) still never skip. Tests: updated the trivial test + added orchestrate_no_ci_wait_skips_ci_keeps_rest. Also added a latent-defect guard: a last_phase()<=3 stop-check (no current variant returns 3, defensive). 29 orchestrate tests green.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T14:08:40.071520214Z
+modified_at: 2026-05-31T14:08:40.071520214Z
+req_type: Bug
+tags:
+- auto-complete
+- from-review
+- kind:bug-spotted
+- lifecycle
+- orchestrator
+- story-442
