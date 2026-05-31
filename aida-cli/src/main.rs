@@ -39454,6 +39454,49 @@ mod handle_pull_command_tests {
         );
     }
 
+    /// BUG-404: when local main was already advanced to the merge commit
+    /// before the pull runs — exactly what `aida pr ship` step 3
+    /// (`gh pr merge --squash`) does before step 4's pull — the pull is a
+    /// no-op ("Already up to date") and the narrow `pre..HEAD` range is
+    /// empty, so the merged spec never bumped (it stayed Done until a manual
+    /// `reconcile-status`). The fix: a no-op pull falls back to the wide
+    /// scan, so a main advanced outside this pull is still covered.
+    /// trace:BUG-404 | ai:claude
+    #[test]
+    fn pull_noop_still_auto_bumps_externally_advanced_main() {
+        let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        let storage = Storage::new(store_path.clone());
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        let spec_id = "STORY-9601".to_string();
+        seed_done_spec_at(&store_path, &spec_id);
+
+        // The merge lands on the remote...
+        push_remote_commit_referencing(&bare, &spec_id);
+        // ...and local main is fast-forwarded to it via a RAW git pull (no
+        // auto-bump) — standing in for `gh pr merge` advancing local main.
+        // The spec is still Done at this point.
+        run_git_in(&project_root, &["pull", "--ff-only", "origin", "main"]);
+
+        // Now the command under test: its `git pull` is a no-op
+        // ("Already up to date"), so the narrow range is empty. The BUG-404
+        // fallback must still scan and bump.
+        handle_pull_command(&store_path, true, false, true, true, false).unwrap();
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "BUG-404: a no-op pull over an externally-advanced main should still \
+             auto-bump {} to Completed, was {:?}",
+            spec_id,
+            req.status
+        );
+    }
+
     /// BUG-254: when the code-leg `git pull --ff-only` fails (here: an
     /// untracked file would be overwritten by the merge), `handle_pull_command`
     /// must return Err so `aida pull` exits non-zero — the orchestrator's
@@ -48191,53 +48234,55 @@ fn handle_pull_command(
                     // refs to specs currently in Done and bump them.
                     // Best-effort: any failure prints a warning but
                     // doesn't fail the pull. trace:STORY-86 | ai:claude
-                    // BUG-404: opt-in instrumentation for diagnosing the
-                    // ship-time auto-bump miss. Logs the exact range +
-                    // store the scan saw so the narrow-vs-wide divergence
-                    // can be pinned without guessing. trace:BUG-404 | ai:claude
+                    //
+                    // BUG-404: the narrow `pre_code_sha..HEAD` range assumes
+                    // THIS pull is what advanced main. But `aida pr ship`
+                    // step 3 (`gh pr merge --squash`) fast-forwards local
+                    // main to the squash commit BEFORE step 4's pull runs —
+                    // so the pull is a no-op ("Already up to date"),
+                    // pre_code_sha == post_head, and the narrow range is
+                    // empty. The merged spec then never bumps (confirmed by
+                    // AIDA_DEBUG_AUTOBUMP instrumentation: 0 commits in the
+                    // range, 0 flips). When the pull moved nothing, fall back
+                    // to the wide scan so a main advanced outside this pull
+                    // (gh merge, or a manual merge-then-pull) is still
+                    // covered. The Done-guard inside the helper keeps the
+                    // wide scan idempotent. trace:BUG-404 | ai:claude
+                    let post_code_sha = git_ops::head_sha(&project_root).ok();
+                    let pull_was_noop = match (pre_code_sha.as_deref(), post_code_sha.as_deref()) {
+                        (Some(a), Some(b)) => a == b,
+                        _ => false,
+                    };
+                    let scan_pre: Option<&str> = if pull_was_noop {
+                        None
+                    } else {
+                        pre_code_sha.as_deref()
+                    };
+                    // Opt-in instrumentation (default off) — permanent
+                    // visibility into why an auto-bump did or didn't fire.
                     let dbg_autobump = std::env::var("AIDA_DEBUG_AUTOBUMP")
                         .map(|v| v != "0" && !v.is_empty())
                         .unwrap_or(false);
                     if dbg_autobump {
-                        let post = git_ops::head_sha(&project_root).ok();
-                        let range_arg = match pre_code_sha.as_deref() {
-                            Some(p) => format!("{}..HEAD", p),
-                            None => "(none → HEAD~50)".to_string(),
-                        };
                         eprintln!(
-                            "  [autobump-debug] enabled={} pre_code_sha={:?} post_head={:?} range={} store_path={}",
+                            "  [autobump-debug] enabled={} pre_code_sha={:?} post_head={:?} pull_was_noop={} scan_range={} store_path={}",
                             auto_bump_enabled(),
                             pre_code_sha,
-                            post,
-                            range_arg,
+                            post_code_sha,
+                            pull_was_noop,
+                            match scan_pre {
+                                Some(p) => format!("{}..HEAD", p),
+                                None => "(wide → HEAD~50)".to_string(),
+                            },
                             store_path.display()
                         );
-                        if let Some(p) = pre_code_sha.as_deref() {
-                            let log = std::process::Command::new("git")
-                                .arg("-C")
-                                .arg(&project_root)
-                                .args([
-                                    "log",
-                                    "--oneline",
-                                    "--no-decorate",
-                                    &format!("{}..HEAD", p),
-                                ])
-                                .output();
-                            if let Ok(o) = log {
-                                eprintln!(
-                                    "  [autobump-debug] commits in {}..HEAD:\n{}",
-                                    p,
-                                    String::from_utf8_lossy(&o.stdout).trim()
-                                );
-                            }
-                        }
                     }
                     if auto_bump_enabled() {
                         let storage = Storage::new(store_path.to_path_buf());
                         match auto_bump_done_to_completed(
                             &project_root,
                             store_path,
-                            pre_code_sha.as_deref(),
+                            scan_pre,
                             &storage,
                         ) {
                             Ok(flips) => {
