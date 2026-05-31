@@ -69,7 +69,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T03:18:25.149264466Z
-modified_at: 2026-05-11T06:03:00.803491569Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -81,6 +81,8 @@ comments:
   content: 'PR-9 reviewer 2026-05-11: --days flag not implemented as composable with --orphans. The chosen design — ''orphan-ness is the sole trigger, no date filter'' — is the right call: orphan project dirs have no useful resume value regardless of age, so filtering by age would just delay cleanup. Acceptance criterion ''--orphans --days N'' is retroactively withdrawn; orphan-only is the shipping semantics.'
   created_at: 2026-05-11T06:03:00.803491569Z
   modified_at: 2026-05-11T06:03:00.803491569Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T04:49:09.732663185Z
