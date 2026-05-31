@@ -120,7 +120,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:55:58.012552109Z
-modified_at: 2026-05-16T20:16:11.603779932Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -148,6 +148,8 @@ comments:
     Test status: no Rust code changed — workflow YAML validated via python yaml.safe_load; shell scripts pass bash -n
   created_at: 2026-05-16T19:53:19.830882382Z
   modified_at: 2026-05-16T19:53:19.830882382Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T19:51:10.476620001Z
