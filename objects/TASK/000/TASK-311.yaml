@@ -82,7 +82,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:37:15.060027836Z
-modified_at: 2026-05-28T04:50:35.709091611Z
+modified_at: 2026-05-31T04:45:15.653321692Z
 req_type: Task
 tags:
 - advisor-discipline
@@ -97,4 +97,9 @@ comments:
   content: 'Audit-check to add 2026-05-19: the spec audit should verify every named hard-dependency/prerequisite resolves to a FILED spec. Worked example: STORY-276 was filed with ''(requires /aida-punt)'' in its title and STORY-306 depending on it — but /aida-punt was never a spec (EPIC-28''s children were prose only). A dangling hard-dependency: the implementer can''t complete the spec, and only discovers it at pickup. The audit check: for each ''requires X'' / ''depends on X'' / ''prerequisite: X'' in a spec, confirm X is a filed spec ID — not prose, not an aspiration. Same family as the primary-caller-environment check: a spec criterion that references something non-existent. (STORY-332 was filed 2026-05-19 to close this specific dangling dep.)'
   created_at: 2026-05-19T14:14:35.852246229Z
   modified_at: 2026-05-19T14:14:35.852246229Z
+- id: 019e7c59-ba05-7290-a52f-fba79260805d
+  author: joe
+  content: 'Triaged 2026-05-30 (blocked-queue sweep): the filing-time discipline is now captured as the advisor memory feedback_verify_acceptance_matches_primary_caller (''name the primary caller, walk each acceptance criterion against that environment before filing''), with the 4 documented instances. Immediate value delivered. The remaining slice — propagating it into the scaffolding-pack discipline templates (TASK-311 is tagged scaffolding-pack) — is a build/commit task, deferred per the bugs-first phase; revisit when next touching the discipline pack. Dequeued from the active queue; kept as Approved backlog for the propagation slice.'
+  created_at: 2026-05-31T04:45:15.653321692Z
+  modified_at: 2026-05-31T04:45:15.653321692Z
 human_only: true
