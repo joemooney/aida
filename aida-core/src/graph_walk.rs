@@ -96,6 +96,41 @@ pub fn walk(
     result
 }
 
+/// Walk several `(rel_types, direction)` specs from the same `root` and merge
+/// the reachable node sets (deduped, first-seen order; edges concatenated).
+///
+/// For a query whose answer spans more than one edge orientation. The driving
+/// case (BUG-411) is `impact` — "specs blocked by the root" — which is
+/// reachable EITHER via an incoming `BlockedBy` edge (`X.BlockedBy → root`) OR
+/// an outgoing `Blocks` edge (`root.Blocks → X`), because a relationship may be
+/// stored only one-directionally. A single-orientation walk silently misses the
+/// other form. Each spec's walk is independently cycle-safe; note the union is
+/// NOT a fully transitive *mixed*-orientation walk (a path alternating
+/// orientations per hop is not followed) — sufficient for the impact query
+/// where each chain is orientation-consistent. trace:BUG-411 | ai:claude
+pub fn walk_union(
+    store: &RequirementsStore,
+    root: Uuid,
+    specs: &[(Vec<RelationshipType>, Direction)],
+    max_depth: Option<usize>,
+) -> GraphResult {
+    let mut merged = GraphResult {
+        root,
+        ..Default::default()
+    };
+    let mut seen: HashSet<Uuid> = HashSet::new();
+    for (rel_types, direction) in specs {
+        let sub = walk(store, root, rel_types, *direction, max_depth);
+        merged.edges.extend(sub.edges);
+        for nid in sub.nodes {
+            if seen.insert(nid) {
+                merged.nodes.push(nid);
+            }
+        }
+    }
+    merged
+}
+
 /// Resolve one hop of neighbors from `node` for the given direction.
 fn neighbors(
     store: &RequirementsStore,
@@ -325,5 +360,44 @@ mod tests {
         // missing without resolving), but rollup contributes nothing for it.
         let rollup = status_rollup(&store, &res.nodes);
         assert_eq!(rollup.total, 0);
+    }
+
+    #[test]
+    fn walk_union_impact_catches_unidirectional_blocks() {
+        // trace:BUG-411 | ai:claude
+        // A blocks B, stored ONLY as A.Blocks->B (unidirectional, no
+        // B.BlockedBy->A). Impact-from-A = (incoming BlockedBy) ∪ (outgoing
+        // Blocks) must still find B via the outgoing-Blocks leg.
+        let mut a = make_req("STORY-A", RequirementStatus::InProgress);
+        let b = make_req("STORY-B", RequirementStatus::Approved);
+        link(&mut a, RelationshipType::Blocks, b.id);
+        let (aid, bid) = (a.id, b.id);
+        let store = store_with(vec![a, b]);
+
+        let specs = [
+            (vec![RelationshipType::BlockedBy], Direction::Incoming),
+            (vec![RelationshipType::Blocks], Direction::Outgoing),
+        ];
+        let res = walk_union(&store, aid, &specs, None);
+        assert_eq!(
+            res.nodes,
+            vec![bid],
+            "impact must find the unidirectionally-blocked spec"
+        );
+
+        // And the other storage form (B.BlockedBy->A) is still caught via the
+        // incoming-BlockedBy leg — and not double-counted when both exist.
+        let mut a2 = make_req("STORY-A2", RequirementStatus::InProgress);
+        let mut b2 = make_req("STORY-B2", RequirementStatus::Approved);
+        link(&mut b2, RelationshipType::BlockedBy, a2.id);
+        link(&mut a2, RelationshipType::Blocks, b2.id); // bidirectional-ish
+        let (a2id, b2id) = (a2.id, b2.id);
+        let store2 = store_with(vec![a2, b2]);
+        let res2 = walk_union(&store2, a2id, &specs, None);
+        assert_eq!(
+            res2.nodes,
+            vec![b2id],
+            "both edge forms ⇒ B2 once, not twice"
+        );
     }
 }
