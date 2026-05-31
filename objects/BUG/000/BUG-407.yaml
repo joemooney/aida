@@ -10,12 +10,12 @@ description: |-
   Fix: every confirm-gated command --heal invokes must run non-interactively — pass -y/--yes (and --force where the heal finding is classified [safe] and a patch is saved first) to 'aida session end' and any other prompting heal action. Mirrors the session-communication discipline: a headless gate must never emit a prompt nobody can answer. Consider a global guard: --heal sets a non-interactive mode that turns any y/N confirmation into its safe default (or hard-errors fast instead of blocking).
 
   Workaround until fixed: do NOT use 'aida doctor --heal'. Apply the safe fixes manually — 'aida brief ack <path>', 'aida queue prune --orphaned', 'aida session end <lease-id> --yes [--force]', 'git worktree remove --force <dir>'. (Done this way 2026-05-30; doctor now clean.)
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T03:06:13.112401686Z
-modified_at: 2026-05-31T04:57:22.318871261Z
+modified_at: 2026-05-31T05:02:03.625405632Z
 req_type: Bug
 tags:
 - aida:doctor
@@ -24,3 +24,7 @@ tags:
 - heal
 - interactive-prompt
 - kind:bug-spotted
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T05:02:03.625405632Z
+  completion_sha: 3901ea7dd5333db7b9a3222f0df250636ad7bfa2
