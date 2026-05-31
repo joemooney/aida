@@ -1,0 +1,19 @@
+id: 019e7dc2-b5c3-7932-bca9-ff4d4422eb8f
+spec_id: BUG-410
+agreed_id: BUG-410
+title: auto-bump re-completes a manually-reopened spec referenced by an older merged commit
+description: 'Confirmed 2026-05-31: STORY-491 was auto-completed by its plan commit a62866a (trailer ''(STORY-491 STORY-489)''). I re-opened it via ''aida edit STORY-491 --status approved --force'' (it was wrongly completed — only the plan, not the impl, had shipped). On the NEXT ''aida pull'' (shipping an unrelated PR), the auto-bump scan re-included a62866a, saw STORY-491 back at an eligible status (Approved), and re-completed it. So a manual re-open never sticks while any merged commit on main references the spec + it sits at an eligible status (Approved/Planned/InProgress/Done/NeedsAttention). Impact: can''t keep an umbrella spec open once a (plan/partial) commit referenced it; silent re-completion misrepresents project state. Proposal: the auto-bump should not RE-bump a spec it has already bumped once for a given commit (record (commit, spec) bump pairs / respect a ''manually reopened after auto-complete'' marker), or only scan commits newer than the last-bumped HEAD rather than a wider window. Related: the commit-trailer-completes-the-spec discipline (a plan commit shouldn''t trailer the umbrella) — but the re-bump-after-reopen is a separate scanner bug.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T11:19:33.059539895Z
+modified_at: 2026-05-31T11:19:33.059539895Z
+req_type: Bug
+tags:
+- aida:pull
+- auto-bump
+- from-self-test
+- kind:bug-spotted
+- lifecycle
+- reconcile
