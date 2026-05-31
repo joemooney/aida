@@ -10,7 +10,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T01:25:06.024019614Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:34:04.589351805Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -23,3 +23,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:34:03.334593072Z
   modified_at: 2026-05-04T19:34:03.334593072Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
