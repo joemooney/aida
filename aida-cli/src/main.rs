@@ -1366,6 +1366,7 @@ fn run() -> Result<()> {
             blocks,
             tree,
             impact,
+            follow,
             depth,
             json,
         } => {
@@ -1377,6 +1378,7 @@ fn run() -> Result<()> {
                 *blocks,
                 *tree,
                 *impact,
+                follow,
                 *depth,
                 *json,
             )?;
@@ -6402,6 +6404,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             blocks,
             tree,
             impact,
+            follow,
             depth,
             json,
         } => {
@@ -6413,6 +6416,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *blocks,
                 *tree,
                 *impact,
+                follow,
                 *depth,
                 *json,
             )?;
@@ -11367,6 +11371,7 @@ pub(crate) fn apply_tag_deltas(
 /// cycle-safe `graph_walk` primitive (TASK-594). Read-only; the flagship
 /// "outsmart the flat-markdown spec tools" demo. trace:STORY-489 | ai:claude
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn handle_graph_command(
     store: &aida_core::RequirementsStore,
     id_str: &str,
@@ -11374,6 +11379,7 @@ fn handle_graph_command(
     blocks: bool,
     tree: bool,
     impact: bool,
+    follow: &[String],
     depth: Option<usize>,
     json: bool,
 ) -> Result<()> {
@@ -11382,9 +11388,12 @@ fn handle_graph_command(
     let mode_count = [blocked_by, blocks, tree, impact]
         .iter()
         .filter(|b| **b)
-        .count();
+        .count()
+        + usize::from(!follow.is_empty());
     if mode_count > 1 {
-        anyhow::bail!("choose at most one graph mode: --blocked-by, --blocks, --tree, or --impact");
+        anyhow::bail!(
+            "choose at most one graph mode: --blocked-by, --blocks, --tree, --impact, or --follow"
+        );
     }
 
     let id = parse_requirement_id(id_str, store)?;
@@ -11417,6 +11426,18 @@ fn handle_graph_command(
                 (vec![RelationshipType::Blocks], Direction::Outgoing),
             ],
             "impact",
+        )
+    } else if !follow.is_empty() {
+        // FR-282: traverse arbitrary named relationship types (custom or
+        // built-in), outgoing. from_str maps an unknown name to Custom(name)
+        // (BUG-251), so `--follow begets` walks Custom("begets") edges — the
+        // query a flat per-feature spec store can't do over custom edges.
+        (
+            follow
+                .iter()
+                .map(|t| (vec![RelationshipType::from_str(t)], Direction::Outgoing))
+                .collect(),
+            "follow",
         )
     } else {
         (
