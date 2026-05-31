@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:51:37.511646683Z
-modified_at: 2026-05-17T02:04:32.553918084Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - auto-bump
@@ -85,6 +85,8 @@ comments:
     Follow-up: the misleading `aida show` hint ("Awaiting commit — no commit references the spec yet") shown for review stories is noted in BUG-113's Origin but out of scope here — could be a separate TASK.
   created_at: 2026-05-17T01:56:30.064901073Z
   modified_at: 2026-05-17T01:56:30.064901073Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T01:54:26.718884724Z
