@@ -1,12 +1,12 @@
 TASK = 140
-CR = 5
-DOC = 2
-FR = 281
+SPIKE = 5
+FOLDER = 6
 STORY = 82
+DOC = 2
+CR = 5
+FR = 281
 SPRINT = 3
 EPIC = 18
-SPIKE = 5
 BUG = 34
 SR = 1
-FOLDER = 6
 UR = 2
