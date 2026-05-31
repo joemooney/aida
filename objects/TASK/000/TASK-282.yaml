@@ -53,7 +53,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:55:26.351418339Z
-modified_at: 2026-05-17T18:25:42.820861185Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - batch:display-polish
@@ -87,6 +87,8 @@ comments:
     Follow-up: criterion 7 (TUI status strip consistency) deferred to STORY-244 — its launcher status strip isn't built yet; a comment there records the rule + helper names to reuse.
   created_at: 2026-05-17T18:08:06.562358606Z
   modified_at: 2026-05-17T18:08:06.562358606Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T18:05:47.774735502Z
