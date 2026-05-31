@@ -8,7 +8,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-03T03:53:18.076961209Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:36:23.050941892Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: References
@@ -33,3 +33,5 @@ history:
   - field_name: description
     old_value: "Work Queue View\n\nA user or team can have a work queue or other folders. This is an ordered list of requirements with a ranking where the ranking is discretionary ordering that the users themselves can elect. It is a type of Inbox and we will have other inboxes (such as notifcations, or mentions in comments). A user or a manager may wish to see what is in the work queue for that user. They can drag items higher or lower. "
     new_value: "Work Queue View\n\nA user or team can have a work queue folder type. This is an ordered list of requirements with a ranking. It is a type of Inbox and we will have other inboxes (such as notifcations, or mentions in comments). A user or a manager may wish to see what is in the work queue for that user. They can drag items higher or lower. "
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
