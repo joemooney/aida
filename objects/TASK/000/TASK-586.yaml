@@ -1,0 +1,23 @@
+id: 019e7bcb-47d2-7472-be10-cede853e3971
+spec_id: TASK-586
+agreed_id: TASK-586
+title: Rename dialog role → advisor as the canonical identifier (supersedes TASK-279)
+description: |-
+  Make 'advisor' the canonical role identifier everywhere (code default, queue routing, statusline, config, templates, living docs), replacing the internal 'dialog' token. TASK-279 deliberately kept 'dialog' internal — but that was path-dependence (changing it was harder then), not principle, and AIDA has no external users, so now is the clean moment to finish the transition.
+
+  Back-compat: keep 'dialog' as a thin, deprecated, silently-accepted INPUT alias (parse-time only) so existing config / AIDA_SESSION_ROLE=dialog shells / dialog-routed queue items on not-yet-rebuilt machines don't break mid-transition. Not permanent dual-naming — advisor is THE name; dialog is a migration safety net.
+
+  Supersedes TASK-279's keep-dialog-internal decision; update CLAUDE.md + discipline/advisor-role.md + the memory pack accordingly. Leave dated artifacts (PROMPT_HISTORY, dated SPIKE/competitive snapshots, frozen spec comments) immutable. trace via this spec.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T02:09:40.306827266Z
+modified_at: 2026-05-31T02:09:40.306827266Z
+req_type: Task
+tags:
+- advisor
+- aida:role
+- convention
+- refactor
+- supersedes:TASK-279
