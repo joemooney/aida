@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-30T18:38:15.154048169Z
-modified_at: 2026-05-31T00:30:09.028580231Z
+modified_at: 2026-05-31T00:38:13.577743864Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -73,3 +73,18 @@ comments:
   content: Commit 4d223bd3 references this requirement
   created_at: 2026-05-31T00:29:54.243397812Z
   modified_at: 2026-05-31T00:29:54.243397812Z
+- id: 019e7b77-8f49-7153-be8b-74043b6ce1a1
+  author: joe
+  content: |-
+    MECHANISM CONFIRMED via live instrumentation (AIDA_DEBUG_AUTOBUMP=1, PR-361 ship 2026-05-30) — the original 'empty scan range' hypothesis was RIGHT; my mid-investigation retraction was the error (I misread the reflog).
+
+    Ground-truth debug output from the ship's step-4 pull:
+      pre_code_sha=Some("c9605120") post_head=Some("c9605120") range=c9605120..HEAD  (EMPTY)
+      commits in c9605120..HEAD: <none>
+      auto_bump_done_to_completed → 0 flips
+
+    Root cause: 'aida pr ship' step 3 ('gh pr merge --squash') fast-forwards LOCAL main to the squash commit BEFORE step 4's 'aida pull' runs. So the pull is a no-op ('Already up to date'), pre_code_sha == post_head, and the narrow 'pre..HEAD' auto-bump range is empty — zero commits scanned, zero flips. The merged spec stays Done until a manual reconcile-status (which uses a wide range and works).
+
+    Fix (handle_pull_command code leg): when the pull moved nothing (pre==post), fall back to the wide HEAD~50 scan instead of the empty narrow range, so a main advanced outside this pull (gh merge, or manual merge-then-pull) is still covered. Done-guard keeps the wide scan idempotent. Regression test pull_noop_still_auto_bumps_externally_advanced_main proven to fail without the fix / pass with it. Instrumentation kept (default-off) for future visibility.
+  created_at: 2026-05-31T00:38:13.577743864Z
+  modified_at: 2026-05-31T00:38:13.577743864Z
