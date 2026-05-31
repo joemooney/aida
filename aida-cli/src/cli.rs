@@ -1350,6 +1350,51 @@ pub enum CacheCommand {
     Status,
 }
 
+/// Inter-agent mailbox — peer↔peer messaging between agents (distinct from
+/// operator→agent briefs and top-down directives). Hybrid storage: a fast
+/// local layer now, a git-canonical durable digest in a later slice.
+// trace:STORY-493 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum MailboxCommand {
+    /// Send a message to another agent, or `--broadcast` to all.
+    Send {
+        /// Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone.
+        #[clap(long)]
+        to: Option<String>,
+
+        /// Broadcast to every agent instead of a single recipient.
+        #[clap(long, conflicts_with = "to")]
+        broadcast: bool,
+
+        /// The message body.
+        body: String,
+
+        /// Attach to an existing thread (default: start a new thread).
+        #[clap(long)]
+        thread: Option<String>,
+
+        /// Id of the message this replies to.
+        #[clap(long)]
+        in_reply_to: Option<String>,
+
+        /// Override the sender id (default: this shell's agent/user identity).
+        #[clap(long)]
+        from: Option<String>,
+    },
+
+    /// Show an agent's inbox: messages addressed to it + broadcasts, oldest-first.
+    Inbox {
+        /// Whose inbox (default: this shell's agent/user identity).
+        agent: Option<String>,
+    },
+
+    /// Show a full conversation thread, oldest-first.
+    Thread {
+        /// The thread id.
+        thread_id: String,
+    },
+}
+
 /// SPIKE-31: Claude Code path-gated rules sync.
 // trace:SPIKE-31 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -4595,6 +4640,11 @@ pub enum Command {
     /// SQLite cache view commands (git-canonical mode only)
     #[clap(subcommand, hide = true)]
     Cache(CacheCommand),
+
+    /// Inter-agent mailbox: peer↔peer messaging (send / inbox / thread).
+    // trace:STORY-493 | ai:claude
+    #[clap(subcommand)]
+    Mailbox(MailboxCommand),
 
     /// Manage per-clone node identity (acquire/release node ids in the
     /// shared registry, list registered clones). Each clone of an AIDA
