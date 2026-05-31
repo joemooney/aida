@@ -77,7 +77,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T01:11:26.881810830Z
-modified_at: 2026-05-13T01:41:59.622948277Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -168,6 +168,8 @@ comments:
     Still High. Users default invocation of `aida queue list` shows zero items in the most common context (main project root, no active session). The implicit-filter behavior fights the user's mental model.
   created_at: 2026-05-13T01:16:39.050712146Z
   modified_at: 2026-05-13T01:16:39.050712146Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T01:33:14.993949431Z
