@@ -7,5 +7,7 @@ priority: Medium
 owner: joe
 feature: 174-claude-code
 created_at: 2025-12-13T18:41:21.022379300Z
-modified_at: 2025-12-13T18:41:21.022379300Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
