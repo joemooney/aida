@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:39:03.616661413Z
-modified_at: 2026-05-15T23:42:14.566473022Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - tui
@@ -26,6 +26,8 @@ comments:
   content: 'Implemented via PR #43 (commit 08ca908b): TUI autonomous-drain overlay buttons dispatching to /aida-drain-queue --mode review|merge. Tests: 737/737 workspace green; cargo fmt + clippy clean.'
   created_at: 2026-05-15T22:58:41.001979069Z
   modified_at: 2026-05-15T22:58:41.001979069Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T22:47:59.913353766Z
