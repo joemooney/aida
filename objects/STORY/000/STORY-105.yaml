@@ -32,7 +32,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:06.515771037Z
-modified_at: 2026-05-12T16:27:27.260476053Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -44,6 +44,8 @@ comments:
   content: Commit 9155163f references this requirement
   created_at: 2026-05-12T16:27:21.387807485Z
   modified_at: 2026-05-12T16:27:21.387807485Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T16:27:27.260476053Z
