@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: 206-Uncategorized
 created_at: 2026-02-21T06:14:31.763628977Z
-modified_at: 2026-02-21T06:15:06.123252747Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: e9d49cdb-399e-4811-903d-ba9b1573a331
@@ -15,3 +15,5 @@ comments:
   content: 'Implemented in commit a3e87ad. Files: useFilters.ts, KanbanFilterBar.tsx. Plan: docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md'
   created_at: 2026-02-21T06:15:06.123246464Z
   modified_at: 2026-02-21T06:15:06.123246464Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
