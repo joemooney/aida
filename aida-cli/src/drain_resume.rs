@@ -112,6 +112,104 @@ pub(crate) fn reconcile_resume_phase(postconditions: &[(Phase, bool)]) -> Resume
     ResumeDecision::AlreadyComplete
 }
 
+/// The reconciled-from-reality facts for one crashed drain member: whether each
+/// phase's *effect* is already present in the world. The caller probes these
+/// from git / PR / spec state (branch exists, CI green, review verdict present,
+/// PR merged, spec promoted, post-merge build ok); this module only reasons
+/// over them. Keeping the probing out of here means the decision is pure and
+/// exhaustively testable, and the probing can be a thin, separately-tested
+/// shell. trace:STORY-492 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct ResumeFacts {
+    /// Implementer: a feature branch with commits referencing the spec exists.
+    pub branch_exists: bool,
+    /// CI: a CI run for the branch head exists and is green.
+    pub ci_green: bool,
+    /// Reviewer: an approving review verdict exists for the PR.
+    pub reviewed: bool,
+    /// Merge: the PR is merged (or the spec already sits on the default branch).
+    pub pr_merged: bool,
+    /// Pull: the default branch locally contains the merge AND the spec has been
+    /// promoted to Completed (auto-bump landed).
+    pub spec_completed: bool,
+    /// Build: a post-merge build verification succeeded.
+    pub build_ok: bool,
+}
+
+/// Is `phase`'s postcondition (its effect on the world) already satisfied?
+/// Pure mapping from a phase to the corresponding probed fact. An unprobed /
+/// false fact means "not met" → that phase will be re-run (conservative).
+pub(crate) fn phase_postcondition_met(phase: Phase, facts: &ResumeFacts) -> bool {
+    match phase {
+        Phase::Implementer => facts.branch_exists,
+        Phase::Ci => facts.ci_green,
+        Phase::Reviewer => facts.reviewed,
+        Phase::Merge => facts.pr_merged,
+        Phase::Pull => facts.spec_completed,
+        Phase::Build => facts.build_ok,
+    }
+}
+
+/// What an explicit `--resume` should do for the crashed member, composed from
+/// the liveness/shelve classification and the reconcile-from-reality decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResumeOutcome {
+    /// Refuse: the original orchestrator may still be alive — never double-drive.
+    RefuseOrchestratorAlive,
+    /// Nothing to resume (no mid-flight member at the recorded state).
+    NothingToResume,
+    /// The member was deliberately shelved — leave it parked (triage, don't resume).
+    LeaveShelved,
+    /// Every phase's effect already exists — just finish/clean up, no phase re-run.
+    AlreadyComplete,
+    /// Re-enter the live drain at this phase (earliest whose effect is absent).
+    ResumeAt(Phase),
+}
+
+/// Decide the explicit-resume outcome. Pure: the caller supplies the liveness +
+/// shelve facts (probed via the same PID-liveness gate the orchestrator uses to
+/// auto-release dormant leases) and the per-phase reality `facts`. The
+/// orchestrator-alive guard dominates — a `--resume` must refuse on any doubt
+/// that the original drive is dead, because double-driving a spec (two
+/// processes merging the same PR / writing the same worktree) is the one
+/// unrecoverable failure mode. trace:STORY-492 | ai:claude
+pub(crate) fn resume_plan(
+    orchestrator_alive: bool,
+    member_in_flight: bool,
+    member_state_in_phase: bool,
+    has_failure_reason: bool,
+    facts: &ResumeFacts,
+) -> ResumeOutcome {
+    match classify_resumability(
+        orchestrator_alive,
+        member_in_flight,
+        member_state_in_phase,
+        has_failure_reason,
+    ) {
+        Resumability::OrchestratorAlive => ResumeOutcome::RefuseOrchestratorAlive,
+        Resumability::NotInFlight => ResumeOutcome::NothingToResume,
+        Resumability::Shelved => ResumeOutcome::LeaveShelved,
+        Resumability::ResumableCrash => {
+            const ALL_PHASES: [Phase; 6] = [
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ];
+            let postconditions: Vec<(Phase, bool)> = ALL_PHASES
+                .iter()
+                .map(|&p| (p, phase_postcondition_met(p, facts)))
+                .collect();
+            match reconcile_resume_phase(&postconditions) {
+                ResumeDecision::AlreadyComplete => ResumeOutcome::AlreadyComplete,
+                ResumeDecision::ResumeAt(phase) => ResumeOutcome::ResumeAt(phase),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,5 +316,109 @@ mod tests {
             reconcile_resume_phase(&[(Phase::Build, true)]),
             ResumeDecision::ResumeAt(Phase::Implementer)
         );
+    }
+
+    // --- slice 2: resume_plan composition (STORY-492) ---
+
+    fn facts(
+        branch: bool,
+        ci: bool,
+        review: bool,
+        merged: bool,
+        completed: bool,
+        build: bool,
+    ) -> ResumeFacts {
+        ResumeFacts {
+            branch_exists: branch,
+            ci_green: ci,
+            reviewed: review,
+            pr_merged: merged,
+            spec_completed: completed,
+            build_ok: build,
+        }
+    }
+
+    #[test]
+    fn phase_postcondition_maps_each_phase_to_its_fact() {
+        let f = facts(true, false, true, false, true, false);
+        assert!(phase_postcondition_met(Phase::Implementer, &f));
+        assert!(!phase_postcondition_met(Phase::Ci, &f));
+        assert!(phase_postcondition_met(Phase::Reviewer, &f));
+        assert!(!phase_postcondition_met(Phase::Merge, &f));
+        assert!(phase_postcondition_met(Phase::Pull, &f));
+        assert!(!phase_postcondition_met(Phase::Build, &f));
+    }
+
+    #[test]
+    fn resume_plan_refuses_when_orchestrator_alive() {
+        // The double-drive guard dominates regardless of how complete the
+        // world looks. This is the catastrophic-risk gate.
+        let out = resume_plan(
+            true,
+            true,
+            true,
+            false,
+            &facts(true, true, true, true, true, true),
+        );
+        assert_eq!(out, ResumeOutcome::RefuseOrchestratorAlive);
+    }
+
+    #[test]
+    fn resume_plan_leaves_shelved_member_parked() {
+        let out = resume_plan(
+            false,
+            true,
+            true,
+            true,
+            &facts(true, false, false, false, false, false),
+        );
+        assert_eq!(out, ResumeOutcome::LeaveShelved);
+    }
+
+    #[test]
+    fn resume_plan_nothing_to_resume_when_not_in_flight() {
+        let out = resume_plan(false, false, false, false, &ResumeFacts::default());
+        assert_eq!(out, ResumeOutcome::NothingToResume);
+    }
+
+    #[test]
+    fn resume_plan_reenters_at_first_unmet_phase() {
+        // Crashed after merge but before pull (spec not yet Completed) ⇒
+        // resume at Pull, skipping the already-merged PR (idempotent).
+        let out = resume_plan(
+            false,
+            true,
+            true,
+            false,
+            &facts(true, true, true, true, false, false),
+        );
+        assert_eq!(out, ResumeOutcome::ResumeAt(Phase::Pull));
+    }
+
+    #[test]
+    fn resume_plan_already_complete_when_every_effect_present() {
+        let out = resume_plan(
+            false,
+            true,
+            true,
+            false,
+            &facts(true, true, true, true, true, true),
+        );
+        assert_eq!(out, ResumeOutcome::AlreadyComplete);
+    }
+
+    #[test]
+    fn resume_plan_merge_done_before_crash_is_not_redone() {
+        // The checkpoint might say "phase 4 (merge)", but if the PR actually
+        // merged before the crash (pr_merged=true) reconcile skips merge and
+        // resumes at Pull — never re-merging.
+        let out = resume_plan(
+            false,
+            true,
+            true,
+            false,
+            &facts(true, true, true, true, false, false),
+        );
+        assert_eq!(out, ResumeOutcome::ResumeAt(Phase::Pull));
     }
 }
