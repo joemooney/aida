@@ -80,7 +80,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:27:12.610752220Z
-modified_at: 2026-05-10T18:45:35.252172565Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -92,3 +92,5 @@ comments:
   content: Commit 00c5b532 references this requirement
   created_at: 2026-05-10T07:00:48.202435499Z
   modified_at: 2026-05-10T07:00:48.202435499Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
