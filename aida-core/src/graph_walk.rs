@@ -57,8 +57,8 @@ pub struct GraphResult {
 /// to exhaustion; `Some(n)` stops after `n` hops from the root.
 ///
 /// The atomic step is the existing single-hop lookup; this only adds traversal
-/// + cycle safety, so it stays consistent with how the rest of AIDA reads the
-/// graph. trace:STORY-489
+/// plus cycle safety, so it stays consistent with how the rest of AIDA reads
+/// the graph. trace:STORY-489
 pub fn walk(
     store: &RequirementsStore,
     root: Uuid,
@@ -159,9 +159,9 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
             RequirementStatus::Completed => r.completed += 1,
             RequirementStatus::Done => r.done += 1,
             RequirementStatus::InProgress => r.in_progress += 1,
-            RequirementStatus::Draft
-            | RequirementStatus::Approved
-            | RequirementStatus::Planned => r.remaining += 1,
+            RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned => {
+                r.remaining += 1
+            }
             RequirementStatus::NeedsAttention => r.shelved += 1,
             RequirementStatus::Rejected => r.rejected += 1,
         }
@@ -191,9 +191,10 @@ mod tests {
     }
 
     fn store_with(reqs: Vec<Requirement>) -> RequirementsStore {
-        let mut s = RequirementsStore::default();
-        s.requirements = reqs;
-        s
+        RequirementsStore {
+            requirements: reqs,
+            ..Default::default()
+        }
     }
 
     #[test]
