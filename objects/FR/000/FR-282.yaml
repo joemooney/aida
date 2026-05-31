@@ -1,0 +1,29 @@
+id: 019e7ea2-8c73-7643-b0b8-bbe0b4db689f
+spec_id: FR-282
+agreed_id: FR-282
+title: 'aida graph / query_graph: traverse Custom("...") edge types (--follow/--type flag)'
+description: |-
+  Feature request from an external project (quizdom) dogfooding AIDA as a graph substrate (2026-05-31).
+
+  Today aida graph and its MCP mirror query_graph only follow built-in Parent/Child/BlockedBy/Blocks edges (modes: tree/blocked-by/blocks/impact). They ignore Custom("...") relationship types entirely — there is no mode and no --type/--follow flag to traverse a custom edge.
+
+  Evidence (quizdom seed cluster): Q-23 has four outgoing custom edges (probes->TERM-24, probes->TERM-25, begets->Q-26, begets->Q-27). 'aida graph Q-23 --tree' and query_graph(Q-23, tree) both return empty (count:0, nodes:[]). 'aida rel list Q-23' DOES show all four — so the edges exist and are stored correctly; only the traversal walk ignores them.
+
+  Impact: any graph-shaped use of AIDA (quizdom's questions/beliefs/definitions over probes/begets/refines/contradicts/agrees/disagrees) cannot use the graph walk for transitive traversal — the core operation. Today the only workaround is app-side BFS issuing one 'aida rel list' per hop.
+
+  Proposed: a way to traverse arbitrary Custom edge types, e.g. 'aida graph <id> --follow begets,probes' (and a query_graph param), transitively. Pairs with the deferred weighted-traversal idea (ranked/weighted successor selection) — but custom-edge traversal is the prerequisite. Generalizes beyond quizdom to any weighted/typed-graph use of the substrate.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T15:24:02.547453751Z
+modified_at: 2026-05-31T15:24:02.547453751Z
+req_type: Functional
+tags:
+- custom-edges
+- external-report
+- graph
+- query-graph
+- quizdom
+- substrate
+- traversal
