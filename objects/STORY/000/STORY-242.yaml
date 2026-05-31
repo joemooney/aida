@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:42:21.797075011Z
-modified_at: 2026-05-16T04:45:25.391888889Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - dialog-role
@@ -84,3 +84,5 @@ comments:
   content: 'Rejected 2026-05-15 in favor of STORY-244 (TUI launcher architecture). The persistent-dialog-session concept carries forward, but it''s now a ''dialog session ID resumable via launch wrapper'' rather than a ''pinned PTY tab.'' Same goal, different mechanism. Reason: same as STORY-241 — PTY hosting of Claude Code is architecturally fragile.'
   created_at: 2026-05-16T04:45:25.391888889Z
   modified_at: 2026-05-16T04:45:25.391888889Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
