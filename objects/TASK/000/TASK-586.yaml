@@ -8,12 +8,12 @@ description: |-
   Back-compat: keep 'dialog' as a thin, deprecated, silently-accepted INPUT alias (parse-time only) so existing config / AIDA_SESSION_ROLE=dialog shells / dialog-routed queue items on not-yet-rebuilt machines don't break mid-transition. Not permanent dual-naming — advisor is THE name; dialog is a migration safety net.
 
   Supersedes TASK-279's keep-dialog-internal decision; update CLAUDE.md + discipline/advisor-role.md + the memory pack accordingly. Leave dated artifacts (PROMPT_HISTORY, dated SPIKE/competitive snapshots, frozen spec comments) immutable. trace via this spec.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T02:09:40.306827266Z
-modified_at: 2026-05-31T02:20:55.270449703Z
+modified_at: 2026-05-31T02:21:10.461438035Z
 req_type: Task
 tags:
 - advisor

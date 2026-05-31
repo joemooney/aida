@@ -11894,5 +11894,13 @@ operations:
   timestamp: 2026-05-31T02:12:00.882182170Z
   kind: !SetDescription
     description: aida --help emitted long command descriptions as single physical lines. The terminal wrapped them visually, but continuation lines started at column 0 instead of under the description column, making the command list hard to scan. Other CLI tools detect terminal width and wrap/indent descriptions themselves. Fix the clap help configuration so command and option descriptions wrap at terminal width with continuation indentation.
-clock: 1310
+- id: 019e7bd5-d007-71d3-a15b-d36eb8101cdf
+  target_id: 019e7bcb-47d2-7472-be10-cede853e3971
+  author: aida
+  node_id: '1'
+  lamport: 1311
+  timestamp: 2026-05-31T02:21:10.535425609Z
+  kind: !SetStatus
+    status: Done
+clock: 1311
 node_id: '1'
