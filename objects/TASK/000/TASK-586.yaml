@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T02:09:40.306827266Z
-modified_at: 2026-05-31T02:09:40.306827266Z
+modified_at: 2026-05-31T02:20:55.270449703Z
 req_type: Task
 tags:
 - advisor
@@ -21,3 +21,9 @@ tags:
 - convention
 - refactor
 - supersedes:TASK-279
+comments:
+- id: 019e7bd5-9466-7fc3-b793-6a647abc1ddf
+  author: joe
+  content: Commit 79d68767 references this requirement
+  created_at: 2026-05-31T02:20:55.270449703Z
+  modified_at: 2026-05-31T02:20:55.270449703Z
