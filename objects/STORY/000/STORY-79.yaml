@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T16:57:38.617935878Z
-modified_at: 2026-05-11T02:59:28.856145837Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 comments:
 - id: 019e13f1-964c-7711-9ec2-f3f54fbc473b
@@ -61,3 +61,5 @@ comments:
   content: Commit 51464135 references this requirement
   created_at: 2026-05-10T22:11:00.300516740Z
   modified_at: 2026-05-10T22:11:00.300516740Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
