@@ -12,7 +12,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-13T18:04:49.986385733Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:32:07.740046096Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df479-f568-7a01-9492-d8065d0723f1
@@ -32,3 +32,5 @@ history:
 
       what is the right way to make references to other reqs or users inside the description (or comments) of a req.
       It could be nice if these were hyperlinks that if we clicked on in the tool would open the other req, or maybe hover would show the req details.
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
