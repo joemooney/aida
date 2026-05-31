@@ -55,7 +55,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T01:43:33.004148552Z
-modified_at: 2026-05-11T04:03:58.031717615Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -65,6 +65,8 @@ relationships:
   target_id: 019e152b-2941-7960-8dbc-047cf890fa99
   created_at: 2026-05-11T03:53:39.442542234Z
   created_by: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T03:40:21.313277669Z
