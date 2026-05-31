@@ -51,12 +51,12 @@ description: |-
   ## Origin
 
   2026-05-23 user reported red CI on PR-270 via screenshot; master triaged + brief filed to Codex per standing 'keep Codex busy' direction.
-status: Approved
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:56:25.499531823Z
-modified_at: 2026-05-31T01:15:11.604255798Z
+modified_at: 2026-05-31T01:15:13.216994942Z
 req_type: Bug
 tags:
 - agent-launcher
