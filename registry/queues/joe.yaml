@@ -1356,13 +1356,6 @@
   added_at: 2026-05-31T19:32:48.591524233Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019e6f71-a9c2-77c1-9547-1776620e6acd
-  position: 323000
-  added_by: joe
-  note: Promoted from finding TASK-1-110 via `aida findings promote`
-  added_at: 2026-05-31T19:32:50.087019088Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e7f5d-c239-7592-b20c-b896d54050c5
   position: 324000
   added_by: joe
