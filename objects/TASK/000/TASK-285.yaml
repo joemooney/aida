@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:20:13.831734961Z
-modified_at: 2026-05-17T02:27:02.750551312Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -106,6 +106,8 @@ comments:
     Test status: 534/534 aida-cli tests green (7 new drain_batch_* tests); cargo fmt + clippy clean on new code.
   created_at: 2026-05-17T02:22:45.940008578Z
   modified_at: 2026-05-17T02:22:45.940008578Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T02:20:52.867673552Z
