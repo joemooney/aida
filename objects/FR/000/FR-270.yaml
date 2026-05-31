@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T04:18:42.878915614Z
-modified_at: 2026-05-05T04:24:19.349985317Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 tags:
 - jsonpath
@@ -82,3 +82,5 @@ comments:
   content: ''
   created_at: 2026-05-05T04:24:11.807175131Z
   modified_at: 2026-05-05T04:24:11.807175131Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
