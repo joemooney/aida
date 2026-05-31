@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T04:00:37.989244316Z
-modified_at: 2026-05-12T04:50:34.881869868Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,6 +20,8 @@ comments:
   content: 'Closed by TASK-32''s fix: aida_home_dir() wrapper added in aida-cli/src/main.rs reads AIDA_HOME first, falls back to dirs::home_dir(). All bg_fetch home-dir call sites now route through it. bg_worker_records_error_on_missing_remote test is no longer #[cfg(unix)]-gated and uses TempAidaHomeEnv. Sweep confirmed no other home-dependent test fixtures need the same treatment.'
   created_at: 2026-05-12T04:50:28.286121290Z
   modified_at: 2026-05-12T04:50:28.286121290Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T04:50:34.881869868Z
