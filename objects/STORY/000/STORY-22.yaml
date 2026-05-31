@@ -35,7 +35,7 @@ priority: High
 owner: joe
 feature: 190-GitLab
 created_at: 2025-12-14T16:30:43.802493010Z
-modified_at: 2025-12-15T01:07:55.634049033Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -62,3 +62,5 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
