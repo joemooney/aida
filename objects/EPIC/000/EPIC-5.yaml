@@ -65,7 +65,7 @@ priority: High
 owner: joe
 feature: 213-Uncategorized
 created_at: 2026-02-21T06:49:14.858451783Z
-modified_at: 2026-05-09T22:35:07.700236730Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Epic
 comments:
 - id: 7151a127-9d08-44cf-839e-251d737f0253
@@ -182,3 +182,5 @@ history:
       PATCH  /api/v2/queue/:user_id/:req_id    — Update position
       POST   /api/v2/queue/:user_id/reorder    — Bulk reorder { items: [{ requirement_id, position }] }
       ```
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
