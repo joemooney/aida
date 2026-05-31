@@ -65,7 +65,16 @@ fn read_config_workflow_hints(project_root: &Path) -> Option<bool> {
         if in_hints {
             if let Some((key, val)) = line.split_once('=') {
                 if key.trim() == "workflow_hints" {
-                    let v = val.trim().trim_matches('"').trim_matches('\'');
+                    // BUG-92: strip a TOML inline `# comment` before parsing so
+                    // `workflow_hints = true # note` matches `true` instead of
+                    // silently falling through to the default.
+                    let v = val
+                        .split('#')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .trim_matches('"')
+                        .trim_matches('\'');
                     return match v.to_ascii_lowercase().as_str() {
                         "true" => Some(true),
                         "false" => Some(false),
@@ -454,6 +463,23 @@ mod tests {
         with_hints_env(Some("0"), || {
             assert!(!enabled(Some(td.path())));
         });
+    }
+
+    /// BUG-92: a TOML inline `# comment` after the value is stripped before
+    /// parsing, so `workflow_hints = true # note` reads as `true` instead of
+    /// silently falling through to the default.
+    #[test]
+    fn read_config_strips_inline_comment() {
+        let td = TempDir::new().unwrap();
+        write_config(
+            td.path(),
+            "[hints]\nworkflow_hints = false # turned off for CI\n",
+        );
+        assert_eq!(read_config_workflow_hints(td.path()), Some(false));
+        write_config(td.path(), "[hints]\nworkflow_hints = true  # back on\n");
+        assert_eq!(read_config_workflow_hints(td.path()), Some(true));
+        write_config(td.path(), "[hints]\nworkflow_hints = \"true\" # quoted\n");
+        assert_eq!(read_config_workflow_hints(td.path()), Some(true));
     }
 
     #[test]
