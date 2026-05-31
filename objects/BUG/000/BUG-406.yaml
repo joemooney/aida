@@ -1,0 +1,85 @@
+id: 019e7bc6-89fe-7de0-8ef6-ec43fcae5583
+spec_id: BUG-406
+agreed_id: BUG-406
+title: aida --help does not indent wrapped command descriptions
+description: |-
+  AI-native requirements management — durable, agent-readable specs
+
+  Usage: aida [OPTIONS] <COMMAND>
+
+  Commands:
+    add         Add a new requirement
+    list        List all requirements
+    show        Show details for a specific requirement
+    edit        Edit an existing requirement
+    del         Delete a requirement
+    findings    Triage findings filed by headless drain phases (reviewer + implementer)
+    advisor     Manage the live-advisor registration the `--no-human=both` orchestrator reads to decide whether to fork the live advisor (full in-flight context) or cold-boot a fresh headless advisor
+    punt        Punt a spec to Needs Attention — pause it with a structured reason instead of guessing past a design-fork. The safety net an autonomous drain reaches for when it hits a decision it cannot safely make
+    punts       Browse and analyze the local design-fork punt ledger
+    autonomy    Autonomy + calibration views. Today this carries the three-way complexity-calibration surface from `aida autonomy calibration mismatches`; the broader autonomy-report views land alongside the autonomy-metric work that owns them
+    load        Quantitative effort/load views. Effort buckets are 15m, 1h, 4h, 1d (8 work-hours), and 1w (5 work-days / 40 work-hours)
+    archive     Mark one or more requirements as archived (hidden from default views but preserved in graph traversals and the audit trail)
+    unarchive   Inverse of `aida archive` — clears the archive flag on a spec so it reappears in default `aida list` / `aida history` views
+    node        Manage per-clone node identity (acquire/release node ids in the shared registry, list registered clones). Each clone of an AIDA project gets a unique node id; that id is the namespace for node-aware spec ids (e.g. `FR-<node>-<NNN>`) until the merge gate promotes them to short agreed-ids
+    status      Show "where am I right now" — unified view of session, branch, PR/CI, queue, cache, and project state. Spiritual cousin of `git status`: one screen, no flag-guessing
+    usage       Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl` (written one line per `aida ...` invocation when telemetry is enabled — opt out via `[telemetry] enabled = false` or `AIDA_TELEMETRY=0`). Default: top-20 most-used commands over the last 30 days
+    digest      Generate a curated narrative work digest — Released / Major progress / Strategic direction / Next iteration / Process artifacts — for a time window. Editorial logic is mechanical: drop typo/chore/style commits, collapse cluster-PRs to one theme line, keep rejected specs only when they carry a supersedes/pivoted-from link, strip SPEC-IDs in customer mode. Default audience is `customer`, default window is `.aida/last-digest.toml` marker → 24h
+    push        Push code branch AND orphan aida-store branch to origin. Use --code-only or --store-only to scope. Equivalent to running `git push` on the current branch followed by `aida db sync --push` — the two operations users routinely forget to do together. Skips a leg cleanly when nothing's pending (no upstream tracked, no commits ahead, no orphan drift). Set `AIDA_PUSH_DEFAULT=code|store` to flip the default scope
+    fetch       Fetch remote refs for both legs (code + orphan store) without merging or touching the worktree. Read-only counterpart to `aida pull` — refreshes what `origin/<branch>` points at so downstream checks (statusline behind-count, queue precheck, rebase dry-run) see the current remote state without paying the cost of two separate `git fetch` invocations or being surprised by an implicit merge. Bumps the `~/.aida/cache/last-fetch.toml` timestamp on success so the statusline freshness indicator reflects the fetch
+    pull        Pull code branch AND orphan aida-store branch from origin. Use --code-only or --store-only to scope. Symmetric to `aida push`: equivalent to `git pull --ff-only` on the current branch followed by `aida db sync --pull`. Skips a leg cleanly when there's nothing to pull (no upstream tracked, no orphan remote)
+    rebase      Detect, classify, and (optionally) execute a rebase of the current branch onto its upstream. Four phases: detect (ahead/behind + file-path overlap), classify (clean / ahead-only / behind-only / diverged-safe / diverged-risky), execute (auto for safe cases, prompt for risky), report (structured, --json). Stateless — safe to invoke anywhere
+    doctor      Diagnose and heal AIDA multi-agent state drift
+    store       Inspect and align the orphan-store SHA against code commits. Pairs with the prepare-commit-msg hook (`aida-store-pair.sh`) that pins the store SHA into every code commit's trailer via an `Aida-Store: <sha>` line
+    role        Manage personas / hats — persistent named contexts that resume across shells. `aida role enter <name>` switches; `aida role list` shows what's defined for this project. State at `.aida/roles/`
+    session     Inspect or resume past Claude Code sessions in this project, enriched with the AIDA role + most-recent spec for each session (extracted from the SessionStart hook output stored in each session's `.jsonl`). Wrapper around `claude --resume` since Claude Code's auto-generated subject can't be customized
+    pr          Pull-request side-effects intended to fire from the /aida-pr skill. Today: `auto-queue-review` files the reviewer story right after `gh pr create` so the trigger lives where context is freshest. `aida session end` keeps the same logic as an idempotent backup for PRs opened outside the skill
+    drain       Inspect the active `aida queue work --auto-complete` drain — what command launched it, the batch members and their progress, and what happens to the queue when the current session exits
+    stack       Inspect the stacked-branch graph: `aida queue work --stack` records each stacked branch's parent in `.aida/stacks.json`; `aida stack show` / `list` render the chains. Pairs with the auto-rebase cascade that `aida pull --auto` runs when a base merges
+    headless    Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the non-obvious jq filter (assistant content blocks, text-only by default, `--with-tools` to interleave tool calls) so the user gets clean text instead of pages of `null`
+    worker      Inspect the `aida-worker` shell function's directive channel — `aida worker directives` lists the FIFO of pending directives the worker will act on next
+    brief       Generate, list, and acknowledge per-agent pickup briefs
+    agent       Launch and track AI agent processes for this AIDA project
+    statusline  One-line project + role summary suitable for shell prompts and the `statusLine.command` setting in ~/.claude/settings.json. Sub-50ms (reads the cache + the orphan-store queue YAML). Format: aida · <project> · role:<name> · @SPEC · q:N · cache:fresh|stale Where `q:N` is the depth of the queue routed to the active role (omitted when zero)
+    upgrade     Upgrade aida to the latest release (or a specified version). Detects how aida was installed (cargo / pre-built binary) and uses the matching upgrade strategy. From a developer build with no --target, scans common install locations and offers to upgrade any stale sibling installs
+    comment     Manage comments on requirements
+    review      Review-workflow helpers (review-prompt generation, etc.)
+    init        Initialize AIDA in the current project
+    tui         Launch the AIDA TUI — a terminal-UI shell that PTY-hosts Claude Code sessions
+    docs        Project the requirements graph as a layered docs tree. Constitution, vision, constraints, decisions, quality, glossary — each layer rendered from its corresponding RequirementType. The graph is the source; this is the projection
+    doc         Living-documentation entries — narrative captured during work (rationale, scenarios, recipes, gotchas) linked to the specs they explain. Different from `aida docs` (plural), which renders the graph as a layered docs tree; this is the *raw* doc entry surface powering the book/tutorial projection
+    backlog     Curate Approved-but-not-queued work into the queue with risk and file-overlap heuristics. See `aida backlog --help`
+    rework      Top-level alias for `aida queue rework SPEC` — single verb for the recurring implementer → reviewer → fixup recovery sequence (status flip + queue add, with optional `--work` session launch). Mirrors `aida relations` → `aida rel list` discoverability pattern. See `aida queue rework --help` for the full flag set
+    search      Simple search for requirements (case-insensitive by default)
+    history     Project activity — what's been touched and how it stands now. Default mode is a per-requirement digest sorted by last-touch time, intended for "what was I up to last session?" Pass `--events` to switch to a chronological per-event feed (slower; decodes each commit's YAML diff into status changes, comments added, etc.)
+    plan        Work with implementation plans archived under `docs/plans/`. Today: `aida plan verify <file>` lints a plan against the structured template — drifted line refs, missing files, absent required sections
+    changelog   Generate `CHANGELOG.md` mechanically from git tags + the spec graph. Walks `v*` tags as release boundaries, scans commits between them for `(SPEC-ID)` references, classifies each spec (Features / Fixes / Documentation / Infrastructure / Internal / Other), and renders one structured markdown section per release. `generate` prints to stdout or `--out`; `refresh` writes `CHANGELOG.md` (idempotent — same git state → byte-identical output); `preview` is `[Unreleased]`-only
+    ultraplan   Assemble a rich, structured planning prompt for a SPEC and hand it to `/ultraplan`. Pulls the spec's description, acceptance criteria, related-spec context, the spec's enrichment comments, the AIDA plan-template structure, and the trace-graph reusable helpers into one prompt — turning a terse ask into a fully-contextualised brief. Copies to the clipboard by default
+    goal        Derive a machine-checkable completion condition from AIDA metadata, ready to paste into `/goal` (or `/schedule`). Each flag contributes one clause; multiple flags compose with `AND`. Every clause carries an explicit verification command so a small evaluator can check it deterministically — no vague "make the tests pass" conditions that loop forever
+    help-all    List all commands (including the less-common ones hidden from `aida --help`), grouped by topic
+    skill       Stock and local skill tooling
+    help        Print this message or the help of the given subcommand(s)
+
+  Options:
+        --file <FILE>         Path to the requirements file (overrides auto-detection)
+    -p, --project <PROJECT>   Project name to use from central registry
+    -s, --server <SERVER>     Connect to a remote AIDA server (e.g., "localhost:50051" or "grpc://host:port") Can also be set via AIDA_SERVER environment variable
+        --asciinema           Record this invocation with asciinema when running in a terminal
+        --cast-out <PATH>     Output path for --asciinema recordings
+        --cast-title <TITLE>  Title for --asciinema recordings
+    -h, --help                Print help
+    -V, --version             Print version
+
+  Less-common commands (db, cache, gitlab, mcp-serve, etc.) are hidden by default. Run `aida help-all` for the full inventory grouped by topic. emits long command descriptions as single physical lines. The terminal wraps them visually, but continuation lines start at column 0 instead of under the description column, making the command list hard to scan. Other CLI tools detect terminal width and wrap/indent descriptions themselves. Fix the clap help configuration so command and option descriptions wrap at terminal width with continuation indentation.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T02:04:29.566003605Z
+modified_at: 2026-05-31T02:04:29.566003605Z
+req_type: Bug
+tags:
+- cli
+- codex
+- help
+- usability
