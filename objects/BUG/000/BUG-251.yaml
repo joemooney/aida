@@ -37,12 +37,12 @@ description: |-
   ## Origin
 
   2026-05-19 — recurring during the autonomy-keystone sprint. The cross-machine version-skew pattern has hit multiple times; the fix would prevent the whole class.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:57:17.999455016Z
-modified_at: 2026-05-31T02:03:47.746045708Z
+modified_at: 2026-05-31T02:08:50.065306282Z
 req_type: Bug
 tags:
 - backlog
@@ -66,3 +66,7 @@ comments:
   content: Commit 2a58d3e8 references this requirement
   created_at: 2026-05-31T02:03:27.276416607Z
   modified_at: 2026-05-31T02:03:27.276416607Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T02:08:50.065306282Z
+  completion_sha: f8102c9cd8ca0130e492febc95564909c9ec0fe3
