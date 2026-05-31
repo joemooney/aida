@@ -55,7 +55,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T14:29:59.179320451Z
-modified_at: 2026-05-15T15:51:59.302650916Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - auto-bump
@@ -68,6 +68,8 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T14:30:01.455847603Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:16:23.003022572Z
