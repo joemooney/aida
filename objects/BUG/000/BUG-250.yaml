@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:03:27.895703170Z
-modified_at: 2026-05-20T05:46:16.010633238Z
+modified_at: 2026-05-31T05:58:13.044092419Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -70,3 +70,19 @@ tags:
 - from-self-test:STORY-306
 - orchestrator
 - outcome-model
+comments:
+- id: 019e7c9c-8534-7af2-94b1-897e1e9a9c5d
+  author: joe
+  content: |-
+    Implementation sketch 2026-05-30 (kept Approved — architecture-class, needs a focused effort + likely master sign-off, not a blind crank):
+
+    The gap is that phase-1's outcome model has no way to tell a DELIBERATE 'push-branch, hold-PR' finish from an accidental no-PR exit. Both currently classify as failure (failure_kind=no-pr) with a misleading recovery hint, and the spec is Done+dequeued so the dormant session can't be resumed to open the deferred PR.
+
+    Proposed shape (3 parts):
+    1. SIGNAL — the implementer writes a deliberate-hold sentinel when it intentionally pushes the branch but holds the PR (operator wants a manual gate before the PR opens). Mirror the AIDA_PUNT_SIGNAL_FILE handshake: e.g. an exit-sentinel value or a `.aida/pr-held/<spec>` marker the orchestrator reads.
+    2. OUTCOME — extend the phase-1 outcome model with a non-failure 'PR-held' variant: branch backed up on origin, PR deferred by design. Phase-1's no-pr classification checks the hold-sentinel FIRST; if present → PR-held (not failure), with a hint that names how to open the PR later. (Composes with BUG-289's fetch-error branching pattern + the existing exit-sentinel/no-pr detection.)
+    3. RE-ENTRY — a PR-held spec must stay resumable: either don't dequeue-as-failed, or provide `aida pr open <spec>` / a resume path that opens the held PR and continues phases 3-6. (Composes with STORY-384 aida queue recover.)
+
+    Risk: touches orchestrator outcome semantics (architecture-class) — sketch-first sign-off before implementation per the discipline. Deferred from the autonomous sweep as too design-laden to crank blind at session tail.
+  created_at: 2026-05-31T05:58:13.044092419Z
+  modified_at: 2026-05-31T05:58:13.044092419Z
