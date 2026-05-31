@@ -4432,6 +4432,13 @@ pub enum Command {
         #[clap(long)]
         impact: bool,
 
+        /// Follow a custom (or built-in) relationship type by name, outgoing —
+        /// e.g. `--follow begets`. Repeatable to walk several types at once.
+        /// The traversal a flat per-feature spec tool can't do over arbitrary edges.
+        // trace:FR-282 | ai:claude
+        #[clap(long, value_name = "TYPE")]
+        follow: Vec<String>,
+
         /// Limit traversal to N hops from the root (default: unbounded).
         #[clap(long, value_name = "N")]
         depth: Option<usize>,

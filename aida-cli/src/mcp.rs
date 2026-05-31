@@ -880,6 +880,16 @@ impl<'a> McpServer<'a> {
             .get("depth")
             .and_then(|v| v.as_u64())
             .map(|n| n as usize);
+        // FR-282: traverse arbitrary named relationship types (custom/built-in).
+        let follow: Vec<String> = args
+            .get("follow")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let root = store
@@ -894,31 +904,41 @@ impl<'a> McpServer<'a> {
         // mode is a list of (rel_types, direction) walk legs; impact spans two
         // so a unidirectionally-stored Blocks edge is still caught (BUG-411).
         type WalkSpecs = Vec<(Vec<RelationshipType>, Direction)>;
-        let (specs, canonical_mode): (WalkSpecs, &str) = match mode {
-            "blocked-by" | "blocked_by" => (
-                vec![(vec![RelationshipType::BlockedBy], Direction::Outgoing)],
-                "blocked-by",
-            ),
-            "blocks" => (
-                vec![(vec![RelationshipType::Blocks], Direction::Outgoing)],
-                "blocks",
-            ),
-            "impact" => (
-                vec![
-                    (vec![RelationshipType::BlockedBy], Direction::Incoming),
-                    (vec![RelationshipType::Blocks], Direction::Outgoing),
-                ],
-                "impact",
-            ),
-            "tree" => (
-                vec![(vec![RelationshipType::Child], Direction::Outgoing)],
-                "tree",
-            ),
-            other => {
-                return Err(format!(
-                    "unknown mode '{}': use tree, blocked-by, blocks, or impact",
-                    other
-                ))
+        let (specs, canonical_mode): (WalkSpecs, &str) = if !follow.is_empty() {
+            (
+                follow
+                    .iter()
+                    .map(|t| (vec![RelationshipType::from_str(t)], Direction::Outgoing))
+                    .collect(),
+                "follow",
+            )
+        } else {
+            match mode {
+                "blocked-by" | "blocked_by" => (
+                    vec![(vec![RelationshipType::BlockedBy], Direction::Outgoing)],
+                    "blocked-by",
+                ),
+                "blocks" => (
+                    vec![(vec![RelationshipType::Blocks], Direction::Outgoing)],
+                    "blocks",
+                ),
+                "impact" => (
+                    vec![
+                        (vec![RelationshipType::BlockedBy], Direction::Incoming),
+                        (vec![RelationshipType::Blocks], Direction::Outgoing),
+                    ],
+                    "impact",
+                ),
+                "tree" => (
+                    vec![(vec![RelationshipType::Child], Direction::Outgoing)],
+                    "tree",
+                ),
+                other => {
+                    return Err(format!(
+                        "unknown mode '{}': use tree, blocked-by, blocks, or impact",
+                        other
+                    ))
+                }
             }
         };
 
@@ -2474,6 +2494,12 @@ pub fn tool_descriptors() -> Value {
                         "description": "Limit traversal to N hops from the root. Omit for unbounded.",
                         "minimum": 1,
                         "example": 3
+                    },
+                    "follow": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Follow arbitrary named relationship types (custom or built-in), outgoing — overrides `mode` when set. E.g. ['begets'] to walk Custom('begets') edges (FR-282).",
+                        "example": ["begets"]
                     }
                 },
                 "required": ["spec_id"]
