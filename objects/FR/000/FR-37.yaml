@@ -7,7 +7,7 @@ priority: High
 owner: joe
 feature: 165-web-client
 created_at: 2025-12-12T23:06:04.598091806Z
-modified_at: 2026-05-04T19:27:00.352110791Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 907b4c77-ee19-4d0b-94f8-fe7bc5cf72f0
@@ -28,3 +28,5 @@ history:
   - field_name: status
     old_value: Draft
     new_value: InProgress
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
