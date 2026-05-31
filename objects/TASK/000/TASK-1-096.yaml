@@ -33,7 +33,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:17:01.132919755Z
-modified_at: 2026-05-28T04:36:55.941086010Z
+modified_at: 2026-05-31T03:13:38.104763428Z
 req_type: Task
 tags:
 - agent-discipline
@@ -52,4 +52,17 @@ comments:
   content: 'Promoted by joe 2026-05-25: AGY''s three-failure-modes-in-one-session pattern needs master-tier diagnosis before further AGY dispatch. Promoting to substrate-actionable + adding to morning agenda.'
   created_at: 2026-05-25T16:17:42.591376306Z
   modified_at: 2026-05-25T16:17:42.591376306Z
+- id: 019e7c05-d738-7591-8896-d142053b4899
+  author: joe
+  content: |-
+    RESOLVED — master diagnosis complete, dispatch policy decided (operator-approved 2026-05-30).
+
+    AGY dispatch policy (not a pause): every AGY dispatch runs under three standing gates —
+    1. Draft-for-review-only: never auto-merged; mandatory master/advisor verdict before merge.
+    2. Cross-validate every ship vs an existing spec's acceptance or another agent's impl (substrate-as-bouncer at PR-open) — check provenance/novelty (plagiarism mode) and verify factual/substrate claims against the store, not plausibility (hallucination mode).
+    3. Constrain briefs to mechanical / bounded-acceptance work — no design judgment, no substrate-property assertions, no docs making factual claims about the system. The OVERVIEW.md hallucination (low-stakes docs) proves the failure is task-surface-independent, so the lever is verification intensity + scope, not task type.
+
+    AGY is NOT paused (it has delivered: SPIKE-35 v2, TASK-574). AGY's self-report on its own reliability is treated as a hypothesis, not a finding — the diagnosis/decision stays with the master. Captured as memory feedback_agy_dispatch_policy; composes with the one-master-advisor + substrate-as-bouncer principles. Sibling agent-discipline items: TASK-115, TASK-116.
+  created_at: 2026-05-31T03:13:38.104763428Z
+  modified_at: 2026-05-31T03:13:38.104763428Z
 human_only: true
