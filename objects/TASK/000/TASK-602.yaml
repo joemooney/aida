@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:55:04.115427061Z
-modified_at: 2026-05-31T14:55:04.115427061Z
+modified_at: 2026-05-31T14:56:27.272796561Z
 req_type: Task
 tags:
 - aida-core
@@ -16,3 +16,9 @@ tags:
 - parent:STORY-493
 - pure-logic
 - slice-1
+comments:
+- id: 019e7e89-4a88-7a51-8114-4bcd4a3e4e3a
+  author: joe
+  content: Commit 42f08bb84 references this requirement
+  created_at: 2026-05-31T14:56:27.272796561Z
+  modified_at: 2026-05-31T14:56:27.272796561Z
