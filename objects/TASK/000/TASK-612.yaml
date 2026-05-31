@@ -1,0 +1,12 @@
+id: 019e801d-f205-7cf0-891a-9fe2d88c9c83
+spec_id: TASK-612
+agreed_id: TASK-612
+title: Consider surfacing watchdog/shelve events as a live `aida status` signal during unattended drains
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T22:18:26.693570449Z
+modified_at: 2026-05-31T22:18:26.693570449Z
+req_type: Task
