@@ -84,13 +84,27 @@ pub(crate) enum ResumeDecision {
 /// re-enter so phases whose effects already exist are skipped (idempotent
 /// resume).
 ///
-/// The input need not be sorted — it is ordered by `Phase::index` here. A phase
-/// missing from the slice is conservatively treated as not-met (re-run it),
-/// because an unknown postcondition must not cause a phase to be skipped.
+/// The input need not be sorted, nor complete: every phase is evaluated in
+/// `Phase::index` order, and a phase ABSENT from the slice is conservatively
+/// treated as not-met (re-run it), because an unprobed postcondition must not
+/// cause a phase to be skipped. So empty input resumes from the start
+/// (`Implementer`) rather than declaring the work complete — the safe default
+/// when nothing is known.
 pub(crate) fn reconcile_resume_phase(postconditions: &[(Phase, bool)]) -> ResumeDecision {
-    let mut ordered: Vec<(Phase, bool)> = postconditions.to_vec();
-    ordered.sort_by_key(|(phase, _)| phase.index());
-    for (phase, met) in ordered {
+    const ALL_PHASES: [Phase; 6] = [
+        Phase::Implementer,
+        Phase::Ci,
+        Phase::Reviewer,
+        Phase::Merge,
+        Phase::Pull,
+        Phase::Build,
+    ];
+    for phase in ALL_PHASES {
+        let met = postconditions
+            .iter()
+            .find(|(p, _)| *p == phase)
+            .map(|(_, m)| *m)
+            .unwrap_or(false);
         if !met {
             return ResumeDecision::ResumeAt(phase);
         }
@@ -190,9 +204,19 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_treats_missing_phase_as_already_complete_only_when_all_present_met() {
-        // Empty input ⇒ nothing unmet ⇒ AlreadyComplete (caller supplies the
-        // full set; an empty set means "no phases to check").
-        assert_eq!(reconcile_resume_phase(&[]), ResumeDecision::AlreadyComplete);
+    fn reconcile_treats_missing_phase_as_not_met() {
+        // Empty input ⇒ every phase is unprobed ⇒ conservatively not-met ⇒
+        // resume from the start, NOT AlreadyComplete (the safe default when
+        // nothing is known). trace:STORY-491 (review finding)
+        assert_eq!(
+            reconcile_resume_phase(&[]),
+            ResumeDecision::ResumeAt(Phase::Implementer)
+        );
+        // A later phase met but an earlier one MISSING ⇒ resume at the missing
+        // (not-met) earlier phase, never skip it.
+        assert_eq!(
+            reconcile_resume_phase(&[(Phase::Build, true)]),
+            ResumeDecision::ResumeAt(Phase::Implementer)
+        );
     }
 }

@@ -886,18 +886,34 @@ impl<'a> McpServer<'a> {
         let root_id = root.id;
         let root_label = root.display_id();
 
-        let (rel_types, direction): (Vec<RelationshipType>, Direction) = match mode {
-            "blocked-by" | "blocked_by" => (vec![RelationshipType::BlockedBy], Direction::Outgoing),
-            "blocks" => (vec![RelationshipType::Blocks], Direction::Outgoing),
-            "impact" => (vec![RelationshipType::BlockedBy], Direction::Incoming),
-            "tree" => (vec![RelationshipType::Child], Direction::Outgoing),
-            other => {
-                return Err(format!(
-                    "unknown mode '{}': use tree, blocked-by, blocks, or impact",
-                    other
-                ))
-            }
-        };
+        // Carry a canonical mode label so the output always echoes the
+        // hyphenated enum form even when an underscore alias was passed
+        // (review finding: don't leak `blocked_by` into the response).
+        let (rel_types, direction, canonical_mode): (Vec<RelationshipType>, Direction, &str) =
+            match mode {
+                "blocked-by" | "blocked_by" => (
+                    vec![RelationshipType::BlockedBy],
+                    Direction::Outgoing,
+                    "blocked-by",
+                ),
+                "blocks" => (
+                    vec![RelationshipType::Blocks],
+                    Direction::Outgoing,
+                    "blocks",
+                ),
+                "impact" => (
+                    vec![RelationshipType::BlockedBy],
+                    Direction::Incoming,
+                    "impact",
+                ),
+                "tree" => (vec![RelationshipType::Child], Direction::Outgoing, "tree"),
+                other => {
+                    return Err(format!(
+                        "unknown mode '{}': use tree, blocked-by, blocks, or impact",
+                        other
+                    ))
+                }
+            };
 
         let result = walk(&store, root_id, &rel_types, direction, depth);
         let nodes: Vec<Value> = result
@@ -916,7 +932,7 @@ impl<'a> McpServer<'a> {
         let rollup = status_rollup(&store, &result.nodes);
         serde_json::to_string_pretty(&json!({
             "root": root_label,
-            "mode": mode,
+            "mode": canonical_mode,
             "count": result.nodes.len(),
             "nodes": nodes,
             "rollup": {
@@ -3704,6 +3720,17 @@ mod tests {
         // Unknown mode is a clean error, not a panic.
         let err = server.tool_query_graph(&json!({ "spec_id": dependent_id, "mode": "bogus" }));
         assert!(err.is_err(), "unknown mode must error: {err:?}");
+
+        // Review finding: an underscore alias is accepted but the output must
+        // echo the canonical hyphenated form, never `blocked_by`.
+        let aliased = server
+            .tool_query_graph(&json!({ "spec_id": dependent_id, "mode": "blocked_by" }))
+            .unwrap();
+        let aliased_parsed: Value = serde_json::from_str(&aliased).unwrap();
+        assert_eq!(
+            aliased_parsed["mode"], "blocked-by",
+            "canonical mode: {aliased}"
+        );
     }
 
     // trace:BUG-381 | ai:codex
