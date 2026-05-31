@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:30:13.256044981Z
-modified_at: 2026-05-31T15:32:25.058137797Z
+modified_at: 2026-05-31T16:52:13.893590719Z
 req_type: Bug
 tags:
 - aida:agent:new
@@ -24,3 +24,8 @@ comments:
   content: 'Operator decision (2026-05-31): DETECT + AUTO-ISOLATE. agent new / session start detect a LIVE lease on the current worktree (key on worktree_path; reuse the BUG-307 dormant-lease liveness check so a dead session isn''t falsely ''occupied''); if found, AUTO-CREATE a fresh per-agent worktree+lease for the new agent rather than co-locating — co-location becomes impossible by construction. Escape hatches preserved: --force/--steal + a same-creator-pid re-attach pass-through; the orchestrator is unaffected (it already provisions per-phase worktrees). Frame: one SESSION (scope-owning lease) per worktree, not one role. Substrate-as-bouncer: a programmatic gate, not a convention. Build separately from P3.'
   created_at: 2026-05-31T15:32:25.058137797Z
   modified_at: 2026-05-31T15:32:25.058137797Z
+- id: 019e7ef3-49c5-7c43-a262-99d206574237
+  author: joe
+  content: 'Cluster map for slice 2 (auto-isolate wiring), captured 2026-05-31 after shipping slice 1 (TASK-607, the pure worktree_occupant detection core). Slice 2 provisions a fresh per-agent worktree when worktree_occupant() detects a live occupant on launch. It surger prepare_agent_launch — the SAME function BUG-408 targets (make --show-context dry, i.e. don''t start the session/worktree/lease before printing context). Recommend doing BUG-408''s dry-refactor FIRST: a prepare_agent_launch that cleanly separates ''compute the launch plan'' from ''execute side-effects'' is the natural seam slice 2 needs to (a) detect occupancy and (b) redirect to a fresh worktree before any lease is written. Also check SPIKE-34 (Done): the claude --bg path may already isolate via native worktree support, so slice 2 may only need to wire the foreground / codex / agy paths. Coherent next-session unit: BUG-408 (dry seam) → BUG-416 slice 2 (auto-isolate) → BUG-362 (pr ship lease+worktree cleanup, same session-lifecycle family). — master/advisor'
+  created_at: 2026-05-31T16:52:13.893590719Z
+  modified_at: 2026-05-31T16:52:13.893590719Z
