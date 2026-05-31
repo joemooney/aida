@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: 112-Uncategorized
 created_at: 2025-12-07T00:30:59.548639777Z
-modified_at: 2026-05-04T19:36:12.010191145Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -34,3 +34,5 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
