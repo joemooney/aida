@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T05:14:58.724390456Z
-modified_at: 2026-05-12T04:04:41.042545092Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -48,6 +48,8 @@ relationships:
   target_id: 019e1a42-e729-7871-bf46-20aa5f4f9219
   created_at: 2026-05-12T03:37:44.557794958Z
   created_by: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T06:59:42.746186584Z
