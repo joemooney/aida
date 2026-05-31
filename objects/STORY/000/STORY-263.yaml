@@ -77,7 +77,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:25:44.957144080Z
-modified_at: 2026-05-17T06:41:21.281205633Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - advanced-user
@@ -298,6 +298,8 @@ comments:
     filed 3 task(s): TASK-300, TASK-301, TASK-302
   created_at: 2026-05-17T06:41:21.657526272Z
   modified_at: 2026-05-17T06:41:21.657526272Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T05:35:39.632979129Z
