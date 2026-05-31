@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T07:26:22.227100115Z
-modified_at: 2026-05-22T07:26:22.227100115Z
+modified_at: 2026-05-31T01:08:19.429250255Z
 req_type: Bug
 tags:
 - auto-complete
@@ -47,3 +47,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-22T07:26:26.124567159Z
+comments:
+- id: 019e7b93-1d65-7f42-9eb5-adff8639a40b
+  author: joe
+  content: 'Bulk-triaged 2026-05-30 (operator-approved): auto-drafted failure-event telemetry; referenced BUG-310 recovered to Completed, so the phase failure was transient/moot. Real orchestrator failure classes are captured by TASK-133 / TASK-136 / TASK-137. Audit trail preserved.'
+  created_at: 2026-05-31T01:08:19.429250255Z
+  modified_at: 2026-05-31T01:08:19.429250255Z
