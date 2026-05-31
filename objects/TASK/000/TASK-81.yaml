@@ -30,7 +30,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T06:37:13.750047240Z
-modified_at: 2026-05-12T16:22:19.749074618Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -102,6 +102,8 @@ comments:
     *This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections like this into `docs/tutorials/` book chapters.*
   created_at: 2026-05-12T15:25:29.370941182Z
   modified_at: 2026-05-12T15:25:29.370941182Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T15:25:06.778867147Z
