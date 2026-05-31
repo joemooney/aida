@@ -8,7 +8,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-14T06:43:06.381899920Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:38:08.660407417Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df47f-77cb-7ad2-8ad4-c5fd77ebfb81
@@ -27,3 +27,5 @@ history:
 
       when I typed 'q t' it switches to edit mode
     new_value: "'q t' should just put the req at the top of the queue and not edit\n\nwhen I typed 'q t' it switches to edit mode, perhap i did 'q t ENTER' \nMaybe ignore an ENTER after the second key of a combo when an action is taken, if the ENTER is pressed within 500ms. "
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
