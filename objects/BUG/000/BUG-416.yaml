@@ -1,0 +1,20 @@
+id: 019e7ea8-3488-7581-90bb-95fbd5037b18
+spec_id: BUG-416
+agreed_id: BUG-416
+title: Co-located agents (aida agent new x2 in one worktree) share session scope → aida add hint bleed
+description: "Found via quizdom (external AIDA-using project), 2026-05-31: ran 'aida agent new claude' + 'aida agent new codex' in the same project/worktree; objects added in codex's session were auto-hinted to claude's session scope (STORY-15). \n\nVERIFIED MECHANISM (aida-cli/src/main.rs): 'aida add' auto-hints a new spec's scope from the ACTIVE SESSION LEASE's scope (~24600), resolved by cwd / shell-ancestry. There IS a guard to not bleed 'this session owns scope X' hints to UNRELATED shells (~21838/21916) — but two agents launched into the SAME worktree/cwd are NOT unrelated: both resolve to the same active lease, so the guard doesn't fire and the second agent inherits the first's scope. prepare_agent_launch checks for a scope-conflict lease but does not, by itself, place each agent in a DISTINCT worktree.\n\nROOT CAUSE: aida agent new does not enforce/default per-agent worktree+lease isolation; co-located agents share one session scope.\n\nREMEDIATION (suggested, quizdom advisor concurs): per-agent worktree isolation — each agent in its own 'aida session start --owns <distinct-SPEC>' worktree+lease so scope can't bleed. Open design question for the operator: should 'aida agent new' isolate by default (create a per-agent worktree), warn when launching a 2nd agent into an already-owned/shared scope, or stay manual? Connects to SPIKE-34 (claude --bg --agent native worktree isolation — does the --bg path already isolate? the foreground / codex / agy paths may not) and BUG-408 (agent new side-effects). Impact: low data-risk (hints are suggestions; quizdom ignored them, no cleanup) but a real first-impression multi-agent isolation gap. 2nd quizdom-driven AIDA signal (after the weighted-graph-walk driver) — validates multi-vendor multi-agent as a real usage frontier."
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T15:30:13.256044981Z
+modified_at: 2026-05-31T15:30:13.256044981Z
+req_type: Bug
+tags:
+- aida:agent:new
+- from-external-driver
+- isolation
+- kind:bug-spotted
+- multi-agent
+- quizdom
+- session-scope
