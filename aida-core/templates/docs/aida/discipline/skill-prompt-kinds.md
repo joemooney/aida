@@ -105,6 +105,74 @@ operative mode and design-forks always pause.
   skills are a follow-up.
 - `docs/autonomous-drain.md` — the three-mode table + when to use each.
 
+## Operator-explicit invocation — `disable-model-invocation` (TASK-575)
+
+The autonomy `kind:` annotation above governs **what happens once a skill
+runs** — does this prompt pause or auto-resolve. A second, stricter axis
+governs **whether the skill runs at all without an operator typing
+`/<skill-name>`**: the `disable-model-invocation` frontmatter key.
+
+```yaml
+---
+name: aida-pickup
+description: …
+disable-model-invocation: true
+allowed-tools:
+  - Bash
+---
+```
+
+When the frontmatter sets `disable-model-invocation: true`, Claude Code
+will **never auto-invoke** the skill from a description match — the
+skill runs only when the operator types `/aida-pickup` (or whatever the
+slash command is). Set this on any skill whose side effects make
+auto-invocation unsafe.
+
+### Categories that warrant it
+
+Borrowed from *Beyond the Prompt: Claude Code* — defensive UX for skills
+with destructive or hard-to-reverse shapes:
+
+| Category | What can go wrong | Skills in this category |
+|---|---|---|
+| **ship** | Commits land, PRs open, releases tag — public state mutation Claude shouldn't trigger on a stray "let's ship this" | `/aida-commit`, `/aida-pr`, `/aida-release`, `/aida-review` |
+| **drain** | Multi-spec autonomous workloads kick off — Claude shouldn't trigger an unattended run from "what should I work on?" | `/aida-drain-queue`, `/aida-pickup`, `/aida-implement` |
+| **force-push / rewrite** | Branch history mutates non-reversibly | `/aida-rebase` |
+| **delete / heal** | Stale leases, orphan briefs, sessions are removed — operator-initiated state may look "stale" to an over-eager auto-trigger | `/aida-doctor`, `/aida-sync` |
+| **state-mutation** | Spec lifecycle parks (NeedsAttention), substrate writes (memory, CLAUDE.md), advisor binding decisions | `/aida-punt`, `/aida-learn`, `/aida-advise` |
+
+### Categories that should stay auto-invocable
+
+The point of skill auto-invocation is the *proactive* surface — captures
+and reviews Claude is supposed to fire from context, not wait to be
+asked. Don't set the flag on:
+
+- **Read-only** skills (`/aida-search`, `/aida-status`, `/aida-queue`,
+  `/aida-show`, `/aida-standup`, `/aida-digest`, `/aida-onboard`)
+- **Proactive-capture** skills designed to fire from conversation
+  (`/aida-req`, `/aida-capture`, `/aida-doc`)
+- **Quality / analysis** skills with no destructive side effect
+  (`/aida-evaluate`, `/aida-grill`, `/aida-architecture`,
+  `/aida-compiler-warnings`, `/aida-code-review`, `/aida-docs-review`)
+
+### How to decide for a new skill
+
+Ask: *"if Claude misinterprets a stray sentence in conversation and
+fires this skill, what is the worst it can do in 30 seconds?"*
+
+- **Modify the working tree, branch, queue, spec lifecycle, or
+  substrate files** → set `disable-model-invocation: true`. The cost of
+  forcing the operator to type `/<skill>` is small; the cost of an
+  unwanted auto-invocation can be a lost branch, a parked spec, a
+  re-shuffled queue, or a memory file the operator didn't approve.
+- **Print things, query state, suggest filings without writing** → leave
+  it off. The proactive surface is the whole point.
+
+The frontmatter is independent of `kind:` annotations — a
+`disable-model-invocation: true` skill still classifies its
+`AskUserQuestion` prompts as `confirmation` or `design-fork` for `--zen`
+mode once the operator has explicitly invoked it.
+
 ## The orchestrator exit signal (TASK-329)
 
 A `kind:confirmation` prompt under `--zen` auto-resolves to option 1 — but
@@ -171,3 +239,30 @@ tunable via `AIDA_EXIT_POLL_MS` / `AIDA_EXIT_GRACE_MS`. Implementation:
   implementer should pause on design-laden choices; `--zen` keeps that for
   `design-fork`, drops it for `confirmation`.
 - `feedback_pushback_on_overengineering.md` — the option-1 convention.
+
+## Skill structure: flat file vs helper folder
+
+A skill is either a **flat file** or a **helper folder** (TASK-574):
+
+- **Flat** — `<name>.md` is the whole skill. The default; use it when the
+  prompt is self-contained.
+- **Folder-form** — `<name>/SKILL.md` is the prompt, and the folder carries
+  supporting files the prompt points at:
+
+  ```
+  skills/aida-pr/
+  ├── SKILL.md                              # the prompt body
+  └── examples/pr-description-template.md   # a copy-paste helper the prompt cites
+  ```
+
+  Reach for folder-form when a skill benefits from shipping a **template,
+  example, or helper script** next to its prompt — e.g. `/aida-pr` shipping a
+  PR-description skeleton. The prompt references the helper by its
+  folder-relative path (`examples/…`, `templates/…`). The whole subfolder
+  tree is embedded at build time and scaffolded verbatim into
+  `.claude/skills/<name>/`, so a fresh `aida init` lands the prompt *and* its
+  helpers.
+
+  Only `SKILL.md` (or a flat `<name>.md`) counts as the prompt — keep the
+  prompt body there. Migrate a flat skill to folder-form by moving `<name>.md`
+  to `<name>/SKILL.md` and adding the helpers; no per-skill wiring is needed.

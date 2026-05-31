@@ -1,6 +1,7 @@
 ---
 name: aida-drain-queue
 description: Assemble a safe, correctly-phrased /goal prompt for autonomously draining your role's work queue. Wraps the queue-drain pattern with templated /goal text that avoids the two recurring phrasing traps — fake command flags and the wrong mechanism clause. Use when the user asks to "drain the queue", "work everything queued", or run an autonomous multi-item session.
+disable-model-invocation: true
 allowed-tools:
   - Bash
 ---

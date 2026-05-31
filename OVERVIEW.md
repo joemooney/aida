@@ -10,7 +10,7 @@ For day-to-day usage see [docs/user-guide.md](docs/user-guide.md). For project c
 
 ## Vision
 
-The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents. Where Karpathy-style "structured markdown queryable by Claude" is the floor and Spec Kit's spec-driven workflow is the ceiling, AIDA sits between them as the *durable index* — a small invisible kernel that captures what exists, plus optional layered modules for everything else.
+The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents. Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA is the *durable index* on top of it. Its nearest competitor, GitHub Spec Kit, produces structured specs per feature and then freezes them — AIDA's delta is keeping them a maintained, cross-cutting graph (stable IDs + typed relationships + enforced traces + lifecycle, queryable via MCP, portable across vendors because it lives in git) that outlives any single feature. A small invisible kernel that captures what exists, plus optional layered modules for everything else. (See [docs/positioning/vs-spec-kit.md](docs/positioning/vs-spec-kit.md) and the current [competitive synthesis](docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md).)
 
 ---
 
@@ -196,7 +196,7 @@ For details on any of these see [docs/user-guide.md](docs/user-guide.md).
 - **MCP tools**: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`
 - **MCP resources**: `aida://project/summary`, `aida://requirements/tree`
 - **Hooks**: `aida-stop-check.sh` warns about untraced edits; `aida-session-context.sh` injects role + project context at session start
-- **Roles & sessions**: `aida role` manages persistent named contexts (architect, implementer, reviewer, and `dialog` — surfaced to users as the **advisor** seat, "trusted counsel" across the project's lifetime) with per-role scope filters and Claude Code system-prompt addenda; `aida session list/resume/new` enriches Claude Code's session list with the active role and most-recent spec id
+- **Roles & sessions**: `aida role` manages persistent named contexts (architect, implementer, reviewer, and **advisor** — "trusted counsel" across the project's lifetime; `dialog` is a deprecated alias for it) with per-role scope filters and Claude Code system-prompt addenda; `aida session list/resume/new` enriches Claude Code's session list with the active role and most-recent spec id
 - **Statusline**: `aida statusline` is sub-50ms and suitable for `~/.claude/settings.json`'s `statusLine.command`
 
 ### Web dashboard highlights

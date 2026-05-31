@@ -353,6 +353,17 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 		ln -sf "../../aida-core/templates/skills/$$name" ".claude/skills/$$name"; \
 		echo "  Linked: .claude/skills/$$name -> aida-core/templates/skills/$$name"; \
 	done
+	@# TASK-574: folder-form skills (<name>/SKILL.md + templates/ + examples/)
+	@# link as a single directory symlink (the *.md loop above skips dirs).
+	@for d in aida-core/templates/skills/*/; do \
+		name=$$(basename "$$d"); \
+		case "$$name" in \
+			local) continue ;; \
+		esac; \
+		rm -rf ".claude/skills/$$name"; \
+		ln -sf "../../aida-core/templates/skills/$$name" ".claude/skills/$$name"; \
+		echo "  Linked: .claude/skills/$$name/ -> aida-core/templates/skills/$$name/ (folder-form)"; \
+	done
 	@# Remove existing files and create symlinks for commands
 	@for f in aida-core/templates/commands/*.md; do \
 		name=$$(basename "$$f"); \
@@ -383,6 +394,19 @@ check-templates: ## Check if .claude/ templates are properly linked
 			fi; \
 		else \
 			echo "  MISSING: $$target"; \
+			errors=1; \
+		fi; \
+	done; \
+	for d in aida-core/templates/skills/*/; do \
+		name=$$(basename "$$d"); \
+		case "$$name" in \
+			local) continue ;; \
+		esac; \
+		target=".claude/skills/$$name"; \
+		if [ -L "$$target" ]; then \
+			echo "  OK: $$target (folder-form symlink)"; \
+		else \
+			echo "  MISSING: $$target (folder-form, TASK-574)"; \
 			errors=1; \
 		fi; \
 	done; \

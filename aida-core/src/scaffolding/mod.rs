@@ -470,8 +470,6 @@ pub struct ScaffoldConfig {
     pub include_aida_docs_review_skill: bool,
     /// Include aida-release skill for release management
     pub include_aida_release_skill: bool,
-    /// Include aida-recover skill for advisor diagnostic playbook
-    pub include_aida_recover_skill: bool,
     /// Include aida-evaluate skill for requirement quality evaluation
     pub include_aida_evaluate_skill: bool,
     /// Include aida-commit skill for commit with requirement linking
@@ -547,7 +545,6 @@ impl Default for ScaffoldConfig {
             include_aida_docs_skill: true,
             include_aida_docs_review_skill: true,
             include_aida_release_skill: true,
-            include_aida_recover_skill: true,
             include_aida_evaluate_skill: true,
             include_aida_commit_skill: true,
             include_aida_sync_skill: true,
@@ -1170,30 +1167,6 @@ impl Scaffolder {
                 artifacts.push(artifact);
             }
 
-            // Add aida-recover skill
-            if self.config.include_aida_recover_skill {
-                let path = PathBuf::from(".claude/skills/aida-recover.md");
-                let artifact = self.create_artifact(
-                    path.clone(),
-                    self.generate_aida_recover_skill(),
-                    "Skill for session, orchestrator, and runtime state recovery".to_string(),
-                    false,
-                );
-
-                match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
-                        modified_files.push(artifact.path.clone())
-                    }
-                    FileStatus::OlderVersion { .. } => {
-                        upgradeable_files.push(artifact.path.clone())
-                    }
-                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
-                }
-
-                artifacts.push(artifact);
-            }
-
             // Add aida-evaluate skill
             if self.config.include_aida_evaluate_skill {
                 let path = PathBuf::from(".claude/skills/aida-evaluate.md");
@@ -1520,16 +1493,21 @@ impl Scaffolder {
             // (aida-pickup, aida-pr, aida-doctor, aida-drain-queue, etc.)
             // trace:BUG-386 | ai:claude
             {
-                use crate::templates::EMBEDDED_TEMPLATES;
+                use crate::templates::{classify_skill_key, EMBEDDED_TEMPLATES};
                 // Sort for deterministic artifact ordering across calls
                 let mut keys: Vec<&&str> = EMBEDDED_TEMPLATES.keys().collect();
                 keys.sort();
                 for key in keys {
-                    let filename = match key.strip_prefix("skills/") {
-                        Some(f) if f.ends_with(".md") => f,
+                    // Folder-form skills (`<name>/SKILL.md` plus `templates/` and
+                    // `examples/` helpers) and flat skills (`<name>.md`) both flow
+                    // through here. The relative path is preserved so the whole
+                    // subfolder tree lands under `.claude/skills/`; apply()
+                    // create_dir_all's parents. trace:TASK-574
+                    let skill = match classify_skill_key(key) {
+                        Some(s) if s.rel_path.ends_with(".md") => s,
                         _ => continue,
                     };
-                    let path = PathBuf::from(format!(".claude/skills/{}", filename));
+                    let path = PathBuf::from(format!(".claude/skills/{}", skill.rel_path));
                     // Skip if a handwritten block already scaffolded this skill
                     if artifacts.iter().any(|a| a.path == path) {
                         continue;
@@ -1538,8 +1516,11 @@ impl Scaffolder {
                         .get(key.as_ref() as &str)
                         .map(|s| s.to_string())
                         .unwrap_or_default();
-                    let skill_name = filename.trim_end_matches(".md");
-                    let desc = format!("AIDA skill: {}", skill_name);
+                    let desc = if skill.is_prompt {
+                        format!("AIDA skill: {}", skill.name)
+                    } else {
+                        format!("AIDA skill helper: {}", skill.rel_path)
+                    };
                     let artifact = self.create_artifact(path.clone(), content, desc, false);
                     match &artifact.file_status {
                         FileStatus::New => new_files.push(path),
@@ -1571,7 +1552,6 @@ impl Scaffolder {
                     self.config.include_aida_docs_review_skill,
                 ),
                 ("aida-release", self.config.include_aida_release_skill),
-                ("aida-recover", self.config.include_aida_recover_skill),
                 ("aida-evaluate", self.config.include_aida_evaluate_skill),
                 ("aida-commit", self.config.include_aida_commit_skill),
                 ("aida-sync", self.config.include_aida_sync_skill),
@@ -2251,15 +2231,6 @@ impl Scaffolder {
             })
     }
 
-    /// Generate aida-recover skill content (loads from embedded template)
-    fn generate_aida_recover_skill(&self) -> String {
-        use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES
-            .get("skills/aida-recover.md")
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "# AIDA Recovery Skill\n\n(template not found)".to_string())
-    }
-
     /// Generate aida-evaluate skill content (loads from embedded template)
     fn generate_aida_evaluate_skill(&self) -> String {
         // Load from embedded templates at compile time
@@ -2822,6 +2793,34 @@ mod tests {
     /// surface the first time they look at `.claude/skills/`.
     /// trace:STORY-305 | ai:claude
     #[test]
+    fn test_folder_form_skill_scaffolded() {
+        // A folder-form skill scaffolds its whole subfolder tree: the prompt
+        // body AND its helper files. trace:TASK-574
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).expect("scaffolding apply");
+
+        let skills_dir = temp_dir.path().join(".claude/skills");
+        assert!(
+            skills_dir.join("aida-pr/SKILL.md").exists(),
+            "folder-form skill prompt should scaffold to <name>/SKILL.md"
+        );
+        assert!(
+            skills_dir
+                .join("aida-pr/examples/pr-description-template.md")
+                .exists(),
+            "folder-form skill helper files should scaffold under the skill folder"
+        );
+        assert!(
+            !skills_dir.join("aida-pr.md").exists(),
+            "migrated skill should not also scaffold a flat <name>.md"
+        );
+    }
+
+    #[test]
     fn test_local_skills_dir_and_readme_scaffolded() {
         let temp_dir = TempDir::new().unwrap();
         let config = ScaffoldConfig::default();
@@ -2849,6 +2848,42 @@ mod tests {
         assert!(
             body.to_lowercase().contains("append"),
             "README should document append-merge semantics"
+        );
+    }
+
+    /// STORY-481: the `/aida-techdebt` skill (end-of-session duplication
+    /// scan) must be scaffolded by `aida init` — both the skill and its
+    /// matching slash command. It rides the BUG-386 catch-all loop (it's
+    /// not a flag-gated daily driver), so this test also guards that loop
+    /// for a Claude-only skill. trace:STORY-481 | ai:claude
+    #[test]
+    fn test_techdebt_skill_and_command_scaffolded() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).expect("scaffolding apply");
+
+        let skill = temp_dir.path().join(".claude/skills/aida-techdebt.md");
+        let command = temp_dir.path().join(".claude/commands/aida-techdebt.md");
+        assert!(skill.is_file(), "aida-techdebt skill should be scaffolded");
+        assert!(
+            command.is_file(),
+            "aida-techdebt command should be scaffolded"
+        );
+
+        // The skill must keep its acceptance contract: a read-only scan
+        // that composes with `aida findings add`.
+        let body = std::fs::read_to_string(&skill).unwrap();
+        assert!(
+            body.contains("aida findings add"),
+            "techdebt skill should compose with `aida findings add`"
+        );
+        assert!(
+            body.to_lowercase().contains("read-only"),
+            "techdebt skill should describe a read-only scan"
         );
     }
 

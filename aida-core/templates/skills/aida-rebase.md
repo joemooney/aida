@@ -1,6 +1,7 @@
 ---
 name: aida-rebase
 description: Detect whether the current branch has drifted from its upstream and classify the rebase (clean / ahead-only / behind-only / diverged-safe / diverged-risky) before deciding whether to rebase. Thin wrapper around the `aida rebase` CLI. Use before committing, before opening a PR, when picking up a session, or whenever the user mentions rebase/pull/push/"is this up to date?".
+disable-model-invocation: true
 allowed-tools:
   - Bash
   - Read

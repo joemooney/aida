@@ -256,6 +256,34 @@ implementer iterates); a wrongly-fix-forwarded logic change is not.
 
 ## Workflow
 
+### 0a. Delegated review mode (SPIKE-37) — trace:SPIKE-37 | ai:antigravity
+
+When AIDA is configured for delegated review, the reviewer phase is delegated to Claude Code's remote team/enterprise review pipeline rather than being executed locally.
+
+1. **Gate on Configured Mode**:
+   Check the review mode from the workspace's `.aida/config.toml`:
+   - If `[review] mode = "delegated"`: proceed with delegated review.
+   - If `[review] mode = "local"` (or omitted): fall back to the standard local reviewer workflow (don't break ZDR users, avoiding billing surprises).
+
+2. **Trigger Remote Review**:
+   If running in delegated mode, or if the `--delegated` flag is explicitly passed to the skill, trigger the remote review by posting a PR comment:
+   ```bash
+   gh pr comment <PR> --body "@claude review once"
+   ```
+
+3. **Verdict Polling and Parsing**:
+   - Resolve the current head SHA of the branch.
+   - Poll GitHub check-runs for the head SHA:
+     ```bash
+     gh api repos/:owner/:repo/commits/<SHA>/check-runs
+     ```
+   - Search the check-run details for the `bughunter-severity:` JSON block (e.g. `bughunter-severity: {"critical": 0, "normal": 0, "cosmetic": 0}`).
+   - If `critical > 0` or `normal > 0`, the verdict is `RequestChanges`. Otherwise, it is `Approved`.
+
+4. **Fail-safe to NeedsAttention**:
+   - If the severity JSON is missing, malformed, or the polling times out (default 10 minutes), trigger the fail-safe.
+   - File a `ReviewerVerdictUnavailable` finding by adding a task to the spec graph to park the spec in `NeedsAttention` for manual operator triage.
+
 ### 0. Pre-flight — PR state check (early-exit on merged/closed) — trace:TASK-227
 
 Before any spec resolution or `aida review prompt` invocation, probe the PR's
@@ -772,7 +800,7 @@ orchestrator-headless reviewer's verdict is read by phase 4. trace:BUG-280
 
 Under a headless `--no-human` drain there is no human to read the
 consolidated comment and feed the reviewer's non-blocking findings back to
-the dialog/advisor role for follow-up filing. Without this step those
+the advisor role for follow-up filing. Without this step those
 follow-ups are lost the moment the drain moves on. So the headless reviewer
 files them itself — as draft TASKs the advisor triages later via
 `aida findings list`.

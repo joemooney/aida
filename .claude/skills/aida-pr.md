@@ -1,1 +1,0 @@
-../../aida-core/templates/skills/aida-pr.md

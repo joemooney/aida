@@ -29,6 +29,8 @@ Everything in this directory is in service of making that scope honest. If a com
 
 | File | The question it answers |
 |---|---|
+| [vs-spec-kit.md](vs-spec-kit.md) | **(nearest competitor)** When GitHub Spec Kit's first-feature spec→plan→tasks scaffold is enough vs when you need a maintained, cross-cutting graph: stable IDs, typed relationships, trace enforcement, lifecycle, MCP — over the project's whole life. |
+| [vs-kiro.md](vs-kiro.md) | **(nearest competitor)** When AWS Kiro's polished agentic IDE with EARS-notation requirements + per-feature task→requirement traceability is enough vs when you need a vendor-neutral, git-canonical graph readable by any agent via MCP — independent of the editor that produced the specs. |
 | [vs-ultrareview.md](vs-ultrareview.md) | When to reach for AIDA's `/aida-review` (free, integrated, lifecycle-aware) vs Claude Code's `/ultrareview` (paid/quota, multi-agent depth). |
 | [vs-ultraplan.md](vs-ultraplan.md) | When `/ultraplan`'s dense LLM-generated planning brief earns its keep vs AIDA's persistent, graph-integrated plan files. Sister doc to vs-ultrareview. |
 | [vs-claude-code-subagents.md](vs-claude-code-subagents.md) | Why AIDA's roles aren't a reinvention of Claude Code's `/agents` — within-conversation primitive vs cross-conversation workflow layer, and how they compose. |

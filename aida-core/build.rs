@@ -66,6 +66,16 @@ fn main() {
         "docs/extending-skills.md",
     );
 
+    // Starter ecosystem-watch log. `scripts/release.sh` reads the file's
+    // `Last updated` line to verify the ecosystem review is recent enough
+    // for a major/minor release; scaffolding the file at init time keeps
+    // a fresh project's first release path clean. trace:TASK-126
+    embed_file(
+        &mut code,
+        "templates/docs/competitive-analysis/ecosystem-watch.md",
+        "docs/competitive-analysis/ecosystem-watch.md",
+    );
+
     // Starter memory pack — generic AIDA-using discipline written to the
     // Claude Code project memory dir by `aida init --with-memories`.
     // trace:STORY-255
@@ -92,6 +102,9 @@ fn main() {
     code.push_str(
         "    (\"docs/extending-skills.md\", \"Per-project skill extension guide scaffolded into docs/\"),\n",
     );
+    code.push_str(
+        "    (\"docs/competitive-analysis/ecosystem-watch.md\", \"Starter ecosystem-watch log read by scripts/release.sh\"),\n",
+    );
     code.push_str("    (\"memories\", \"Starter memory pack - generic discipline for `aida init --with-memories`\"),\n");
     code.push_str("];\n");
 
@@ -110,7 +123,15 @@ fn embed_file(code: &mut String, file_path: &str, key: &str) {
 }
 
 fn embed_directory(code: &mut String, dir: &str, prefix: &str) {
-    let dir_path = Path::new(dir);
+    embed_directory_rec(code, Path::new(dir), prefix);
+}
+
+// Recurse so a skill (or any template category) can be a *folder* carrying
+// supporting files alongside its prompt, e.g.
+// `templates/skills/aida-pr/{SKILL.md, examples/pr-description-template.md}`.
+// Subdirectory structure is preserved in the embedded key
+// (`skills/aida-pr/examples/pr-description-template.md`). trace:TASK-574
+fn embed_directory_rec(code: &mut String, dir_path: &Path, prefix: &str) {
     if !dir_path.exists() {
         return;
     }
@@ -122,10 +143,12 @@ fn embed_directory(code: &mut String, dir: &str, prefix: &str) {
 
         for entry in sorted_entries {
             let path = entry.path();
-            if path.is_file() {
-                let file_name = path.file_name().unwrap().to_str().unwrap();
-                let key = format!("{}/{}", prefix, file_name);
+            let name = path.file_name().unwrap().to_str().unwrap();
+            let key = format!("{}/{}", prefix, name);
 
+            if path.is_dir() {
+                embed_directory_rec(code, &path, &key);
+            } else if path.is_file() {
                 // Use include_str! for compile-time embedding
                 let rel_path = path.to_str().unwrap().replace("\\", "/");
                 code.push_str(&format!(

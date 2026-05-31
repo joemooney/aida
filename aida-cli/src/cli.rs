@@ -232,6 +232,13 @@ pub enum ScaffoldCommand {
         /// Show what would be done without making changes
         #[clap(long)]
         dry_run: bool,
+
+        /// Remove obsolete `aida-*` skills/commands/hooks that this AIDA
+        /// version no longer ships (left over from an older version). Without
+        /// this, they are only reported. Symlinks and non-`aida-` files are
+        /// never touched. (BUG-298)
+        #[clap(long)]
+        prune: bool,
     },
 
     /// Extract embedded templates to disk for customization
@@ -366,6 +373,14 @@ pub enum ReviewCommand {
         /// (`aida review prompt --pr 2 --write .aida-review-prompt.md`).
         #[clap(long, value_name = "PATH")]
         write: Option<String>,
+    },
+
+    /// Assemble active review fragments into a root REVIEW.md file.
+    // trace:SPIKE-35 | ai:antigravity
+    Assemble {
+        /// Output path for the assembled REVIEW.md file (default: REVIEW.md in project root).
+        #[clap(long, short = 'o', value_name = "PATH")]
+        output: Option<PathBuf>,
     },
 }
 
@@ -1333,6 +1348,28 @@ pub enum CacheCommand {
 
     /// Show cache state (HEAD comparison, requirement count, last build time)
     Status,
+}
+
+/// SPIKE-31: Claude Code path-gated rules sync.
+// trace:SPIKE-31 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum RulesCommand {
+    /// Reconcile `.claude/rules/aida-specs/` against the current spec
+    /// graph: write a rule for every active spec with trace comments,
+    /// remove rules whose spec is no longer active.
+    Sync {
+        /// Compute what would change without touching disk.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// SPIKE-35: also emit a project-root `REVIEW.md` that
+        /// aggregates every active spec's acceptance criteria as
+        /// the highest-priority injection into Anthropic's managed
+        /// Code Review pipeline. One file, committed.
+        // trace:SPIKE-35 | ai:claude
+        #[clap(long = "review-md")]
+        review_md: bool,
+    },
 }
 
 /// Project the graph into a layered docs tree.
@@ -3953,6 +3990,16 @@ pub enum AgentNewCommand {
         /// Optional human-readable instance name.
         #[clap(long)]
         name: Option<String>,
+
+        /// Dispatch to Claude Code's background supervisor via `claude
+        /// --bg`. The session detaches from this terminal and shows up
+        /// in `claude agents` (and `aida status`). When `--spec` is
+        /// also passed, AIDA records the captured sessionId on the
+        /// lease so the cross-substrate view links them automatically.
+        /// Without `--bg`, the foreground launch path is unchanged.
+        // trace:SPIKE-34 | ai:claude
+        #[clap(long = "bg")]
+        bg: bool,
     },
 
     /// Spawn Codex CLI with project-correct cwd/env and registry tracking.
@@ -4225,6 +4272,24 @@ pub enum Command {
         // trace:STORY-244 | ai:claude
         #[clap(long, hide = true)]
         json: bool,
+
+        /// Group the listing by parent EPIC for visual clustering —
+        /// children indented under their EPIC, groups sorted by item
+        /// count desc, requirements with no EPIC parent under a final
+        /// "Unscoped" group. Mirrors `aida queue list --tree`. Composes
+        /// with the --status / --type / --priority / --tags / --parent
+        /// filters. Mutually exclusive with --json.
+        // trace:TASK-568 | ai:claude
+        #[clap(long, conflicts_with = "json")]
+        tree: bool,
+
+        /// Surface each row's tags as an extra column right of Title.
+        /// The chip set is truncated to the first three tags with a
+        /// "+N more" suffix when more exist. Composes with every
+        /// existing filter (`--tags`, `--status`, `--type`, …).
+        // trace:TASK-569 | ai:claude
+        #[clap(long)]
+        show_tags: bool,
     },
 
     /// Show details for a specific requirement
@@ -4963,6 +5028,14 @@ pub enum Command {
         #[clap(long = "depends-on")]
         depends_on: Option<String>,
 
+        /// Print a `claude-cli://open` deep link after writing the brief.
+        /// Click → Claude Code opens in the spec's worktree with a
+        /// short pickup prompt (inert until Enter). Eliminates the
+        /// paste step. Requires Claude Code v2.1.91+ for the URL scheme.
+        // trace:SPIKE-33 | ai:claude
+        #[clap(long = "as-deep-link")]
+        as_deep_link: bool,
+
         #[clap(subcommand)]
         cmd: Option<BriefCommand>,
     },
@@ -5285,6 +5358,17 @@ pub enum Command {
     // trace:FR-1-077 | ai:claude
     #[clap(subcommand)]
     Docs(DocsCommand),
+
+    /// Sync Claude Code path-gated rules from the spec graph. For each
+    /// active spec (In Progress or Done) with spec-id markers in the code,
+    /// emit `.claude/rules/aida-specs/<SPEC-ID>.md` with a `paths:` glob
+    /// matching the marked files. Claude Code's runtime loads the rule
+    /// on-demand when the implementer reads or edits one of those files —
+    /// so the spec's scope + acceptance land in context exactly when
+    /// load-bearing.
+    // trace:SPIKE-31 | ai:claude
+    #[clap(subcommand)]
+    Rules(RulesCommand),
 
     /// Living-documentation entries — narrative captured during work
     /// (rationale, scenarios, recipes, gotchas) linked to the specs they
@@ -5615,6 +5699,13 @@ pub enum Command {
         /// for scripting / command substitution.
         #[clap(long)]
         invoke: bool,
+
+        /// Print a `claude-cli://open` deep link with the `/goal …` line
+        /// pre-filled. Click → Claude Code opens in cwd with the prompt
+        /// ready (inert until Enter). Requires Claude Code v2.1.91+.
+        // trace:SPIKE-33 | ai:claude
+        #[clap(long = "as-deep-link", conflicts_with_all = ["copy", "invoke"])]
+        as_deep_link: bool,
     },
 
     /// List all commands (including the less-common ones hidden from

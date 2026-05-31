@@ -151,7 +151,6 @@ Different agent types have different conventions for invoking AIDA workflows (th
 | **aida-doc** | `/aida-doc` | manual file edits + commit | manual file edits + commit | Document architecture/design |
 | **aida-search** | `/aida-search <q>` | `aida search <q>` (or MCP `search_requirements`) | `aida search <q>` (or MCP) | FTS5 search across specs |
 | **aida-plan** | `/aida-plan [SPEC]` | `aida plan verify` / `aida ultraplan` | same | Plan an implementation; verify against template |
-| **aida-recover** | `/aida-recover` | `aida doctor` (+ `aida doctor heal <category>`) | `aida doctor` | Diagnostic + recovery for state drift |
 | **aida-findings** | (slash variants) | `aida findings add/list/promote/dismiss` (or MCP `file_finding`) | `aida findings ...` (or MCP) | Advisor observation entry + triage flow |
 | **aida-onboard** | `/aida-onboard` | read AGENTS.md + this doc | read AGENTS.md + this doc | First-session orientation |
 

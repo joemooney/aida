@@ -298,6 +298,10 @@ up front that the PR bundles every batch member shipped on the branch.
 The `## Per-spec` section still has one entry per REQ-ID (all batch
 members the commit-log walk found); no spec is dropped.
 
+A copy-paste skeleton ships alongside this skill at
+`examples/pr-description-template.md` — fill the placeholders, delete the
+comments, and pass it to `gh pr create --body-file -`.
+
 **Body sections:**
 
 ```markdown
@@ -546,7 +550,7 @@ end` yourself — that is the orchestrator's phase 2; just exit cleanly.
 | Path | What happens | Why |
 |------|--------------|-----|
 | ⇒ Exit — let the orchestrator continue ← recommended | Interactive: press Ctrl+D. Under `$AIDA_ZEN` / headless: the skill instead runs `touch "$AIDA_EXIT_SENTINEL"` as its absolute last action (see below) | The PR is open and the State snapshot above shows no blocker — exiting hands phases 2-6 (CI → review → merge → pull → build) to the orchestrator. Reversible: a `RequestChanges` verdict halts the chain at phase 3 with the recovery hint. |
-| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this block to the dialog/advisor seat; STORY-306's tier handles punts automatically | When the State snapshot or deciding factor above flags something the implementer cannot grade (a risk that should hold the PR, a deviation worth a human's eyes), park the call with the advisor instead of releasing the chain. |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this block to the advisor seat; STORY-306's tier handles punts automatically | When the State snapshot or deciding factor above flags something the implementer cannot grade (a risk that should hold the PR, a deviation worth a human's eyes), park the call with the advisor instead of releasing the chain. |
 | ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — PR-<N> stays open but CI / review / merge will not run. Reversible: re-queue and re-run `aida queue work <SPEC-ID>` later. |
 
 **Graceful exit signal (TASK-329).** A skill cannot synthesize the Ctrl+D
