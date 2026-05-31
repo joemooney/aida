@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:20:02.395892520Z
-modified_at: 2026-05-16T18:39:09.229838591Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -34,6 +34,8 @@ relationships:
   target_id: 019e319d-19b1-7dc0-b753-198848c86f0e
   created_at: 2026-05-16T18:20:06.884835902Z
   created_by: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T18:34:51.272916278Z
