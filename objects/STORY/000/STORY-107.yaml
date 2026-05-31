@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:51:25.341027642Z
-modified_at: 2026-05-13T05:48:47.575145883Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -332,6 +332,8 @@ comments:
   content: 'Added docs/positioning/vs-ultraplan.md (commit 8e5e4768) — sister to vs-ultrareview.md. Same thesis: /ultraplan drafts the prose, AIDA structures + verifies + executes. Grounded in the STORY-86 case study (docs/plans/2026-05-13-story-86-done-status.md). Index in docs/positioning/README.md updated.'
   created_at: 2026-05-13T05:48:47.575145883Z
   modified_at: 2026-05-13T05:48:47.575145883Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T16:33:02.328974663Z
