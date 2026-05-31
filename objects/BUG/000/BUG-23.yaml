@@ -13,10 +13,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:59:39.003020600Z
-modified_at: 2026-05-09T19:03:18.421700373Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - ergonomics
 - init
 - sync
 - walkthrough
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
