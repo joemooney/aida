@@ -9,7 +9,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T00:48:03.665435136Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:39:27.458639775Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Child
@@ -30,3 +30,5 @@ history:
   - field_name: title
     old_value: ''
     new_value: A place to store notes and observations.
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
