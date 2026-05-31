@@ -104,7 +104,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T02:23:27.442361366Z
-modified_at: 2026-05-15T06:07:25.712085311Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - batch:plan-tooling
@@ -122,6 +122,8 @@ comments:
   content: Commit a18f3882 references this requirement
   created_at: 2026-05-15T03:20:32.296276879Z
   modified_at: 2026-05-15T03:20:32.296276879Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T03:20:37.369661451Z
