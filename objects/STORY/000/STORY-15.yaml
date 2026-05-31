@@ -7,10 +7,12 @@ priority: Medium
 owner: joe
 feature: 232-Uncategorized
 created_at: 2026-02-22T21:30:34.418112889Z
-modified_at: 2026-02-22T21:30:34.418112889Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - editor
 - markdown
 - ui
 - web
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
