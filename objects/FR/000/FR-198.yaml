@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T17:26:03.149592683Z
-modified_at: 2026-05-04T19:34:37.001840301Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -126,3 +126,5 @@ history:
         - Cycle protection: If a requirement is visited twice in the same path, shows "↻ (cycle)" indicator and stops recursion
         - No delete button in recursive view to avoid confusion with the collapse button
         - Double-click any node to navigate to that requirement
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
