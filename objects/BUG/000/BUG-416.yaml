@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:30:13.256044981Z
-modified_at: 2026-05-31T16:52:13.893590719Z
+modified_at: 2026-05-31T17:01:15.902541987Z
 req_type: Bug
 tags:
 - aida:agent:new
@@ -29,3 +29,20 @@ comments:
   content: 'Cluster map for slice 2 (auto-isolate wiring), captured 2026-05-31 after shipping slice 1 (TASK-607, the pure worktree_occupant detection core). Slice 2 provisions a fresh per-agent worktree when worktree_occupant() detects a live occupant on launch. It surger prepare_agent_launch — the SAME function BUG-408 targets (make --show-context dry, i.e. don''t start the session/worktree/lease before printing context). Recommend doing BUG-408''s dry-refactor FIRST: a prepare_agent_launch that cleanly separates ''compute the launch plan'' from ''execute side-effects'' is the natural seam slice 2 needs to (a) detect occupancy and (b) redirect to a fresh worktree before any lease is written. Also check SPIKE-34 (Done): the claude --bg path may already isolate via native worktree support, so slice 2 may only need to wire the foreground / codex / agy paths. Coherent next-session unit: BUG-408 (dry seam) → BUG-416 slice 2 (auto-isolate) → BUG-362 (pr ship lease+worktree cleanup, same session-lifecycle family). — master/advisor'
   created_at: 2026-05-31T16:52:13.893590719Z
   modified_at: 2026-05-31T16:52:13.893590719Z
+- id: 019e7efb-8efe-7590-9448-af43a7e5b7fc
+  author: joe
+  content: |-
+    Slice-2 design fork (open, needs master/operator decision — surfaced 2026-05-31 after building the detection core TASK-607 + the dry seam BUG-408). Reading the launch code clarifies WHERE the bleed actually lives:
+
+    • --spec PATH: prepare_agent_launch already calls session_start → a DISTINCT per-spec worktree+lease, AND already bails if the scope is owned (main.rs ~20238). So two agents with DIFFERENT --spec are already isolated; two with the SAME --spec already conflict-bail. This path is largely safe.
+
+    • NO-SPEC PATH (the actual quizdom repro: 'aida agent new claude' + 'aida agent new codex', no --spec): the None branch sets launch_cwd = project_root with NO lease. Both agents run in the main worktree; a later 'aida add' resolves whatever lease covers that cwd → scope hint bleed. worktree_occupant() does NOT directly fix this, because this path creates no worktree to check occupancy of — there's nothing to detect.
+
+    OPEN DECISION for slice 2: what should a no-spec 'aida agent new' do to isolate?
+      (a) Auto-create a per-agent scratch worktree+lease with a SYNTHETIC scope (e.g. 'agent/<name>' or a no-op lease) so each agent's cwd resolves to its own lease and 'aida add' can't bleed. Cost: synthetic leases/worktrees proliferate; need cleanup discipline (ties to BUG-362).
+      (b) Require --spec for a 2nd concurrent agent (refuse/​warn a no-spec launch when a live agent already shares project_root). Cheaper, less magic, but less 'auto'.
+      (c) Leave the no-spec launch as-is but make 'aida add' NOT auto-hint scope when the resolving lease's worktree == project_root AND >1 live agent shares it (fix the bleed at the hint site, not the launch site). Smallest blast radius; doesn't proliferate worktrees.
+
+    Recommend discussing (c) vs (a): (c) is the substrate-as-bouncer fix (gate the hint, the actual bleed point) and avoids worktree proliferation; (a) is the operator's stated 'auto-isolate' but heavier. worktree_occupant (TASK-607) stays useful for (a) and for SPIKE-34's --bg path. Not charging this headless — it's an agent-launch behavior change wanting sign-off. — master/advisor
+  created_at: 2026-05-31T17:01:15.902541987Z
+  modified_at: 2026-05-31T17:01:15.902541987Z
