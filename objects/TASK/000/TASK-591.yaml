@@ -3,12 +3,12 @@ spec_id: TASK-591
 agreed_id: TASK-591
 title: 'Positioning doc: vs-spec-kit.md (nearest competitor) + README index'
 description: 'docs/positioning/ covered ultrareview/ultraplan/subagents/karpathy-md/saas-pm but had NO entry for GitHub Spec Kit — the nearest competitor per the 2026-05-31 round-2 competitive analysis. Wrote vs-spec-kit.md (precise, not overclaimed: Spec Kit has within-feature FR/SC/T IDs + /speckit.analyze + ~100x distribution; AIDA''s delta is the cross-cutting maintained graph — stable IDs, typed relationships, trace enforcement, lifecycle, MCP, multi-vendor portability) + indexed it first in README as nearest competitor.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:32:34.743006862Z
-modified_at: 2026-05-31T06:33:02.175166720Z
+modified_at: 2026-05-31T06:37:32.324849282Z
 req_type: Task
 tags:
 - competitive
@@ -22,3 +22,7 @@ comments:
   content: Commit 67c44a6c references this requirement
   created_at: 2026-05-31T06:33:02.175166720Z
   modified_at: 2026-05-31T06:33:02.175166720Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T06:37:32.324849282Z
+  completion_sha: bd74288d749dfaad52ae6bd5b431e5f4295b9ccc
