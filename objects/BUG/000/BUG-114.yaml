@@ -64,7 +64,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:14:30.632335051Z
-modified_at: 2026-05-16T18:34:47.609191194Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - auto-complete
@@ -120,6 +120,8 @@ comments:
     Test status: 474/474 aida-cli tests green, incl. 2 new regression tests
   created_at: 2026-05-16T18:18:45.753828386Z
   modified_at: 2026-05-16T18:18:45.753828386Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T17:59:45.098238597Z
