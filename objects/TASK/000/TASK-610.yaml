@@ -1,0 +1,19 @@
+id: 019e7fca-dcf1-7d22-8b48-9e68aa399a97
+spec_id: TASK-610
+agreed_id: TASK-610
+title: 'Draft AIDA overview slide deck (Marp markdown): architecture, capabilities, fit with Claude Code + other agents'
+description: 'Operator-requested (2026-05-31). A Marp-compatible Markdown deck at docs/presentations/aida-overview.md introducing AIDA — what it is, architecture, capabilities, and how it composes with Claude Code + other coding agents. PHASE NOTE: marketing-adjacent (the bug-clearing→stability phase defers publishing); this is a DRAFT asset parked for when marketing starts, drafted now during idle Codex time. Assigned to Codex via brief; DRAFT-FOR-REVIEW (master + operator cross-validate every claim before merge — positioning content is hallucination-prone, cf TASK-122 where an agent invented a ''sub-100ms SLO''). Hard grounding rule: every claim traceable to an existing repo doc, cited in a speaker-note; nothing invented. Source corpus: OVERVIEW.md, CLAUDE.md, docs/positioning/*, docs/competitive-analysis/*, docs/architecture/* (incl spike-46-store-interop/FINDINGS.md), docs/tui/README.md, docs/autonomous-drain.md, docs/agents/*, docs/lifecycle.md. Arc ~12-16 slides: what AIDA is; the problem; architecture (git-canonical store + MCP + graph/stable-IDs/trace-comments); spec lifecycle + queue/roles; autonomous drain/orchestrator + escalation; fit with Claude Code (MCP/skills/TUI/hooks — composes not competes); fit with other agents (Codex AGENTS.md, Antigravity; multi-vendor substrate thesis — open-to-read/conformant-to-write per SPIKE-46); positioning/moat (git-canonical knowledge substrate; Trojan-horse TUI); roadmap. No SPEC-IDs in slide text; precise claims not overclaims.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T20:47:41.809827697Z
+modified_at: 2026-05-31T20:47:41.809827697Z
+req_type: Task
+tags:
+- docs
+- draft-for-review
+- from-operator
+- kind:doc-asset
+- marketing
+- presentation
