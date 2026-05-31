@@ -12435,7 +12435,16 @@ fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
     match arg {
         None => {
             let effective = workflow_hints::enabled(Some(&project_root));
-            let env = std::env::var("AIDA_HINTS").ok().filter(|s| !s.is_empty());
+            // BUG-93: only attribute the source to the env var when its value
+            // is one `enabled()` actually recognizes. `enabled()` silently
+            // ignores unrecognized values (`AIDA_HINTS=garbage`) and falls
+            // through to config/default, so claiming "(env)" there is wrong.
+            let env = std::env::var("AIDA_HINTS").ok().filter(|s| {
+                matches!(
+                    s.trim().to_ascii_lowercase().as_str(),
+                    "true" | "1" | "yes" | "on" | "false" | "0" | "no" | "off"
+                )
+            });
             println!(
                 "Workflow hints: {}",
                 if effective {
@@ -21796,7 +21805,16 @@ pub(crate) fn session_log_recent_spec(
 /// PR-15"); STORY-NNN stays visible for direct `aida edit` operations.
 /// trace:TASK-91 | ai:claude
 fn format_review_story_display(display_id: &str, title: &str) -> Option<(String, String)> {
-    let rest = title.strip_prefix("Review PR-")?;
+    // BUG-91: match the `Review PR-` prefix case-insensitively so a
+    // hand-typed `review pr-15: foo` renders consistently with how
+    // `review_title_matches` (also case-insensitive) routes it. Slice the
+    // ORIGINAL title (not a lowercased copy) so the after-colon title keeps
+    // its case.
+    const PREFIX: &str = "Review PR-";
+    if title.len() < PREFIX.len() || !title[..PREFIX.len()].eq_ignore_ascii_case(PREFIX) {
+        return None;
+    }
+    let rest = &title[PREFIX.len()..];
     let (pr_n, after) = rest.split_once(':')?;
     if pr_n.is_empty() || !pr_n.chars().all(|c| c.is_ascii_digit()) {
         return None;
@@ -40781,6 +40799,23 @@ mod format_review_story_display_tests {
     fn handles_empty_title_after_colon() {
         let result = format_review_story_display("STORY-1", "Review PR-99:");
         assert_eq!(result, Some(("PR-99 (STORY-1)".to_string(), String::new())));
+    }
+
+    /// BUG-91: the `Review PR-` prefix matches case-insensitively (aligning
+    /// with the case-insensitive `review_title_matches` router), and the
+    /// after-colon title keeps its original case.
+    #[test]
+    fn matches_review_prefix_case_insensitively() {
+        let result = format_review_story_display("STORY-15", "review pr-15: Foo Bar");
+        assert_eq!(
+            result,
+            Some(("PR-15 (STORY-15)".to_string(), "Foo Bar".to_string()))
+        );
+        let result = format_review_story_display("STORY-3", "REVIEW PR-3: keep CASE");
+        assert_eq!(
+            result,
+            Some(("PR-3 (STORY-3)".to_string(), "keep CASE".to_string()))
+        );
     }
 }
 
