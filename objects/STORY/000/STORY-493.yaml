@@ -1,0 +1,19 @@
+id: 019e7e87-df03-7c10-b6bc-50806abc6126
+spec_id: STORY-493
+agreed_id: STORY-493
+title: 'P3 hybrid inter-agent mailbox: fast .aida/ local layer + git-canonical durable digest'
+description: 'SPIKE-45 P3. Agent<->agent peer messaging (distinct from operator->agent briefs + top-down directives). Operator chose the HYBRID shape (2026-05-31): fast .aida/mailbox/ local layer for live exchange + a git-canonical durable digest on the orphan store for replay/audit/cross-clone sharing (round-2 differentiator vs competitors'' ephemeral local mailboxes); mirrors AIDA''s git-canonical-writer + cache/handshake architecture. Plan: docs/plans/2026-05-31-p3-hybrid-inter-agent-mailbox.md. Build order: (1) pure message model + inbox/thread/merge core [this slice], (2) .aida/ local store + CLI, (3) MCP send_message/read_inbox, (4) git-canonical digest (aida mailbox sync + session-end/drain auto-trigger). Digest-trigger + consistency model need sign-off before the wiring slices. Stays open until all slices land.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T14:54:54.211726236Z
+modified_at: 2026-05-31T14:54:54.211726236Z
+req_type: Story
+tags:
+- competitive-parity
+- hybrid
+- inter-agent-mailbox
+- moat
+- needs-design-signoff
+- parent:SPIKE-45
