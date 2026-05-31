@@ -18,9 +18,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:05:34.837531027Z
-modified_at: 2026-05-09T20:16:52.020072645Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - hooks
 - scaffolding
 - upgrade
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
