@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:20:17.623910661Z
-modified_at: 2026-05-09T20:25:24.270393667Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Epic
 comments:
 - id: 019e0e6a-8c2e-7c11-a79a-e6ae590c22ec
@@ -29,3 +29,5 @@ comments:
   content: ''
   created_at: 2026-05-09T20:25:24.270393667Z
   modified_at: 2026-05-09T20:25:24.270393667Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
