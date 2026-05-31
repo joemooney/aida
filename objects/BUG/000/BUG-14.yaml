@@ -26,7 +26,7 @@ priority: High
 owner: joe
 feature: 121-Uncategorized
 created_at: 2025-12-09T04:34:16.558538542Z
-modified_at: 2025-12-09T15:37:28.514714890Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 comments:
 - id: 317df708-b309-4ee5-bd22-a877c0651a58
@@ -47,6 +47,8 @@ history:
   - field_name: owner
     old_value: ''
     new_value: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 trace_links:
 - id: b446fc92-9b3d-453a-a5f5-d7ed3e34402b
   artifact_type: SourceCode
