@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T02:52:31.262954456Z
-modified_at: 2026-05-15T02:57:21.577569502Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - gh
@@ -102,3 +102,5 @@ comments:
     What MIGHT be worth filing instead (low priority): a visibility improvement so when the autonomous flow merges a PR while the user isn't watching, there's a clear surface that records 'PR-28 merged at SHA by reviewer session SID' in some session log the user can scan. But that's a different TASK and probably overkill given aida pull already surfaces the merge state on next sync.
   created_at: 2026-05-15T02:57:21.577569502Z
   modified_at: 2026-05-15T02:57:21.577569502Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
