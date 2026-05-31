@@ -14,9 +14,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::models::{
-    Requirement, RequirementPriority, RequirementStatus, RequirementType, RequirementsStore,
-};
+use crate::models::{Requirement, RequirementsStore};
 
 /// Lightweight projection of a Requirement, sourced from the cache rather
 /// than from canonical YAML. Contains just the fields needed for list /
@@ -782,6 +780,7 @@ fn yaml_path_for(req: &Requirement) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{RequirementPriority, RequirementStatus, RequirementType};
     use std::sync::{Mutex as StdMutex, OnceLock};
     use tempfile::tempdir;
 
