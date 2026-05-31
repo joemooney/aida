@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:28:23.693582217Z
-modified_at: 2026-05-15T15:51:59.302650916Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - autonomous-agents
@@ -142,6 +142,8 @@ comments:
     - [ ] Graceful degradation when /goal unavailable (trust gate, hooks disabled, etc.)
   created_at: 2026-05-15T06:44:07.988630745Z
   modified_at: 2026-05-15T06:44:07.988630745Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:27:19.254572073Z
