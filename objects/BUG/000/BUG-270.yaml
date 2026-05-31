@@ -27,12 +27,12 @@ description: |-
 
   - The non-standard format itself is a separate convention issue — many PRs use the canonical format, this one didn't. Convention enforcement is out of scope for this BUG; the scanner just needs to handle the variety it sees in real commits.
   - Surfaced 2026-05-20 during post-drain cleanup, blocked an auto-bump that the user expected to fire.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T01:35:10.344061045Z
-modified_at: 2026-05-31T01:18:52.549584480Z
+modified_at: 2026-05-31T01:23:43.437193887Z
 req_type: Bug
 tags:
 - commit-format
@@ -46,3 +46,7 @@ comments:
   content: Commit 6b04d13a references this requirement
   created_at: 2026-05-31T01:18:33.884535066Z
   modified_at: 2026-05-31T01:18:33.884535066Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T01:23:43.437193887Z
+  completion_sha: e2aaf54cb1aedbad34f6288f90fdde3abde515b1
