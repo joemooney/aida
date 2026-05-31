@@ -65,7 +65,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:41:24.380983051Z
-modified_at: 2026-05-13T04:37:47.354619641Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -90,6 +90,8 @@ comments:
     Test status: skill text changes (no code); verified renders by dogfooding on this cluster's terminal moments
   created_at: 2026-05-13T04:06:16.288159595Z
   modified_at: 2026-05-13T04:06:16.288159595Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T02:10:37.925629159Z
