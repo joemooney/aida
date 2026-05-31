@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:06:53.806139637Z
-modified_at: 2026-05-31T06:16:59.815606346Z
+modified_at: 2026-05-31T06:17:50.919434985Z
 req_type: Spike
 tags:
 - competitive
@@ -44,6 +44,16 @@ comments:
   content: Commit 3497b57f references this requirement
   created_at: 2026-05-31T06:11:54.886069932Z
   modified_at: 2026-05-31T06:11:54.886069932Z
+- id: 019e7cae-7e47-70a1-92a6-87b0192cf57e
+  author: joe
+  content: |-
+    Spec Kit depth-dive (linchpin) — verdict, primary-source-grounded (github/spec-kit):
+    ALL 5 of AIDA's primary differentiators CONFIRMED that Spec Kit LACKS: stable cross-cutting IDs (only branch-scoped NNN-name dirs + within-feature FR-/SC-/T- IDs), typed relationship graph (specs isolated by design), code↔spec trace enforcement (forward-only flow; maintainer admits sync is manual 'discipline', Discussion #152), rebuildable query cache (no store/DB/index; /speckit.analyze is single-feature + ephemeral + writes nothing), MCP spec graph (no API of its own — agents read files directly). Lifecycle = vestigial 'Status: Draft' field, no state machine (PARTIAL).
+    Avoid overclaiming: Spec Kit DOES have within-feature FR-/SC-/T- IDs + a one-shot /speckit.analyze consistency check — so say 'no STRUCTURED LAYER (durable IDs/graph/trace/query/API)', not 'no IDs at all'.
+    Spec Kit is AHEAD on: distribution (~106k stars, GitHub first-party, 30+ agent integrations — ~100× AIDA), a tasks→GitHub Issues bridge (/speckit.taskstoissues — a real AIDA GAP), the 'constitution' governance primitive, multi-agent breadth (agent-agnostic prompt files).
+    STRATEGIC READ: AIDA's differentiation is real + confirmed, but the risk is DISTRIBUTION, not feature-convergence — Spec Kit's roadmap aims at GitHub Issues + agent prompts, NOT a structured layer (roadmap-risk LOW, refresh ~6wk). AIDA's bet = depth-on-use; Spec Kit's = reach. Candidate AIDA capability-match: a tasks/specs → GitHub Issues bridge.
+  created_at: 2026-05-31T06:17:50.919434985Z
+  modified_at: 2026-05-31T06:17:50.919434985Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T06:16:59.815606346Z
