@@ -26,7 +26,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:06:45.169475129Z
-modified_at: 2026-05-25T16:06:45.169475129Z
+modified_at: 2026-05-31T19:32:56.818613001Z
 req_type: Task
 tags:
 - agent-discipline
@@ -39,3 +39,8 @@ tags:
 - plagiarism
 - recurrence-8
 - severity:major
+relationships:
+- rel_type: References
+  target_id: 019e5d86-935f-70e1-be21-547f5b6cd2c4
+  created_at: 2026-05-31T19:32:56.818605673Z
+  created_by: joe
