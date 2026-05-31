@@ -84,6 +84,7 @@ aida archive --older-than 30d --dry-run   # Preview bulk sweep; drop --dry-run t
 aida unarchive <ID>                    # Restore an archived spec
 aida show <ID>                         # Show requirement details + git linkage (commits/files/branch/PR — TASK-241)
 aida show <ID> --no-git                # Skip the git-linkage section; --verbose expands it
+aida graph <ID> --blocked-by           # Transitive cross-spec queries: blocked-by/blocks chains, --tree epic rollup, --impact reverse closure, --json (STORY-489)
 aida add --title "..." --type story --status draft --tags "tag1,tag2"
 aida edit <ID> --status completed
 aida comment add <ID> "..."
