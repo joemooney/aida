@@ -39,12 +39,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — PR-29 reviewer deep-pass identified this as DP-2 (deep-pass finding 2) and noted it as non-blocking for merge. User flagged it for filing post-merge.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:15:53.972861010Z
-modified_at: 2026-05-31T05:33:58.097182071Z
+modified_at: 2026-05-31T05:39:13.736994336Z
 req_type: Bug
 tags:
 - DP-2
@@ -58,3 +58,7 @@ relationships:
 - rel_type: Child
   target_id: 019e1f98-72d0-7d02-9c08-7b3d52001a22
   created_at: 2026-05-15T06:15:56.007537358Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T05:39:13.736994336Z
+  completion_sha: ea4802b3b6ce245d6f96c78cac35ebb02824b0dc
