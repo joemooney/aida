@@ -1,0 +1,18 @@
+id: 019e7fea-1175-70f0-aa77-20d062479d5e
+spec_id: BUG-423
+agreed_id: BUG-423
+title: 'Flaky CI: agent_launcher_tests::tracked_fake_antigravity_receives_env_args_and_registry_is_removed fails on temp-binary spawn under CI load'
+description: 'Observed 2026-05-31 (PR-417 / run 26724642172, Build ubuntu-latest): the test panicked at aida-cli/src/main.rs:~21894 with ''called Result::unwrap() on an Err value: failed to spawn /tmp/.tmpXXXX/agy''. The test writes a fake ''agy'' executable into a tempdir and spawns it; the spawn failed transiently under CI. Passes 3/3 locally + /tmp is exec-capable locally, so this is a CI-environment flake (temp-exec race / parallel-test load / transient), NOT a logic defect — the BUG-421 PR that surfaced it is a string-only change. Distinct from BUG-409 (story_429 auto-rebase flaky). Remediation options: (1) retry the spawn with a short backoff before unwrap; (2) assert the temp binary''s exec bit + existence before spawn with a clearer failure; (3) serialize this test (avoid parallel temp-exec contention). Sibling to BUG-409 in the test-reliability cluster; recovery for now is a same-commit CI rerun. trace-evidence: gh run 26724642172.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T21:21:46.869417113Z
+modified_at: 2026-05-31T21:21:46.869417113Z
+req_type: Bug
+tags:
+- aida:agent:new
+- ci
+- flaky-test
+- from-self-test
+- test-reliability
