@@ -27277,20 +27277,52 @@ fn discover_plan_context(
     project_root: &std::path::Path,
     spec_id: &str,
 ) -> Option<session_manifest::PlanContext> {
-    let plan_file = find_plan_files_for_spec(project_root, spec_id)
-        .into_iter()
-        .next()?;
-    let content = std::fs::read_to_string(&plan_file).ok()?;
-    let rel = plan_file
-        .strip_prefix(project_root)
-        .unwrap_or(&plan_file)
-        .display()
-        .to_string();
+    // BUG-105: when more than one plan file owns the spec, merge them all
+    // instead of silently using only the first. Critical-files and followups
+    // are unioned (dedup, order-preserving); verification scripts are
+    // concatenated; plan_file lists every contributing path.
+    let plan_files = find_plan_files_for_spec(project_root, spec_id);
+    let mut rels: Vec<String> = Vec::new();
+    let mut critical_files: Vec<String> = Vec::new();
+    let mut followups: Vec<String> = Vec::new();
+    let mut verifications: Vec<String> = Vec::new();
+    for plan_file in &plan_files {
+        let Ok(content) = std::fs::read_to_string(plan_file) else {
+            continue;
+        };
+        rels.push(
+            plan_file
+                .strip_prefix(project_root)
+                .unwrap_or(plan_file)
+                .display()
+                .to_string(),
+        );
+        for c in parse_plan_critical_files(&content) {
+            if !critical_files.contains(&c) {
+                critical_files.push(c);
+            }
+        }
+        for f in parse_plan_followups(&content) {
+            if !followups.contains(&f) {
+                followups.push(f);
+            }
+        }
+        if let Some(v) = parse_plan_verification(&content) {
+            verifications.push(v);
+        }
+    }
+    if rels.is_empty() {
+        return None;
+    }
     Some(session_manifest::PlanContext {
-        plan_file: rel,
-        critical_files: parse_plan_critical_files(&content),
-        followups: parse_plan_followups(&content),
-        verification: parse_plan_verification(&content),
+        plan_file: rels.join(", "),
+        critical_files,
+        followups,
+        verification: if verifications.is_empty() {
+            None
+        } else {
+            Some(verifications.join("\n\n"))
+        },
     })
 }
 
@@ -34593,6 +34625,46 @@ mod statusline_tests {
                 "Support `Vec<T>` in the parser".to_string(),
                 "Fix the `a < b` guard".to_string(),
             ]
+        );
+    }
+
+    /// BUG-105: when multiple plan files own the same spec, discover_plan_context
+    /// merges them all (union of critical-files + followups, all paths listed)
+    /// instead of silently using only the first.
+    #[test]
+    fn discover_plan_context_merges_multiple_owning_plans() {
+        let dir = tempfile::tempdir().unwrap();
+        let plans = dir.path().join("docs/plans");
+        std::fs::create_dir_all(&plans).unwrap();
+        std::fs::write(
+            plans.join("a.md"),
+            "# Plan A (STORY-1)\n\n## Critical Files\n- `a.rs`\n\n## Followups\n- followup A\n",
+        )
+        .unwrap();
+        std::fs::write(
+            plans.join("b.md"),
+            "# Plan B (STORY-1)\n\n## Critical Files\n- `b.rs`\n\n## Followups\n- followup B\n",
+        )
+        .unwrap();
+
+        let ctx =
+            discover_plan_context(dir.path(), "STORY-1").expect("should find a merged context");
+        assert!(
+            ctx.plan_file.contains("a.md") && ctx.plan_file.contains("b.md"),
+            "both plan paths listed: {}",
+            ctx.plan_file
+        );
+        assert!(
+            ctx.critical_files.contains(&"a.rs".to_string())
+                && ctx.critical_files.contains(&"b.rs".to_string()),
+            "critical files unioned: {:?}",
+            ctx.critical_files
+        );
+        assert!(
+            ctx.followups.contains(&"followup A".to_string())
+                && ctx.followups.contains(&"followup B".to_string()),
+            "followups unioned: {:?}",
+            ctx.followups
         );
     }
 

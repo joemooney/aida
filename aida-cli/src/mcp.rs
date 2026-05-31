@@ -1110,10 +1110,41 @@ impl<'a> McpServer<'a> {
 
         append_to_ledger(&self.project_root, &record).map_err(|e| e.to_string())?;
 
-        Ok(format!(
-            "Punt recorded for {} [{}]. Use `aida edit {} --status needs-attention` from a session lease to park the spec.",
-            spec, category, spec
-        ))
+        // BUG-334: a punt MEANS "I hit a fork I can't resolve — this spec
+        // needs attention", so flip the status to match the CLI `aida punt`
+        // (which already does this). The state machine only permits
+        // `InProgress → NeedsAttention` (forbidden_attention_transition
+        // guards it), so flip when the transition is legal and record-only
+        // otherwise — never erroring, since the punt ledger entry is already
+        // written. trace:BUG-334 | ai:claude
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        let flipped = match store.get_requirement_by_spec_id_mut(spec) {
+            Some(req)
+                if aida_core::forbidden_attention_transition(
+                    &req.status,
+                    &aida_core::RequirementStatus::NeedsAttention,
+                )
+                .is_none() =>
+            {
+                req.status = aida_core::RequirementStatus::NeedsAttention;
+                req.modified_at = Utc::now();
+                true
+            }
+            _ => false,
+        };
+        if flipped {
+            self.storage.save(&store).map_err(|e| e.to_string())?;
+        }
+
+        Ok(if flipped {
+            format!("Punt recorded for {spec} [{category}]; spec flipped to NeedsAttention.")
+        } else {
+            format!(
+                "Punt recorded for {spec} [{category}]. Spec status unchanged \
+                 (only an In Progress spec auto-flips to NeedsAttention); flip \
+                 manually with `aida edit {spec} --status needs-attention` if needed."
+            )
+        })
     }
 
     fn tool_resolve_punt(&self, args: &Value) -> Result<String, String> {
@@ -3800,6 +3831,37 @@ mod tests {
         let read = srv.tool_read_punt(&json!({"spec_id": "STORY-X"})).unwrap();
         assert!(read.contains("design-fork"), "{}", read);
         assert!(read.contains("OAuth"), "{}", read);
+    }
+
+    /// BUG-334: post_punt flips an In Progress spec to NeedsAttention (matching
+    /// the CLI `aida punt`), instead of only recording the ledger entry and
+    /// telling the operator to flip it by hand.
+    #[test]
+    fn post_punt_flips_in_progress_spec_to_needs_attention() {
+        let dir = tempdir().unwrap();
+        let srv = mk_server(dir.path());
+        let add = srv
+            .tool_add_requirement(
+                &json!({"title":"flip me","description":"d","type":"task","status":"in-progress"}),
+            )
+            .unwrap();
+        let id = added_spec_id(&add).to_string();
+
+        let r = srv
+            .tool_post_punt(
+                &json!({"spec_id": id, "detail":"hit a fork", "category":"design-fork"}),
+            )
+            .unwrap();
+        assert!(
+            r.contains("NeedsAttention"),
+            "punt response should report the flip: {r}"
+        );
+
+        let shown = srv.tool_show_requirement(&json!({"id": id})).unwrap();
+        assert!(
+            shown.to_lowercase().contains("needs attention") || shown.contains("NeedsAttention"),
+            "spec should be NeedsAttention after punt: {shown}"
+        );
     }
 
     #[test]
