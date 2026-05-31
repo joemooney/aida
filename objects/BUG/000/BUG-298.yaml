@@ -33,12 +33,12 @@ description: |-
   ## Origin
 
   User question 2026-05-22 after creating a new project: *"does aida scaffold apply remove skills or hooks that are prefixed with 'aida-' that are old/obsolete and should it?"* Today: no, it doesn't. Worth fixing — onboarding gap.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T05:56:32.965862532Z
-modified_at: 2026-05-31T05:52:17.376562217Z
+modified_at: 2026-05-31T05:52:17.856096297Z
 req_type: Bug
 tags:
 - cleanup
@@ -46,9 +46,3 @@ tags:
 - obsolete-files
 - scaffold
 - scaffolding-pack
-comments:
-- id: 019e7c97-17e0-7a30-b878-d2a63bc5db75
-  author: joe
-  content: Commit b4a140bf references this requirement
-  created_at: 2026-05-31T05:52:17.376562217Z
-  modified_at: 2026-05-31T05:52:17.376562217Z
