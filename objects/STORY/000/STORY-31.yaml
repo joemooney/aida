@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: 138-ai-workflow
 created_at: 2025-12-11T00:38:05.334289421Z
-modified_at: 2026-05-15T04:01:54.747099341Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 comments:
 - id: 019e29cc-4a3b-7120-aaf8-500157a7328a
@@ -15,3 +15,5 @@ comments:
   content: 'Rejected 2026-05-14 (Trojan-horse triage): SUPERSEDED by MCP server. The ''context gathering tool'' described here IS the MCP server (aida mcp-serve) — list_requirements, show_requirement, search_requirements, list_features are all exposed as MCP tools. Claude Code uses these natively for context gathering. Re-file with sharper scope if a specific gap remains.'
   created_at: 2026-05-15T04:01:54.747099341Z
   modified_at: 2026-05-15T04:01:54.747099341Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
