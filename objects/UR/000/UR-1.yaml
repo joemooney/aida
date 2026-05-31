@@ -40,7 +40,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-16T05:46:15.358156684Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:38:00.334338987Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: User
 comments:
 - id: 019df47f-5703-7782-a3fc-8b8d4a288302
@@ -48,3 +48,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:37:59.299469736Z
   modified_at: 2026-05-04T19:37:59.299469736Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
