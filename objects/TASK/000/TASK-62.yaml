@@ -51,7 +51,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:21:34.843287316Z
-modified_at: 2026-05-12T04:05:17.724557558Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -85,6 +85,8 @@ comments:
   content: 'Correction: the follow-up is TASK-35 (pre-existing, same content). TASK-32 that I filed earlier was a duplicate and is now Rejected.'
   created_at: 2026-05-12T04:05:17.724557558Z
   modified_at: 2026-05-12T04:05:17.724557558Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T06:50:35.572732431Z
