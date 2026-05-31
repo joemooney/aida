@@ -12,5 +12,7 @@ priority: Medium
 owner: joe
 feature: 2-cli
 created_at: 2025-12-13T19:04:31.070179382Z
-modified_at: 2025-12-13T19:04:31.070179382Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
