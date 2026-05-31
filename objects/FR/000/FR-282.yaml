@@ -17,16 +17,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:24:02.547453751Z
-modified_at: 2026-05-31T15:33:02.282839016Z
+modified_at: 2026-05-31T15:33:04.454730901Z
 req_type: Functional
 tags:
 - custom-edges
-- external-report
-- graph
-- query-graph
+- from-external-driver
+- graph-query
+- parent:STORY-489
 - quizdom
-- substrate
-- traversal
+- small
 comments:
 - id: 019e7eaa-c1d0-73c1-8b8f-5206aecc445d
   author: joe
