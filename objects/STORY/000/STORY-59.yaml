@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:14:36.047248463Z
-modified_at: 2026-05-10T06:25:01.755078024Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -50,3 +50,5 @@ comments:
   content: Depends on STORY-69 (sysinfo-based liveness probe). Without it, this story would hide active long-running sessions.
   created_at: 2026-05-10T04:41:50.544229263Z
   modified_at: 2026-05-10T04:41:50.544229263Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
