@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:43:28.745969796Z
-modified_at: 2026-05-16T22:49:04.778869170Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - auto-complete
@@ -73,6 +73,8 @@ comments:
     Test status: 36/36 auto_complete tests green (incl. the `recovery_hint_ci_spawn_does_not_blame_ci` regression test)
   created_at: 2026-05-16T22:42:59.513741751Z
   modified_at: 2026-05-16T22:42:59.513741751Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T22:38:12.002155591Z
