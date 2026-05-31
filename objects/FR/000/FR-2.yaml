@@ -35,7 +35,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T05:30:18.498861915Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:38:40.000221953Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Child
@@ -112,3 +112,5 @@ history:
         - Action-oriented - you get a new description you can use directly
 
         In short: Evaluate tells you what's wrong and gives a score, Improve actually rewrites the description for you.
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
