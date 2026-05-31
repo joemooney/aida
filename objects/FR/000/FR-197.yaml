@@ -7,7 +7,7 @@ priority: Medium
 owner: jane
 feature: 97-Uncategorized
 created_at: 2025-11-27T00:54:01.866964924Z
-modified_at: 2026-02-22T21:41:42.775117439Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -31,3 +31,5 @@ history:
   - field_name: owner
     old_value: ''
     new_value: jane
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
