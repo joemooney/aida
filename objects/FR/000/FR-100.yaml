@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T06:10:17.050094053Z
-modified_at: 2026-05-04T19:34:34.750087756Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -28,3 +28,5 @@ history:
   - field_name: description
     old_value: 'Width of Requirements View Panel will not allow resizing to less than the widest requirement title. We need to be able to resize it to a narrower width and show a horizontal scrollbar when narrower. '
     new_value: "Width of Requirements View Panel will not allow resizing to less than the widest requirement title. We need to be able to resize it to a narrower width and show a horizontal scrollbar when narrower. \n\nThe Requirements Panel can now be resized narrower:\n\n  Changes:\n  - Minimum width reduced from 400px to 200px\n  - Default width set to 400px (preserves initial appearance)\n  - Horizontal scrolling enabled - when the panel is narrower than the content, a horizontal scrollbar appears\n  - Content minimum width set to 300px to prevent text from collapsing completely\n\n  Now you can drag the panel border to make it narrower, and long requirement titles will scroll horizontally instead of forcing a minimum\n  panel width.\n"
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
