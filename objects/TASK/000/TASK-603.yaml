@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:03:32.225306247Z
-modified_at: 2026-05-31T15:03:32.225306247Z
+modified_at: 2026-05-31T15:10:32.747616573Z
 req_type: Task
 tags:
 - aida-cli
@@ -17,3 +17,9 @@ tags:
 - local-store
 - parent:STORY-493
 - slice-2
+comments:
+- id: 019e7e96-312b-7092-a046-206c79ff5596
+  author: joe
+  content: Commit 1e32bf0fa references this requirement
+  created_at: 2026-05-31T15:10:32.747616573Z
+  modified_at: 2026-05-31T15:10:32.747616573Z
