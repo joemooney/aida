@@ -1,0 +1,21 @@
+id: 019e7bff-4cdf-7b93-b43d-035751e4642e
+spec_id: TASK-589
+agreed_id: TASK-589
+title: 'aida help --glossary: surface the machinery/lifecycle glossary from the CLI'
+description: |-
+  Add 'aida help --glossary' (or 'aida glossary') to print AIDA's machinery + lifecycle vocabulary from the CLI. The content already exists structured — aida-core/templates/docs/aida/discipline/glossary.yaml + machinery-glossary.md + lifecycle-vocabulary.md — so this is a surfacing command, not new content. Improves discoverability of orchestrator/phase/drain/lease/role/scope/session/worktree/sentinel/batch/autonomy-mode terms for both operators and agents (agents could call it to ground vocabulary).
+
+  Deferred per the bugs-first phase (project_bugs_before_marketing_phase) — small feature, build after stability. Operator-requested 2026-05-30.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T03:06:29.471718069Z
+modified_at: 2026-05-31T03:06:29.471718069Z
+req_type: Task
+tags:
+- aida:help
+- deferred:post-stability
+- discoverability
+- docs
+- glossary
