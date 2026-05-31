@@ -42,7 +42,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T18:12:10.930679221Z
-modified_at: 2026-05-23T18:12:10.930679221Z
+modified_at: 2026-05-31T05:58:07.076725257Z
 req_type: Bug
 tags:
 - ceiling-pattern
@@ -51,3 +51,9 @@ tags:
 - lifecycle-discipline
 - papercut
 - parent:BUG-361
+comments:
+- id: 019e7c9c-6de4-73e3-abf8-6787baa8eadd
+  author: joe
+  content: 'Triaged 2026-05-30 (autonomous backlog sweep): deferred — needs a fresh repro. The fix would broaden ship step-5''s lease cleanup (currently `list_leases(main_worktree).find(|l| l.branch == branch)` in pr_ship_handler), but WHY the branch-match failed for the original case (TASK-497 / lease 019e55ab, 2026-05-23) can''t be determined now — that lease state is long gone. A blind defensive broadening (e.g. also match by the merged spec or by worktree-path-is-cwd) risks fixing the wrong thing. Re-open with a captured failing lease (`aida session leases` output at the moment ship leaves one orphaned) so the exact mismatch is visible. Low priority; recovery is a one-line manual `aida session end`.'
+  created_at: 2026-05-31T05:58:07.076725257Z
+  modified_at: 2026-05-31T05:58:07.076725257Z
