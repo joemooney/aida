@@ -21,7 +21,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-14T06:46:44.272915918Z
 created_by: Joe Mooney
-modified_at: 2025-12-14T07:04:53.957011414Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 history:
 - id: a4c44adc-97b4-4203-acaa-80c91bf6e182
@@ -94,6 +94,8 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 ai_evaluation:
   evaluation:
     quality_score: 5
