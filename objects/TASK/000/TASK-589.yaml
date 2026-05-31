@@ -11,7 +11,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T03:06:29.471718069Z
-modified_at: 2026-05-31T03:06:29.471718069Z
+modified_at: 2026-05-31T17:14:22.314427833Z
 req_type: Task
 tags:
 - aida:help
@@ -19,3 +19,9 @@ tags:
 - discoverability
 - docs
 - glossary
+comments:
+- id: 019e7f07-8eea-7902-8306-70de8fa8baad
+  author: joe
+  content: Commit b4fc48605 references this requirement
+  created_at: 2026-05-31T17:14:22.314427833Z
+  modified_at: 2026-05-31T17:14:22.314427833Z
