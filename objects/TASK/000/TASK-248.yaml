@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T19:40:01.583169557Z
-modified_at: 2026-05-15T20:22:07.149332168Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - epic-26
@@ -32,6 +32,8 @@ comments:
     Test status: 15/15 aida-tui tests green; build/clippy/fmt clean.
   created_at: 2026-05-15T20:07:53.760849244Z
   modified_at: 2026-05-15T20:07:53.760849244Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T19:57:38.296280203Z
