@@ -4358,7 +4358,7 @@ pub enum Command {
     /// blocked-by / blocks chains, epic rollup, and reverse impact — the
     /// questions a flat per-feature spec tool structurally can't answer.
     /// Read-only. Pick at most one mode (default: --tree).
-    /// trace:STORY-489 | ai:claude
+    // trace:STORY-489 | ai:claude
     Graph {
         /// The root spec (SPEC-ID or UUID) to query from.
         id: String,
