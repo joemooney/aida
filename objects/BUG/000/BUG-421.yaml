@@ -1,0 +1,18 @@
+id: 019e7fdf-5e32-74f2-bc52-c3f3485d5078
+spec_id: BUG-421
+agreed_id: BUG-421
+title: 'Correct ''aida agent list-roles'' output: fabricated lease-limits + inaccurate role summaries + missing ''aida role list'' cross-reference'
+description: 'Cross-validation of AGY''s TASK-587 (PR-415, merged without the draft-for-review gate) found the ''aida agent list-roles'' output ships inaccurate/fabricated content: (1) active_leases_limit values are invented (AIDA enforces no per-role lease caps; ''reviewer: 0 spec leases'' is wrong — a reviewer holds a PR-scope lease); (2) implementer described as ''spawns with main worktree'' — wrong, it gets a dedicated sibling worktree (the BUG-416 isolation point); (3) advisor reduced to ''advises on specs or provides second opinions'' — undersells the coordinator/escalation seat; (4) reviewer ''runs spec review fragments assembly'' — garbled; (5) NO ''See also: aida role list'' cross-reference (the whole point — preventing operator/agent-role confusion); (6) no orchestrator-phase framing (the reason the set is closed). Fix: replace the AgentRoleInfo fields with role + orchestrator_phase + accurate summary; drop the fabricated lease-limit field; add the aida-role-list cross-reference footer. Keeps AGY''s DRY''d AGENT_ROLES const + subcommand structure (those were correct). trace:TASK-587'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T21:10:05.618440288Z
+modified_at: 2026-05-31T21:10:05.618440288Z
+req_type: Bug
+tags:
+- agent-discipline
+- aida:agent:new
+- docs-quality
+- from-cross-validation
+- linked:TASK-587
