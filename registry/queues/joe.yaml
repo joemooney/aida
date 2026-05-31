@@ -1308,13 +1308,6 @@
   added_at: 2026-05-29T03:50:31.705600486Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e71e2-7fe3-7691-9e0c-2bdd52fb3712
-  position: 315000
-  added_by: joe
-  note: auto-queued by `aida pr` (019e71db); covers 1 spec
-  added_at: 2026-05-29T03:59:02.481505449Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 019e71e8-b97e-7931-91eb-0d073abadffd
   position: 316000
   added_by: joe
