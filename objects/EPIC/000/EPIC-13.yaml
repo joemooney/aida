@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T04:36:24.270885134Z
-modified_at: 2026-05-10T06:23:18.141718966Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Epic
 tags:
 - producer-consumer
@@ -45,3 +45,5 @@ comments:
   content: ''
   created_at: 2026-05-04T04:38:31.080542130Z
   modified_at: 2026-05-04T04:38:31.080542130Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
