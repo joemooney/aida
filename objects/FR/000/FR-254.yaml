@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T21:19:17.305675907Z
-modified_at: 2026-05-04T19:38:33.510384786Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df47f-d85d-7993-8a6c-1dc14a67b711
@@ -27,3 +27,5 @@ history:
   - field_name: spec_id
     old_value: FR-0062
     new_value: INBOX-0069
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
