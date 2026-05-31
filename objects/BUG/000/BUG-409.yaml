@@ -1,0 +1,18 @@
+id: 019e7d94-beea-7de0-885c-ed9b029cfd27
+spec_id: BUG-409
+agreed_id: BUG-409
+title: 'Flaky CI: story_429_auto_rebase_tests::clean_auto_rebase_proceeds_without_retrying_preflight (git-state-sensitive)'
+description: 'Confirmed flaky 2026-05-31: this test FAILED CI on PR-389 — a DOCS-ONLY change (two docs/plans/*.md files, zero code) — panicking at aida-cli/src/main.rs:29960 with ''fatal: cannot change to /nonexistent-repo-path-xyz'' + ''error: The following untracked working tree files would be overwritten by merge''. A docs-only diff cannot affect auto-rebase logic, so the test is environment/git-state-sensitive: it does real git operations (merge/checkout) against a fixture that isn''t fully isolated, so a dirty/shared working tree in the CI runner trips it. The same ''untracked files overwritten by merge'' git noise appeared in PR-388''s CI log too — recurring. Fix: isolate the test''s git fixture (fresh temp repo per run, no reliance on a clean shared CWD), or guard the path that hits ''/nonexistent-repo-path-xyz''. Recovered PR-389 via ''gh run rerun --failed'' (flaky-recovery on the same commit). Impact: spurious red CI on unrelated PRs → wasted ship round-trips in autonomous drains.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T10:29:20.746775632Z
+modified_at: 2026-05-31T10:29:20.746775632Z
+req_type: Bug
+tags:
+- ci
+- flaky-test
+- from-self-test
+- kind:bug-spotted
+- story-429
