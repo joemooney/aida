@@ -1444,6 +1444,23 @@ pub enum DocsCommand {
         #[clap(long, short = 'o')]
         output: Option<PathBuf>,
     },
+
+    /// Print AIDA's machinery + lifecycle glossary from the binary's
+    /// embedded copy.
+    ///
+    /// Surfaces the canonical vocabulary (orchestrator, phase, drain, lease,
+    /// role, scope, worktree, …) and the spec-lifecycle verbs (committed,
+    /// pushed, merged, completed, released) without hunting for the file under
+    /// docs/aida/discipline/ — and stays correct even if the project's
+    /// scaffolded copy is missing or stale. Default prints both sections.
+    Glossary {
+        /// Print only the machinery glossary (orchestrator, drain, lease, …).
+        #[clap(long)]
+        machinery: bool,
+        /// Print only the lifecycle vocabulary (the spec-state verbs).
+        #[clap(long)]
+        lifecycle: bool,
+    },
 }
 
 /// Living-documentation entry surface.
