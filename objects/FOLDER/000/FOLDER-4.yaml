@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-26T22:56:44.024845680Z
-modified_at: 2026-05-04T19:30:03.030939278Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Folder
 relationships:
 - rel_type: Child
@@ -137,3 +137,5 @@ history:
   - field_name: type
     old_value: Functional
     new_value: Folder
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
