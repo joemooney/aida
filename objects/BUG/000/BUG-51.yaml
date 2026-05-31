@@ -10,12 +10,12 @@ description: |
   2. Require strict id-only and document that version progress should go in commit body, not subject
 
   Mild preference for option 1 — version suffixes in commit subjects are useful real-world signal.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:31:24.947853399Z
-modified_at: 2026-05-31T12:05:34.440216193Z
+modified_at: 2026-05-31T12:10:46.380303743Z
 req_type: Bug
 comments:
 - id: 019e7dec-d868-78a2-aa1b-6b654c093d0d
@@ -23,3 +23,7 @@ comments:
   content: Commit e2249f825 references this requirement
   created_at: 2026-05-31T12:05:34.440216193Z
   modified_at: 2026-05-31T12:05:34.440216193Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T12:10:46.380303743Z
+  completion_sha: bbff9d2d51cc804b3136fd15fba4aaee6d357493
