@@ -1,0 +1,17 @@
+id: 019e7f3a-7034-7b21-afe8-f8a632d357d2
+spec_id: BUG-418
+agreed_id: BUG-418
+title: 'aida db reconcile-status: real run printed ''No eligible flips'' yet the spec ended Completed (misleading output or state confusion)'
+description: 'Observed 2026-05-31 recovering SPIKE-46 (merged PR-410, auto-bump missed it → stuck In Progress). Sequence: ''reconcile-status --spec SPIKE-46 --dry-run'' → ''would flip 1 spec → Completed (was In Progress, commit c263969)''. Then the REAL ''reconcile-status --spec SPIKE-46'' → ''No eligible flips for SPIKE-46...'' YET ''aida show SPIKE-46'' immediately after = Completed. So the spec DID get completed, but the real run''s message claimed no flip. dry_run_does_not_write is a tested invariant (main.rs ~39999), so dry-run-persisted is unlikely; most probable = the real run flipped it but printed the no-op message (count-vs-message bug), OR a state/scan-range confusion between the two runs. NOT mechanism-confirmed — 1st occurrence. Recovery itself worked (SPIKE-46 is Completed). Risk: misleading output could make an operator think a recovery failed when it succeeded (or vice-versa). On recurrence: add opt-in instrumentation to log the flip decision + the message path rather than infer. trace-observation only; promote to confirmed bug at recurrence.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T18:09:56.788195263Z
+modified_at: 2026-05-31T18:09:56.788195263Z
+req_type: Bug
+tags:
+- aida:db:reconcile-status
+- from-self-test
+- needs-instrumentation
+- observation
