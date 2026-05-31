@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T04:32:01.625353327Z
-modified_at: 2026-05-04T19:35:02.130632537Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -33,3 +33,5 @@ history:
   - field_name: title
     old_value: ''
     new_value: Type Definition Editor
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
