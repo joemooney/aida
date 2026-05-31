@@ -8,7 +8,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T04:33:51.842450784Z
 created_by: '@joe'
-modified_at: 2026-05-04T19:34:18.411944485Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -29,3 +29,5 @@ history:
   - field_name: description
     old_value: "I will want to optionally lock navigation in both lists and as we move we should keep the selected requirement in the center (vertical) of \nthe panel for ease of visualization. Place a little loced/unlocked icon to the left of the 'x' on List 2 to incidcate naviation is locked \nbetween both lists."
     new_value: "I will want to optionally lock navigation in both lists and as we move we should keep the selected requirement in the center (vertical) of \nthe panel for ease of visualization. Place a little loced/unlocked icon to the left of the 'x' on List 2 to incidcate naviation is locked \nbetween both lists.\n\n\n Navigation Lock Feature:\n\n  - Added a lock/unlock icon button (🔒/🔓) to the List 2 header, positioned to the left of the close (✕) button\n  - When locked:\n    - Selecting a requirement in either list automatically selects and scrolls to the same requirement in the other list\n    - Both lists center the selected item vertically for easy visualization\n    - Works with keyboard navigation (arrow keys, Page Up/Down) and mouse clicks\n  - When unlocked:\n    - Lists operate independently as before\n\n  The icon shows:\n  - 🔒 (locked padlock) when navigation is synced\n  - 🔓 (unlocked padlock) when navigation is independent\n\n\n"
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
