@@ -29,7 +29,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-09T03:33:22.828401443Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:29:27.326108829Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df477-834f-78c2-b456-f71d1cbaba7c
@@ -85,6 +85,8 @@ history:
   - field_name: spec_id
     old_value: FR-0226
     new_value: DB-0227
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 ai_evaluation:
   evaluation:
     quality_score: 4
