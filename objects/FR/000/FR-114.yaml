@@ -77,7 +77,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T06:28:15.111308891Z
-modified_at: 2026-05-04T19:34:55.623517301Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -313,3 +313,5 @@ history:
         1. Select text in a field
         2. Right-click
         3. The selection is preserved and Copy/Cut should work
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
