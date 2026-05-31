@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:22:20.110613503Z
-modified_at: 2026-05-31T10:19:23.690611872Z
+modified_at: 2026-05-31T10:24:34.005387457Z
 req_type: Story
 tags:
 - competitive-parity
@@ -35,6 +35,11 @@ comments:
   content: 'Slice 3 (MCP query_graph) SHIPPED by master (TASK-597, PR-388) — verified end-to-end over JSON-RPC stdio. STORY-489 now COMPLETE: CLI (aida graph) + MCP (query_graph) both live on the shared cycle-safe graph_walk primitive. The Codex slice-3 brief is moot (acking it). Net flagship: the cross-spec typed-graph query — blocked-by/blocks chains, epic rollup, reverse impact — that flat per-feature SDD tools (Spec Kit, Kiro) structurally can''t answer, queryable by CLI AND any MCP client (the multi-vendor moat).'
   created_at: 2026-05-31T10:08:45.041682125Z
   modified_at: 2026-05-31T10:08:45.041682125Z
+- id: 019e7d90-5ed5-7300-be6d-83dd25be2d48
+  author: joe
+  content: Commit d442b6c57 references this requirement
+  created_at: 2026-05-31T10:24:34.005387457Z
+  modified_at: 2026-05-31T10:24:34.005387457Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T10:19:23.690611872Z
