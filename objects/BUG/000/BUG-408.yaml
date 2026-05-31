@@ -1,0 +1,21 @@
+id: 019e7ca7-2f63-7992-8e22-5dfb11d5fb89
+spec_id: BUG-408
+agreed_id: BUG-408
+title: 'aida agent new --show-context is not dry: it starts the session (worktree + lease + status→InProgress) before printing context'
+description: |-
+  Observed 2026-05-31: ran 'aida agent new codex --role implementer --spec SPIKE-44 --show-context' expecting a DRY preview of the launch-context snapshot (per CLAUDE.md: '--show-context # Print the generated launch-context snapshot'). Instead it created the worktree (/home/joe/ai/aida-spike-44), started a session/lease (019e7ca5), flipped SPIKE-44 Approved→InProgress, AND printed the context — i.e. --show-context still runs the full session-start + (attempted) launch, just also prints the snapshot. Required manual session-end + status revert to clean up.
+
+  Expected: --show-context should be a PURE PREVIEW — render the launch-context snapshot for the given role/spec WITHOUT starting a session, creating a worktree, flipping spec status, or launching the agent. (Or rename the dry flag, e.g. --print-context, and document that --show-context launches.) Surfaced while the operator mandated autonomous fleet control — a dry preview is exactly what you want before committing to a real launch.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T06:09:51.971767710Z
+modified_at: 2026-05-31T06:09:51.971767710Z
+req_type: Bug
+tags:
+- aida:agent:new
+- from-self-test
+- papercut
+- show-context
+- ux
