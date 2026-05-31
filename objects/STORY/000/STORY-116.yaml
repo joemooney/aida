@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:17:46.354015070Z
-modified_at: 2026-05-13T15:37:59.210641242Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -40,3 +40,5 @@ comments:
   content: 'Review verdict: changes-requested. PR-20 closed (not merged); fixup delivered in PR-21 (review story STORY-117). This review iteration''s job — surface the QueueEntry drop blocker — was completed successfully. The verdict drove the right outcome even though PR-20 itself didn''t merge.'
   created_at: 2026-05-13T15:37:59.210641242Z
   modified_at: 2026-05-13T15:37:59.210641242Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
