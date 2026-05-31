@@ -60,16 +60,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:03:27.895703170Z
-modified_at: 2026-05-31T05:58:13.044092419Z
+modified_at: 2026-05-31T05:58:15.187197666Z
 req_type: Bug
 tags:
-- autonomous-drain
-- backlog
 - bug-241-extension
-- false-failure
-- from-self-test:STORY-306
+- needs-sketch-signoff
 - orchestrator
 - outcome-model
+- push-branch-hold-pr
 comments:
 - id: 019e7c9c-8534-7af2-94b1-897e1e9a9c5d
   author: joe
