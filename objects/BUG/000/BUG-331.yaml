@@ -44,12 +44,12 @@ description: |-
   Antigravity report 2026-05-22 during STORY-407 Phase 2: *"Discovered & Solved a Key Edge Case: Sibling worktrees naturally fall back to centralized SQLite/YAML mode because the .aida-store folder (which represents the git-canonical store) is gitignored and nested worktrees aren't automatically generated."*
 
   The "key edge case" framing is correct — it's a real bug; the symlink is a workaround.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:36:27.894170541Z
-modified_at: 2026-05-31T01:32:26.364079291Z
+modified_at: 2026-05-31T01:36:55.462961053Z
 req_type: Bug
 tags:
 - from-antigravity
@@ -68,3 +68,7 @@ comments:
   content: 'Docs follow-up (out of scope for the code fix): PR-187''s Antigravity setup doc may still narrate the .aida-store symlink workaround — needs an edit to remove it now that sibling worktrees resolve the canonical store automatically. The code-generated symlink line (agent-brief Setup section) was removed in this fix.'
   created_at: 2026-05-31T01:32:26.364079291Z
   modified_at: 2026-05-31T01:32:26.364079291Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T01:36:55.462961053Z
+  completion_sha: 9a9a3d5ba7e891d559c4aa3138c68502b0734f3c
