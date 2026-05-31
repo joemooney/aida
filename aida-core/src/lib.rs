@@ -15,6 +15,7 @@ pub mod graph_walk;
 pub mod hlc;
 pub mod import;
 pub mod integrations;
+pub mod mailbox;
 pub mod meta;
 pub mod models;
 pub mod node;
