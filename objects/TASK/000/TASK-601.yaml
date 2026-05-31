@@ -1,0 +1,19 @@
+id: 019e7e6f-682d-7200-93e7-9781998760fd
+spec_id: TASK-601
+agreed_id: TASK-601
+title: 'Resume decision core: ResumeFacts + phase_postcondition_met + resume_plan (STORY-492 slice 2a)'
+description: 'First slice of STORY-492 (operator signed off explicit-only resume, reconcile-from-reality design). Pure, side-effect-free resume-decision core in drain_resume.rs: ResumeFacts (per-phase reality), phase_postcondition_met (phase→fact), and resume_plan composing classify_resumability (double-drive guard dominant) + reconcile_resume_phase → ResumeOutcome (RefuseOrchestratorAlive / NothingToResume / LeaveShelved / AlreadyComplete / ResumeAt(phase)). 7 new unit tests incl. the merge-done-before-crash idempotency case + the orchestrator-alive refusal. Remaining wiring (sign-off-gated catastrophic part): the impure fact-gathering probes (git/PR/spec reads + PID-liveness gate reusing classify_for_auto_release), the --resume flag, and the live re-entry via orchestrate start_phase. STORY-492 stays open.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T14:28:10.925167853Z
+modified_at: 2026-05-31T14:28:10.925167853Z
+req_type: Task
+tags:
+- aida-cli
+- durable-execution
+- parent:STORY-492
+- pure-logic
+- resumable-drain
+- slice-2a
