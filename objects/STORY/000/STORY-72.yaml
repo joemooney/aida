@@ -36,10 +36,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:19:40.751502153Z
-modified_at: 2026-05-10T21:29:41.864928500Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019df145-ea4e-7440-b80d-88a34684f39c
   created_at: 2026-05-10T06:23:17.280736441Z
   created_by: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
