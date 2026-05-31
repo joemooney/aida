@@ -17045,6 +17045,23 @@ fn heal_doctor_findings(
 
 fn confirm_doctor_category(category: &str, count: usize) -> Result<bool> {
     use std::io::Write;
+    // BUG-407: never block on a prompt nobody can answer. In a non-interactive
+    // shell (no TTY — a background task, CI, or piped stdin) `stdin.read_line`
+    // blocks forever on an open-but-empty socket (the observed `aida doctor
+    // --heal` hang: 7.5min, 0 progress, WCHAN unix_stream_read_generic).
+    // Decline fast with guidance instead; `--heal --yes` skips this prompt
+    // entirely (the caller only calls us when !opts.yes). trace:BUG-407
+    if !std::io::stdin().is_terminal() {
+        eprintln!(
+            "  {} non-interactive shell — skipping '{}' ({} finding(s)). Re-run \
+             `aida doctor --heal --yes` (add --force for destructive categories) \
+             to apply without prompting.",
+            "Note:".yellow().bold(),
+            category,
+            count
+        );
+        return Ok(false);
+    }
     print!("Heal {} finding(s) in {}? [y/N] ", count, category);
     std::io::stdout().flush()?;
     let mut ans = String::new();
@@ -17460,6 +17477,18 @@ mod story_462_doctor_tests {
         );
         assert_eq!(normalize_doctor_category("locks").unwrap(), "stale-locks");
         assert!(normalize_doctor_category("not-a-category").is_err());
+    }
+
+    /// BUG-407: `confirm_doctor_category` must NOT block on stdin in a
+    /// non-interactive shell (the `aida doctor --heal` hang). Under `cargo
+    /// test` stdin is non-interactive, so this returns Ok(false) immediately
+    /// and the test completing at all proves it doesn't block. Also locks the
+    /// contract: non-interactive declines (never silently auto-confirms).
+    /// The open-socket hang condition itself is verified empirically (a
+    /// background `--heal` run with a finding present). trace:BUG-407 | ai:claude
+    #[test]
+    fn confirm_doctor_category_declines_in_non_interactive_shell() {
+        assert_eq!(confirm_doctor_category("stale-leases", 3).unwrap(), false);
     }
 
     #[test]
