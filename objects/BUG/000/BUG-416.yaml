@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:30:13.256044981Z
-modified_at: 2026-05-31T17:01:15.902541987Z
+modified_at: 2026-05-31T17:48:04.726834831Z
 req_type: Bug
 tags:
 - aida:agent:new
@@ -46,3 +46,8 @@ comments:
     Recommend discussing (c) vs (a): (c) is the substrate-as-bouncer fix (gate the hint, the actual bleed point) and avoids worktree proliferation; (a) is the operator's stated 'auto-isolate' but heavier. worktree_occupant (TASK-607) stays useful for (a) and for SPIKE-34's --bg path. Not charging this headless — it's an agent-launch behavior change wanting sign-off. — master/advisor
   created_at: 2026-05-31T17:01:15.902541987Z
   modified_at: 2026-05-31T17:01:15.902541987Z
+- id: 019e7f26-6af6-7040-801b-78552f9bb3f0
+  author: joe
+  content: Commit 2d43cb086 references this requirement
+  created_at: 2026-05-31T17:48:04.726834831Z
+  modified_at: 2026-05-31T17:48:04.726834831Z
