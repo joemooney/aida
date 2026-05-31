@@ -19,7 +19,7 @@ priority: Low
 owner: joe
 feature: 97-Uncategorized
 created_at: 2025-11-27T17:02:58.915305926Z
-modified_at: 2025-12-06T19:06:39.455567941Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -72,3 +72,5 @@ history:
   - field_name: owner
     old_value: ''
     new_value: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
