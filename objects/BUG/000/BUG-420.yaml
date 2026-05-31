@@ -3,12 +3,12 @@ spec_id: BUG-420
 agreed_id: BUG-420
 title: Headless implementer degenerates into filler-spin (echo counters + sleeps) AFTER committing its work — never advances to open-PR/next-phase
 description: 'Empirical 2026-05-31 (the demo-drain asciinema cast, batch:demo-drain, member TASK-608, headless session 019e7fa5; log .aida/headless-logs/task-608-019e7fa5-*.jsonl). The headless --auto-complete implementer IMPLEMENTED TASK-608 correctly and COMMITTED it (1432abe4d, a real fix(role) commit), then degenerated into an infinite filler loop: batches of meaningless ''echo cq1..cq10'' / ''echo cr1..cr10'' / ''echo dc1..dc10'' interspersed with ''Wait ~150s'' sleep tasks — never advancing to the open-PR phase. Operator caught it on the cast (Ctrl+C). KEY: the WORK succeeded; the orchestration/phase-transition degenerated post-commit. Distinct from TASK-136 (GH-API verification stall pauses batch) and TASK-133 (phase-1 status-before-lease strands spec) — this is a post-commit degenerate-spin. NEAR-MISS: the committed work looked like a clean worktree, nearly discarded during recovery (see memory clean_worktree_is_not_no_work). REMEDIATION: a drain watchdog — a phase that produces only echo/sleep tool-calls with NO file changes + NO git commits for N minutes (or N consecutive no-op tool calls) should ABORT and shelve the member (NeedsAttention + FailureReason), not spin indefinitely. Pairs with TASK-136/133 as the orchestrator-reliability hardening set; reinforces that headless drains need a liveness/progress watchdog and that interactive supervision catches this in minutes. trace-evidence: the cast at .aida/casts/2026-05-31T195548Z-batch-demo-drain.cast.'
-status: Completed
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:41:24.581886146Z
-modified_at: 2026-05-31T22:18:38.716079921Z
+modified_at: 2026-05-31T22:20:14.307124964Z
 req_type: Bug
 tags:
 - aida:queue:work
