@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:09:51.971767710Z
-modified_at: 2026-05-31T06:09:51.971767710Z
+modified_at: 2026-05-31T17:00:31.278932843Z
 req_type: Bug
 tags:
 - aida:agent:new
@@ -19,3 +19,9 @@ tags:
 - papercut
 - show-context
 - ux
+comments:
+- id: 019e7efa-e0ae-7981-bf85-1f1063b52d99
+  author: joe
+  content: Commit efe94b43e references this requirement
+  created_at: 2026-05-31T17:00:31.278932843Z
+  modified_at: 2026-05-31T17:00:31.278932843Z
