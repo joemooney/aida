@@ -1,0 +1,26 @@
+id: 019e7fa5-54b7-7783-90c2-87615470ff66
+spec_id: STORY-494
+agreed_id: STORY-494
+title: 'Review PR-414: [AI:claude] feat(hooks): pre-commit gate rejects trace markers on /// doc comments (TASK-135)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e7f9b`) for branch `task-135`.
+
+  - PR: <https://github.com/joemooney/aida/pull/414>
+  - Branch: `task-135` → `main`
+
+  ## Covers
+
+  - TASK-135
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 414` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T20:06:42.103296536Z
+modified_at: 2026-05-31T20:06:42.103296536Z
+req_type: Story
