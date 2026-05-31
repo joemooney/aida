@@ -49,7 +49,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:02:57.560667499Z
-modified_at: 2026-05-14T04:40:43.964904528Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -77,6 +77,8 @@ comments:
     Test status: 280/280 aida-cli tests green; `cargo fmt --all -- --check` clean.
   created_at: 2026-05-14T04:14:00.105525524Z
   modified_at: 2026-05-14T04:14:00.105525524Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T01:46:55.362138400Z
