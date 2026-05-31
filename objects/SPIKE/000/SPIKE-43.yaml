@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:06:53.806139637Z
-modified_at: 2026-05-31T06:17:50.919434985Z
+modified_at: 2026-05-31T06:49:28.947670732Z
 req_type: Spike
 tags:
 - competitive
@@ -54,6 +54,11 @@ comments:
     STRATEGIC READ: AIDA's differentiation is real + confirmed, but the risk is DISTRIBUTION, not feature-convergence — Spec Kit's roadmap aims at GitHub Issues + agent prompts, NOT a structured layer (roadmap-risk LOW, refresh ~6wk). AIDA's bet = depth-on-use; Spec Kit's = reach. Candidate AIDA capability-match: a tasks/specs → GitHub Issues bridge.
   created_at: 2026-05-31T06:17:50.919434985Z
   modified_at: 2026-05-31T06:17:50.919434985Z
+- id: 019e7ccb-7473-76b2-8604-e319a4a29cb2
+  author: joe
+  content: Commit 6c8c3de8 references this requirement
+  created_at: 2026-05-31T06:49:28.947670732Z
+  modified_at: 2026-05-31T06:49:28.947670732Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T06:16:59.815606346Z
