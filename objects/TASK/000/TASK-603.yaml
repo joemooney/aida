@@ -3,12 +3,12 @@ spec_id: TASK-603
 agreed_id: TASK-603
 title: Mailbox local store + aida mailbox CLI (send/inbox/thread) (STORY-493 slice 2)
 description: 'Slice 2 of STORY-493. The fast .aida/mailbox/ local layer (one atomic JSON per message) + the aida mailbox CLI: send (build a Message — uuid id, now() timestamp, from=current_user_id, to agent|broadcast, thread/in_reply_to — and write it), inbox <agent> (read_local + inbox_for), thread <id> (read_local + thread). Over the pure aida_core::mailbox core. .aida/mailbox/ is deny-by-default-gitignored runtime state. The git-canonical digest (sync) + MCP tools are later slices.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:03:32.225306247Z
-modified_at: 2026-05-31T15:15:50.848237500Z
+modified_at: 2026-05-31T15:20:38.276101413Z
 req_type: Task
 tags:
 - aida-cli
@@ -28,3 +28,7 @@ comments:
   content: Commit 2a8619416 references this requirement
   created_at: 2026-05-31T15:15:50.848237500Z
   modified_at: 2026-05-31T15:15:50.848237500Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T15:20:38.276101413Z
+  completion_sha: 478cb847ba74abeaf1027adf96d0e7b9baba360f
