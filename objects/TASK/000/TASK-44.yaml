@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:02:43.096552618Z
-modified_at: 2026-05-11T02:59:12.015482793Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -71,3 +71,5 @@ comments:
   content: Commit 511caf7d references this requirement
   created_at: 2026-05-10T22:17:25.575278038Z
   modified_at: 2026-05-10T22:17:25.575278038Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
