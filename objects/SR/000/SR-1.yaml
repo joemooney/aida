@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: 12-Claude-Code-Integration
 created_at: 2025-12-01T06:27:09.025805737Z
-modified_at: 2025-12-11T03:41:45.904538115Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: System
 history:
 - id: b1352ac6-dad8-4486-95a6-687481400adf
@@ -105,3 +105,5 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
