@@ -35,10 +35,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T06:53:34.391817786Z
-modified_at: 2026-05-23T06:53:34.391817786Z
+modified_at: 2026-05-31T01:13:52.968231979Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-1
 - implementer
+comments:
+- id: 019e7b98-3448-7073-8998-e8a3718807af
+  author: joe
+  content: 'Bulk-triaged 2026-05-30 (operator-approved): no-pr exit (implementer finished without opening a PR). This discipline gap is FIXED by TASK-401 + BUG-269/360/285/361 (all Completed); this auto-draft (2026-05-23) predates those fixes. Stale.'
+  created_at: 2026-05-31T01:13:52.968231979Z
+  modified_at: 2026-05-31T01:13:52.968231979Z
