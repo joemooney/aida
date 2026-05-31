@@ -20,6 +20,10 @@ tags:
 - reliability
 - severity:major
 - unattended-drain
+relationships:
+- rel_type: Parent
+  target_id: 019e801d-b083-75b3-a460-1d44a4ac6b0c
+  created_at: 2026-05-31T22:18:22.300829631Z
 comments:
 - id: 019e8017-6b19-7dc3-92dc-e4bb46f9bab0
   author: joe
