@@ -517,6 +517,51 @@ pub(crate) enum ImplementerOutcome {
     },
 }
 
+/// BUG-420: which watchdog tripped on a degenerate headless phase. The
+/// no-progress signal (no commit + no file-change for N minutes) is the
+/// precise catch for the echo/sleep filler-spin; the wall-clock ceiling is a
+/// hard backstop. trace:BUG-420 | ai:claude
+#[allow(dead_code)] // decision core; wired into the phase spawn-wait by slice 2
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WatchdogTrip {
+    NoProgress,
+    Ceiling,
+}
+
+/// Pure decision core for the BUG-420 phase watchdog. `since_progress` is the
+/// time since the last observed commit/file-change in the phase's worktree;
+/// `total` is wall-clock since the phase started. A limit of `0` disables that
+/// check. No-progress takes precedence (it's the precise signal). The caller
+/// polls the worktree and feeds these in; this stays pure + unit-testable.
+/// trace:BUG-420 | ai:claude
+#[allow(dead_code)] // wired into the phase spawn-wait by slice 2
+pub(crate) fn watchdog_verdict(
+    since_progress: std::time::Duration,
+    total: std::time::Duration,
+    no_progress_limit: std::time::Duration,
+    ceiling: std::time::Duration,
+) -> Option<WatchdogTrip> {
+    if !no_progress_limit.is_zero() && since_progress >= no_progress_limit {
+        return Some(WatchdogTrip::NoProgress);
+    }
+    if !ceiling.is_zero() && total >= ceiling {
+        return Some(WatchdogTrip::Ceiling);
+    }
+    None
+}
+
+/// TASK-136: the GH PR-verification retry backoff schedule — `retries` waits at
+/// 30s, 1m, 5m, then 15m for any beyond. A transient GH blip clears within
+/// these; a persistent outage falls through to shelve-and-advance. Pure so the
+/// schedule is pinned by a test. trace:TASK-136 | ai:claude
+#[allow(dead_code)] // wired by slice 2
+pub(crate) fn gh_verify_backoff_schedule(retries: usize) -> Vec<std::time::Duration> {
+    const STEPS: [u64; 3] = [30, 60, 300];
+    (0..retries)
+        .map(|i| std::time::Duration::from_secs(*STEPS.get(i).unwrap_or(&900)))
+        .collect()
+}
+
 /// The outcome of phase 3 — the reviewer session. The reviewer either
 /// reaches a [`Verdict`] (the normal path — `Approved` continues to merge,
 /// anything else stops the pipeline), or *escalates the merge decision to a
@@ -2392,6 +2437,68 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// BUG-420: the watchdog trips on no-progress first, ceiling as backstop;
+    /// 0 disables a check. trace:BUG-420
+    #[test]
+    fn watchdog_verdict_no_progress_then_ceiling() {
+        use std::time::Duration;
+        let (np, ceil) = (Duration::from_secs(600), Duration::from_secs(2700));
+        // No progress for >= limit → NoProgress.
+        assert_eq!(
+            watchdog_verdict(Duration::from_secs(600), Duration::from_secs(100), np, ceil),
+            Some(WatchdogTrip::NoProgress)
+        );
+        // Progress recent but total >= ceiling → Ceiling.
+        assert_eq!(
+            watchdog_verdict(Duration::from_secs(10), Duration::from_secs(2700), np, ceil),
+            Some(WatchdogTrip::Ceiling)
+        );
+        // Both within limits → None (keep running).
+        assert_eq!(
+            watchdog_verdict(Duration::from_secs(60), Duration::from_secs(120), np, ceil),
+            None
+        );
+        // No-progress takes precedence when both would trip.
+        assert_eq!(
+            watchdog_verdict(
+                Duration::from_secs(600),
+                Duration::from_secs(2700),
+                np,
+                ceil
+            ),
+            Some(WatchdogTrip::NoProgress)
+        );
+        // Zero limits disable both checks.
+        assert_eq!(
+            watchdog_verdict(
+                Duration::from_secs(99_999),
+                Duration::from_secs(99_999),
+                Duration::ZERO,
+                Duration::ZERO
+            ),
+            None
+        );
+    }
+
+    /// TASK-136: backoff schedule is 30s/1m/5m, then 15m for any beyond. trace:TASK-136
+    #[test]
+    fn gh_verify_backoff_schedule_steps() {
+        use std::time::Duration;
+        assert_eq!(
+            gh_verify_backoff_schedule(3),
+            vec![
+                Duration::from_secs(30),
+                Duration::from_secs(60),
+                Duration::from_secs(300)
+            ]
+        );
+        assert_eq!(
+            gh_verify_backoff_schedule(5).last().copied(),
+            Some(Duration::from_secs(900))
+        );
+        assert!(gh_verify_backoff_schedule(0).is_empty());
+    }
 
     /// Mock driver: records the phases invoked, optionally fails at one, and
     /// returns a configurable verdict. Stands in for the real Claude / CI /
