@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T11:19:33.059539895Z
-modified_at: 2026-05-31T13:56:01.896442013Z
+modified_at: 2026-05-31T16:37:09.980767048Z
 req_type: Bug
 tags:
 - aida:pull
@@ -23,3 +23,8 @@ comments:
   content: 'Adversarial-review (2026-05-31) re-confirmed this + gave a precise, verified fix recipe: in auto_bump_done_to_completed''s MAIN flip paths (aida-cli/src/main.rs ~50320 and ~50716), AFTER the auto_bump_eligible_status check and BEFORE set_status_from_str("Completed"), skip a spec already completed by THIS commit: ''if r.implementation_info.as_ref().and_then(|i| i.completion_sha.as_deref()) == Some(flip.sha.as_str()) && !flip.sha.is_empty() { continue; }''. completion_sha survives a manual --force reopen, so this blocks the re-bump-by-same-commit while still allowing a legitimate re-bump by a DIFFERENT commit. Needs a regression test (spec completed by sha X → reopen to Approved → re-scan including X → stays Approved). Left for a careful fresh fix (touches the flip-decision loop in 2 places); not rushed at fatigue. Note: companion failure_reason-not-cleared bug shipped separately.'
   created_at: 2026-05-31T13:56:01.896442013Z
   modified_at: 2026-05-31T13:56:01.896442013Z
+- id: 019e7ee5-7edc-7b42-b13f-98134115af6b
+  author: joe
+  content: Commit d65296d4d references this requirement
+  created_at: 2026-05-31T16:37:09.980767048Z
+  modified_at: 2026-05-31T16:37:09.980767048Z
