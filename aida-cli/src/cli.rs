@@ -3148,13 +3148,18 @@ pub enum QueueCommand {
         /// next N items from the queue head in order.
         // trace:STORY-246, TASK-285, TASK-293 | ai:claude
         // trace:TASK-487 | ai:claude
+        // TASK-560: `resume` is intentionally NOT in this clap conflict list.
+        // The pair is still rejected, but by a manual check in the handler that
+        // explains WHY they conflict and names both recovery paths — clap's
+        // auto-generated "cannot be used with" message left the operator
+        // stuck. trace:TASK-560 | ai:claude
         #[clap(
             long,
             value_name = "MODE",
             num_args = 0..=1,
             default_missing_value = "full",
             conflicts_with_all = [
-                "no_launch", "resume", "fresh", "list_sessions",
+                "no_launch", "fresh", "list_sessions",
                 "dry_run", "type_filter",
             ]
         )]
