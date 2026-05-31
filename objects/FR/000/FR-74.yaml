@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-28T03:52:10.460760188Z
-modified_at: 2026-05-04T19:36:29.729114370Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df47c-fe72-7a80-811d-e87e8344bc7b
@@ -61,3 +61,5 @@ history:
         - Matching requirements: Normal display (full color)
         - Non-matching ancestors: Displayed but greyed out/dimmed, showing the path to the matching child
         - Non-matching siblings/other branches: Hidden (as they are now)
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
