@@ -1,0 +1,18 @@
+id: 019e7e51-fd26-78b2-8c6a-0bdc283bb1ac
+spec_id: BUG-412
+agreed_id: BUG-412
+title: extract_referenced_spec_ids_from_commit pulls code-like (PREFIX-NNN) from commit bodies as false references
+description: 'Found by the 2026-05-31 auto-bump review (verified). push_paren_spec_ids_from_line, used by extract_referenced_spec_ids_from_commit (main.rs ~28006) for the PR-linked-spec ''References (not delivered)'' section, extracts any (PREFIX-DIGITS) from commit BODY lines — so code like ''enum Status { OK = (STATUS-200) }'' in a body yields bogus references STATUS-200/STATUS-500 on the auto-filed review story. Low impact (cosmetic: a reviewer sees spurious entries; no auto-bump/status effect since these are ''referenced not delivered'', not trailer ids). Fix is a heuristic (skip code-like lines: contain ''='', ''{}'', fn/pub/const, unbalanced brackets) — fiddly + risks over/under-filtering, so deferred as low-pri. Distinct from the trailer/subject extraction that drives auto-bump (that path is body-excluded).'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T13:56:02.982424738Z
+modified_at: 2026-05-31T13:56:02.982424738Z
+req_type: Bug
+tags:
+- auto-bump
+- extraction
+- from-review
+- kind:bug-spotted
+- papercut
