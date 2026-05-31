@@ -403,7 +403,14 @@ impl MetaSubtype {
 }
 
 /// Represents a relationship type between requirements
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+///
+/// BUG-251: `Deserialize` is hand-written (not derived) for forward-compat
+/// across binary version skew. The derived impl errors hard on an unknown
+/// unit variant (e.g. an older binary reading a newer `BlockedBy`), which
+/// produced noisy parse failures on every machine trailing a format change.
+/// The manual impl routes any unknown variant to `Custom(name)` instead.
+/// `Serialize` stays derived so the on-disk bytes are unchanged.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash, TS)]
 pub enum RelationshipType {
     /// Parent-child relationship (this is parent of target)
     Parent,
@@ -443,6 +450,78 @@ impl fmt::Display for RelationshipType {
             RelationshipType::Blocks => write!(f, "blocks"),
             RelationshipType::Custom(name) => write!(f, "{}", name),
         }
+    }
+}
+
+/// BUG-251: forward-compatible deserialization. An unknown variant — a newer
+/// binary's addition read by an older one — lands in `Custom(name)` rather
+/// than failing the whole spec parse. Handles all three wire shapes the
+/// derived `Serialize` can emit (confirmed empirically):
+///   - bare string `Parent` / `BlockedBy` / future names  → `visit_str`
+///   - YAML externally-tagged `!Custom foo`                → `visit_enum`
+///   - JSON externally-tagged `{"Custom":"foo"}`           → `visit_map`
+/// `from_str` lowercases, so the stored PascalCase variant names round-trip,
+/// and unknown names fall through to `Custom`. trace:BUG-251 | ai:claude
+impl<'de> Deserialize<'de> for RelationshipType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RelTypeVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for RelTypeVisitor {
+            type Value = RelationshipType;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str(
+                    "a relationship-type string, a `!Custom <name>` tag, or a `{Custom: <name>}` map",
+                )
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<RelationshipType, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(RelationshipType::from_str(value))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<RelationshipType, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(RelationshipType::from_str(&value))
+            }
+
+            // YAML externally-tagged form: `!Custom foo`. `Custom` is the only
+            // newtype variant; any newtype-shaped value carries its name in the
+            // payload, so an unknown future newtype still preserves the payload.
+            fn visit_enum<A>(self, data: A) -> Result<RelationshipType, A::Error>
+            where
+                A: serde::de::EnumAccess<'de>,
+            {
+                use serde::de::VariantAccess;
+                let (_name, variant) = data.variant::<String>()?;
+                let payload: String = variant.newtype_variant()?;
+                Ok(RelationshipType::Custom(payload))
+            }
+
+            // JSON externally-tagged form: `{"Custom":"foo"}`.
+            fn visit_map<A>(self, mut map: A) -> Result<RelationshipType, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let key: Option<String> = map.next_key()?;
+                let Some(_key) = key else {
+                    return Err(serde::de::Error::custom(
+                        "empty map is not a valid relationship type",
+                    ));
+                };
+                let value: String = map.next_value()?;
+                Ok(RelationshipType::Custom(value))
+            }
+        }
+
+        deserializer.deserialize_any(RelTypeVisitor)
     }
 }
 
@@ -6157,6 +6236,72 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// BUG-251: forward-compat — an unknown `RelationshipType` variant (a newer
+    /// binary's addition, read by an older one) deserializes to `Custom(name)`
+    /// instead of failing the whole spec parse. Covers all three wire shapes
+    /// plus serialize-byte stability. trace:BUG-251 | ai:claude
+    #[test]
+    fn relationship_type_deserialize_is_forward_compatible() {
+        // The bug: an unknown unit variant used to hard-error. Now → Custom.
+        let future: RelationshipType = serde_yaml::from_str("FutureVariant\n").unwrap();
+        assert_eq!(
+            future,
+            RelationshipType::Custom("FutureVariant".to_string())
+        );
+
+        // Existing YAML forms still parse to the right typed variants.
+        assert_eq!(
+            serde_yaml::from_str::<RelationshipType>("Parent\n").unwrap(),
+            RelationshipType::Parent
+        );
+        assert_eq!(
+            serde_yaml::from_str::<RelationshipType>("BlockedBy\n").unwrap(),
+            RelationshipType::BlockedBy
+        );
+        // YAML externally-tagged Custom (`!Custom foo`).
+        assert_eq!(
+            serde_yaml::from_str::<RelationshipType>("!Custom foo\n").unwrap(),
+            RelationshipType::Custom("foo".to_string())
+        );
+
+        // JSON forms: bare-string unit variant + externally-tagged Custom.
+        assert_eq!(
+            serde_json::from_str::<RelationshipType>("\"Parent\"").unwrap(),
+            RelationshipType::Parent
+        );
+        assert_eq!(
+            serde_json::from_str::<RelationshipType>("{\"Custom\":\"foo\"}").unwrap(),
+            RelationshipType::Custom("foo".to_string())
+        );
+
+        // Serialize bytes are unchanged (derived Serialize preserved) — older
+        // and newer binaries must keep producing identical on-disk content.
+        assert_eq!(
+            serde_yaml::to_string(&RelationshipType::Parent)
+                .unwrap()
+                .trim(),
+            "Parent"
+        );
+        assert_eq!(
+            serde_yaml::to_string(&RelationshipType::BlockedBy)
+                .unwrap()
+                .trim(),
+            "BlockedBy"
+        );
+        assert_eq!(
+            serde_yaml::to_string(&RelationshipType::Custom("foo".to_string()))
+                .unwrap()
+                .trim(),
+            "!Custom foo"
+        );
+
+        // Full round-trip: serialize a future-unknown variant we modeled as
+        // Custom, read it back identically.
+        let rt = RelationshipType::Custom("future-edge".to_string());
+        let yaml = serde_yaml::to_string(&rt).unwrap();
+        assert_eq!(serde_yaml::from_str::<RelationshipType>(&yaml).unwrap(), rt);
+    }
 
     /// STORY-333: typed `BlockedBy` round-trips cleanly through the canonical
     /// string form. A regression here would silently downgrade typed edges
