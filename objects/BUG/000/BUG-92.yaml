@@ -3,10 +3,14 @@ spec_id: BUG-92
 agreed_id: BUG-92
 title: read_config_workflow_hints doesn't strip TOML inline comments
 description: 'workflow_hints.rs:64-78 parses [hints] workflow_hints = <val> but doesn''t strip TOML inline # comments. A user writing ''workflow_hints = true # commented'' results in val = ''true # commented'', no match for ''true''/''false'', silent fall-through to default. Exact PR-15 bug_002 / TASK-84 pattern. Severity LOW (.aida/config.toml is rarely hand-edited, default enabled). Surfaced by /aida-review deep-pass (Probe 2) on PR-19.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T04:35:53.758129896Z
-modified_at: 2026-05-31T05:10:57.087246339Z
+modified_at: 2026-05-31T05:15:59.510582682Z
 req_type: Bug
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T05:15:59.510582682Z
+  completion_sha: aa9bc2e13281e6005630c7815196f313a48f47c6
