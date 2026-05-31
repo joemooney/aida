@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T18:31:18.516132752Z
-modified_at: 2026-05-13T05:50:36.587346052Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -75,6 +75,8 @@ comments:
   content: 'See docs/git-workflow.md (committed 2026-05-13, 862d631b) for the full base-freshness layered defense — this task is the push-time leg of the Pattern B (stale base) coverage. Pre-push counterparts: TASK-99 (queue work pulls code at session start), TASK-100 (queue done detects stale base), TASK-101 (statusline shows behind-count during session). Together they catch base-staleness at every lifecycle moment.'
   created_at: 2026-05-13T05:50:36.587346052Z
   modified_at: 2026-05-13T05:50:36.587346052Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-10T22:38:54.792020900Z
