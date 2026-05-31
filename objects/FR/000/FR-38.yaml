@@ -43,7 +43,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T19:50:26.797473616Z
 created_by: Unknown User
-modified_at: 2025-11-30T02:24:47.150874757Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -177,3 +177,5 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
