@@ -60645,6 +60645,110 @@ fn handle_report_command(cmd: &ReportCommand, storage: &Storage, storage_path: &
     Ok(())
 }
 
+/// BUG-298: find `aida-*` entries under `.claude/{skills,commands,hooks}` that
+/// no longer correspond to a template the current binary ships — left behind
+/// when a template was renamed/consolidated/retired. Compared by base name, so
+/// a flat `aida-x.md` and a folder-form `aida-x/` both resolve to `aida-x`.
+/// Symlinks are skipped — the in-repo dogfood `.claude/` is per-file symlinks
+/// into the master templates and must never be pruned. trace:BUG-298 | ai:claude
+fn detect_obe_aida_scaffold_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    use std::collections::{HashMap, HashSet};
+    const DIRS: [&str; 3] = ["skills", "commands", "hooks"];
+
+    // Expected base names per scaffold dir, from the embedded template set.
+    let mut expected: HashMap<&str, HashSet<String>> =
+        DIRS.iter().map(|d| (*d, HashSet::new())).collect();
+    for key in aida_core::templates::EMBEDDED_TEMPLATES.keys() {
+        for dir in DIRS {
+            if let Some(rest) = key.strip_prefix(&format!("{dir}/")) {
+                let first = rest.split('/').next().unwrap_or(rest);
+                let base = std::path::Path::new(first)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(first)
+                    .to_string();
+                expected.get_mut(dir).unwrap().insert(base);
+            }
+        }
+    }
+
+    let mut obe = Vec::new();
+    for dir in DIRS {
+        let d = root.join(".claude").join(dir);
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        let exp = &expected[dir];
+        for entry in entries.flatten() {
+            let path = entry.path();
+            // Never touch symlinks (the dogfood per-file symlink layout).
+            if path
+                .symlink_metadata()
+                .map(|m| m.file_type().is_symlink())
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if !name.starts_with("aida-") {
+                continue;
+            }
+            let base = std::path::Path::new(name)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(name)
+                .to_string();
+            if !exp.contains(&base) {
+                obe.push(path);
+            }
+        }
+    }
+    obe.sort();
+    obe
+}
+
+#[cfg(test)]
+mod bug_298_prune_tests {
+    use super::*;
+
+    /// BUG-298: only obsolete `aida-*` files are flagged — a currently-shipped
+    /// skill, a user's own non-`aida-` file, and any symlink are all left alone.
+    #[test]
+    fn detect_obe_aida_scaffold_files_flags_only_obsolete() {
+        let dir = tempfile::tempdir().unwrap();
+        let skills = dir.path().join(".claude/skills");
+        std::fs::create_dir_all(&skills).unwrap();
+        std::fs::write(skills.join("aida-req.md"), "x").unwrap(); // shipped → keep
+        std::fs::write(skills.join("aida-obsolete-xyz.md"), "x").unwrap(); // OBE → flag
+        std::fs::write(skills.join("my-skill.md"), "x").unwrap(); // user → keep
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/nonexistent", skills.join("aida-symlinked.md")).unwrap();
+
+        let names: Vec<String> = detect_obe_aida_scaffold_files(dir.path())
+            .iter()
+            .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from))
+            .collect();
+        assert!(
+            names.contains(&"aida-obsolete-xyz.md".to_string()),
+            "obsolete aida file must be flagged: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n == "aida-req.md"),
+            "a shipped skill must NOT be flagged: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n == "my-skill.md"),
+            "a user's non-aida file must NOT be flagged: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n == "aida-symlinked.md"),
+            "a symlink must NOT be flagged: {names:?}"
+        );
+    }
+}
+
 // trace:FR-0260 | ai:claude:high
 fn handle_scaffold_command(
     cmd: &ScaffoldCommand,
@@ -60800,6 +60904,7 @@ fn handle_scaffold_command(
             project_root,
             force,
             dry_run,
+            prune,
         } => {
             let store = storage.load()?;
             let root = project_root
@@ -60934,6 +61039,57 @@ fn handle_scaffold_command(
                         unchanged,
                         if skipped > 0 {
                             format!(", {} skipped (use --force)", skipped)
+                        } else {
+                            String::new()
+                        }
+                    );
+                }
+            }
+
+            // BUG-298: surface (and with --prune, remove) obsolete `aida-*`
+            // skills/commands/hooks this AIDA version no longer ships. Symlinks
+            // and non-`aida-` files are never touched (see the detector).
+            let obe = detect_obe_aida_scaffold_files(&root);
+            if !obe.is_empty() {
+                println!();
+                if *prune && !*dry_run {
+                    println!(
+                        "{} Pruning {} obsolete aida-* file(s):",
+                        "🧹".yellow(),
+                        obe.len()
+                    );
+                    for p in &obe {
+                        let rel = p.strip_prefix(&root).unwrap_or(p);
+                        let removed = if p.is_dir() {
+                            std::fs::remove_dir_all(p)
+                        } else {
+                            std::fs::remove_file(p)
+                        };
+                        match removed {
+                            Ok(()) => println!("  {} {}", "-".red(), rel.display()),
+                            Err(e) => {
+                                eprintln!("  {} {} (failed: {})", "⚠".yellow(), rel.display(), e)
+                            }
+                        }
+                    }
+                } else {
+                    println!(
+                        "{} {} obsolete aida-* file(s) this AIDA version no longer ships:",
+                        "⚠".yellow(),
+                        obe.len()
+                    );
+                    for p in &obe {
+                        println!(
+                            "  {} {}",
+                            "·".dimmed(),
+                            p.strip_prefix(&root).unwrap_or(p).display()
+                        );
+                    }
+                    println!(
+                        "  Remove with: {}{}",
+                        "aida scaffold apply --prune".cyan(),
+                        if *dry_run {
+                            " (dry-run: not pruned)".dimmed().to_string()
                         } else {
                             String::new()
                         }
