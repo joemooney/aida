@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:56:29.098120601Z
-modified_at: 2026-05-29T04:56:29.098120601Z
+modified_at: 2026-05-31T05:10:30.461200325Z
 req_type: Bug
 tags:
 - dogfood
@@ -16,3 +16,9 @@ tags:
 - papercut
 - scaffolding
 - skills
+comments:
+- id: 019e7c70-d73d-7460-84d5-01dca1a3bd9a
+  author: joe
+  content: 'Verified resolved 2026-05-30: the main worktree''s .claude/skills/aida-learn.md and aida-doctor.md symlinks already point at the skills/ master (../../aida-core/templates/skills/...), not commands/. The wrong links were in the now-removed task-575 sibling worktree (cleaned up in the doctor sweep). git status shows no symlink change. No code change needed.'
+  created_at: 2026-05-31T05:10:30.461200325Z
+  modified_at: 2026-05-31T05:10:30.461200325Z
