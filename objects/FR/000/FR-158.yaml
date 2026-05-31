@@ -23,7 +23,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T00:59:16.590202157Z
 created_by: '@joe'
-modified_at: 2026-05-04T19:34:22.826972567Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -63,3 +63,5 @@ history:
 
         When you click the "▶" button in the list header, the detail panel disappears and the list takes up the full central panel. Click "◀ Show
         Detail" to bring back the detail panel.
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
