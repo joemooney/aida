@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T05:56:32.965862532Z
-modified_at: 2026-05-31T05:47:27.198442398Z
+modified_at: 2026-05-31T05:52:17.376562217Z
 req_type: Bug
 tags:
 - cleanup
@@ -46,3 +46,9 @@ tags:
 - obsolete-files
 - scaffold
 - scaffolding-pack
+comments:
+- id: 019e7c97-17e0-7a30-b878-d2a63bc5db75
+  author: joe
+  content: Commit b4a140bf references this requirement
+  created_at: 2026-05-31T05:52:17.376562217Z
+  modified_at: 2026-05-31T05:52:17.376562217Z
