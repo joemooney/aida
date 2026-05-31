@@ -3,12 +3,12 @@ spec_id: TASK-560
 agreed_id: TASK-560
 title: 'aida queue work --auto-complete + --resume: improve UX (currently conflict with terse error)'
 description: "Today 'aida queue work SPEC --zen --auto-complete --resume' errors with 'the argument --auto-complete cannot be used with --resume'. Operator intent in this case is: 'continue the in-flight session under orchestrator drain mode for phases 2-6'. The conflict is real (resume = pick up existing session; auto-complete = drive fresh pipeline), but the error doesn't help operator find the right next step.\n\n## Reproduced 2026-05-25\n\nOperator dispatched STORY-465; phase 1 failed. Tried '--resume --auto-complete' to retry under orchestrator. Got terse conflict error. Had to manually drop down (session start direct + claude in worktree + manual cadence).\n\n## Fix shape\n\nTwo paths, can compose:\n\nA. **Error message improves**: explain WHY the flags conflict + suggest the right path:\n   'error: --auto-complete cannot be used with --resume (auto-complete drives a fresh pipeline; --resume continues an existing session). \n   \n   To continue an existing session: use --resume alone.\n   To start a fresh orchestrator drain: end the existing session first (aida session end <id>) then re-run with --auto-complete.'\n\nB. **Make them composable**: --resume --auto-complete picks up phase N+1 of the existing session's orchestrator drain. Requires the orchestrator to track per-phase state in the lease metadata.\n\nOption A is the smaller valuable slice; option B is the deeper substrate work.\n\n## Acceptance\n\n- [ ] Error message includes the why + recovery commands\n- [ ] (Optional, follow-up) Compose --resume + --auto-complete for phase-N+1 continuation\n\n## Composes with\n\n- STORY-460 (integrator role — orchestrator phase handling)\n- BUG-379 + non-atomic-bump-fix (related ceiling pattern around session lifecycle)\n\n## Origin\n\n2026-05-25 STORY-465 recovery loop: operator tried this combination naturally; error didn't help find the workaround.\n\ntrace:TASK-X"
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:28.457375483Z
-modified_at: 2026-05-31T18:13:49.360434967Z
+modified_at: 2026-05-31T18:19:02.355867608Z
 req_type: Task
 tags:
 - aida:queue
@@ -22,3 +22,7 @@ comments:
   content: Commit c263969d8 references this requirement
   created_at: 2026-05-31T18:13:49.360434967Z
   modified_at: 2026-05-31T18:13:49.360434967Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T18:19:02.355867608Z
+  completion_sha: b9eb45b894eb3fc330c758ff1da4ad7ba530f56e
