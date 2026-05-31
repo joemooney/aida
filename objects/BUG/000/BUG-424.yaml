@@ -1,0 +1,19 @@
+id: 019e7ff0-70f2-7451-a961-447ba2465610
+spec_id: BUG-424
+agreed_id: BUG-424
+title: aida archive --older-than --dry-run panics on emoji/unicode spec titles (byte-index truncation not char-boundary-safe)
+description: 'Reproduced 2026-05-31: ''aida archive --older-than 14d --dry-run'' PANICS — ''byte index 59 is not a char boundary; it is inside ⏸ (bytes 57..60)'' — when a spec title in the window contains a multibyte char at the truncation point. Root cause: title-truncation helpers slice by raw BYTE index: shorten_text (main.rs:3174), history::shorten (history.rs:1199), shorten_title (main.rs:58729) all do format!("{}…", &s[..max-1]), which panics when max-1 is not a UTF-8 char boundary. HIGH relevance: the operator likes emoji in titles (and AIDA''s own specs carry ⏸/⇒ glyphs from BUG-116), so this is hit in practice — and it BLOCKS the bulk-archive sweep entirely (the dry-run crashes before archiving). The [..7]/[..8] slices elsewhere are on hex SHAs/short-ids (ASCII, safe). Fix: char-boundary-safe truncation (chars().take(max-1) + char-count guard) in all three helpers; add an emoji-title regression test. trace:self'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T21:28:44.530662861Z
+modified_at: 2026-05-31T21:28:44.530662861Z
+req_type: Bug
+tags:
+- aida:archive
+- archive
+- from-self-test
+- panic
+- unicode
+- user-facing
