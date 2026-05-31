@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:28.457375483Z
-modified_at: 2026-05-25T07:41:28.457375483Z
+modified_at: 2026-05-31T18:13:49.360434967Z
 req_type: Task
 tags:
 - aida:queue
@@ -16,3 +16,9 @@ tags:
 - from-overnight-drain-2026-05-25
 - from-self-test
 - ux-papercut
+comments:
+- id: 019e7f3d-fcb0-7221-b193-3fee7db44b11
+  author: joe
+  content: Commit c263969d8 references this requirement
+  created_at: 2026-05-31T18:13:49.360434967Z
+  modified_at: 2026-05-31T18:13:49.360434967Z
