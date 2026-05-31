@@ -1,0 +1,32 @@
+id: 019e7cf2-489a-76a2-b514-d731a39645c1
+spec_id: STORY-490
+agreed_id: STORY-490
+title: 'Drain legibility: surface shelved/escalated (NeedsAttention) count in aida queue progress'
+description: |-
+  SPIKE-45 P5 — 'surface the moat on demand' (round-2 competitive analysis). In a parallel autonomous drain the operator needs an at-a-glance 'N draining / M shelved / K escalated', but aida queue progress today has no distinct surface for shelved work.
+
+  SKETCH (sketch-first — there is a DESIGN TENSION to resolve before building):
+  - Current: classify_progress_bucket (main.rs:65774) folds RequirementStatus::NeedsAttention into ProgressBucket::Remaining. This was a DELIBERATE STORY-332 decision (comment at main.rs:65780): a punted spec is still work the batch must land, so it buckets with Remaining; its ⚠ status glyph carries the 'needs a decision' signal.
+  - P5 need: for multi-drain legibility the SHELVED COUNT must be first-class + countable, not invisible inside Remaining.
+  - Tension: STORY-332 optimized the single-session 'what must still land' view; P5 optimizes the multi-drain 'what got parked' view.
+
+  RESOLUTION OPTIONS (pick before building):
+  (a) Distinct 'Needs attention' bucket between Working-now and Remaining — REVERSES STORY-332.
+  (b) [recommended, minimal, non-reversing] Keep NeedsAttention in Remaining for bucketing, ADD a '⚠ N shelved (needs a decision)' summary callout line + count, so the legibility lands without reversing STORY-332.
+  (c) A --legibility/--shelved flag that splits the bucket only on demand (default preserves STORY-332).
+
+  Recommend (b). Needs master/operator sign-off on the option before implementation. Files: aida-cli/src/main.rs (classify_progress_bucket, bucket_order, bucket_color, suffix match, net summary line ~65990-66070).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T07:31:53.626645957Z
+modified_at: 2026-05-31T07:31:53.626645957Z
+req_type: Story
+tags:
+- competitive-parity
+- drain-legibility
+- moat
+- needs-design-signoff
+- parent:SPIKE-45
+- sketch-first
