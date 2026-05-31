@@ -3,12 +3,12 @@ spec_id: TASK-616
 agreed_id: TASK-616
 title: 'Archive bulk-sweep progress output: heading + throttled [k/N] ticks (slice of BUG-425)'
 description: 'The progress-output half of BUG-425 (the ''looked hung'' fix): aida archive --older-than prints an up-front heading + a [k/N] tick every 50 specs. Implemented on branch archive-sweep-progress / PR-422. This child completes on merge; BUG-425 stays OPEN for the remaining batching half (per-spec store commits → one commit, needs an aida-core batch-update API). trace:self'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T23:24:06.310535961Z
-modified_at: 2026-05-31T23:24:06.310535961Z
+modified_at: 2026-05-31T23:25:33.875331660Z
 req_type: Task
 tags:
 - archive
