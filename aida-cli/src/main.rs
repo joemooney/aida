@@ -21832,6 +21832,29 @@ fn lease_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
     leases_dir(project_root).join(format!("{}.toml", id))
 }
 
+/// BUG-416 detection core: find a lease that already occupies `worktree` and is
+/// still live, so a second agent isn't launched into the same worktree — where
+/// per-session scope hints (the `--owns` lease, role context, queue-head pickup)
+/// bleed across agents and one agent ships under another's scope.
+///
+/// Pure over the lease set + an injected liveness predicate: the caller supplies
+/// PID-liveness / dormancy (via `creator_pid` + the same logic
+/// `classify_for_auto_release` uses), so a dead or auto-released lease's worktree
+/// is correctly seen as free to take. Path comparison is exact — the caller
+/// canonicalizes `worktree` to match the canonicalized `lease.worktree_path`.
+/// The detect-and-auto-isolate wiring (provision a fresh worktree when this
+/// returns `Some`) is the follow-up slice. trace:TASK-607 trace:BUG-416 | ai:claude
+#[allow(dead_code)] // detection core; wired by the auto-isolate follow-up slice
+fn worktree_occupant<'a>(
+    worktree: &std::path::Path,
+    leases: &'a [SessionLease],
+    is_live: impl Fn(&SessionLease) -> bool,
+) -> Option<&'a SessionLease> {
+    leases
+        .iter()
+        .find(|l| l.worktree_path == worktree && is_live(l))
+}
+
 fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     let dir = leases_dir(project_root);
     if !dir.exists() {
@@ -37125,6 +37148,62 @@ mod lease_enforcement_tests {
         assert!(scopes.contains(&"EPIC-20"));
         assert!(scopes.contains(&"PR-19"));
         assert!(scopes.contains(&"EPIC-21"));
+    }
+
+    /// BUG-416: `worktree_occupant` is the detection core for the
+    /// detect-and-auto-isolate gate. It must (1) find a LIVE lease on the
+    /// target worktree, (2) ignore a lease on a DIFFERENT worktree, and
+    /// (3) treat a dead/auto-released lease's worktree as free — driven by
+    /// the injected liveness predicate so the pure core is testable without
+    /// poking real PIDs. trace:BUG-416 | ai:claude
+    #[test]
+    fn worktree_occupant_finds_only_live_same_worktree_lease() {
+        fn lease(scope: &str, wt: &str, pid: u32) -> SessionLease {
+            SessionLease {
+                id: format!("lease-{scope}"),
+                scope: scope.into(),
+                slug: scope.to_lowercase(),
+                owner: "t".into(),
+                worktree_path: std::path::PathBuf::from(wt),
+                branch: "br".into(),
+                started_at: chrono::Utc::now(),
+                hostname: "h".into(),
+                role: None,
+                creator_pid: Some(pid),
+                cargo_target_dir: None,
+                parent_project_root: None,
+                pr_head_sha: None,
+                pr_base_sha: None,
+                pr_base_ref: None,
+                zen_intent_token: None,
+                escalated_to_human: None,
+                parent_branch: None,
+                parent_branch_sha: None,
+            }
+        }
+        let leases = vec![
+            lease("EPIC-1", "/tmp/wt-a", 100), // dead (per predicate below)
+            lease("EPIC-2", "/tmp/wt-a", 200), // live, on the target worktree
+            lease("EPIC-3", "/tmp/wt-b", 300), // live, but different worktree
+        ];
+        // Liveness predicate: every pid is alive except 100.
+        let is_live = |l: &SessionLease| l.creator_pid != Some(100);
+
+        // A live lease occupies /tmp/wt-a → detected (the EPIC-2 one, not the
+        // dead EPIC-1 sharing the path).
+        let occ = worktree_occupant(std::path::Path::new("/tmp/wt-a"), &leases, is_live)
+            .expect("occupied");
+        assert_eq!(occ.scope, "EPIC-2");
+
+        // A worktree with no lease at all → free.
+        assert!(worktree_occupant(std::path::Path::new("/tmp/wt-c"), &leases, is_live).is_none());
+
+        // If the only lease on a worktree is dead, the worktree is free to take.
+        let only_dead = vec![lease("EPIC-9", "/tmp/wt-d", 100)];
+        assert!(
+            worktree_occupant(std::path::Path::new("/tmp/wt-d"), &only_dead, is_live).is_none(),
+            "a dead lease's worktree must read as free for auto-isolate"
+        );
     }
 }
 
