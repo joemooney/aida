@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T11:19:17.845028040Z
-modified_at: 2026-05-31T11:19:17.845028040Z
+modified_at: 2026-05-31T14:36:11.146393309Z
 req_type: Story
 tags:
 - durable-execution
@@ -18,3 +18,17 @@ tags:
 - resumable-drain
 - sketch-first
 - slice-2
+comments:
+- id: 019e7e76-bc0a-7742-951a-29e936986f34
+  author: joe
+  content: |-
+    Slice 2a SHIPPED (TASK-601): the pure resume-decision core in drain_resume.rs — ResumeFacts + phase_postcondition_met + resume_plan (double-drive refusal dominant; merge-idempotency tested). Verified, side-effect-free.
+
+    REMAINING WIRING (staged; each its own verifiable PR, re-entry last):
+    - 2b (safe, read-only): add --resume to the queue work command (cli.rs:2888 Work struct; dispatch main.rs:620). Handler reads DrainState::read(), runs the liveness gate via process_probe::pid_is_alive(orchestrator_pid), derives member_in_flight/state_in_phase/has_failure_reason from drain-state + the spec, calls resume_plan, and PRINTS the outcome (dry-run diagnostic — NO re-entry). Worst case = wrong message, not data loss. Verify by manufacturing a .aida/drain-state.json.
+    - 2c (impure probes): implement the real ResumeFacts gathering — branch_exists/pr_merged via git+gh (gh pr view --json state,mergeStateStatus; git branch --contains), ci_green via the CI poll, reviewed via the verdict file, spec_completed via store status. Reuse aida pr ship's PR-probe helpers. Feed resume_plan; --resume dry-run now shows the real ResumeAt(phase).
+    - 2d (CATASTROPHIC capstone): the live re-entry — thread start_phase into orchestrate_with_lifecycle_skip (skip phases with index < start_phase; mirror the existing skip pattern), and have --resume (non-dry-run) call it ONLY after the liveness gate passes. Needs a crashed-drain integration test fixture (manufacture drain-state + assert re-entry skips done phases + refuses on live PID). Build with fresh care — this is the irreversible part.
+
+    Paused here at deep fatigue-tail (autonomous session, ~24 PRs): the verified core is banked; the irreversible wiring earns fresh, careful work per the double-drive sign-off discussion.
+  created_at: 2026-05-31T14:36:11.146393309Z
+  modified_at: 2026-05-31T14:36:11.146393309Z
