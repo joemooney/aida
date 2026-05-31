@@ -17,12 +17,12 @@ description: |-
   Operator impact this incident: 12 hours of work lost, no progress signal during the pause, only discovered on manual queue progress check. The orchestrator should have either retried or surfaced an immediate signal (push notification, exit-with-known-code) so the user could resume.
 
   Source: operator direct frustration on return — 'this is disappointing'.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T02:55:21.362693521Z
-modified_at: 2026-05-29T02:55:21.362693521Z
+modified_at: 2026-05-31T19:32:45.165512788Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -34,3 +34,9 @@ tags:
 - reliability
 - severity:major
 - unattended-drain
+comments:
+- id: 019e7f86-3fed-7a12-b7fe-8fc58fa0628f
+  author: joe
+  content: 'Promoted by joe 2026-05-31: Highest-value reliability bug: a single transient GH-API failure pauses an entire unattended batch drain for hours (autonomy keystone). Inconclusive-pause path still live (no retry/backoff). Triage 2026-05-31.'
+  created_at: 2026-05-31T19:32:45.165512788Z
+  modified_at: 2026-05-31T19:32:45.165512788Z
