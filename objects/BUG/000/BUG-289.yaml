@@ -41,12 +41,12 @@ description: |-
   ## Origin
 
   2026-05-21 ~04:00, during STORY-360 (PR-161) merge-conflict recovery. User: *"aida pr rebase 161 ... fatal: refusing to fetch into branch 'refs/heads/pr-161' checked out at '/home/joe/ai/aida-pr-161'"*
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T01:08:59.175805586Z
-modified_at: 2026-05-31T05:41:41.020730921Z
+modified_at: 2026-05-31T05:46:58.349580789Z
 req_type: Bug
 tags:
 - aida:pr:rebase
@@ -55,3 +55,7 @@ tags:
 - from-user-friction
 - task-308-followup
 - worktree
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T05:46:58.349580789Z
+  completion_sha: b4a140bf13d6d87f7b0695aaada44aadee884617
