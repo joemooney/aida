@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:01.699959803Z
-modified_at: 2026-05-15T00:59:11.950024305Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - auto-bump
@@ -62,6 +62,8 @@ comments:
     Test status: 609/609 workspace tests green (2 new regression tests in handle_pull_command_tests)
   created_at: 2026-05-15T00:32:54.341990374Z
   modified_at: 2026-05-15T00:32:54.341990374Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:13:37.934151774Z
