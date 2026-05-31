@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T03:34:26.856630403Z
-modified_at: 2026-05-04T19:36:10.966006281Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -31,3 +31,5 @@ history:
   - field_name: description
     old_value: "Filters should also include custom PREFIXes. All of the unique ID Prefix that are entered can be stored in a list. These can also be used to\n filter which requirements are shown. This should be listed in the project administration as well. Possibly, this could be a project admin \nrestricted capability (boolean) whereby the ID Prefix would only from a set of prefixes that the project admin controls and it would be a \ndropdown in the edit/add requirement. But by default a regular user should be able to enter a new one. "
     new_value: "Filters should also include custom PREFIXes. All of the unique ID Prefix that are entered can be stored in a list. These can also be used to\n filter which requirements are shown. This should be listed in the project administration as well. Possibly, this could be a project admin \nrestricted capability (boolean) whereby the ID Prefix would only from a set of prefixes that the project admin controls and it would be a \ndropdown in the edit/add requirement. But by default a regular user should be able to enter a new one. \n  ID Prefix Filtering and Management:\n\n  1. Core Model Updates (requirements-core/src/models.rs):\n    - Added allowed_prefixes: Vec<String> - list of allowed/known prefixes\n    - Added restrict_prefixes: bool - when true, users must select from allowed list\n    - Added helper methods:\n        - get_used_prefixes() - gets all unique prefixes from existing requirements\n      - get_all_prefixes() - combines allowed + used prefixes\n      - add_allowed_prefix(), remove_allowed_prefix(), is_prefix_allowed()\n  2. GUI Filter Panel:\n    - Added filter_prefixes: HashSet<String> for prefix-based filtering\n    - Updated passes_filters() to check prefix filter\n    - Added \"ID Prefix Filters\" section with checkboxes for each unique prefix\n    - Updated ViewPreset to save/restore prefix filters\n  3. Admin Settings (Settings > Admin > ID Prefix Management):\n    - Toggle to restrict prefixes to allowed list\n    - Shows prefixes currently in use\n    - Add new allowed prefixes with validation (uppercase letters only)\n    - Remove prefixes from allowed list (shows if in use)\n  4. Add/Edit Form:\n    - When restrict_prefixes is enabled: shows dropdown with only allowed prefixes\n    - When unrestricted: shows combo box with existing prefixes + text input for new ones\n    - Auto-adds new prefixes to allowed list when used (unless restricted)\n"
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
