@@ -20,12 +20,12 @@ description: |-
   Promotion trigger: at recurrence 2+, consider STORY-469 Guard 4 candidate: 'spec-references in docs PRs must resolve in substrate AND match referenced specs' description on key fields'. Substrate-side validation of doc factual fidelity.
 
   — master observation, captured from aida-chat advisor's overnight cross-project report 2026-05-25
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:06:17.132616417Z
-modified_at: 2026-05-31T19:32:58.161777050Z
+modified_at: 2026-05-31T19:33:01.675926991Z
 req_type: Task
 tags:
 - agent-discipline
@@ -43,3 +43,9 @@ relationships:
   target_id: 019e5d86-935f-70e1-be21-547f5b6cd2c4
   created_at: 2026-05-31T19:32:58.161769671Z
   created_by: joe
+comments:
+- id: 019e7f86-806b-77a0-bc9f-5815b61a9eec
+  author: joe
+  content: 'Dismissed by joe 2026-05-31: Folded into STORY-469 as Guard-4 input: ''doc-PR spec-references must resolve in substrate AND match the referenced spec''s key fields''. Not a standalone build — it''s a guard-design input. Linked to STORY-469. Triage 2026-05-31.'
+  created_at: 2026-05-31T19:33:01.675926991Z
+  modified_at: 2026-05-31T19:33:01.675926991Z
