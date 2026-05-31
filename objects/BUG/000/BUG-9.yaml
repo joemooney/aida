@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: 237-Uncategorized
 created_at: 2026-02-23T05:49:07.717765371Z
-modified_at: 2026-02-23T05:49:19.891365340Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - bug-fix
@@ -19,3 +19,5 @@ comments:
   content: Committed in 6a0513b (initial docs fix) and d78fd2a (skills + shared project_root helper)
   created_at: 2026-02-23T05:49:19.891355330Z
   modified_at: 2026-02-23T05:49:19.891355330Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
