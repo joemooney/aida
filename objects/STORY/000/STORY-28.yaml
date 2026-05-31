@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: 145-ai-workflow
 created_at: 2025-12-11T00:38:53.477757721Z
-modified_at: 2026-05-15T04:01:49.599213014Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 comments:
 - id: 019e29cc-361f-7571-b9f5-63eac8024e6b
@@ -15,3 +15,5 @@ comments:
   content: 'Rejected 2026-05-14 (Trojan-horse triage): SUPERSEDED. The two-phase /aida-implement skill described here is already in production: /aida-implement skill exists at aida-core/templates/skills/aida-implement.md, /aida-plan is a separate skill (per STORY-112''s plan-tooling track), ImplementationInfo and TraceLink data structures exist in aida-core/src/models.rs, and the plan-before-implement pattern is the established workflow. Re-file with sharper scope if a specific gap remains.'
   created_at: 2026-05-15T04:01:49.599213014Z
   modified_at: 2026-05-15T04:01:49.599213014Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
