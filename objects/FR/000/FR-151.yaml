@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T17:21:11.683638399Z
-modified_at: 2026-05-04T19:34:25.046728363Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -50,3 +50,5 @@ history:
         - Uses egui's interact_bg() method to detect clicks on background/empty areas
         - Only triggers when no modal dialogs are open
         - Complements the "✏ Edit" button - just a faster way to start editing
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
