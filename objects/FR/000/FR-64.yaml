@@ -12,7 +12,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-07T19:21:58.984960265Z
 created_by: joe
-modified_at: 2026-05-04T19:38:17.644149810Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: !Custom sprint_assignment
@@ -41,6 +41,8 @@ history:
   - field_name: sprint_assignment
     old_value: ''
     new_value: REQ-0219
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 ai_evaluation:
   evaluation:
     quality_score: 5
