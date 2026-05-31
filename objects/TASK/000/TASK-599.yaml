@@ -1,0 +1,18 @@
+id: 019e7de2-660e-7920-888e-100d7f57ae50
+spec_id: TASK-599
+agreed_id: TASK-599
+title: 'Regression tests: query_graph MCP tool (functional + descriptor advertisement)'
+description: 'Harden the shipped query_graph MCP tool (STORY-489 slice 3) with automated regression tests in aida-cli/src/mcp.rs: (1) mcp_query_graph_returns_blocked_by_chain — builds two specs + a blocked-by edge via the server''s own tools, calls tool_query_graph in blocked-by mode, asserts count=1 + the blocker id in nodes + clean error on unknown mode; (2) added query_graph to tool_descriptors_lists_coordination_tools'' required list + bumped both descriptor-count assertions 26→27 (10 spec-graph incl. query_graph + 17 coordination). Previously query_graph had only a manual stdio smoke test. Full mcp suite 47 green; fmt + doc-consistency clean.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T11:54:09.806752968Z
+modified_at: 2026-05-31T11:54:09.806752968Z
+req_type: Task
+tags:
+- graph-query
+- mcp
+- parent:STORY-489
+- regression
+- test
