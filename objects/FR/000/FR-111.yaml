@@ -25,7 +25,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T05:21:30.635827807Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:38:26.681455217Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -38,3 +38,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:38:25.604171522Z
   modified_at: 2026-05-04T19:38:25.604171522Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
