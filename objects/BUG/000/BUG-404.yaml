@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-30T18:38:15.154048169Z
-modified_at: 2026-05-31T00:38:13.577743864Z
+modified_at: 2026-05-31T00:38:48.229987503Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -88,3 +88,8 @@ comments:
     Fix (handle_pull_command code leg): when the pull moved nothing (pre==post), fall back to the wide HEAD~50 scan instead of the empty narrow range, so a main advanced outside this pull (gh merge, or manual merge-then-pull) is still covered. Done-guard keeps the wide scan idempotent. Regression test pull_noop_still_auto_bumps_externally_advanced_main proven to fail without the fix / pass with it. Instrumentation kept (default-off) for future visibility.
   created_at: 2026-05-31T00:38:13.577743864Z
   modified_at: 2026-05-31T00:38:13.577743864Z
+- id: 019e7b78-16a5-7992-988e-8be2a942e900
+  author: joe
+  content: Commit eaa74af0 references this requirement
+  created_at: 2026-05-31T00:38:48.229987503Z
+  modified_at: 2026-05-31T00:38:48.229987503Z
