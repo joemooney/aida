@@ -9,7 +9,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T19:10:52.867367071Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:38:24.504108811Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Folder
 relationships:
 - rel_type: Child
@@ -149,3 +149,5 @@ history:
   - field_name: feature
     old_value: 97-Uncategorized
     new_value: Uncategorized
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
