@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:03:31.556415989Z
-modified_at: 2026-05-14T06:05:51.384862231Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - lifecycle
@@ -116,6 +116,8 @@ comments:
     Test status: 298/298 tests green (`cargo test -p aida-cli`)
   created_at: 2026-05-14T05:06:22.915387210Z
   modified_at: 2026-05-14T05:06:22.915387210Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T05:01:34.995093705Z
