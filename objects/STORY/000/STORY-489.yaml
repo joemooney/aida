@@ -9,12 +9,12 @@ description: |-
   - Cross-feature impact: given a spec, what transitively depends on / is blocked by it.
   - Surface the SAME over MCP (a graph-query tool/resource) so ANY agent converges on the typed graph — the multi-vendor edge.
   First step: inventory what graph-walk helpers already exist (relationships are stored; pickability already walks BlockedBy). Sketch the command + MCP surface, then build. This is the demo that makes the moat visible vs the flat-markdown SDD tools. Architecture-touch (new MCP surface) — sketch-first if it changes the MCP contract.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:22:20.110613503Z
-modified_at: 2026-05-31T10:08:45.041682125Z
+modified_at: 2026-05-31T10:19:23.690611872Z
 req_type: Story
 tags:
 - competitive-parity
@@ -35,3 +35,7 @@ comments:
   content: 'Slice 3 (MCP query_graph) SHIPPED by master (TASK-597, PR-388) — verified end-to-end over JSON-RPC stdio. STORY-489 now COMPLETE: CLI (aida graph) + MCP (query_graph) both live on the shared cycle-safe graph_walk primitive. The Codex slice-3 brief is moot (acking it). Net flagship: the cross-spec typed-graph query — blocked-by/blocks chains, epic rollup, reverse impact — that flat per-feature SDD tools (Spec Kit, Kiro) structurally can''t answer, queryable by CLI AND any MCP client (the multi-vendor moat).'
   created_at: 2026-05-31T10:08:45.041682125Z
   modified_at: 2026-05-31T10:08:45.041682125Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T10:19:23.690611872Z
+  completion_sha: f5cf99fabbda7162997b0e70c887e946f7d22bb1

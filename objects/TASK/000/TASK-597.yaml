@@ -3,12 +3,12 @@ spec_id: TASK-597
 agreed_id: TASK-597
 title: 'MCP query_graph tool: agent-queryable cross-spec graph (STORY-489 slice 3)'
 description: 'Slice 3 of 3 — COMPLETES STORY-489. The query_graph MCP tool: blocked-by/blocks/tree/impact over the graph_walk primitive, mirroring the aida graph CLI, returning pretty-printed JSON. Wired into the tool dispatch + tool_descriptors. The agent-facing half of the moat — any MCP client (Claude/Codex/Cursor) converges on the same typed graph, the multi-vendor differentiator. Verified end-to-end: a JSON-RPC tools/call query_graph(STORY-276, blocked-by) over stdio returns STORY-332 with correct rollup. Full bin suite 1474 green; fmt + clippy clean. Built by master (additive read-only tool — owned the additive-contract decision rather than blocking).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T10:07:57.614459074Z
-modified_at: 2026-05-31T10:14:29.595189711Z
+modified_at: 2026-05-31T10:19:23.690611872Z
 req_type: Task
 tags:
 - graph-query
@@ -23,3 +23,7 @@ comments:
   content: Commit c27b72be8 references this requirement
   created_at: 2026-05-31T10:14:29.595189711Z
   modified_at: 2026-05-31T10:14:29.595189711Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T10:19:23.690611872Z
+  completion_sha: f5cf99fabbda7162997b0e70c887e946f7d22bb1
