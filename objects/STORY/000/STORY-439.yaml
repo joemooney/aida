@@ -85,12 +85,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: *'when we work a task we may be in a position to estimate whether and what level of assistance it will require. That is a metric that may be useful to store as well as whether we ended up needing assistance. We may have a story for this be we need to see how we are improving over time. You talk about PRs shipped, we need to know the priority, complexity, etc. that we can report on over time.'* + refinement: *'in the review we may be able to assess predicted complexity versus implementation complexity.'*
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:55:05.971218903Z
-modified_at: 2026-05-25T07:43:05.707359387Z
+modified_at: 2026-05-31T01:18:22.510236568Z
 req_type: Story
 tags:
 - assistance-calibration
@@ -131,3 +131,7 @@ comments:
     — master advisor
   created_at: 2026-05-24T05:04:20.552864267Z
   modified_at: 2026-05-24T05:04:20.552864267Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T01:18:22.510236568Z
+  completion_sha: 57ada1a81798799f69a6f4b341fe75b308d81d78
