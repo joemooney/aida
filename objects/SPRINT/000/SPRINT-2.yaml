@@ -11,7 +11,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-07T03:11:01.158857231Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:32:28.708187876Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Sprint
 relationships:
 - rel_type: Parent
@@ -47,6 +47,8 @@ history:
       Sprint 123
 
       ID should now be sprint?
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 custom_fields:
   end_date: 2026-03-06
   sprint_goal: get front end web up to speed
