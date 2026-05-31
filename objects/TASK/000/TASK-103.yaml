@@ -61,7 +61,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:55:24.529881695Z
-modified_at: 2026-05-15T14:35:02.655953760Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - batch:rebase-verb
@@ -83,6 +83,8 @@ comments:
   content: 'Implemented via PR-30 (commit 966b316c). Test status: 640/640 tests green (cargo test -p aida-cli -p aida-core).'
   created_at: 2026-05-15T13:21:47.426892014Z
   modified_at: 2026-05-15T13:21:47.426892014Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T07:20:08.938289732Z
