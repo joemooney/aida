@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T08:51:05.020112469Z
-modified_at: 2026-05-31T08:51:05.020112469Z
+modified_at: 2026-05-31T17:08:55.267581166Z
 req_type: Task
 tags:
 - aida:pr:ship
 - from-self-test
 - kind:papercut
 - reliability
+comments:
+- id: 019e7f02-9163-70f3-b141-3bc5785a634e
+  author: joe
+  content: 'Verify-before-building finding (2026-05-31): the proposed fix ALREADY EXISTS. wait_for_pr_checks_to_register (aida-cli/src/main.rs:29035, fn at ~29592) polls ''gh pr checks <N>'' for up to 60s (10s interval) right before the ''--watch'' step, and correctly treats ''no checks reported'' as keep-waiting via gh_pr_checks_output_is_unregistered (it only bails on a REAL gh/auth failure, or after the 60s deadline). It landed 2026-05-22 in PR-213 (BUG-344) — BEFORE this task''s 2026-05-31 PR-386 report. So either (a) the PR-386 failure was mis-attributed / transient / a >60s-registration edge case, or (b) my dev binary at that moment predated the BUG-344 build. Per instrument-don''t-infer: rather than re-implement, the next ship will DROP the sleep-25 workaround and observe whether the wait holds. If it does, close this as already-fixed-by-BUG-344. If it fails, capture the exact stderr + exit path (don''t guess). — master/advisor'
+  created_at: 2026-05-31T17:08:55.267581166Z
+  modified_at: 2026-05-31T17:08:55.267581166Z
