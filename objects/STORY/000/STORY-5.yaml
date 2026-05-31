@@ -38,7 +38,7 @@ priority: High
 owner: joe
 feature: 215-Uncategorized
 created_at: 2026-02-21T06:49:39.758002534Z
-modified_at: 2026-05-04T19:29:10.241836772Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -50,3 +50,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:29:09.296044911Z
   modified_at: 2026-05-04T19:29:09.296044911Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
