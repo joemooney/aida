@@ -29,7 +29,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T18:38:19.957263864Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:33:48.312805336Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -71,3 +71,5 @@ history:
       - Include attachment metadata in exports (filename, size, hash)
       - Optionally include attachment files in export archives
       - Maintain referential integrity when requirements are deleted (prompt to delete or orphan attachments)
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
