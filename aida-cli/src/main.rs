@@ -52686,6 +52686,51 @@ mod queue_work_tests {
         assert!(!quiet_of(&off), "quiet defaults to false");
     }
 
+    /// TASK-560: --resume + --auto-complete must now PARSE (the clap conflict
+    /// was lifted) so the handler can reject it with a helpful message instead
+    /// of clap's terse "cannot be used with". trace:TASK-560
+    #[test]
+    fn queue_work_resume_plus_auto_complete_parses_for_handler_rejection() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "queue",
+            "work",
+            "STORY-465",
+            "--resume",
+            "--auto-complete",
+        ])
+        .expect("--resume + --auto-complete should parse (handler rejects, not clap)");
+        match cli.command {
+            Command::Queue(QueueCommand::Work {
+                resume,
+                auto_complete,
+                ..
+            }) => {
+                assert!(resume.is_some() && auto_complete.is_some());
+            }
+            other => panic!("expected queue work command, got {other:?}"),
+        }
+    }
+
+    /// TASK-560: the conflict message fires only for the pair, and carries the
+    /// WHY + both recovery paths. trace:TASK-560
+    #[test]
+    fn resume_autocomplete_conflict_message_explains_and_recovers() {
+        assert!(resume_autocomplete_conflict_message(false, true).is_none());
+        assert!(resume_autocomplete_conflict_message(true, false).is_none());
+        assert!(resume_autocomplete_conflict_message(false, false).is_none());
+        let msg = resume_autocomplete_conflict_message(true, true).expect("pair conflicts");
+        assert!(msg.contains("FRESH"), "explains why: {msg}");
+        assert!(
+            msg.contains("--resume alone"),
+            "names the continue path: {msg}"
+        );
+        assert!(
+            msg.contains("aida session end"),
+            "names the fresh-drain path: {msg}"
+        );
+    }
+
     #[test]
     fn queue_work_force_claim_flag_parses() {
         let cli = Cli::try_parse_from(["aida", "queue", "work", "TASK-559", "--force-claim"])
@@ -66004,6 +66049,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             effort,
             strict,
         } => {
+            // TASK-560: reject --resume + --auto-complete with a message that
+            // explains the conflict and names both recovery paths, instead of
+            // clap's terse "cannot be used with". trace:TASK-560 | ai:claude
+            if let Some(msg) =
+                resume_autocomplete_conflict_message(resume.is_some(), auto_complete.is_some())
+            {
+                anyhow::bail!(msg);
+            }
             let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
             // `--zen` propagates via `AIDA_ZEN` — set the env var once at
@@ -67552,6 +67605,29 @@ enum QueueWorkMode {
 ///
 /// `type_filter` only applies in cluster mode (filters drained children
 /// by req type, case-insensitive). trace:STORY-42 | ai:claude
+/// TASK-560: `--auto-complete` and `--resume` are mutually exclusive
+/// (auto-complete drives a FRESH implementer→CI→reviewer→merge pipeline;
+/// --resume continues an EXISTING session — the two can't both own the run).
+/// Returns the helpful rejection message when both are set, else `None`.
+/// Pure so the message (the WHY + both recovery paths) is unit-testable
+/// without running the launcher. trace:TASK-560 | ai:claude
+fn resume_autocomplete_conflict_message(resume: bool, auto_complete: bool) -> Option<String> {
+    if resume && auto_complete {
+        Some(
+            "--auto-complete cannot be used with --resume.\n\
+             auto-complete drives a FRESH implementer→CI→reviewer→merge→pull→build \
+             pipeline; --resume continues an EXISTING session — the two can't both \
+             own the run.\n\n  \
+             To continue the existing session:    re-run with --resume alone.\n  \
+             To start a fresh orchestrator drain:  end the existing session first \
+             (`aida session end <id>`), then re-run with --auto-complete."
+                .to_string(),
+        )
+    } else {
+        None
+    }
+}
+
 fn resolve_queue_work_plan(
     storage: &Storage,
     user_id: &str,
