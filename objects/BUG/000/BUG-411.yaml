@@ -1,0 +1,20 @@
+id: 019e7e38-d8bc-7522-9dbd-ceb6777132bb
+spec_id: BUG-411
+agreed_id: BUG-411
+title: aida graph --impact (CLI + MCP) misses specs blocked via unidirectional Blocks edges
+description: "Found by the 2026-05-31 adversarial review of the graph-query flagship (confirmed by independent verifier). Both handle_graph_command (main.rs ~11398) and tool_query_graph (mcp.rs ~892) implement --impact as walk(root, [BlockedBy], Direction::Incoming): 'find specs X where X.BlockedBy->root'. But a unidirectional 'aida rel add A B blocks' (no --bidirectional) stores ONLY A.Blocks->B, no B.BlockedBy->A. So 'aida graph A --impact' misses B, even though A blocks B (B is impacted by A). \n\nCORRECT semantics: impact (what is blocked by root) = (Incoming BlockedBy on root) UNION (Outgoing Blocks from root). The walk() API takes a single (rel_types, direction); the fix needs either a multi-pair walk helper (walk each + merge/dedup nodes) or a dedicated walk_impact in aida-core/src/graph_walk.rs, called by BOTH handlers for parity. \n\nDESIGN NOTE (why not a blind quick fix): a naive merge of two independent transitive walks is NOT fully transitive across MIXED edges (a path alternating Blocks-out then BlockedBy-in won't be found). Decide: (a) ship the union-of-two-walks improvement (strictly better than today; documents the mixed-path limitation) or (b) a true mixed-direction transitive walk (follow Incoming-BlockedBy AND Outgoing-Blocks at every hop) — bigger graph_walk change. Recommend (a) + a followup for (b) if needed. Add a graph_walk unit test for the unidirectional-Blocks case + a CLI/MCP parity test. Note: many Blocks edges are stored bidirectionally, so impact is correct in the common case; this is the unidirectional edge case."
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T13:28:35.260944929Z
+modified_at: 2026-05-31T13:28:35.260944929Z
+req_type: Bug
+tags:
+- aida:graph
+- correctness
+- from-review
+- graph-query
+- kind:bug-spotted
+- mcp
+- parent:STORY-489
