@@ -483,6 +483,7 @@ impl<'a> McpServer<'a> {
             "search_requirements" => self.tool_search_requirements(&arguments),
             "add_comment" => self.tool_add_comment(&arguments),
             "add_relationship" => self.tool_add_relationship(&arguments),
+            "query_graph" => self.tool_query_graph(&arguments),
             "list_features" => self.tool_list_features(),
             "history" => self.tool_history(&arguments),
 
@@ -857,6 +858,78 @@ impl<'a> McpServer<'a> {
             output.push_str(&format!("- [{}] {} ({})\n", spec_id(r), r.title, r.status));
         }
         Ok(output)
+    }
+
+    /// MCP parity for `aida graph` — cross-spec relationship queries
+    /// (blocked-by / blocks chains, epic tree rollup, reverse impact) so any
+    /// MCP client converges on the same typed graph the CLI walks. Built on the
+    /// shared cycle-safe graph_walk primitive; read-only. The agent-facing half
+    /// of the moat: the query a flat per-feature spec store can't answer.
+    // trace:STORY-489 | ai:claude
+    fn tool_query_graph(&self, args: &Value) -> Result<String, String> {
+        use aida_core::graph_walk::{status_rollup, walk, Direction};
+
+        let spec = args
+            .get("spec_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id")?;
+        let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("tree");
+        let depth = args
+            .get("depth")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize);
+
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let root = store
+            .get_requirement_by_spec_id(spec)
+            .ok_or_else(|| format!("Requirement '{}' not found", spec))?;
+        let root_id = root.id;
+        let root_label = root.display_id();
+
+        let (rel_types, direction): (Vec<RelationshipType>, Direction) = match mode {
+            "blocked-by" | "blocked_by" => (vec![RelationshipType::BlockedBy], Direction::Outgoing),
+            "blocks" => (vec![RelationshipType::Blocks], Direction::Outgoing),
+            "impact" => (vec![RelationshipType::BlockedBy], Direction::Incoming),
+            "tree" => (vec![RelationshipType::Child], Direction::Outgoing),
+            other => {
+                return Err(format!(
+                    "unknown mode '{}': use tree, blocked-by, blocks, or impact",
+                    other
+                ))
+            }
+        };
+
+        let result = walk(&store, root_id, &rel_types, direction, depth);
+        let nodes: Vec<Value> = result
+            .nodes
+            .iter()
+            .map(|nid| {
+                let r = store.get_requirement_by_id(nid);
+                json!({
+                    "id": r.map(|x| x.display_id()).unwrap_or_else(|| nid.to_string()),
+                    "title": r.map(|x| x.title.clone()),
+                    "status": r.map(|x| format!("{:?}", x.status)),
+                    "resolved": r.is_some(),
+                })
+            })
+            .collect();
+        let rollup = status_rollup(&store, &result.nodes);
+        serde_json::to_string_pretty(&json!({
+            "root": root_label,
+            "mode": mode,
+            "count": result.nodes.len(),
+            "nodes": nodes,
+            "rollup": {
+                "total": rollup.total,
+                "completed": rollup.completed,
+                "done": rollup.done,
+                "in_progress": rollup.in_progress,
+                "remaining": rollup.remaining,
+                "shelved": rollup.shelved,
+                "rejected": rollup.rejected,
+            },
+        }))
+        .map_err(|e| e.to_string())
     }
 
     // TASK-538: MCP parity with `aida history --events`.
@@ -2266,6 +2339,37 @@ pub fn tool_descriptors() -> Value {
             },
             "outputSchema": text_envelope_output_schema(
                 "a confirmation line `Relationship added: <SOURCE> (<title>) --[<type>]--> <TARGET> (<title>)`, with an inverse note when `bidirectional` added one."
+            )
+        },
+        {
+            "name": "query_graph",
+            "description": "Query the cross-spec relationship graph from a root spec — transitive blocked-by/blocks chains, epic tree rollup, and reverse impact. Mirrors `aida graph` for MCP consumers; read-only. This is the typed-graph query a flat per-feature spec store cannot answer.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec_id": {
+                        "type": "string",
+                        "description": "Root requirement SPEC-ID to query from.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "STORY-489"
+                    },
+                    "mode": {
+                        "type": "string",
+                        "description": "Query mode (default tree): tree = Parent/Child descendants + status rollup; blocked-by = transitive BlockedBy chain; blocks = transitive Blocks chain; impact = reverse closure (what is blocked by the root).",
+                        "enum": ["tree", "blocked-by", "blocks", "impact"],
+                        "example": "blocked-by"
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": "Limit traversal to N hops from the root. Omit for unbounded.",
+                        "minimum": 1,
+                        "example": 3
+                    }
+                },
+                "required": ["spec_id"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "pretty-printed JSON `{root, mode, count, nodes:[{id,title,status,resolved}], rollup:{total,completed,done,in_progress,remaining,shelved,rejected}}`."
             )
         },
         {
