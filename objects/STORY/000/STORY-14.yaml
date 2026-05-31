@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: 227-Uncategorized
 created_at: 2026-02-22T18:23:02.151416315Z
-modified_at: 2026-02-22T18:23:02.151416315Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - frontend
@@ -16,3 +16,5 @@ relationships:
 - rel_type: Parent
   target_id: e88eb8dd-1ed5-4076-9c9e-eeaac44dd994
   created_at: 2026-02-22T18:23:06.030765131Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
