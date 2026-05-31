@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:02:51.768736110Z
-modified_at: 2026-05-22T06:02:51.768736110Z
+modified_at: 2026-05-31T01:09:18.732391410Z
 req_type: Bug
 tags:
 - auto-complete
@@ -46,3 +46,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-22T06:02:55.756528189Z
+comments:
+- id: 019e7b94-050c-7c12-a6c6-46b340391f86
+  author: joe
+  content: 'Bulk-triaged 2026-05-30 (operator-approved): auto-drafted failure-event telemetry; referenced TASK-440 recovered to Rejected, so the phase failure was transient/moot. Real orchestrator failure classes are captured by TASK-133 / TASK-136 / TASK-137. Audit trail preserved.'
+  created_at: 2026-05-31T01:09:18.732391410Z
+  modified_at: 2026-05-31T01:09:18.732391410Z
