@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: 135-traceability
 created_at: 2025-12-11T00:37:32.363918629Z
-modified_at: 2026-05-04T19:37:40.056876476Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 comments:
 - id: 019df47f-084f-7e93-98d5-c059aab1358a
@@ -15,6 +15,8 @@ comments:
   content: ''
   created_at: 2026-05-04T19:37:39.151309725Z
   modified_at: 2026-05-04T19:37:39.151309725Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 trace_links:
 - id: 50b234e3-2ed5-436d-96dd-9417944f0ddb
   artifact_type: SourceCode
