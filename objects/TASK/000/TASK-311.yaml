@@ -82,11 +82,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:37:15.060027836Z
-modified_at: 2026-05-31T04:45:15.653321692Z
+modified_at: 2026-05-31T04:45:21.380883916Z
 req_type: Task
 tags:
 - advisor-discipline
-- dialog-discipline
+- deferred:post-stability
 - propagation
 - scaffolding-pack
 - self-audit
