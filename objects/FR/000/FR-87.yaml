@@ -8,7 +8,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-13T18:17:17.709095532Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:33:10.267497926Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df47a-ea47-7802-98f5-08683663516c
@@ -16,3 +16,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:33:09.319407310Z
   modified_at: 2026-05-04T19:33:09.319407310Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
