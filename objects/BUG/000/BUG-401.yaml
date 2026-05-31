@@ -3,12 +3,12 @@ spec_id: BUG-401
 agreed_id: BUG-401
 title: 'Dogfood: .claude/skills/aida-learn.md & aida-doctor.md symlinks point at commands/ master not skills/'
 description: 'Found during TASK-574. In this repo''s dogfood .claude/, the skill-side symlinks for aida-learn and aida-doctor point at the WRONG master: .claude/skills/aida-learn.md -> ../../aida-core/templates/commands/aida-learn.md (and same for aida-doctor). They should point at the skills/ master (cf. .claude/skills/aida-req.md -> ../../aida-core/templates/skills/aida-req.md). Both skills/ masters exist. Effect: in this repo the /aida-learn and /aida-doctor *skills* render the *command* file content. Dogfood-only — scaffolded projects get real files, not symlinks, so end users are unaffected. Fix: relink the two skill-side symlinks (or extend ''make sync-templates'' to detect/repair drift). These four files (incl. untracked aida-doctor.md command+skill links) were dirty in the task-574 worktree and were deliberately NOT committed with TASK-574 to avoid co-mingling.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:56:29.098120601Z
-modified_at: 2026-05-31T05:10:30.461200325Z
+modified_at: 2026-05-31T05:10:32.150282638Z
 req_type: Bug
 tags:
 - dogfood
