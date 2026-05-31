@@ -30,9 +30,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:40:30.811183735Z
-modified_at: 2026-05-10T06:25:04.896388756Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-10T02:40:31.768738642Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
