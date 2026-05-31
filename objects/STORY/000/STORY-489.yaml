@@ -1,0 +1,26 @@
+id: 019e7cb2-99ce-7003-9e86-4f5ceb96832e
+spec_id: STORY-489
+agreed_id: STORY-489
+title: 'aida graph: cross-spec relationship queries (BlockedBy chains, epic rollup, cross-feature impact) via CLI + MCP'
+description: |-
+  Flagship 'outsmart the SDD field' capability (SPIKE-45 P2). AIDA has the typed relationship graph; Spec Kit + Kiro have flat per-feature markdown that STRUCTURALLY CANNOT answer 'what is blocked by this epic across the tree' or 'what does changing X impact.' Build (or surface, if partially present) a graph-query interface:
+  - aida graph <SPEC> --blocked-by / --blocks / --tree / --impact (walk typed relationships: BlockedBy/Blocks/parent/child/depends-on/subsumes/verifies).
+  - Epic rollup: status distribution + blocked-count across an epic's descendants.
+  - Cross-feature impact: given a spec, what transitively depends on / is blocked by it.
+  - Surface the SAME over MCP (a graph-query tool/resource) so ANY agent converges on the typed graph — the multi-vendor edge.
+  First step: inventory what graph-walk helpers already exist (relationships are stored; pickability already walks BlockedBy). Sketch the command + MCP surface, then build. This is the demo that makes the moat visible vs the flat-markdown SDD tools. Architecture-touch (new MCP surface) — sketch-first if it changes the MCP contract.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T06:22:20.110613503Z
+modified_at: 2026-05-31T06:22:20.110613503Z
+req_type: Story
+tags:
+- competitive-parity
+- for-codex
+- graph-query
+- moat
+- parent:SPIKE-45
+- vs-kiro
+- vs-spec-kit
