@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T20:55:50.580655527Z
-modified_at: 2026-05-04T19:34:51.481435946Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df47c-756e-7771-af27-8fa2f5ebb317
@@ -16,6 +16,8 @@ comments:
   content: ''
   created_at: 2026-05-04T19:34:50.478907389Z
   modified_at: 2026-05-04T19:34:50.478907389Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 urls:
 - id: b69fefd6-d4bd-4187-8802-2b904abf4b1b
   url: https://github.com/joemooney/aida
