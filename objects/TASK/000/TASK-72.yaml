@@ -51,7 +51,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:05:08.327855472Z
-modified_at: 2026-05-12T04:04:35.655566282Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -76,6 +76,8 @@ comments:
     All three compose with each other. Implementer should address #4 first (the ordering bug is the cause; #5 and #6 are downstream symptoms of it). Suggest folding into TASK-72's existing acceptance section.
   created_at: 2026-05-11T06:03:01.899722992Z
   modified_at: 2026-05-11T06:03:01.899722992Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T04:41:39.227905957Z
