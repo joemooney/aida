@@ -1,0 +1,18 @@
+id: 019e7f5d-c239-7592-b20c-b896d54050c5
+spec_id: TASK-608
+agreed_id: TASK-608
+title: Trim 'aida role scaffold' defaults to the agent-wired role set (drop architect/triage, add advisor)
+description: 'aida role scaffold currently installs {triage, architect, implementer, reviewer} as global starter roles (~/.aida/roles/). This is misaligned with actual usage + the agent-role taxonomy: (1) architect + triage are NOT orchestrator-wired (no agent phase), and empirically dormant — 27d inactive, ZERO work ever routed to them (for:architect/for:triage = 0 across the store); (2) the scaffold OMITS advisor, which is the most load-bearing role (the strategic partner / escalation tier, validate_registered_agent_role accepts it, active continuously). So the default set ships 2 inert roles and skips the key one — inviting the ''what''s this role for?'' first-impression confusion (the same overlap that tripped the TASK-587 list-roles work). Fix: change the scaffold default set to the AGENT-WIRED roles {implementer, advisor, reviewer} (+ integrator once STORY-460''s role lands), and make architect/triage OPT-IN via ''aida role add''. The agent-wired set is the canonical role taxonomy (validate_registered_agent_role in aida-cli/src/main.rs); aligning scaffold defaults to it removes cruft + the operator/agent-role overlap confusion. Touches: the ''aida role scaffold'' default-set definition. Companion to the corrected role model from the 2026-05-31 AGY list-roles review. Verify the scaffold set location before editing (role scaffold handler).'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T18:48:31.545477796Z
+modified_at: 2026-05-31T18:48:31.545477796Z
+req_type: Task
+tags:
+- aida:role:scaffold
+- from-advisor
+- papercut
+- roles
+- scaffolding
