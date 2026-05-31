@@ -1,0 +1,19 @@
+id: 019e7d33-e35d-7b33-a460-ea06a7cd1a61
+spec_id: TASK-595
+agreed_id: TASK-595
+title: 'aida graph CLI subcommand: blocked-by/blocks/tree/impact + --json (STORY-489 slice 2)'
+description: 'Slice 2 of 3 for STORY-489. The user-visible ''aida graph <SPEC>'' command on top of the graph_walk primitive (TASK-594): --blocked-by / --blocks transitive chains, --tree epic rollup (Parent/Child + status distribution), --impact reverse closure, --json for agents. Mode-exclusion guard + default-to-tree. Wired into the git-backend dispatch (the live path — initial wiring into the legacy match alone hit ''not supported for git backend'', caught by smoke test). Verified end-to-end: ''aida graph STORY-276 --blocked-by'' correctly surfaces STORY-332 (the transitive query flat-markdown SDD tools can''t answer). Slice 3 (MCP query_graph tool) remains — needs contract sign-off; STORY-489 stays open. Plan: docs/plans/2026-05-31-graph-query-story-489.md.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T08:43:33.085678853Z
+modified_at: 2026-05-31T08:43:33.085678853Z
+req_type: Task
+tags:
+- aida-cli
+- graph-query
+- moat
+- parent:STORY-489
+- slice-2-of-3
+- vs-kiro
