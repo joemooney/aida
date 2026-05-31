@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:38:36.856006582Z
-modified_at: 2026-05-15T23:42:08.713302504Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - batch:tui-v1
@@ -33,6 +33,8 @@ comments:
   content: 'Implemented via PR #43 (commit e7463c4b): read-only ratatui status overlay (prefix o) over `aida status --json` with 3 quick actions; cache-first paint + background gh refresh. Tests: 737/737 workspace green; cargo fmt + clippy clean.'
   created_at: 2026-05-15T22:58:33.323461079Z
   modified_at: 2026-05-15T22:58:33.323461079Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T20:49:46.801969199Z
