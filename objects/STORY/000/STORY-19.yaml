@@ -75,7 +75,7 @@ priority: High
 owner: joe
 feature: 200-GitLab
 created_at: 2025-12-14T16:34:08.806087789Z
-modified_at: 2026-05-04T19:35:23.315303081Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -87,3 +87,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:35:21.646715449Z
   modified_at: 2026-05-04T19:35:21.646715449Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
