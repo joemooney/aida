@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:19:16.149343346Z
-modified_at: 2026-05-31T06:27:18.329728306Z
+modified_at: 2026-05-31T07:50:07.028109836Z
 req_type: Spike
 tags:
 - competitive
@@ -41,6 +41,11 @@ comments:
     Tripwires (~6wk refresh): agents.md #135/#179/#105 (structure creep), MCP agent-comms workstream, Spec Kit roadmap toward IDs/graph, Letta Context Repos adding a graph layer, any ReqIF↔agent bridge. Full synthesis: docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md
   created_at: 2026-05-31T06:21:31.822521714Z
   modified_at: 2026-05-31T06:21:31.822521714Z
+- id: 019e7d02-f7b4-7be1-88e2-dfab72dfcac7
+  author: joe
+  content: 'Roadmap progress (autonomous loop, 2026-05-31): P2 graph-query → STORY-489 (dispatched to Codex, sketch-first). P5 drain-legibility → STORY-490 shipped as option (b): the ''⚠ N shelved'' additive callout in ''aida queue progress'' (PR-384, merged, tested; bucketing unchanged per STORY-332). Remaining P1 (resumable checkpointing), P3 (inter-agent mailbox / SPIKE-10), P4 (semantic recall) are architecture-class — left for sketch-first sign-off with the operator rather than unsupervised solo builds. AGENTS.md-generator + ReqIF bridge remain options (phase-gated). Also filed this loop: TASK-593 (prune --orphaned misses merged-PR review rows).'
+  created_at: 2026-05-31T07:50:07.028109836Z
+  modified_at: 2026-05-31T07:50:07.028109836Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T06:27:18.329728306Z
