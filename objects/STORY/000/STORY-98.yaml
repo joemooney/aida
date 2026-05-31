@@ -100,7 +100,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:20:15.751009438Z
-modified_at: 2026-05-12T15:01:43.916568986Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -131,6 +131,8 @@ comments:
     This naming also signals to the user that 'Scheduled' is session-bound (ephemeral, owned by one session) vs 'Planned' which is roadmap-bound (durable, status field on the req).
   created_at: 2026-05-11T04:20:56.793236087Z
   modified_at: 2026-05-11T04:20:56.793236087Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T05:37:06.469961514Z
