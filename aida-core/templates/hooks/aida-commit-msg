@@ -49,7 +49,11 @@ CONVENTIONAL_PATTERN="^(\\[AI:${AI_TOOL_PATTERN}(:(high|med|low))?\\] )?(feat|fi
 ID_ATOM='[A-Za-z]+(-[A-Za-z0-9_]+)?-[0-9]+(\.\.[0-9]+)?'
 # BUG-78: accept whitespace as a separator alongside comma — squash commits
 # from multi-spec PRs land subjects like `(STORY-98 STORY-90 BUG-74)`.
-REQ_ID_PATTERN="\\(${ID_ATOM}([,[:space:]]+${ID_ATOM})*\\)\$"
+# BUG-51: allow an optional non-paren suffix after the id list so version /
+# phase progress markers in the subject — `(EPIC-19 v1)`, `(STORY-47 phase-2)`
+# — are accepted. The leading id atom is still required; the suffix is any
+# trailing non-`)` text before the close.
+REQ_ID_PATTERN="\\(${ID_ATOM}([,[:space:]]+${ID_ATOM})*[^)]*\\)\$"
 FEAT_FIX_PATTERN="^(\\[AI:${AI_TOOL_PATTERN}(:(high|med|low))?\\] )?(feat|fix)"
 
 ERRORS=()
