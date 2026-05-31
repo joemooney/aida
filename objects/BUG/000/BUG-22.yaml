@@ -8,9 +8,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:43:36.361192981Z
-modified_at: 2026-05-09T18:53:12.223532704Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - ergonomics
 - shell
 - walkthrough
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
