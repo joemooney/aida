@@ -1,0 +1,17 @@
+id: 019e7ef0-5422-71f1-a0ab-e5f8151dedbf
+spec_id: TASK-607
+agreed_id: TASK-607
+title: 'BUG-416 slice 1: pure worktree_occupant detection core (live-lease-on-worktree check)'
+description: 'Slice 1 of the detect-and-auto-isolate remediation for BUG-416. Adds the pure detection core fn worktree_occupant(worktree, leases, is_live) -> Option<&SessionLease> in aida-cli/src/main.rs: finds a lease that already occupies a target worktree AND is live (per an injected liveness predicate), so the auto-isolate wiring (slice 2) can provision a fresh worktree when launching a 2nd agent into an occupied one. Unit-tested (live same-worktree wins, different worktree ignored, dead lease''s worktree reads as free). #[allow(dead_code)] until slice 2 wires it. Slice 2 (the worktree provisioning in prepare_agent_launch / aida agent new for the non --bg paths) keeps BUG-416 open.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T16:48:59.938179574Z
+modified_at: 2026-05-31T16:48:59.938179574Z
+req_type: Task
+tags:
+- aida:agent:new
+- isolation
+- multi-agent
+- parent:BUG-416
