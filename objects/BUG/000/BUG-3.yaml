@@ -13,9 +13,11 @@ priority: Medium
 owner: joe
 feature: 234-Uncategorized
 created_at: 2026-02-23T02:49:30.683744854Z
-modified_at: 2026-02-23T02:49:30.683744854Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - skills
 - ux
 - web
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
