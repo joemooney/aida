@@ -15,12 +15,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:40:59.788089262Z
-modified_at: 2026-05-28T04:52:54.229035603Z
+modified_at: 2026-05-31T03:15:04.291561610Z
 req_type: Task
 tags:
 - ci
 - from-review:PR-142
 - release
+comments:
+- id: 019e7c07-27e3-7d53-87e2-30984439fd71
+  author: joe
+  content: 'Triaged 2026-05-30 (blocked-queue sweep): this is a release-tag-gated verification — it cannot be exercised on a PR, only on the next `scripts/release.sh` run, and the task notes release.sh ALREADY surfaces a missing-file error if download-artifact@v5 changed the layout. So the safety net is automatic; this doesn''t belong in NeedsAttention/blocked. Moving to Approved + tagging release-gated. Action remains: on the next release, watch the ''Download all artifacts'' step + confirm the four files: paths resolve; if v5 flattened the layout, fix-forward with explicit per-artifact name:. No work needed until then.'
+  created_at: 2026-05-31T03:15:04.291561610Z
+  modified_at: 2026-05-31T03:15:04.291561610Z
 failure_reason:
   phase: implementer
   phase_index: 1
