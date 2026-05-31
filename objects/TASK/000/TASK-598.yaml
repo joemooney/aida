@@ -1,0 +1,19 @@
+id: 019e7dbb-5eb2-7d23-ad97-04d4a7cb6ca4
+spec_id: TASK-598
+agreed_id: TASK-598
+title: 'Resumable-drain pure decision logic: classify_resumability + reconcile_resume_phase (STORY-491 slice 1)'
+description: 'Slice 1 of STORY-491. New aida-cli/src/drain_resume.rs: the PURE, side-effect-free decision core for resumable drain — classify_resumability (orchestrator-alive guard FIRST → never double-drive; shelved/not-in-flight/resumable-crash) + reconcile_resume_phase (earliest phase whose postcondition is unmet = the idempotent resume point; sorts input, conservative on missing phases). 8 unit tests. Deliberately excludes the probing (git/PR/spec reality) and the live orchestrator re-entry wiring — those are slice 2, sign-off-gated (reconcile-from-reality design + double-drive liveness gate). Pure logic is robust across whatever probing design lands, so it''s safe to build now; #![allow(dead_code)] scoped until slice 2 wires it. STORY-491 stays open.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T11:11:32.018620954Z
+modified_at: 2026-05-31T11:11:32.018620954Z
+req_type: Task
+tags:
+- aida-cli
+- durable-execution
+- parent:STORY-491
+- pure-logic
+- resumable-drain
+- slice-1-of-2
