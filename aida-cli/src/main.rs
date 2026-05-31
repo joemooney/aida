@@ -5213,6 +5213,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // trace:STORY-361 | ai:claude
             return handle_mcp_command(mcp_cmd);
         }
+        Command::Agent(agent_cmd) => {
+            return handle_agent_command(agent_cmd);
+        }
         Command::Brief {
             agent,
             spec,
@@ -19784,6 +19787,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         } => agent_register(*pid, agent_type, role, spec.as_deref(), name.as_deref()),
         AgentCommand::Ls => agent_ls(),
         AgentCommand::Stop { name } => agent_stop(name),
+        AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
     }
 }
 
@@ -20944,15 +20948,78 @@ fn validate_registered_agent_type(raw: &str) -> Result<String> {
     }
 }
 
+// trace:TASK-587 | ai:antigravity
+pub const AGENT_ROLES: &[&str] = &["implementer", "advisor", "reviewer", "integrator"];
+
+// trace:TASK-587 | ai:antigravity
+#[derive(serde::Serialize)]
+struct AgentRoleInfo {
+    role: &'static str,
+    target: &'static str,
+    active_leases_limit: &'static str,
+    typical_lifecycle_context: &'static str,
+}
+
+// trace:TASK-587 | ai:antigravity
+const AGENT_ROLE_INFOS: &[AgentRoleInfo] = &[
+    AgentRoleInfo {
+        role: "implementer",
+        target: "single spec ID",
+        active_leases_limit: "1 spec lease",
+        typical_lifecycle_context: "spawns with main worktree, single active spec lease, implements the spec, and runs tests.",
+    },
+    AgentRoleInfo {
+        role: "advisor",
+        target: "lightweight / shared context",
+        active_leases_limit: "unlimited",
+        typical_lifecycle_context: "lightweight / shared context, advises on specs or provides second opinions.",
+    },
+    AgentRoleInfo {
+        role: "reviewer",
+        target: "spec review",
+        active_leases_limit: "0 spec leases",
+        typical_lifecycle_context: "runs spec review fragments assembly or executes check-run polling.",
+    },
+    AgentRoleInfo {
+        role: "integrator",
+        target: "main / PR branches",
+        active_leases_limit: "0 spec leases",
+        typical_lifecycle_context: "watches overnight PR lists, merges clean PRs, and handles branch updates.",
+    },
+];
+
+// trace:TASK-587 | ai:antigravity
+fn handle_agent_list_roles(json: bool) -> Result<()> {
+    if json {
+        let serialized = serde_json::to_string_pretty(AGENT_ROLE_INFOS)?;
+        println!("{}", serialized);
+    } else {
+        println!(
+            "{:<12} | {:<28} | {:<19} | {}",
+            "Role", "Target", "Active Leases Limit", "Typical Lifecycle Context"
+        );
+        println!("{:-<12}-+-{:-<28}-+-{:-<19}-+-{:-<80}", "", "", "", "");
+        for info in AGENT_ROLE_INFOS {
+            println!(
+                "{:<12} | {:<28} | {:<19} | {}",
+                info.role, info.target, info.active_leases_limit, info.typical_lifecycle_context
+            );
+        }
+    }
+    Ok(())
+}
+
 // trace:TASK-543 | ai:codex
 fn validate_registered_agent_role(raw: &str) -> Result<String> {
     let role = raw.trim().to_ascii_lowercase();
-    match role.as_str() {
-        "implementer" | "advisor" | "reviewer" | "integrator" => Ok(role),
-        _ => anyhow::bail!(
-            "--role must be one of: implementer, advisor, reviewer, integrator (got `{}`)",
+    if AGENT_ROLES.contains(&role.as_str()) {
+        Ok(role)
+    } else {
+        anyhow::bail!(
+            "--role must be one of: {} (got `{}`)",
+            AGENT_ROLES.join(", "),
             raw
-        ),
+        )
     }
 }
 
@@ -21463,6 +21530,22 @@ mod agent_launcher_tests {
         };
         assert!(no_context);
         assert!(show_context);
+    }
+
+    // trace:TASK-587 | ai:antigravity
+    #[test]
+    fn parses_agent_list_roles_flags() {
+        let cli = Cli::try_parse_from(["aida", "agent", "list-roles"]).unwrap();
+        let Command::Agent(AgentCommand::ListRoles { json }) = cli.command else {
+            panic!("expected agent list-roles command");
+        };
+        assert!(!json);
+
+        let cli_json = Cli::try_parse_from(["aida", "agent", "list-roles", "--json"]).unwrap();
+        let Command::Agent(AgentCommand::ListRoles { json: json_opt }) = cli_json.command else {
+            panic!("expected agent list-roles command");
+        };
+        assert!(json_opt);
     }
 
     // trace:TASK-543 | ai:codex
