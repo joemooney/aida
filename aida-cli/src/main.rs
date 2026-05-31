@@ -11365,7 +11365,7 @@ fn handle_graph_command(
     depth: Option<usize>,
     json: bool,
 ) -> Result<()> {
-    use aida_core::graph_walk::{status_rollup, walk, Direction};
+    use aida_core::graph_walk::{status_rollup, walk_union, Direction};
 
     let mode_count = [blocked_by, blocks, tree, impact]
         .iter()
@@ -11382,32 +11382,39 @@ fn handle_graph_command(
     let root_label = root.display_id();
     let root_title = root.title.clone();
 
-    // Resolve mode → (relationship types, direction, label). Default: tree.
-    let (rel_types, direction, mode): (Vec<RelationshipType>, Direction, &str) = if blocked_by {
+    // Resolve mode → (walk specs, label). Default: tree. Each spec is a
+    // (rel_types, direction) leg; impact spans two legs so a unidirectionally-
+    // stored Blocks edge is still caught (BUG-411).
+    type WalkSpecs = Vec<(Vec<RelationshipType>, Direction)>;
+    let (specs, mode): (WalkSpecs, &str) = if blocked_by {
         (
-            vec![RelationshipType::BlockedBy],
-            Direction::Outgoing,
+            vec![(vec![RelationshipType::BlockedBy], Direction::Outgoing)],
             "blocked-by",
         )
     } else if blocks {
         (
-            vec![RelationshipType::Blocks],
-            Direction::Outgoing,
+            vec![(vec![RelationshipType::Blocks], Direction::Outgoing)],
             "blocks",
         )
     } else if impact {
-        // What is blocked by the root = specs whose BlockedBy edge points at it.
+        // Blocked by the root = X.BlockedBy→root (incoming BlockedBy) OR
+        // root.Blocks→X (outgoing Blocks); a one-directional edge needs both.
         (
-            vec![RelationshipType::BlockedBy],
-            Direction::Incoming,
+            vec![
+                (vec![RelationshipType::BlockedBy], Direction::Incoming),
+                (vec![RelationshipType::Blocks], Direction::Outgoing),
+            ],
             "impact",
         )
     } else {
-        (vec![RelationshipType::Child], Direction::Outgoing, "tree")
+        (
+            vec![(vec![RelationshipType::Child], Direction::Outgoing)],
+            "tree",
+        )
     };
     let is_tree = mode == "tree";
 
-    let result = walk(store, id, &rel_types, direction, depth);
+    let result = walk_union(store, id, &specs, depth);
 
     if json {
         let nodes: Vec<_> = result

@@ -867,7 +867,7 @@ impl<'a> McpServer<'a> {
     /// of the moat: the query a flat per-feature spec store can't answer.
     // trace:STORY-489 | ai:claude
     fn tool_query_graph(&self, args: &Value) -> Result<String, String> {
-        use aida_core::graph_walk::{status_rollup, walk, Direction};
+        use aida_core::graph_walk::{status_rollup, walk_union, Direction};
 
         let spec = args
             .get("spec_id")
@@ -888,34 +888,39 @@ impl<'a> McpServer<'a> {
 
         // Carry a canonical mode label so the output always echoes the
         // hyphenated enum form even when an underscore alias was passed
-        // (review finding: don't leak `blocked_by` into the response).
-        let (rel_types, direction, canonical_mode): (Vec<RelationshipType>, Direction, &str) =
-            match mode {
-                "blocked-by" | "blocked_by" => (
-                    vec![RelationshipType::BlockedBy],
-                    Direction::Outgoing,
-                    "blocked-by",
-                ),
-                "blocks" => (
-                    vec![RelationshipType::Blocks],
-                    Direction::Outgoing,
-                    "blocks",
-                ),
-                "impact" => (
-                    vec![RelationshipType::BlockedBy],
-                    Direction::Incoming,
-                    "impact",
-                ),
-                "tree" => (vec![RelationshipType::Child], Direction::Outgoing, "tree"),
-                other => {
-                    return Err(format!(
-                        "unknown mode '{}': use tree, blocked-by, blocks, or impact",
-                        other
-                    ))
-                }
-            };
+        // (review finding: don't leak `blocked_by` into the response). Each
+        // mode is a list of (rel_types, direction) walk legs; impact spans two
+        // so a unidirectionally-stored Blocks edge is still caught (BUG-411).
+        type WalkSpecs = Vec<(Vec<RelationshipType>, Direction)>;
+        let (specs, canonical_mode): (WalkSpecs, &str) = match mode {
+            "blocked-by" | "blocked_by" => (
+                vec![(vec![RelationshipType::BlockedBy], Direction::Outgoing)],
+                "blocked-by",
+            ),
+            "blocks" => (
+                vec![(vec![RelationshipType::Blocks], Direction::Outgoing)],
+                "blocks",
+            ),
+            "impact" => (
+                vec![
+                    (vec![RelationshipType::BlockedBy], Direction::Incoming),
+                    (vec![RelationshipType::Blocks], Direction::Outgoing),
+                ],
+                "impact",
+            ),
+            "tree" => (
+                vec![(vec![RelationshipType::Child], Direction::Outgoing)],
+                "tree",
+            ),
+            other => {
+                return Err(format!(
+                    "unknown mode '{}': use tree, blocked-by, blocks, or impact",
+                    other
+                ))
+            }
+        };
 
-        let result = walk(&store, root_id, &rel_types, direction, depth);
+        let result = walk_union(&store, root_id, &specs, depth);
         let nodes: Vec<Value> = result
             .nodes
             .iter()
@@ -3715,6 +3720,24 @@ mod tests {
         assert!(
             ids.contains(&blocker_id.as_str()),
             "blocker in nodes: {out}"
+        );
+
+        // BUG-411 parity: impact from the blocker finds what it blocks
+        // (the dependent is blocked-by the blocker), via the handler's
+        // walk_union legs.
+        let impact = server
+            .tool_query_graph(&json!({ "spec_id": blocker_id, "mode": "impact" }))
+            .unwrap();
+        let impact_parsed: Value = serde_json::from_str(&impact).unwrap();
+        let impact_ids: Vec<&str> = impact_parsed["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|n| n["id"].as_str())
+            .collect();
+        assert!(
+            impact_ids.contains(&dependent_id.as_str()),
+            "impact must surface the dependent: {impact}"
         );
 
         // Unknown mode is a clean error, not a panic.
