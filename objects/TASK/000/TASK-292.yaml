@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:04:18.586209459Z
-modified_at: 2026-05-17T21:15:11.677889225Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - auto-complete
@@ -66,6 +66,8 @@ comments:
     Test status: 5/5 new unit tests green; cargo fmt + clippy clean
   created_at: 2026-05-17T21:05:34.612384862Z
   modified_at: 2026-05-17T21:05:34.612384862Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T20:56:34.066595912Z
