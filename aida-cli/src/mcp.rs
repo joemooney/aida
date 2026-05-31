@@ -484,6 +484,8 @@ impl<'a> McpServer<'a> {
             "add_comment" => self.tool_add_comment(&arguments),
             "add_relationship" => self.tool_add_relationship(&arguments),
             "query_graph" => self.tool_query_graph(&arguments),
+            "send_message" => self.tool_send_message(&arguments),
+            "read_inbox" => self.tool_read_inbox(&arguments),
             "list_features" => self.tool_list_features(),
             "history" => self.tool_history(&arguments),
 
@@ -990,6 +992,93 @@ impl<'a> McpServer<'a> {
         serde_json::to_string_pretty(&json!({
             "count": events.len(),
             "events": events,
+        }))
+        .map_err(|e| e.to_string())
+    }
+
+    /// MCP parity for `aida mailbox send` (STORY-493): send an inter-agent
+    /// peer message into the local layer. `to` a specific agent or
+    /// `broadcast: true` to all; `from` defaults to this server's identity.
+    // trace:STORY-493 trace:TASK-604 | ai:claude
+    fn tool_send_message(&self, args: &Value) -> Result<String, String> {
+        use aida_core::mailbox::{Message, Recipient};
+        let body = args
+            .get("body")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: body")?;
+        let broadcast = args
+            .get("broadcast")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let recipient = if broadcast {
+            Recipient::Broadcast
+        } else if let Some(a) = args.get("to").and_then(|v| v.as_str()) {
+            Recipient::Agent(a.to_string())
+        } else {
+            return Err("specify `to` (an agent) or `broadcast: true`".to_string());
+        };
+        let from = args
+            .get("from")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| crate::current_user_id(None));
+        let id = uuid::Uuid::new_v4().to_string();
+        let thread_id = args
+            .get("thread")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| id.clone());
+        let msg = Message {
+            id: id.clone(),
+            thread_id: thread_id.clone(),
+            from,
+            to: recipient,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            in_reply_to: args
+                .get("in_reply_to")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            body: body.to_string(),
+        };
+        crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
+        Ok(format!("Message sent: {id} (thread {thread_id})"))
+    }
+
+    /// MCP parity for `aida mailbox inbox` (STORY-493): an agent's inbox —
+    /// messages addressed to it + broadcasts (excluding its own sent),
+    /// oldest-first, as JSON. `agent` defaults to this server's identity.
+    // trace:STORY-493 | ai:claude
+    fn tool_read_inbox(&self, args: &Value) -> Result<String, String> {
+        use aida_core::mailbox::{inbox_for, Recipient};
+        let agent = args
+            .get("agent")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| crate::current_user_id(None));
+        let all = crate::mailbox_store::read_local_messages(&self.project_root)
+            .map_err(|e| e.to_string())?;
+        let messages: Vec<Value> = inbox_for(&agent, &all)
+            .iter()
+            .map(|m| {
+                let to = match &m.to {
+                    Recipient::Agent(a) => a.clone(),
+                    Recipient::Broadcast => "all".to_string(),
+                };
+                json!({
+                    "id": m.id,
+                    "thread_id": m.thread_id,
+                    "from": m.from,
+                    "to": to,
+                    "timestamp": m.timestamp,
+                    "in_reply_to": m.in_reply_to,
+                    "body": m.body,
+                })
+            })
+            .collect();
+        serde_json::to_string_pretty(&json!({
+            "agent": agent,
+            "count": messages.len(),
+            "messages": messages,
         }))
         .map_err(|e| e.to_string())
     }
@@ -2394,6 +2483,38 @@ pub fn tool_descriptors() -> Value {
             )
         },
         {
+            "name": "send_message",
+            "description": "Send an inter-agent peer message into the mailbox local layer, mirroring `aida mailbox send`. Distinct from briefs (operator→agent work) and directives (top-down control): this is agent↔agent conversation. Address a single agent via `to`, or set `broadcast: true` to reach every agent.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "body": { "type": "string", "description": "The message body.", "example": "can you re-check the auth flow in PR-42? CI flaked once." },
+                    "to": { "type": "string", "description": "Recipient agent id. Omit and set broadcast=true to reach all.", "example": "codex" },
+                    "broadcast": { "type": "boolean", "description": "Send to every agent instead of a single recipient.", "example": true },
+                    "thread": { "type": "string", "description": "Attach to an existing thread id (default: start a new thread).", "example": "0193a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" },
+                    "in_reply_to": { "type": "string", "description": "Id of the message this replies to.", "example": "0193a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" },
+                    "from": { "type": "string", "description": "Sender id (default: this server's agent/user identity).", "example": "claude" }
+                },
+                "required": ["body"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Message sent: <id> (thread <thread-id>)`."
+            )
+        },
+        {
+            "name": "read_inbox",
+            "description": "Read an agent's mailbox inbox — messages addressed to it plus broadcasts (excluding its own sent), oldest-first — mirroring `aida mailbox inbox`. Returns pretty-printed JSON.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "agent": { "type": "string", "description": "Whose inbox (default: this server's agent/user identity).", "example": "claude" }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "pretty-printed JSON `{agent, count, messages:[{id,thread_id,from,to,timestamp,in_reply_to,body}]}`."
+            )
+        },
+        {
             "name": "list_features",
             "description": "List all active feature categories defined in the project, displaying their names and normalized prefixes.",
             "inputSchema": { "type": "object", "properties": {} },
@@ -3315,11 +3436,14 @@ mod tests {
             .iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
             .collect();
-        // 10 spec-graph (incl. query_graph) + 17 coordination = 27 total.
-        assert!(names.len() >= 27, "expected ≥27 tools, got {}", names.len());
+        // 10 spec-graph (incl. query_graph) + 19 coordination (incl. the two
+        // mailbox tools) = 29 total.
+        assert!(names.len() >= 29, "expected ≥29 tools, got {}", names.len());
         for required in [
             "add_relationship",
             "query_graph",
+            "send_message",
+            "read_inbox",
             "history",
             "list_punts",
             "read_punt",
@@ -3354,8 +3478,8 @@ mod tests {
         let desc = tool_descriptors();
         let arr = desc.as_array().expect("tool_descriptors must be an array");
         assert!(
-            arr.len() >= 27,
-            "expected ≥27 tool descriptors (10 spec-graph incl. query_graph + 17 coordination), got {}",
+            arr.len() >= 29,
+            "expected ≥29 tool descriptors (10 spec-graph incl. query_graph + 19 coordination incl. mailbox), got {}",
             arr.len()
         );
 
@@ -3669,6 +3793,43 @@ mod tests {
     /// query_graph walks the typed relationship graph: a spec blocked-by
     /// another surfaces that blocker in the `blocked-by` mode result, and the
     /// JSON carries the count + node id. Regression for the MCP half of the
+    // trace:STORY-493 | ai:claude
+    /// send_message → read_inbox round-trip: a direct message and a broadcast
+    /// both land in the recipient's inbox; the sender's own message does not.
+    #[test]
+    fn mcp_mailbox_send_then_read_inbox_roundtrip() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        server
+            .tool_send_message(&json!({ "to": "claude", "body": "direct hi", "from": "codex" }))
+            .unwrap();
+        server
+            .tool_send_message(&json!({ "broadcast": true, "body": "all hands", "from": "agy" }))
+            .unwrap();
+
+        let out = server
+            .tool_read_inbox(&json!({ "agent": "claude" }))
+            .unwrap();
+        let parsed: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(parsed["agent"], "claude");
+        assert_eq!(parsed["count"], 2, "direct + broadcast: {out}");
+
+        // The sender (codex) sees the broadcast but not its own direct message.
+        let codex = server
+            .tool_read_inbox(&json!({ "agent": "codex" }))
+            .unwrap();
+        let codex_parsed: Value = serde_json::from_str(&codex).unwrap();
+        assert_eq!(
+            codex_parsed["count"], 1,
+            "codex sees only agy's broadcast: {codex}"
+        );
+
+        // Neither `to` nor `broadcast` is a clean error, not a panic.
+        let err = server.tool_send_message(&json!({ "body": "orphan" }));
+        assert!(err.is_err(), "must require to/broadcast: {err:?}");
+    }
+
     /// graph-query moat (the CLI half is covered by graph_walk's unit tests).
     #[test]
     fn mcp_query_graph_returns_blocked_by_chain() {
