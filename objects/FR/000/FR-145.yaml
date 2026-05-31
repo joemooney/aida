@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 155-scaffolding
 created_at: 2025-12-11T04:55:26.391272156Z
-modified_at: 2025-12-11T05:02:10.012546569Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 5ac6d6c3-dab9-4a51-95ff-4f913561b2e5
@@ -20,3 +20,5 @@ comments:
   content: Test comment with AIDA_AUTHOR env var
   created_at: 2025-12-11T05:02:10.012537718Z
   modified_at: 2025-12-11T05:02:10.012537718Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
