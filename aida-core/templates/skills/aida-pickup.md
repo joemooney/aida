@@ -16,8 +16,8 @@ allowed-tools:
 
 Drive the implementer / reviewer / triage / architect loop where the active
 role pulls the next item from the queue, works on it, marks it complete,
-and pulls the next. Pairs with the `dialog` role — the **advisor** seat —
-on the producer side (see `aida role enter dialog` and
+and pulls the next. Pairs with the `advisor` role — the **advisor** seat —
+on the producer side (see `aida role enter advisor` and
 `aida queue add --for <role>`).
 
 ## When to use
@@ -35,7 +35,7 @@ on the producer side (see `aida role enter dialog` and
   `eval "$(aida role enter <name>)"` first so the queue filter has a target
   (or the `aida-role <name>` shell helper if `aida dev shell-init --install`
   has been run)
-- The user is in `dialog` mode (the advisor seat) — that's the producer
+- The user is in `advisor` mode (the advisor seat) — that's the producer
   seat, not the consumer
 
 ## Your local scratchpad is NOT AIDA substrate (BUG-378)
@@ -211,7 +211,7 @@ Show the user the item and ask whether to start. Examples:
 
 > Next up: **FR-1-042 — Add OAuth provider** (Approved · High · joe)
 >
-> Note from dialog: "high priority, customer ask"
+> Note from advisor: "high priority, customer ask"
 >
 > Want me to start on this? I'll mark it in-progress before diving in.
 
@@ -749,7 +749,7 @@ over and why.
 **Advise escape.** When a checkpoint is genuinely ambiguous — competing
 defensible paths, a risk the implementer cannot grade itself — add an
 `⊕ Route to the advisor` row. The row's What cell is *"`/aida-advise
-<SPEC-ID>` (today: copy the menu to the dialog/advisor seat; STORY-306's
+<SPEC-ID>` (today: copy the menu to the advisor seat; STORY-306's
 advisor tier routes punts automatically)."* This is the rubric's `advise`
 escape — a first-class option, not a fallback. Omit the row when the
 recommendation is clear-cut and a relay would be busywork.
@@ -812,7 +812,7 @@ session end` would break the chain.
 | Path | What happens | Why |
 |------|--------------|-----|
 | ⇒ Submit the PR ← recommended | `/aida-pr` | The orchestrator is already driving this spec — opening the PR is the only mechanical step that keeps the chain moving (phases 2-6 follow automatically). Reversible: closing the PR halts at phase 3. |
-| ⊕ Route to the advisor *(include only when the deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the implementation surfaced a load-bearing risk the implementer can't grade itself (smoke-test gate, deviation from the plan, larger-than-expected change), park the decision with the advisor instead of guessing the path forward. |
+| ⊕ Route to the advisor *(include only when the deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the advisor seat; STORY-306's tier routes punts automatically | When the implementation surfaced a load-bearing risk the implementer can't grade itself (smoke-test gate, deviation from the plan, larger-than-expected change), park the decision with the advisor instead of guessing the path forward. |
 | ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — ends this spec and bails; phases 2-6 will not run. Reversible: re-queue with `aida queue work <SPEC-ID>`. |
 
 Orchestrator mode shows only these three rows on purpose: there is no
@@ -870,7 +870,7 @@ cluster commits compound the decision.">
 | ▶ Continue the batch ← recommended | `/aida-pickup --batch <NAME>` | The batch IS the consent record — cluster-mode continuation is the whole point: one branch + one PR for the batch, no re-entry cost. Same session + same lease; the next member accumulates as commits in this cluster. Reversible: Ctrl+D pauses; `aida queue work --batch <NAME>` resumes later. |
 | ⇒ Wrap the batch as one PR | `/aida-pr` | Ships every batch member committed so far as a single cluster PR; the remaining queued members wait for a later session |
 | ⇒ Pause the drain | Ctrl+D | Step out to test / debug; the batch marker is on the manifest — resume later with `aida queue work --batch <NAME>` from the parent shell |
-| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-shipped batch member surfaced a load-bearing risk the implementer can't grade itself (an unexpected API change, a deviation from the batch plan, a scope realization), park the keep-draining-vs-pause call with the advisor before more cluster commits compound it. |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the advisor seat; STORY-306's tier routes punts automatically | When the just-shipped batch member surfaced a load-bearing risk the implementer can't grade itself (an unexpected API change, a deviation from the batch plan, a scope realization), park the keep-draining-vs-pause call with the advisor before more cluster commits compound it. |
 | ⏸ Ship just this spec, drop the batch | `/aida-pr`, then `aida session end <session-id>` from the parent shell | Solo PR for <SPEC-ID> only; abandons the rest of the batch — pick the remaining members up individually later |
 
 The ▶/⇒ ordering is the point (TASK-272): cluster-mode continuation is
@@ -909,7 +909,7 @@ Drained <N> items from <cluster-id>.
 |------|--------------|-----|
 | ▶ Open PR for this batch ← recommended | `/aida-pr` | The cluster is complete and the manifest's reasoning is still in scrollback — shipping the batch as one PR now beats coming back cold. Same session, same lease. Reversible: close the PR if review surfaces a blocker. |
 | ⇒ Pick up a different cluster | `aida queue work <EPIC-M>` | New scope → new lease + worktree; end this session first or the leases conflict |
-| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <last-SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When a cluster member surfaced something the implementer can't grade (a deviation from the plan, an unexpected size, a coverage gap), park the ship-now-vs-revisit call with the advisor instead of guessing. |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <last-SPEC-ID>` — today: copy this menu to the advisor seat; STORY-306's tier routes punts automatically | When a cluster member surfaced something the implementer can't grade (a deviation from the plan, an unexpected size, a coverage gap), park the ship-now-vs-revisit call with the advisor instead of guessing. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the cluster lease — the drained work is safe, the PR can wait |
 
 *Cluster partial:*
@@ -943,7 +943,7 @@ the next pickup.">
 |------|--------------|-----|
 | ▶ Keep draining this cluster ← recommended | `aida queue work` (no-arg = next planned item) | The manifest is the consent record — staying in the cluster preserves momentum, lease, and worktree; no re-confirm, no context-switch cost. Reversible: pause anytime with Ctrl+D; the `[planned:by-<session>]` chips keep remaining members claimed. |
 | ⇒ Pause + check on something else | `aida queue list --all` | Read-only peek; doesn't drop the lease, you can return to the drain |
-| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <last-SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-finished member surfaced something the implementer can't grade (an emerging shared-file conflict, a plan deviation, a scope realization), park the keep-draining-vs-pivot call with the advisor instead of guessing through more cluster commits. |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <last-SPEC-ID>` — today: copy this menu to the advisor seat; STORY-306's tier routes punts automatically | When the just-finished member surfaced something the implementer can't grade (an emerging shared-file conflict, a plan deviation, a scope realization), park the keep-draining-vs-pivot call with the advisor instead of guessing through more cluster commits. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease mid-cluster; `[planned:by-<session>]` chips keep the rest claimed for next time |
 
 *Simple mode, queue has more items routed to this role:* — trace:TASK-414
@@ -977,7 +977,7 @@ item.">
 |------|--------------|-----|
 | ▶ Grab next item ← recommended | `/aida-pickup` | The Step 5c gate already opened the PR and the queue still has work — staying in this session reuses the role + lease + worktree with zero re-entry cost. Reversible: stop anytime with Ctrl+D; the remaining items stay routed to <role>. |
 | ⇒ Wrap up what's shipped as a PR | `/aida-pr` | Use when Step 5c skipped (e.g. follow-up commits landed since); still this session — ships the current branch before picking up more |
-| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-shipped spec surfaced something worth a human's eyes before chaining more work (an unexpected size, a deviation, a coverage gap), park the grab-next-vs-pause call with the advisor instead of letting it ride. |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the advisor seat; STORY-306's tier routes punts automatically | When the just-shipped spec surfaced something worth a human's eyes before chaining more work (an unexpected size, a deviation, a coverage gap), park the grab-next-vs-pause call with the advisor instead of letting it ride. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease; the queued items stay routed to <role> for later |
 
 *Simple mode, queue empty:* — trace:TASK-412
@@ -1009,7 +1009,7 @@ entirely):
 
 ```
 Deciding factor: <one sentence — e.g. "Just-shipped spec opened a
-follow-up shape the dialog seat should triage before more work queues
+follow-up shape the advisor seat should triage before more work queues
 up.">
 ```
 
@@ -1018,8 +1018,8 @@ up.">
 | Path | What happens | Why |
 |------|--------------|-----|
 | ▶ Stop here ← recommended | Ctrl+D, then `aida session end <session-id>` from the parent shell | The atomic shipping unit is already closed (Step 5c opened the PR, or no commits to ship) and the queue is empty — releasing the lease is the natural finish. The PR, if any, continues through CI / review independently. Reversible: re-enter the worktree with `aida queue work <SPEC-ID>` or pick up new work later. |
-| ⇒ Switch hats and queue more | `eval "$(aida role enter dialog)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; dialog is the producer seat that refills the queue — stay if you want to refill before stepping away |
-| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the dialog/advisor seat; STORY-306's tier routes punts automatically | When the just-shipped spec surfaced something the dialog seat should triage before the queue refills (a follow-up shape, a strategic concern, a memory worth capturing), park it with the advisor instead of dropping the lease cold. |
+| ⇒ Switch hats and queue more | `eval "$(aida role enter advisor)"` then `aida queue add <id> --for <role>` | Changes the active role on this shell; advisor is the producer seat that refills the queue — stay if you want to refill before stepping away |
+| ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the advisor seat; STORY-306's tier routes punts automatically | When the just-shipped spec surfaced something the advisor seat should triage before the queue refills (a follow-up shape, a strategic concern, a memory worth capturing), park it with the advisor instead of dropping the lease cold. |
 
 **Rare bypass** (`commits_ahead > 0 AND pr_open == 0`): the implementer
 should never see this here because Step 5c hard-gates it. If it does (a
@@ -1080,8 +1080,8 @@ Pairs with:
 If the user complains the queue is always empty, gently remind them about
 the advisor seat:
 
-> The queue is filled by whoever wears the `dialog` role (the advisor seat)
-> (`eval "$(aida role enter dialog)"`, then
+> The queue is filled by whoever wears the `advisor` role (the advisor seat)
+> (`eval "$(aida role enter advisor)"`, then
 > `aida queue add <id> --for implementer`).
 > Want to switch hats and queue some work?
 

@@ -1,6 +1,6 @@
 ---
 name: feedback_one_master_advisor_until_subsystems
-description: "Until subsystem-scoped advisors exist (SPIKE-10 territory), there is exactly ONE master advisor (the live dialog-role session). Sibling agents and implementers contribute substrate freely BUT must seek permission before merging architecture-impacting changes. As subsystems emerge, master delegates ownership; until then, the master's gate is the project's gate."
+description: "Until subsystem-scoped advisors exist (SPIKE-10 territory), there is exactly ONE master advisor (the live advisor-role session). Sibling agents and implementers contribute substrate freely BUT must seek permission before merging architecture-impacting changes. As subsystems emerge, master delegates ownership; until then, the master's gate is the project's gate."
 type: feedback
 propagation: scaffolding-pack
 originSessionId: 1bf450af-f9e9-49d0-a098-79696b14cefc
@@ -10,7 +10,7 @@ A multi-agent AIDA project (sibling Claude + Codex + Cursor + …) is dogfood fo
 1. **What can each agent decide autonomously?**
 2. **What requires the master advisor's permission before merging?**
 
-The current model: **one master advisor (the live dialog-role session); permission required for architecture-impacting changes; subsystem-level delegation arrives later (SPIKE-10's multi-advisor coordination work).**
+The current model: **one master advisor (the live advisor-role session); permission required for architecture-impacting changes; subsystem-level delegation arrives later (SPIKE-10's multi-advisor coordination work).**
 
 ## What sibling agents (implementer Codex, reviewer Claude, …) decide autonomously
 
@@ -32,7 +32,7 @@ The current model: **one master advisor (the live dialog-role session); permissi
 
 ## Why the asymmetry
 
-A sibling agent (Codex) attaching to AIDA only sees a slice of the project's history + intent. The master advisor (the live dialog-role session) holds the long-term context, the cross-spec relationships, the strategic positioning that hasn't yet hit substrate. **Architecture-impacting changes propagate to every future drain + every future agent**; getting them wrong has compounding cost. The master's veto isn't authority; it's continuity.
+A sibling agent (Codex) attaching to AIDA only sees a slice of the project's history + intent. The master advisor (the live advisor-role session) holds the long-term context, the cross-spec relationships, the strategic positioning that hasn't yet hit substrate. **Architecture-impacting changes propagate to every future drain + every future agent**; getting them wrong has compounding cost. The master's veto isn't authority; it's continuity.
 
 ## What changes when subsystems exist (SPIKE-10 future)
 

@@ -835,7 +835,7 @@ When you change ID configuration settings, you can optionally migrate existing r
 - **Format change requirement**: To change between Single Level and Two Level formats, you must have Global Sequential numbering selected.
 - **Safe operation**: Requirements that cannot be migrated (e.g., would exceed digit limit) are skipped with a warning.
 
-The migration dialog shows:
+The migration advisor shows:
 - Number of requirements that will be affected
 - Any validation errors that prevent migration
 - Warnings about potential issues

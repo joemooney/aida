@@ -79,13 +79,15 @@ extract_field() {
 purpose=$(extract_field purpose "$role_file")
 system_prompt=$(extract_field system_prompt "$role_file")
 
-# STORY-278/STORY-285: the dialog (advisor) seat triages findings the headless
-# drain files as draft TASKs — the reviewer (from-review:) and the implementer
+# STORY-278/STORY-285: the advisor seat triages findings the headless drain
+# files as draft TASKs — the reviewer (from-review:) and the implementer
 # (from-implementer:). Surface a pending count at session start so they aren't
 # missed. Non-zero count only — silent when clean. Best-effort: a missing/slow
 # `aida` degrades to no line.
+# TASK-586: match `advisor` (canonical) and `dialog` (deprecated alias, for a
+# shell whose AIDA_SESSION_ROLE predates the rename).
 findings_line=""
-if [ "$role" = "dialog" ]; then
+if [ "$role" = "advisor" ] || [ "$role" = "dialog" ]; then
     n=$(aida findings list --count 2>/dev/null || echo 0)
     case "$n" in
         '' | *[!0-9]*) n=0 ;;

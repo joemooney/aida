@@ -196,7 +196,7 @@ For details on any of these see [docs/user-guide.md](docs/user-guide.md).
 - **MCP tools**: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`
 - **MCP resources**: `aida://project/summary`, `aida://requirements/tree`
 - **Hooks**: `aida-stop-check.sh` warns about untraced edits; `aida-session-context.sh` injects role + project context at session start
-- **Roles & sessions**: `aida role` manages persistent named contexts (architect, implementer, reviewer, and `dialog` — surfaced to users as the **advisor** seat, "trusted counsel" across the project's lifetime) with per-role scope filters and Claude Code system-prompt addenda; `aida session list/resume/new` enriches Claude Code's session list with the active role and most-recent spec id
+- **Roles & sessions**: `aida role` manages persistent named contexts (architect, implementer, reviewer, and **advisor** — "trusted counsel" across the project's lifetime; `dialog` is a deprecated alias for it) with per-role scope filters and Claude Code system-prompt addenda; `aida session list/resume/new` enriches Claude Code's session list with the active role and most-recent spec id
 - **Statusline**: `aida statusline` is sub-50ms and suitable for `~/.claude/settings.json`'s `statusLine.command`
 
 ### Web dashboard highlights

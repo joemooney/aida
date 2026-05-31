@@ -208,7 +208,7 @@ accordingly.
 ## Findings reach the advisor (STORY-278, STORY-285)
 
 A headless drain phase surfaces things a human would normally hand to the
-`dialog`/advisor role to file as follow-up TASKs. With no human in the loop
+`advisor`/advisor role to file as follow-up TASKs. With no human in the loop
 those follow-ups would be lost when the drain moves on. So each headless
 phase files them itself, and the advisor triages the lot on its next session
 through one shared surface — `aida findings`.
@@ -235,7 +235,7 @@ step 3d → `/aida-punt`), which parks the spec in Needs Attention.
 **Triage.** `aida findings list` shows pending findings grouped by source
 (*From review* / *From implementer*), then origin, severity-sorted;
 `--source review|implementer` and `--kind bug-spotted` narrow it. The
-`dialog`-role SessionStart hook and `/aida-pickup` surface a one-line pending
+`advisor`-role SessionStart hook and `/aida-pickup` surface a one-line pending
 count. `aida findings promote <ID>` sends one to the work queue;
 `aida findings dismiss <ID>` rejects it with an audit comment. Both accept
 `--reason "<text>"` to record the *why* in that audit comment in one command
