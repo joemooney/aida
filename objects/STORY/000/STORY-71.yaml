@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:06:24.835272423Z
-modified_at: 2026-05-10T18:45:36.358292679Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -67,3 +67,5 @@ comments:
   content: 'Reverted status Completed → Approved on 2026-05-10 after PR #5 review. PR-5 shipped the data-write half (lease fields + start-summary print + gh/glab JSON parsers + CLI-missing soft-fallback). Read-side acceptance (''aida session show <id> displays the PR head/base SHAs'') ships in PR #4 (epic-20-batch4, contains STORY-68''s session_show) once it''s rebased on main and wires the printout. Bump back to Completed when that lands.'
   created_at: 2026-05-10T17:44:24.144522186Z
   modified_at: 2026-05-10T17:44:24.144522186Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
