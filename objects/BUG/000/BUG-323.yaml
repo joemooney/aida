@@ -32,12 +32,12 @@ description: |
   ## Recurse-fix
 
   Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T08:03:04.656082081Z
-modified_at: 2026-05-31T01:08:04.374265634Z
+modified_at: 2026-05-31T01:08:06.177182767Z
 req_type: Bug
 tags:
 - auto-complete
