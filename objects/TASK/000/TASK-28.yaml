@@ -10,9 +10,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T05:42:56.783067461Z
-modified_at: 2026-05-05T05:43:52.170976503Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - branding
 - cli
 - statusline
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
