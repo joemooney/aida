@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T00:56:26.707906781Z
-modified_at: 2026-05-05T01:07:47.292251679Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 tags:
 - cli
@@ -98,3 +98,5 @@ comments:
   content: ''
   created_at: 2026-05-05T01:07:42.949039397Z
   modified_at: 2026-05-05T01:07:42.949039397Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
