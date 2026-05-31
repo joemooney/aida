@@ -17,12 +17,12 @@ description: |-
   Operator impact this incident: 12 hours of work lost, no progress signal during the pause, only discovered on manual queue progress check. The orchestrator should have either retried or surfaced an immediate signal (push notification, exit-with-known-code) so the user could resume.
 
   Source: operator direct frustration on return — 'this is disappointing'.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T02:55:21.362693521Z
-modified_at: 2026-05-31T22:11:16.233108357Z
+modified_at: 2026-05-31T22:18:03.676726259Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -45,3 +45,7 @@ comments:
   content: 'DECISION (operator, 2026-05-31): skip-shelve + short retry. On phase-1 GH-verify inconclusive: (1) retry the verify a few times with backoff (e.g. 30s/1m/5m), then (2) if still inconclusive, SHELVE the spec (NeedsAttention + FailureReason ''PR verification inconclusive — GH unreachable'') and ADVANCE the batch to the next member, returning to the shelved one at end — instead of pausing the whole batch. Route through the existing EPIC-28 shelve-and-advance path (don''t invent a new one). Implementation autonomous; end-to-end validation wants a supervised drain. — master/advisor'
   created_at: 2026-05-31T22:11:16.233108357Z
   modified_at: 2026-05-31T22:11:16.233108357Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T22:18:03.676726259Z
+  completion_sha: 3f8fc276ddaaeacc82bbdfaf77b552fdbf908a8e
