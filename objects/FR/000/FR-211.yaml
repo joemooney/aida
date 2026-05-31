@@ -53,7 +53,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T01:05:46.342405088Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:28:49.943749874Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -453,3 +453,5 @@ history:
         3. Use arrow keys to select a status and press Enter
         4. The status should change and you should remain in the Details view (not enter Edit mode)
 
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
