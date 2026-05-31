@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T10:24:19.562555466Z
-modified_at: 2026-05-31T10:33:44.609203062Z
+modified_at: 2026-05-31T10:34:35.130718462Z
 req_type: Story
 tags:
 - competitive-parity
@@ -18,6 +18,12 @@ tags:
 - orchestrator
 - parent:SPIKE-45
 - sketch-first
+comments:
+- id: 019e7d99-8afa-77c1-b4a1-57731914a6b7
+  author: joe
+  content: 'Status corrected back to Approved: the plan commit (PR-389) carried trailer (STORY-491 STORY-489) which auto-bumped this umbrella story to Completed, but only the SKETCH/PLAN exists — the implementation (reconcile slice + --resume wiring) has NOT been built and the design still needs sign-off. Lesson: a plan-only commit must not reference the not-yet-built implementation spec in its trailer (the auto-bump completes it); use a plan-task id or reference only already-complete specs. STORY-491 stays Approved until built.'
+  created_at: 2026-05-31T10:34:35.130718462Z
+  modified_at: 2026-05-31T10:34:35.130718462Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T10:33:44.609203062Z
