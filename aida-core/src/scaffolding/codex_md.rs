@@ -123,10 +123,26 @@ whether to continue after an earlier hook has halted the run.
 
 ### Worktree And Session Discipline
 
-Do implementation work in a sibling worktree. Link `.aida-store` into
-that worktree when the local CLI needs direct store access. Do not edit
-another agent's dirty main worktree. If a branch, lease, or worktree
-state looks inconsistent, stop and surface it instead of forcing git.
+Do implementation work in a sibling worktree. No `.aida-store` symlink is
+needed — a sibling worktree resolves the canonical store at the main
+worktree automatically (BUG-331). Do not edit another agent's dirty main
+worktree. If a branch, lease, or worktree state looks inconsistent, stop
+and surface it instead of forcing git.
+
+### Direct Assignment: Implement BUG/TASK-N
+
+When the operator says "implement BUG-N / TASK-N" and there is no queued
+brief, follow this path (it's the same one used for TASK-132 and BUG-406):
+
+1. `aida show <SPEC>` — read the spec, acceptance criteria, and any owning plan.
+2. If it is Draft and the operator explicitly assigned it, promote it: `aida edit <SPEC> --status approved`.
+3. Start an isolated session: `aida session start --owns <SPEC> --role implementer --base origin/main`.
+4. Work in the sibling worktree — no `.aida-store` symlink (the store resolves automatically, per Worktree discipline above).
+5. Implement; add `// trace:<SPEC> | ai:codex` comments; run targeted tests + `cargo fmt --all -- --check`.
+6. Commit `[AI:codex] type(scope): description (<SPEC>)`.
+7. `aida pr ship` — watches CI, squash-merges, pulls, and auto-bumps the spec to Completed.
+8. End the session; verify the spec reached Completed.
+9. Architecture-class work → sketch first and wait for master sign-off (see Sketch-First Protocol).
 
 ### Code Traceability
 
