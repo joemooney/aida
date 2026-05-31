@@ -8,7 +8,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-07T00:54:17.958043260Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:31:59.622773984Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -21,3 +21,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:31:58.402851923Z
   modified_at: 2026-05-04T19:31:58.402851923Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
