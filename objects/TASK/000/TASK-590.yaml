@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:07:41.445107237Z
-modified_at: 2026-05-31T06:07:41.445107237Z
+modified_at: 2026-05-31T17:25:43.724362441Z
 req_type: Task
 tags:
 - for-agy
@@ -16,3 +16,9 @@ tags:
 - multi-vendor
 - substrate
 - supports:SPIKE-44
+comments:
+- id: 019e7f11-f4ac-7cf1-9698-bf62660bf248
+  author: joe
+  content: Commit fa6bbab28 references this requirement
+  created_at: 2026-05-31T17:25:43.724362441Z
+  modified_at: 2026-05-31T17:25:43.724362441Z
