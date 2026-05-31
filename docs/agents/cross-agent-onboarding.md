@@ -41,6 +41,7 @@ AIDA's MCP server exposes **26 tools** in two clusters:
 - `search_requirements({query})` → FTS5 search
 - `add_comment({id, text})` → comment on a spec  *(arg is `text`, not `body`)*
 - `add_relationship({spec_id, relationship_type, target_spec_id, bidirectional?, force_parent?})` → add a typed relationship between existing specs. Built-ins include `parent`, `child`, `duplicate`, `verifies`, `verified-by`, `references`, `blocked-by`, and `blocks`; `depends-on` aliases to `blocked-by`, and custom non-empty names are accepted for CLI parity.
+- `query_graph({spec_id, mode?, depth?})` → query the cross-spec relationship graph from a root spec, equivalent to `aida graph`. `mode` ∈ `tree` (Parent/Child descendants + status rollup, default), `blocked-by` / `blocks` (transitive chains), `impact` (reverse closure — what is blocked by the root). Returns JSON `{root, mode, count, nodes:[{id,title,status,resolved}], rollup}`. The typed-graph query a flat per-feature spec store can't answer.
 - `list_features()` → list project features
 - `history({spec_id?, since?})` → structured event ledger, equivalent to `aida history --events`
 
