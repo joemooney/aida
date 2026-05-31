@@ -7,7 +7,7 @@ priority: Low
 owner: joe
 feature: 210-Uncategorized
 created_at: 2026-02-21T06:14:56.105137754Z
-modified_at: 2026-02-21T06:15:06.645606734Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 66f9f171-58c4-4cd6-91f9-fd06b0785f3b
@@ -15,3 +15,5 @@ comments:
   content: 'Implemented in commit a3e87ad. File: RequirementsRow.tsx. Plan: docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md'
   created_at: 2026-02-21T06:15:06.645596895Z
   modified_at: 2026-02-21T06:15:06.645596895Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
