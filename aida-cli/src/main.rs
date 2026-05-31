@@ -65785,6 +65785,18 @@ fn classify_progress_bucket(status: &aida_core::RequirementStatus) -> ProgressBu
     }
 }
 
+/// A spec is "shelved" when parked in `NeedsAttention` (a punt/escalation the
+/// drain could not auto-resolve). Surfaced as a distinct drain-legibility
+/// callout in `aida queue progress` — the "M shelved" half of the
+/// "N draining / M shelved" view a parallel autonomous drain needs. Bucketing
+/// is deliberately UNCHANGED (STORY-332): a shelved spec still counts in
+/// `Remaining` as work the batch must land; this only adds a visible count so
+/// the parked work is legible at a glance instead of hiding inside Remaining.
+/// trace:STORY-490 | ai:claude
+fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
+    matches!(status, aida_core::RequirementStatus::NeedsAttention)
+}
+
 /// Parse a `--since` value as either an RFC3339 timestamp or a relative
 /// `<N>{d,h,m}` expression (e.g. `2d`, `12h`, `45m`). Returns the
 /// resulting absolute UTC timestamp.
@@ -66008,6 +66020,7 @@ fn handle_queue_progress(
     }
 
     let mut unresolved: Vec<String> = Vec::new();
+    let mut shelved_count = 0usize;
     for spec in specs_in_source {
         // Match by spec_id, agreed_id, or both. We accept agreed_id-form
         // ids when the manifest was written before merge-gate ran.
@@ -66016,6 +66029,11 @@ fn handle_queue_progress(
             unresolved.push(spec.clone());
             continue;
         };
+        // Tally shelved (NeedsAttention) specs for the drain-legibility
+        // callout below — independent of bucketing. trace:STORY-490
+        if status_is_shelved(&req.status) {
+            shelved_count += 1;
+        }
         let bucket = classify_progress_bucket(&req.status);
         let display_id = req.display_id();
         let label = bucket_order
@@ -66099,6 +66117,19 @@ fn handle_queue_progress(
         }
     );
 
+    // Drain-legibility callout: surface parked (shelved) work distinctly so a
+    // parallel autonomous drain's "M shelved, needs a decision" is visible at a
+    // glance. Shelved specs still count in Remaining above (STORY-332); this is
+    // an additive signal, not a re-bucketing. trace:STORY-490 | ai:claude
+    if shelved_count > 0 {
+        println!(
+            "{} {} shelved (NeedsAttention — needs a decision; triage with {})",
+            "⚠".yellow().bold(),
+            shelved_count.to_string().yellow().bold(),
+            "aida findings list".cyan()
+        );
+    }
+
     if !unresolved.is_empty() && verbose {
         println!();
         println!(
@@ -66147,6 +66178,30 @@ mod queue_progress_tests {
         );
         assert_eq!(
             classify_progress_bucket(&RequirementStatus::Planned),
+            ProgressBucket::Remaining
+        );
+    }
+
+    #[test]
+    fn shelved_callout_is_additive_not_a_rebucketing() {
+        // trace:STORY-490 | ai:claude
+        // NeedsAttention is the only shelved status...
+        assert!(status_is_shelved(&RequirementStatus::NeedsAttention));
+        for s in [
+            RequirementStatus::Completed,
+            RequirementStatus::Rejected,
+            RequirementStatus::Done,
+            RequirementStatus::InProgress,
+            RequirementStatus::Approved,
+            RequirementStatus::Draft,
+            RequirementStatus::Planned,
+        ] {
+            assert!(!status_is_shelved(&s), "{s:?} must not count as shelved");
+        }
+        // ...yet it STILL buckets into Remaining (STORY-332 preserved): the
+        // shelved callout is an additive signal, not a re-bucketing.
+        assert_eq!(
+            classify_progress_bucket(&RequirementStatus::NeedsAttention),
             ProgressBucket::Remaining
         );
     }
