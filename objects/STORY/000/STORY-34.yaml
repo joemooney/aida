@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: 144-ai-workflow
 created_at: 2025-12-11T00:38:36.073832116Z
-modified_at: 2026-05-15T04:02:00.338533174Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 comments:
 - id: 019e29cc-6012-7c00-a559-d90ebf7e9205
@@ -15,3 +15,5 @@ comments:
   content: 'Rejected 2026-05-14 (Trojan-horse triage): SUPERSEDED by MCP server. The ''agent tool exposure API'' described here (get_requirement / search / update / trace-link management) is exactly what aida mcp-serve provides: list_requirements, show_requirement, add_requirement, update_requirement, search_requirements, add_comment, list_features. JSON-RPC 2.0 stdio per CLAUDE.md. Re-file with sharper scope if a specific gap remains.'
   created_at: 2026-05-15T04:02:00.338533174Z
   modified_at: 2026-05-15T04:02:00.338533174Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
