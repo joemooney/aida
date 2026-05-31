@@ -50,7 +50,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T01:36:51.643356042Z
-modified_at: 2026-05-14T07:27:18.116051112Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - panic
@@ -84,6 +84,8 @@ comments:
     Test status: smoke-tested with the three repros from the bug — `aida show STORY-86 | head -2`, `aida list | head -1`, `aida search anything | head -1` all exit cleanly with no panic. No unit test — the fix is one syscall whose effect is invisible to in-process asserts; the well-known Rust CLI pattern + smoke verification is the right coverage. 332/332 cargo tests green.
   created_at: 2026-05-14T07:12:21.909573483Z
   modified_at: 2026-05-14T07:12:21.909573483Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:45:10.550257511Z
