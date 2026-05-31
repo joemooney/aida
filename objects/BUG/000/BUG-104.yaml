@@ -29,12 +29,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — PR-29 reviewer deep-pass identified this as DP-1 (deep-pass finding 1) and noted it as non-blocking for merge. User flagged it for filing post-merge.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:15:39.528620160Z
-modified_at: 2026-05-31T05:21:58.269213711Z
+modified_at: 2026-05-31T05:26:55.778086856Z
 req_type: Bug
 tags:
 - DP-1
@@ -48,3 +48,7 @@ relationships:
 - rel_type: Child
   target_id: 019e1f98-8e83-7ad0-aea0-3a9217e72cf6
   created_at: 2026-05-15T06:15:42.853051594Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T05:26:55.778086856Z
+  completion_sha: f54d8e72e186dfae34f890f3adb4c301bf4706a1
