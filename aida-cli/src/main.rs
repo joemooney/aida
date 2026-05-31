@@ -38748,6 +38748,71 @@ mod auto_bump_done_tests {
         assert!(second.is_empty(), "second call is a no-op: {:?}", second);
     }
 
+    /// BUG-410: a spec auto-completed by a commit and then MANUALLY REOPENED
+    /// (status back to eligible, completion_sha retained as a `--force` reopen
+    /// leaves it) must NOT be re-completed by the SAME commit on a later pull —
+    /// that silently overwrites the deliberate reopen. Fails without the
+    /// completion_sha dedup guard. trace:BUG-410 | ai:claude
+    #[test]
+    fn auto_bump_does_not_recomplete_reopened_spec_by_same_commit() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9410");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: land ({})", spec_id)],
+        );
+
+        let storage = Storage::new(store_path.clone());
+
+        // First pull completes it + stamps completion_sha.
+        let first =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+        assert!(has_flip(&first, &spec_id), "first pull completes it");
+
+        // Manually reopen: status → Approved, completion_sha retained.
+        let mut store = storage.load().unwrap();
+        let req = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+            .unwrap();
+        assert!(
+            req.implementation_info
+                .as_ref()
+                .and_then(|i| i.completion_sha.as_deref())
+                .is_some(),
+            "completion_sha was stamped on completion"
+        );
+        req.set_status_from_str("Approved");
+        storage.save(&store).unwrap();
+
+        // A later pull scanning the SAME commit must NOT re-complete it.
+        let second =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+        assert!(
+            !has_flip(&second, &spec_id),
+            "same-commit re-bump must be skipped: {:?}",
+            second
+        );
+        let reloaded = storage.load().unwrap();
+        let still = reloaded
+            .requirements
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+            .unwrap();
+        assert_eq!(
+            still.status,
+            aida_core::RequirementStatus::Approved,
+            "the deliberate reopen survives the re-pull"
+        );
+    }
+
     /// STORY-86: a commit whose subject does NOT reference any spec in
     /// Done leaves the store untouched. Guards against the helper
     /// over-firing on prose/release commits. trace:STORY-86 | ai:claude
@@ -50494,6 +50559,19 @@ fn auto_bump_done_to_completed(
                 if !auto_bump_eligible_status(&r.status) {
                     continue;
                 }
+                // BUG-410: skip a spec already completed by THIS exact commit
+                // and since manually reopened — re-bumping silently overwrites
+                // the deliberate reopen. completion_sha survives a `--force`
+                // reopen, so equality here means "this commit already completed
+                // it once"; a DIFFERENT commit referencing it still bumps.
+                if !flip.sha.is_empty()
+                    && r.implementation_info
+                        .as_ref()
+                        .and_then(|i| i.completion_sha.as_deref())
+                        == Some(flip.sha.as_str())
+                {
+                    continue;
+                }
                 r.set_status_from_str("Completed");
                 r.modified_at = now;
                 // BUG-405: a Completed spec must not carry a stale
@@ -50893,6 +50971,19 @@ fn handle_db_reconcile_status(
                     || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
             }) {
                 if !auto_bump_eligible_status(&r.status) {
+                    continue;
+                }
+                // BUG-410: skip a spec already completed by THIS exact commit
+                // and since manually reopened — re-bumping silently overwrites
+                // the deliberate reopen. completion_sha survives a `--force`
+                // reopen, so equality here means "this commit already completed
+                // it once"; a DIFFERENT commit referencing it still bumps.
+                if !flip.sha.is_empty()
+                    && r.implementation_info
+                        .as_ref()
+                        .and_then(|i| i.completion_sha.as_deref())
+                        == Some(flip.sha.as_str())
+                {
                     continue;
                 }
                 r.set_status_from_str("Completed");
