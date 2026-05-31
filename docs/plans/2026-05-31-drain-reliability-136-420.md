@@ -23,6 +23,12 @@ Today: GH-verify unreachable → `Inconclusive` outcome → `finish_inconclusive
 
 **Risk:** the `Inconclusive` vs `shelve_on_failure` paths are distinct today (different exit/triage semantics). Don't collapse them — *add* a batch-mode branch that shelves inconclusive, leaving the single-spec inconclusive-pauses behavior intact.
 
+**WIRING FINDINGS (read 2026-05-31, slice-2 prep — the non-obvious bits):**
+- The reroute CANNOT be a `drain_batch`-level skip: an inconclusive spec stays the queue head, so `continue` re-picks it forever (the infinite-loop the comment at `auto_complete.rs:2234` warns about). To advance, the spec must *leave the queue* → it must actually be shelved (NeedsAttention), not just skipped.
+- `shelve_on_failure` is a **driver trait method** (`&mut self`, default `Ok(None)`, real driver overrides) called *inside* `run_spec` — NOT callable from `drain_batch`. So the shelve must be injected at the phase-1 finish *inside* `run_spec`, where the `ImplementerOutcome::Inconclusive` is produced (handled at `~1686`/`~1805` via `finish_inconclusive`).
+- Therefore the change is: in `run_spec`'s phase-1 finish, (a) wrap the GH-verify in the `gh_verify_backoff_schedule` retry loop; (b) after retries, branch on a **batch-mode flag** — batch → `self.shelve_on_failure(...)` so the existing `drain_batch` shelve→advance path (`~2217`) carries it; single-spec → `finish_inconclusive` (pause, unchanged). This requires **threading a `batch: bool` (or equivalent) through `run_spec` + the driver trait signature** — a ripple to all callers + the mock driver. Budget for that; it's the bulk of the work, not the retry.
+- The drain_batch `inconclusive_reason` branch (`~2238`) then becomes unreachable in batch mode (inconclusive is shelved upstream) but stays for the single-spec path. Leave it.
+
 ## BUG-420 — no-progress watchdog + ceiling backstop
 
 Today: a headless phase that degenerates (echo/sleep filler after committing) runs until killed.
