@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T17:38:12.813489208Z
-modified_at: 2026-05-15T19:39:37.374176855Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - batch:tui-v1
@@ -35,6 +35,8 @@ comments:
     Test status: 455/455 tests green (440 aida-cli + 15 aida-tui); plan verification 8/8.
   created_at: 2026-05-15T18:32:12.580583940Z
   modified_at: 2026-05-15T18:32:12.580583940Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T18:22:07.055464066Z
