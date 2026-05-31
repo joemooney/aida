@@ -42,15 +42,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T18:12:10.930679221Z
-modified_at: 2026-05-31T05:58:07.076725257Z
+modified_at: 2026-05-31T05:58:08.795608562Z
 req_type: Bug
 tags:
-- ceiling-pattern
-- from-self-test
-- from-task-497
-- lifecycle-discipline
-- papercut
-- parent:BUG-361
+- aida:pr:ship
+- bug-361-family
+- closing-discipline
+- deferred:needs-repro
 comments:
 - id: 019e7c9c-6de4-73e3-abf8-6787baa8eadd
   author: joe
