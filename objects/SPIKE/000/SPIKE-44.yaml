@@ -1,0 +1,24 @@
+id: 019e7ca4-a443-79c2-a854-6a5af3f086ad
+spec_id: SPIKE-44
+agreed_id: SPIKE-44
+title: 'Multi-vendor substrate access: can a non-AIDA tool read/write the git-canonical store?'
+description: |-
+  The multi-vendor thesis is only real if a NON-AIDA tool (Codex, Cursor, a CI script, another vendor's agent) can read AND write AIDA's git-canonical store without the AIDA CLI. Spike the interop surface:
+  - Is the on-disk format (objects/TYPE/000/SPEC-ID.yaml schema + the history[] array + relationships + the HLC/dispenser ID allocation) specified precisely enough for an external writer to append a valid spec or a status flip + history entry?
+  - What's the MINIMUM an external tool must honor to write a valid object (ID allocation, HLC timestamp, history entry, cache-staleness so AIDA rebuilds)? Document it.
+  - Compare the three access paths: (a) MCP server (today's path), (b) direct YAML write to the orphan worktree, (c) a thin vendor-neutral spec for the format. Which makes multi-vendor real with least coupling?
+  - Output: a gap list + a recommended minimal interop contract. Architecture-class — sketch first, master sign-off before any format change.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T06:07:05.283487717Z
+modified_at: 2026-05-31T06:07:05.283487717Z
+req_type: Spike
+tags:
+- for-codex
+- from-operator-mandate
+- git-canonical
+- interop
+- multi-vendor
+- substrate
