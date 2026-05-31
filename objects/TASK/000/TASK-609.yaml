@@ -3,12 +3,12 @@ spec_id: TASK-609
 agreed_id: TASK-609
 title: 'SPIKE-46 follow-up: CI conformance gate guarding AIDA''s own on-disk YAML format against serializer drift'
 description: 'From SPIKE-46''s FINDINGS.md follow-ups. A drift in AIDA''s serde_yaml output (field reorder, scalar-style change, dropped sorted-collection serializer, timestamp-format change) would break (a) write_object_if_changed''s no-op detection — spurious git diffs on every spec — and (b) every external vendor''s byte-identical writes (the multi-vendor moat contract). Adds object_store::tests::requirement_yaml_holds_the_write_conformance_contract: builds a Requirement with out-of-order tags + custom_fields + a Custom relationship + a None optional field, serializes via the same serde_yaml path write_object uses, and asserts the four conformance properties (sorted collections, !Custom tag, RFC3339-Zulu timestamps, omitted None) plus serialize→deserialize→serialize byte-idempotence. Runs in the existing cargo test suite, so it IS the CI gate — no bespoke workflow. Verified no prior serializer-stability test existed (test_write_read_roundtrip only checks data round-trip). trace:SPIKE-46'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T18:55:16.025966698Z
-modified_at: 2026-05-31T18:55:16.025966698Z
+modified_at: 2026-05-31T19:00:28.414160577Z
 req_type: Task
 tags:
 - from-spike:SPIKE-46
@@ -17,3 +17,7 @@ tags:
 - object-store
 - regression-guard
 - stability
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T19:00:28.414160577Z
+  completion_sha: 4c0f6e50df578a1531bd5ab46adc628054753c9b
