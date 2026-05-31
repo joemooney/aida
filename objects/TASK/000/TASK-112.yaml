@@ -63,7 +63,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:23:13.837377870Z
-modified_at: 2026-05-15T15:51:59.302650916Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - batch:tui-prereqs
@@ -147,6 +147,8 @@ comments:
     Today's manual workaround requires 4-5 commands (gh pr view headRefName, aida session start --no-launch, cd, claude --resume). TASK-112 collapses to one verb. Bumping to High priority since the use case is now active and recurring.
   created_at: 2026-05-15T13:44:06.527817197Z
   modified_at: 2026-05-15T13:44:06.527817197Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:03:34.423044400Z
