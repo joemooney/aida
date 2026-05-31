@@ -20982,60 +20982,62 @@ fn validate_registered_agent_type(raw: &str) -> Result<String> {
 // trace:TASK-587 | ai:antigravity
 pub const AGENT_ROLES: &[&str] = &["implementer", "advisor", "reviewer", "integrator"];
 
-// trace:TASK-587 | ai:antigravity
+// The agent-role taxonomy is CLOSED because each role maps to a stage the
+// orchestrator drives — that's the accurate framing (the prior version invented
+// per-role lease caps and mischaracterized the roles). Structure (struct +
+// const + subcommand) is AGY's TASK-587; the content is corrected here.
+// trace:BUG-421 | ai:claude
 #[derive(serde::Serialize)]
 struct AgentRoleInfo {
     role: &'static str,
-    target: &'static str,
-    active_leases_limit: &'static str,
-    typical_lifecycle_context: &'static str,
+    orchestrator_phase: &'static str,
+    summary: &'static str,
 }
 
-// trace:TASK-587 | ai:antigravity
+// trace:BUG-421 | ai:claude
 const AGENT_ROLE_INFOS: &[AgentRoleInfo] = &[
     AgentRoleInfo {
         role: "implementer",
-        target: "single spec ID",
-        active_leases_limit: "1 spec lease",
-        typical_lifecycle_context: "spawns with main worktree, single active spec lease, implements the spec, and runs tests.",
+        orchestrator_phase: "phase 1 — implement",
+        summary: "Drives one spec to completion in its own dedicated worktree, then opens a PR.",
     },
     AgentRoleInfo {
         role: "advisor",
-        target: "lightweight / shared context",
-        active_leases_limit: "unlimited",
-        typical_lifecycle_context: "lightweight / shared context, advises on specs or provides second opinions.",
+        orchestrator_phase: "escalation / advisory tier",
+        summary: "Strategic partner + escalation seat — routes work, resolves punted design-forks, captures friction. The headless advisor tier in --no-human drains.",
     },
     AgentRoleInfo {
         role: "reviewer",
-        target: "spec review",
-        active_leases_limit: "0 spec leases",
-        typical_lifecycle_context: "runs spec review fragments assembly or executes check-run polling.",
+        orchestrator_phase: "phase 3 — review",
+        summary: "Reviews a PR (walks the diff, checks trace comments, verifies against the spec) and reaches a merge verdict.",
     },
     AgentRoleInfo {
         role: "integrator",
-        target: "main / PR branches",
-        active_leases_limit: "0 spec leases",
-        typical_lifecycle_context: "watches overnight PR lists, merges clean PRs, and handles branch updates.",
+        orchestrator_phase: "integration",
+        summary: "Watches open PRs, merges clean ones, and handles branch updates.",
     },
 ];
 
-// trace:TASK-587 | ai:antigravity
+// trace:BUG-421 | ai:claude
 fn handle_agent_list_roles(json: bool) -> Result<()> {
     if json {
         let serialized = serde_json::to_string_pretty(AGENT_ROLE_INFOS)?;
         println!("{}", serialized);
     } else {
         println!(
-            "{:<12} | {:<28} | {:<19} | {}",
-            "Role", "Target", "Active Leases Limit", "Typical Lifecycle Context"
+            "{:<12} | {:<28} | {}",
+            "Role", "Orchestrator phase", "Summary"
         );
-        println!("{:-<12}-+-{:-<28}-+-{:-<19}-+-{:-<80}", "", "", "", "");
+        println!("{:-<12}-+-{:-<28}-+-{:-<60}", "", "", "");
         for info in AGENT_ROLE_INFOS {
             println!(
-                "{:<12} | {:<28} | {:<19} | {}",
-                info.role, info.target, info.active_leases_limit, info.typical_lifecycle_context
+                "{:<12} | {:<28} | {}",
+                info.role, info.orchestrator_phase, info.summary
             );
         }
+        println!();
+        println!("These are the closed agent-role set (valid for `aida agent new --role`) — one per orchestrator stage.");
+        println!("See also: `aida role list` — operator/human personas (an open set; overlaps on implementer/advisor/reviewer).");
     }
     Ok(())
 }
@@ -21231,6 +21233,40 @@ mod agent_launcher_tests {
     use super::*;
     use clap::Parser;
     use tempfile::TempDir;
+
+    /// BUG-421: `aida agent list-roles` must list exactly the canonical
+    /// AGENT_ROLES (so the listing and the validator can't drift) and must not
+    /// regress to the pre-correction fabricated/inaccurate phrasing. trace:BUG-421
+    #[test]
+    fn agent_role_infos_cover_canonical_set_without_fabrications() {
+        let listed: std::collections::HashSet<&str> =
+            AGENT_ROLE_INFOS.iter().map(|i| i.role).collect();
+        let canonical: std::collections::HashSet<&str> = AGENT_ROLES.iter().copied().collect();
+        assert_eq!(
+            listed, canonical,
+            "list-roles must cover exactly the validated agent roles"
+        );
+        for info in AGENT_ROLE_INFOS {
+            let s = info.summary.to_lowercase();
+            assert!(
+                !s.contains("main worktree"),
+                "implementer uses a dedicated worktree, not main: {}",
+                info.role
+            );
+            assert!(
+                !s.contains("second opinion"),
+                "advisor is the coordinator/escalation seat, not 'second opinions'"
+            );
+            assert!(
+                !s.contains("fragments assembly"),
+                "garbled reviewer phrasing"
+            );
+            assert!(
+                !info.orchestrator_phase.is_empty(),
+                "each role names its orchestrator phase"
+            );
+        }
+    }
 
     #[test]
     fn parses_agent_new_claude_flags() {
