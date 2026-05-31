@@ -1,0 +1,32 @@
+id: 019e7caf-cb35-70a3-8bf4-585865e3989e
+spec_id: SPIKE-45
+agreed_id: SPIKE-45
+title: 'Competitive capability roadmap: match the multi-agent frontier, harden the spec-graph moat'
+description: |-
+  From the multi-agent-coordination frontier research (2026-05-31). The frontier splits into 3 families; AIDA uniquely lives in all 3 (spec substrate + coding orchestrator + graph/escalation). CONFIRMED moat (precise): the ONLY durable, typed, multi-vendor spec graph an orchestrator DRAINS, with a spec-grounded escalation/shelving cascade + git-canonical agent-neutral coordination + per-spec history time-series. No competitor combines these.
+
+  But two things AIDA can NO LONGER claim as unique: (a) worktree-per-agent isolation is TABLE STAKES (Cursor 3-agents, Windsurf Wave 13, Composio AO); (b) 'specs as artifacts' is matched by AWS Kiro (EARS-notation acceptance + task→requirement traceability + steering files). Composio AO reproduced AIDA's CI-fix→review→merge drain WITHOUT a spec substrate. Kiro is the SDD threat to watch.
+
+  PRIORITIZED capability roadmap (each a child spec):
+  - P1 (clearest technical gap an evaluator hits first): RESUMABLE ORCHESTRATOR CHECKPOINTING — LangGraph/CrewAI/MAF checkpoint execution per node w/ replay+crash-recovery; AIDA shelves SPECS but a crashed drain isn't step-resumable. Formalize phase transitions into a replayable execution log keyed to spec+worktree. Edge: 'git-canonical AND crash-resumable.'
+  - P2 (flagship outsmart-Kiro): GRAPH-QUERY surface (aida graph: BlockedBy/epic-rollup/cross-feature impact) over MCP — Kiro's flat per-feature markdown CANNOT answer 'what's blocked by this epic across the tree.' Make that the demo + write vs-kiro.md / vs-spec-kit positioning.
+  - P3: LIVE inter-agent mailbox ON the substrate (MCP send_message/read_inbox, git-canonical + replayable) — Agent-Teams/Ruflo have ephemeral local mailboxes; ours would be auditable. Aligns with SPIKE-10.
+  - P4: SPEC-GRAPH-AWARE semantic recall for agents (embeddings as a cache projection over spec descriptions + traces + history) — match Ruflo HNSW/CrewAI recall, grounded in the typed graph.
+  - P5: PARALLEL-DRAIN LEGIBILITY (aida queue progress / findings: 'N draining, M shelved, K escalated + blocked-by graph') — surface the moat on demand vs Composio's dashboard, without violating quiet-depth.
+
+  Full evidence: docs/competitive-analysis/ multi-agent-frontier research pass.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T06:19:16.149343346Z
+modified_at: 2026-05-31T06:19:16.149343346Z
+req_type: Spike
+tags:
+- competitive
+- competitive-parity
+- from-operator-mandate
+- moat
+- multi-agent
+- roadmap
+- strategy
