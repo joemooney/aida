@@ -37,7 +37,7 @@ is good at and the CLI deliberately is not.
 - The queue is already what you intended — don't enqueue for its own sake.
 - The user is asking about a specific spec (use `/aida-pickup` or
   `aida queue add <ID>` directly).
-- The user is in `dialog` mode and only wants to *file* requirements
+- The user is in `advisor` mode and only wants to *file* requirements
   (use `/aida-req` — grooming is downstream of capture).
 
 ## Workflow

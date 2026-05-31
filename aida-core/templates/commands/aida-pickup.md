@@ -16,4 +16,4 @@ Follow the workflow in `.claude/skills/aida-pickup.md`:
 8. Under a headless drain (`AIDA_HEADLESS=1`), file conversational flags as draft findings (Step 5b)
 9. Optionally offer to grab the next item
 
-Pairs with the `dialog` role on the producer side (`aida queue add <id> --for <role>`).
+Pairs with the `advisor` role on the producer side (`aida queue add <id> --for <role>`).

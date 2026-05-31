@@ -92,7 +92,7 @@ scope: |
 role: |
   The seat an agent occupies in a session: implementer (codes the
   spec), reviewer (judges the PR), advisor (the user-facing identity
-  of the dialog role — routes work, captures friction, escalates
+  of the advisor role — routes work, captures friction, escalates
   forks). Set via 'aida role enter <name>'.
 
 
@@ -164,7 +164,7 @@ auto-complete: |
       --auto-complete=through-merge  # stops after phase 4
 
 advisor: |
-  The user-facing identity of the 'dialog' role. Six responsibilities:
+  The user-facing identity of the 'advisor' role. Six responsibilities:
   route work, capture friction as filings, articulate mental models,
   detect strategic gaps, garden the queue, curate memory. NOT a code-
   implementer. The headless advisor tier ('/aida-advise') is a cold-

@@ -1,7 +1,7 @@
 # The advisor role
 
 AIDA sessions wear a *role* (`aida role enter <name>`). The **advisor** seat
-— sometimes run as a `dialog` role — is the persistent strategic + tactical
+— sometimes run as a `advisor` role — is the persistent strategic + tactical
 partner for the project. It is the captain/PO seat: the human drives the
 conversation, the advisor partners with them on the project. It is **not** a
 passive routing layer, and it is **not** a code-implementer.

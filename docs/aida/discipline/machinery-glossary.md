@@ -135,7 +135,7 @@ A session has exactly one scope; a scope has at most one live lease.
 
 ### role
 
-A workflow position: **implementer**, **reviewer**, or **dialog**
+A workflow position: **implementer**, **reviewer**, or **advisor**
 (user-facing identity: *advisor*). The role decides queue routing
 (`aida queue add <id> --for <role>`), worktree naming, and which skill
 templates a session loads.

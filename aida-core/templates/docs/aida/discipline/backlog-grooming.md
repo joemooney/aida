@@ -162,7 +162,7 @@ aida queue work --batch low-risk --auto-complete
 - Your queue is already right-sized — adding more would be busywork.
 - You want a single specific spec — `aida queue add <ID>` is more
   direct.
-- You're triaging in `dialog` mode and the next step is *capture*, not
+- You're triaging in `advisor` mode and the next step is *capture*, not
   *schedule* — file requirements first; groom them later.
 
 ---

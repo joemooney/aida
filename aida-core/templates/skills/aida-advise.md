@@ -28,7 +28,7 @@ tier that replaces the human — see the load-bearing rule below.
 ## When this skill runs
 
 Only the `--auto-complete --no-human=both` orchestrator invokes it, headless
-(`claude -p`), in the advisor (`dialog`) role. It sets two env vars:
+(`claude -p`), in the advisor (`advisor`) role. It sets two env vars:
 
 - `AIDA_PUNT_REQUEST_FILE` — the punt-request payload to read (JSON).
 - `AIDA_PUNT_RESPONSE_FILE` — the path to write your decision to (JSON).
