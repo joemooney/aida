@@ -27,7 +27,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T04:29:05.104232414Z
-modified_at: 2026-05-15T06:07:30.762577671Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - batch:plan-tooling
@@ -46,6 +46,8 @@ relationships:
 - rel_type: Parent
   target_id: 019e2a46-f574-7453-a33f-3da01e33e09b
   created_at: 2026-05-15T06:15:56.007537358Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T04:13:16.296374193Z
