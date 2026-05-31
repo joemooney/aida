@@ -30,7 +30,7 @@ priority: Medium
 owner: bill
 feature: 97-Uncategorized
 created_at: 2025-11-27T22:29:31.052887770Z
-modified_at: 2026-05-04T19:29:31.967509294Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -140,3 +140,5 @@ history:
   - field_name: owner
     old_value: ''
     new_value: bill
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
