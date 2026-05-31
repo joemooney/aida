@@ -28,7 +28,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T19:24:02.088640698Z
-modified_at: 2026-05-11T02:59:19.441688868Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 comments:
 - id: 019e14d1-be9b-7872-b3df-9fd071f7220f
@@ -36,6 +36,8 @@ comments:
   content: 'Acceptance was loose — ''CI green'' didn''t survive contact with later commits in the same batch. PR-7 opened with fresh fmt drift introduced AFTER TASK-57''s pass (commits BUG-68, TASK-55/56, TASK-58 reintroduced wrap variants). Reviewer caught it and pushed a follow-up [AI:claude] style: cargo fmt --all (TASK-57) commit on epic-20-batch7. Structural fix tracked at TASK-61 — /aida-pr pre-flight cargo fmt --all --check gates the PR open. After TASK-61 ships, this kind of drift can''t reach CI again.'
   created_at: 2026-05-11T02:15:50.683565992Z
   modified_at: 2026-05-11T02:15:50.683565992Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-10T22:41:27.845289795Z
