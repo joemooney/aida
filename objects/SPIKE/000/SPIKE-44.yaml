@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:07:05.283487717Z
-modified_at: 2026-05-31T06:09:49.913297854Z
+modified_at: 2026-05-31T17:25:47.529156077Z
 req_type: Spike
 tags:
 - for-codex
@@ -22,3 +22,9 @@ tags:
 - interop
 - multi-vendor
 - substrate
+comments:
+- id: 019e7f12-0389-75e1-89e4-5bcca7a66d54
+  author: joe
+  content: 'Groundwork landed: docs/architecture/on-disk-serialization-surface.md (TASK-590) inventories the full read/write surface with file:line citations (load-bearing custom (de)serializers spot-verified vs source 2026-05-31). KEY FINDING for the multi-vendor question: READ interop is cheap — AIDA''s deserializers are fallback-tolerant by design (RelationshipType three-shape + unknown→Custom at models.rs:465; untagged int/string node_id at node.rs:59/oplog.rs:141; skip_serializing_if defaults). WRITE interop is the hard part, and it concentrates in exactly THREE behaviours: (1) the sorted-collection serializers (yaml_helpers serialize_sorted_string_set/map, wired at models.rs:3323/3369) that make write_object_if_changed diff-clean; (2) the three-shape RelationshipType; (3) optional-field omission. A non-AIDA WRITER that ignores these corrupts the orphan branch''s history with spurious diffs / dropped variants — so the moat is REAL — BUT the conformance contract is small and specifiable enough to PUBLISH as a spec. Recommended SPIKE-44 next step: draft that conformance spec (the 3 write-behaviours + a byte-identical round-trip test corpus) and prototype a tiny non-Rust (Python) reader/writer against real .aida-store YAML to prove read-easy/write-bounded empirically. — master/advisor'
+  created_at: 2026-05-31T17:25:47.529156077Z
+  modified_at: 2026-05-31T17:25:47.529156077Z
