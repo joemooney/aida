@@ -17,12 +17,12 @@ description: |-
   Operator impact this incident: 12 hours of work lost, no progress signal during the pause, only discovered on manual queue progress check. The orchestrator should have either retried or surfaced an immediate signal (push notification, exit-with-known-code) so the user could resume.
 
   Source: operator direct frustration on return — 'this is disappointing'.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T02:55:21.362693521Z
-modified_at: 2026-05-31T22:20:10.959937252Z
+modified_at: 2026-05-31T22:33:53.042220179Z
 req_type: Task
 tags:
 - aida:queue:work
