@@ -62,7 +62,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T18:47:31.227610038Z
-modified_at: 2026-05-11T02:59:09.386681196Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -74,3 +74,5 @@ comments:
   content: 'PR-7 reviewer noted 2026-05-11: acceptance criterion ''Lease deletion order preserved (after worktree remove succeeds, not before)'' doesn''t match the shipped implementation. Code at main.rs:10839 deletes the lease (and activity log at L10858) BEFORE the git worktree remove call at L10877. The implementer''s documented rationale (L10828-10835 comment): the canonical_lease path is snapshotted earlier, so unlinking first is safe and prefers orphan-worktree over orphan-lease in the failure case. That''s a defensible design choice — both orderings have orphan failure modes; lease-first prefers worktree-orphan (visible, fixable via git worktree prune) over lease-orphan (invisible until next session leases). Updating acceptance retroactively to match. Implementation accepted; criterion was premature.'
   created_at: 2026-05-11T02:15:51.531783301Z
   modified_at: 2026-05-11T02:15:51.531783301Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
