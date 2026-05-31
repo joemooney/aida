@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T16:54:17.621496941Z
-modified_at: 2026-05-13T05:50:28.880832904Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 comments:
 - id: 019e1fe2-f810-73f1-8e67-c67748e2785e
@@ -51,3 +51,5 @@ comments:
   content: See docs/git-workflow.md (committed 2026-05-13, 862d631b) for the full base-freshness layered defense — explains aida pull's deliberate asymmetry (code leg --ff-only vs store leg --rebase) and how this task composes with TASK-54 (push behind-main) and the Pattern A/B defenses (TASK-97/98/99/100/101).
   created_at: 2026-05-13T05:50:28.880832904Z
   modified_at: 2026-05-13T05:50:28.880832904Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
