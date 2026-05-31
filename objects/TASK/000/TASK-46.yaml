@@ -41,5 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:20:45.878343028Z
-modified_at: 2026-05-10T22:26:21.643697090Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
