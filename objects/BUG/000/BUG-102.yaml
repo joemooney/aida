@@ -75,7 +75,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:45:22.472590028Z
-modified_at: 2026-05-15T00:59:15.479559287Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 tags:
 - auto-bump
@@ -104,6 +104,8 @@ comments:
     Test status: 609/609 workspace tests green (4 new in auto_bump_done_tests)
   created_at: 2026-05-15T00:32:42.540863587Z
   modified_at: 2026-05-15T00:32:42.540863587Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:06:22.683366817Z
