@@ -11,7 +11,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-06T18:18:44.025626762Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:36:18.850144673Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -29,3 +29,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:36:17.056250413Z
   modified_at: 2026-05-04T19:36:17.056250413Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
