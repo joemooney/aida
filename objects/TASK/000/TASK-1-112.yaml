@@ -13,12 +13,12 @@ description: |-
   The drain DID correctly classify this as shelvable and advance to TASK-575 (good — EPIC-28 resilience working). So this is a different failure mode than yesterday's GH-API stall — both belong on the Pattern-A advisor wrapper STORY but are independent bugs.
 
   Sibling pattern: TASK-1-108 (orchestrator-corroborated auto-claim) was the phase-1 startup bug. This is the phase-3 startup bug. Worth a sweep through every phase's startup pre-flight to see whether each correctly targets the right anchor for that phase.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T03:53:16.162269855Z
-modified_at: 2026-05-29T03:53:16.162269855Z
+modified_at: 2026-05-31T19:32:48.687810947Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -30,3 +30,9 @@ tags:
 - phase-3-reviewer
 - severity:major
 - wrong-anchor
+comments:
+- id: 019e7f86-4daf-7a41-967e-a9f104ed298b
+  author: joe
+  content: 'Promoted by joe 2026-05-31: Phase-3 reviewer anchors on impl SPEC-ID not PR/reviewer-story. No fix landed. Pairs with TASK-133 as the phase-startup pre-flight sweep. Triage 2026-05-31.'
+  created_at: 2026-05-31T19:32:48.687810947Z
+  modified_at: 2026-05-31T19:32:48.687810947Z
