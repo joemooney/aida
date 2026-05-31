@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:06:53.806139637Z
-modified_at: 2026-05-31T06:11:51.633182547Z
+modified_at: 2026-05-31T06:11:54.886069932Z
 req_type: Spike
 tags:
 - competitive
@@ -39,3 +39,8 @@ comments:
     HONESTY CORRECTION: AIDA uses git + SQLite cache + file handshakes — positioning must NOT claim git-purity. Linchpin follow-up dispatched: verify Spec Kit lacks IDs/relationships/traces/graph (our differentiation rests on it).
   created_at: 2026-05-31T06:11:51.633182547Z
   modified_at: 2026-05-31T06:11:51.633182547Z
+- id: 019e7ca9-0f86-7c82-9b62-00e7a9db5971
+  author: joe
+  content: Commit 3497b57f references this requirement
+  created_at: 2026-05-31T06:11:54.886069932Z
+  modified_at: 2026-05-31T06:11:54.886069932Z
