@@ -11,6 +11,7 @@ pub mod export;
 pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
+pub mod graph_walk;
 pub mod hlc;
 pub mod import;
 pub mod integrations;
