@@ -20,8 +20,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T06:05:52.437668966Z
-modified_at: 2026-05-11T06:37:37.747737198Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T06:37:37.747737198Z
