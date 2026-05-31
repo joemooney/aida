@@ -1,0 +1,18 @@
+id: 019e7cf2-748e-70f3-81fd-be9e16261b0e
+spec_id: TASK-593
+agreed_id: TASK-593
+title: aida queue prune --orphaned misses review-queue rows for already-merged PRs
+description: 'Confirmed 2026-05-31: the reviewer queue retains ''PR-309 (STORY-468)'' / ''PR-347 (STORY-485)'' rows although both PRs are MERGED and their leaf specs (TASK-548/TASK-575) are Completed. ''aida queue prune --orphaned --dry-run'' reports ''No orphan queue entries found'' — the orphaned predicate only catches rows whose SPEC no longer exists, not rows whose PR has merged (spec still non-terminal, e.g. umbrella STORY left Approved). Review rows auto-queued by ''session end''/''aida pr'' are only removed via the reviewer''s ''aida queue done'' flow; when a PR merges outside that flow the row lingers. Proposal: extend prune with a --merged predicate (or widen --orphaned) that dequeues review rows whose PR is merged. Low priority — visual clutter, not blocking.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T07:32:04.878450126Z
+modified_at: 2026-05-31T07:32:04.878450126Z
+req_type: Task
+tags:
+- aida:queue:prune
+- from-self-test
+- kind:bug-spotted
+- queue-legibility
+- reliability
