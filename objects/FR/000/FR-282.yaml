@@ -12,12 +12,12 @@ description: |-
   Impact: any graph-shaped use of AIDA (quizdom's questions/beliefs/definitions over probes/begets/refines/contradicts/agrees/disagrees) cannot use the graph walk for transitive traversal — the core operation. Today the only workaround is app-side BFS issuing one 'aida rel list' per hop.
 
   Proposed: a way to traverse arbitrary Custom edge types, e.g. 'aida graph <id> --follow begets,probes' (and a query_graph param), transitively. Pairs with the deferred weighted-traversal idea (ranked/weighted successor selection) — but custom-edge traversal is the prerequisite. Generalizes beyond quizdom to any weighted/typed-graph use of the substrate.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:24:02.547453751Z
-modified_at: 2026-05-31T16:27:28.954501357Z
+modified_at: 2026-05-31T16:32:34.474779510Z
 req_type: Functional
 tags:
 - custom-edges
@@ -37,3 +37,7 @@ comments:
   content: Commit 90d02eab2 references this requirement
   created_at: 2026-05-31T16:27:28.954501357Z
   modified_at: 2026-05-31T16:27:28.954501357Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T16:32:34.474779510Z
+  completion_sha: d65296d4d15273f65df54ee49f2f22fc22bb44d9
