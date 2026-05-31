@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T08:51:05.020112469Z
-modified_at: 2026-05-31T17:08:55.267581166Z
+modified_at: 2026-05-31T17:20:18.301805193Z
 req_type: Task
 tags:
 - aida:pr:ship
@@ -21,3 +21,8 @@ comments:
   content: 'Verify-before-building finding (2026-05-31): the proposed fix ALREADY EXISTS. wait_for_pr_checks_to_register (aida-cli/src/main.rs:29035, fn at ~29592) polls ''gh pr checks <N>'' for up to 60s (10s interval) right before the ''--watch'' step, and correctly treats ''no checks reported'' as keep-waiting via gh_pr_checks_output_is_unregistered (it only bails on a REAL gh/auth failure, or after the 60s deadline). It landed 2026-05-22 in PR-213 (BUG-344) — BEFORE this task''s 2026-05-31 PR-386 report. So either (a) the PR-386 failure was mis-attributed / transient / a >60s-registration edge case, or (b) my dev binary at that moment predated the BUG-344 build. Per instrument-don''t-infer: rather than re-implement, the next ship will DROP the sleep-25 workaround and observe whether the wait holds. If it does, close this as already-fixed-by-BUG-344. If it fails, capture the exact stderr + exit path (don''t guess). — master/advisor'
   created_at: 2026-05-31T17:08:55.267581166Z
   modified_at: 2026-05-31T17:08:55.267581166Z
+- id: 019e7f0c-fd7d-7041-a368-eb871ccc3411
+  author: joe
+  content: 'VERDICT (live-verified 2026-05-31, PR-407): shipped TASK-589 with ''git push'' immediately followed by ''aida pr ship'' — NO sleep workaround. Result: exit 0, PR merged, step 2 gated on CI green with no ''no checks reported'' bail. The wait_for_pr_checks_to_register poll (BUG-344, PR-213) holds the post-push registration window as designed. The reported PR-386 failure does not reproduce on the current binary — most likely a dev-binary that predated the BUG-344 build at that moment. Closing as already-fixed-by-BUG-344 (no new commit needed). Operational note: the post-push sleep workaround is REDUNDANT — drop it from future ship sequences. — master/advisor'
+  created_at: 2026-05-31T17:20:18.301805193Z
+  modified_at: 2026-05-31T17:20:18.301805193Z
