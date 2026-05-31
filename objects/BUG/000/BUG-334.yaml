@@ -3,12 +3,12 @@ spec_id: BUG-334
 agreed_id: BUG-334
 title: 'Decide: should post_punt auto-flip spec status to needs-attention, or stay decoupled?'
 description: 'Per Antigravity Phase 3 verification 2026-05-22: `post_punt` writes the punt record to `.aida/punts.jsonl` but does NOT modify the spec''s status. Antigravity correctly noted that the spec stays at its prior status (e.g., approved) unless the agent/operator separately edits to needs-attention. This may be intentional (separation of concerns: punt ledger vs spec status) or it may be a gap (operators expect post_punt to flip status as part of the punt''s semantic meaning). Open design questions: (1) Should post_punt accept an optional `set_status_to_needs_attention` parameter (default false, opt-in)? (2) Or should the documented pattern in cross-agent-onboarding doc be ''always pair post_punt with update_requirement to flip status''? (3) Or should the orchestrator drain mechanism''s punt detection logic itself flip status, independent of MCP write? Need a master decision. Surfaces a real workflow question. Composes with STORY-306 (orchestrator''s headless punt detection) and the punt-channel coordination tools generally.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:52:56.788625463Z
-modified_at: 2026-05-31T05:34:01.220171404Z
+modified_at: 2026-05-31T05:39:13.736994336Z
 req_type: Bug
 tags:
 - design-decision
@@ -16,3 +16,7 @@ tags:
 - from-story-407
 - mcp
 - punt-channel
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T05:39:13.736994336Z
+  completion_sha: ea4802b3b6ce245d6f96c78cac35ebb02824b0dc
