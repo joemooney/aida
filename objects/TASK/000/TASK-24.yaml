@@ -12,7 +12,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T00:23:39.732313620Z
-modified_at: 2026-05-09T20:22:42.784348151Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - parity
@@ -23,3 +23,5 @@ relationships:
   target_id: 019df42f-2b53-75a1-b93e-1e8d875b41b8
   created_at: 2026-05-05T00:23:48.524075938Z
   created_by: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
