@@ -7,7 +7,7 @@ priority: High
 owner: joe
 feature: 203-GitLab
 created_at: 2025-12-14T16:35:31.414124608Z
-modified_at: 2026-05-04T19:35:15.363061941Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Spike
 relationships:
 - rel_type: Parent
@@ -19,3 +19,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:35:13.107269180Z
   modified_at: 2026-05-04T19:35:13.107269180Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
