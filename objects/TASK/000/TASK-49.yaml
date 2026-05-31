@@ -46,13 +46,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:38:56.044230560Z
-modified_at: 2026-05-12T15:01:41.822159760Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 019e1cb4-f5fa-74e2-aa0e-1ce0d3ff91d9
   created_at: 2026-05-12T15:01:41.822152559Z
   created_by: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-10T22:33:17.612305268Z
