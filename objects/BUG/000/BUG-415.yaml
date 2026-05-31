@@ -1,0 +1,35 @@
+id: 019e7e79-8395-7992-b183-9387e1178f7a
+spec_id: BUG-415
+agreed_id: BUG-415
+title: 'Fresh-init: aida status reports Total 7 / Draft 6 but aida list --all shows only 1 requirement'
+description: |-
+  Observed on a brand-new distributed store (a fresh 'quizdom' project, immediately after init) on 2026-05-31.
+
+  aida status Requirements panel showed:
+    Total: 7  (Approved 1, Draft 6)
+    Cache Rows: 7 (store has 7)  Status: FRESH
+
+  But at the same moment:
+    - aida list            -> 1 (TASK-007, Approved)
+    - aida list --all      -> 1 (only TASK-007)
+    - aida list --status draft -> 'No requirements found.'
+    - .aida-store/objects/ contained only TASK/ and META/ (TASK/000, META/000)
+
+  So the status/cache count (7 total, 6 draft) does not reconcile with list output or on-disk objects (1 real requirement + 1 META). The 6 phantom 'draft' rows are unexplained.
+
+  Hypothesis: the status/cache counter is counting non-requirement or template/history/META rows as draft requirements, OR a stale/pre-seed count is reported before the first real list query. Either way 'status' and 'list --all' disagree on a fresh store, which erodes trust in the counts.
+
+  Repro: aida init a fresh distributed project, then compare 'aida status' vs 'aida list --all' immediately. Reported by an external project (quizdom) dogfooding AIDA as a substrate.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T14:39:13.301040728Z
+modified_at: 2026-05-31T14:39:13.301040728Z
+req_type: Bug
+tags:
+- cache
+- count
+- external-report
+- fresh-init
+- status
