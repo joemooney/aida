@@ -9,12 +9,12 @@ description: |-
   3. Multi-vendor (vendor-neutral) operation is where AIDA structurally excels vs single-vendor runtimes; git-canonical helps because any tool can read/write versioned files.
 
   Deliverable: a dated docs/competitive-analysis/ synthesis grounding each claim, steelmanning the git-canonical trade-offs (latency/query/concurrency/multi-writer/offline/auditability/ops vs DB/cloud), naming where the bet WINS and LOSES, and the precise open slice. A background competitive-intel research pass (launched 2026-05-31) feeds the empirical map. Anchor durable advantage on INCENTIVE (vendor-neutrality, riding the standard), not transient capability.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:06:53.806139637Z
-modified_at: 2026-05-31T06:06:53.806139637Z
+modified_at: 2026-05-31T06:11:50.169051261Z
 req_type: Spike
 tags:
 - competitive
