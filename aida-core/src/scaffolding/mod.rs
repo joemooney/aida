@@ -3398,4 +3398,96 @@ mod tests {
             "reformatted file should be multi-line, got: {after:?}"
         );
     }
+
+    // trace:TASK-135 | ai:claude
+    // Verifies the pre-commit hook's substrate-as-bouncer gate rejects a
+    // SPEC-ID trace marker on a `///` doc comment (which clap would leak into
+    // `--help`), and lets a plain `//` trace comment through. Catches the
+    // "both-at-once trap" (TASK-268 / BUG-227) at the moment of writing rather
+    // than minutes later in CI (source_doc_comments_carry_no_trace_token).
+    #[test]
+    fn test_pre_commit_hook_rejects_trace_marker_on_doc_comment() {
+        use std::process::Command;
+        let temp_dir = TempDir::new().unwrap();
+
+        let run_git = |args: &[&str]| {
+            let mut cmd = Command::new("git");
+            cmd.args(args);
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            let status = cmd.status().unwrap();
+            assert!(status.success(), "git command {:?} failed", args);
+        };
+
+        run_git(&["init"]);
+
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+
+        let hook_path = temp_dir.path().join(".git/hooks/pre-commit");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        std::fs::create_dir_all(temp_dir.path().join("src")).unwrap();
+        std::fs::write(temp_dir.path().join(".gitignore"), "target/\n").unwrap();
+        run_git(&["config", "user.email", "test@aida.dev"]);
+        run_git(&["config", "user.name", "AIDA Test"]);
+
+        let run_hook = || {
+            let mut cmd = if cfg!(windows) {
+                let mut c = Command::new("sh");
+                c.arg(&hook_path);
+                c
+            } else {
+                Command::new(&hook_path)
+            };
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            cmd.output().unwrap()
+        };
+
+        // Offending: a `trace:` marker on a `///` doc comment leaks into --help.
+        let bad = "/// trace:STORY-1 | ai:claude\npub fn foo() {}\n";
+        std::fs::write(temp_dir.path().join("src/leaky.rs"), bad).unwrap();
+        run_git(&["add", "src/leaky.rs", ".gitignore"]);
+
+        let output = run_hook();
+        assert!(
+            !output.status.success(),
+            "hook must reject a `///` doc comment carrying a trace marker"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("src/leaky.rs:1:"),
+            "rejection should name the offending file:line, got: {stderr}"
+        );
+
+        // Fix: a plain `//` trace comment is the correct form — must pass the gate.
+        let good = "// trace:STORY-1 | ai:claude\npub fn foo() {}\n";
+        std::fs::write(temp_dir.path().join("src/leaky.rs"), good).unwrap();
+        run_git(&["add", "src/leaky.rs"]);
+
+        let output = run_hook();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // The fmt step may warn if cargo/rustfmt is unavailable; the trace gate
+        // is independent of it, so assert only that no trace offender fired.
+        assert!(
+            !stderr.contains("SPEC-ID trace marker") && !stderr.contains("Offending lines"),
+            "plain `//` trace comment must not trip the doc-comment gate, got: {stderr}"
+        );
+    }
 }
