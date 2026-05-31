@@ -8,7 +8,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T00:13:28.940830659Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:33:03.736604109Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -43,3 +43,5 @@ history:
   - field_name: title
     old_value: When I edit a theme the changes to be reflected globally and reverted if I click cancel
     new_value: When I edit a theme the changes to be reflected globally and reverted if I click cancel ddddddddddddddddddddddddddddddddddddd
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
