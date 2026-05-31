@@ -432,6 +432,86 @@ mod tests {
         assert!(loaded.tags.contains("test"));
     }
 
+    /// SPIKE-46 conformance gate: AIDA's on-disk YAML format must stay stable,
+    /// because a drift in our serializer breaks every external tool's
+    /// byte-identical writes (and makes `write_object_if_changed` see spurious
+    /// diffs). This guards the four write-conformance properties from
+    /// docs/architecture/spike-46-store-interop/FINDINGS.md plus
+    /// serialize→deserialize→serialize idempotence. If a struct/serde change
+    /// alters the on-disk shape, this fails on purpose — update it deliberately
+    /// and note the format change for downstream consumers. trace:SPIKE-46 | ai:claude
+    #[test]
+    fn requirement_yaml_holds_the_write_conformance_contract() {
+        use crate::models::{Relationship, RelationshipType};
+
+        let mut req = Requirement::new("Conformance fixture".into(), "body".into());
+        req.spec_id = Some("TASK-999".into());
+        // Insert tags + custom_fields OUT of order — the serializer must sort.
+        req.tags.insert("tag-zebra".into());
+        req.tags.insert("tag-alpha".into());
+        req.tags.insert("tag-mango".into());
+        req.custom_fields.insert("z_key".into(), "1".into());
+        req.custom_fields.insert("a_key".into(), "2".into());
+        // A custom relationship must serialize as a `!Custom` tag (the shape a
+        // stock YAML loader trips on — hazard #1).
+        req.relationships.push(Relationship {
+            rel_type: RelationshipType::Custom("verifies-indirectly".into()),
+            target_id: Uuid::now_v7(),
+            created_at: Some(req.created_at),
+            created_by: None,
+        });
+        // agreed_id stays None → must be omitted, not emitted as null.
+
+        let yaml = serde_yaml::to_string(&req).expect("serialize");
+
+        // 1. Sorted collections (yaml_helpers::serialize_sorted_*).
+        let (a, m, z) = (
+            yaml.find("tag-alpha").unwrap(),
+            yaml.find("tag-mango").unwrap(),
+            yaml.find("tag-zebra").unwrap(),
+        );
+        assert!(a < m && m < z, "tags must serialize sorted:\n{yaml}");
+        assert!(
+            yaml.find("a_key").unwrap() < yaml.find("z_key").unwrap(),
+            "custom_fields keys must serialize sorted:\n{yaml}"
+        );
+
+        // 2. RelationshipType::Custom → `!Custom` tag.
+        assert!(
+            yaml.contains("!Custom"),
+            "custom rel must tag as !Custom:\n{yaml}"
+        );
+
+        // 3. Timestamps are RFC3339 Zulu strings (nanosecond-Z), never `+00:00`.
+        let created_line = yaml
+            .lines()
+            .find(|l| l.starts_with("created_at:"))
+            .expect("created_at present");
+        assert!(
+            created_line.trim_end().ends_with('Z'),
+            "timestamps must be RFC3339 Zulu: {created_line}"
+        );
+        assert!(
+            !yaml.contains("+00:00"),
+            "no offset-form timestamps:\n{yaml}"
+        );
+
+        // 4. Optional None fields omitted, not emitted as null.
+        assert!(
+            !yaml.contains("agreed_id"),
+            "None optional fields must be omitted:\n{yaml}"
+        );
+
+        // 5. Round-trip idempotence: deserialize → reserialize is byte-stable,
+        // so an unchanged spec re-written by AIDA produces no diff.
+        let req2: Requirement = serde_yaml::from_str(&yaml).expect("deserialize");
+        let yaml2 = serde_yaml::to_string(&req2).expect("reserialize");
+        assert_eq!(
+            yaml, yaml2,
+            "serialize→deserialize→serialize must be byte-stable"
+        );
+    }
+
     #[cfg(feature = "native")]
     #[test]
     fn test_write_read_distributed_id() {
