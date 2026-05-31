@@ -1788,15 +1788,28 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
         emit_shipped_mismatch(spec, &credited, json, start.elapsed().as_millis());
     }
 
-    // Phase 2 — end + wait for CI.
-    emit_start(Phase::Ci, spec, json, start.elapsed().as_millis());
-    let phase_start = Instant::now();
-    if let Err(f) = driver.finish_ci() {
+    // Phase 2 — end + wait for CI. lifecycle:no-ci-wait (incl. lifecycle:trivial)
+    // skips the BLOCKING wait — CI still runs remotely, the orchestrator just
+    // doesn't block on it (STORY-442). Mirrors the no_review / no_build skips;
+    // the variant last_phase cap below still applies either way. (Review
+    // finding: this flag was parsed + bannered but never acted on.)
+    if lifecycle_skip.no_ci_wait {
+        if !json {
+            eprintln!(
+                "  {} skipping CI-wait per lifecycle tag (CI still runs remotely)",
+                "↷".cyan()
+            );
+        }
+    } else {
+        emit_start(Phase::Ci, spec, json, start.elapsed().as_millis());
+        let phase_start = Instant::now();
+        if let Err(f) = driver.finish_ci() {
+            durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
+            return resolve_phase_failure(driver, Phase::Ci, spec, json, &start, &f, durations);
+        }
         durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
-        return resolve_phase_failure(driver, Phase::Ci, spec, json, &start, &f, durations);
+        emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
     }
-    durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
-    emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 2 {
         return finish_success(spec, &credited, json, &start, durations);
     }
@@ -1860,6 +1873,13 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
         }
         durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
         emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
+    }
+    // Latent-defect guard (review finding): mirror the <=2/<=4/<=5 caps so a
+    // future variant with last_phase()==3 (e.g. a "through-reviewer" mode)
+    // stops here instead of falling through to merge. No current variant
+    // returns 3, so this is a no-op today.
+    if variant.last_phase() <= 3 {
+        return finish_success(spec, &credited, json, &start, durations);
     }
 
     // Phase 4 — merge.
@@ -2746,7 +2766,7 @@ mod tests {
     }
 
     #[test]
-    fn orchestrate_trivial_skips_reviewer_and_build_keeps_merge_and_pull() {
+    fn orchestrate_trivial_skips_ci_reviewer_and_build_keeps_merge_and_pull() {
         let mut driver = MockPhaseDriver::all_ok();
         let result = orchestrate_with_lifecycle_skip(
             &mut driver,
@@ -2759,8 +2779,44 @@ mod tests {
         assert_eq!(result.exit_code, 0);
         assert_eq!(
             driver.calls,
-            vec![Phase::Implementer, Phase::Ci, Phase::Merge, Phase::Pull,],
-            "merge + pull are substrate-integrity phases and must not be skipped"
+            vec![Phase::Implementer, Phase::Merge, Phase::Pull,],
+            "trivial skips the ci-wait, reviewer, and build phases; merge + pull \
+             are substrate-integrity phases and must not be skipped"
+        );
+    }
+
+    #[test]
+    fn orchestrate_no_ci_wait_skips_ci_keeps_rest() {
+        // Review finding: lifecycle:no-ci-wait must skip the blocking CI phase
+        // (CI still runs remotely) while every other phase proceeds.
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip {
+                no_ci_wait: true,
+                ..LifecycleSkip::none()
+            },
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(
+            !driver.calls.contains(&Phase::Ci),
+            "no-ci-wait must skip the CI phase: {:?}",
+            driver.calls
+        );
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ],
+            "only the ci-wait phase is skipped"
         );
     }
 
