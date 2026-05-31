@@ -50361,6 +50361,11 @@ fn auto_bump_done_to_completed(
                 let prior = r.status.clone();
                 r.set_status_from_str("Completed");
                 r.modified_at = now;
+                // BUG-405 contract (review finding): a Completed spec must not
+                // keep a stale FailureReason (it drives a false "CI red"
+                // finding in `aida findings list`). Clear it on every
+                // flip-to-Completed path, not just the primary one.
+                r.failure_reason = None;
                 let info = r
                     .implementation_info
                     .get_or_insert_with(aida_core::ImplementationInfo::default);
@@ -50718,6 +50723,11 @@ fn handle_db_reconcile_status(
                 }
                 r.set_status_from_str("Completed");
                 r.modified_at = now;
+                // BUG-405 contract (review finding): a Completed spec must not
+                // keep a stale FailureReason (it drives a false "CI red"
+                // finding in `aida findings list`). Clear it on every
+                // flip-to-Completed path, not just the primary one.
+                r.failure_reason = None;
                 let info = r
                     .implementation_info
                     .get_or_insert_with(aida_core::ImplementationInfo::default);
@@ -50748,6 +50758,11 @@ fn handle_db_reconcile_status(
                 let prior = r.status.clone();
                 r.set_status_from_str("Completed");
                 r.modified_at = now;
+                // BUG-405 contract (review finding): a Completed spec must not
+                // keep a stale FailureReason (it drives a false "CI red"
+                // finding in `aida findings list`). Clear it on every
+                // flip-to-Completed path, not just the primary one.
+                r.failure_reason = None;
                 let info = r
                     .implementation_info
                     .get_or_insert_with(aida_core::ImplementationInfo::default);
