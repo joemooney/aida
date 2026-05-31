@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T10:24:19.562555466Z
-modified_at: 2026-05-31T11:16:56.566291391Z
+modified_at: 2026-05-31T11:19:31.965400502Z
 req_type: Story
 tags:
 - competitive-parity
@@ -24,6 +24,11 @@ comments:
   content: 'Status corrected back to Approved: the plan commit (PR-389) carried trailer (STORY-491 STORY-489) which auto-bumped this umbrella story to Completed, but only the SKETCH/PLAN exists — the implementation (reconcile slice + --resume wiring) has NOT been built and the design still needs sign-off. Lesson: a plan-only commit must not reference the not-yet-built implementation spec in its trailer (the auto-bump completes it); use a plan-task id or reference only already-complete specs. STORY-491 stays Approved until built.'
   created_at: 2026-05-31T10:34:35.130718462Z
   modified_at: 2026-05-31T10:34:35.130718462Z
+- id: 019e7dc2-b17d-77c1-826d-764d9974deb1
+  author: joe
+  content: 'Marking accepted-as-Completed: this story = P1 plan + slice-1 (pure decision logic, TASK-598, shipped). It keeps auto-re-completing anyway because the plan commit (a62866a) trailers (STORY-491 ...) and the pull-scan re-bumps it whenever it''s at an eligible status — manual --force re-open doesn''t stick. Remaining P1 implementation (slice 2: probing + live --resume wiring, sign-off-gated) is tracked fresh by STORY-492. Auto-bump re-bump filed as a bug.'
+  created_at: 2026-05-31T11:19:31.965400502Z
+  modified_at: 2026-05-31T11:19:31.965400502Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T10:33:44.609203062Z
