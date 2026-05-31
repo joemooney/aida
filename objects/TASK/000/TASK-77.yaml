@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T04:11:25.314429016Z
-modified_at: 2026-05-12T04:32:15.011639220Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 comments:
 - id: 019e1a74-fca3-7c43-8a1c-97be154848dd
@@ -16,3 +16,5 @@ comments:
   content: Reject — was a smoke test from the node identity fix (2026-05-11). No actual work to do.
   created_at: 2026-05-12T04:32:15.011639220Z
   modified_at: 2026-05-12T04:32:15.011639220Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
