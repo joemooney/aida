@@ -1074,7 +1074,7 @@ pub enum PrCommand {
 pub enum RoleCommand {
     /// Enter (resume) an existing role. Errors if the role doesn't exist —
     /// use `aida role add` to create a new one. Outputs shell code:
-    ///   `eval "$(aida role enter architect)"`
+    ///   `eval "$(aida role enter advisor)"`
     /// or via the `aida-role` shell helper.
     Enter {
         /// Role name — must already exist
@@ -1135,9 +1135,10 @@ pub enum RoleCommand {
         yes: bool,
     },
 
-    /// Install a starter set of global roles (triage, architect,
-    /// implementer, reviewer) at ~/.aida/roles/. Idempotent — skips any
-    /// that already exist; safe to re-run.
+    /// Install a starter set of global roles (implementer, advisor,
+    /// reviewer) at ~/.aida/roles/ — the agent-wired role taxonomy.
+    /// Idempotent — skips any that already exist; safe to re-run.
+    /// (`architect` / `triage` are opt-in via `aida role add`.)
     Scaffold,
 
     /// Manage per-role scope filters. Scope filters are auto-applied to
