@@ -1,0 +1,26 @@
+id: 019e7ead-cff8-7aa0-8101-dc1f18627d05
+spec_id: BUG-417
+agreed_id: BUG-417
+title: 'aida pr ship: assumes base ''main'' (ignores origin default branch) + CI-wait blocks on repos with no workflows'
+description: |-
+  Reported by an external project (quizdom) on 2026-05-31; quizdom-side record SPEC-008.
+
+  Two co-occurring issues on the master/no-CI path:
+  1. BASE-REF: 'aida pr ship' attempts to create the PR against 'main' even though the repo's origin default branch is 'master', producing a GitHub GraphQL base-ref error. It should resolve the base from the origin default branch (gh repo view --json defaultBranchRef, or remote HEAD), not assume 'main'.
+  2. CI-WAIT: after manually creating PR #2 with base master, 'aida pr ship 2' failed its CI wait because the repo has no .github/workflows at all. Adding 'lifecycle:no-ci-wait' to the spec did NOT change the direct 'pr ship' behavior. 'pr ship' should detect 'no CI configured' (or honor lifecycle:no-ci-wait) and skip the wait instead of blocking.
+
+  Workaround used: manually create PR with base master, then 'gh pr merge'.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T15:36:20.728144498Z
+modified_at: 2026-05-31T15:36:20.728144498Z
+req_type: Bug
+tags:
+- base-branch
+- ci-wait
+- external-report
+- no-workflows
+- pr-ship
+- quizdom
