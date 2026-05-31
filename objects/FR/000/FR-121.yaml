@@ -8,7 +8,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T20:01:10.871060615Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:33:43.801581219Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -29,3 +29,5 @@ history:
   - field_name: description
     old_value: "'o' for Owner hotkey in reqlist\n\nwhen we type 'o' we should be presented with a list of owners that we will update the requirement as owner.\nthis should be a fuzzy search. \nOwners may at some point be restricted to users working on that feature but that is a whole set of additional requirements, we could have approvers per feature, and we could have certain users that are only allowed to transition requirements into certain states. I would like to see it possible for owner automatically transition depending on the status, so in \"Test\" a member of the test team would own perhaps and in \"Implement\" a member of the development team could own. This would require an editor dialog to control status and owner.  So there could be different roles and we assign users to certain roles (probably per feature)  "
     new_value: "'o' for Owner hotkey in reqlist\n\nwhen we type 'o' in the Requirements List, we should be presented with a list of owners and we can select one to update the requirement as new owner.\nthis should be a fuzzy search, if we type a partial name or handle it should filter the users.\n \nOwners may be restricted to users designated as working on that feature.\nwe could have designated approvers per feature, \ncertain users that are only allowed to transition requirements into certain states. \nowner automatically change as we transition status, so in \"Test\" a member of the test team would own perhaps and in \"Implement\" a member of the development team could own. \nThis would require an editor dialog to control status and owner.  So there could be different roles and we assign users to certain roles (probably per feature)  "
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
