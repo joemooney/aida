@@ -103,7 +103,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:18:43.395729318Z
-modified_at: 2026-05-17T01:40:28.855311427Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -135,6 +135,8 @@ comments:
     Test status: 525/525 aida-cli tests green; cargo fmt --all --check clean.
   created_at: 2026-05-17T01:29:22.426035727Z
   modified_at: 2026-05-17T01:29:22.426035727Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T01:26:44.850493969Z
