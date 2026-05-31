@@ -8,13 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T16:48:59.938179574Z
-modified_at: 2026-05-31T16:49:47.361674904Z
+modified_at: 2026-05-31T16:52:31.727285150Z
 req_type: Task
 tags:
 - aida:agent:new
 - isolation
 - multi-agent
 - parent:BUG-416
+relationships:
+- rel_type: Child
+  target_id: 019e7ea8-3488-7581-90bb-95fbd5037b18
+  created_at: 2026-05-31T16:52:31.727280820Z
+  created_by: joe
 comments:
 - id: 019e7ef1-0d61-7340-a15b-5d23d03bf9b0
   author: joe
