@@ -18,7 +18,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:41:53.171908309Z
-modified_at: 2026-05-17T08:02:55.757073523Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - batch:pr-64-cleanup
@@ -44,6 +44,8 @@ comments:
     Follow-up: 54 pre-existing doc_lazy_continuation warnings remain across the workspace, tracked by the CI `TODO: change back to -D warnings` — out of this task's scope.
   created_at: 2026-05-17T07:55:24.467368410Z
   modified_at: 2026-05-17T07:55:24.467368410Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T07:29:45.769193684Z
