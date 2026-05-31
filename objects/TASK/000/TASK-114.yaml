@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:52:22.828568930Z
-modified_at: 2026-05-15T06:07:38.223648242Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - automation
@@ -80,6 +80,8 @@ relationships:
   target_id: 019e2a08-ff45-7261-853e-fe71b81fe09f
   created_at: 2026-05-15T05:08:16.311390035Z
   created_by: joe
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T04:54:21.079956831Z
