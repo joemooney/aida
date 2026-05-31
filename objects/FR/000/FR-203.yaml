@@ -22,7 +22,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T02:10:08.382814924Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:28:38.710022136Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -80,3 +80,5 @@ history:
       - [ ] Status filters include "Folder" as a filter option
       - [ ] Metrics dashboards exclude "Folder" requirements from status counts unless explicitly included
       - [ ] Child requirements under a "Folder" parent are not affected by the parent's status
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
