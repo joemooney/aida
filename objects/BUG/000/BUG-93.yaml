@@ -3,10 +3,10 @@ spec_id: BUG-93
 agreed_id: BUG-93
 title: aida config hints source-display is misleading on unrecognized AIDA_HINTS value
 description: 'handle_config_hints (main.rs:5413-5443) tags source as ''AIDA_HINTS=<val> (env)'' whenever the env var is set and non-empty, but workflow_hints::enabled silently ignores unrecognized values and falls through to config + default. Result: ''AIDA_HINTS=garbage aida config hints'' wrongly attributes source to env. One-line fix: only attribute to env when enabled() would have decided from it. Surfaced by /aida-review deep-pass (Probe 4) on PR-19.'
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T04:35:56.036032464Z
-modified_at: 2026-05-13T04:35:56.036032464Z
+modified_at: 2026-05-31T05:10:59.798146035Z
 req_type: Bug
