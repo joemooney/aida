@@ -15111,7 +15111,11 @@ const ACTIVITY_MAX: usize = 10;
 /// `aida_core::mailbox` core; the git-canonical digest is a later slice.
 // trace:STORY-493 trace:TASK-603 | ai:claude
 fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) -> Result<()> {
-    use aida_core::mailbox::{inbox_for, thread as thread_view, Message, Recipient};
+    use aida_core::mailbox::{inbox_for, merge_dedup, thread as thread_view, Message, Recipient};
+    // store_path is the orphan-store worktree root (the canonical layer lives at
+    // <store_root>/mailbox); its parent is the project root (the local layer at
+    // <project_root>/.aida/mailbox).
+    let store_root = store_path;
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
@@ -15156,7 +15160,9 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
         }
         MailboxCommand::Inbox { agent } => {
             let who = agent.clone().unwrap_or_else(|| current_user_id(None));
-            let all = mailbox_store::read_local_messages(project_root)?;
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let all = merge_dedup(&local, &canonical);
             let inbox = inbox_for(&who, &all);
             if inbox.is_empty() {
                 println!("{} inbox empty for {}", "✉".dimmed(), who.cyan());
@@ -15173,7 +15179,9 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             Ok(())
         }
         MailboxCommand::Thread { thread_id } => {
-            let all = mailbox_store::read_local_messages(project_root)?;
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let all = merge_dedup(&local, &canonical);
             let msgs = thread_view(thread_id, &all);
             if msgs.is_empty() {
                 println!(
@@ -15191,6 +15199,33 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             for m in msgs {
                 print_mailbox_line(m);
             }
+            Ok(())
+        }
+        MailboxCommand::Sync => {
+            // Digest the local layer into the git-canonical layer (orphan
+            // store), then stage + commit it. Append-only/id-keyed, so this is
+            // idempotent. The orphan branch is pushed by the normal store-sync
+            // path (`aida db sync --push` / `aida pull`); this only advances it
+            // locally. Auto-triggering this on session-end / drain boundaries
+            // is a deliberate follow-up (the trigger-cadence is the operator's
+            // call). trace:TASK-605 | ai:claude
+            let n = mailbox_store::digest_local_to_canonical(store_root, project_root)?;
+            if n == 0 {
+                println!(
+                    "{} mailbox already in sync (nothing new to digest)",
+                    "✉".dimmed()
+                );
+                return Ok(());
+            }
+            aida_core::git_ops::add(store_root, &["mailbox"])?;
+            let committed =
+                aida_core::git_ops::commit(store_root, &format!("mailbox: digest {n} message(s)"))?;
+            println!(
+                "{} digested {} message(s) to the canonical store{}",
+                "✉".green(),
+                n.to_string().cyan(),
+                if committed { "" } else { " (nothing staged)" }
+            );
             Ok(())
         }
     }
