@@ -43,7 +43,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T16:02:46.382166956Z
-modified_at: 2026-05-14T07:27:14.632083509Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - messages
@@ -72,6 +72,8 @@ comments:
     Test status: 6 new unit tests in aida-core (with-path, mentions-mismatch, names aida --version, mentions dev activate, mentions cache rebuild, path optional). 332/332 cargo tests green.
   created_at: 2026-05-14T07:12:47.184818345Z
   modified_at: 2026-05-14T07:12:47.184818345Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:59:21.521951255Z
