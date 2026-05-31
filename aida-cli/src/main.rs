@@ -27181,7 +27181,11 @@ fn parse_plan_followups(content: &str) -> Vec<String> {
         let bullet = line.strip_prefix("- ").or_else(|| line.strip_prefix("* "));
         if let Some(b) = bullet {
             let text = b.trim().trim_end_matches('.').trim().to_string();
-            if text.is_empty() || text.contains("<") || text.starts_with("file as") {
+            // BUG-104: skip only a literal template placeholder (a bullet that
+            // STARTS with `<`, e.g. `<describe the followup>`) — not any bullet
+            // that merely contains `<` (a real followup like "support `Vec<T>`"
+            // or "fix the `a < b` guard" was being silently dropped).
+            if text.is_empty() || text.starts_with('<') || text.starts_with("file as") {
                 continue;
             }
             out.push(text);
@@ -34570,6 +34574,28 @@ mod statusline_tests {
         );
     }
 
+    /// BUG-104: a real followup that merely *contains* `<` (generics, a `<`
+    /// comparison) is kept; only a literal `<placeholder>` bullet is dropped.
+    #[test]
+    fn plan_followups_keeps_angle_brackets_drops_placeholder() {
+        let plan = "\
+## Followups
+
+- Support `Vec<T>` in the parser
+- Fix the `a < b` guard
+- <describe the followup here>
+
+## Related
+";
+        assert_eq!(
+            parse_plan_followups(plan),
+            vec![
+                "Support `Vec<T>` in the parser".to_string(),
+                "Fix the `a < b` guard".to_string(),
+            ]
+        );
+    }
+
     /// TASK-95: the Critical Files parser collects backtick paths from the
     /// `## Critical Files` section's bullets and nowhere else.
     #[test]
@@ -36328,6 +36354,48 @@ mod bug_231_findings_promote_tests {
             .find(|e| e.requirement_id == fid)
             .expect("promoted finding must be present in the queue");
         assert_eq!(entry.for_role.as_deref(), Some("reviewer"));
+    }
+
+    /// BUG-90 (BUG-89 follow-up): `--user` override wins over any env.
+    #[test]
+    fn current_user_id_override_wins() {
+        assert_eq!(current_user_id(Some("alice")), "alice");
+    }
+
+    /// BUG-90: with no override, `AIDA_USER` is the highest-precedence env
+    /// source (over the ambient `USER`/`USERNAME`).
+    #[test]
+    fn current_user_id_prefers_aida_user_env() {
+        let _g = crate::test_env::EnvVarGuard::set("AIDA_USER", "env-bob");
+        assert_eq!(current_user_id(None), "env-bob");
+    }
+
+    /// BUG-90 acceptance: queue add + queue list from the same shell show the
+    /// just-added item WITHOUT a `--user` flag (both route through the single
+    /// `current_user_id` resolver, BUG-89's fix), and a different user_id does
+    /// not see it.
+    #[test]
+    fn queue_add_then_list_same_shell_is_consistent() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let fid = seed_finding(&root, "TASK-902");
+        // Add via the real route (uses current_user_id internally).
+        queue_promoted_finding(&root, fid, "TASK-902", None).unwrap();
+
+        let me = current_user_id(None);
+        let mine = Storage::new(&root).queue_list(&me, false).unwrap();
+        assert!(
+            mine.iter().any(|e| e.requirement_id == fid),
+            "same-shell add+list must show the item without --user"
+        );
+
+        let theirs = Storage::new(&root)
+            .queue_list("a-different-user", false)
+            .unwrap();
+        assert!(
+            !theirs.iter().any(|e| e.requirement_id == fid),
+            "a different user_id must not see another user's queue item"
+        );
     }
 
     /// Failure injection: pointing the store at a path that is neither a
