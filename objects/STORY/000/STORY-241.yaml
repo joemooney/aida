@@ -90,7 +90,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:32:32.371630658Z
-modified_at: 2026-05-16T05:06:51.563734039Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - alpha-gating
@@ -247,6 +247,8 @@ comments:
   content: 'Rejected 2026-05-15 in favor of STORY-244 (TUI launcher architecture). The four-region layout + mode-aware keybindings designed in this STORY carry forward to the new STORY; only the PTY-tab hosting model is rejected. Reason: Claude Code is itself a full-screen TUI; PTY-hosting causes render contention that''s architectural, not polish-fixable.'
   created_at: 2026-05-16T04:45:22.763718298Z
   modified_at: 2026-05-16T04:45:22.763718298Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T04:43:45.883744702Z
