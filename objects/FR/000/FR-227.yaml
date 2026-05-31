@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 1-REQ
 created_at: 2025-11-25T19:45:25.234562378Z
-modified_at: 2026-02-23T05:27:36.784560695Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -51,3 +51,5 @@ history:
   - field_name: status
     old_value: Planned
     new_value: Completed
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
