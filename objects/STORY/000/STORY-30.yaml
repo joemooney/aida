@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: 139-ai-workflow
 created_at: 2025-12-11T00:38:06.778903807Z
-modified_at: 2026-05-15T04:01:52.149815909Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 comments:
 - id: 019e29cc-4015-79e2-b42a-6ac73e1469da
@@ -15,3 +15,5 @@ comments:
   content: 'Rejected 2026-05-14 (Trojan-horse triage): SUPERSEDED. Trace comments (// trace:SPEC | ai:tool), TraceLink data, ImplementationInfo updates, and the /aida-commit flow that maintains them are all in production. This is the established convention documented in CLAUDE.md and AIDA.md. Re-file with sharper scope if a specific gap remains.'
   created_at: 2026-05-15T04:01:52.149815909Z
   modified_at: 2026-05-15T04:01:52.149815909Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
