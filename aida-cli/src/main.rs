@@ -3115,8 +3115,19 @@ fn archive_sweep(
     }
 
     let now = chrono::Utc::now();
+    let total = eligible.len();
+    // BUG-425: a large sweep commits per-spec (one store commit each), so it
+    // can run for minutes. Print a heading up front + a throttled `[k/N]`
+    // progress line so it doesn't look hung. (Batching the per-spec commits
+    // into one is a separate aida-core change — tracked on BUG-425.)
+    // trace:BUG-425 | ai:claude
+    eprintln!(
+        "{} {total} spec(s) older than {duration} (status in {}) — this commits per spec, so it may take a moment…",
+        "Archiving:".cyan().bold(),
+        statuses.join(",")
+    );
     let mut archived_count = 0usize;
-    for s in &eligible {
+    for (i, s) in eligible.iter().enumerate() {
         let display_id = s
             .agreed_id
             .as_deref()
@@ -3135,6 +3146,12 @@ fn archive_sweep(
         backend.update_requirement(&req)?;
         archived_count += 1;
         record_role_activity(&display_id, "archive");
+        // Throttled progress: every 50 + the final one, so a 600-spec sweep
+        // shows ~12 ticks rather than silence or 600 lines.
+        let n = i + 1;
+        if n % 50 == 0 || n == total {
+            eprintln!("  {} {n}/{total}", "…".dimmed());
+        }
     }
     println!(
         "{} {archived_count} spec(s) (older than {duration}, status in {})",
