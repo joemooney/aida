@@ -3294,10 +3294,11 @@ mod tests {
             .iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
             .collect();
-        // 9 spec-graph + 17 coordination = 26 total.
-        assert!(names.len() >= 26, "expected ≥26 tools, got {}", names.len());
+        // 10 spec-graph (incl. query_graph) + 17 coordination = 27 total.
+        assert!(names.len() >= 27, "expected ≥27 tools, got {}", names.len());
         for required in [
             "add_relationship",
+            "query_graph",
             "history",
             "list_punts",
             "read_punt",
@@ -3332,8 +3333,8 @@ mod tests {
         let desc = tool_descriptors();
         let arr = desc.as_array().expect("tool_descriptors must be an array");
         assert!(
-            arr.len() >= 26,
-            "expected ≥26 tool descriptors (9 spec-graph + 17 coordination), got {}",
+            arr.len() >= 27,
+            "expected ≥27 tool descriptors (10 spec-graph incl. query_graph + 17 coordination), got {}",
             arr.len()
         );
 
@@ -3641,6 +3642,68 @@ mod tests {
             .unwrap();
         assert!(priority_output.contains(&working_id), "{priority_output}");
         assert!(!priority_output.contains(&planned_id), "{priority_output}");
+    }
+
+    // trace:STORY-489 | ai:claude
+    /// query_graph walks the typed relationship graph: a spec blocked-by
+    /// another surfaces that blocker in the `blocked-by` mode result, and the
+    /// JSON carries the count + node id. Regression for the MCP half of the
+    /// graph-query moat (the CLI half is covered by graph_walk's unit tests).
+    #[test]
+    fn mcp_query_graph_returns_blocked_by_chain() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let dependent = server
+            .tool_add_requirement(&json!({
+                "title": "Dependent spec",
+                "description": "blocked by the blocker",
+                "type": "story",
+                "status": "approved",
+            }))
+            .unwrap();
+        let dependent_id = added_spec_id(&dependent).to_string();
+        let blocker = server
+            .tool_add_requirement(&json!({
+                "title": "Blocker spec",
+                "description": "blocks the dependent",
+                "type": "story",
+                "status": "in-progress",
+            }))
+            .unwrap();
+        let blocker_id = added_spec_id(&blocker).to_string();
+
+        server
+            .tool_add_relationship(&json!({
+                "spec_id": dependent_id,
+                "relationship_type": "blocked-by",
+                "target_spec_id": blocker_id,
+            }))
+            .unwrap();
+
+        let out = server
+            .tool_query_graph(&json!({
+                "spec_id": dependent_id,
+                "mode": "blocked-by",
+            }))
+            .unwrap();
+        let parsed: Value = serde_json::from_str(&out).expect("query_graph returns JSON");
+        assert_eq!(parsed["mode"], "blocked-by");
+        assert_eq!(parsed["count"], 1, "expected one blocker: {out}");
+        assert_eq!(parsed["root"], dependent_id, "{out}");
+        let ids: Vec<&str> = parsed["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|n| n["id"].as_str())
+            .collect();
+        assert!(
+            ids.contains(&blocker_id.as_str()),
+            "blocker in nodes: {out}"
+        );
+
+        // Unknown mode is a clean error, not a panic.
+        let err = server.tool_query_graph(&json!({ "spec_id": dependent_id, "mode": "bogus" }));
+        assert!(err.is_err(), "unknown mode must error: {err:?}");
     }
 
     // trace:BUG-381 | ai:codex
