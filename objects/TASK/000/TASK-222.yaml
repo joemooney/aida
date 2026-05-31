@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:55:31.246695225Z
-modified_at: 2026-05-14T14:43:34.243677818Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - done
@@ -84,6 +84,8 @@ comments:
     Test status: smoke-verified against the live store (5 Done specs visible); no unit tests since the in-flight render is inline I/O matching the rest of the queue list paths. 332/332 cargo tests green.
   created_at: 2026-05-14T07:12:02.863634260Z
   modified_at: 2026-05-14T07:12:02.863634260Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:33:27.242092754Z
