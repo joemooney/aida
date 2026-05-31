@@ -1,0 +1,18 @@
+id: 019e7f18-0c17-7232-8576-fa3d27de5866
+spec_id: SPIKE-46
+agreed_id: SPIKE-46
+title: 'SPIKE-44 follow-through: publish a write-conformance spec + prove read-easy with a non-Rust prototype'
+description: 'Concrete next step recommended by the TASK-590 serialization-surface inventory (docs/architecture/on-disk-serialization-surface.md). The inventory established: READ interop is cheap (AIDA''s deserializers are fallback-tolerant by design), WRITE interop concentrates in exactly THREE specifiable behaviours — (1) sorted-collection serializers (yaml_helpers serialize_sorted_string_set/map) for diff-clean writes, (2) the three-shape fallback-to-Custom RelationshipType, (3) optional-field omission (skip_serializing_if). Two deliverables: (A) a published WRITE-CONFORMANCE SPEC — the 3 behaviours stated precisely + a byte-identical round-trip test corpus (read real objects/*.yaml → re-serialize → assert byte-identical) that any vendor can run; (B) a tiny non-Rust (Python) READER/WRITER prototype against a real .aida-store to EMPIRICALLY prove read-easy / write-bounded. Outcome: turns ''the substrate is a moat'' from assertion into a demonstrable, publishable interop contract — the core of the multi-vendor multi-agent thesis. NOTE: gated behind the current bug-clearing→stability phase (project_bugs_before_marketing); this is moat/marketing-adjacent strategy work, file-now/pick-up-when-phase-allows. Verify against the live serde surface before building — line refs in the inventory drift.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T17:32:22.935130289Z
+modified_at: 2026-05-31T17:32:22.935130289Z
+req_type: Spike
+tags:
+- from-self:TASK-590
+- git-canonical
+- moat
+- multi-vendor
+- parent:SPIKE-44
