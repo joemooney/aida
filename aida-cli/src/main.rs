@@ -48191,6 +48191,47 @@ fn handle_pull_command(
                     // refs to specs currently in Done and bump them.
                     // Best-effort: any failure prints a warning but
                     // doesn't fail the pull. trace:STORY-86 | ai:claude
+                    // BUG-404: opt-in instrumentation for diagnosing the
+                    // ship-time auto-bump miss. Logs the exact range +
+                    // store the scan saw so the narrow-vs-wide divergence
+                    // can be pinned without guessing. trace:BUG-404 | ai:claude
+                    let dbg_autobump = std::env::var("AIDA_DEBUG_AUTOBUMP")
+                        .map(|v| v != "0" && !v.is_empty())
+                        .unwrap_or(false);
+                    if dbg_autobump {
+                        let post = git_ops::head_sha(&project_root).ok();
+                        let range_arg = match pre_code_sha.as_deref() {
+                            Some(p) => format!("{}..HEAD", p),
+                            None => "(none → HEAD~50)".to_string(),
+                        };
+                        eprintln!(
+                            "  [autobump-debug] enabled={} pre_code_sha={:?} post_head={:?} range={} store_path={}",
+                            auto_bump_enabled(),
+                            pre_code_sha,
+                            post,
+                            range_arg,
+                            store_path.display()
+                        );
+                        if let Some(p) = pre_code_sha.as_deref() {
+                            let log = std::process::Command::new("git")
+                                .arg("-C")
+                                .arg(&project_root)
+                                .args([
+                                    "log",
+                                    "--oneline",
+                                    "--no-decorate",
+                                    &format!("{}..HEAD", p),
+                                ])
+                                .output();
+                            if let Ok(o) = log {
+                                eprintln!(
+                                    "  [autobump-debug] commits in {}..HEAD:\n{}",
+                                    p,
+                                    String::from_utf8_lossy(&o.stdout).trim()
+                                );
+                            }
+                        }
+                    }
                     if auto_bump_enabled() {
                         let storage = Storage::new(store_path.to_path_buf());
                         match auto_bump_done_to_completed(
@@ -48199,8 +48240,18 @@ fn handle_pull_command(
                             pre_code_sha.as_deref(),
                             &storage,
                         ) {
-                            Ok(flips) if !quiet => print_auto_bump_summary(&flips),
-                            Ok(_) => {}
+                            Ok(flips) => {
+                                if dbg_autobump {
+                                    eprintln!(
+                                        "  [autobump-debug] auto_bump_done_to_completed → {} flip(s): {:?}",
+                                        flips.len(),
+                                        flips.iter().map(|f| f.spec_id.clone()).collect::<Vec<_>>()
+                                    );
+                                }
+                                if !quiet {
+                                    print_auto_bump_summary(&flips);
+                                }
+                            }
                             Err(e) => {
                                 eprintln!(
                                     "  {} auto-bump failed: {} (specs stay at Done; \
