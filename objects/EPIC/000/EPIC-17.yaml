@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T04:37:49.938673688Z
-modified_at: 2026-05-04T04:38:36.171793359Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Epic
 tags:
 - architecture
@@ -51,3 +51,5 @@ comments:
   content: ''
   created_at: 2026-05-04T04:38:36.171793359Z
   modified_at: 2026-05-04T04:38:36.171793359Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
