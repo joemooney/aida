@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-02T06:09:28.437117418Z
-modified_at: 2026-05-04T19:32:41.161563283Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df47a-7842-7ad2-a54f-83d332a176ed
@@ -40,3 +40,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:32:40.130596393Z
   modified_at: 2026-05-04T19:32:40.130596393Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
