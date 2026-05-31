@@ -18,7 +18,7 @@ priority: High
 owner: joe
 feature: 233-Uncategorized
 created_at: 2026-02-23T02:49:24.757611723Z
-modified_at: 2026-05-04T19:36:06.873123820Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 tags:
 - skills
@@ -34,3 +34,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:36:03.202025601Z
   modified_at: 2026-05-04T19:36:03.202025601Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
