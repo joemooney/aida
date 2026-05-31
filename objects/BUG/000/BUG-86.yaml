@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T16:00:23.751172789Z
-modified_at: 2026-05-13T04:37:45.870071782Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -82,6 +82,8 @@ comments:
     Test status: smoke-tested the re-run hint on a by-design skip (nonexistent branch). The needs-attention path uses the same render block, symmetrically.
   created_at: 2026-05-13T04:06:37.356393624Z
   modified_at: 2026-05-13T04:06:37.356393624Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T02:26:41.705367879Z
