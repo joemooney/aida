@@ -7,9 +7,11 @@ priority: Medium
 owner: joe
 feature: 220-My Queue
 created_at: 2026-02-21T16:36:53.005448270Z
-modified_at: 2026-02-21T16:36:53.005448270Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Parent
   target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
   created_at: 2026-02-21T16:36:53.005471299Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
