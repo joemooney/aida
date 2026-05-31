@@ -3,12 +3,12 @@ spec_id: TASK-600
 agreed_id: TASK-600
 title: 'Adversarial-review fixes: canonical MCP query_graph mode + conservative reconcile_resume_phase'
 description: 'Two confirmed findings from the 2026-05-31 multi-agent review of the night''s flagship code: (1) tool_query_graph echoed the raw mode arg, leaking the underscore alias ''blocked_by'' into output instead of the canonical ''blocked-by'' — now carries a canonical_mode label through the match + a regression assertion. (2) reconcile_resume_phase only iterated the GIVEN postconditions, so a missing phase was silently skipped and empty input wrongly returned AlreadyComplete — contradicting its own doc. Now iterates ALL phases, treating any missing as conservatively not-met (empty ⇒ resume from Implementer, the safe default); test updated. The third review finding (impact mode misses unidirectional Blocks edges) is filed separately as BUG-411 (moderate, transitive-design dimension). All checks green: drain_resume 8 + query_graph tests, fmt, doc-consistency.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T13:30:27.639988159Z
-modified_at: 2026-05-31T13:30:27.639988159Z
+modified_at: 2026-05-31T13:35:33.332625893Z
 req_type: Task
 tags:
 - correctness
@@ -16,3 +16,7 @@ tags:
 - from-review
 - graph-query
 - mcp
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T13:35:33.332625893Z
+  completion_sha: c44b65149362f0f3c7fce5f4faccbd3ac9716d3e
