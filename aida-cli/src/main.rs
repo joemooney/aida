@@ -19883,6 +19883,17 @@ fn agent_new_with_config(
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = main_worktree_root_from(&discovered_root);
     apply_agent_default_flags(&mut config, &project_root, flag_options)?;
+
+    // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
+    // snapshot from a dry plan and return without launching — no `session_start`,
+    // so no worktree, no lease, no spec status flip. Previously this fell through
+    // to the full launch path, creating the worktree + lease + flipping the spec
+    // to InProgress before printing — the opposite of a dry preview.
+    // trace:BUG-408 | ai:claude
+    if context.show {
+        return print_dry_launch_context(&project_root, role, spec, &config, name);
+    }
+
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
     let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
 
@@ -19957,6 +19968,17 @@ fn agent_new_bg_dispatch(
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = main_worktree_root_from(&discovered_root);
     apply_agent_default_flags(&mut config, &project_root, flag_options)?;
+
+    // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
+    // snapshot from a dry plan and return without launching — no `session_start`,
+    // so no worktree, no lease, no spec status flip. Previously this fell through
+    // to the full launch path, creating the worktree + lease + flipping the spec
+    // to InProgress before printing — the opposite of a dry preview.
+    // trace:BUG-408 | ai:claude
+    if context.show {
+        return print_dry_launch_context(&project_root, role, spec, &config, name);
+    }
+
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
     let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
 
@@ -20354,6 +20376,66 @@ fn prepare_agent_launch_context(
         println!("{body}");
     }
     Ok(Some(AgentLaunchContext { path, token }))
+}
+
+/// BUG-408: the dry counterpart of `prepare_agent_launch`. Computes what the
+/// launch plan WOULD be — resolved role, generated stable name, current spec —
+/// WITHOUT any side effects: no `session_start`, so no worktree is created, no
+/// lease is written, and the spec's status is not flipped to InProgress. Used
+/// by `--show-context`, which is a pure preview. The working directory is
+/// reported as the project root (the dedicated worktree only exists after a
+/// real launch); the preview banner makes that explicit. `generate_or_validate_name`
+/// is read-only (it inspects the registry to pick a unique name but reserves
+/// nothing until the agent record is written at launch), so it is safe here.
+/// trace:BUG-408 | ai:claude
+fn prepare_agent_launch_dry(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    agent_type: &str,
+    custom_name: Option<String>,
+) -> Result<AgentLaunchPlan> {
+    let plan_role = role;
+    let name = agent_registry::generate_or_validate_name(
+        project_root,
+        agent_type,
+        plan_role.as_deref(),
+        custom_name.as_deref(),
+    )?;
+    Ok(AgentLaunchPlan {
+        project_root: project_root.to_path_buf(),
+        launch_cwd: project_root.to_path_buf(),
+        role: plan_role,
+        current_spec: spec,
+        name,
+        lease_id: None,
+    })
+}
+
+/// BUG-408: shared `--show-context` preview for both the foreground and `--bg`
+/// launch paths. Builds a dry plan, renders the launch-context snapshot, and
+/// prints a preview banner + the body. No session is started, no worktree or
+/// lease is created, and the spec status is untouched. trace:BUG-408 | ai:claude
+fn print_dry_launch_context(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    config: &AgentLaunchConfig,
+    name: Option<String>,
+) -> Result<()> {
+    let plan = prepare_agent_launch_dry(project_root, role, spec, config.agent_type, name)?;
+    let token = std::env::var("AIDA_AGENT_REGISTRY_TOKEN")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| Uuid::now_v7().to_string());
+    let body = render_agent_launch_context(config, &plan, &token)?;
+    println!(
+        "# DRY PREVIEW — no session was started.\n\
+         A dedicated worktree + lease are created (and the spec flips to InProgress) \
+         only on a real launch (drop `--show-context`).\n"
+    );
+    println!("{body}");
+    Ok(())
 }
 
 // trace:STORY-436 | ai:codex
@@ -21003,6 +21085,37 @@ mod agent_launcher_tests {
         assert!(!no_prompt);
         assert!(no_default_flags);
         assert_eq!(extra_flags, vec!["--verbose"]);
+    }
+
+    /// BUG-408: `--show-context` must be a PURE PREVIEW. `prepare_agent_launch_dry`
+    /// builds the plan WITHOUT `session_start`, so no lease is written, the working
+    /// directory stays the project root (no worktree is created), and `lease_id`
+    /// is `None`. This is the core regression guard for the bug where
+    /// `--show-context` created a worktree + lease and flipped the spec to
+    /// InProgress. trace:BUG-408 | ai:claude
+    #[test]
+    fn dry_launch_plan_creates_no_lease_or_worktree() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let plan = prepare_agent_launch_dry(
+            root,
+            Some("implementer".into()),
+            Some("STORY-9".into()),
+            "claude",
+            None,
+        )
+        .unwrap();
+        assert_eq!(plan.current_spec.as_deref(), Some("STORY-9"));
+        assert_eq!(plan.role.as_deref(), Some("implementer"));
+        assert_eq!(
+            plan.launch_cwd, root,
+            "dry preview reports the project root, not a (nonexistent) worktree"
+        );
+        assert!(plan.lease_id.is_none(), "dry plan holds no lease");
+        assert!(
+            list_leases(root).is_empty(),
+            "dry preview must not write a session lease"
+        );
     }
 
     #[test]
