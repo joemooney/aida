@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 141-traceability
 created_at: 2025-12-11T00:38:10.030743795Z
-modified_at: 2026-05-04T19:37:29.707236974Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 comments:
 - id: 019df47e-df5f-7c12-96f6-42086c70ed03
@@ -15,3 +15,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:37:28.671080967Z
   modified_at: 2026-05-04T19:37:28.671080967Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
