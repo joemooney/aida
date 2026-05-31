@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:19:16.149343346Z
-modified_at: 2026-05-31T06:19:16.149343346Z
+modified_at: 2026-05-31T06:21:31.822521714Z
 req_type: Spike
 tags:
 - competitive
@@ -30,3 +30,14 @@ tags:
 - multi-agent
 - roadmap
 - strategy
+comments:
+- id: 019e7cb1-dd2e-7292-a253-dbba4f18315c
+  author: joe
+  content: |-
+    Round-2 findings folded in (AGENTS.md-convergence + beyond-software use-cases agents):
+    RIDE (don't rebuild): AGENTS.md + MCP + goose are now Linux-Foundation-governed standards (Agentic AI Foundation, Dec 2025). Context-file + transport are COMMODITIZED. Move: be the best AGENTS.md GENERATOR — emit a rich, always-current AGENTS.md (+ .agents/rules/ when it lands) projected from the graph, eliminating the markdown drift Spec Kit suffers. Adopt v1.1 frontmatter (description/tags) early for conformance.
+    OPTION (SPIKE, phase-gated): agent-native ReqIF import/export bridge — ReqIF is conceptually 'AIDA's typed-relationship graph for enterprise ALM' but ABSENT from the agent world; no ReqIF↔agent bridge exists. Planting it pre-empts the highest-impact tail risk + opens regulated/ALM markets.
+    USE-CASE expansion verdicts: PURSUE (as a FEATURE not pivot) ADRs/decision-records as a graph (only genuine structural fit + underserved + short reach from the doc type + typed rels); WATCH compliance-as-code-on-git (value is the validation/e-sig wrapper we lack) + portable agent memory (DEFENSIVE — Letta now ships git-based Context Repositories, so the 'no library ships git memory' claim is STALE; hold the STRUCTURED-memory differentiation); AVOID ELN/wikis/PKM (entrenched incumbents on our own pitch — Benchling/Notion/Obsidian).
+    Tripwires (~6wk refresh): agents.md #135/#179/#105 (structure creep), MCP agent-comms workstream, Spec Kit roadmap toward IDs/graph, Letta Context Repos adding a graph layer, any ReqIF↔agent bridge. Full synthesis: docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md
+  created_at: 2026-05-31T06:21:31.822521714Z
+  modified_at: 2026-05-31T06:21:31.822521714Z
