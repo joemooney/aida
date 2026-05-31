@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T23:08:44.110738408Z
-modified_at: 2026-05-04T19:34:29.604373084Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df47c-1fad-7b11-90b5-97d536214d67
@@ -133,3 +133,5 @@ history:
   - field_name: spec_id
     old_value: REQLIST-0080
     new_value: FR-0085
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
