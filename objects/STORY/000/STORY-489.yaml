@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:22:20.110613503Z
-modified_at: 2026-05-31T08:54:59.907908401Z
+modified_at: 2026-05-31T10:08:45.041682125Z
 req_type: Story
 tags:
 - competitive-parity
@@ -30,3 +30,8 @@ comments:
   content: 'Slices 1+2 shipped autonomously (2026-05-31): TASK-594 (graph_walk core primitive — cycle-safe transitive walk + status_rollup, PR-385) and TASK-595 (the aida graph CLI: --blocked-by/--blocks/--tree/--impact/--json, PR-386). The moat-demo is LIVE on main: ''aida graph STORY-276 --blocked-by'' surfaces STORY-332 — the transitive query flat-markdown SDD tools can''t answer. REMAINING = slice 3: the MCP query_graph tool (the contract-touching part). It mirrors the CLI on the same graph_walk primitive — see handle_graph_command in main.rs + the MCP descriptor/handler pattern (add_relationship) noted in the plan. Slice 3 needs contract sign-off (additive read-only tool); left for Codex''s sketch-first pickup. Plan: docs/plans/2026-05-31-graph-query-story-489.md.'
   created_at: 2026-05-31T08:54:59.907908401Z
   modified_at: 2026-05-31T08:54:59.907908401Z
+- id: 019e7d81-e3f1-7d02-882a-9cb046357693
+  author: joe
+  content: 'Slice 3 (MCP query_graph) SHIPPED by master (TASK-597, PR-388) — verified end-to-end over JSON-RPC stdio. STORY-489 now COMPLETE: CLI (aida graph) + MCP (query_graph) both live on the shared cycle-safe graph_walk primitive. The Codex slice-3 brief is moot (acking it). Net flagship: the cross-spec typed-graph query — blocked-by/blocks chains, epic rollup, reverse impact — that flat per-feature SDD tools (Spec Kit, Kiro) structurally can''t answer, queryable by CLI AND any MCP client (the multi-vendor moat).'
+  created_at: 2026-05-31T10:08:45.041682125Z
+  modified_at: 2026-05-31T10:08:45.041682125Z
