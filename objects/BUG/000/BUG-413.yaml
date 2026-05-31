@@ -3,12 +3,12 @@ spec_id: BUG-413
 agreed_id: BUG-413
 title: auto-bump leaves stale failure_reason on Completed in 3 of 4 flip paths (false CI-red findings)
 description: 'Found by the 2026-05-31 auto-bump review (verified). Only the primary flip-to-Completed path (main.rs ~50331) cleared failure_reason per the BUG-405 contract; the second main path (~50719) and BOTH stale-review-story paths (~50362, ~50749 — for PRs merged before review finished) did NOT. Result: a review story carrying a failure_reason (e.g. ''CI red'' from a reviewer fixup request) that self-merges gets bumped to Completed but keeps failure_reason, so ''aida findings list'' surfaces a false ''CI red'' finding for already-shipped work. Fix: clear r.failure_reason = None on every flip-to-Completed site (now 4/4). Safe + additive (a Completed spec must never carry a FailureReason). 37 auto_bump tests green.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T13:56:41.222806392Z
-modified_at: 2026-05-31T13:56:41.222806392Z
+modified_at: 2026-05-31T14:01:38.806971442Z
 req_type: Bug
 tags:
 - auto-bump
@@ -16,3 +16,7 @@ tags:
 - findings
 - from-review
 - kind:bug-spotted
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T14:01:38.806971442Z
+  completion_sha: 8e032e90cfc1ae0e67451cd92e2a61553eeb9f9d
