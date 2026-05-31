@@ -16418,22 +16418,25 @@ fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> 
 /// Starter role set installed by `aida role scaffold`. Idempotent — skips
 /// any name that already exists (anywhere). All starter roles are global
 /// since they're meant to apply across projects.
+///
+/// The default set is the **agent-wired** role taxonomy — the roles the
+/// orchestrator actually drives and routes work to (`implementer`,
+/// `advisor`, `reviewer`; `integrator` joins once STORY-460's role lands).
+/// `architect` and `triage` are deliberately NOT scaffolded by default:
+/// they have no orchestrator phase and sit empirically dormant, so shipping
+/// them as starters invites the "what's this role for?" first-impression
+/// confusion. They remain valid role names — install them opt-in with
+/// `aida role add <name>`. The canonical taxonomy lives in
+/// `validate_registered_agent_role`.
+// trace:TASK-608 | ai:claude
 const STARTER_ROLES: &[(&str, &str)] = &[
-    (
-        "advisor",
-        "Trusted counsel across the project's lifetime. Surfaces friction, articulates mental models, gardens the queue, curates memory across sessions. Produces specs and comments, not code; routes implementation to doer roles via `aida queue add --for <role>`.",
-    ),
-    (
-        "triage",
-        "Process the backlog: review drafts, close stale items, group related work.",
-    ),
-    (
-        "architect",
-        "Design work: explore tradeoffs, write/review plans, capture decisions in docs/plans/.",
-    ),
     (
         "implementer",
         "Heads-down coding on a specific feature or fix. Drive a requirement to completed.",
+    ),
+    (
+        "advisor",
+        "Trusted counsel across the project's lifetime. Surfaces friction, articulates mental models, gardens the queue, curates memory across sessions. Produces specs and comments, not code; routes implementation to doer roles via `aida queue add --for <role>`.",
     ),
     (
         "reviewer",
@@ -16490,7 +16493,7 @@ fn handle_role_scaffold() -> Result<()> {
             }
         );
         println!();
-        println!("Try them: {}", "aida role enter triage".cyan());
+        println!("Try them: {}", "aida role enter implementer".cyan());
         println!("List all: {}", "aida role list".cyan());
     }
     Ok(())
@@ -16683,6 +16686,29 @@ mod role_identity_tests {
         assert!(
             !purpose.contains("PO hat"),
             "old captain/PO-hat framing should be removed: {purpose}"
+        );
+    }
+
+    // TASK-608: the scaffold default set is the agent-wired role taxonomy
+    // (implementer, advisor, reviewer). architect/triage have no
+    // orchestrator phase and are opt-in via `aida role add` — they must NOT
+    // ship as starter roles. trace:TASK-608 | ai:claude
+    #[test]
+    fn starter_set_is_agent_wired_only() {
+        let names: Vec<&str> = STARTER_ROLES.iter().map(|(name, _)| *name).collect();
+        assert!(
+            names.contains(&"implementer"),
+            "implementer must be scaffolded"
+        );
+        assert!(names.contains(&"advisor"), "advisor must be scaffolded");
+        assert!(names.contains(&"reviewer"), "reviewer must be scaffolded");
+        assert!(
+            !names.contains(&"architect"),
+            "architect must be opt-in, not a default starter role"
+        );
+        assert!(
+            !names.contains(&"triage"),
+            "triage must be opt-in, not a default starter role"
         );
     }
 }
