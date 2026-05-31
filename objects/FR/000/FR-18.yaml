@@ -9,7 +9,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T00:52:32.764418229Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:38:28.903749226Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -48,3 +48,5 @@ history:
   - field_name: title
     old_value: Long Term/Hairbrained
     new_value: Long Term
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
