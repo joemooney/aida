@@ -128,7 +128,7 @@ re-start from a wider window than the marker would suggest.
 
 - **`aida release`** — at release-cut time, run with `--since <prev-tag>`
   to seed release notes.
-- **`role:dialog` (advisor seat)** — natural home; the editorial judgment
+- **`role:advisor` (advisor seat)** — natural home; the editorial judgment
   about "what was meaningful" is advisor work.
 - **`aida usage`** — sibling telemetry surface (per-command analytics);
   complementary, not overlapping.

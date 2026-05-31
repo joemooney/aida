@@ -194,7 +194,7 @@ non-failure outcome distinct from Approved / RequestChanges / Rejected
 
 ### Tier 2 — headless advisor (STORY-306)
 
-The orchestrator spawns a fresh `claude -p` in the advisor (`dialog`) role
+The orchestrator spawns a fresh `claude -p` in the advisor (`advisor`) role
 with the `/aida-advise` skill, the punt payload, and a path to write its
 response to. The advisor does one of two things:
 

@@ -800,7 +800,7 @@ orchestrator-headless reviewer's verdict is read by phase 4. trace:BUG-280
 
 Under a headless `--no-human` drain there is no human to read the
 consolidated comment and feed the reviewer's non-blocking findings back to
-the dialog/advisor role for follow-up filing. Without this step those
+the advisor role for follow-up filing. Without this step those
 follow-ups are lost the moment the drain moves on. So the headless reviewer
 files them itself — as draft TASKs the advisor triages later via
 `aida findings list`.

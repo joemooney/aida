@@ -18,4 +18,4 @@ When the user asks me to apply a destructive operation to a *subset* of files, a
 - Filtering output (`| grep`, `| head`, `--quiet`) never changes what a command writes. Don't conflate "what I see" with "what happened."
 - Always read `--dry-run` output as a complete list, not "the file I'm focused on right now."
 - For untracked files specifically (not in git): assume zero recovery options unless I personally backed them up. Transcripts only capture file content if Read/Write/Edit was called on them in a prior session.
-- The carve-out from `feedback_dialog_routes_to_implementer` (settings.json/tooling tweaks OK inline in dialog mode) does NOT extend to bulk destructive operations on user-owned config files. Those still need explicit confirmation per file.
+- The carve-out from `feedback_dialog_routes_to_implementer` (settings.json/tooling tweaks OK inline in advisor mode) does NOT extend to bulk destructive operations on user-owned config files. Those still need explicit confirmation per file.
