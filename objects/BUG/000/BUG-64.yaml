@@ -40,5 +40,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:55:15.099630258Z
-modified_at: 2026-05-10T21:29:38.842340611Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
