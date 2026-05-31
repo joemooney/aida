@@ -12,12 +12,12 @@ description: |-
   The CLAUDE.md guidance + the test-enforcement gate are BOTH in place, yet I keep repeating the mistake. The gap: CLAUDE.md instructions don't gate; the source-test ONLY fires in CI. A pre-commit hook OR a clippy-style lint would catch this at the moment of writing.
 
   Promote candidate (recurrence 3+): substrate-as-bouncer for the trace-marker convention. Either a pre-commit hook that grep-scans for '/// ...\n/// trace:' patterns in clap-decorated structs, or a clippy lint.
-status: Approved
+status: InProgress
 priority: Low
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T16:36:20.546911728Z
-modified_at: 2026-05-31T19:52:40.605217568Z
+modified_at: 2026-05-31T19:55:49.954948124Z
 req_type: Task
 tags:
 - batch:demo-drain
