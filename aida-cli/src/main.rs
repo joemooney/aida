@@ -15031,28 +15031,38 @@ fn load_role_with_warnings(
     project_root: &std::path::Path,
     name: &str,
 ) -> Result<(RoleState, std::path::PathBuf, Vec<String>)> {
-    let project_path = project_role_file(project_root, name);
-    if project_path.exists() {
-        let content = std::fs::read_to_string(&project_path)
-            .with_context(|| format!("Failed to read role file {}", project_path.display()))?;
-        let (state, warnings) = parse_role_lenient(&content)
-            .with_context(|| format!("Failed to parse role file {}", project_path.display()))?;
-        return Ok((state, project_path, warnings));
+    // TASK-586: resolve under the canonical name, but also accept the legacy
+    // `dialog.toml` file as the advisor role on machines not yet migrated.
+    // The loaded state's name is canonicalized so callers always see
+    // `advisor`, never `dialog`.
+    let canonical = canonical_role_name(name);
+    let mut candidates = vec![canonical.clone()];
+    if canonical == "advisor" {
+        candidates.push("dialog".to_string());
     }
-    if let Some(global_path) = global_role_file(name) {
-        if global_path.exists() {
-            let content = std::fs::read_to_string(&global_path)
-                .with_context(|| format!("Failed to read role file {}", global_path.display()))?;
-            let (state, warnings) = parse_role_lenient(&content)
-                .with_context(|| format!("Failed to parse role file {}", global_path.display()))?;
-            return Ok((state, global_path, warnings));
+    for cand in &candidates {
+        for path in [
+            Some(project_role_file(project_root, cand)),
+            global_role_file(cand),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if path.exists() {
+                let content = std::fs::read_to_string(&path)
+                    .with_context(|| format!("Failed to read role file {}", path.display()))?;
+                let (mut state, warnings) = parse_role_lenient(&content)
+                    .with_context(|| format!("Failed to parse role file {}", path.display()))?;
+                state.name = canonical_role_name(&state.name);
+                return Ok((state, path, warnings));
+            }
         }
     }
     anyhow::bail!(
         "No such role: {} (looked at {} and {})",
         name,
-        project_path.display(),
-        global_role_file(name)
+        project_role_file(project_root, &canonical).display(),
+        global_role_file(&canonical)
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "(no global dir)".into())
     )
@@ -15108,7 +15118,9 @@ fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
                     // BUG-228: lenient parse — a role with a corrupted
                     // activity entry still appears in `aida role list`
                     // instead of silently vanishing from it.
-                    if let Ok((state, _warnings)) = parse_role_lenient(&content) {
+                    if let Ok((mut state, _warnings)) = parse_role_lenient(&content) {
+                        // TASK-586: surface `dialog.toml` as the advisor role.
+                        state.name = canonical_role_name(&state.name);
                         roles.push(state);
                     }
                 }
@@ -15116,6 +15128,12 @@ fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
         }
     }
     roles.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    // TASK-586: a machine mid-migration can have both `advisor.toml` and the
+    // legacy `dialog.toml` — both canonicalize to `advisor`. Keep the
+    // most-recently-active (the sort above already put it first) and drop the
+    // duplicate so `aida role list` shows one advisor.
+    let mut seen = std::collections::HashSet::new();
+    roles.retain(|r| seen.insert(r.name.clone()));
     Ok(roles)
 }
 
@@ -15265,11 +15283,13 @@ fn print_role_prompt(state: &RoleState) {
 /// Resolve a role name from --name or AIDA_SESSION_ROLE; error if neither.
 /// trace:TASK-1-021 | ai:claude
 fn resolve_role_name(name: Option<&str>) -> Result<String> {
+    // TASK-586: canonicalize so an explicit `--name dialog` or a stale
+    // `AIDA_SESSION_ROLE=dialog` shell still resolves to the advisor role.
     if let Some(n) = name {
-        return Ok(n.to_string());
+        return Ok(canonical_role_name(n));
     }
     match std::env::var("AIDA_SESSION_ROLE") {
-        Ok(n) if !n.is_empty() => Ok(n),
+        Ok(n) if !n.is_empty() => Ok(canonical_role_name(&n)),
         _ => anyhow::bail!(
             "No role active and no --name given. Either `aida role enter <name>` first \
              or pass --name to target a specific role."
@@ -15532,7 +15552,11 @@ fn emit_role_enter_eval(
             .map(|entries| {
                 entries
                     .into_iter()
-                    .filter(|e| e.for_role.as_deref() == Some(state.name.as_str()))
+                    // TASK-586: a `dialog`-routed item matches the advisor role.
+                    .filter(|e| {
+                        e.for_role.as_deref().map(canonical_role_name).as_deref()
+                            == Some(state.name.as_str())
+                    })
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -15667,17 +15691,18 @@ fn handle_role_end() -> Result<()> {
     Ok(())
 }
 
-/// The user-facing identity for an internal role name, when the two differ.
-/// The `dialog` role is surfaced to users as **advisor** — "trusted counsel"
-/// reads truer than "dialog" for a seat that gardens the queue, curates
-/// memory, and detects strategic gaps. The internal identifier stays
-/// `dialog` everywhere (config, env vars, queue routing, status line); only
-/// the rendered identity changes.
-// trace:TASK-279 | ai:claude
-fn role_user_facing_identity(name: &str) -> Option<&'static str> {
-    match name {
-        "dialog" => Some("advisor"),
-        _ => None,
+/// Canonicalize a role name. TASK-586 made `advisor` the canonical
+/// identifier; `dialog` (TASK-279's old internal token) is now a
+/// deprecated, silently-accepted alias so existing config / shells
+/// (`AIDA_SESSION_ROLE=dialog`) / `dialog`-routed queue items / legacy
+/// `dialog.toml` role files on not-yet-migrated machines keep resolving.
+/// Applied at every role-name boundary: load, list, input resolution,
+/// and queue routing. trace:TASK-586 | ai:claude
+fn canonical_role_name(raw: &str) -> String {
+    if raw.eq_ignore_ascii_case("dialog") {
+        "advisor".to_string()
+    } else {
+        raw.to_string()
     }
 }
 
@@ -15712,13 +15737,9 @@ fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
             .as_deref()
             .map(|p| format!(" — {}", p))
             .unwrap_or_default();
-        // Render the user-facing identity alongside the internal role name
-        // (e.g. `dialog (advisor)`) without changing the stored identifier.
-        // trace:TASK-279 | ai:claude
-        let display_name = match role_user_facing_identity(&role.name) {
-            Some(identity) => format!("{} ({})", role.name, identity),
-            None => role.name.clone(),
-        };
+        // TASK-586: `advisor` is the canonical name now (roles are
+        // canonicalized on load), so the bare name is the identity.
+        let display_name = role.name.clone();
         println!(
             "  {} {:<16}{} last active {}{}",
             marker,
@@ -15753,14 +15774,8 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
             String::new()
         }
     );
-    // trace:TASK-279 | ai:claude
-    if let Some(identity) = role_user_facing_identity(&state.name) {
-        println!(
-            "Identity:    {} {}",
-            identity.bold(),
-            "— user-facing name for this role".dimmed()
-        );
-    }
+    // TASK-586: `state.name` is canonicalized on load, so the role's name
+    // is its identity now — no separate user-facing-identity line needed.
     println!("Stored at:   {}", path.display());
     println!(
         "Purpose:     {}",
@@ -15939,8 +15954,8 @@ fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> 
 /// since they're meant to apply across projects.
 const STARTER_ROLES: &[(&str, &str)] = &[
     (
-        "dialog",
-        "Your AIDA advisor — trusted counsel across the project's lifetime. Surfaces friction, articulates mental models, gardens the queue, curates memory across sessions. Produces specs and comments, not code; routes implementation to doer roles via `aida queue add --for <role>`.",
+        "advisor",
+        "Trusted counsel across the project's lifetime. Surfaces friction, articulates mental models, gardens the queue, curates memory across sessions. Produces specs and comments, not code; routes implementation to doer roles via `aida queue add --for <role>`.",
     ),
     (
         "triage",
@@ -16160,42 +16175,45 @@ mod role_repair_tests {
     }
 }
 
-// trace:TASK-279 | ai:claude
+// trace:TASK-586 | ai:claude
 #[cfg(test)]
 mod role_identity_tests {
-    use super::{role_user_facing_identity, STARTER_ROLES};
+    use super::{canonical_role_name, STARTER_ROLES};
 
-    // The `dialog` role's user-facing identity is "advisor" — surfaced by
-    // `aida role list` (as `dialog (advisor)`) and `aida role show dialog`
-    // (as the `Identity:` line).
+    // TASK-586: `advisor` is canonical; `dialog` is a deprecated alias that
+    // still resolves (case-insensitively). Other role names pass through.
     #[test]
-    fn dialog_renders_as_advisor() {
-        assert_eq!(role_user_facing_identity("dialog"), Some("advisor"));
+    fn dialog_canonicalizes_to_advisor() {
+        assert_eq!(canonical_role_name("dialog"), "advisor");
+        assert_eq!(canonical_role_name("Dialog"), "advisor");
+        assert_eq!(canonical_role_name("DIALOG"), "advisor");
+        assert_eq!(canonical_role_name("advisor"), "advisor");
     }
 
-    // Doer roles have no separate user-facing identity — the rendered name
-    // is the stored name.
+    // Doer roles (and anything else) are unchanged by canonicalization.
     #[test]
-    fn doer_roles_have_no_separate_identity() {
+    fn other_roles_pass_through_canonicalization() {
         for name in ["implementer", "reviewer", "architect", "triage"] {
-            assert_eq!(role_user_facing_identity(name), None, "role {name}");
+            assert_eq!(canonical_role_name(name), name, "role {name}");
         }
     }
 
-    // A freshly-scaffolded `dialog` role ships the advisor framing in its
-    // purpose text, so `aida role show dialog` reads as "advisor" copy even
-    // before the render-time `Identity:` line.
+    // The advisor starter role exists with advisor framing, and the old
+    // `dialog` starter name + "Captain / PO hat" framing are both gone.
     #[test]
-    fn starter_dialog_role_uses_advisor_framing() {
+    fn starter_set_uses_advisor_not_dialog() {
+        assert!(
+            STARTER_ROLES.iter().any(|(name, _)| *name == "advisor"),
+            "advisor must be a starter role"
+        );
+        assert!(
+            !STARTER_ROLES.iter().any(|(name, _)| *name == "dialog"),
+            "dialog must no longer be a starter role name"
+        );
         let (_, purpose) = STARTER_ROLES
             .iter()
-            .find(|(name, _)| *name == "dialog")
-            .expect("dialog is a starter role");
-        assert!(
-            purpose.contains("advisor"),
-            "dialog starter purpose should use advisor framing: {purpose}"
-        );
-        // The superseded "Captain / PO hat" framing must be gone.
+            .find(|(name, _)| *name == "advisor")
+            .expect("advisor is a starter role");
         assert!(
             !purpose.contains("PO hat"),
             "old captain/PO-hat framing should be removed: {purpose}"
@@ -72333,7 +72351,8 @@ impl RealPhaseDriver {
             .env("AIDA_HEADLESS", "1")
             .env(punt::REQUEST_FILE_ENV, request_path)
             .env(punt::RESPONSE_FILE_ENV, response_path)
-            .env("AIDA_SESSION_ROLE", "dialog")
+            // TASK-586: the advisor tier runs as the advisor role.
+            .env("AIDA_SESSION_ROLE", "advisor")
             .stdout(std::process::Stdio::from(log))
             .status()
             .map_err(|e| {
