@@ -1393,6 +1393,10 @@ pub enum MailboxCommand {
         /// The thread id.
         thread_id: String,
     },
+
+    /// Digest the local layer into the git-canonical store (durable, replayable,
+    /// shareable across clones) and commit it on the orphan branch. Idempotent.
+    Sync,
 }
 
 /// SPIKE-31: Claude Code path-gated rules sync.
