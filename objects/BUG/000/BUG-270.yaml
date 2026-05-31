@@ -32,7 +32,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T01:35:10.344061045Z
-modified_at: 2026-05-31T01:15:56.355796483Z
+modified_at: 2026-05-31T01:18:33.884535066Z
 req_type: Bug
 tags:
 - commit-format
@@ -40,3 +40,9 @@ tags:
 - papercut
 - reconcile-status
 - scanner
+comments:
+- id: 019e7b9c-7d9c-7b12-b546-b8cb0e0696b6
+  author: joe
+  content: Commit 6b04d13a references this requirement
+  created_at: 2026-05-31T01:18:33.884535066Z
+  modified_at: 2026-05-31T01:18:33.884535066Z
