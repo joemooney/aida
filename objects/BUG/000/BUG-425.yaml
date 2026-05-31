@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:03:52.208648036Z
-modified_at: 2026-05-31T22:03:52.208648036Z
+modified_at: 2026-05-31T23:23:02.993038866Z
 req_type: Bug
 tags:
 - aida:archive
@@ -18,3 +18,9 @@ tags:
 - performance
 - store-history
 - ux
+comments:
+- id: 019e8059-17d1-7290-84d2-8175865a0166
+  author: joe
+  content: 'Progress half SHIPPED (PR on branch archive-sweep-progress, merged 2026-05-31): bulk ''aida archive --older-than'' now prints an up-front ''Archiving: N spec(s)…'' heading + a throttled [k/N] tick every 50, so it no longer looks hung. REMAINING (keep this open): batch the per-spec store commits — archive_sweep calls backend.update_requirement per spec (main.rs ~3135), one orphan-store commit each (679 for the recent sweep). Needs a NEW aida-core CachedGitBackend batch-update API (write all YAMLs, one commit) — moderate storage-layer change, deferred to a focused session. Kept BUG-425''s id out of the progress commit subject/PR-title deliberately (the agreed-id auto-complete trap, BUG-426). — master/advisor'
+  created_at: 2026-05-31T23:23:02.993038866Z
+  modified_at: 2026-05-31T23:23:02.993038866Z
