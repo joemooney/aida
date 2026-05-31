@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T07:31:53.626645957Z
-modified_at: 2026-05-31T07:44:02.266883090Z
+modified_at: 2026-05-31T07:44:09.757573152Z
 req_type: Story
 tags:
 - competitive-parity
@@ -36,3 +36,8 @@ comments:
   content: 'Shipped option (b) — the non-reversing additive callout. No STORY-332 sign-off was needed in the end: (b) leaves bucketing untouched (NeedsAttention still counts in Remaining), so there''s no decision to reverse — it only adds a ''⚠ N shelved (needs a decision)'' line to the net summary when shelved_count>0, plus a status_is_shelved predicate (unit-tested) and a regression test locking in that NeedsAttention still buckets to Remaining. Options (a) full re-bucketing and (c) --legibility flag remain available as follow-ups if the additive line proves insufficient for parallel-drain legibility.'
   created_at: 2026-05-31T07:44:02.266883090Z
   modified_at: 2026-05-31T07:44:02.266883090Z
+- id: 019e7cfd-841d-7bb2-ac38-4206702acc68
+  author: joe
+  content: Commit 23b7edb05 references this requirement
+  created_at: 2026-05-31T07:44:09.757573152Z
+  modified_at: 2026-05-31T07:44:09.757573152Z
