@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:58:55.090830143Z
-modified_at: 2026-05-11T04:25:50.369811619Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -65,6 +65,8 @@ comments:
   content: Commit adc336e8 references this requirement
   created_at: 2026-05-11T04:25:49.055179018Z
   modified_at: 2026-05-11T04:25:49.055179018Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T04:25:50.369811619Z
