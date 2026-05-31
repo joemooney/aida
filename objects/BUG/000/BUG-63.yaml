@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:24:35.883151110Z
-modified_at: 2026-05-10T06:24:52.890779388Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 comments:
 - id: 019e108f-629a-7140-bd49-1520835c23d9
@@ -50,3 +50,5 @@ comments:
   content: Duplicate of BUG-62 — filed by reviewer milliseconds before noticing user had already filed the same content as BUG-62. Rejecting; track work on BUG-62.
   created_at: 2026-05-10T06:24:52.890779388Z
   modified_at: 2026-05-10T06:24:52.890779388Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
