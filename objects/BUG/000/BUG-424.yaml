@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T21:28:44.530662861Z
-modified_at: 2026-05-31T21:28:44.530662861Z
+modified_at: 2026-05-31T21:32:54.703940954Z
 req_type: Bug
 tags:
 - aida:archive
@@ -17,3 +17,9 @@ tags:
 - panic
 - unicode
 - user-facing
+comments:
+- id: 019e7ff4-422f-76c2-821c-119f90c1c0bb
+  author: joe
+  content: Commit cee7e1c9a references this requirement
+  created_at: 2026-05-31T21:32:54.703940954Z
+  modified_at: 2026-05-31T21:32:54.703940954Z
