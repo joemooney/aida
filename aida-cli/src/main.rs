@@ -1358,6 +1358,27 @@ fn run() -> Result<()> {
             // so the --comments flag is a no-op here. Git backend honors it.
             show_requirement(&storage, id)?;
         }
+        Command::Graph {
+            id,
+            blocked_by,
+            blocks,
+            tree,
+            impact,
+            depth,
+            json,
+        } => {
+            let store = storage.load()?;
+            handle_graph_command(
+                &store,
+                id,
+                *blocked_by,
+                *blocks,
+                *tree,
+                *impact,
+                *depth,
+                *json,
+            )?;
+        }
         Command::Brief {
             agent,
             spec,
@@ -6362,6 +6383,27 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
             }
         }
+        Command::Graph {
+            id,
+            blocked_by,
+            blocks,
+            tree,
+            impact,
+            depth,
+            json,
+        } => {
+            let store = backend.load()?;
+            handle_graph_command(
+                &store,
+                id,
+                *blocked_by,
+                *blocks,
+                *tree,
+                *impact,
+                *depth,
+                *json,
+            )?;
+        }
         Command::Show {
             id,
             comments,
@@ -11305,6 +11347,142 @@ pub(crate) fn apply_tag_deltas(
         }
     }
     changed
+}
+
+/// Handler for `aida graph <SPEC>` — query the cross-spec relationship graph
+/// (blocked-by / blocks chains, epic rollup, reverse impact) on top of the
+/// cycle-safe `graph_walk` primitive (TASK-594). Read-only; the flagship
+/// "outsmart the flat-markdown spec tools" demo. trace:STORY-489 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_graph_command(
+    store: &aida_core::RequirementsStore,
+    id_str: &str,
+    blocked_by: bool,
+    blocks: bool,
+    tree: bool,
+    impact: bool,
+    depth: Option<usize>,
+    json: bool,
+) -> Result<()> {
+    use aida_core::graph_walk::{status_rollup, walk, Direction};
+
+    let mode_count = [blocked_by, blocks, tree, impact]
+        .iter()
+        .filter(|b| **b)
+        .count();
+    if mode_count > 1 {
+        anyhow::bail!("choose at most one graph mode: --blocked-by, --blocks, --tree, or --impact");
+    }
+
+    let id = parse_requirement_id(id_str, store)?;
+    let root = store
+        .get_requirement_by_id(&id)
+        .context("Requirement not found")?;
+    let root_label = root.display_id();
+    let root_title = root.title.clone();
+
+    // Resolve mode → (relationship types, direction, label). Default: tree.
+    let (rel_types, direction, mode): (Vec<RelationshipType>, Direction, &str) = if blocked_by {
+        (
+            vec![RelationshipType::BlockedBy],
+            Direction::Outgoing,
+            "blocked-by",
+        )
+    } else if blocks {
+        (
+            vec![RelationshipType::Blocks],
+            Direction::Outgoing,
+            "blocks",
+        )
+    } else if impact {
+        // What is blocked by the root = specs whose BlockedBy edge points at it.
+        (
+            vec![RelationshipType::BlockedBy],
+            Direction::Incoming,
+            "impact",
+        )
+    } else {
+        (vec![RelationshipType::Child], Direction::Outgoing, "tree")
+    };
+    let is_tree = mode == "tree";
+
+    let result = walk(store, id, &rel_types, direction, depth);
+
+    if json {
+        let nodes: Vec<_> = result
+            .nodes
+            .iter()
+            .map(|nid| {
+                let r = store.get_requirement_by_id(nid);
+                serde_json::json!({
+                    "id": r.map(|x| x.display_id()).unwrap_or_else(|| nid.to_string()),
+                    "title": r.map(|x| x.title.clone()),
+                    "status": r.map(|x| format!("{:?}", x.status)),
+                    "resolved": r.is_some(),
+                })
+            })
+            .collect();
+        let rollup = status_rollup(store, &result.nodes);
+        let out = serde_json::json!({
+            "root": root_label,
+            "mode": mode,
+            "count": result.nodes.len(),
+            "nodes": nodes,
+            "rollup": {
+                "total": rollup.total,
+                "completed": rollup.completed,
+                "done": rollup.done,
+                "in_progress": rollup.in_progress,
+                "remaining": rollup.remaining,
+                "shelved": rollup.shelved,
+                "rejected": rollup.rejected,
+            },
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+
+    println!(
+        "{} {} {} — {}",
+        "Graph".bold(),
+        format!("({mode})").dimmed(),
+        root_label.cyan().bold(),
+        root_title
+    );
+    if result.nodes.is_empty() {
+        println!("  {}", "(no related specs in this direction)".dimmed());
+        return Ok(());
+    }
+    for nid in &result.nodes {
+        match store.get_requirement_by_id(nid) {
+            Some(r) => println!("  {}  {}", r.display_id().yellow(), r.title),
+            None => println!("  {}  {}", nid.to_string().yellow(), "(unresolved)".red()),
+        }
+    }
+    if is_tree {
+        let r = status_rollup(store, &result.nodes);
+        let shelved = if r.shelved > 0 {
+            format!(" · {} shelved", r.shelved)
+        } else {
+            String::new()
+        };
+        let rejected = if r.rejected > 0 {
+            format!(" · {} rejected", r.rejected)
+        } else {
+            String::new()
+        };
+        println!(
+            "\n{} {} total · {} completed · {} in progress · {} remaining{}{}",
+            "Rollup:".bold(),
+            r.total,
+            r.completed,
+            r.in_progress,
+            r.remaining,
+            shelved,
+            rejected
+        );
+    }
+    Ok(())
 }
 
 /// STORY-439: stamp `complexity:<level>` / `estimated-assistance:<level>`

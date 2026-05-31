@@ -4354,6 +4354,44 @@ pub enum Command {
         full: bool,
     },
 
+    /// Query the cross-spec relationship graph from a root spec: transitive
+    /// blocked-by / blocks chains, epic rollup, and reverse impact — the
+    /// questions a flat per-feature spec tool structurally can't answer.
+    /// Read-only. Pick at most one mode (default: --tree).
+    // trace:STORY-489 | ai:claude
+    Graph {
+        /// The root spec (SPEC-ID or UUID) to query from.
+        id: String,
+
+        /// Transitive BlockedBy chain: every spec the root is directly or
+        /// indirectly blocked by.
+        #[clap(long)]
+        blocked_by: bool,
+
+        /// Transitive Blocks chain: every spec the root directly or
+        /// indirectly blocks.
+        #[clap(long)]
+        blocks: bool,
+
+        /// Parent/Child descendants of the root with a status rollup — the
+        /// epic-rollup view. The default when no mode flag is given.
+        #[clap(long)]
+        tree: bool,
+
+        /// Reverse impact: every spec that is (transitively) blocked by the
+        /// root — what is at risk if the root slips.
+        #[clap(long)]
+        impact: bool,
+
+        /// Limit traversal to N hops from the root (default: unbounded).
+        #[clap(long, value_name = "N")]
+        depth: Option<usize>,
+
+        /// Emit the result as JSON for agents / scripts.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Edit an existing requirement
     Edit {
         /// The ID of the requirement to edit
