@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:57:17.999455016Z
-modified_at: 2026-05-31T01:58:19.453059020Z
+modified_at: 2026-05-31T02:03:27.276416607Z
 req_type: Bug
 tags:
 - backlog
@@ -61,3 +61,8 @@ comments:
     Fix constraint for whoever implements: a custom Deserialize for RelationshipType must PRESERVE the existing on-disk format (read 'Parent' and '!Custom x' unchanged) while routing unknown bare-string variants to Custom(name) — switching to a plain Display-string format would change the bytes ('Parent'→'parent', drop the !Custom tag) and break every existing file. The 'round-trip preservation of unknown FIELDS' acceptance is the risky part (derived serde drops unknown fields on rewrite → an older binary editing a spec would ERASE a newer machine's fields); a true fix needs a per-type unknown-field bucket, which is a much larger change. Recommend scoping a first PR to the enum-variant forward-compat (the actually-failing part) and treating field round-trip-preservation as a separate, larger spec.
   created_at: 2026-05-31T01:39:27.210922063Z
   modified_at: 2026-05-31T01:39:27.210922063Z
+- id: 019e7bc5-96ac-7e02-8f0d-118435878c69
+  author: joe
+  content: Commit 2a58d3e8 references this requirement
+  created_at: 2026-05-31T02:03:27.276416607Z
+  modified_at: 2026-05-31T02:03:27.276416607Z
