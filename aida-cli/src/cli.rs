@@ -1353,7 +1353,7 @@ pub enum CacheCommand {
 /// Inter-agent mailbox — peer↔peer messaging between agents (distinct from
 /// operator→agent briefs and top-down directives). Hybrid storage: a fast
 /// local layer now, a git-canonical durable digest in a later slice.
-/// trace:STORY-493 | ai:claude
+// trace:STORY-493 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum MailboxCommand {
     /// Send a message to another agent, or `--broadcast` to all.
@@ -4642,7 +4642,7 @@ pub enum Command {
     Cache(CacheCommand),
 
     /// Inter-agent mailbox: peer↔peer messaging (send / inbox / thread).
-    /// trace:STORY-493 | ai:claude
+    // trace:STORY-493 | ai:claude
     #[clap(subcommand)]
     Mailbox(MailboxCommand),
 
