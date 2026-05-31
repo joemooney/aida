@@ -35,7 +35,7 @@ priority: Medium
 owner: joe
 feature: 219-Uncategorized
 created_at: 2026-02-21T06:50:21.589806781Z
-modified_at: 2026-05-04T19:29:14.541465595Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -47,3 +47,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:29:13.588720271Z
   modified_at: 2026-05-04T19:29:13.588720271Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
