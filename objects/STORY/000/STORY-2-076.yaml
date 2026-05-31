@@ -73,9 +73,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T03:49:10.684910674Z
-modified_at: 2026-05-12T06:52:03.959895037Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T03:49:11.668472950Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
