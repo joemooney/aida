@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:54:12.333617718Z
-modified_at: 2026-05-10T18:45:27.272327609Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -64,3 +64,5 @@ comments:
   content: Commit 339ad818 references this requirement
   created_at: 2026-05-10T06:52:28.243085428Z
   modified_at: 2026-05-10T06:52:28.243085428Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
