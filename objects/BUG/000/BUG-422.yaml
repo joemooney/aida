@@ -1,0 +1,30 @@
+id: 019e7fe7-dac1-7902-b68c-18253a662bec
+spec_id: BUG-422
+agreed_id: BUG-422
+title: aida session end hangs indefinitely on the CI/PR probe when stdin is not a TTY (no timeout)
+description: |-
+  Reported by an external project (quizdom) on 2026-05-31.
+
+  'aida session end <id>' blocks INDEFINITELY with zero output when run in a non-interactive / no-TTY context (e.g. an orchestrator or another agent's bash, piped). Root cause: it shells out to 'gh' for the open-PR / CI probe, and that subprocess hangs with no timeout. Observed: a session-end ran 177s producing NO output before being killed; a 25s-timeout retry also failed to complete.
+
+  Workaround that worked: 'aida session end <id> --skip-ci -y'.
+
+  Fixes: (1) detect non-TTY stdin and auto-skip (or bound with a short timeout) the CI/PR probe — it should never hang the lease release; (2) put a hard timeout on the gh subprocess regardless of TTY. This bites multi-agent orchestration hard: tearing down a finished worktree from outside the agent (the required handoff path) hangs.
+
+  Related ergonomics gap (separate enhancement): a scoped session can't self-reap its own worktree or chain to the next spec, so every spec boundary needs a human to exit -> session end -> agent new. A reaper ('remove worktrees whose branch is merged AND process is gone') + chained handoff would close the loop.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T21:19:21.793273566Z
+modified_at: 2026-05-31T21:19:21.793273566Z
+req_type: Bug
+tags:
+- ci-probe
+- external-report
+- gh
+- hang
+- multi-agent
+- non-tty
+- quizdom
+- session-end
