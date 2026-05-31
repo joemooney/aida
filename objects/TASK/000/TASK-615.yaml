@@ -1,0 +1,19 @@
+id: 019e803b-9191-7240-b83d-3ba055efa8af
+spec_id: TASK-615
+agreed_id: TASK-615
+title: 'Implement drain-reliability wiring (slice 2): inconclusive→retry-then-shelve + phase no-progress/ceiling watchdog'
+description: 'The implementation of the two operator-approved drain-reliability fixes, per docs/plans/2026-05-31-drain-reliability-136-420.md (sharpened with the real wiring findings). The decision CORES already shipped (watchdog_verdict + gh_verify_backoff_schedule, PR-420). This is the WIRING: (1) TASK-136 — in run_spec''s phase-1 finish, wrap the GH-verify in the backoff retry, then in BATCH mode route a still-inconclusive result through the driver''s shelve_on_failure (so drain_batch''s existing shelve→advance at ~2217 carries it) instead of finish_inconclusive; requires threading a batch-mode flag through run_spec + the driver trait. (2) BUG-420 — wrap the headless phase spawn-wait with watchdog_verdict (no-progress poll of worktree commit/mtime + wall-clock ceiling), kill+shelve on trip. NOTE: validation requires a SUPERVISED --zen --auto-complete drain (keyboard, advisor watching). The umbrella findings TASK-136/BUG-420 auto-completed off the cores/plan commits (agreed-id matching) — this fresh spec tracks the open wiring. trace:self'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T22:50:48.081133903Z
+modified_at: 2026-05-31T22:50:48.081133903Z
+req_type: Task
+tags:
+- drain
+- from-plan
+- keyboard-supervised
+- orchestrator
+- reliability
+- slice-2
