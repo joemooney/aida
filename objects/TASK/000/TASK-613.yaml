@@ -1,0 +1,12 @@
+id: 019e801e-36ae-7971-b229-105b1dadacd7
+spec_id: TASK-613
+agreed_id: TASK-613
+title: BUG-425 (bulk-archive batch+progress) is independent — ship separately
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T22:18:44.270782271Z
+modified_at: 2026-05-31T22:18:44.270782271Z
+req_type: Task
