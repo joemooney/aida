@@ -4009,6 +4009,15 @@ pub enum AgentCommand {
         /// Name of the agent to stop.
         name: String,
     },
+
+    /// List the supported agent roles in the taxonomy.
+    // trace:TASK-587 | ai:antigravity
+    #[clap(name = "list-roles")]
+    ListRoles {
+        /// Format output as JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Agent-specific launchers. Each variant maps AIDA's supervision layer onto
