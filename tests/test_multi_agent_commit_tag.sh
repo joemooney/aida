@@ -35,6 +35,12 @@ accepted=(
     "[AI:codex+antigravity+claude] test(hooks): accept three agents (TASK-509)"
     "[AI:claude:med] fix(hooks): accept confidence (TASK-509)"
     "[AI:antigravity+claude:med] fix(hooks): accept multi-agent confidence (TASK-509)"
+    # BUG-51: a non-id-atom suffix after the id list (version / phase progress
+    # marker) is accepted. Base id stays TASK-509 to match the staged trace;
+    # `v1`/`v2`/`rc1` are the genuinely-non-atom suffixes the old pattern rejected.
+    "[AI:claude] feat(doctor): ship v1 (TASK-509 v1)"
+    "[AI:claude] feat(doctor): ship rc (TASK-509 rc1)"
+    "[AI:claude] feat(x): suffix after multi-id (TASK-509 TASK-509 v2)"
 )
 
 for subject in "${accepted[@]}"; do
