@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:24:02.547453751Z
-modified_at: 2026-05-31T15:24:02.547453751Z
+modified_at: 2026-05-31T15:33:00.496770053Z
 req_type: Functional
 tags:
 - custom-edges
@@ -27,3 +27,9 @@ tags:
 - quizdom
 - substrate
 - traversal
+comments:
+- id: 019e7eaa-c1d0-73c1-8b8f-5206aecc445d
+  author: joe
+  content: 'Master triage (2026-05-31): verified + scoped. This is SMALL — the pure core already does it. aida_core::graph_walk::walk takes rel_types: &[RelationshipType] and matches by equality via get_relationships_by_type, so it already traverses Custom("begets") edges; RelationshipType::from_str returns Custom(name) for unknown names (BUG-251). The ONLY gap: the aida graph CLI mode-resolution + the query_graph MCP tool hardcode built-in types (Child/BlockedBy/Blocks) and expose no way to pass a custom type. Implementation: add --follow <type> (repeatable) to aida graph + a ''follow''/''types'' param to query_graph, map each via RelationshipType::from_str into a walk_union spec ((vec![from_str(t)], Direction::Outgoing)), default direction outgoing (or a --incoming flag). Reuses walk_union (BUG-411) directly. Natural follow-up to STORY-489; ~1 CLI slice + 1 MCP slice + doc-consistency. Reproduced by quizdom (aida graph Q-23 --tree empty despite 4 custom ''begets'' edges; rel list shows them). 3rd quizdom-driven AIDA signal.'
+  created_at: 2026-05-31T15:33:00.496770053Z
+  modified_at: 2026-05-31T15:33:00.496770053Z
