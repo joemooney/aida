@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T18:44:08.462445407Z
-modified_at: 2026-05-04T19:22:11.778019983Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - cli
@@ -54,3 +54,5 @@ comments:
   content: ''
   created_at: 2026-05-04T18:50:07.919213376Z
   modified_at: 2026-05-04T18:50:07.919213376Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
