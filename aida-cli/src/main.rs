@@ -4702,6 +4702,17 @@ fn detect_distributed_store_from(start: &std::path::Path) -> Option<std::path::P
                         if store_path.exists() && store_path.is_dir() {
                             return Some(store_path);
                         }
+                        // BUG-331: a sibling worktree (`git worktree add`) has the
+                        // tracked `.aida/config.toml` but NOT `.aida-store/` — that
+                        // gitignored orphan-branch worktree only lives in the MAIN
+                        // worktree. Without this, detection fails here and AIDA
+                        // silently falls back to deprecated centralized mode,
+                        // breaking cross-worktree coordination. Resolve the store
+                        // at the main worktree via git-common-dir before giving up.
+                        // trace:BUG-331 | ai:claude
+                        if let Some(main_store) = main_worktree_store(current, val) {
+                            return Some(main_store);
+                        }
                     }
                 }
             }
@@ -4710,6 +4721,49 @@ fn detect_distributed_store_from(start: &std::path::Path) -> Option<std::path::P
             Some(p) => current = p,
             None => return None,
         }
+    }
+}
+
+/// BUG-331: resolve `<main-worktree>/<rel_store>` from inside a git worktree.
+///
+/// `git rev-parse --git-common-dir` yields the SHARED `.git` directory (e.g.
+/// `/main/.git`) regardless of which worktree we're in; its parent is the main
+/// worktree. The `.aida-store/` orphan-branch worktree is created (and
+/// gitignored) only there, so a sibling worktree must look here instead of
+/// falling back to centralized mode. The common-dir may be printed relative to
+/// `current` (e.g. `.git`) or absolute — handle both, then canonicalize.
+///
+/// Returns None when not in a git repo, git is unavailable/old, or the store is
+/// genuinely absent — callers then fall through to their existing resolution.
+/// trace:BUG-331 | ai:claude
+fn main_worktree_store(current: &std::path::Path, rel_store: &str) -> Option<std::path::PathBuf> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(current)
+        .args(["rev-parse", "--git-common-dir"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let raw = String::from_utf8(out.stdout).ok()?;
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let common_dir = std::path::Path::new(raw);
+    let common_dir = if common_dir.is_absolute() {
+        common_dir.to_path_buf()
+    } else {
+        current.join(common_dir)
+    };
+    let common_dir = common_dir.canonicalize().ok()?;
+    let main_worktree = common_dir.parent()?;
+    let store = main_worktree.join(rel_store);
+    if store.exists() && store.is_dir() {
+        Some(store)
+    } else {
+        None
     }
 }
 
@@ -8138,7 +8192,8 @@ fn render_agent_brief(
         "git worktree add /home/joe/ai/aida-{branch} -b {branch} origin/main\n"
     ));
     out.push_str(&format!("cd /home/joe/ai/aida-{branch}\n"));
-    out.push_str("ln -s /home/joe/ai/aida/.aida-store .aida-store\n");
+    // BUG-331: no `.aida-store` symlink needed — sibling worktrees now resolve
+    // the canonical store at the main worktree via git-common-dir. trace:BUG-331
     out.push_str(&format!(
         "aida session start --owns {spec_id} --branch {branch} --path /home/joe/ai/aida-{branch} --reuse-branch\n"
     ));
@@ -36696,6 +36751,81 @@ mod store_walkup_tests {
         let nested = tmp.path().join("a/b");
         std::fs::create_dir_all(&nested).unwrap();
         assert!(detect_distributed_store_from(&nested).is_none());
+    }
+
+    /// BUG-331: from a sibling git worktree, detection resolves the canonical
+    /// store at the MAIN worktree (via git-common-dir) instead of failing and
+    /// falling back to centralized mode. The sibling has the tracked
+    /// `.aida/config.toml` but no local `.aida-store/`.
+    /// trace:BUG-331 | ai:claude
+    #[test]
+    fn detect_distributed_store_resolves_from_sibling_worktree() {
+        fn git(repo: &std::path::Path, args: &[&str]) {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+                .expect("git on PATH");
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+
+        let tmp = TempDir::new().unwrap();
+        let main_wt = tmp.path().join("main");
+        std::fs::create_dir_all(&main_wt).unwrap();
+        git(&main_wt, &["init", "--initial-branch=main", "--quiet"]);
+        git(&main_wt, &["config", "user.email", "t@example.com"]);
+        git(&main_wt, &["config", "user.name", "T"]);
+
+        // Tracked config.toml (a sibling worktree inherits it from the branch).
+        std::fs::create_dir_all(main_wt.join(".aida")).unwrap();
+        std::fs::write(
+            main_wt.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        git(&main_wt, &["add", ".aida/config.toml"]);
+        git(&main_wt, &["commit", "-m", "chore: aida config", "--quiet"]);
+
+        // The orphan-branch worktree lives ONLY in the main worktree.
+        std::fs::create_dir_all(main_wt.join(".aida-store")).unwrap();
+
+        // Add a sibling worktree — it has config.toml, but no `.aida-store/`.
+        let sibling = tmp.path().join("sibling");
+        git(
+            &main_wt,
+            &[
+                "worktree",
+                "add",
+                "--quiet",
+                sibling.to_str().unwrap(),
+                "-b",
+                "feature",
+            ],
+        );
+        assert!(sibling.join(".aida/config.toml").exists());
+        assert!(!sibling.join(".aida-store").exists());
+
+        let resolved =
+            detect_distributed_store_from(&sibling).expect("should resolve via main worktree");
+        // Canonicalize both sides — worktree paths can differ by symlinks
+        // (e.g. /tmp vs /private/tmp) before normalization.
+        assert_eq!(
+            resolved.canonicalize().unwrap(),
+            main_wt.join(".aida-store").canonicalize().unwrap(),
+            "sibling worktree must resolve the main worktree's canonical store"
+        );
+
+        // Cleanup the registered worktree so the tempdir drops cleanly.
+        git(
+            &main_wt,
+            &["worktree", "remove", "--force", sibling.to_str().unwrap()],
+        );
     }
 }
 
