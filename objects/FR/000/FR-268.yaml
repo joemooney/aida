@@ -20,9 +20,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T02:08:40.901745992Z
-modified_at: 2026-05-09T02:08:40.901745992Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 tags:
 - display
 - list
 - ux
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
