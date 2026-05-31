@@ -23,6 +23,7 @@ mod global_queue;
 mod headless_tail;
 mod headless_tee;
 mod history;
+mod mailbox_store;
 mod mcp;
 mod network_retry;
 mod not_found;
@@ -98,9 +99,9 @@ use crate::cli::{
     AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BacklogCommand, BlockCommand,
     BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
     DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
-    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand, McpCommand,
-    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QueueCommand,
-    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
+    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand, MailboxCommand,
+    McpCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand,
+    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
     SessionManifestCommand, SessionWakeupCommand, SkillCommand, StackCommand, TraceCommand,
     TypeCommand, WorkerCommand, ZenCommand,
@@ -1476,6 +1477,12 @@ fn run() -> Result<()> {
         Command::Node(_) => {
             anyhow::bail!(
                 "aida node commands are only available in git-canonical (distributed) mode. \
+                 Run `aida init` (defaults to distributed) first."
+            );
+        }
+        Command::Mailbox(_) => {
+            anyhow::bail!(
+                "aida mailbox commands are only available in git-canonical (distributed) mode. \
                  Run `aida init` (defaults to distributed) first."
             );
         }
@@ -5182,6 +5189,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
     match command {
         Command::Cache(cache_cmd) => {
             return handle_cache_command(cache_cmd, &backend);
+        }
+        Command::Mailbox(mailbox_cmd) => {
+            // trace:STORY-493 | ai:claude — local layer only; git-canonical
+            // digest is a later slice. Needs only the project root.
+            return handle_mailbox_command(mailbox_cmd, store_path);
         }
         Command::Node(node_cmd) => {
             return handle_node_command(node_cmd, store_path);
@@ -15093,6 +15105,112 @@ struct RoleActivity {
 }
 
 const ACTIVITY_MAX: usize = 10;
+
+/// Handler for `aida mailbox` — the local layer of the hybrid inter-agent
+/// mailbox (STORY-493). Reads/writes `.aida/mailbox/` via the pure
+/// `aida_core::mailbox` core; the git-canonical digest is a later slice.
+// trace:STORY-493 trace:TASK-603 | ai:claude
+fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) -> Result<()> {
+    use aida_core::mailbox::{inbox_for, thread as thread_view, Message, Recipient};
+    let project_root = store_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+
+    match cmd {
+        MailboxCommand::Send {
+            to,
+            broadcast,
+            body,
+            thread,
+            in_reply_to,
+            from,
+        } => {
+            let recipient = if *broadcast {
+                Recipient::Broadcast
+            } else if let Some(agent) = to {
+                Recipient::Agent(agent.clone())
+            } else {
+                anyhow::bail!("specify --to <agent> or --broadcast");
+            };
+            let sender = from.clone().unwrap_or_else(|| current_user_id(None));
+            let id = uuid::Uuid::new_v4().to_string();
+            // A message with no explicit thread starts its own thread (id == thread).
+            let thread_id = thread.clone().unwrap_or_else(|| id.clone());
+            let msg = Message {
+                id: id.clone(),
+                thread_id: thread_id.clone(),
+                from: sender,
+                to: recipient,
+                timestamp: chrono::Utc::now().timestamp_millis(),
+                in_reply_to: in_reply_to.clone(),
+                body: body.clone(),
+            };
+            mailbox_store::write_message(project_root, &msg)?;
+            println!(
+                "{} sent {} (thread {})",
+                "✉".green(),
+                id.cyan(),
+                thread_id.dimmed()
+            );
+            Ok(())
+        }
+        MailboxCommand::Inbox { agent } => {
+            let who = agent.clone().unwrap_or_else(|| current_user_id(None));
+            let all = mailbox_store::read_local_messages(project_root)?;
+            let inbox = inbox_for(&who, &all);
+            if inbox.is_empty() {
+                println!("{} inbox empty for {}", "✉".dimmed(), who.cyan());
+                return Ok(());
+            }
+            println!(
+                "{} {}",
+                format!("Inbox for {who}").bold(),
+                format!("({})", inbox.len()).dimmed()
+            );
+            for m in inbox {
+                print_mailbox_line(m);
+            }
+            Ok(())
+        }
+        MailboxCommand::Thread { thread_id } => {
+            let all = mailbox_store::read_local_messages(project_root)?;
+            let msgs = thread_view(thread_id, &all);
+            if msgs.is_empty() {
+                println!(
+                    "{} no messages in thread {}",
+                    "✉".dimmed(),
+                    thread_id.cyan()
+                );
+                return Ok(());
+            }
+            println!(
+                "{} {}",
+                format!("Thread {thread_id}").bold(),
+                format!("({})", msgs.len()).dimmed()
+            );
+            for m in msgs {
+                print_mailbox_line(m);
+            }
+            Ok(())
+        }
+    }
+}
+
+/// One mailbox message as a compact line: short-id, from → to, body.
+fn print_mailbox_line(m: &aida_core::mailbox::Message) {
+    let to = match &m.to {
+        aida_core::mailbox::Recipient::Agent(a) => a.clone(),
+        aida_core::mailbox::Recipient::Broadcast => "all".to_string(),
+    };
+    let short = m.id.split('-').next().unwrap_or(m.id.as_str());
+    println!(
+        "  {} {} → {}  {}",
+        short.dimmed(),
+        m.from.cyan(),
+        to.yellow(),
+        m.body
+    );
+}
 
 fn statusline_project_root() -> std::path::PathBuf {
     // Roles + statusline live in the project that is the user's CWD
