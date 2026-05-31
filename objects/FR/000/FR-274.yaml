@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T00:45:55.071793183Z
-modified_at: 2026-05-05T02:26:44.759894528Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df59c-0943-7f81-95e4-27a61b75e707
@@ -50,3 +50,5 @@ comments:
   content: ''
   created_at: 2026-05-05T02:26:39.611151475Z
   modified_at: 2026-05-05T02:26:39.611151475Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
