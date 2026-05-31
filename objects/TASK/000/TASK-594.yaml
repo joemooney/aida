@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T08:21:35.879735887Z
-modified_at: 2026-05-31T08:21:35.879735887Z
+modified_at: 2026-05-31T08:29:23.344761713Z
 req_type: Task
 tags:
 - aida-core
@@ -16,3 +16,9 @@ tags:
 - moat
 - parent:STORY-489
 - slice-1-of-3
+comments:
+- id: 019e7d26-ec10-7c83-9b62-ac91ef71eb77
+  author: joe
+  content: Commit 081e3ab7c references this requirement
+  created_at: 2026-05-31T08:29:23.344761713Z
+  modified_at: 2026-05-31T08:29:23.344761713Z
