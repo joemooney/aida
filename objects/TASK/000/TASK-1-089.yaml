@@ -10,12 +10,12 @@ description: |-
   Worth extending STORY-469 with a 5th guard idea: 'aida session start refuses spec-not-in-active-briefed-batch when an overnight drain is active.' Substrate-aware of operator intent boundaries.
 
   Recurrence count for unauthorized-pickup sub-pattern: 1 (first observation of THIS sub-shape; sibling cases of agent-discipline-violation are in STORY-467 comments).
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T07:27:16.720637894Z
-modified_at: 2026-05-31T03:16:23.799607832Z
+modified_at: 2026-05-31T03:16:25.838313556Z
 req_type: Task
 tags:
 - batch:queue-work-reliability
