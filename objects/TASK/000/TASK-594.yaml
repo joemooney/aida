@@ -1,0 +1,18 @@
+id: 019e7d1f-ca07-7471-9cc5-e1ffcae664ee
+spec_id: TASK-594
+agreed_id: TASK-594
+title: 'graph_walk core primitive: cycle-safe transitive relationship walk + status rollup (STORY-489 slice 1)'
+description: 'Slice 1 of 3 for STORY-489 (aida graph). The aida-core/src/graph_walk.rs module: cycle-safe visited-set BFS over any relationship-type set in either direction (Outgoing follows a spec''s own edges; Incoming = reverse adjacency for impact queries), plus status_rollup for epic views. Built on the existing single-step get_relationships_by_type; adds the transitive walk + cycle guard the codebase lacked. 6 unit tests (transitive closure, cycle termination, depth bound, reverse/impact, rollup, dangling-target safety). Slices 2 (CLI aida graph subcommand) and 3 (MCP query_graph tool — needs contract sign-off) remain; STORY-489 stays open until all land. Plan: docs/plans/2026-05-31-graph-query-story-489.md.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T08:21:35.879735887Z
+modified_at: 2026-05-31T08:21:35.879735887Z
+req_type: Task
+tags:
+- aida-core
+- graph-query
+- moat
+- parent:STORY-489
+- slice-1-of-3
