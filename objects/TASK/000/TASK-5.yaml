@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: 204-Uncategorized
 created_at: 2025-12-16T03:35:33.799836362Z
-modified_at: 2026-05-04T19:26:39.300264812Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 comments:
 - id: 019df474-f32c-7602-ac43-56f9ef436d41
@@ -15,3 +15,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:26:38.380556460Z
   modified_at: 2026-05-04T19:26:38.380556460Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
