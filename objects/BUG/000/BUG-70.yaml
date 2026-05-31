@@ -40,12 +40,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T21:44:10.299919947Z
-modified_at: 2026-05-11T04:34:39.629036531Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 019df145-51da-7c23-ab31-910ad58c4c44
   created_at: 2026-05-10T21:44:11.295730799Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T04:34:39.629036531Z
