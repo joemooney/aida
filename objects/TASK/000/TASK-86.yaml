@@ -59,7 +59,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:20:08.185506367Z
-modified_at: 2026-05-12T16:04:21.235256696Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -92,6 +92,8 @@ comments:
     Commit: fb230097
   created_at: 2026-05-12T15:35:27.314385636Z
   modified_at: 2026-05-12T15:35:27.314385636Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T15:35:28.744309779Z
