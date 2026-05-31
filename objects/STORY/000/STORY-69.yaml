@@ -62,7 +62,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:41:46.578062063Z
-modified_at: 2026-05-10T18:45:32.433163619Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -74,3 +74,5 @@ comments:
   content: Commit dad3fcb3 references this requirement
   created_at: 2026-05-10T06:47:34.060275530Z
   modified_at: 2026-05-10T06:47:34.060275530Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
