@@ -13420,6 +13420,39 @@ fn handle_docs_command(cmd: &DocsCommand, storage: &Storage) -> Result<()> {
     handle_docs_with_store(cmd, &store)
 }
 
+/// TASK-589: assemble the discipline-pack glossary from the binary's embedded
+/// templates — the machinery glossary and/or the lifecycle vocabulary. Reads
+/// the embedded copy (not the project's scaffolded files), so it is correct
+/// even when a project's `docs/aida/discipline/` is missing or stale. With
+/// neither flag (or both) it returns both sections, machinery first.
+/// trace:TASK-589 | ai:claude
+fn render_discipline_glossary(machinery: bool, lifecycle: bool) -> Result<String> {
+    let templates = aida_core::get_embedded_templates();
+    let embedded = |key: &str| -> Result<String> {
+        templates
+            .iter()
+            .find(|t| t.key == key)
+            .map(|t| t.content.clone())
+            .ok_or_else(|| anyhow::anyhow!("embedded glossary `{key}` not found in this binary"))
+    };
+    // Neither flag (default) or both flags → show both sections.
+    let both = machinery == lifecycle;
+    let show_machinery = both || machinery;
+    let show_lifecycle = both || lifecycle;
+
+    let mut out = String::new();
+    if show_machinery {
+        out.push_str(&embedded("docs/aida/discipline/machinery-glossary.md")?);
+    }
+    if show_machinery && show_lifecycle {
+        out.push_str("\n\n");
+    }
+    if show_lifecycle {
+        out.push_str(&embedded("docs/aida/discipline/lifecycle-vocabulary.md")?);
+    }
+    Ok(out)
+}
+
 /// Dispatch `aida doc {add,list,show}`. Always operates against the
 /// distributed git-canonical backend — Doc entries are just requirements
 /// with `req_type == Doc` and `--about` modeled as `References`
@@ -13810,8 +13843,60 @@ fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStore) -> Resul
             }
             println!("{} docs tree matches graph projection.", "✓".green());
         }
+        // TASK-589: surface the embedded discipline glossary from the CLI.
+        // trace:TASK-589 | ai:claude
+        DocsCommand::Glossary {
+            machinery,
+            lifecycle,
+        } => {
+            print!("{}", render_discipline_glossary(*machinery, *lifecycle)?);
+        }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod glossary_render_tests {
+    use super::*;
+
+    /// TASK-589: with no flags, both glossary sections render, machinery first.
+    #[test]
+    fn default_renders_both_glossary_sections_machinery_first() {
+        let out = render_discipline_glossary(false, false).unwrap();
+        let m = out.find("# Machinery glossary");
+        let l = out.find("# Lifecycle vocabulary");
+        assert!(m.is_some(), "machinery section present");
+        assert!(l.is_some(), "lifecycle section present");
+        assert!(
+            m < l,
+            "machinery glossary renders before lifecycle vocabulary"
+        );
+    }
+
+    /// Each filter flag isolates its own section.
+    #[test]
+    fn filter_flags_isolate_their_section() {
+        let machinery = render_discipline_glossary(true, false).unwrap();
+        assert!(machinery.contains("# Machinery glossary"));
+        assert!(
+            !machinery.contains("# Lifecycle vocabulary"),
+            "--machinery omits the lifecycle section"
+        );
+
+        let lifecycle = render_discipline_glossary(false, true).unwrap();
+        assert!(lifecycle.contains("# Lifecycle vocabulary"));
+        assert!(
+            !lifecycle.contains("# Machinery glossary"),
+            "--lifecycle omits the machinery section"
+        );
+    }
+
+    /// Passing both flags is the same as passing neither — show everything.
+    #[test]
+    fn both_flags_render_both_sections() {
+        let out = render_discipline_glossary(true, true).unwrap();
+        assert!(out.contains("# Machinery glossary") && out.contains("# Lifecycle vocabulary"));
+    }
 }
 
 /// SPIKE-31 entry point: reconcile `.claude/rules/aida-specs/` against the
