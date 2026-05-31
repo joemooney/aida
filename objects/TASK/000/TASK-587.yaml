@@ -3,10 +3,10 @@ spec_id: TASK-587
 agreed_id: TASK-587
 title: validate and confirm custom agent roles in aida agent new
 description: Add validation to aida agent new (Claude, Codex, Antigravity) to ensure the provided role matches one of the defined standard roles (implementer, advisor, reviewer, integrator). In interactive environments, prompt to confirm. In non-interactive environments, error out to prevent typos.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T02:14:25.286116856Z
-modified_at: 2026-05-31T02:14:25.286116856Z
+modified_at: 2026-05-31T02:28:27.674739540Z
 req_type: Task
