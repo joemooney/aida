@@ -14,6 +14,7 @@ mod complexity_calibration;
 mod deep_link;
 mod digest;
 mod docs;
+mod drain_resume;
 mod drain_state;
 mod effort_calibration;
 mod exit_signal;
