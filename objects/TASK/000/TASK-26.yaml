@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T18:54:57.132606773Z
-modified_at: 2026-05-04T19:22:12.778428165Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Task
 tags:
 - claude-code
@@ -51,3 +51,5 @@ comments:
   content: ''
   created_at: 2026-05-04T18:58:45.112500498Z
   modified_at: 2026-05-04T18:58:45.112500498Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
