@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:21:43.573099151Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-05-14T07:27:19.730222476Z
 req_type: Task
 tags:
 - automation
@@ -100,8 +100,6 @@ comments:
     Follow-up: scope cuts deferred — gh-fetched PR title/url in End summary, non-blocking background-watch mode, session-manifest stamp of PR number at /aida-pr time.
   created_at: 2026-05-14T07:12:14.384172592Z
   modified_at: 2026-05-14T07:12:14.384172592Z
-archived: true
-archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:40:30.170528Z
