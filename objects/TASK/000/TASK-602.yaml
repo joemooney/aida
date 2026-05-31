@@ -3,12 +3,12 @@ spec_id: TASK-602
 agreed_id: TASK-602
 title: 'Mailbox pure core: Message model + inbox_for/thread/merge_dedup (STORY-493 slice 1)'
 description: 'First slice of STORY-493. Pure, side-effect-free aida-core/src/mailbox.rs: Message { id, thread_id, from, to: Recipient (Agent|Broadcast), timestamp, in_reply_to, body } + inbox_for (direct+broadcast, excl. own, oldest-first), thread (whole conversation ordered), merge_dedup (id-keyed union of the local + canonical hybrid layers, canonical wins on collision). 6 unit tests. No I/O — the .aida/ local store, CLI, MCP, and git-canonical digest are later slices.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:55:04.115427061Z
-modified_at: 2026-05-31T14:56:27.272796561Z
+modified_at: 2026-05-31T15:01:16.902825285Z
 req_type: Task
 tags:
 - aida-core
@@ -22,3 +22,7 @@ comments:
   content: Commit 42f08bb84 references this requirement
   created_at: 2026-05-31T14:56:27.272796561Z
   modified_at: 2026-05-31T14:56:27.272796561Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T15:01:16.902825285Z
+  completion_sha: 1e32bf0faeac406d46f5881fcee15266bcfb8805
