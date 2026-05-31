@@ -34296,6 +34296,43 @@ mod statusline_tests {
             extract_spec_ids_from_commit(msg),
             vec!["BUG-83".to_string()]
         );
+
+        // BUG-270: a leading `SPEC-ID:` prefix (web /ultraplan / hand-authored
+        // squash shape) is recognized — STORY-439 was stranded at Approved
+        // after PR-270 merged with exactly this subject.
+        let msg = "STORY-439: three-way complexity calibration substrate (#270)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["STORY-439".to_string()]
+        );
+        // Node-aware id prefix works too.
+        let msg = "BUG-1-099: fix the thing (#42)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-1-099".to_string()]
+        );
+        // Conventional-commit heads must NOT false-match as a colon-prefix id.
+        for msg in [
+            "fix: something broke\n",
+            "feat(scope): add a thing\n",
+            "[AI:claude] feat(api): add endpoint (FR-1-042)\n",
+            "chore: bump dep version\n",
+        ] {
+            let got = extract_spec_ids_from_commit(msg);
+            // The [AI:claude] one still delivers its paren id; the others none.
+            assert!(
+                got.is_empty() || got == vec!["FR-1-042".to_string()],
+                "colon-prefix false-match on {:?}: {:?}",
+                msg,
+                got
+            );
+        }
+        // Prefix + trailing paren naming the SAME id dedupes to one.
+        let msg = "TASK-5: tidy (TASK-5)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["TASK-5".to_string()]
+        );
     }
 
     /// TASK-93: `locate_symbol_line` finds a definition's 1-based line and,
@@ -59419,6 +59456,21 @@ pub(crate) fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     let subject = message.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
     let mut out = Vec::new();
     push_paren_spec_ids_from_line(subject, &mut out);
+    // BUG-270: also recognize a leading `SPEC-ID:` prefix, e.g.
+    // "STORY-439: three-way complexity calibration substrate (#270)". Some
+    // merge commits (web /ultraplan output, hand-authored squashes) put the
+    // spec id at the FRONT with a colon instead of the AIDA-convention
+    // trailing `(REQ-ID)`. Without this, such a spec is never auto-bumped /
+    // reconciled and strands at its pre-merge status. The `looks_like_spec_id`
+    // guard keeps conventional-commit heads (`fix:`, `feat(scope):`,
+    // `[AI:claude] ...`) from false-matching — none of them parse as a bare
+    // `<ALPHA>-<DIGITS...>` token. trace:BUG-270 | ai:claude
+    if let Some((head, _)) = subject.split_once(':') {
+        let head = head.trim();
+        if looks_like_spec_id(head) && !out.iter().any(|x| x.eq_ignore_ascii_case(head)) {
+            out.push(head.to_string());
+        }
+    }
     out
 }
 
