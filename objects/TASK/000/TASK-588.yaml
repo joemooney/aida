@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T02:34:41.623182702Z
-modified_at: 2026-05-31T02:49:37.421142104Z
+modified_at: 2026-05-31T02:49:44.554908141Z
 req_type: Task
 tags:
 - agents
@@ -21,3 +21,9 @@ tags:
 - codex
 - from-codex
 - onboarding
+comments:
+- id: 019e7bef-f76a-7462-86d2-a0f2dd8f540b
+  author: joe
+  content: Commit e85d28ce references this requirement
+  created_at: 2026-05-31T02:49:44.554908141Z
+  modified_at: 2026-05-31T02:49:44.554908141Z
