@@ -27961,6 +27961,29 @@ enum PrRebaseMode {
     Interactive,
 }
 
+/// BUG-289: build the `aida pr rebase` fetch-failure message. When git's
+/// stderr shows the branch is checked out in a worktree (the pr-N reviewer
+/// worktree), surface a clear, actionable hint — end the lease or remove the
+/// worktree — instead of the misleading "is the PR number correct?" line.
+/// trace:BUG-289 | ai:claude
+fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &str) -> String {
+    if stderr.contains("checked out at") || stderr.contains("refusing to fetch into branch") {
+        format!(
+            "a worktree already holds the `{pr_local_branch}` branch, so `git fetch` \
+             into it is refused.\n  To recover: end that worktree's lease \
+             (`aida session leases`, then `aida session end <id>`) or remove the \
+             worktree (`git worktree remove <path>`), then re-run `aida pr rebase {n}`.\n  \
+             git said: {}",
+            stderr.trim()
+        )
+    } else {
+        format!(
+            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) — \
+             is the PR number correct and the remote reachable?"
+        )
+    }
+}
+
 /// `aida pr rebase <N>` — orchestrates the temp-worktree / fetch /
 /// rebase / smoke / force-push-with-lease / cleanup recipe.
 ///
@@ -28033,16 +28056,22 @@ fn pr_rebase_handler(
     // primes the worktree branch in EPIC-20.
     let pr_local_branch = format!("pr-{}", n);
     let pr_refspec = format!("+refs/pull/{n}/head:refs/heads/{pr_local_branch}");
+    // BUG-289: capture stderr so the failure hint can branch on the actual
+    // git error — git refuses to fetch into a local branch that's checked out
+    // in a worktree (typically the pr-N reviewer worktree), which is a
+    // different problem than a bad PR number / unreachable remote.
     let pr_fetch = std::process::Command::new("git")
         .arg("-C")
         .arg(&project_root)
         .args(["fetch", "origin", pr_refspec.as_str()])
-        .status();
-    if !matches!(pr_fetch, Ok(s) if s.success()) {
-        anyhow::bail!(
-            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) — \
-             is the PR number correct and the remote reachable?"
-        );
+        .output();
+    let fetch_ok = matches!(&pr_fetch, Ok(o) if o.status.success());
+    if !fetch_ok {
+        let stderr = pr_fetch
+            .as_ref()
+            .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
+            .unwrap_or_default();
+        anyhow::bail!(pr_fetch_failure_message(&stderr, n, &pr_local_branch));
     }
 
     // ---- Step 4 (--check only): report + exit zero. ----
@@ -29762,6 +29791,33 @@ mod pr_ship_environment_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
     use std::time::Duration;
+
+    /// BUG-289: a worktree-conflict fetch failure gets the actionable hint
+    /// (end the lease / remove the worktree), NOT the misleading "is the PR
+    /// number correct?" line; other failures still get the generic hint.
+    #[test]
+    fn pr_fetch_failure_message_branches_on_worktree_conflict() {
+        let worktree_err = "fatal: refusing to fetch into branch 'refs/heads/pr-161' \
+                            checked out at '/home/joe/ai/aida-pr-161'";
+        let m = pr_fetch_failure_message(worktree_err, 161, "pr-161");
+        assert!(
+            m.contains("worktree already holds the `pr-161` branch"),
+            "{m}"
+        );
+        assert!(
+            m.contains("aida session end") || m.contains("git worktree remove"),
+            "{m}"
+        );
+        assert!(
+            !m.contains("is the PR number correct"),
+            "worktree-conflict hint must not show the misleading PR-number line: {m}"
+        );
+
+        let other_err = "fatal: couldn't find remote ref refs/pull/999/head";
+        let g = pr_fetch_failure_message(other_err, 999, "pr-999");
+        assert!(g.contains("is the PR number correct"), "{g}");
+        assert!(!g.contains("worktree already holds"), "{g}");
+    }
 
     fn git(repo: &std::path::Path, args: &[&str]) -> String {
         let out = std::process::Command::new("git")
