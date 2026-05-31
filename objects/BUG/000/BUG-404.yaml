@@ -18,12 +18,12 @@ description: |-
 
   ## Impact
   Recurring correctness papercut on the core ship path: every `aida pr ship` leaves the spec at Done until a manual chaser. Recovery is non-destructive (reconcile-status), so medium not high.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-30T18:38:15.154048169Z
-modified_at: 2026-05-31T00:29:54.243397812Z
+modified_at: 2026-05-31T00:30:09.028580231Z
 req_type: Bug
 tags:
 - aida:pr:ship
