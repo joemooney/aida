@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 143-ai-workflow
 created_at: 2025-12-11T00:38:34.641203323Z
-modified_at: 2026-05-15T04:02:02.995529241Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 comments:
 - id: 019e29cc-6a73-7630-bbfa-d73e230efafe
@@ -18,3 +18,5 @@ comments:
     Note: the React dashboard surface is intentionally NOT a Trojan-horse focus area; new evaluation workflows should go through the TUI/MCP path.
   created_at: 2026-05-15T04:02:02.995529241Z
   modified_at: 2026-05-15T04:02:02.995529241Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
