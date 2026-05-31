@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: 207-Uncategorized
 created_at: 2026-02-21T06:14:37.785473096Z
-modified_at: 2026-02-21T06:15:06.192907145Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 13efafee-6ea3-4a30-8c2c-41fb19b1a422
@@ -15,3 +15,5 @@ comments:
   content: 'Implemented in commit a3e87ad. File: Header.tsx. Plan: docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md'
   created_at: 2026-02-21T06:15:06.192901402Z
   modified_at: 2026-02-21T06:15:06.192901402Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
