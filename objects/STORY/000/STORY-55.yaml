@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:47:31.384872919Z
-modified_at: 2026-05-10T06:25:05.986553079Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - ''
@@ -46,3 +46,5 @@ comments:
   content: 'Implemented + verified: statusline shows @<scope> when cwd is in an active session lease and the role''s last activity is older than lease.started_at; in-session activity wins. Decision-table + truncation tests in statusline_tests. trace:STORY-55 | ai:claude'
   created_at: 2026-05-10T03:12:23.883642695Z
   modified_at: 2026-05-10T03:12:23.883642695Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
