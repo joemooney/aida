@@ -232,6 +232,13 @@ pub enum ScaffoldCommand {
         /// Show what would be done without making changes
         #[clap(long)]
         dry_run: bool,
+
+        /// Remove obsolete `aida-*` skills/commands/hooks that this AIDA
+        /// version no longer ships (left over from an older version). Without
+        /// this, they are only reported. Symlinks and non-`aida-` files are
+        /// never touched. (BUG-298)
+        #[clap(long)]
+        prune: bool,
     },
 
     /// Extract embedded templates to disk for customization
