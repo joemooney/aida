@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-02T06:20:45.623601337Z
-modified_at: 2026-05-04T19:36:25.279610720Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df47c-db49-7f80-9d0d-098c367f754e
@@ -40,6 +40,8 @@ comments:
   content: ''
   created_at: 2026-05-04T19:36:24.234813680Z
   modified_at: 2026-05-04T19:36:24.234813680Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 trace_links:
 - id: 6c125981-de1d-472b-8dd1-1a31fba08902
   artifact_type: SourceCode
