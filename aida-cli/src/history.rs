@@ -1196,17 +1196,36 @@ fn maybe_dash(s: &str) -> String {
     }
 }
 
+// Char-boundary-safe truncation: titles carry emoji/unicode, so slicing by raw
+// byte index panics mid-codepoint (BUG-424). Truncate by chars. trace:BUG-424
 fn shorten(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..max.saturating_sub(1)])
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// BUG-424: a multibyte char straddling the truncation point must not panic
+    /// (raw byte-slicing did). Titles carry emoji/unicode glyphs.
+    #[test]
+    fn shorten_is_char_boundary_safe_on_emoji_title() {
+        let s = "Review PR-75: apply ⇒/⏸ glyph set to skill templates (BUG-116)";
+        // byte index ~59 lands inside the ⏸ codepoint — the old panic point.
+        for max in [40usize, 58, 59, 60, 1] {
+            let out = shorten(s, max); // must not panic at any boundary
+            assert!(out.chars().count() <= max.max(1));
+        }
+        assert!(shorten(s, 30).ends_with('…'));
+        // No truncation when it fits (by char count).
+        assert_eq!(shorten("short ⏸ title", 100), "short ⏸ title");
+    }
 
     #[test]
     fn spec_id_from_path_extracts_stem() {

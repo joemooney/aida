@@ -3171,11 +3171,16 @@ fn handle_unarchive_command(
 }
 
 /// Local truncate helper for archive listings; mirrors `history::shorten`.
+/// Char-boundary-safe: titles carry emoji/unicode (e.g. the pause/arrow glyphs),
+/// so slicing by raw byte index panics mid-codepoint. Truncate by chars instead.
+// trace:BUG-424 | ai:claude
 fn shorten_text(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..max.saturating_sub(1)])
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
     }
 }
 
