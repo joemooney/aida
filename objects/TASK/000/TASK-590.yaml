@@ -1,0 +1,18 @@
+id: 019e7ca5-3185-7bc2-98b2-e14acd0561ef
+spec_id: TASK-590
+agreed_id: TASK-590
+title: 'Inventory: every aida-core symbol that serializes/deserializes the on-disk object format'
+description: 'MECHANICAL inventory (no design judgment — feeds SPIKE-44''s interop analysis). Produce a file:symbol list of every place in aida-core/src that reads or writes the on-disk git-canonical object format: the Requirement serde (struct + custom (de)serialize), the history[] HistoryEntry (de)serialization, RelationshipType (de)serialize (note: BUG-251 made it custom), the ImplementationInfo/FailureReason fields, the object_store path layout (objects/TYPE/000/SPEC-ID.yaml), and the HLC/dispenser ID allocation. For each: file path, symbol name, and a one-line note of what format aspect it owns. Output a markdown table. Do NOT assess completeness or propose changes — just the inventory (SPIKE-44 does the analysis). Draft-for-review: master verdict before merge; cross-validate against the actual symbols (per AGY dispatch policy).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T06:07:41.445107237Z
+modified_at: 2026-05-31T06:07:41.445107237Z
+req_type: Task
+tags:
+- for-agy
+- inventory
+- multi-vendor
+- substrate
+- supports:SPIKE-44
