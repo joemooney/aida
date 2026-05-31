@@ -47,7 +47,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T04:10:39.343335710Z
-modified_at: 2026-05-06T04:59:30.697372555Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Epic
 tags:
 - blocks
@@ -65,3 +65,5 @@ comments:
   content: ''
   created_at: 2026-05-06T04:59:30.697372555Z
   modified_at: 2026-05-06T04:59:30.697372555Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
