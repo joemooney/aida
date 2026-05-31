@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:30:37.098163669Z
-modified_at: 2026-05-10T03:38:50.522436939Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 tags:
 - ''
@@ -28,3 +28,5 @@ comments:
   content: 'Implemented + verified: aida edit / aida add --parent / aida queue next consult lease list. New SessionEnforcement enum reads [session].enforcement from .aida/config.toml (warn|block|off, default warn). --strict on aida edit escalates to block for one call. queue next silently filters items in another session''s scope and prints a Note: explaining what was skipped. AIDA''s parent-edge convention is rel_type:Child on the descendant — walk that, not Parent, to climb to root. Tests in lease_enforcement_tests. trace:STORY-48 | ai:claude'
   created_at: 2026-05-10T03:12:29.797152485Z
   modified_at: 2026-05-10T03:12:29.797152485Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
