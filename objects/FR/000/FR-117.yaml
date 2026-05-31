@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 128-Uncategorized
 created_at: 2025-12-10T05:58:53.812489362Z
-modified_at: 2026-05-04T19:31:53.374586790Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019df479-bba9-72b0-8af5-2654791c453b
@@ -15,3 +15,5 @@ comments:
   content: ''
   created_at: 2026-05-04T19:31:51.849671266Z
   modified_at: 2026-05-04T19:31:51.849671266Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
