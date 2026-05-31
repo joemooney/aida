@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:06:53.806139637Z
-modified_at: 2026-05-31T06:11:50.169051261Z
+modified_at: 2026-05-31T06:11:51.633182547Z
 req_type: Spike
 tags:
 - competitive
@@ -24,3 +24,18 @@ tags:
 - multi-vendor
 - strategy
 - thesis
+comments:
+- id: 019e7ca9-02d1-7da1-b67f-4b4dec5b777f
+  author: joe
+  content: |-
+    First synthesis landed (docs/competitive-analysis/2026-05-31-git-canonical-substrate-thesis.md), from a competitive-intel research pass. KEY REFINEMENT of the operator thesis — the naive 'competitors avoid git, we ride it' is partially-true and DANGEROUS:
+    - Memory libs (mem0/Letta/Zep/Cognee): avoid git TRUE+strong, but different workload (semantic/temporal recall) — not our fight.
+    - Coding tools (Claude/Cursor/Windsurf/Aider): operate IN git, shared rules in git as prose; the opening is our STRUCTURE not our git usage.
+    - Requirements/PM: FALSE/CONTESTED — GitHub Spec Kit + indie files-in-git PM already do git-canonical specs with our EXACT rationale. Spec Kit is the nearest competitor.
+    - Orchestrators: avoid git for a SOUND reason (hot-loop concurrency) — AIDA agrees (uses SQLite cache + handshakes).
+
+    DEFENSIBLE WEDGE: not 'git vs DB' but the STRUCTURE on git — stable IDs + typed relationship graph + code↔spec traces + MCP query graph + rebuildable cache — which NO competitor combines. STRONGEST claim: multi-vendor — git-canonical makes knowledge portable; app-local memory (Cursor/Windsurf/Claude auto-memory) is structurally vendor-LOCKED. Anchor on incentive (single-vendor runtimes won't make memory portable), not capability.
+
+    HONESTY CORRECTION: AIDA uses git + SQLite cache + file handshakes — positioning must NOT claim git-purity. Linchpin follow-up dispatched: verify Spec Kit lacks IDs/relationships/traces/graph (our differentiation rests on it).
+  created_at: 2026-05-31T06:11:51.633182547Z
+  modified_at: 2026-05-31T06:11:51.633182547Z
