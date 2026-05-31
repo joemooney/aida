@@ -1,6 +1,6 @@
 # Implementation plan — `aida graph`: cross-spec relationship queries
 
-**Date:** 2026-05-31 · **Specs:** STORY-489 (parent SPIKE-45 P2) · **Status:** Sketch — needs sign-off on the MCP-contract slice · **Complexity:** Medium
+**Date:** 2026-05-31 · **Specs:** STORY-489 (parent SPIKE-45 P2) · **Status:** ✅ Complete — all 3 slices shipped (TASK-594 core, TASK-595 CLI, TASK-597 MCP) · **Complexity:** Medium
 
 > The flagship "outsmart the flat-markdown SDD tools" capability. AIDA stores a typed relationship graph; Spec Kit and Kiro store per-feature markdown that **structurally cannot** answer "what is blocked across this epic" or "what does changing X impact." This plan makes that latent advantage a demonstrable command. Authored from a two-agent inventory of the existing relationship data + surface layers (2026-05-31).
 
