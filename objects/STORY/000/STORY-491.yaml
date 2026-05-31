@@ -1,0 +1,20 @@
+id: 019e7d90-266a-70d3-b8cd-61b7f56f662b
+spec_id: STORY-491
+agreed_id: STORY-491
+title: 'Resumable orchestrator drain checkpointing: --resume re-enters a crashed --auto-complete at the right phase'
+description: 'SPIKE-45 P1 — close the durable-execution gap (LangGraph/CrewAI/Temporal have it; AIDA restarts a crashed drain from phase 1). Sketch-first plan written: docs/plans/2026-05-31-p1-resumable-drain-checkpointing.md. KEY INSIGHT: the persistence substrate already exists (.aida/drain-state.json records current_phase + orchestrator_pid per STORY-301), so this is ''add a resume path'', not ''build checkpointing''. CENTRAL DESIGN DECISION (needs sign-off): resume RECONCILES against git/PR/spec reality (branch exists? PR merged? spec status?) to compute the re-entry phase, rather than blindly replaying a checkpoint log — robust to ''merge completed before crash'' and matches substrate-as-truth. CATASTROPHIC RISK to guard: double-drive (resume while original orchestrator alive) — mandatory PID-liveness gate reusing classify_for_auto_release. Architecture-class, touches core drain control flow → needs operator/master sign-off before the wiring slice; the pure reconcile_resume_phase function is a safe first slice. Edge: ''git-canonical AND crash-resumable'' — no competitor pairs them.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T10:24:19.562555466Z
+modified_at: 2026-05-31T10:24:19.562555466Z
+req_type: Story
+tags:
+- competitive-parity
+- durable-execution
+- moat
+- needs-design-signoff
+- orchestrator
+- parent:SPIKE-45
+- sketch-first
