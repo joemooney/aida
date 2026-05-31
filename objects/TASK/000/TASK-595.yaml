@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T08:43:33.085678853Z
-modified_at: 2026-05-31T08:43:33.085678853Z
+modified_at: 2026-05-31T08:49:15.914986855Z
 req_type: Task
 tags:
 - aida-cli
@@ -17,3 +17,9 @@ tags:
 - parent:STORY-489
 - slice-2-of-3
 - vs-kiro
+comments:
+- id: 019e7d39-1e8a-7120-8733-1ea411193132
+  author: joe
+  content: Commit ee9065439 references this requirement
+  created_at: 2026-05-31T08:49:15.914986855Z
+  modified_at: 2026-05-31T08:49:15.914986855Z
