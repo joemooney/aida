@@ -200,6 +200,46 @@ fn registry_path(project_root: &Path, id: &str) -> PathBuf {
     agents_dir(project_root).join(format!("{id}.toml"))
 }
 
+/// BUG-416: count the LIVE agents registered as operating within `cwd` — i.e.
+/// whose `worktree_path` equals or is an ancestor of `cwd`. Used to detect a
+/// SHARED worktree: when two `aida agent new` sessions land in the same
+/// worktree, the `aida add` "this session owns scope X" hint cannot be
+/// confidently attributed to the current process, because the lease
+/// `active_lease_for_cwd` resolves may belong to a peer agent. A human session
+/// (not in the registry) yields 0; a lone agent yields 1; co-located agents
+/// yield ≥2 — the caller suppresses the hint only at ≥2. Dead PIDs are skipped
+/// so an exited agent's stale record doesn't keep a worktree "shared".
+/// trace:BUG-416 | ai:claude
+pub(crate) fn live_agents_covering_cwd(project_root: &Path, cwd: &Path) -> usize {
+    let canon_cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    let mut count = 0usize;
+    if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            let Ok(body) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) else {
+                continue;
+            };
+            if !crate::process_probe::pid_is_alive(record.pid) {
+                continue;
+            }
+            let wt = record
+                .worktree_path
+                .canonicalize()
+                .unwrap_or_else(|_| record.worktree_path.clone());
+            if !wt.as_os_str().is_empty() && (canon_cwd == wt || canon_cwd.starts_with(&wt)) {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
 fn agent_id(agent_type: &str, pid: u32) -> String {
     format!("{agent_type}-{pid}")
 }
@@ -910,6 +950,47 @@ mod tests {
         assert_eq!(views[0].source, "manual-register");
         assert_eq!(views[0].name.as_deref(), Some("codex-raw"));
         assert_eq!(views[0].status, AgentStatus::Stale);
+    }
+
+    /// BUG-416: live_agents_covering_cwd counts only LIVE agents whose
+    /// worktree covers the cwd (equal or ancestor), skipping dead PIDs. A
+    /// worktree with ≥2 live agents reads as "shared" (the add-hint suppressor
+    /// fires); a lone agent or an unrelated dir does not. trace:BUG-416
+    #[test]
+    fn live_agents_covering_cwd_counts_shared_live_worktrees_only() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let wt_a = root.join("aida-a");
+        let wt_b = root.join("aida-b");
+        let nested = wt_a.join("src");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::create_dir_all(&wt_b).unwrap();
+
+        let mut live = |id: &str, wt: &Path| {
+            let mut e = entry_with(std::process::id(), Utc::now());
+            e.id = id.to_string();
+            e.worktree_path = wt.to_path_buf();
+            write_entry(root, &e).unwrap();
+        };
+        // Two live agents share wt_a.
+        live("a-codex-1", &wt_a);
+        live("a-claude-2", &wt_a);
+        // One live agent alone in wt_b.
+        live("b-codex-solo", &wt_b);
+        // A dead agent also recorded in wt_b — must be skipped.
+        let mut dead = entry_with(u32::MAX - 1, Utc::now());
+        dead.id = "b-codex-dead".to_string();
+        dead.worktree_path = wt_b.clone();
+        write_entry(root, &dead).unwrap();
+
+        // wt_a shared by 2 live agents.
+        assert_eq!(live_agents_covering_cwd(root, &wt_a), 2);
+        // A descendant of wt_a is still "covered" by both.
+        assert_eq!(live_agents_covering_cwd(root, &nested), 2);
+        // wt_b: 1 live + 1 dead → 1 (lone occupant; dead skipped).
+        assert_eq!(live_agents_covering_cwd(root, &wt_b), 1);
+        // The parent dir is no agent's worktree → 0 (human-alone case hints).
+        assert_eq!(live_agents_covering_cwd(root, root), 0);
     }
 
     #[test]

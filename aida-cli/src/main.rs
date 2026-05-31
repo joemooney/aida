@@ -6306,10 +6306,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 //   - the new req isn't already that scope's spec
                 // trace:BUG-58 | ai:claude
                 if parent.is_none() {
-                    if let Ok(project_root) = find_project_root() {
-                        if let Some(lease) = std::env::current_dir()
-                            .ok()
-                            .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+                    if let (Ok(project_root), Ok(cwd)) =
+                        (find_project_root(), std::env::current_dir())
+                    {
+                        // BUG-416: the "this session owns scope X" hint is only
+                        // trustworthy when the current process is the SOLE live
+                        // agent in this worktree. When two `aida agent new`
+                        // sessions share a worktree, active_lease_for_cwd may
+                        // resolve a PEER agent's lease, so the hint would
+                        // misattribute its scope (the quizdom bleed). Stay
+                        // silent then. A human session (0 registered agents) or
+                        // a lone agent (1) hints exactly as before.
+                        // trace:BUG-416 | ai:claude
+                        let shared_worktree =
+                            agent_registry::live_agents_covering_cwd(&project_root, &cwd) > 1;
+                        if let Some(lease) =
+                            active_lease_for_cwd(&project_root, &cwd).filter(|_| !shared_worktree)
                         {
                             let scope = lease.scope.clone();
                             // Cheap heuristic for "looks like a spec id":
@@ -22030,19 +22042,19 @@ fn lease_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
     leases_dir(project_root).join(format!("{}.toml", id))
 }
 
-/// BUG-416 detection core: find a lease that already occupies `worktree` and is
-/// still live, so a second agent isn't launched into the same worktree — where
-/// per-session scope hints (the `--owns` lease, role context, queue-head pickup)
-/// bleed across agents and one agent ships under another's scope.
-///
-/// Pure over the lease set + an injected liveness predicate: the caller supplies
-/// PID-liveness / dormancy (via `creator_pid` + the same logic
+/// Lease-occupancy primitive: find a lease that already occupies `worktree` and
+/// is still live. Pure over the lease set + an injected liveness predicate: the
+/// caller supplies PID-liveness / dormancy (via `creator_pid` + the same logic
 /// `classify_for_auto_release` uses), so a dead or auto-released lease's worktree
-/// is correctly seen as free to take. Path comparison is exact — the caller
-/// canonicalizes `worktree` to match the canonicalized `lease.worktree_path`.
-/// The detect-and-auto-isolate wiring (provision a fresh worktree when this
-/// returns `Some`) is the follow-up slice. trace:TASK-607 trace:BUG-416 | ai:claude
-#[allow(dead_code)] // detection core; wired by the auto-isolate follow-up slice
+/// is correctly seen as free. Path comparison is exact — the caller canonicalizes
+/// `worktree` to match the canonicalized `lease.worktree_path`.
+///
+/// NOTE: BUG-416's shipped fix is the attribution-aware `aida add` hint, which
+/// gates on *agent* occupancy (`agent_registry::live_agents_covering_cwd`), not
+/// lease occupancy — so this primitive is currently unused. Retained as the
+/// natural building block for lease-hygiene work that needs "is this worktree
+/// still claimed?" (e.g. BUG-362 pr-ship lease cleanup). trace:TASK-607 | ai:claude
+#[allow(dead_code)] // unused since BUG-416 chose agent-occupancy; kept for lease-hygiene reuse
 fn worktree_occupant<'a>(
     worktree: &std::path::Path,
     leases: &'a [SessionLease],
