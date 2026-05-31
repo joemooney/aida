@@ -3,12 +3,12 @@ spec_id: TASK-605
 agreed_id: TASK-605
 title: 'Mailbox git-canonical digest: aida mailbox sync + merge-on-read (STORY-493 slice 4)'
 description: 'Slice 4 of STORY-493 — the differentiator layer. canonical_dir/read_canonical_messages/digest_local_to_canonical in mailbox_store (write to <orphan-root>/mailbox/, separate from objects/ so it never touches the spec store/cache); ''aida mailbox sync'' digests local→canonical (append-only/id-keyed, idempotent) + git add mailbox + commit on the orphan branch (pushed by the normal store-sync path). inbox/thread now MERGE local ∪ canonical via merge_dedup (merge-on-read). Verified end-to-end: send→sync→commit→merge-on-read→idempotent re-sync, orphan branch reset clean after. Full bin suite 1497 green; fmt + doc-consistency clean. Auto-triggers deferred to a follow-up.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T16:15:01.987263999Z
-modified_at: 2026-05-31T16:15:01.987263999Z
+modified_at: 2026-05-31T16:20:07.662650837Z
 req_type: Task
 tags:
 - digest
@@ -16,3 +16,7 @@ tags:
 - inter-agent-mailbox
 - parent:STORY-493
 - slice-4
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T16:20:07.662650837Z
+  completion_sha: 90d02eab2aef21ba4f76eb777cdabed754facbe3
