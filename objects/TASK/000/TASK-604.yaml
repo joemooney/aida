@@ -3,15 +3,19 @@ spec_id: TASK-604
 agreed_id: TASK-604
 title: 'Mailbox MCP tools: send_message + read_inbox (STORY-493 slice 3)'
 description: 'Slice 3 of STORY-493. MCP parity for the mailbox CLI: send_message ({body, to?|broadcast?, thread?, in_reply_to?, from?}) writes to the local layer via mailbox_store; read_inbox ({agent?}) returns the inbox as JSON. Mirrors the brief MCP tools + query_graph. Dispatch arms + full descriptors (param examples) + cross-agent-onboarding.md entry (doc-consistency). Tool counts bumped 27→29. Functional round-trip test (direct+broadcast land; own-sent excluded; missing to/broadcast errors). Full aida-cli bin suite 1496 green; fmt + doc-consistency clean. Git-canonical digest (slice 4) remains.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:27:22.999391825Z
-modified_at: 2026-05-31T15:27:22.999391825Z
+modified_at: 2026-05-31T15:32:24.944558759Z
 req_type: Task
 tags:
 - inter-agent-mailbox
 - mcp
 - parent:STORY-493
 - slice-3
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T15:32:24.944558759Z
+  completion_sha: e099eb6f7ba9a2aa2645732329822a79a517513b
