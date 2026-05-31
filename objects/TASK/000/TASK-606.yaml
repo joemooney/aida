@@ -1,0 +1,18 @@
+id: 019e7ed1-5b3e-7360-892f-9101b311714b
+spec_id: TASK-606
+agreed_id: TASK-606
+title: 'Mailbox digest auto-triggers: run sync on session-end + drain boundaries (cadence = operator veto)'
+description: 'Follow-up to STORY-493 slice 4. The digest (aida mailbox sync) is MANUAL today. Add BATCHED auto-triggers — run the digest on ''aida session end'' and at drain phase-boundaries — so the canonical layer stays current without manual sync. NOT per-message (that''s the coarse-git trap). The trigger cadence is the operator''s call (flagged for veto): session-end + drain-boundary is the proposed default. Closes STORY-493.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T16:15:10.142566784Z
+modified_at: 2026-05-31T16:15:10.142566784Z
+req_type: Task
+tags:
+- auto-trigger
+- digest
+- inter-agent-mailbox
+- needs-design-signoff
+- parent:STORY-493
