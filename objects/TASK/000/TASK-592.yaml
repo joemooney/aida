@@ -1,0 +1,18 @@
+id: 019e7cc1-5083-74e1-abbf-bc08da80b646
+spec_id: TASK-592
+agreed_id: TASK-592
+title: 'Positioning doc: vs-kiro.md (nearest competitor) + README index'
+description: 'Second missing nearest-competitor positioning page (sibling to vs-spec-kit, TASK-591). AWS Kiro matched ''specs as artifacts'' + has EARS-notation requirements + per-feature task->requirement traceability per the round-2 competitive analysis. Wrote vs-kiro.md (precise: credits Kiro''s EARS rigor as MORE structured than AIDA''s freeform descriptions on that axis, its task->requirement traceability, polished AWS-backed IDE; locates AIDA''s delta in the vendor-neutral cross-cutting graph readable by any agent via MCP, independent of editor) + indexed in README.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T06:38:24.387070373Z
+modified_at: 2026-05-31T06:38:24.387070373Z
+req_type: Task
+tags:
+- competitive
+- doc
+- parent:STORY-107
+- positioning
+- vs-kiro
