@@ -7,7 +7,7 @@ priority: Medium
 owner: ai:claude:joe
 feature: 158-release
 created_at: 2025-12-11T06:34:46.780073412Z
-modified_at: 2026-05-06T06:30:49.907144320Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 comments:
 - id: 019dfbfb-5bb7-7bc2-bfdb-4cd54d9fee9d
@@ -15,3 +15,5 @@ comments:
   content: ''
   created_at: 2026-05-06T06:30:47.479366829Z
   modified_at: 2026-05-06T06:30:47.479366829Z
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
