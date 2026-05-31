@@ -1,0 +1,17 @@
+id: 019e7d3a-c8bc-70a2-9396-d5b1023b7309
+spec_id: TASK-596
+agreed_id: TASK-596
+title: aida pr ship bails on 'no checks reported' when run immediately after push (CI not yet registered)
+description: 'Confirmed 2026-05-31: running ''aida pr ship <N>'' in the same command sequence right after ''git push'' fails with ''no checks reported on the <branch> branch'' → ''CI failed''. The check run hasn''t registered on GitHub yet (a few-second lag between push and the workflow appearing), so step 2''s check-watch sees zero checks and treats it as failure rather than waiting. Cost a wasted ship invocation on PR-386. Proposal: in the CI-watch step, distinguish ''no checks YET'' (poll-wait up to a timeout for the first check to appear) from ''checks ran and failed''. Today the workaround is to wait ~30s after push before ''aida pr ship'', or re-run ship once ''gh pr checks'' shows a pending run. Low-medium: papercut that bites the push-then-ship sequence common in autonomous drains.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T08:51:05.020112469Z
+modified_at: 2026-05-31T08:51:05.020112469Z
+req_type: Task
+tags:
+- aida:pr:ship
+- from-self-test
+- kind:papercut
+- reliability
