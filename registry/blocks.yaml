@@ -53,7 +53,7 @@ blocks:
   type_prefix: SPIKE
   range_start: 5
   range_end: 104
-  next: 43
+  next: 44
   allocated_at: 2026-05-09T04:40:40.163752645Z
 - node_id: '1'
   owner: joe

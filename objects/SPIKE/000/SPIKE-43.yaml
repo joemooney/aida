@@ -1,0 +1,26 @@
+id: 019e7ca4-776e-73c0-8691-9a9a7ba67dbc
+spec_id: SPIKE-43
+agreed_id: SPIKE-43
+title: 'Git-canonical knowledge-substrate thesis: competitive validation + multi-vendor opening'
+description: |-
+  Operator strategic mandate (2026-05-31): develop + pressure-test the thesis that AIDA's defensible position is a GIT-CANONICAL knowledge substrate. Three claims to validate with evidence (precise, not overclaimed):
+  1. Git has emerged as THE common standard for versioned state; building the knowledge/requirement substrate ON git rides that standard rather than reinventing persistence.
+  2. Competitors deliberately AVOID a git dependency (to stay unopinionated / dodge coupling). If git is the emerging common substrate, NOT riding it leaves them off the standard — AIDA's opening. (TEST whether this avoidance is real across the competitive set or only some categories.)
+  3. Multi-vendor (vendor-neutral) operation is where AIDA structurally excels vs single-vendor runtimes; git-canonical helps because any tool can read/write versioned files.
+
+  Deliverable: a dated docs/competitive-analysis/ synthesis grounding each claim, steelmanning the git-canonical trade-offs (latency/query/concurrency/multi-writer/offline/auditability/ops vs DB/cloud), naming where the bet WINS and LOSES, and the precise open slice. A background competitive-intel research pass (launched 2026-05-31) feeds the empirical map. Anchor durable advantage on INCENTIVE (vendor-neutrality, riding the standard), not transient capability.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-31T06:06:53.806139637Z
+modified_at: 2026-05-31T06:06:53.806139637Z
+req_type: Spike
+tags:
+- competitive
+- from-operator-mandate
+- git-canonical
+- knowledge-substrate
+- multi-vendor
+- strategy
+- thesis
