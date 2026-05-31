@@ -1341,3 +1341,10 @@
   note: Promoted from finding TASK-1-111 via `aida findings promote`
   added_at: 2026-05-31T19:32:45.074817681Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e6f52-358c-7290-9792-402f7235580f
+  position: 321000
+  added_by: joe
+  note: Promoted from finding TASK-1-108 via `aida findings promote`
+  added_at: 2026-05-31T19:32:47.136059609Z
+  for_role: implementer
