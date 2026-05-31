@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T04:27:55.860215514Z
-modified_at: 2026-05-04T19:36:06.885281449Z
+modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -88,6 +88,8 @@ history:
         4. Documentation:
           - Updated docs/user-guide.md with Links Tab section
           - Updated PROMPT_HISTORY.md with feature details
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
 urls:
 - id: f6a655a0-3ccd-4945-8300-4417ca6fc8c3
   url: file:///home/joe/ai/req/docs/user-guide-dark.html
