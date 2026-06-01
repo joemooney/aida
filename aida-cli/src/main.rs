@@ -22075,7 +22075,23 @@ mod agent_launcher_tests {
 
         let prompt_args =
             agent_initial_prompt_args(&config, &plan, &AgentPromptOptions::new(None, false));
-        run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args).unwrap();
+        // BUG-423: spawning a just-written temp binary can transiently fail
+        // under CI load / parallel-test execution (e.g. ETXTBSY — the file is
+        // briefly busy after write+chmod). Retry a few times with a short
+        // backoff. This is fixture-only: production launches an INSTALLED
+        // binary, never a freshly-written one, so it can't hit this. Safe to
+        // retry the whole call — run_tracked_agent registers the agent only
+        // AFTER a successful spawn, so a failed attempt leaves no partial
+        // registry state. trace:BUG-423 | ai:claude
+        let mut spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args);
+        for _ in 0..5 {
+            if spawn_result.is_ok() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args);
+        }
+        spawn_result.expect("run_tracked_agent should succeed after retrying transient spawn");
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -22146,7 +22162,23 @@ mod agent_launcher_tests {
             &plan,
             &AgentPromptOptions::new(Some("work STORY-434".into()), false),
         );
-        run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args).unwrap();
+        // BUG-423: spawning a just-written temp binary can transiently fail
+        // under CI load / parallel-test execution (e.g. ETXTBSY — the file is
+        // briefly busy after write+chmod). Retry a few times with a short
+        // backoff. This is fixture-only: production launches an INSTALLED
+        // binary, never a freshly-written one, so it can't hit this. Safe to
+        // retry the whole call — run_tracked_agent registers the agent only
+        // AFTER a successful spawn, so a failed attempt leaves no partial
+        // registry state. trace:BUG-423 | ai:claude
+        let mut spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args);
+        for _ in 0..5 {
+            if spawn_result.is_ok() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args);
+        }
+        spawn_result.expect("run_tracked_agent should succeed after retrying transient spawn");
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let argv = std::fs::read_to_string(&argv_out).unwrap();
@@ -22294,14 +22326,30 @@ mod agent_launcher_tests {
 
         let prompt_args =
             agent_initial_prompt_args(&config, &plan, &AgentPromptOptions::new(None, false));
-        run_tracked_agent(
+        // BUG-423: retry the transient temp-binary spawn (see the other
+        // tracked_fake_* tests). Fixture-only; no partial state on failure.
+        // trace:BUG-423 | ai:claude
+        let mut spawn_result = run_tracked_agent(
             &fake_agent,
             &config,
             &plan,
             Some(&launch_context),
             &prompt_args,
-        )
-        .unwrap();
+        );
+        for _ in 0..5 {
+            if spawn_result.is_ok() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            spawn_result = run_tracked_agent(
+                &fake_agent,
+                &config,
+                &plan,
+                Some(&launch_context),
+                &prompt_args,
+            );
+        }
+        spawn_result.expect("run_tracked_agent should succeed after retrying transient spawn");
 
         let env = std::fs::read_to_string(&env_out).unwrap();
         let copied = std::fs::read_to_string(&context_out).unwrap();
