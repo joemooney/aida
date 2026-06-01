@@ -1226,6 +1226,34 @@ fn run() -> Result<()> {
                 }
                 return handle_git_backend_command(&store_path, &cli.command);
             }
+            // BUG-428: distributed mode is declared in `.aida/config.toml` but
+            // the store worktree isn't resolvable here — the hallmark of a
+            // freshly-cloned AIDA project (`.aida-store/` is gitignored and
+            // only created by `aida init`). Refuse to silently fall back to the
+            // legacy requirements.yaml/SQLite: that shows STALE data with no
+            // signal it's wrong (a first-user lands on someone's pre-migration
+            // specs and never knows). Point at `aida init`, which bootstraps
+            // the worktree from the existing `aida-store` branch via
+            // handle_init_post_clone. `aida init` itself is dispatched earlier
+            // (line ~873), so it is never blocked by this guard.
+            // trace:BUG-428 | ai:claude
+            if let Some(project_root) = distributed_mode_declared() {
+                let on_origin =
+                    aida_core::git_ops::remote_branch_exists(&project_root, "origin", "aida-store");
+                let branch_hint = if on_origin {
+                    "\n  Its `aida-store` branch is on origin, ready to attach."
+                } else {
+                    ""
+                };
+                anyhow::bail!(
+                    "This is a distributed AIDA project, but its store isn't set up in \
+                     this working copy yet (no `.aida-store/` worktree).{branch_hint}\n\n  \
+                     Run `aida init` to attach it — it creates the `.aida-store` worktree \
+                     from the `aida-store` branch and rebuilds the cache.\n\n  \
+                     (Refusing to fall back to a legacy requirements file: that would show \
+                     stale, pre-migration data with no indication it's wrong.)"
+                );
+            }
         } // close is_external_integration check
 
         // Auto-detect: first find the base path, then check migration status
@@ -4732,6 +4760,39 @@ mod task_510_init_scaffold_task_tests {
 fn detect_distributed_store() -> Option<std::path::PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     detect_distributed_store_from(&cwd)
+}
+
+/// Walk up from `start` and return the project root whose `.aida/config.toml`
+/// declares `mode = "distributed"`. Used to distinguish two states that look
+/// identical to [`detect_distributed_store`] (both return `None` for the
+/// store path): a *legacy* single-file project (no distributed config → the
+/// YAML/SQLite fallback is correct) vs. a *distributed* project whose
+/// `.aida-store/` worktree just isn't set up in this working copy — the
+/// hallmark of a fresh clone, since the worktree is gitignored and only
+/// created by `aida init`. In the latter case the caller must refuse the
+/// legacy fallback (it would show stale data) and point at `aida init`.
+/// trace:BUG-428 | ai:claude
+fn distributed_mode_declared_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut current = start;
+    loop {
+        let config_path = current.join(".aida").join("config.toml");
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            // The first `.aida/config.toml` we hit walking up decides the
+            // mode — a config without distributed mode means a legacy
+            // project, so stop (don't keep walking to a parent project).
+            let declares_distributed = content.lines().any(|l| {
+                let l = l.trim();
+                l.starts_with("mode") && l.contains("distributed")
+            });
+            return declares_distributed.then(|| current.to_path_buf());
+        }
+        current = current.parent()?;
+    }
+}
+
+fn distributed_mode_declared() -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    distributed_mode_declared_from(&cwd)
 }
 
 /// Walk-up resolver split out from `detect_distributed_store` so the search
@@ -37838,6 +37899,52 @@ mod store_walkup_tests {
 
         let resolved = detect_distributed_store_from(&nested).expect("should walk up");
         assert_eq!(resolved, root.join(".aida-store"));
+    }
+
+    /// BUG-428: distributed config present but NO `.aida-store/` worktree
+    /// (the fresh-clone state) → `detect_distributed_store_from` returns None
+    /// (no worktree) while `distributed_mode_declared_from` returns Some — the
+    /// pair the dispatcher uses to bail with "run aida init" instead of
+    /// silently reading the legacy requirements.yaml.
+    #[test]
+    fn distributed_declared_but_worktree_missing_is_detectable() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join(".aida")).unwrap();
+        fs::write(
+            root.join(".aida/config.toml"),
+            "[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        // deliberately do NOT create .aida-store/ (fresh clone)
+        assert!(
+            detect_distributed_store_from(root).is_none(),
+            "no worktree → store unresolvable"
+        );
+        assert_eq!(
+            distributed_mode_declared_from(root),
+            Some(root.to_path_buf()),
+            "distributed mode is still declared in config"
+        );
+    }
+
+    /// A legacy project — `.aida/config.toml` without distributed mode (or no
+    /// config at all) → `distributed_mode_declared_from` is None, so the
+    /// dispatcher keeps the legacy YAML/SQLite fallback (no false bail).
+    #[test]
+    fn legacy_config_does_not_declare_distributed() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        // no .aida/config.toml at all
+        assert_eq!(distributed_mode_declared_from(root), None);
+        // a config.toml that does NOT set distributed mode
+        fs::create_dir_all(root.join(".aida")).unwrap();
+        fs::write(
+            root.join(".aida/config.toml"),
+            "[hints]\nworkflow_hints = true\n",
+        )
+        .unwrap();
+        assert_eq!(distributed_mode_declared_from(root), None);
     }
 
     /// store_path is interpreted relative to the directory containing
