@@ -1,0 +1,20 @@
+id: 019e83df-8923-72c0-8750-e7dee24707c3
+spec_id: BUG-432
+agreed_id: BUG-432
+title: aida queue work hard-fails at startup db-sync-pull when the project has no 'origin' remote
+description: 'Surfaced 2026-06-01 validating BUG-431 #1 in a local-only throwaway (aida init, no remote added). ''aida queue work STORY-2'' printed the correct scope/role then died: ''Error: Pull failed: git pull --rebase failed: fatal: origin does not appear to be a git repository.'' The startup db sync --pull should be a graceful no-op/skip when there is no ''origin'' remote (a legitimate local-only project state — and the aida-demo / fresh-init flow before a remote is added), not a hard fatal that blocks the session. Same family as BUG-417 (pr ship assumes a remote) + the headless-never-blocks invariant (EPIC-33 inv 4). Fix: detect missing/unreachable origin and skip the pull leg with a one-line note, like ''aida fetch --code-only'' already tolerates. NOTE: BUG-431 #1 itself validated fine (scope=STORY-2 printed before the pull).'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T15:48:45.475145111Z
+modified_at: 2026-06-01T15:48:45.475145111Z
+req_type: Bug
+tags:
+- aida:db:sync
+- aida:queue:work
+- from-self-test
+- kind:observation
+- no-remote
+- non-tty
+- robustness
