@@ -29156,7 +29156,62 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             complexity,
             effort,
         } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run, *complexity, *effort),
+        PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
     }
+}
+
+/// BUG-250: `aida pr hold` — deliberately hold the PR on the current session.
+///
+/// The implementer pushed its branch but is intentionally not opening the PR
+/// yet (a manual gate runs first). This resolves the session's spec + branch
+/// from the active lease covering cwd and records a [`punt::HoldSignal`]. When
+/// invoked under an `--auto-complete` drain the orchestrator provisions
+/// [`punt::HOLD_SIGNAL_FILE_ENV`] pointing at an absolute path under the main
+/// worktree root (the handshake is worktree-resolution-independent, exactly
+/// like the punt signal); a standalone invocation still drops the marker under
+/// the main root's `.aida/pr-holds/` so the state is recorded. Prints the hint
+/// for opening the PR once the gate passes. trace:BUG-250 | ai:claude
+fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
+    let project_root = find_main_worktree_root()?;
+    let cwd = std::env::current_dir().context("could not resolve the current directory")?;
+    let lease = active_lease_for_cwd(&project_root, &cwd).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no active session lease covers this directory — `aida pr hold` runs inside \
+             a `aida queue work` session worktree (it resolves the held spec + branch \
+             from the session lease)."
+        )
+    })?;
+    let spec = lease.scope.clone();
+    let branch = lease.branch.clone();
+    let signal = punt::HoldSignal {
+        spec: spec.clone(),
+        branch: branch.clone(),
+        reason: reason.map(str::to_string),
+    };
+
+    // Prefer the orchestrator-provisioned absolute path (handshake); fall back
+    // to the conventional marker path under the main root for a standalone hold.
+    let signal_path = std::env::var(punt::HOLD_SIGNAL_FILE_ENV)
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| punt::hold_signal_path(&project_root, &spec));
+    punt::write_hold_signal(&signal_path, &signal)
+        .with_context(|| format!("could not write the PR-hold marker to {:?}", signal_path))?;
+
+    eprintln!(
+        "{} {} held — branch `{}` pushed, PR deliberately not opened{}",
+        "⏸".yellow().bold(),
+        spec.bold(),
+        branch,
+        reason.map(|r| format!(" ({r})")).unwrap_or_default(),
+    );
+    eprintln!(
+        "  {} when your gate passes: `gh pr create` (or `glab mr create`), then \
+         `aida queue work PR-N --role reviewer`",
+        "→".dimmed()
+    );
+    Ok(())
 }
 
 /// Mode selector for `aida pr rebase`. Computed once from the CLI
@@ -52590,7 +52645,7 @@ mod queue_work_tests {
     //! refactors don't silently break the resolver.
     //! trace:STORY-42 | ai:claude
     use super::*;
-    use aida_core::{QueueEntry, Relationship, Requirement, RequirementType, RequirementsStore};
+    use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
     use uuid::Uuid;
 
     fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
@@ -52773,53 +52828,49 @@ mod queue_work_tests {
         let mut review = req("STORY-9", None, RequirementType::Story);
         review.title = "Review PR-11: clean up sync flow".into();
         let qe = entry(review.id, Some("reviewer"), Some("EPIC-99"));
-        let store = RequirementsStore {
-            requirements: vec![review.clone()],
-            ..Default::default()
-        };
-        let (scope, target) = derive_scope_from_entry(&qe, &review, &store);
+        let (scope, target) = derive_scope_from_entry(&qe, &review);
         assert_eq!(scope, "PR-11");
         assert!(target.is_some());
     }
 
-    /// for_scope wins over derived parent EPIC when both exist.
+    /// for_scope wins even for a child story (its parent-epic relationship is
+    /// no longer consulted for the session scope — BUG-431 #1).
     #[test]
     fn scope_for_scope_beats_parent_epic() {
-        let epic = req("EPIC-20", None, RequirementType::Epic);
         let mut bug = req("BUG-1", None, RequirementType::Bug);
         bug.relationships.push(Relationship {
             rel_type: RelationshipType::Child,
-            target_id: epic.id,
+            target_id: Uuid::now_v7(), // a parent epic, irrelevant to scope now
             created_at: Some(chrono::Utc::now()),
             created_by: Some("t".into()),
         });
         let qe = entry(bug.id, Some("implementer"), Some("EPIC-21"));
-        let store = RequirementsStore {
-            requirements: vec![epic, bug.clone()],
-            ..Default::default()
-        };
-        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
+        let (scope, _) = derive_scope_from_entry(&qe, &bug);
         assert_eq!(scope, "EPIC-21");
     }
 
-    /// No for_scope → falls back to derived parent EPIC.
+    /// BUG-431 #1: no for_scope → a child story scopes to its OWN id, NOT the
+    /// parent epic. Previously this fell back to the parent EPIC, so every
+    /// same-epic story in a drain contended for one epic scope (worktree +
+    /// branch collision, sibling lease-block, multi-spec PR). Each sibling
+    /// must get its own scope so the drain progresses without contention.
     #[test]
-    fn scope_falls_back_to_parent_epic() {
-        let epic = req("EPIC-20", None, RequirementType::Epic);
+    fn scope_child_story_does_not_inherit_parent_epic() {
         let mut bug = req("BUG-1", None, RequirementType::Bug);
+        // A child-of-epic relationship — the exact shape that used to pull the
+        // session scope up to the parent epic.
         bug.relationships.push(Relationship {
             rel_type: RelationshipType::Child,
-            target_id: epic.id,
+            target_id: Uuid::now_v7(),
             created_at: Some(chrono::Utc::now()),
             created_by: Some("t".into()),
         });
         let qe = entry(bug.id, Some("implementer"), None);
-        let store = RequirementsStore {
-            requirements: vec![epic, bug.clone()],
-            ..Default::default()
-        };
-        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
-        assert_eq!(scope, "EPIC-20");
+        let (scope, _) = derive_scope_from_entry(&qe, &bug);
+        assert_eq!(
+            scope, "BUG-1",
+            "a child story's session must scope to its own id, not its parent epic"
+        );
     }
 
     /// No for_scope and no parent EPIC → falls back to req's own
@@ -52828,11 +52879,7 @@ mod queue_work_tests {
     fn scope_falls_back_to_own_id() {
         let bug = req("BUG-1", None, RequirementType::Bug);
         let qe = entry(bug.id, Some("implementer"), None);
-        let store = RequirementsStore {
-            requirements: vec![bug.clone()],
-            ..Default::default()
-        };
-        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
+        let (scope, _) = derive_scope_from_entry(&qe, &bug);
         assert_eq!(scope, "BUG-1");
     }
 
@@ -68598,7 +68645,7 @@ fn resolve_queue_work_plan(
             .iter()
             .find(|r| r.id == head.requirement_id)
             .ok_or_else(|| anyhow::anyhow!("queue head's requirement is missing from the store"))?;
-        let (scope, review_target) = derive_scope_from_entry(&head, req, &store);
+        let (scope, review_target) = derive_scope_from_entry(&head, req);
         let anchor_display = req
             .agreed_id
             .clone()
@@ -68635,7 +68682,7 @@ fn resolve_queue_work_plan(
             .iter()
             .find(|r| r.id == entry.requirement_id)
             .unwrap();
-        let (scope, review_target) = derive_scope_from_entry(&entry, req, &store);
+        let (scope, review_target) = derive_scope_from_entry(&entry, req);
         let anchor_display = req
             .agreed_id
             .clone()
@@ -68972,15 +69019,19 @@ fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
 /// Preference order:
 ///   1. PR-N / MR-N parsed from "Review PR-N: …" title → "PR-N"
 ///   2. entry.for_scope (explicit STORY-57 tag)
-///   3. derived parent EPIC from req relationships (TASK-44)
-///   4. fall back to the req's own display id
+///   3. fall back to the req's own display id
 /// Also returns the parsed review target (if any) so the caller can
 /// thread it into session_start without re-parsing.
 /// trace:STORY-42 | ai:claude
+// BUG-431 #1: a child story no longer inherits its parent epic's scope (the
+// removed step 3). Session scope is derived purely from the entry's
+// `for_scope`, the review-title shape, and the req's own id — so same-epic
+// siblings drained together each get an independent scope / worktree / branch
+// instead of contending for one epic scope. The store param is gone with the
+// parent lookup. trace:BUG-431
 fn derive_scope_from_entry(
     entry: &aida_core::QueueEntry,
     req: &aida_core::Requirement,
-    store: &RequirementsStore,
 ) -> (String, Option<(ReviewForge, u64)>) {
     // Review-PR shape — title carries the PR ref; e.g. "Review PR-11: …".
     if let Some(rest) = req.title.strip_prefix("Review ") {
@@ -68993,10 +69044,20 @@ fn derive_scope_from_entry(
         let target = parse_review_scope(s);
         return (s.to_uppercase(), target);
     }
-    if let Some(p) = derive_parent_epic_label(req, store) {
-        let target = parse_review_scope(&p);
-        return (p.to_uppercase(), target);
-    }
+    // BUG-431 #1: a child story's session scopes to the STORY'S OWN id, not
+    // its parent epic. Previously this fell back to `derive_parent_epic_label`,
+    // so every same-epic story under one drain (`aida queue work next N`) tried
+    // to own the SAME epic scope — the worktree (`proj-epic-11`) and branch
+    // (`epic-11`) collided, the first story's lease blocked all siblings at
+    // phase 1 ("scope EPIC-11 is owned by lease …"), and the epic-leading PR
+    // title backed two specs (epic + child), breaking the headless reviewer.
+    // Scoping to the story gives each sibling its own scope / worktree / branch
+    // so they drain without contention. An operator who genuinely wants an
+    // epic-wide session still gets it via an explicit `for_scope` (above) or
+    // `aida queue work EPIC-N`. The parent-epic label is still used for
+    // *display* clustering elsewhere (planned-cluster manifest, queue
+    // grouping) — that is separate from the lease scope and unaffected.
+    // trace:BUG-431 | ai:claude
     let fallback = req
         .agreed_id
         .clone()
@@ -71667,6 +71728,7 @@ fn emit_batch_chain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            BatchDrainOutcome::Held => "held",
             // EPIC-28 trace:EPIC-28 | ai:claude
             BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         };
@@ -71862,6 +71924,18 @@ fn emit_batch_chain_summary(
             );
             eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
         }
+        // BUG-250: a member deliberately held its PR — the chain pauses there
+        // until the operator runs the gate and opens the PR. trace:BUG-250
+        BatchDrainOutcome::Held => {
+            let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch chain paused in `batch:{batch}` at {} — PR deliberately held",
+                "⏸".yellow().bold(),
+                stopped.bold()
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+        }
         // EPIC-28: every batch drained, but at least one member shelved
         // or was skipped. trace:EPIC-28 | ai:claude
         BatchDrainOutcome::DrainedWithShelved => {
@@ -71940,6 +72014,7 @@ fn emit_batch_drain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            BatchDrainOutcome::Held => "held",
             // EPIC-28: a clean drain that shelved at least one member —
             // the operator still has triage to do. trace:EPIC-28
             BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
@@ -72127,6 +72202,22 @@ fn emit_batch_drain_summary(
             eprintln!(
                 "  {} transient — retry once the API is reachable: \
                  `gh api /rate_limit` then re-run \
+                 `aida queue work --batch {batch_name} --auto-complete`",
+                "→".dimmed()
+            );
+        }
+        // BUG-250: a member deliberately held its PR — the batch pauses there
+        // for the operator's manual gate. trace:BUG-250 | ai:claude
+        BatchDrainOutcome::Held => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch `batch:{batch_name}` drain paused at {} — PR deliberately held",
+                "⏸".yellow().bold(),
+                stopped.bold(),
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} run your gate, open the PR (`gh pr create`), then re-run \
                  `aida queue work --batch {batch_name} --auto-complete`",
                 "→".dimmed()
             );
@@ -72488,6 +72579,7 @@ fn emit_next_n_drain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            BatchDrainOutcome::Held => "held",
             // EPIC-28 trace:EPIC-28 | ai:claude
             BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         };
@@ -72684,6 +72776,25 @@ fn emit_next_n_drain_summary(
             eprintln!(
                 "  {} transient — retry once the API is reachable: \
                  `gh api /rate_limit` then re-run",
+                "→".dimmed()
+            );
+        }
+        // BUG-250: a member deliberately held its PR — pause for the gate.
+        // trace:BUG-250 | ai:claude
+        BatchDrainOutcome::Held => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} next {n} drain paused at {} — PR deliberately held",
+                "⏸".yellow().bold(),
+                stopped.bold(),
+            );
+            eprintln!(
+                "  {} already shipped ({count}): {}",
+                "✓".green(),
+                shipped_list
+            );
+            eprintln!(
+                "  {} run your gate, open the PR (`gh pr create`), then re-run",
                 "→".dimmed()
             );
         }
@@ -74656,6 +74767,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let _ = std::fs::remove_file(&punt_signal);
         cmd.env(punt::SIGNAL_FILE_ENV, &punt_signal);
 
+        // BUG-250: provision the PR-hold handshake the same way. An implementer
+        // that deliberately holds the PR (branch pushed, PR withheld for a
+        // manual gate) runs `aida pr hold`, which drops a `HoldSignal` at this
+        // path. The orchestrator reads it after the session exits and reports a
+        // clean `Held` outcome rather than a phantom NoPr failure. Clear any
+        // stale file from a prior run first. trace:BUG-250 | ai:claude
+        let hold_signal = punt::hold_signal_path(&self.project_root, &self.spec);
+        if let Some(parent) = hold_signal.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::remove_file(&hold_signal);
+        cmd.env(punt::HOLD_SIGNAL_FILE_ENV, &hold_signal);
+
         // TASK-329: spawn + poll for the graceful-exit sentinel rather than a
         // blocking `.status()`. In interactive `--zen` mode the skill
         // auto-resolves its end-of-drain prompt and goes idle, but the Claude
@@ -74757,6 +74881,30 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             ));
             return Ok(auto_complete::ImplementerOutcome::Punted {
                 reason: signal.summary(),
+            });
+        }
+
+        // BUG-250: did the implementer deliberately HOLD the PR? `aida pr hold`
+        // dropped the hold-signal file — the branch is pushed but the PR was
+        // intentionally withheld for a manual gate. This must be checked BEFORE
+        // the "no open PR → failure" path below, or a deliberate hold gets
+        // mis-filed as a phase-1 failure with a wrong recovery hint (the exact
+        // BUG-250 symptom). Reconcile the branch from the worktree HEAD so the
+        // epilogue's `gh pr create` hint + a later resume target the pushed
+        // branch. Unlike the punt signal, the hold marker is NOT removed here —
+        // it persists so a resume can recognise the deliberate-hold state.
+        // trace:BUG-250 | ai:claude
+        if let Some(signal) = punt::read_hold_signal(&hold_signal) {
+            let held_branch = reconcile_orchestrated_branch(
+                &self.project_root,
+                &lease_id,
+                &worktree_path,
+                &recorded_branch,
+            );
+            self.branch = Some(held_branch.clone());
+            return Ok(auto_complete::ImplementerOutcome::Held {
+                reason: signal.reason,
+                branch: held_branch,
             });
         }
 
