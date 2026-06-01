@@ -1,0 +1,19 @@
+id: 019e83e8-2fb2-79d3-96b7-bf7244cbeadc
+spec_id: BUG-433
+agreed_id: BUG-433
+title: Worktree with .aida-store symlink but no committed .aida/config.toml → plain aida falls to legacy backend + shows WRONG data (inverse of BUG-428)
+description: 'Surfaced 2026-06-01 during the invariant-1 drain validation. A session worktree had .aida-store (symlink → main store) reachable but NO .aida/config.toml (the scaffolding was never committed to main, so the worktree forked from a commit lacking it). Plain ''aida'' there did NOT detect distributed mode (no config marker) and fell through to the legacy backend, returning STALE/UNRELATED data (showed STORY-003 as ''B: blocker'' when the canonical YAML is ''STORY-INV1-B''); ''aida findings''/''aida cache'' hard-errored ''requires distributed store''. ''aida --file <store>'' returned the truth. BUG-428 closed the ''distributed declared but store missing → bail not legacy'' hole; this is the INVERSE: store PRESENT (via .aida-store, even a symlink) but config marker ABSENT → should detect the store from .aida-store''s shape and use it (or bail), NOT silently serve legacy/wrong data. Mostly triggered by uncommitted scaffolding (a transient fresh-init window — cf BUG-415), so low-pri, but it''s a silent-wrong-data path (worst kind). Fix: if .aida-store/ exists and looks git-canonical, treat as distributed even without .aida/config.toml. NOTE: BUG-431 #1 validated fine regardless.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T15:58:12.402309656Z
+modified_at: 2026-06-01T15:58:12.402309656Z
+req_type: Bug
+tags:
+- bug-428-family
+- from-self-test
+- kind:observation
+- silent-wrong-data
+- store-detection
+- worktree
