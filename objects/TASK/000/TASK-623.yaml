@@ -1,0 +1,24 @@
+id: 019e8193-5668-7393-a5f3-28f9f63fc5e3
+spec_id: TASK-623
+agreed_id: TASK-623
+title: 'Make ''aida init'' idempotent toward node-id: complete node-id setup when store is attached but this clone hasn''t acquired one'
+description: |-
+  GAP (surfaced by operator 2026-05-31 re: TASK-621). 'aida init' DOES acquire a node-id on the post-clone path. But after the TASK-621 auto-attach shortcut (user ran 'aida list' first → worktree present, no node-id), re-running 'aida init' hits the 'already initialized' early-return (keyed on worktree/config presence) and does NOT complete the node-id step — dead-ending the user, who must use 'aida node acquire' instead. Also affects BUG-429 (a clone whose node-reg failed can't finish via 'aida init').
+
+  PROPOSED: make 'aida init' reconcile-not-dead-end: when the store is attached but this clone has not acquired its own node-id, run the node-id setup instead of printing 'already initialized'. Turns 'aida init' into the single idempotent 'finish whatever setup is incomplete' command.
+
+  SUBTLETY (why this needs care / a nod): reliably detecting 'this clone needs its own node-id'. .aida/node.toml absence is NOT a valid marker — the main repo runs as node 1 WITHOUT node.toml (verified), so gating on node.toml would wrongly re-bootstrap it. 'aida node acquire' already computes 'this clone already has node id X' vs needs-acquire; reuse that predicate, and confirm it correctly treats a clone defaulting to node 1 (sharing the origin's id) as needs-acquire. Node-identity-lifecycle adjacent → master sign-off before implementing.
+
+  ALT considered: auto-acquire on first write ('aida add' with no node-id). Rejected as default — a write silently CAS-pushing to the shared registry is surprising; keep node-id acquisition explicit (init / node acquire).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T05:06:17.320300945Z
+modified_at: 2026-06-01T05:06:17.320300945Z
+req_type: Task
+tags:
+- aida:init
+- distributed-coordination
+- from-advisor
+- onboarding-flow
