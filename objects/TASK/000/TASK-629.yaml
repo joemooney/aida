@@ -1,0 +1,19 @@
+id: 019e8373-3149-72e2-b199-3aac9f854fa7
+spec_id: TASK-629
+agreed_id: TASK-629
+title: 'BUG-431 #2: reviewer resolves PR backing epic+child to the most-specific spec (drop ancestors)'
+description: 'Slice #2 of BUG-431 (invariant 2 of EPIC-33). resolve_pr_to_spec bailed ''multiple backing specs: EPIC-11, STORY-76'' when an epic-scoped session''s PR backed an epic + its child. Add reduce_to_most_specific_specs(store, specs): drop any spec that is a proven transitive ANCESTOR of another spec in the set (walk Parent/Child relationships), keeping the most-specific descendant; genuinely-unrelated specs survive so real ambiguity still bails. Applied before the multiple-backing-specs bail. Does NOT fix BUG-431 #1 (story-scoping root) or #3 (lease-release on failure) — those stay open under BUG-431.'
+status: InProgress
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T13:50:25.097604154Z
+modified_at: 2026-06-01T13:50:25.097604154Z
+req_type: Task
+tags:
+- correctness-floor
+- multi-spec
+- orchestrator
+- parent:BUG-431
+- parent:EPIC-33
+- reviewer
