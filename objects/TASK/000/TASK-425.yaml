@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:40:59.788089262Z
-modified_at: 2026-06-01T13:58:12.452000463Z
+modified_at: 2026-06-01T14:00:07.744161710Z
 req_type: Task
 tags:
 - ci
@@ -29,3 +29,17 @@ comments:
   content: 'Triaged 2026-05-30 (blocked-queue sweep): this is a release-tag-gated verification — it cannot be exercised on a PR, only on the next `scripts/release.sh` run, and the task notes release.sh ALREADY surfaces a missing-file error if download-artifact@v5 changed the layout. So the safety net is automatic; this doesn''t belong in NeedsAttention/blocked. Moving to Approved + tagging release-gated. Action remains: on the next release, watch the ''Download all artifacts'' step + confirm the four files: paths resolve; if v5 flattened the layout, fix-forward with explicit per-artifact name:. No work needed until then.'
   created_at: 2026-05-31T03:15:04.291561610Z
   modified_at: 2026-05-31T03:15:04.291561610Z
+- id: 019e837c-1540-7fb2-b3bc-063c5d523a0b
+  author: joe
+  content: |-
+    VERIFIED — no fix-forward needed. actions/download-artifact@v5 multi-artifact layout is unchanged from v4.
+
+    Authoritative: v5.0.0 release notes + current README confirm the ONLY breaking change is single-artifact-BY-ID downloads (now extract to path/ directly instead of path/<name>/). Multi-artifact mode (no name:, only path:) still nests each artifact in path/<artifact-name>/ — README example: 'etc/usr/artifacts/Artifact-A/ ... Artifact-B/ ...'. merge-multiple:true would flatten, but release.yml does not set it.
+
+    Empirical: PR-142 (v5 upgrade) merged 2026-05-21. Two release tags fired afterward — v0.9.1 (2026-05-23) and v0.11.0 (2026-06-01) — both Release runs completed SUCCESS. v0.11.0 shipped all four expected assets (aida-{linux,darwin}-{x86_64,arm64}.tar.gz), proving the Create Release step resolved release.yml:93-96's four artifacts/<name>/<name>.tar.gz paths. Had v5 flattened/renamed the layout, action-gh-release@v2 would have failed to find the files.
+
+    Durable note added at the download step in release.yml (trace:TASK-425).
+
+    Side observation (out of scope, not a download-artifact issue): the v0.10.0 git tag exists but has no GitHub Release and no release-workflow run — worth a separate look.
+  created_at: 2026-06-01T14:00:07.744161710Z
+  modified_at: 2026-06-01T14:00:07.744161710Z
