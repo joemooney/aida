@@ -17420,6 +17420,34 @@ fn collect_doctor_findings(
         }
     }
 
+    // STORY-496: reap dead-PID agent-registry entries. A record under
+    // `.aida/agents/` whose creator process is gone is confirmed multi-agent
+    // drift — the `aida status` "Active agents" headline counts these corpses,
+    // and no existing command cleans them up. Reap ONLY entries whose pid is
+    // not alive (conservative: a reused/returned pid is left alone, handled by
+    // the re-check at heal time). trace:STORY-496 | ai:claude
+    {
+        let agent_ctx = agent_registry::AgentClassifyContext::new(now, 30, Vec::new());
+        for view in agent_registry::list_agent_views(project_root, &agent_ctx) {
+            if !process_probe::pid_is_alive(view.pid) {
+                push(DoctorFinding {
+                    category: "dead-agents".to_string(),
+                    id: format!("{}#{}", view.agent_type, view.pid),
+                    summary: format!(
+                        "agent `{}` (pid {}) is dead — its registry entry under \
+                         .aida/agents/ was never reaped",
+                        view.agent_type, view.pid
+                    ),
+                    action: format!(
+                        "remove dead-agent registry entry for {}#{}",
+                        view.agent_type, view.pid
+                    ),
+                    safe_heal: true,
+                });
+            }
+        }
+    }
+
     for lease in &leases {
         let worktree_exists = lease.worktree_path.exists();
         let live_in_worktree = live_sessions.iter().any(|s| {
@@ -17690,11 +17718,14 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         "orphan-queue" | "orphan-queue-entry" | "orphan-queue-entries" | "queue-orphans" => {
             "orphan-queue-entries"
         }
+        // STORY-496: dead-PID agent-registry entries (corpses under
+        // `.aida/agents/`). trace:STORY-496 | ai:claude
+        "dead-agent" | "dead-agents" | "stale-agent" | "stale-agents" | "agents" => "dead-agents",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, orphan-queue-entries, stale-reviewer-leases, stale-locks, \
-             OBE-briefs)",
+             dead-agents, OBE-briefs)",
             other
         ),
     };
@@ -17839,6 +17870,7 @@ fn heal_doctor_finding(
         "orphan-worktrees" => heal_doctor_orphan_worktree(project_root, finding),
         "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
+        "dead-agents" => heal_doctor_dead_agent(project_root, finding),
         "orphan-branches" if opts.force && opts.yes => {
             heal_doctor_orphan_branch(project_root, finding)
         }
@@ -17850,6 +17882,46 @@ fn heal_doctor_finding(
             detail: Some("diagnostic-only category; follow the printed action".to_string()),
         }),
     }
+}
+
+/// STORY-496: reap a dead-PID agent-registry entry. The finding id is
+/// `{agent_type}#{pid}`. Re-checks the pid is still dead before removing — a
+/// pid can be reused by an unrelated process between scan and heal, and we
+/// must never reap a live agent. trace:STORY-496 | ai:claude
+fn heal_doctor_dead_agent(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let (agent_type, pid_str) = finding.id.split_once('#').ok_or_else(|| {
+        anyhow::anyhow!(
+            "malformed dead-agent id `{}` (expected type#pid)",
+            finding.id
+        )
+    })?;
+    let pid: u32 = pid_str
+        .parse()
+        .with_context(|| format!("bad pid in dead-agent id `{}`", finding.id))?;
+    if process_probe::pid_is_alive(pid) {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some(format!("pid {pid} is now alive — not reaping")),
+        });
+    }
+    let removed = agent_registry::remove_agent(project_root, agent_type, pid)?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: finding.action.clone(),
+        status: if removed { "healed" } else { "skipped" }.to_string(),
+        detail: if removed {
+            None
+        } else {
+            Some("registry entry already gone".to_string())
+        },
+    })
 }
 
 fn heal_doctor_lease(
@@ -18162,6 +18234,52 @@ mod story_462_doctor_tests {
         assert!(json);
         assert!(!force);
         assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn normalize_doctor_category_accepts_dead_agents() {
+        // STORY-496
+        for alias in ["dead-agents", "dead-agent", "stale-agents", "agents"] {
+            assert_eq!(normalize_doctor_category(alias).unwrap(), "dead-agents");
+        }
+    }
+
+    #[test]
+    fn doctor_detects_and_reaps_dead_agent_registry_entry() {
+        // STORY-496: a registry entry whose pid is dead is reported under
+        // `dead-agents` and reaped by the heal.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().to_path_buf();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        let dead_pid = 4_294_967_294u32; // far above any real pid → never alive
+        assert!(!process_probe::pid_is_alive(dead_pid));
+        agent_registry::register_spawned_agent(
+            &project,
+            "claude",
+            dead_pid,
+            None,
+            None,
+            project.clone(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Detect.
+        let store = aida_core::models::RequirementsStore::new();
+        let findings = collect_doctor_findings(&project, &store, Some("dead-agents")).unwrap();
+        assert_eq!(findings.len(), 1, "one dead-agent finding");
+        assert_eq!(findings[0].category, "dead-agents");
+        assert_eq!(findings[0].id, format!("claude#{dead_pid}"));
+        assert!(findings[0].safe_heal);
+
+        // Heal.
+        let result = heal_doctor_dead_agent(&project, &findings[0]).unwrap();
+        assert_eq!(result.status, "healed");
+
+        // Reaped → no longer reported.
+        let after = collect_doctor_findings(&project, &store, Some("dead-agents")).unwrap();
+        assert!(after.is_empty(), "reaped entry must not reappear");
     }
 
     #[test]
