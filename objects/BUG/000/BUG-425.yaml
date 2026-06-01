@@ -3,12 +3,12 @@ spec_id: BUG-425
 agreed_id: BUG-425
 title: 'Bulk ''aida archive --older-than'' is silent + slow: per-spec commits (679), no progress output, pollutes orphan-store history'
 description: 'Observed live 2026-05-31: operator ran ''aida archive --older-than 14d'' over 677 specs; it ran several MINUTES with ZERO terminal output, looking hung (operator flagged it). Diagnosis (read-only): the process was healthy (D+ I/O-wait, progressing) but (1) emits NO progress output during the sweep, and (2) commits PER-SPEC — one ''update <SPEC>'' commit each, 679 total — so it''s slow (~25 specs/min, ~25min for the full sweep) AND adds 679 commits to the orphan-store history for a single logical operation. Two fixes: (A) BATCH the archive into ONE store commit (or a handful) instead of 679 — faster + clean history; (B) emit progress (''archiving N specs older than 14d... [k/N]'') so it doesn''t look hung. The single-spec ''aida archive <ID>'' path is fine; this is specifically the --older-than bulk sweep. Companion to the just-fixed BUG-424 (the dry-run panic) — same command family. Verify the per-spec-commit claim against the archive_sweep impl before fixing.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:03:52.208648036Z
-modified_at: 2026-06-01T05:38:52.573801351Z
+modified_at: 2026-06-01T06:31:35.418533130Z
 req_type: Bug
 tags:
 - aida:archive
