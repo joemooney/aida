@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:03:52.208648036Z
-modified_at: 2026-05-31T23:23:02.993038866Z
+modified_at: 2026-06-01T05:38:52.573801351Z
 req_type: Bug
 tags:
 - aida:archive
@@ -24,3 +24,13 @@ comments:
   content: 'Progress half SHIPPED (PR on branch archive-sweep-progress, merged 2026-05-31): bulk ''aida archive --older-than'' now prints an up-front ''Archiving: N spec(s)…'' heading + a throttled [k/N] tick every 50, so it no longer looks hung. REMAINING (keep this open): batch the per-spec store commits — archive_sweep calls backend.update_requirement per spec (main.rs ~3135), one orphan-store commit each (679 for the recent sweep). Needs a NEW aida-core CachedGitBackend batch-update API (write all YAMLs, one commit) — moderate storage-layer change, deferred to a focused session. Kept BUG-425''s id out of the progress commit subject/PR-title deliberately (the agreed-id auto-complete trap, BUG-426). — master/advisor'
   created_at: 2026-05-31T23:23:02.993038866Z
   modified_at: 2026-05-31T23:23:02.993038866Z
+- id: 019e81b1-2c1d-73f2-820f-73c4e1af7a4e
+  author: joe
+  content: |-
+    Implementation findings (advisor burn-down, 2026-05-31) — remaining scope is JUST the batching (progress output shipped via TASK-616). archive_sweep (main.rs ~3192) loops backend.update_requirement(&req) per spec; each is a write-through git commit → 679 commits.
+
+    CLEAN FIX (not a 5-min hack — substrate, do with focus): add GitBackend::bulk_update(reqs, commit_subject) that writes each via object_store::write_object_if_changed, records OpKind::Update (NOT Create) per req, stages the changed YAMLs + oplog, commits once. Expose on CachedGitBackend write-through: run the git bulk_update, then let cache stale-detection rebuild (HEAD-SHA mismatch) on next read — or invalidate explicitly. Wire archive_sweep to collect the mutated reqs and call bulk_update once.
+
+    DO NOT reuse the existing BulkWriter for this: its add() is built for NEW reqs (assigns spec_ids) and its finish() records OpKind::Create for every staged req — using it for archive UPDATES would log false Create ops in the oplog and bump metadata counters needlessly. The batch-commit mechanism (write_object_if_changed loop + single stage+commit) is the part to mirror, with Update-op bookkeeping. Tests: bulk_update writes N, commits once (count git log on the orphan branch before/after), records Update ops, cache reflects archived=true after rebuild. trace:BUG-425
+  created_at: 2026-06-01T05:38:52.573801351Z
+  modified_at: 2026-06-01T05:38:52.573801351Z
