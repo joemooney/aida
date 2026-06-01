@@ -1,0 +1,18 @@
+id: 019e8179-a627-7f33-a624-a565ba1ebfdb
+spec_id: BUG-428
+agreed_id: BUG-428
+title: Fresh clone silently reads legacy requirements.yaml instead of the git-canonical store (shows stale pre-migration data)
+description: 'FOUND via empirical clone dogfood 2026-05-31 (operator: ''test with a new clone''). A freshly-cloned distributed AIDA project has .aida/config.toml (mode=distributed) + origin/aida-store but no local .aida-store/ worktree (gitignored, created only by aida init). detect_distributed_store() requires the worktree to EXIST, so it returns None, and dispatch falls through to determine_requirements_path() → finds the legacy requirements.yaml committed on main → ''aida list/status/findings/queue'' silently show STALE pre-migration specs (FR-0001 era) in the old format, with zero signal anything is wrong. Worst failure mode: plausible wrong data. FIX: when distributed mode is declared but the worktree is unresolvable, refuse the legacy fallback and bail with a clear ''run aida init'' message (aida init''s handle_init_post_clone bootstraps the worktree from the aida-store branch). Verified: post-init the clone sees the real backlog + findings + queue.'
+status: InProgress
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T04:38:13.799434757Z
+modified_at: 2026-06-01T04:38:13.799434757Z
+req_type: Bug
+tags:
+- aida:init
+- distributed-coordination
+- from-self-test
+- kind:bug
+- onboarding-flow
