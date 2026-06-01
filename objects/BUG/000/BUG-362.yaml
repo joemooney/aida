@@ -42,7 +42,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T18:12:10.930679221Z
-modified_at: 2026-06-01T05:28:07.440258375Z
+modified_at: 2026-06-01T05:28:08.678193229Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -60,3 +60,8 @@ comments:
   content: Commit 2d43cb086 references this requirement
   created_at: 2026-05-31T17:48:02.900624333Z
   modified_at: 2026-05-31T17:48:02.900624333Z
+- id: 019e81a7-58e6-7e70-a698-c202b0ff2ea1
+  author: joe
+  content: 'Master decision (advisor, 2026-05-31, charge-forward): implementing Option B — ''aida pr ship'' auto-ends the session lease whose scope matches the shipped branch after a successful merge+auto-bump (no-op when no lease matches). Chosen over A (opt-in flag, doesn''t fix the default forget) because the bug rightly invokes substrate-as-bouncer: ship a programmatic gate, not a discipline reminder. Safe: pr ship runs only after the branch merged (worktree work is shipped); session end''s own clean-worktree guard still applies. trace:BUG-362'
+  created_at: 2026-06-01T05:28:08.678193229Z
+  modified_at: 2026-06-01T05:28:08.678193229Z
