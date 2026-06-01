@@ -1410,3 +1410,10 @@
   note: Narrow docs spot-check; do NOT boil the ocean.
   added_at: 2026-06-01T06:57:02.834234955Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e8208-1e3f-7603-a5a4-7ff64085c644
+  position: 332000
+  added_by: joe
+  note: Pure doc-wiring for the new positioning doc. Low.
+  added_at: 2026-06-01T07:14:09.451472702Z
+  for_role: implementer
