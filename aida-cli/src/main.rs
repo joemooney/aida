@@ -29156,7 +29156,62 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             complexity,
             effort,
         } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run, *complexity, *effort),
+        PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
     }
+}
+
+/// BUG-250: `aida pr hold` — deliberately hold the PR on the current session.
+///
+/// The implementer pushed its branch but is intentionally not opening the PR
+/// yet (a manual gate runs first). This resolves the session's spec + branch
+/// from the active lease covering cwd and records a [`punt::HoldSignal`]. When
+/// invoked under an `--auto-complete` drain the orchestrator provisions
+/// [`punt::HOLD_SIGNAL_FILE_ENV`] pointing at an absolute path under the main
+/// worktree root (the handshake is worktree-resolution-independent, exactly
+/// like the punt signal); a standalone invocation still drops the marker under
+/// the main root's `.aida/pr-holds/` so the state is recorded. Prints the hint
+/// for opening the PR once the gate passes. trace:BUG-250 | ai:claude
+fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
+    let project_root = find_main_worktree_root()?;
+    let cwd = std::env::current_dir().context("could not resolve the current directory")?;
+    let lease = active_lease_for_cwd(&project_root, &cwd).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no active session lease covers this directory — `aida pr hold` runs inside \
+             a `aida queue work` session worktree (it resolves the held spec + branch \
+             from the session lease)."
+        )
+    })?;
+    let spec = lease.scope.clone();
+    let branch = lease.branch.clone();
+    let signal = punt::HoldSignal {
+        spec: spec.clone(),
+        branch: branch.clone(),
+        reason: reason.map(str::to_string),
+    };
+
+    // Prefer the orchestrator-provisioned absolute path (handshake); fall back
+    // to the conventional marker path under the main root for a standalone hold.
+    let signal_path = std::env::var(punt::HOLD_SIGNAL_FILE_ENV)
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| punt::hold_signal_path(&project_root, &spec));
+    punt::write_hold_signal(&signal_path, &signal)
+        .with_context(|| format!("could not write the PR-hold marker to {:?}", signal_path))?;
+
+    eprintln!(
+        "{} {} held — branch `{}` pushed, PR deliberately not opened{}",
+        "⏸".yellow().bold(),
+        spec.bold(),
+        branch,
+        reason.map(|r| format!(" ({r})")).unwrap_or_default(),
+    );
+    eprintln!(
+        "  {} when your gate passes: `gh pr create` (or `glab mr create`), then \
+         `aida queue work PR-N --role reviewer`",
+        "→".dimmed()
+    );
+    Ok(())
 }
 
 /// Mode selector for `aida pr rebase`. Computed once from the CLI
@@ -71673,6 +71728,7 @@ fn emit_batch_chain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            BatchDrainOutcome::Held => "held",
             // EPIC-28 trace:EPIC-28 | ai:claude
             BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         };
@@ -71868,6 +71924,18 @@ fn emit_batch_chain_summary(
             );
             eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
         }
+        // BUG-250: a member deliberately held its PR — the chain pauses there
+        // until the operator runs the gate and opens the PR. trace:BUG-250
+        BatchDrainOutcome::Held => {
+            let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch chain paused in `batch:{batch}` at {} — PR deliberately held",
+                "⏸".yellow().bold(),
+                stopped.bold()
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+        }
         // EPIC-28: every batch drained, but at least one member shelved
         // or was skipped. trace:EPIC-28 | ai:claude
         BatchDrainOutcome::DrainedWithShelved => {
@@ -71946,6 +72014,7 @@ fn emit_batch_drain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            BatchDrainOutcome::Held => "held",
             // EPIC-28: a clean drain that shelved at least one member —
             // the operator still has triage to do. trace:EPIC-28
             BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
@@ -72133,6 +72202,22 @@ fn emit_batch_drain_summary(
             eprintln!(
                 "  {} transient — retry once the API is reachable: \
                  `gh api /rate_limit` then re-run \
+                 `aida queue work --batch {batch_name} --auto-complete`",
+                "→".dimmed()
+            );
+        }
+        // BUG-250: a member deliberately held its PR — the batch pauses there
+        // for the operator's manual gate. trace:BUG-250 | ai:claude
+        BatchDrainOutcome::Held => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} batch `batch:{batch_name}` drain paused at {} — PR deliberately held",
+                "⏸".yellow().bold(),
+                stopped.bold(),
+            );
+            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} run your gate, open the PR (`gh pr create`), then re-run \
                  `aida queue work --batch {batch_name} --auto-complete`",
                 "→".dimmed()
             );
@@ -72494,6 +72579,7 @@ fn emit_next_n_drain_summary(
             BatchDrainOutcome::Stalled => "stalled",
             BatchDrainOutcome::Mismatched { .. } => "mismatched",
             BatchDrainOutcome::Inconclusive => "inconclusive",
+            BatchDrainOutcome::Held => "held",
             // EPIC-28 trace:EPIC-28 | ai:claude
             BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         };
@@ -72690,6 +72776,25 @@ fn emit_next_n_drain_summary(
             eprintln!(
                 "  {} transient — retry once the API is reachable: \
                  `gh api /rate_limit` then re-run",
+                "→".dimmed()
+            );
+        }
+        // BUG-250: a member deliberately held its PR — pause for the gate.
+        // trace:BUG-250 | ai:claude
+        BatchDrainOutcome::Held => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            eprintln!(
+                "{} next {n} drain paused at {} — PR deliberately held",
+                "⏸".yellow().bold(),
+                stopped.bold(),
+            );
+            eprintln!(
+                "  {} already shipped ({count}): {}",
+                "✓".green(),
+                shipped_list
+            );
+            eprintln!(
+                "  {} run your gate, open the PR (`gh pr create`), then re-run",
                 "→".dimmed()
             );
         }
@@ -74662,6 +74767,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let _ = std::fs::remove_file(&punt_signal);
         cmd.env(punt::SIGNAL_FILE_ENV, &punt_signal);
 
+        // BUG-250: provision the PR-hold handshake the same way. An implementer
+        // that deliberately holds the PR (branch pushed, PR withheld for a
+        // manual gate) runs `aida pr hold`, which drops a `HoldSignal` at this
+        // path. The orchestrator reads it after the session exits and reports a
+        // clean `Held` outcome rather than a phantom NoPr failure. Clear any
+        // stale file from a prior run first. trace:BUG-250 | ai:claude
+        let hold_signal = punt::hold_signal_path(&self.project_root, &self.spec);
+        if let Some(parent) = hold_signal.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::remove_file(&hold_signal);
+        cmd.env(punt::HOLD_SIGNAL_FILE_ENV, &hold_signal);
+
         // TASK-329: spawn + poll for the graceful-exit sentinel rather than a
         // blocking `.status()`. In interactive `--zen` mode the skill
         // auto-resolves its end-of-drain prompt and goes idle, but the Claude
@@ -74763,6 +74881,30 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             ));
             return Ok(auto_complete::ImplementerOutcome::Punted {
                 reason: signal.summary(),
+            });
+        }
+
+        // BUG-250: did the implementer deliberately HOLD the PR? `aida pr hold`
+        // dropped the hold-signal file — the branch is pushed but the PR was
+        // intentionally withheld for a manual gate. This must be checked BEFORE
+        // the "no open PR → failure" path below, or a deliberate hold gets
+        // mis-filed as a phase-1 failure with a wrong recovery hint (the exact
+        // BUG-250 symptom). Reconcile the branch from the worktree HEAD so the
+        // epilogue's `gh pr create` hint + a later resume target the pushed
+        // branch. Unlike the punt signal, the hold marker is NOT removed here —
+        // it persists so a resume can recognise the deliberate-hold state.
+        // trace:BUG-250 | ai:claude
+        if let Some(signal) = punt::read_hold_signal(&hold_signal) {
+            let held_branch = reconcile_orchestrated_branch(
+                &self.project_root,
+                &lease_id,
+                &worktree_path,
+                &recorded_branch,
+            );
+            self.branch = Some(held_branch.clone());
+            return Ok(auto_complete::ImplementerOutcome::Held {
+                reason: signal.reason,
+                branch: held_branch,
             });
         }
 
