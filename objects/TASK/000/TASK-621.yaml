@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:38:26.426851688Z
-modified_at: 2026-06-01T04:38:26.426851688Z
+modified_at: 2026-06-01T05:01:01.743073782Z
 req_type: Task
 tags:
 - aida:init
 - distributed-coordination
 - onboarding-flow
+comments:
+- id: 019e818e-85af-7580-988d-5f0f35d4c5f4
+  author: joe
+  content: Commit 4807a9919 references this requirement
+  created_at: 2026-06-01T05:01:01.743073782Z
+  modified_at: 2026-06-01T05:01:01.743073782Z
