@@ -1396,3 +1396,10 @@
   note: Launch-legibility signpost; operator-surfaced 2026-05-31. Layering stays separate, add the lane note. Product seat.
   added_at: 2026-06-01T06:46:06.803091866Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e81f8-1b90-7031-a9a9-ac2fd504806d
+  position: 330000
+  added_by: joe
+  note: Management demo in ~2 days; deck+runbook drafted (docs/presentation/), remaining = render+fill-ask+rehearse+retire-old. HIGH/time-boxed.
+  added_at: 2026-06-01T06:56:58.966640958Z
+  for_role: implementer
