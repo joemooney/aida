@@ -1,0 +1,16 @@
+id: 019e816f-7a7a-7380-9739-1c4e0c285bb5
+spec_id: TASK-620
+agreed_id: TASK-620
+title: Document shared-vs-local substrate model (queue/leases) in multi-advisor-coordination.md
+description: Add the verified shared-vs-local table + the two distributed-coordination consequences (per-user queue sharding + same-user_id collision; machine-local leases → pull-before-pickup) to docs/multi-advisor-coordination.md. Corrects an earlier inaccurate 'the queue is never shared' framing. Completed by this doc commit.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T04:27:07.258369968Z
+modified_at: 2026-06-01T04:27:07.258369968Z
+req_type: Task
+tags:
+- aida:queue
+- distributed-coordination
+- docs
