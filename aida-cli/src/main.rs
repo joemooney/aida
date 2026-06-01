@@ -52590,7 +52590,7 @@ mod queue_work_tests {
     //! refactors don't silently break the resolver.
     //! trace:STORY-42 | ai:claude
     use super::*;
-    use aida_core::{QueueEntry, Relationship, Requirement, RequirementType, RequirementsStore};
+    use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
     use uuid::Uuid;
 
     fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
@@ -52773,53 +52773,49 @@ mod queue_work_tests {
         let mut review = req("STORY-9", None, RequirementType::Story);
         review.title = "Review PR-11: clean up sync flow".into();
         let qe = entry(review.id, Some("reviewer"), Some("EPIC-99"));
-        let store = RequirementsStore {
-            requirements: vec![review.clone()],
-            ..Default::default()
-        };
-        let (scope, target) = derive_scope_from_entry(&qe, &review, &store);
+        let (scope, target) = derive_scope_from_entry(&qe, &review);
         assert_eq!(scope, "PR-11");
         assert!(target.is_some());
     }
 
-    /// for_scope wins over derived parent EPIC when both exist.
+    /// for_scope wins even for a child story (its parent-epic relationship is
+    /// no longer consulted for the session scope — BUG-431 #1).
     #[test]
     fn scope_for_scope_beats_parent_epic() {
-        let epic = req("EPIC-20", None, RequirementType::Epic);
         let mut bug = req("BUG-1", None, RequirementType::Bug);
         bug.relationships.push(Relationship {
             rel_type: RelationshipType::Child,
-            target_id: epic.id,
+            target_id: Uuid::now_v7(), // a parent epic, irrelevant to scope now
             created_at: Some(chrono::Utc::now()),
             created_by: Some("t".into()),
         });
         let qe = entry(bug.id, Some("implementer"), Some("EPIC-21"));
-        let store = RequirementsStore {
-            requirements: vec![epic, bug.clone()],
-            ..Default::default()
-        };
-        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
+        let (scope, _) = derive_scope_from_entry(&qe, &bug);
         assert_eq!(scope, "EPIC-21");
     }
 
-    /// No for_scope → falls back to derived parent EPIC.
+    /// BUG-431 #1: no for_scope → a child story scopes to its OWN id, NOT the
+    /// parent epic. Previously this fell back to the parent EPIC, so every
+    /// same-epic story in a drain contended for one epic scope (worktree +
+    /// branch collision, sibling lease-block, multi-spec PR). Each sibling
+    /// must get its own scope so the drain progresses without contention.
     #[test]
-    fn scope_falls_back_to_parent_epic() {
-        let epic = req("EPIC-20", None, RequirementType::Epic);
+    fn scope_child_story_does_not_inherit_parent_epic() {
         let mut bug = req("BUG-1", None, RequirementType::Bug);
+        // A child-of-epic relationship — the exact shape that used to pull the
+        // session scope up to the parent epic.
         bug.relationships.push(Relationship {
             rel_type: RelationshipType::Child,
-            target_id: epic.id,
+            target_id: Uuid::now_v7(),
             created_at: Some(chrono::Utc::now()),
             created_by: Some("t".into()),
         });
         let qe = entry(bug.id, Some("implementer"), None);
-        let store = RequirementsStore {
-            requirements: vec![epic, bug.clone()],
-            ..Default::default()
-        };
-        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
-        assert_eq!(scope, "EPIC-20");
+        let (scope, _) = derive_scope_from_entry(&qe, &bug);
+        assert_eq!(
+            scope, "BUG-1",
+            "a child story's session must scope to its own id, not its parent epic"
+        );
     }
 
     /// No for_scope and no parent EPIC → falls back to req's own
@@ -52828,11 +52824,7 @@ mod queue_work_tests {
     fn scope_falls_back_to_own_id() {
         let bug = req("BUG-1", None, RequirementType::Bug);
         let qe = entry(bug.id, Some("implementer"), None);
-        let store = RequirementsStore {
-            requirements: vec![bug.clone()],
-            ..Default::default()
-        };
-        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
+        let (scope, _) = derive_scope_from_entry(&qe, &bug);
         assert_eq!(scope, "BUG-1");
     }
 
@@ -68598,7 +68590,7 @@ fn resolve_queue_work_plan(
             .iter()
             .find(|r| r.id == head.requirement_id)
             .ok_or_else(|| anyhow::anyhow!("queue head's requirement is missing from the store"))?;
-        let (scope, review_target) = derive_scope_from_entry(&head, req, &store);
+        let (scope, review_target) = derive_scope_from_entry(&head, req);
         let anchor_display = req
             .agreed_id
             .clone()
@@ -68635,7 +68627,7 @@ fn resolve_queue_work_plan(
             .iter()
             .find(|r| r.id == entry.requirement_id)
             .unwrap();
-        let (scope, review_target) = derive_scope_from_entry(&entry, req, &store);
+        let (scope, review_target) = derive_scope_from_entry(&entry, req);
         let anchor_display = req
             .agreed_id
             .clone()
@@ -68972,15 +68964,19 @@ fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
 /// Preference order:
 ///   1. PR-N / MR-N parsed from "Review PR-N: …" title → "PR-N"
 ///   2. entry.for_scope (explicit STORY-57 tag)
-///   3. derived parent EPIC from req relationships (TASK-44)
-///   4. fall back to the req's own display id
+///   3. fall back to the req's own display id
 /// Also returns the parsed review target (if any) so the caller can
 /// thread it into session_start without re-parsing.
 /// trace:STORY-42 | ai:claude
+// BUG-431 #1: a child story no longer inherits its parent epic's scope (the
+// removed step 3). Session scope is derived purely from the entry's
+// `for_scope`, the review-title shape, and the req's own id — so same-epic
+// siblings drained together each get an independent scope / worktree / branch
+// instead of contending for one epic scope. The store param is gone with the
+// parent lookup. trace:BUG-431
 fn derive_scope_from_entry(
     entry: &aida_core::QueueEntry,
     req: &aida_core::Requirement,
-    store: &RequirementsStore,
 ) -> (String, Option<(ReviewForge, u64)>) {
     // Review-PR shape — title carries the PR ref; e.g. "Review PR-11: …".
     if let Some(rest) = req.title.strip_prefix("Review ") {
@@ -68993,10 +68989,20 @@ fn derive_scope_from_entry(
         let target = parse_review_scope(s);
         return (s.to_uppercase(), target);
     }
-    if let Some(p) = derive_parent_epic_label(req, store) {
-        let target = parse_review_scope(&p);
-        return (p.to_uppercase(), target);
-    }
+    // BUG-431 #1: a child story's session scopes to the STORY'S OWN id, not
+    // its parent epic. Previously this fell back to `derive_parent_epic_label`,
+    // so every same-epic story under one drain (`aida queue work next N`) tried
+    // to own the SAME epic scope — the worktree (`proj-epic-11`) and branch
+    // (`epic-11`) collided, the first story's lease blocked all siblings at
+    // phase 1 ("scope EPIC-11 is owned by lease …"), and the epic-leading PR
+    // title backed two specs (epic + child), breaking the headless reviewer.
+    // Scoping to the story gives each sibling its own scope / worktree / branch
+    // so they drain without contention. An operator who genuinely wants an
+    // epic-wide session still gets it via an explicit `for_scope` (above) or
+    // `aida queue work EPIC-N`. The parent-epic label is still used for
+    // *display* clustering elsewhere (planned-cluster manifest, queue
+    // grouping) — that is separate from the lease scope and unaffected.
+    // trace:BUG-431 | ai:claude
     let fallback = req
         .agreed_id
         .clone()
