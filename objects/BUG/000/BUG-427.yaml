@@ -10,12 +10,12 @@ description: |-
   FIX: route every echo of the purpose/description through the same single-quote-escaping helper the export line uses (replace ' with '\''), or switch the echo to printf '%s' with a pre-escaped arg. Audit role enter / role end / role show / role list for any other raw-interpolation echo sites.
 
   IMPACT: blocks entering a role whose purpose has shell-special chars — silent until the operator tries to enter it. Connects to user-likes-special-chars + statusline-posix discipline (emitted shell must survive arbitrary free text).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T02:31:31.474868150Z
-modified_at: 2026-06-01T02:47:57.044882471Z
+modified_at: 2026-06-01T02:53:06.156921973Z
 req_type: Bug
 comments:
 - id: 019e8114-af74-74c1-8197-901c35f04a10
@@ -23,3 +23,7 @@ comments:
   content: Commit 18101b9db references this requirement
   created_at: 2026-06-01T02:47:57.044882471Z
   modified_at: 2026-06-01T02:47:57.044882471Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T02:53:06.156921973Z
+  completion_sha: 7eab5fc877cac5744b59c25c329159432e991e73
