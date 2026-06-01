@@ -4,12 +4,158 @@ All notable changes to this project are documented here. Generated
 mechanically from the spec graph (`aida changelog refresh`) — do not edit
 by hand; regenerate after merging.
 
-## [v0.10.0] — 2026-05-25
+## [v0.11.0] — 2026-06-01
 
-Specs merged since v0.9.1 (82):
+Specs merged since v0.10.0 (126):
 
 ### Features
 
+- **TASK-623** — Make 'aida init' idempotent toward node-id: complete node-id setup when store is attached but this clone hasn't acquired one (#431)
+- **TASK-621** — Enhancement: read-only commands auto-attach the .aida-store worktree on fresh clone (so 'aida list' just works pre-init) (#429)
+- **TASK-587** — validate and confirm custom agent roles in aida agent new (#415)
+- **TASK-135** — TASK-268 'both-at-once trap' recurred a 3rd time on 2026-05-28. Pattern: I add … (#414)
+- **TASK-607** — BUG-416 slice 1: pure worktree_occupant detection core (live-lease-on-worktree check) (#405)
+- **FR-282** — aida graph / query_graph: traverse Custom("...") edge types (--follow/--type flag) (#403)
+- **TASK-605** — Mailbox git-canonical digest: aida mailbox sync + merge-on-read (STORY-493 slice 4) (#402)
+- **TASK-604** — Mailbox MCP tools: send_message + read_inbox (STORY-493 slice 3) (#401)
+- **TASK-603** — Mailbox local store + aida mailbox CLI (send/inbox/thread) (STORY-493 slice 2) (#400)
+- **TASK-602** — Mailbox pure core: Message model + inbox_for/thread/merge_dedup (STORY-493 slice 1) (#399)
+- **TASK-601** — Resume decision core: ResumeFacts + phase_postcondition_met + resume_plan (STORY-492 slice 2a) (#398)
+- **TASK-598** — Resumable-drain pure decision logic: classify_resumability + reconcile_resume_phase (STORY-491 slice 1) (#390)
+- **STORY-489** — aida graph: cross-spec relationship queries (BlockedBy chains, epic rollup, cross-feature impact) via CLI + MCP (#388, #389)
+- **TASK-597** — MCP query_graph tool: agent-queryable cross-spec graph (STORY-489 slice 3) (#388)
+- **TASK-595** — aida graph CLI subcommand: blocked-by/blocks/tree/impact + --json (STORY-489 slice 2) (#386, #387)
+- **TASK-594** — graph_walk core primitive: cycle-safe transitive relationship walk + status rollup (STORY-489 slice 1) (#385)
+- **STORY-490** — Drain legibility: surface shelved/escalated (NeedsAttention) count in aida queue progress (#384)
+- **TASK-583** — SPIKE-35 v2 follow-ups: align bughunter-severity schema, regen stale REVIEW.md, drop thinking-comment (#354, #367)
+- **SPIKE-35** — Emit REVIEW.md from spec graph (substrate-as-bouncer for managed Code Review) (#353)
+- **SPIKE-37** — Trigger Code Review via '@claude review once' from /aida-review (#353)
+- **TASK-568** — aida list --tree: parent/child clustering view (parallel to aida queue list --tree) (#351)
+- **TASK-574** — Skill helper subfolders: allow .claude/skills/<name>/{SKILL.md, templates/, examples/} (#350)
+- **STORY-481** — /aida-techdebt skill: end-of-session duplication scan (#349)
+- **TASK-577** — /aida-insights skill wrapper around 'aida usage' for monthly pattern view (#348)
+- **TASK-569** — aida list --show-tags: surface spec tags in the list view (#345)
+- **TASK-126** — Empirical 2026-05-25: scripts/release.sh's ecosystem-watch verification refuses… (#344)
+- **TASK-570** — aida doctor --heal should detect + clean up orphan queue entries (delegate to aida queue prune --orphaned) (#342)
+- **STORY-473** — Publish AIDA as a Claude Code plugin/marketplace package (#341)
+- **SPIKE-30** — Integrate `claude agents --json` into `aida status`
+- **SPIKE-31** — Emit path-gated `.claude/rules/` from the spec graph (substrate-as-bouncer)
+- **SPIKE-33** — Emit `claude-cli://` deep links from `aida brief` + paste-ready prompts
+- **SPIKE-34** — Re-shape `aida agent new claude` as a `claude --bg --agent <subagent-def>` wrapper
+- **STORY-479** — /aida-learn skill: substrate-aware 'update CLAUDE.md so you don't repeat this' verb
+- **TASK-1-109** — aida queue clear --completed is a no-op on the git-canonical backend (the defau…
+- **TASK-120** — aida findings add --severity vocabulary only accepts major / minor / cosmetic. …
+- **TASK-136** — 12-hour drain stall after single transient GH API failure during phase-1 verifi…
+- **TASK-37** — Recurrence threshold of 3 is hard-coded in the recur handler; consider making i…
+- **TASK-537** — aida queue prune --orphaned: detect + remove queue entries whose backing spec was deleted
+- **TASK-572** — CLAUDE.local.md scaffolding: 'aida init' should write a structured personal-notes template + auto-gitignore
+
+### Fixes
+
+- **BUG-429** — Node-reg failure hard-aborts clone-init even though the store worktree was already attached (should soft-warn + continue) (#428)
+- **BUG-428** — Fresh clone silently reads legacy requirements.yaml instead of the git-canonical store (shows stale pre-migration data) (#427)
+- **BUG-427** — aida role enter: 'Resumed role' echo doesn't shell-escape the purpose — apostrophes/parens in a role purpose break the eval (#425)
+- **BUG-424** — aida archive --older-than --dry-run panics on emoji/unicode spec titles (byte-index truncation not char-boundary-safe) (#418)
+- **BUG-421** — Correct 'aida agent list-roles' output: fabricated lease-limits + inaccurate role summaries + missing 'aida role list' cross-reference (#417)
+- **TASK-608** — Trim 'aida role scaffold' defaults to the agent-wired role set (drop architect/triage, add advisor) (#416)
+- **TASK-560** — aida queue work --auto-complete + --resume: improve UX (currently conflict with terse error) (#412)
+- **BUG-416** — Co-located agents (aida agent new x2 in one worktree) share session scope → aida add hint bleed (#409)
+- **BUG-408** — aida agent new --show-context is not dry: it starts the session (worktree + lease + status→InProgress) before printing context (#406)
+- **BUG-410** — auto-bump re-completes a manually-reopened spec referenced by an older merged commit (#404)
+- **BUG-414** — lifecycle:no-ci-wait silently ignored — orchestrator always blocks on CI (#397)
+- **BUG-413** — auto-bump leaves stale failure_reason on Completed in 3 of 4 flip paths (false CI-red findings) (#396)
+- **BUG-411** — aida graph --impact (CLI + MCP) misses specs blocked via unidirectional Blocks edges (#395)
+- **TASK-600** — Adversarial-review fixes: canonical MCP query_graph mode + conservative reconcile_resume_phase (#394)
+- **BUG-51** — REQ_ID_PATTERN rejects (EPIC-19 v1) suffix variants (#392)
+- **BUG-298** — aida scaffold apply: prune obsolete 'aida-' prefixed skills/hooks/commands from previous AIDA versions (#376)
+- **BUG-289** — aida pr rebase <N> trips when a worktree (typically pr-N reviewer) already holds the conflicting ref (#375)
+- **BUG-105** — queue work pre-populate-manifest uses only first matching plan file (TASK-95 DP-2 followup) (#374)
+- **BUG-334** — Decide: should post_punt auto-flip spec status to needs-attention, or stay decoupled? (#374)
+- **BUG-104** — queue done followups extraction drops bullets in some edge cases (TASK-96 DP-1 followup) (#373)
+- **BUG-90** — BUG-89 follow-up: add integration tests for queue user_id consistency (#373)
+- **BUG-91** — review_title_matches vs format_review_story_display case-sensitivity divergence (#372)
+- **BUG-92** — read_config_workflow_hints doesn't strip TOML inline comments (#372)
+- **BUG-93** — aida config hints source-display is misleading on unrecognized AIDA_HINTS value (#372)
+- **BUG-407** — aida doctor --heal hangs forever on an interactive y/N prompt (blocks on stdin / unix_stream_read_generic) (#371)
+- **BUG-406** — aida --help does not indent wrapped command descriptions (#366)
+- **BUG-251** — Spec YAML parser fails hard on unknown enum variants / unknown fields — needs forward-compat reading for cross-binary version skew (#365)
+- **BUG-331** — Substrate gap: sibling worktrees fall back to centralized mode because .aida-store detection doesn't traverse up the worktree tree (#364)
+- **BUG-270** — aida db reconcile-status: recognize 'SPEC-ID:' prefix format on merge commits (#363)
+- **BUG-404** — aida pr ship: auto-bump misses the just-merged spec — in-process pull reports 'Already up to date', spec stays Done (#361, #362)
+- **BUG-405** — auto-bump: a NeedsAttention spec whose referencing PR merges is stranded — never promoted to Completed (BUG-328 sibling) (#360)
+- **BUG-366** — aida queue list 'Next:' hint suggests 'aida queue work PR-N' but the command rejects PR numbers (#359)
+- **TASK-1-113** — aida db reconcile-status: dry-run and apply DIVERGE for specs whose agreed_id ≠… (#356)
+- **TASK-131** — aida queue list displays spec status as '▸ Approved' even when the underlying r… (#343)
+- **BUG-420** — Headless implementer degenerates into filler-spin (echo counters + sleeps) AFTER committing its work — never advances to open-PR/next-phase
+- **DOC-1-101** — Competitive analysis: agent memory libraries (Mem0/LangMem/Graphiti/Cognee/Letta/Dreams)
+- **TASK-1-107** — aida list multi-filter is broken — appears to use OR not AND between flags. Emp…
+- **TASK-1-108** — aida queue work phase-1 startup transitions status before acquiring lease — lea…
+- **TASK-1-110** — TASK-268 'both-at-once trap' recurred a 3rd time on 2026-05-28. Pattern: I add …
+- **TASK-534** — Rename stale test discipline_pack_scaffolds_seven_docs_plus_readme
+- **TASK-535** — backlog: replace literal STORY-444 in user-facing error with generic placeholder
+- **TASK-536** — backlog: drop redundant !is_terminal_status filter on Approved candidates
+
+### Documentation
+
+- **TASK-622** — README + CLAUDE.md: 'Cloning an existing AIDA project' note (reads auto-attach; writing needs a node id) (#430)
+- **TASK-620** — Document shared-vs-local substrate model (queue/leases) in multi-advisor-coordination.md (#426)
+- **TASK-617** — Capture the two-advisor functional-split coordination protocol (multi-advisor-coordination.md) (#423, #424)
+- **SPIKE-46** — SPIKE-44 follow-through: publish a write-conformance spec + prove read-easy with a non-Rust prototype (#411)
+- **TASK-590** — Inventory: every aida-core symbol that serializes/deserializes the on-disk object format (#408)
+- **TASK-589** — aida help --glossary: surface the machinery/lifecycle glossary from the CLI (#407)
+- **STORY-491** — Resumable orchestrator drain checkpointing: --resume re-enters a crashed --auto-complete at the right phase (#389)
+- **SPIKE-43** — Git-canonical knowledge-substrate thesis: competitive validation + multi-vendor opening (#377, #378, #382, #383)
+- **TASK-592** — Positioning doc: vs-kiro.md (nearest competitor) + README index (#380, #381)
+- **TASK-591** — Positioning doc: vs-spec-kit.md (nearest competitor) + README index (#379)
+- **SPIKE-45** — Competitive capability roadmap: match the multi-agent frontier, harden the spec-graph moat (#378)
+- **TASK-588** — AGENTS.md: add a compact 'direct user assignment — implement BUG/TASK-N' runbook (no queued brief) (#370)
+- **TASK-580** — README: trim narrative metadata to push loaded-context delta negative (#357)
+- **SPIKE-32** — Compile spec graph to workflow.js targeting Claude Code's workflows runtime (#352)
+- **TASK-567** — Marketplace publication security checklist (#340)
+- **TASK-566** — Document AIDA MCP install matrix for major agent clients (#339)
+- **TASK-565** — Marketplace research refresh: AIDA positioning + improvement roadmap (#338)
+- **DOC-1-103** — Competitive analysis: AI coding agents (Cline/Aider/Plandex/Goose/Continue) — framework lens
+- **SESSION-60** — SESSION-60 _(spec not in store)_
+- **SLICE-2** — SLICE-2 _(spec not in store)_
+- **TASK-121** — AIDA stores per-requirement transition history INSIDE each .aida-store/objects/…
+- **TASK-575** — disable-model-invocation frontmatter on destructive skills
+
+### Internal
+
+- **TASK-609** — SPIKE-46 follow-up: CI conformance gate guarding AIDA's own on-disk YAML format against serializer drift (#413)
+- **TASK-599** — Regression tests: query_graph MCP tool (functional + descriptor advertisement) (#391)
+- **TASK-586** — Rename dialog role → advisor as the canonical identifier (supersedes TASK-279) (#368, #369)
+- **TASK-132** — aida list multi-filter is broken — appears to use OR not AND between flags. Emp… (#358)
+- **TASK-584** — Consolidate aida-recover into aida-doctor (remove the ~80%-overlap skill) (#355)
+- **TASK-573** — @path imports in scaffolded CLAUDE.md to trim per-session context budget (#346)
+
+### Other
+
+- [AI:claude] docs(aida): skill-catalog slop audit — trio verdict + doctor/recover overlap
+- [AI:claude] docs(briefs): Codex SPIKE-32 narrow-POC + AGY SPIKE-35 v2 rework
+- [AI:claude] docs(briefs): Codex resume-bridge investigation — SPIKE-32's one blocker
+- [AI:claude] docs(briefs): implementer brief for TASK-574 folder-form skills
+- [AI:claude] docs(briefs): skill-catalog slop audit — consolidation per operator steer
+- [AI:claude] docs(competitive): SPIKE-14 dynamic workflows decompose — COMPOSE verdict
+- [AI:claude] docs(competitive): SPIKE-14 update — verified at operator's keyboard (Claude Code 2.1.156)
+- [AI:claude] docs(competitive): SPIKE-15 agent view — COMPOSE+Divest verdict
+- [AI:claude] docs(competitive): strategic recompose post Claude Code 2.1.154
+- [AI:claude] docs(glossary): document existing --human-only mechanism + apply to TASK-115/116/123
+- [AI:claude] docs(queue clear): explanatory help + flag the --completed no-op on git backend
+- [AI:claude] docs(spike): SPIKE-46 — measured multi-vendor store interop (read-easy, write-bounded) (#410)
+- [AI:claude] feat(archive): progress heading + throttled [k/N] ticks on bulk --older-than sweep (#422)
+- [AI:claude] feat(rules): SPIKE-35 emit REVIEW.md + Round 2 strategic recompose
+- [AI:claude] feat(triage+small-fixes): TASK-350 glossary + TASK-381 digest --copy + TASK-388 plan template
+- [AI:claude] fix(preflight): orchestrator-aware messages for InProgress refusal + claim warning (TASK-1-108 follow-up)
+- [AI:claude] fix(test): seed CLAUDE.local.md in 'idempotent_when_both_blocks_present' (TASK-572 follow-up)
+
+## [v0.10.0] — 2026-05-26
+
+Specs merged since v0.9.1 (103):
+
+### Features
+
+- **TASK-563** — scripts/aida-demo.sh: gh-backed throwaway hello-world walkthrough for first-user testing (#332)
 - **TASK-559** — aida queue work --force-claim flag forwarding to internal session start invocation (#329)
 - **STORY-464** — aida status integrates passive aida doctor scan — surface 1-2 findings under a 'Hygiene' section (#328)
 - **STORY-465** — aida status: top-priority 'Awaiting you' section aggregating all human-gate items (PRs ready to merge, briefs for you, findings to triage, escalations) (#325)
@@ -34,6 +180,7 @@ Specs merged since v0.9.1 (82):
 - **STORY-442** — Lifecycle short-circuit tags: lifecycle:no-ci-wait / no-review / no-build / trivial for small-blast-radius specs (#276)
 - **STORY-325** — Punt ledger — record every design-fork decision as structured metadata; analyze for patterns that become recorded principles (#275)
 - **STORY-248** — Stacked-branch awareness: aida queue work --stack + auto-rebase on pull for parallel implementation pipelining (#272)
+- **STORY-439** — Assistance + complexity calibration layer — predicted vs actual at pickup, ship, and review (#270)
 - **STORY-244** — TUI architecture pivot: launcher + bash-wrapper re-entry (replaces PTY-host model) (#269)
 - **STORY-436** — Role-context auto-injection on agent session start (EPIC-31 Phase 5, optional) (#266)
 - **STORY-435** — MCP heartbeat busy/idle tracking for agent registry (EPIC-31 Phase 4) (#263)
@@ -84,6 +231,7 @@ Specs merged since v0.9.1 (82):
 
 ### Documentation
 
+- **TASK-564** — Document cross-agent hook pause/abort/defer semantics (#334)
 - **TASK-512** — Document aida:<subcommand> tag-namespace convention in docs/aida/ + CLAUDE.md + scaffolding-pack (#271)
 - **STORY-443** — Reshape aida init docs/ namespace: discipline pack to docs/aida/, keep docs/plans/ for project-authored plans (#268)
 - **TASK-476** — docs/multi-node.md: replace line-ref to current_user_id with symbol-ref (#262)
@@ -103,10 +251,28 @@ Specs merged since v0.9.1 (82):
 
 ### Other
 
-- STORY-439: three-way complexity calibration substrate (#270)
+- [AI:claude] docs(claude-md): mention scripts/aida-demo.sh for first-user validation (#335)
+- [AI:claude] feat(demo): cleanup section uses box_title + note_box
+- [AI:claude] feat(demo): final Notes section in note_box + drop stale BUG-386 framing
+- [AI:claude] feat(demo): option [1] runs real work via claude -p + glossary path fix
+- [AI:claude] feat(demo): option [3] doctor wraps explanation in note_box
+- [AI:claude] feat(demo): option [4] search wraps explanation in note_box
+- [AI:claude] feat(demo): option [5] findings now frames the AIDA feedback loop
+- [AI:claude] feat(demo): step 8 also shows 'aida list' so the new STORY appears in backlog
+- [AI:claude] fix(demo): box_title and note_box share fixed width 80
+- [AI:claude] fix(demo): explore menu clears screen on pick, presses enter on return
+- [AI:claude] fix(demo): explore menu in note_box, Ctrl-C trap, box_title Unicode align
+- [AI:claude] fix(demo): option-1 anatomy framing + glossary fallback + visible commands
+- [AI:claude] fix(demo): pause + clear after 'aida pull' before 'aida show'
+- [AI:claude] fix(demo): pause after grep output + before explore menu
+- [AI:claude] fix(demo): scaffold commit no longer emits foreign-trace warning
+- [AI:claude] fix(demo): true-rectangle note_box + auto-pause between steps
+- [BUG-386] fix(scaffold): scaffold all skill + command templates on aida init (#333)
 - [STORY-305] feat(scaffolding): per-project skill extensions via local/ + .local.md (#210)
 - [TASK-553] docs(discipline): implementer-discipline.md — six rules + bouncer map
 - [TASK-555] docs(agents): cross-agent skill-invocation surface map
+- feat(demo + status): TUI polish for the first-user walkthrough (#337)
+- fix(demo + status): show commands inline; cleanup summary surfaces categories (#336)
 
 ## [v0.9.1] — 2026-05-23
 
@@ -174,6 +340,7 @@ Specs merged since v0.8.0 (114):
 - **TASK-401** — Headless /aida-pickup: enforce push + /aida-pr before exit; never commit-and-exit (#127)
 - **TASK-358** — Clean up lingering worktrees from unresumed --escalate-blocks punts (#125)
 - **TASK-351** — aida edit: add --add-tag / --remove-tag — --tags is replace-only and silently clobbers (#120)
+- **STORY-306** — Advisor escalation tier for --no-human: design-forks punt to a headless advisor before reaching the human (#118)
 - **STORY-252** — /aida-digest skill: advisor-curated narrative report of project work (customer / team / self perspectives) (#114)
 - **STORY-333** — Typed blocked-by + human-only markers — orchestrator + queue skip un-pickable specs at pickup instead of phase-1-failing on them (#113)
 - **TASK-294** — aida-worker bash function: MVP queue-drain loop with file-directive control (.aida/worker.cmd) (#112)
@@ -204,6 +371,7 @@ Specs merged since v0.8.0 (114):
 - **TASK-436** — MCP tool_post_directive: validate verb against drain|pause|exit (#167)
 - **TASK-439** — MCP resolve_punt/escalate_punt: use write_atomic, not std::fs::write, for punt-response files (#166)
 - **BUG-286** — Orchestrator phases 3-6: retry transient gh/git network errors before classifying as failure (#159)
+- **BUG-285** — BUG-269 gate has a hole — 'aida queue done --yes' succeeds with no open PR (tonight's TASK-413/TASK-416 evidence) (#158)
 - **TASK-416** — state-snapshot --json: PlanRow serialization shape-inconsistent with PrRow (#157)
 - **TASK-429** — TUI: arm TERMINAL_NEEDS_RESTORE gate BEFORE enable_raw_mode to close micro-race window (#155)
 - **BUG-280** — Reviewer skill under --no-human=both posts verdict to PR but skips verdict-file AND tries to AskUserQuestion (#152)
@@ -273,8 +441,6 @@ Specs merged since v0.8.0 (114):
 
 ### Other
 
-- BUG-285: harden queue-done PR-check gate against --yes bypass and silent failure (#158)
-- STORY-306: advisor escalation tier for --no-human — punts route to a headless advisor before reaching a human (#118)
 - [AI:claude] docs(readme): add orchestrator vs Claude-sessions process diagram for --auto-complete
 - [AI:claude] docs(readme): honest empirical-proof framing + LLM-skeptic-aware positioning (TASK-403 prep) (#190)
 - [AI:claude] docs(scaffolding): sync 22 scaffolding-pack memories + 1 discipline doc to master templates (#193)
@@ -411,6 +577,7 @@ Specs merged since v0.5.2 (7):
 ### Features
 
 - **TASK-218** — aida queue rework SPEC (+ aida rework SPEC alias): single verb for the flip-requeue-rework pattern (#24)
+- **STORY-86** — New status 'Done': distinguish 'work finished on branch' from 'merged to main' (Completed) (#21)
 
 ### Fixes
 
@@ -422,14 +589,14 @@ Specs merged since v0.5.2 (7):
 
 - EPIC-23 batch 5: session/queue/parse polish (9 specs) (#25)
 - EPIC-23 batch 6: observability — queue progress, status, batch drain, usage telemetry (6 specs) (#26)
-- STORY-86: Done status — split branch-finished from merged-to-main (#21)
 
 ## [v0.5.2] — 2026-05-13
 
-Specs merged since v0.5.1 (13):
+Specs merged since v0.5.1 (14):
 
 ### Features
 
+- **EPIC-24** — Living documentation: capture rationale, use cases, recipes, and tutorial seeds DURING work — book-as-living-document (#17)
 - **STORY-104** — aida doc data model + aida doc add command — first-class documentation type (#17)
 - **STORY-105** — /aida-doc skill — proactive doc capture at natural work checkpoints (#17)
 
@@ -444,7 +611,7 @@ Specs merged since v0.5.1 (13):
 ### Documentation
 
 - **STORY-107** — Positioning + ecosystem comparison doc: 'why AIDA, how it fits' kept current as the AI/dev-tools landscape evolves (#17)
-- **EPIC-23** — Session orchestration & autonomy: automated transitions between batch / PR / review lifecycles
+- **EPIC-23** — Session orchestration & autonomy: automated transitions between batch / PR / review lifecycles (#15)
 - **STORY-86** — New status 'Done': distinguish 'work finished on branch' from 'merged to main' (Completed)
 
 ### Infrastructure
