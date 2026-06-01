@@ -1403,3 +1403,10 @@
   note: Management demo in ~2 days; deck+runbook drafted (docs/presentation/), remaining = render+fill-ask+rehearse+retire-old. HIGH/time-boxed.
   added_at: 2026-06-01T06:56:58.966640958Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e81f8-8b4d-7951-a2bd-c38bd6d5e661
+  position: 331000
+  added_by: joe
+  note: Narrow docs spot-check; do NOT boil the ocean.
+  added_at: 2026-06-01T06:57:02.834234955Z
+  for_role: implementer
