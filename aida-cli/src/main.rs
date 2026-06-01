@@ -10659,18 +10659,52 @@ fn handle_init_post_clone(
         hn,
         email.as_deref().unwrap_or("-")
     );
-    let new_id = git_ops::register_node_full(
+    let new_id = match git_ops::register_node_full(
         &store_path,
         requested_id,
         1, // user_id placeholder — see Phase 1 commit message
         &hn,
         email.clone(),
-    )?;
-    println!(
-        "  {} Acquired node id {} for this clone.",
-        "".green().bold(),
-        new_id
-    );
+    ) {
+        Ok(id) => {
+            println!(
+                "  {} Acquired node id {} for this clone.",
+                "".green().bold(),
+                id
+            );
+            id
+        }
+        // BUG-429: by here the store worktree is already attached + scaffolded
+        // and the onboarding task is enqueued — only node-id acquisition
+        // failed (transient registry contention, or an unreachable/rejecting
+        // remote). Don't abort the whole clone-init as a hard error with a
+        // bare "Error:" that reads as "nothing worked": the clone is usable
+        // for reads right now, and only collision-free ID issuance for WRITES
+        // needs the node id. Warn, point at the retry, and return Ok —
+        // consistent with the auto-acquire path's soft-handling above.
+        // trace:BUG-429 | ai:claude
+        Err(e) => {
+            eprintln!();
+            eprintln!(
+                "  {} Store attached, but node-id acquisition failed: {}",
+                "Warning:".yellow().bold(),
+                e
+            );
+            eprintln!(
+                "  The clone is ready to read (list / show / findings / queue). Before issuing"
+            );
+            eprintln!(
+                "  new IDs (`aida add`), run `{}` to claim a collision-free node id.",
+                "aida node acquire".cyan()
+            );
+            eprintln!();
+            eprintln!(
+                "{} AIDA clone bootstrap complete (node-id pending).",
+                "".green().bold()
+            );
+            return Ok(());
+        }
+    };
 
     // Auto-allocate initial blocks for the common types (Phase 3).
     // trace:FR-1-073 | ai:claude
