@@ -26744,6 +26744,45 @@ fn record_session_end_unshipped_work(
     }
 }
 
+/// BUG-422: should `aida session end` auto-skip the CI/PR probe because we're
+/// in a non-interactive context? The probe shells out to `gh` with no timeout;
+/// with no TTY to Ctrl+C or answer a prompt it can hang the lease teardown
+/// forever — which breaks the multi-agent handoff (tearing down a finished
+/// worktree from outside the agent). True only when the probe WOULD otherwise
+/// run (`!skip_ci && !force`), the caller did NOT explicitly ask to wait for CI
+/// (`--wait-ci`/`--watch-ci` is honored even headless — that's an explicit
+/// choice), and stdin is not a TTY. trace:BUG-422 | ai:claude
+fn non_tty_skips_ci_probe(
+    skip_ci: bool,
+    force: bool,
+    explicit_ci_wait: bool,
+    stdin_is_tty: bool,
+) -> bool {
+    !skip_ci && !force && !explicit_ci_wait && !stdin_is_tty
+}
+
+#[cfg(test)]
+mod bug422_ci_probe_tests {
+    use super::non_tty_skips_ci_probe;
+
+    #[test]
+    fn skips_only_when_non_tty_default_and_probe_would_run() {
+        // The bug: bare `aida session end` in a non-TTY orchestrator hangs.
+        assert!(
+            non_tty_skips_ci_probe(false, false, false, false),
+            "non-TTY + no flags → skip the hanging probe"
+        );
+        // A TTY user keeps the interactive probe.
+        assert!(!non_tty_skips_ci_probe(false, false, false, true));
+        // Explicit --wait-ci/--watch-ci is honored even headless (caller's call).
+        assert!(!non_tty_skips_ci_probe(false, false, true, false));
+        // --skip-ci / --force already bypass the probe via the existing guard;
+        // this predicate stays false so it doesn't double-handle them.
+        assert!(!non_tty_skips_ci_probe(true, false, false, false));
+        assert!(!non_tty_skips_ci_probe(false, true, false, false));
+    }
+}
+
 fn session_end(
     id_query: Option<&str>,
     spec_query: Option<&str>,
@@ -26821,7 +26860,21 @@ fn session_end(
     // happens BEFORE the BUG-61 live-claude check so the user can decide
     // whether to bail-and-keep-fixing without first wading through the
     // claude-process disclosure. trace:TASK-111 | ai:claude
-    if !skip_ci && !force {
+    if non_tty_skips_ci_probe(
+        skip_ci,
+        force,
+        wait_ci || watch_ci,
+        std::io::stdin().is_terminal(),
+    ) {
+        // BUG-422: non-interactive shell — the `gh` CI/PR probe has no timeout
+        // and would hang the lease teardown with no TTY to interrupt it. Skip
+        // it (equivalent to the proven `--skip-ci` workaround). trace:BUG-422
+        eprintln!(
+            "  {} non-interactive shell — skipping the CI/PR probe (it would hang the lease \
+             teardown with no TTY). Pass --wait-ci from a TTY to force it, or --skip-ci to silence.",
+            "Note:".dimmed()
+        );
+    } else if !skip_ci && !force {
         let probe = probe_ci_state_for_branch(&target.branch);
         // TASK-233: --watch-ci blocks like --wait-ci, so it produces the
         // same `CiAction::Wait`; the difference is the live display.
