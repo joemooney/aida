@@ -1,0 +1,56 @@
+id: 019e81ee-3eac-7563-8f64-0cf05d2dccc8
+spec_id: TASK-626
+agreed_id: TASK-626
+title: 'aida agent new --spec: signpost that this lane ships a PR + exits (not orchestrated), name the queue-work alternative'
+description: |-
+  ## Problem
+
+  `aida agent new claude --role implementer --spec STORY-83` sets up worktree + lease + context and launches an agent that implements the spec, ships a PR, and exits. It does NOT engage the orchestrator/sentinel — nothing drives the post-PR lifecycle (CI-wait → review → merge → pull → auto-bump). That's correct by design: `aida agent new` is the supervised-LAUNCH lane; `aida queue work --auto-complete` is the ORCHESTRATOR lane (defined as exactly that command in docs/architecture/autonomy-and-escalation.md:463).
+
+  But the surface gives no signal which lane the operator picked. Two parallel entry points to "start work on a spec" have DIFFERENT completion semantics (PR-shipped-then-stop vs driven-to-Completed), and the launcher is silent about it. Operator surfaced the confusion directly (2026-05-31): "this does not use the orchestrator/sentinel, should it?" — the layering is right; the legibility is the gap.
+
+  ## Desired behaviour
+
+  When `aida agent new <type> --spec <ID>` launches (any of claude/codex/antigravity), print a short, clearly-set-apart note that:
+  1. names what this lane does — implements the spec, ships a PR, and exits;
+  2. states it is NOT orchestrated — CI/review/merge/pull are the operator's responsibility;
+  3. names the orchestrated alternative for full-lifecycle drive: `aida queue work <ID> --auto-complete`.
+
+  Operator-approved shape (logical seat; physical seat refines wording/placement):
+
+  ```
+  ✓ worktree + lease + context ready
+  ℹ This agent will implement <ID>, ship a PR, and exit.
+    It is NOT orchestrated — CI/review/merge/pull are manual.
+    For full-lifecycle drive: aida queue work <ID> --auto-complete
+  ```
+
+  ## Acceptance criteria
+
+  - [ ] `aida agent new claude --spec <ID>` prints a note naming (a) ships-PR-then-exits, (b) not-orchestrated, (c) the `aida queue work <ID> --auto-complete` alternative.
+  - [ ] Same note for `codex` and `antigravity` agent types.
+  - [ ] The note appears ONLY when `--spec` is supplied (no `--spec` = no lifecycle to signpost; stay quiet).
+  - [ ] `--show-context` (dry preview) and `--no-context` paths still behave correctly; the note is about lane semantics, not the context snapshot.
+  - [ ] The note does not break `--bg` / scripted launches (goes to stderr or is otherwise non-interfering with any machine-readable stdout).
+
+  ## Design note — SPEC-ID in output
+
+  The note echoes the SPEC-ID the operator themselves just typed, inside a developer-facing multi-agent launch command — so it is NOT the first-user opaque-ID leak that docs/user-facing-text-conventions.md (TASK-268) guards against, and the `queue work <ID>` hint genuinely needs the ID to be actionable. Physical seat: confirm this reading so the pre-commit user-facing-text gate isn't tripped; if the gate is strict on banners, route the note to stderr / mark it developer-facing.
+
+  ## Notes
+
+  - Pure additive UX; touches the agent_new launch path in aida-cli/src/main.rs (prepare_agent_launch / the post-launch print).
+  - Adjacent (not duplicate): EPIC-30 (persistent `aida queue worker`) is about making the orchestrator lane continuous; this is just signposting the launcher lane. The deeper convergence (`--orchestrate` opt-in on agent new) was considered and explicitly deferred in favor of signposting.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T06:45:35.020377871Z
+modified_at: 2026-06-01T06:45:35.020377871Z
+req_type: Task
+tags:
+- aida:agent:new
+- from-product
+- launch-legibility
+- lifecycle:no-review
+- papercut
