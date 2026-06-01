@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:38:22.111302751Z
-modified_at: 2026-06-01T04:48:08.709349790Z
+modified_at: 2026-06-01T04:50:21.345918636Z
 req_type: Bug
 tags:
 - aida:init
@@ -21,3 +21,8 @@ comments:
   content: 'CORRECTION (verify-before-claiming): my original ''exits 0'' framing was a measurement artifact — the exit code I read came from a command piped to ''tail'', so $? was tail''s, not aida''s. Verified with no pipe: ''aida init'' exits 1 on node-reg failure — the main() exit-code mapping is already correct. The REAL bug: node-registration failure in handle_init_post_clone hard-aborts the entire clone-init via ''?'' (line ~10662) EVEN THOUGH the worktree was already successfully attached (.aida-store exists, scaffolding done, onboarding task enqueued). Partial success reported as total failure, with a bare ''Error:'' that doesn''t tell the user the store IS usable. Inconsistent with the auto-acquire path (line ~10335) which soft-warns + continues. FIX: soft-handle the register_node_full error — warn that the store is attached but node-id needs a retry via ''aida node acquire'', return Ok(). Retitling accordingly.'
   created_at: 2026-06-01T04:48:07.575529713Z
   modified_at: 2026-06-01T04:48:07.575529713Z
+- id: 019e8184-c021-7393-b9a2-500faf488af1
+  author: joe
+  content: Commit 6cfac7895 references this requirement
+  created_at: 2026-06-01T04:50:21.345918636Z
+  modified_at: 2026-06-01T04:50:21.345918636Z
