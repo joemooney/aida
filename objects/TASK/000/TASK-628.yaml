@@ -1,0 +1,32 @@
+id: 019e8208-1e3f-7603-a5a4-7ff64085c644
+spec_id: TASK-628
+agreed_id: TASK-628
+title: Wire vs-claude-code-workflows.md into positioning index + CLAUDE.md neighbor list
+description: |-
+  ## Context
+
+  New positioning doc `docs/positioning/vs-claude-code-workflows.md` (created 2026-06-01, product seat) answers "AIDA vs Claude Code Workflows: compete / complement / overlap." Companion to vs-claude-code-subagents.md. Needs wiring into the discovery surfaces.
+
+  ## Acceptance criteria
+
+  - [ ] Add `vs-claude-code-workflows.md` to `docs/positioning/README.md` index (next to vs-claude-code-subagents.md).
+  - [ ] Add it to the CLAUDE.md positioning enumeration (the "lead with vs-spec-kit + vs-kiro, then vs-ultrareview … vs-claude-code-subagents, vs-karpathy-md, vs-saas-pm" list — insert vs-claude-code-workflows alongside vs-claude-code-subagents).
+  - [ ] Verify `aida plan verify` / link-check passes (no dead refs in the new doc; SPIKE refs resolve).
+
+  ## Notes
+
+  - Content is the deliverable; this is pure wiring. Low priority.
+  - The doc's core thesis (capture for the competitive synthesis): Workflows = within-task ephemeral fan-out; AIDA = cross-session persistent substrate + lifecycle. They compose (workflow reads AIDA's MCP graph; AIDA delegates a phase to a workflow). Orchestration mechanism overlaps + is commoditizing — divest posture (SPIKE-34), because the moat is the substrate, not the mechanism.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T07:13:50.655568174Z
+modified_at: 2026-06-01T07:13:50.655568174Z
+req_type: Task
+tags:
+- claude-code-compose
+- competitive-analysis
+- docs
+- from-product
+- positioning
