@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T13:42:30.862628604Z
-modified_at: 2026-06-01T13:42:44.476628721Z
+modified_at: 2026-06-01T13:42:46.097266421Z
 req_type: Epic
 tags:
 - autonomous-drain
@@ -54,4 +54,8 @@ relationships:
 - rel_type: Child
   target_id: 019e4356-9397-7b72-8723-3be1ab88979c
   created_at: 2026-06-01T13:42:44.476613955Z
+  created_by: joe
+- rel_type: Child
+  target_id: 019e803b-9191-7240-b83d-3ba055efa8af
+  created_at: 2026-06-01T13:42:46.097260902Z
   created_by: joe
