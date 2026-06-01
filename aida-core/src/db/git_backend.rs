@@ -326,6 +326,103 @@ impl GitBackend {
             baselines: store.baselines.clone(),
         }
     }
+
+    /// Record the granular field ops for one requirement update and write its
+    /// YAML — WITHOUT committing. Returns `Some(spec_id)` when the on-disk YAML
+    /// actually changed (so the caller can stage + commit it), `None` when it
+    /// was already up to date. Single source of truth shared by
+    /// `update_requirement` (commits the one path) and `bulk_update` (batches
+    /// many writes into one commit). trace:BUG-425 | ai:claude
+    fn stage_requirement_update<'a>(
+        &self,
+        requirement: &'a Requirement,
+    ) -> Result<Option<&'a str>> {
+        let spec_id = requirement.spec_id.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("Cannot update requirement without spec_id in git backend")
+        })?;
+
+        // Record ops for changed fields (compare with existing if possible).
+        if let Ok(old) = object_store::read_object(&self.objects_root, spec_id) {
+            if old.title != requirement.title {
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetTitle {
+                        title: requirement.title.clone(),
+                    },
+                );
+            }
+            if old.effective_status() != requirement.effective_status() {
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetStatus {
+                        status: requirement.effective_status(),
+                    },
+                );
+            }
+            if old.effective_priority() != requirement.effective_priority() {
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetPriority {
+                        priority: requirement.effective_priority(),
+                    },
+                );
+            }
+            if old.owner != requirement.owner {
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetOwner {
+                        owner: requirement.owner.clone(),
+                    },
+                );
+            }
+            if old.description != requirement.description {
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetDescription {
+                        description: requirement.description.clone(),
+                    },
+                );
+            }
+        }
+
+        let wrote = object_store::write_object_if_changed(&self.objects_root, requirement)?;
+        Ok(if wrote { Some(spec_id) } else { None })
+    }
+
+    /// Apply field updates to many existing requirements in a SINGLE git commit
+    /// — vs `update_requirement`'s one-commit-per-spec, which turns a bulk
+    /// operation (e.g. `aida archive --older-than`) into hundreds of commits
+    /// (BUG-425: a 679-spec sweep made 679 commits). Records exactly the same
+    /// granular field ops `update_requirement` does (via the shared
+    /// `stage_requirement_update`), so the oplog and per-spec YAML history stay
+    /// faithful; only the commit is batched. Returns the count whose on-disk
+    /// YAML actually changed (unchanged reqs are skipped, so re-running is a
+    /// no-op). trace:BUG-425 | ai:claude
+    pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
+        let mut changed: Vec<String> = Vec::new();
+        for requirement in requirements {
+            if let Some(spec_id) = self.stage_requirement_update(requirement)? {
+                changed.push(spec_id.to_string());
+            }
+        }
+        if changed.is_empty() {
+            return Ok(0);
+        }
+        let paths: Vec<String> = changed
+            .iter()
+            .filter_map(|sid| object_store::relative_object_path(sid).ok())
+            .collect();
+        let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+        let n = changed.len();
+        let message = format!(
+            "{}: update {} requirement{}",
+            commit_subject,
+            n,
+            if n == 1 { "" } else { "s" }
+        );
+        self.auto_commit_paths(&message, &path_refs);
+        Ok(n)
+    }
 }
 
 impl DatabaseBackend for GitBackend {
@@ -458,58 +555,12 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
-        let spec_id = requirement.spec_id.as_deref().ok_or_else(|| {
-            anyhow::anyhow!("Cannot update requirement without spec_id in git backend")
-        })?;
-
-        // Record ops for changed fields (compare with existing if possible)
-        if let Ok(old) = object_store::read_object(&self.objects_root, spec_id) {
-            if old.title != requirement.title {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetTitle {
-                        title: requirement.title.clone(),
-                    },
-                );
-            }
-            if old.effective_status() != requirement.effective_status() {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetStatus {
-                        status: requirement.effective_status(),
-                    },
-                );
-            }
-            if old.effective_priority() != requirement.effective_priority() {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetPriority {
-                        priority: requirement.effective_priority(),
-                    },
-                );
-            }
-            if old.owner != requirement.owner {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetOwner {
-                        owner: requirement.owner.clone(),
-                    },
-                );
-            }
-            if old.description != requirement.description {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetDescription {
-                        description: requirement.description.clone(),
-                    },
-                );
-            }
-        }
-
-        // Targeted write+stage: only the one YAML this op touched.
-        // trace:BUG-1-040 | ai:claude
-        let wrote = object_store::write_object_if_changed(&self.objects_root, requirement)?;
-        if wrote {
+        // Record granular field ops + write the YAML via the shared helper,
+        // then targeted-commit only the one YAML this op touched (when it
+        // actually changed). The op-recording logic lives in
+        // `stage_requirement_update` so `bulk_update` stays faithful to it.
+        // trace:BUG-1-040 trace:BUG-425 | ai:claude
+        if let Some(spec_id) = self.stage_requirement_update(requirement)? {
             let rel = object_store::relative_object_path(spec_id)?;
             self.auto_commit_paths(&format!("update {}", spec_id), &[&rel]);
         }
@@ -985,6 +1036,81 @@ mod tests {
         backend.delete_requirement(&added.id).unwrap();
         let gone = backend.get_requirement_by_spec_id("FR-042").unwrap();
         assert!(gone.is_none());
+    }
+
+    /// BUG-425: bulk_update commits all changed YAMLs in exactly ONE commit
+    /// (the whole point — vs update_requirement's one-commit-per-spec that
+    /// turned a 679-spec archive sweep into 679 commits).
+    #[test]
+    fn bulk_update_writes_all_changed_in_a_single_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+
+        // GitBackend::new doesn't git-init, and auto_commit_paths no-ops
+        // outside a git repo — so make the store a real repo, else there are
+        // no commits to count. (This is the property under test.)
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "test@example.com"]);
+        git(&["config", "user.name", "Test"]);
+
+        // Seed three requirements (each auto-commits once now that it's a repo).
+        let mut reqs = Vec::new();
+        for i in 1..=3 {
+            let r = Requirement::new(format!("Bulk update {i}"), format!("desc {i}"));
+            reqs.push(backend.add_requirement(r).unwrap());
+        }
+
+        let count_commits = || -> usize {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(["rev-list", "--count", "HEAD"])
+                .output()
+                .unwrap();
+            String::from_utf8(out.stdout)
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap()
+        };
+        let before = count_commits();
+
+        // Archive all three and commit them as one batch.
+        for r in &mut reqs {
+            r.archived = true;
+        }
+        let n = backend.bulk_update(&reqs, "chore(archive)").unwrap();
+        assert_eq!(n, 3, "all three YAMLs changed");
+
+        assert_eq!(
+            count_commits(),
+            before + 1,
+            "bulk_update must produce exactly ONE commit, not one per spec"
+        );
+
+        // Changes persisted to disk.
+        let loaded = backend.load().unwrap();
+        assert_eq!(loaded.requirements.iter().filter(|r| r.archived).count(), 3);
+
+        // Re-running with the same (now-unchanged) reqs is a no-op: nothing
+        // changed on disk → no new commit.
+        let n2 = backend.bulk_update(&reqs, "chore(archive)").unwrap();
+        assert_eq!(n2, 0, "unchanged reqs write nothing");
+        assert_eq!(
+            count_commits(),
+            before + 1,
+            "no-op bulk_update must not add an empty commit"
+        );
     }
 
     #[test]

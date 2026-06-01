@@ -3178,18 +3178,20 @@ fn archive_sweep(
 
     let now = chrono::Utc::now();
     let total = eligible.len();
-    // BUG-425: a large sweep commits per-spec (one store commit each), so it
-    // can run for minutes. Print a heading up front + a throttled `[k/N]`
-    // progress line so it doesn't look hung. (Batching the per-spec commits
-    // into one is a separate aida-core change — tracked on BUG-425.)
+    // BUG-425: collect the mutations, then commit them all in ONE store commit
+    // via `bulk_update`, instead of one git commit per spec. A 679-spec sweep
+    // used to make 679 commits (minutes of git, burying the store history);
+    // now it's a single fast commit, so the throttled per-spec progress
+    // (TASK-616) is no longer needed. The collection loop only reads YAMLs
+    // (no commits), so it's quick even for a large sweep.
     // trace:BUG-425 | ai:claude
     eprintln!(
-        "{} {total} spec(s) older than {duration} (status in {}) — this commits per spec, so it may take a moment…",
+        "{} {total} spec(s) older than {duration} (status in {})…",
         "Archiving:".cyan().bold(),
         statuses.join(",")
     );
-    let mut archived_count = 0usize;
-    for (i, s) in eligible.iter().enumerate() {
+    let mut to_archive = Vec::with_capacity(total);
+    for s in &eligible {
         let display_id = s
             .agreed_id
             .as_deref()
@@ -3205,18 +3207,12 @@ fn archive_sweep(
         req.archived = true;
         req.archived_at = Some(now);
         req.modified_at = now;
-        backend.update_requirement(&req)?;
-        archived_count += 1;
+        to_archive.push(req);
         record_role_activity(&display_id, "archive");
-        // Throttled progress: every 50 + the final one, so a 600-spec sweep
-        // shows ~12 ticks rather than silence or 600 lines.
-        let n = i + 1;
-        if n % 50 == 0 || n == total {
-            eprintln!("  {} {n}/{total}", "…".dimmed());
-        }
     }
+    let archived_count = backend.bulk_update(&to_archive, "chore(archive)")?;
     println!(
-        "{} {archived_count} spec(s) (older than {duration}, status in {})",
+        "{} {archived_count} spec(s) in 1 commit (older than {duration}, status in {})",
         "Archived:".cyan().bold(),
         statuses.join(",")
     );
