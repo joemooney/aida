@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:03:27.895703170Z
-modified_at: 2026-05-31T05:58:15.187197666Z
+modified_at: 2026-06-01T14:13:16.888567020Z
 req_type: Bug
 tags:
 - bug-241-extension
@@ -84,3 +84,18 @@ comments:
     Risk: touches orchestrator outcome semantics (architecture-class) — sketch-first sign-off before implementation per the discipline. Deferred from the autonomous sweep as too design-laden to crank blind at session tail.
   created_at: 2026-05-31T05:58:13.044092419Z
   modified_at: 2026-05-31T05:58:13.044092419Z
+- id: 019e8388-1fd8-7760-9e08-33afe84b26e7
+  author: joe
+  content: |-
+    SKETCH for sign-off (advisor/physical seat, 2026-06-01; honoring needs-sketch-signoff). EPIC-33 invariant 3 — 'held' is a missing outcome in the phase-1 taxonomy.
+
+    THE CORE PROBLEM is a missing SIGNAL: the orchestrator sees 'implementer exited, no PR' and can't distinguish deliberate push-branch-hold-PR (success, PR deferred behind a manual gate) from failed-to-open-PR (real failure). Intent can't be inferred from the absence of a PR — it must be signaled.
+
+    SKETCH (3 parts):
+    1. SIGNAL — mirror the punt handshake (AIDA_PUNT_SIGNAL_FILE / STORY-306): the implementer's finish-checkpoint, on a push-hold-PR decision, writes a 'pr-held' sentinel under .aida/ recording {spec, branch, reason, gate}. /aida-pr-hold (or a finish-checkpoint option) drops it. Keeps intent explicit + substrate-resident, no inference.
+    2. OUTCOME MODEL — add ImplementerOutcome::Held { reason, branch } alongside Success/Inconclusive/Failed (auto_complete.rs). The driver returns Held when it finds the sentinel. drain action = NON-failure: record the spec as 'done-on-branch, PR-held' (a held marker, NOT Done-terminal), advance the batch, emit the CORRECT hint ('PR held per <reason>; after the gate: aida queue work <spec> --resume then /aida-pr'). Exit code: not a phase-1 failure (the run succeeded-with-deferral).
+    3. RE-ENTRY — the held spec must stay RESUMABLE (the BUG-250 second half: re-entering the dormant session to finish the deferred PR was blocked because the spec was Done + dequeued). The held marker must NOT be terminal, and 'aida queue work <spec> --resume' must accept a held spec. (Composes with STORY-492 resumable-drain.)
+
+    DECISIONS FOR YOU: (a) signal mechanism — dedicated pr-held sentinel (recommended, mirrors punt) vs reuse the punt/NeedsAttention path (rejected: hold ≠ needs-attention; work is done-on-branch, not stuck). (b) the held state — a new lifecycle status 'Held'/'PR-Held' vs a tag/marker on Done. Recommend a marker (avoid a new lifecycle status unless it earns its keep). (c) whether to fold this into the same supervised --zen drain as TASK-133/BUG-431-#1 (all three are queue-work/orchestrator outcome paths; one drain validates the set). Awaiting sign-off before implementing. trace:BUG-250
+  created_at: 2026-06-01T14:13:16.888567020Z
+  modified_at: 2026-06-01T14:13:16.888567020Z
