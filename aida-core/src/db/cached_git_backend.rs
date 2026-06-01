@@ -136,6 +136,34 @@ impl CachedGitBackend {
             let _ = self.cache.set_source_head_sha(&head);
         }
     }
+
+    /// Write-through batched update (BUG-425): apply many requirement updates
+    /// in a SINGLE store commit (via `GitBackend::bulk_update`), then upsert
+    /// each into the cache and re-stamp the HEAD-SHA once. Mirrors
+    /// `update_requirement`'s write-through cache handling, batched. If any
+    /// cache upsert fails the cache is marked stale so the next read rebuilds
+    /// from the store. Returns the count whose YAML actually changed.
+    /// trace:BUG-425 | ai:claude
+    pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
+        let n = self.inner.bulk_update(requirements, commit_subject)?;
+        let mut cache_ok = true;
+        for req in requirements {
+            if let Err(e) = self.cache.upsert_requirement(req) {
+                eprintln!(
+                    "warning: cache upsert failed during bulk_update, cache marked stale: {}",
+                    e
+                );
+                cache_ok = false;
+                break;
+            }
+        }
+        if cache_ok {
+            self.restamp_head();
+        } else {
+            let _ = self.cache.set_source_head_sha("");
+        }
+        Ok(n)
+    }
 }
 
 impl DatabaseBackend for CachedGitBackend {
@@ -314,6 +342,57 @@ mod tests {
         // Delete → cache row gone.
         backend.delete_requirement(&req_id).unwrap();
         assert_eq!(backend.cache().requirement_count().unwrap(), 0);
+    }
+
+    /// BUG-425: CachedGitBackend::bulk_update must write through to the cache
+    /// (the archived rows must move out of the non-archived view), same
+    /// guarantee as update_requirement but batched into one store commit.
+    #[test]
+    fn bulk_update_writes_through_to_cache() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+
+        let mut reqs = Vec::new();
+        for i in 1..=3 {
+            reqs.push(
+                backend
+                    .add_requirement(sample_req(&format!("FR-1-00{i}"), &format!("req {i}")))
+                    .unwrap(),
+            );
+        }
+        let non_archived = |b: &CachedGitBackend| {
+            b.list_summaries(&ListFilter {
+                archive: ArchiveFilter::NonArchivedOnly,
+                ..Default::default()
+            })
+            .unwrap()
+            .len()
+        };
+        assert_eq!(non_archived(&backend), 3);
+
+        // Bulk-archive all three.
+        for r in &mut reqs {
+            r.archived = true;
+        }
+        assert_eq!(backend.bulk_update(&reqs, "chore(archive)").unwrap(), 3);
+
+        // Cache reflects the archive: gone from the non-archived view, present
+        // in the archived view.
+        assert_eq!(
+            non_archived(&backend),
+            0,
+            "all archived → none non-archived"
+        );
+        let archived = backend
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::ArchivedOnly,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(archived.len(), 3, "cache reflects the bulk archive");
     }
 
     #[test]
