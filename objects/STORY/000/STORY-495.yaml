@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T02:54:40.561121692Z
-modified_at: 2026-06-01T02:54:40.561121692Z
+modified_at: 2026-06-01T07:23:03.514904978Z
 req_type: Story
 tags:
 - aida:agent:new
@@ -59,3 +59,26 @@ tags:
 - convention-change
 - from-product
 - launch-posture
+comments:
+- id: 019e8210-8dda-71a3-930d-ff068aead73e
+  author: joe
+  content: |-
+    Implementation-ready scoping (advisor/physical seat, 2026-06-01) — deliberately NOT auto-implemented: this is a convention change with a keystone safety invariant (headless drain must keep forcing bypass or the overnight --no-human drain hangs on a prompt with no TTY). Per reliability-fixes-at-keyboard discipline, ship this supervised, not via saturated-context autonomy. Surface mapped:
+
+    SITES (clap default_value = "bypassPermissions" to flip → faithful):
+    - aida session new --launch: cli.rs ~458 (--launch-permission-mode)
+    - aida queue work --launch: cli.rs ~558 (--launch-permission-mode, STORY-54)
+    - aida agent new claude: cli.rs ~4044
+    Flip: make the default 'honor native' (do NOT inject --permission-mode for claude unless explicit). Cleanest: change the clap field to Option<String> default None, and only pass --permission-mode when Some.
+
+    UNIFORM KNOB: add [agents] bypass = bool to the agents.toml loader (alongside the existing [agents.<tool>] default_flags / no_default_flags / bypass_sandbox at cli.rs 4063-4179). When true + no explicit per-launch override → inject each tool's bypass flag (claude → --permission-mode bypassPermissions / --dangerously-skip-permissions; codex → --dangerously-bypass-approvals-and-sandbox; antigravity → --dangerously-skip-permissions). Adopt the operator's shape: ~/.aida/agents.toml (user base) overridable by .aida/agents.toml (project); per-tool override expressible.
+
+    PRECEDENCE (preserve, test): explicit --permission-mode <M> / --bypass-sandbox / --no-default-flags / [agents.<tool>] default_flags raw passthrough all WIN over the knob.
+
+    SAFETY INVARIANT (verify it holds): the orchestrator/headless force passes the mode EXPLICITLY (main.rs ~20790 launch_permission_mode='bypassPermissions'; the --auto-complete --no-human path). It is structurally separate from the clap default, so flipping the clap default does NOT touch it — confirm no headless path reads the new faithful default. This separation is what makes the flip safe.
+
+    DELEGATED DECISIONS (operator deferred to physical seat): (1) --bg with no TTY → RECOMMEND force bypass (a detached launch implies 'I won't answer prompts', consistent with the headless drain) with a one-line note, over refuse-with-error. (2) config shape → adopt the [agents] bypass shape above. Both are physical-seat calls; flagging for visibility, not blocking.
+
+    TESTS: faithful default (no --permission-mode injected for claude by default); knob on → per-tool bypass injected; explicit override wins over knob; headless path still forces; --bg forces (or refuses) per (1). Est. ~1-2h focused. trace:STORY-495
+  created_at: 2026-06-01T07:23:03.514904978Z
+  modified_at: 2026-06-01T07:23:03.514904978Z
