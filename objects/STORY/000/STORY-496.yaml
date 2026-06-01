@@ -40,12 +40,12 @@ description: |-
   - Root surface: aida-cli/src/agent_registry.rs (classify_status, remove_agent, list_agent_views), doctor category dispatch in aida-cli/src/main.rs (~17637 normalize, ~17792 heal dispatch), status render main.rs:54564.
   - Builds on STORY-431/435 (registry), STORY-462 (doctor), STORY-464 (passive scan in status).
   - Filed during bug-clearing-before-marketing phase: dogfood papercut on a daily-driver surface (`aida status`), Medium.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:59:41.193610449Z
-modified_at: 2026-06-01T04:59:41.193610449Z
+modified_at: 2026-06-01T07:09:52.832867657Z
 req_type: Story
 tags:
 - agent-registry
