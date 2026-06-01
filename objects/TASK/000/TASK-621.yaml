@@ -3,12 +3,12 @@ spec_id: TASK-621
 agreed_id: TASK-621
 title: 'Enhancement: read-only commands auto-attach the .aida-store worktree on fresh clone (so ''aida list'' just works pre-init)'
 description: 'Follow-up to BUG-428. The BUG-428 fix converts silent-stale-data into a clear ''run aida init'' error. A nicer UX: when distributed mode is declared, the worktree is missing, and origin/aida-store exists, auto-create the worktree (git worktree add .aida-store aida-store, creating a local tracking branch from origin/aida-store) on first read so ''aida list/findings/queue'' work without a manual init step. Deferred from the BUG-428 fix because: (a) it''s a mutating side-effect on the core resolution path (needs care re: idempotency + git edge cases — local branch already exists, detached HEAD, ambiguous remotes); (b) node-id still wouldn''t be set up, so writes (aida add) still need init. Best shipped as its own supervised slice. Pairs with BUG-428.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:38:26.426851688Z
-modified_at: 2026-06-01T05:01:01.743073782Z
+modified_at: 2026-06-01T05:05:39.206271135Z
 req_type: Task
 tags:
 - aida:init
@@ -20,3 +20,7 @@ comments:
   content: Commit 4807a9919 references this requirement
   created_at: 2026-06-01T05:01:01.743073782Z
   modified_at: 2026-06-01T05:01:01.743073782Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T05:05:39.206271135Z
+  completion_sha: d339d5fd05e44c645602dfe96fdb63f53f3e8a4d
