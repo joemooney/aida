@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:59:41.193610449Z
-modified_at: 2026-06-01T07:09:52.832867657Z
+modified_at: 2026-06-01T07:16:53.248635895Z
 req_type: Story
 tags:
 - agent-registry
@@ -56,3 +56,9 @@ tags:
 - from-product
 - kind:bug-spotted
 - multi-agent-drift
+comments:
+- id: 019e820a-e780-7441-888f-e6a6ad8cca17
+  author: joe
+  content: Commit e61197bbe references this requirement
+  created_at: 2026-06-01T07:16:53.248635895Z
+  modified_at: 2026-06-01T07:16:53.248635895Z
