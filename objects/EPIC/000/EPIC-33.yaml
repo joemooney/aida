@@ -1,0 +1,32 @@
+id: 019e836b-f4ce-7c01-8ee1-4b4767cfe3bd
+spec_id: EPIC-33
+agreed_id: EPIC-33
+title: Orchestrator correctness floor — the invariants the autonomous drain must hold to be trustworthy (escape the can't-fix-itself recursion)
+description: |-
+  Umbrella for the autonomous-drain reliability work (advisor synthesis, operator-requested 2026-06-01). The drain's job: per queued spec, implement→CI→review→merge→pull across a batch, shelving failures + advancing. It is currently untrustworthy because FOUR correctness invariants are violated; until they hold we cannot run it unsupervised (and especially cannot use it to ship its own fixes — a bug rides through the broken machinery). Fix these via direct/supervised work (NOT unsupervised --no-human), in dependency order; once they hold, a single spec's failure SHELVES cleanly and the batch continues — the recursion dissolves.
+
+  INVARIANT 1 — Lease lifecycle: one spec, one scope, always released. (story-scoped sessions; acquire-before-transition; release/park on EVERY terminal outcome.) Members: BUG-431 (#1 epic-scope contention, #3 cascade lease-block), TASK-133 (status flips before lease acquire).
+
+  INVARIANT 2 — Spec resolution: one resolver, most-specific, no false positives. (used by commit/PR/reviewer/auto-bump; child over epic; no code-like body matches.) Members: BUG-431 (#2 multi-spec PR breaks reviewer), TASK-137 (reviewer anchors wrong SPEC-ID), BUG-412 (code-like false refs), BUG-426 (auto-bump false-completes umbrellas).
+
+  INVARIANT 3 — Outcome model: every phase outcome maps to a defined drain action (advance / shelve+skip-dependents / retry / park / abort). Members: BUG-250 (PR-held mis-classified as failure), TASK-615 (inconclusive→retry-then-shelve + no-progress/ceiling watchdog). Relates to EPIC-28 (resilient-drain / shelve-and-advance — the model).
+
+  INVARIANT 4 — Headless never blocks: timeouts / non-TTY fast-paths everywhere. Member: BUG-422 (session-end gh probe hang — DONE 2026-06-01).
+
+  RESILIENCE LAYER (after the floor holds): STORY-492 (phase-postcondition probing + --resume re-entry) + findings observability.
+
+  THRESHOLD-TO-TRUST: when invariants 1-4 hold, unsupervised --no-human becomes safe AND the drain can drive its own remaining polish. Until then, validate each fix with a SUPERVISED --zen --auto-complete drain (per TASK-456).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T13:42:30.862628604Z
+modified_at: 2026-06-01T13:42:30.862628604Z
+req_type: Epic
+tags:
+- autonomous-drain
+- correctness-floor
+- from-advisor
+- orchestrator
+- reliability
+- strategic
