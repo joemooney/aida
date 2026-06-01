@@ -12,12 +12,12 @@ description: |-
   Fixes: (1) detect non-TTY stdin and auto-skip (or bound with a short timeout) the CI/PR probe — it should never hang the lease release; (2) put a hard timeout on the gh subprocess regardless of TTY. This bites multi-agent orchestration hard: tearing down a finished worktree from outside the agent (the required handoff path) hangs.
 
   Related ergonomics gap (separate enhancement): a scoped session can't self-reap its own worktree or chain to the next spec, so every spec boundary needs a human to exit -> session end -> agent new. A reaper ('remove worktrees whose branch is merged AND process is gone') + chained handoff would close the loop.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T21:19:21.793273566Z
-modified_at: 2026-06-01T13:39:35.867429832Z
+modified_at: 2026-06-01T13:45:32.305059091Z
 req_type: Bug
 tags:
 - ci-probe
@@ -34,3 +34,7 @@ comments:
   content: Commit 152afb32d references this requirement
   created_at: 2026-06-01T13:39:35.867429832Z
   modified_at: 2026-06-01T13:39:35.867429832Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T13:45:32.305059091Z
+  completion_sha: 7c55ac7eaa1930e183935a125794ee49cc5af726
