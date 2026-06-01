@@ -1,6 +1,13 @@
 # Orchestrator correctness floor — invariant 1 (lease lifecycle) + the held-outcome
 
-**Date:** 2026-06-01 · **Specs:** TASK-133, BUG-431 (#1, #3), BUG-250 · **Epic:** EPIC-33 · **Status:** planned (code-grounded; execute via supervised `--zen` drain) · **Complexity:** high (keystone orchestrator)
+**Date:** 2026-06-01 · **Specs:** TASK-133, BUG-431 (#1, #3), BUG-250 · **Epic:** EPIC-33 · **Status:** implemented (3 branches, pure cores unit-tested) — pending supervised `--zen --auto-complete` drain validation · **Complexity:** high (keystone orchestrator)
+
+## Execution log (2026-06-01)
+- **TASK-133** — shipped on `task-133-phase1-reset-compensation`. Pure core `should_compensate_phase1_bump` (5 cases) + `restore_phase1_status_on_lease_failure`. On a phase-1 failure with no lease recorded, restores the captured prior status and clears the spurious shelve `failure_reason`.
+- **BUG-431 #1** — shipped on `bug-431-story-scope` (stacked on TASK-133). `derive_scope_from_entry` no longer falls back to the parent epic; a child story scopes to its own id. Worktree + branch follow (both slugify the scope). Parent-epic label kept for display clustering only.
+- **BUG-431 #3** — re-evaluated: mooted by #1 (story-scoped leases don't block siblings). Residual lease-release-preserve-worktree deferred to post-drain evaluation (recorded as a BUG-431 comment); not built speculatively.
+- **BUG-250** — shipped on `bug-250-held-outcome` (stacked on BUG-431 #1). `ImplementerOutcome::Held` + `finish_held` + `BatchDrainOutcome::Held` + `aida pr hold` + the `punt::HoldSignal` handshake. Scoped to the outcome model (acceptance #1-4); the `--resume` re-entry (#5) is filed as **TASK-630**.
+- **Remaining:** the supervised `aida queue work next N --zen --auto-complete` drain on a multi-story-epic batch (validates items 1+2 together; a push-hold-PR finish validates 4). Per TASK-456: keyboard, not `--no-human`.
 
 Operator signed off BUG-431 #1 (story-scoping) on 2026-06-01. All four are queue-work/orchestrator-drain changes whose correctness only shows under a live `aida queue work --zen --auto-complete` startup — so **validation requires a supervised drain**, not unit tests alone. Do them in one focused session (clean context), in the order below.
 
