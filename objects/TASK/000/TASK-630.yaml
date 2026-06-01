@@ -1,0 +1,23 @@
+id: 019e83b6-78a5-7532-b9ed-5415f8edb42a
+spec_id: TASK-630
+agreed_id: TASK-630
+title: aida queue work --resume accepts a deliberate-hold spec (BUG-250 criterion 5)
+description: |-
+  Follow-up from BUG-250 (Held outcome shipped 2026-06-01). BUG-250's acceptance #5 — 'aida queue work <spec> --resume <session-id> allows resumption when the spec is in the deliberate-hold state' — was deliberately deferred from the outcome-model fix to keep that slice tight and avoid bolting resume re-entry onto the keystone queue-work verb in the same change.
+
+  Today a held spec ends Done; 'aida queue work <spec> --resume' bails via format_queue_work_not_queued_error ('isn't queued. Status is Done'). The working path post-BUG-250 is: run the gate, 'gh pr create', then 'aida queue work PR-N --role reviewer' (the Held hint points at this). The ergonomic gap: re-entering the SAME implementer worktree/session to run the gate + open the PR from inside, with the verb's lease/pull bookkeeping (today the bypass is 'cd <worktree> && claude --resume <session>').
+
+  Mechanism available: BUG-250 already persists the hold marker at .aida/pr-holds/<spec>.json (punt::read_hold_signal). The resume path (resolve_queue_work_plan -> format_queue_work_not_queued_error, and the QueueWorkLaunch::Resume re-entry in handle_queue_work) should recognise a held marker as a re-enterable state distinct from queued/Completed/needs-rework, and clear the marker once the PR is opened. Validate via a supervised push-hold-PR finish + resume, per the EPIC-33 invariant-1 plan.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T15:03:54.277918097Z
+modified_at: 2026-06-01T15:03:54.277918097Z
+req_type: Task
+tags:
+- from-bug-250
+- orchestrator
+- outcome-model
+- pr-hold
+- resume
