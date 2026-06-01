@@ -18,12 +18,12 @@ description: |-
   - Reviewer spec-resolver: when a PR backs an epic + its child, pick the most-specific (the child story).
   - On ANY phase failure, RELEASE the lease (or park the worktree) so siblings aren't blocked by a dead session.
   - Provide a true skip-review / autonomous-merge mode for solo drains (--no-human=both still runs phase 3; a solo dev wants to skip it).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:39:05.836892426Z
-modified_at: 2026-06-01T05:39:05.836892426Z
+modified_at: 2026-06-01T13:43:07.777608609Z
 req_type: Bug
 tags:
 - autonomous
