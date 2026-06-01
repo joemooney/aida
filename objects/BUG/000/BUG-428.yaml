@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:38:13.799434757Z
-modified_at: 2026-06-01T04:38:13.799434757Z
+modified_at: 2026-06-01T04:41:28.840913008Z
 req_type: Bug
 tags:
 - aida:init
@@ -16,3 +16,9 @@ tags:
 - from-self-test
 - kind:bug
 - onboarding-flow
+comments:
+- id: 019e817c-a008-7660-86d1-c61d1029369c
+  author: joe
+  content: Commit 1c2d0acc7 references this requirement
+  created_at: 2026-06-01T04:41:28.840913008Z
+  modified_at: 2026-06-01T04:41:28.840913008Z
