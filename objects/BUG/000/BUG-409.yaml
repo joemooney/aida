@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T10:29:20.746775632Z
-modified_at: 2026-05-31T10:29:20.746775632Z
+modified_at: 2026-06-01T05:47:21.945969058Z
 req_type: Bug
 tags:
 - ci
@@ -16,3 +16,12 @@ tags:
 - from-self-test
 - kind:bug-spotted
 - story-429
+comments:
+- id: 019e81b8-f1d9-73c1-810c-fe379f4f3ed3
+  author: joe
+  content: |-
+    Root-cause finding (advisor burn-down, 2026-05-31): the test sets driver.project_root=tmp but does NOT 'git init' tmp, so resolve_phase3_stale_overlap's real git ops have no isolated repo. More telling: the failing run's panic string mixes '/nonexistent-repo-path-xyz' (a sentinel used by a DIFFERENT test, main.rs:53587) with 'untracked files overwritten by merge' — strong signal this is PARALLEL-TEST CWD interference: cargo runs tests concurrently, and tests doing real git ops that depend on / mutate process-global CWD race against each other. A docs-only PR failing confirms it's environmental, not logic.
+
+    FIX DIRECTION (not yet implemented — needs focus + can't be locally repro'd since it's CI-load/parallelism-dependent): (a) every git-op test must use an isolated 'git init' tmp repo AND pass that path explicitly to git (never rely on process CWD); (b) audit resolve_phase3_stale_overlap + the auto-rebase path for std::env::set_current_dir or implicit-CWD git calls — those are the race; thread an explicit repo path instead. This is orchestrator-adjacent + un-reproducible locally, so it wants a focused keyboard session, not autonomous saturated-context work. trace:BUG-409
+  created_at: 2026-06-01T05:47:21.945969058Z
+  modified_at: 2026-06-01T05:47:21.945969058Z
