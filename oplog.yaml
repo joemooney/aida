@@ -12246,5 +12246,13 @@ operations:
   timestamp: 2026-06-01T04:48:08.723019899Z
   kind: !SetTitle
     title: Node-reg failure hard-aborts clone-init even though the store worktree was already attached (should soft-warn + continue)
-clock: 1354
+- id: 019e81a3-871c-7a71-a1f5-330ac814eb6f
+  target_id: 019e8197-7c23-7383-ac29-317b8ae23b9d
+  author: aida
+  node_id: '1'
+  lamport: 1355
+  timestamp: 2026-06-01T05:23:58.365006748Z
+  kind: !SetStatus
+    status: Completed
+clock: 1355
 node_id: '1'

@@ -14,12 +14,12 @@ description: |-
   AUDIT: there appear to be two node.toml path conventions in code — store_path/.aida/node.toml (node cmd + register_node_full) vs project .aida/node.toml (other sites). Confirm which is canonical and converge.
 
   UNBLOCKS TASK-623 (init idempotency toward node-id) — that fix needs a reliable per-clone predicate, which this provides. Host-agnostic (pure git remote 'origin' — applies to GitHub AND GitLab origins).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:10:49.123567989Z
-modified_at: 2026-06-01T05:10:49.123567989Z
+modified_at: 2026-06-01T05:23:58.351530634Z
 req_type: Bug
 tags:
 - aida:node
