@@ -1382,3 +1382,10 @@
   note: 'Dogfood papercut: aida status counts dead agents as active; no doctor reaper exists. Product seat, 2026-05-31.'
   added_at: 2026-06-01T04:59:58.077608755Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e81ac-f40d-7743-a280-563cb9c3b163
+  position: 328000
+  added_by: joe
+  note: Release-hygiene papercut, trivial gitignore fix. Product seat, 2026-05-31.
+  added_at: 2026-06-01T05:34:33.919386493Z
+  for_role: implementer
