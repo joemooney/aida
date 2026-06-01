@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T21:19:21.793273566Z
-modified_at: 2026-06-01T13:36:10.710789270Z
+modified_at: 2026-06-01T13:39:35.867429832Z
 req_type: Bug
 tags:
 - ci-probe
@@ -28,3 +28,9 @@ tags:
 - non-tty
 - quizdom
 - session-end
+comments:
+- id: 019e8369-493b-7a42-8340-eedcbf21d3b0
+  author: joe
+  content: Commit 152afb32d references this requirement
+  created_at: 2026-06-01T13:39:35.867429832Z
+  modified_at: 2026-06-01T13:39:35.867429832Z
