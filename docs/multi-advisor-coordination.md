@@ -73,6 +73,42 @@ This is the same pre-PR-flag / sketch-first discipline used for sibling agents
 flagging architecture to the master — applied advisor-to-advisor. It's proven,
 not new. The subsystem-advisor tracks below remain the *later* evolution.
 
+### What actually coordinates through the substrate — and what does not (verified 2026-05-31)
+
+"Coordinate through the substrate" is only as strong as what *is* substrate.
+Verified against the storage layer:
+
+| Surface | Storage | Shared across clones/machines? |
+|---|---|---|
+| Specs, comments, history, relationships, tags, **status** | orphan `aida-store` branch (`objects/…yaml`) | **Yes** — git-canonical |
+| **Findings** | *derived* from spec status/tags (a view, not a file) | **Yes** |
+| **Default queue** | `.aida-store/registry/queues/<user_id>.yaml`, **committed to the orphan branch**, sharded per user | **Yes**, after `aida db sync` — per-user shard |
+| `--global` queue | `~/.aida/queue/<role>.yaml` (HOME) | **No** — machine-local |
+| **Leases** | `.aida/sessions/<id>.toml` (gitignored) | **No** — machine-local |
+| Punt/calibration ledger, drain-state, logs | `.aida/*` (gitignored) | **No** |
+
+Two consequences the protocol must respect:
+
+1. **The default queue *is* shared, but sharded by `user_id`.** Distinct users
+   never collide (separate `<user>.yaml` files, clean rebase, mutually visible
+   after sync). The hazard is **two machines sharing one `user_id`** — most
+   easily the `default` fallback (BUG-89) when `$USER`/`$AIDA_USER` are unset
+   (CI, containers) — which makes both write the *same* file and conflict at
+   sync. Distinct `user_id` per machine is a hard requirement for shared-branch
+   collaboration. (Tracked: TASK-618.)
+2. **Leases are machine-local**, so the "is someone already working on this?"
+   guard is single-machine. Across machines the only shared "taken" signal is
+   the spec's **status flip to in-progress** — git-canonical but
+   *eventually-consistent*: a second person can pick up the same spec in the
+   window before they pull the first's flip. Cross-machine coordination must
+   therefore ride **spec status (pull-before-pickup)**, not leases. (Tracked:
+   TASK-619.)
+
+So for two advisors on **one machine, one user** (the common solo case) the
+queue is a fully shared coordination surface. For **distinct machines/users**,
+coordinate on spec status + tags + findings + comments, treat the per-user
+queue as advisory, and pull before picking up.
+
 ## Gaps + mechanisms
 
 ### Gap 1 — Subsystem-advisor within a monolithic repo
