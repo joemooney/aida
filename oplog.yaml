@@ -12238,5 +12238,13 @@ operations:
   timestamp: 2026-06-01T04:48:05.476999429Z
   kind: !SetStatus
     status: In Progress
-clock: 1353
+- id: 019e8182-ba12-7e62-8586-4eacd4b9ea23
+  target_id: 019e8179-c69f-7e82-bedf-beb91dc18aaf
+  author: aida
+  node_id: '1'
+  lamport: 1354
+  timestamp: 2026-06-01T04:48:08.723019899Z
+  kind: !SetTitle
+    title: Node-reg failure hard-aborts clone-init even though the store worktree was already attached (should soft-warn + continue)
+clock: 1354
 node_id: '1'
