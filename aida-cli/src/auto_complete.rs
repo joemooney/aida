@@ -515,6 +515,21 @@ pub(crate) enum ImplementerOutcome {
         reason: String,
         retry_hint: Option<String>,
     },
+    /// BUG-250: the implementer deliberately *held* the PR — branch pushed,
+    /// PR intentionally not opened, pending a manual gate (a smoke test, an
+    /// out-of-band review, an operator decision). Signalled by `aida pr hold`
+    /// dropping a [`crate::punt::HoldSignal`] the orchestrator reads after the
+    /// session exits. This is NOT a failure (the work succeeded; the artifact
+    /// was deliberately withheld) and NOT a punt (no design-fork, no
+    /// NeedsAttention) — it is a clean stop. The drain halts at phase 1 with a
+    /// `deliberate-hold` outcome and the correct hint (open the PR when the
+    /// gate passes, then route it to the reviewer). `reason` is the operator's
+    /// "why"; `branch` is the pushed branch the PR will be opened from.
+    /// trace:BUG-250 | ai:claude
+    Held {
+        reason: Option<String>,
+        branch: String,
+    },
 }
 
 /// BUG-420: which watchdog tripped on a degenerate headless phase. The
@@ -683,6 +698,14 @@ pub(crate) struct OrchestrationResult {
     /// vs "the failure could not be shelved — stop the batch". `None`
     /// on every non-failure path. trace:EPIC-28 | ai:claude
     pub(crate) shelved_reason: Option<aida_core::FailureReason>,
+    /// BUG-250: set when phase 1 ended in a deliberate *PR-hold* — the
+    /// implementer pushed the branch but intentionally did not open the PR,
+    /// pending a manual gate. Like `punt_reason` / `inconclusive_reason` this
+    /// is a non-failure stop (`exit_code` `0`, `failed_phase` `None`); the spec
+    /// is left in its current state and the operator opens the PR when ready.
+    /// Carries the one-line hold summary for the run epilogue + batch summary.
+    /// `None` on every other path. trace:BUG-250 | ai:claude
+    pub(crate) held_reason: Option<String>,
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -1101,6 +1124,7 @@ fn finish_success(
         escalation: None,
         inconclusive_reason: None,
         shelved_reason: None,
+        held_reason: None,
     }
 }
 
@@ -1176,6 +1200,7 @@ fn finish_punted(
         escalation: None,
         inconclusive_reason: None,
         shelved_reason: None,
+        held_reason: None,
     }
 }
 
@@ -1261,6 +1286,7 @@ fn finish_escalated(
         }),
         inconclusive_reason: None,
         shelved_reason: None,
+        held_reason: None,
     }
 }
 
@@ -1340,6 +1366,87 @@ fn finish_inconclusive(
         escalation: None,
         inconclusive_reason: Some(reason.to_string()),
         shelved_reason: None,
+        held_reason: None,
+    }
+}
+
+/// BUG-250: print the deliberate-PR-hold epilogue and build a clean *non-
+/// failure* [`OrchestrationResult`]. When phase 1 ends with the branch pushed
+/// but the PR deliberately held (the `aida pr hold` signal), the pre-BUG-250
+/// behaviour mis-filed it as a phase-1 failure with a wrong recovery hint
+/// ("run `/aida-pr`") — which for a deliberate hold would ship un-gated code.
+/// The honest outcome is *Held*: the run halts cleanly (exit `0`, no
+/// `failed_phase`), the spec is left in its current state, and the hint matches
+/// the actual state — open the PR once the manual gate passes, then route it to
+/// the reviewer. trace:BUG-250 | ai:claude
+fn finish_held(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+    reason: Option<&str>,
+    branch: &str,
+) -> OrchestrationResult {
+    let elapsed = start.elapsed().as_millis();
+    let summary = match reason {
+        Some(r) => format!("PR held on `{branch}` — {r}"),
+        None => format!("PR held on `{branch}`"),
+    };
+    // The recovery hint matches the deliberate-hold state: open the PR when the
+    // gate is satisfied, then hand it to the reviewer. NOT "run /aida-pr".
+    let hint_line = "ready for review when you are — run your gate, then \
+         `gh pr create` (or `glab mr create`) and `aida queue work PR-N --role reviewer`";
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                Phase::Implementer.slug(),
+                "held",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", summary.as_str()), ("hint", hint_line)],
+            )
+        );
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "held",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", summary.as_str())],
+            )
+        );
+    } else {
+        eprintln!();
+        eprintln!(
+            "{} phase 1 (implementer session) — PR deliberately held: {}",
+            "⏸".yellow().bold(),
+            summary
+        );
+        eprintln!("  {} {}", "→".dimmed(), hint_line.cyan());
+        eprintln!();
+        eprintln!(
+            "{} {} held ({}) — branch pushed, PR held for your gate",
+            "⏸".yellow().bold(),
+            spec.bold(),
+            fmt_duration(elapsed)
+        );
+    }
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: durations,
+        total_ms: elapsed,
+        punt_reason: None,
+        shipped_spec_id: None,
+        escalation: None,
+        inconclusive_reason: None,
+        shelved_reason: None,
+        held_reason: Some(summary),
     }
 }
 
@@ -1438,6 +1545,7 @@ fn finish_failure(
         escalation: None,
         inconclusive_reason: None,
         shelved_reason,
+        held_reason: None,
     }
 }
 
@@ -1507,6 +1615,7 @@ fn finish_reconciled(
         escalation: None,
         inconclusive_reason: None,
         shelved_reason: None,
+        held_reason: None,
     }
 }
 
@@ -1693,6 +1802,17 @@ fn resume_after_advisor(
                 retry_hint.as_deref(),
             ))
         }
+        // BUG-250: the resumed implementer deliberately held the PR — a clean
+        // terminal stop, same as the first-pass hold (the advisor's fork is
+        // resolved, the work is on a branch, the PR awaits a manual gate).
+        Ok(ImplementerOutcome::Held { reason, branch }) => PuntFlow::Terminal(finish_held(
+            spec,
+            json,
+            start,
+            durations.to_vec(),
+            reason.as_deref(),
+            &branch,
+        )),
     }
 }
 
@@ -1844,6 +1964,16 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
                 &reason,
                 retry_hint.as_deref(),
             );
+        }
+        // BUG-250: the implementer deliberately held the PR (branch pushed, PR
+        // intentionally not opened, pending a manual gate). A clean non-failure
+        // stop — exit `0`, no `failed_phase` — distinct from a punt (no
+        // design-fork) and a failure (nothing broke). The drain halts at phase
+        // 1 with the correct "open the PR when your gate passes" hint.
+        // trace:BUG-250
+        Ok(ImplementerOutcome::Held { reason, branch }) => {
+            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+            return finish_held(spec, json, &start, durations, reason.as_deref(), &branch);
         }
     }
 
@@ -2049,6 +2179,14 @@ pub(crate) enum BatchDrainOutcome {
     /// from `0` clean drain, `1` stall, and `3..=8` phase failures).
     /// trace:EPIC-28 | ai:claude
     DrainedWithShelved,
+    /// BUG-250: a batch member ended in a deliberate *PR-hold* — the
+    /// implementer pushed the branch but intentionally held the PR for a manual
+    /// gate. Like [`Inconclusive`](Self::Inconclusive) this pauses the drain at
+    /// the held spec (it is left in its current state; the operator opens the
+    /// PR when the gate passes) and exits `0` — a deliberate hold is not a
+    /// failure, so the batch summary must not crash with a false "shipped 0".
+    /// trace:BUG-250 | ai:claude
+    Held,
 }
 
 /// Outcome of a [`drain_batch`] run — what shipped, where it stopped, and the
@@ -2279,6 +2417,24 @@ pub(crate) fn drain_batch(
                 exit_code: 0,
             };
         }
+        // BUG-250: a deliberate PR-hold pauses the drain at this spec. The
+        // member did not ship, punt, or fail — it is parked on a pushed branch
+        // awaiting the operator's manual gate, so stop cleanly (exit `0`) here
+        // rather than falling through to the `shipped` bucket below (which
+        // would falsely claim it shipped). The operator opens the PR and
+        // re-runs the drain to continue. trace:BUG-250 | ai:claude
+        if result.held_reason.is_some() {
+            return BatchDrainResult {
+                shipped,
+                punted,
+                escalated,
+                shelved,
+                skipped,
+                stopped_at: Some(head),
+                outcome: BatchDrainOutcome::Held,
+                exit_code: 0,
+            };
+        }
         // BUG-245: phase 1 shipped a different spec than the dispatched
         // head. Credit the truth (the id the PR's commits name), leave the
         // dispatched head queued for its own pickup, and stop the drain —
@@ -2441,6 +2597,24 @@ where
                     exit_code: result.exit_code,
                 };
             }
+            // BUG-250: a deliberate PR-hold pauses the chain at this batch,
+            // exactly like an inconclusive run — the held spec awaits the
+            // operator's gate, so the chain stops cleanly rather than rolling
+            // on to the next batch. trace:BUG-250 | ai:claude
+            BatchDrainOutcome::Held => {
+                return BatchChainDrainResult {
+                    steps,
+                    shipped,
+                    punted,
+                    escalated,
+                    shelved,
+                    skipped,
+                    stopped_batch: Some(batch_name.clone()),
+                    stopped_at: result.stopped_at,
+                    outcome: BatchDrainOutcome::Held,
+                    exit_code: result.exit_code,
+                };
+            }
         }
     }
 
@@ -2570,6 +2744,11 @@ mod tests {
         /// orchestrator's phase-1 PR lookup hit a transient GH-API blip and
         /// cannot tell whether a PR was opened. The drain pauses.
         inconclusive: Option<String>,
+        /// BUG-250: when set, `run_implementer` returns
+        /// [`ImplementerOutcome::Held`] — the implementer deliberately held the
+        /// PR (branch pushed, PR withheld for a manual gate). The drain reports
+        /// a clean `Held` outcome, not a phase-1 failure.
+        held: Option<String>,
         /// TASK-358: how many times `mark_implementer_lease_escalated` was
         /// called. The `--escalate-blocks` path stamps it once before
         /// `finish_escalated`; the `--escalate-defaults` resume path and
@@ -2595,6 +2774,7 @@ mod tests {
                 advisor_calls: 0,
                 resume: None,
                 inconclusive: None,
+                held: None,
                 mark_escalated_calls: 0,
             }
         }
@@ -2632,6 +2812,15 @@ mod tests {
         fn inconclusive_at_implementer(reason: &str) -> Self {
             Self {
                 inconclusive: Some(reason.to_string()),
+                ..Self::base()
+            }
+        }
+
+        /// BUG-250: make `run_implementer` return [`ImplementerOutcome::Held`]
+        /// — the implementer deliberately held the PR for a manual gate.
+        fn holding_at_implementer(reason: &str) -> Self {
+            Self {
+                held: Some(reason.to_string()),
                 ..Self::base()
             }
         }
@@ -2712,6 +2901,12 @@ mod tests {
                 return Ok(ImplementerOutcome::Inconclusive {
                     reason: reason.clone(),
                     retry_hint: None,
+                });
+            }
+            if let Some(reason) = &self.held {
+                return Ok(ImplementerOutcome::Held {
+                    reason: Some(reason.clone()),
+                    branch: "held-branch".to_string(),
                 });
             }
             match &self.punt {
@@ -3203,6 +3398,91 @@ mod tests {
         assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
 
+    // --- BUG-250: deliberate PR-hold phase-1 outcome ---------------------
+    //
+    // A deliberate push-branch, hold-PR finish must NOT be reported as a
+    // phase-1 failure (that gave a wrong recovery hint — "run /aida-pr" —
+    // which for a deliberate hold would ship un-gated code). It is a clean
+    // non-failure stop: exit 0, no `failed_phase`, `held_reason` set, no later
+    // phase runs.
+
+    /// BUG-250 acceptance #1/#2/#4 — a held PR reports `Held`, not a phase-1
+    /// failure; the drain halts cleanly at phase 1. trace:BUG-250 | ai:claude
+    #[test]
+    fn orchestrate_held_at_phase1_is_not_a_failure() {
+        let mut driver =
+            MockPhaseDriver::holding_at_implementer("SPIKE-7 smoke must pass before merge");
+        let result = orchestrate(
+            &mut driver,
+            "STORY-306",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(
+            result.exit_code, 0,
+            "a deliberate hold is a clean exit, not a failure"
+        );
+        assert!(
+            result.failed_phase.is_none(),
+            "no `failed_phase` — the PR was deliberately held, nothing failed",
+        );
+        assert!(result.failure.is_none(), "no `PhaseFailure` payload");
+        assert!(
+            result.held_reason.is_some(),
+            "`held_reason` distinguishes a deliberate hold from a clean ship",
+        );
+        assert!(result.punt_reason.is_none(), "not a punt");
+        assert!(result.inconclusive_reason.is_none(), "not inconclusive");
+        assert!(result.escalation.is_none(), "not an escalation");
+        assert!(result.shipped_spec_id.is_none(), "nothing shipped");
+        // Phases 2-6 never ran — the drain halted at phase 1.
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// `BatchDrainOutcome::Held` — a batch member that deliberately holds its
+    /// PR pauses the drain at that spec (does not falsely count it shipped),
+    /// exits 0. trace:BUG-250 | ai:claude
+    #[test]
+    fn drain_batch_held_pauses_without_shipping() {
+        struct OneHeldDriver {
+            queue: Vec<String>,
+            ran: Vec<String>,
+        }
+        impl BatchDriver for OneHeldDriver {
+            fn next_head(&mut self) -> Option<String> {
+                self.queue.first().cloned()
+            }
+            fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
+                self.ran.push(spec.to_string());
+                OrchestrationResult {
+                    exit_code: 0,
+                    failed_phase: None,
+                    failure: None,
+                    phase_durations: Vec::new(),
+                    total_ms: 0,
+                    punt_reason: None,
+                    shipped_spec_id: None,
+                    escalation: None,
+                    inconclusive_reason: None,
+                    shelved_reason: None,
+                    held_reason: Some("PR held on `story-306` — SPIKE-7 smoke".to_string()),
+                }
+            }
+        }
+        let mut driver = OneHeldDriver {
+            queue: vec!["STORY-306".to_string(), "STORY-307".to_string()],
+            ran: Vec::new(),
+        };
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::Held);
+        assert_eq!(result.exit_code, 0, "a deliberate hold is not a failure");
+        assert!(result.shipped.is_empty(), "the held spec did not ship");
+        assert_eq!(result.stopped_at.as_deref(), Some("STORY-306"));
+        // The drain paused at the held head — the next member never ran.
+        assert_eq!(driver.ran, vec!["STORY-306".to_string()]);
+    }
+
     /// `BatchDrainOutcome::Inconclusive` — a batch drain that hits a phase-1
     /// inconclusive run stops at that spec without claiming ship / punt /
     /// fail, leaves the head un-advanced, and exits 0 so the next drain
@@ -3230,6 +3510,7 @@ mod tests {
                     escalation: None,
                     inconclusive_reason: Some("GH API unreachable — cannot confirm PR".to_string()),
                     shelved_reason: None,
+                    held_reason: None,
                 }
             }
         }
@@ -4264,6 +4545,7 @@ mod tests {
             escalation: None,
             inconclusive_reason: None,
             shelved_reason: None,
+            held_reason: None,
         }
     }
 
@@ -4279,6 +4561,7 @@ mod tests {
             escalation: None,
             inconclusive_reason: None,
             shelved_reason: None,
+            held_reason: None,
         }
     }
 
@@ -4296,6 +4579,7 @@ mod tests {
             escalation: None,
             inconclusive_reason: None,
             shelved_reason: None,
+            held_reason: None,
         }
     }
 
@@ -4314,6 +4598,7 @@ mod tests {
             escalation: None,
             inconclusive_reason: None,
             shelved_reason: None,
+            held_reason: None,
         }
     }
 
@@ -4343,6 +4628,7 @@ mod tests {
             escalation: None,
             inconclusive_reason: None,
             shelved_reason: Some(fr),
+            held_reason: None,
         }
     }
 
@@ -4363,6 +4649,7 @@ mod tests {
             }),
             inconclusive_reason: None,
             shelved_reason: None,
+            held_reason: None,
         }
     }
 
