@@ -1,0 +1,16 @@
+id: 019e8192-c282-70f1-97af-136b82da7868
+spec_id: TASK-622
+agreed_id: TASK-622
+title: 'README + CLAUDE.md: ''Cloning an existing AIDA project'' note (reads auto-attach; writing needs a node id)'
+description: 'Document the post-TASK-621/BUG-428 fresh-clone UX: clone → reads just work (auto-attach the .aida-store worktree from the aida-store branch); writing new ids needs ''aida init'' or ''aida node acquire''. README ''Bootstrap a project'' sibling subsection + a CLAUDE.md storage-section line. Completed by this docs commit.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T05:05:39.458723798Z
+modified_at: 2026-06-01T05:05:39.458723798Z
+req_type: Task
+tags:
+- aida:init
+- docs
+- onboarding-flow
