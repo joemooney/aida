@@ -1,0 +1,38 @@
+id: 019e81ac-f40d-7743-a280-563cb9c3b163
+spec_id: TASK-625
+agreed_id: TASK-625
+title: gitignore .claude/scheduled_tasks.lock — scheduler runtime lock leaks as untracked file
+description: |-
+  ## Problem
+
+  `.claude/scheduled_tasks.lock` (the /schedule + /loop scheduler's runtime lock) shows up as an untracked file in `git status` on the AIDA repo. It is per-machine runtime state, not source — it should never be committable. `git check-ignore -v .claude/scheduled_tasks.lock` confirms it is NOT ignored: `.gitignore` has `*.yaml.lock` (line 34) and `.claude/rules/aida-specs/` (line 92), but nothing matches this path.
+
+  Surfaced during release prep (2026-05-31): an untracked runtime file in the tree is noise before a version-bump commit and risks being swept in if any tooling does `git add -A`.
+
+  ## Fix
+
+  Add an ignore entry for the scheduler lock. Minimal: `.claude/scheduled_tasks.lock`. Consider the slightly broader `.claude/*.lock` to catch sibling scheduler/runtime lock files of the same shape (but NOT `*.yaml.lock`, already covered). Pick whichever matches the actual runtime-file naming convention — verify there are no tracked `.claude/*.lock` files first.
+
+  ## Acceptance criteria
+
+  - [ ] `git check-ignore .claude/scheduled_tasks.lock` returns the path (i.e. it is now ignored).
+  - [ ] `git status` on a repo with the scheduler having run is clean (no untracked `.claude/scheduled_tasks.lock`).
+  - [ ] No currently-tracked file is newly ignored by the added pattern (verify with `git ls-files | grep '\.claude/.*\.lock'` → empty before choosing a glob).
+
+  ## Notes
+
+  - Trivial gitignore-only change. The `.claude/` tree is mostly tracked (skills/commands symlinks), unlike `.aida/` (deny-by-default), so runtime files under `.claude/` need explicit ignore lines.
+  - Scaffolding consideration: if `aida init` scaffolds a `.gitignore` block, the same line likely belongs in that template so new projects inherit it (verify whether scheduler runs in scaffolded projects).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T05:34:16.077853065Z
+modified_at: 2026-06-01T05:34:16.077853065Z
+req_type: Task
+tags:
+- from-product
+- gitignore
+- lifecycle:trivial
+- papercut
+- release-hygiene
