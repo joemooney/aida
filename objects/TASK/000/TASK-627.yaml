@@ -1,0 +1,35 @@
+id: 019e81f8-8b4d-7951-a2bd-c38bd6d5e661
+spec_id: TASK-627
+agreed_id: TASK-627
+title: Docs freshness spot-check before demo — getting-started.md + retire stale slideshow.html
+description: |-
+  ## Scope (deliberately narrow — NOT an all-docs sweep)
+
+  Staleness scan 2026-05-31 found user-facing docs are largely current (README/OVERVIEW/user-guide/lifecycle/tui/autonomous-drain all touched within ~10 days). Only two items warrant action before the management demo:
+
+  1. **`docs/getting-started.md`** — last touched 2026-05-02 (~1 month). Spot-check against current reality: fresh-clone auto-attach (TASK-621), node-id reconcile on init (TASK-623), distributed-mode-no-legacy-fallback (BUG-428), v0.11.0 surface. Fix any drifted command/flag/output.
+  2. **`docs/slideshow.html`** — handled by STORY-497 (retire/redirect). Listed here only so the audit is complete.
+
+  Explicitly OUT of scope: `docs/plans/*` (dated historical artifacts — leave frozen per the dated-artifacts-immutable convention), archived docs, and the otherwise-fresh user-facing set.
+
+  ## Acceptance criteria
+
+  - [ ] `docs/getting-started.md` verified against a real fresh-clone + init walkthrough on v0.11.0; drifted commands/output corrected, or confirmed current with a note.
+  - [ ] No other user-facing doc found >30 days stale and materially drifted (re-run the §0 staleness scan; if one surfaces, fix or file).
+  - [ ] `docs/slideshow.html` retirement tracked under STORY-497 (cross-reference only).
+
+  ## Notes
+
+  - Cheap, bounded. The point of this task is to PREVENT a boil-the-ocean "update all docs" interpretation — the docs are mostly fine; this is the actual short list.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T06:56:49.997930492Z
+modified_at: 2026-06-01T06:56:49.997930492Z
+req_type: Task
+tags:
+- demo-prep
+- docs
+- freshness-audit
+- from-product
