@@ -221,6 +221,27 @@ aida show FR-1-001
 
 After `aida init`, your first spec goes through [the lifecycle above](#spec-lifecycle): it starts in Draft, you approve it, queue it, and `aida queue work` carries it to a merged PR. The [Getting started](#getting-started-in-5-minutes) walkthrough below runs one real spec through it, end to end.
 
+### Cloning an existing AIDA project
+
+The requirement store rides along on the orphan `aida-store` branch, so a clone has everything — clone as usual and **reads just work**:
+
+```bash
+git clone <repo-url> && cd <repo>
+aida list                                # backlog, findings, queue — all visible
+```
+
+The first read **auto-attaches** the store: it materializes the gitignored `.aida-store/` worktree from the `aida-store` branch and rebuilds the local cache. No setup step.
+
+**Before issuing new spec ids** (i.e. before writing — `aida add`), claim a collision-free node id for your clone so your ids don't clash with other clones:
+
+```bash
+aida init                                # full setup; prompts to acquire a node id
+# — or, if the store is already attached and you just need the id —
+aida node acquire
+```
+
+(`.aida-store/` and `.aida/cache.db` are per-clone and gitignored; only the `aida-store` branch is shared. See [Architecture](#architecture-one-paragraph).)
+
 ## Getting started in 5 minutes
 
 <!-- trace:TASK-274 | ai:claude -->
