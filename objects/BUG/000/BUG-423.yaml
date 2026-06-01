@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T21:21:46.869417113Z
-modified_at: 2026-06-01T06:58:20.223219682Z
+modified_at: 2026-06-01T07:01:07.263839725Z
 req_type: Bug
 tags:
 - aida:agent:new
@@ -16,3 +16,9 @@ tags:
 - flaky-test
 - from-self-test
 - test-reliability
+comments:
+- id: 019e81fc-783f-7420-a47a-94013f483b34
+  author: joe
+  content: Commit 1a59589cd references this requirement
+  created_at: 2026-06-01T07:01:07.263839725Z
+  modified_at: 2026-06-01T07:01:07.263839725Z
