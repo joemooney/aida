@@ -3,12 +3,12 @@ spec_id: BUG-429
 agreed_id: BUG-429
 title: Node-reg failure hard-aborts clone-init even though the store worktree was already attached (should soft-warn + continue)
 description: 'FOUND 2026-05-31 during clone dogfood. When node-id acquisition fails (push contention / rejected push), aida init prints ''Error: Node registration failed after 10 attempts — too much contention on the registry'' but the process exits 0. A non-success outcome must exit non-zero so scripts/CI can detect it. (The push-rejection in my test was a local-non-bare-origin artifact, but the misleading exit code is real regardless of trigger.) Also consider: the worktree bootstrap had already succeeded by then, so the failure is partial — node-id unset but store attached; the exit code + message should reflect ''store attached, node-id not acquired, re-run aida node acquire''.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:38:22.111302751Z
-modified_at: 2026-06-01T04:50:21.345918636Z
+modified_at: 2026-06-01T04:55:41.907583474Z
 req_type: Bug
 tags:
 - aida:init
@@ -26,3 +26,7 @@ comments:
   content: Commit 6cfac7895 references this requirement
   created_at: 2026-06-01T04:50:21.345918636Z
   modified_at: 2026-06-01T04:50:21.345918636Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T04:55:41.907583474Z
+  completion_sha: 4807a99199973221afa1db4f9bb21be22ea559bc
