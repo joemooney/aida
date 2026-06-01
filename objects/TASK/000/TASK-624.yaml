@@ -1,0 +1,18 @@
+id: 019e81a4-1199-73d3-8d02-5e9c98d848e7
+spec_id: TASK-624
+agreed_id: TASK-624
+title: 'Verify: re-running ''aida init'' on an attached clone (TASK-623 path) re-prints ''Enqueued onboarding task'' — does it duplicate the queue entry?'
+description: 'OBSERVED 2026-05-31 during TASK-623 testing: when ''aida init'' is re-run on an auto-attached clone to finish node-id setup, the post-clone bootstrap re-prints ''Enqueued onboarding task TASK-0412''. NOT yet verified whether this duplicates the queue entry or is idempotent (the onboarding enqueue may already guard on existence). Low-pri papercut at most. ACTION: reproduce, check ''aida queue list'' for a duplicate TASK-0412 entry after a second init; if duplicated, make the onboarding enqueue idempotent (skip if the spec is already queued). trace:TASK-623'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T05:24:33.817850061Z
+modified_at: 2026-06-01T05:24:33.817850061Z
+req_type: Task
+tags:
+- aida:init
+- kind:observation
+- needs-verification
+- onboarding-flow
+- papercut
