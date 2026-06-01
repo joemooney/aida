@@ -1389,3 +1389,10 @@
   note: Release-hygiene papercut, trivial gitignore fix. Product seat, 2026-05-31.
   added_at: 2026-06-01T05:34:33.919386493Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e81ee-3eac-7563-8f64-0cf05d2dccc8
+  position: 329000
+  added_by: joe
+  note: Launch-legibility signpost; operator-surfaced 2026-05-31. Layering stays separate, add the lane note. Product seat.
+  added_at: 2026-06-01T06:46:06.803091866Z
+  for_role: implementer
