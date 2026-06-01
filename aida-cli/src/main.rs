@@ -15932,6 +15932,52 @@ fn handle_role_add(
     Ok(())
 }
 
+/// Escape an arbitrary string for safe interpolation inside a
+/// single-quoted shell word: every `'` becomes `'\''` (close-quote,
+/// escaped-quote, reopen-quote). Any value emitted into the `eval`-able
+/// shell of `aida role enter` MUST pass through this — free-text role
+/// purposes and spec titles routinely contain apostrophes/parens, and an
+/// unescaped apostrophe closes the quote and exposes the rest to bare
+/// bash (`syntax error near unexpected token )`). trace:BUG-427 | ai:claude
+fn sh_single_quote(s: &str) -> String {
+    s.replace('\'', "'\\''")
+}
+
+#[cfg(test)]
+mod sh_single_quote_tests {
+    use super::sh_single_quote;
+
+    // The exact purpose text that broke `aida role enter product` (BUG-427):
+    // apostrophes in `that's` / `'advisor'` closed the quote and exposed the
+    // parens to bare bash. Wrapped in single quotes after escaping, it must be
+    // a single well-formed shell word with the original text recovered.
+    #[test]
+    fn escaped_purpose_is_a_single_well_formed_shell_word() {
+        let purpose = "do NOT drive execution (that's the 'advisor' seat)";
+        let wrapped = format!("'{}'", sh_single_quote(purpose));
+        // Round-trip: the only way the escaping is correct is if splitting on
+        // the close-quote/reopen-quote boundaries reconstructs the original.
+        // A POSIX shell parses '...'\''...' as one concatenated word == purpose.
+        let reconstructed = wrapped
+            .trim_start_matches('\'')
+            .trim_end_matches('\'')
+            .replace("'\\''", "'");
+        assert_eq!(reconstructed, purpose);
+    }
+
+    #[test]
+    fn no_apostrophe_is_identity() {
+        let s = "Intake / product advisor — clean text, no quotes";
+        assert_eq!(sh_single_quote(s), s);
+    }
+
+    #[test]
+    fn each_apostrophe_becomes_the_four_char_escape() {
+        assert_eq!(sh_single_quote("a'b"), "a'\\''b");
+        assert_eq!(sh_single_quote("''"), "'\\'''\\''");
+    }
+}
+
 fn emit_role_enter_eval(
     project_root: &std::path::Path,
     state: &RoleState,
@@ -15968,7 +16014,7 @@ fn emit_role_enter_eval(
     println!("fi");
     println!("export AIDA_SESSION_ROLE='{}'", state.name);
     if let Some(p) = &state.purpose {
-        println!("export AIDA_SESSION_PURPOSE='{}'", p.replace('\'', "'\\''"));
+        println!("export AIDA_SESSION_PURPOSE='{}'", sh_single_quote(p));
     } else {
         println!("unset AIDA_SESSION_PURPOSE");
     }
@@ -15985,16 +16031,19 @@ fn emit_role_enter_eval(
         "Created and entered"
     };
     let scope = if state.global { " [global]" } else { "" };
+    // Escape name + purpose: both are free-text and the echo is eval'd.
+    // verb + scope are fixed literals. trace:BUG-427 | ai:claude
+    let purpose_suffix = state
+        .purpose
+        .as_ref()
+        .map(|p| format!(" — {}", p))
+        .unwrap_or_default();
     println!(
         "echo '✓ {} role: {}{}{}'",
         verb,
-        state.name,
+        sh_single_quote(&state.name),
         scope,
-        state
-            .purpose
-            .as_ref()
-            .map(|p| format!(" — {}", p))
-            .unwrap_or_default()
+        sh_single_quote(&purpose_suffix)
     );
     // TASK-48 / TASK-49: load store + queue once (best-effort) so both
     // sections below can resolve spec_id → title and surface the
@@ -16086,11 +16135,7 @@ fn emit_role_enter_eval(
                     .and_then(|s| s.requirements.iter().find(|r| r.id == entry.requirement_id))
                     .map(|r| (r.display_id(), truncate(&r.title, 60).to_string()))
                     .unwrap_or_else(|| ("(deleted)".into(), String::new()));
-                println!(
-                    "echo '    {:<12} {}'",
-                    display_id,
-                    title.replace('\'', "'\\''")
-                );
+                println!("echo '    {:<12} {}'", display_id, sh_single_quote(&title));
             }
             if total > show_n {
                 let remaining = total - show_n;
@@ -16129,7 +16174,7 @@ fn emit_role_enter_eval(
                 println!(
                     "echo '    {:<12} {:<60} {} ({})'",
                     display_id,
-                    title.replace('\'', "'\\''"),
+                    sh_single_quote(&title),
                     entry.action,
                     when
                 );
