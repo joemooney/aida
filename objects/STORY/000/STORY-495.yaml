@@ -1,0 +1,61 @@
+id: 019e811a-d7b1-7fd2-9f09-f7e9f4a9c427
+spec_id: STORY-495
+agreed_id: STORY-495
+title: 'Faithful launcher: all agent launchers honor each tool''s native permission default + single uniform bypass opt-in'
+description: |-
+  ## Problem / rationale
+
+  AIDA's agent launchers are inconsistent about permission posture. Codex and Antigravity honor each tool's NATIVE default and require an explicit opt-in (`--bypass-sandbox`). Claude is the lone exception: three separate commands inject `--permission-mode bypassPermissions` by default —
+
+  - `aida session new --launch` (cli.rs:458)
+  - `aida queue work --launch` (cli.rs:558, STORY-54)
+  - `aida agent new claude` (cli.rs:4044)
+
+  This means `aida agent new claude` does NOT behave like bare `claude` (which prompts). The wrapper carries a hidden opinion.
+
+  Operator principle (2026-05-31): a launcher should be a *faithful* wrapper — behave like invoking the bare tool, honoring that tool's native default, and deviate ONLY when the operator is explicit. Deviation should live in ONE auditable, uniform place — not be baked silently into the wrapper, and not be a per-tool memory tax (three different raw-flag strings).
+
+  ## Desired behaviour
+
+  1. Every interactive/foreground agent launcher honors the underlying tool's NATIVE permission/sandbox default out of the box. For Claude that means NOT injecting `--permission-mode` (let `claude` use its own default). Codex/AGY already do this — no change to their defaults.
+  2. A SINGLE uniform opt-in knob turns on bypass posture for the whole fleet at once, applying each tool's appropriate bypass flag (claude → bypassPermissions/--dangerously-skip-permissions; codex → --dangerously-bypass-approvals-and-sandbox; antigravity → --dangerously-skip-permissions). Operator's expressed preferred shape (non-binding — physical seat refines): `[agents] bypass = true` in ~/.aida/agents.toml (user base) overridable by .aida/agents.toml (project). Per-tool override should remain expressible.
+  3. Existing explicit per-launch overrides still win and are unchanged: the `--permission-mode <M>` flag, `--bypass-sandbox`, `--no-default-flags`, and `agents.toml [agents.<tool>] default_flags` raw passthrough (TASK-557) all continue to function and take precedence over the uniform knob.
+
+  ## Safety invariant (do NOT regress)
+
+  4. The headless drain (`aida queue work --auto-complete --no-human`, `claude -p`) MUST continue to force bypass regardless of the knob — a prompting child has no TTY to answer and would hang forever. This forcing is itself "explicit" and is consistent with the principle. The convention flip applies to INTERACTIVE/foreground launches only; the orchestrator's headless launch path keeps forcing bypass.
+  5. Detached/background launches with no answerable TTY (`aida agent new claude --bg`) must likewise either force bypass or refuse-with-clear-error rather than silently spawn a child that hangs on the first prompt. Physical seat picks force-vs-refuse.
+
+  ## Migration / least-surprise
+
+  6. This is a behaviour change for operators (including this project's own operator) who relied on Claude's bypass-by-default. Provide a discoverable migration path: a one-time notice on the first native-default interactive Claude launch pointing at the `[agents] bypass` knob, and a CHANGELOG/release-note entry. Physical seat decides exact mechanism.
+
+  ## Acceptance criteria
+
+  - [ ] With no agents.toml present, `aida agent new claude` (and `session new --launch`, `queue work --launch`) launch `claude` WITHOUT an injected `--permission-mode` (verifiable via the launch-log / argv) — i.e. native Claude prompting posture.
+  - [ ] Codex and Antigravity interactive defaults are unchanged (already native + `--bypass-sandbox` opt-in).
+  - [ ] Setting the single uniform knob (e.g. `[agents] bypass = true`) makes all three launchers spawn with their respective bypass flags; unsetting returns all three to native.
+  - [ ] `--permission-mode`, `--bypass-sandbox`, `--no-default-flags`, and per-tool `default_flags` still work and override the uniform knob.
+  - [ ] `aida queue work --auto-complete --no-human` still forces bypass on its headless `claude -p` children regardless of the knob (drain does not hang). Regression test proves a prompting default would break it.
+  - [ ] `aida agent new claude --bg` does not silently spawn a child that hangs on first prompt (forces bypass or refuses with a clear message).
+  - [ ] First native-default interactive Claude launch surfaces a one-time discoverable pointer to the `[agents] bypass` knob; CHANGELOG documents the behaviour change.
+
+  ## Notes
+
+  - HOW (exact config key, precedence layering, where the knob is read, force-vs-refuse for --bg) is the physical/implementer seat's lane. The operator's preferred config shape is recorded above as a hint, not a mandate.
+  - Builds directly on TASK-557 (agents.toml default_flags) and the `--bypass-sandbox` plumbing. trace anchors: cli.rs:458 / :558 / :4044.
+  - Project context: filed during the bug-clearing-before-marketing phase — this is convention polish, Medium priority; sequence after the open bug stack.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T02:54:40.561121692Z
+modified_at: 2026-06-01T02:54:40.561121692Z
+req_type: Story
+tags:
+- aida:agent:new
+- aida:queue:work
+- aida:session:new
+- convention-change
+- from-product
+- launch-posture
