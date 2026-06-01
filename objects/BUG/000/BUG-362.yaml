@@ -37,12 +37,12 @@ description: |-
   - BUG-361 (session-end gate for un-shipped commits — opposite direction)
   - BUG-360 (queue-done gate visibility — same family)
   - BUG-354 / BUG-249 / BUG-269 (ceiling-pattern arc)
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T18:12:10.930679221Z
-modified_at: 2026-06-01T05:31:03.105070050Z
+modified_at: 2026-06-01T05:31:10.572670795Z
 req_type: Bug
 tags:
 - aida:pr:ship
