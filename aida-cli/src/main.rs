@@ -1226,20 +1226,54 @@ fn run() -> Result<()> {
                 }
                 return handle_git_backend_command(&store_path, &cli.command);
             }
-            // BUG-428: distributed mode is declared in `.aida/config.toml` but
-            // the store worktree isn't resolvable here — the hallmark of a
-            // freshly-cloned AIDA project (`.aida-store/` is gitignored and
-            // only created by `aida init`). Refuse to silently fall back to the
-            // legacy requirements.yaml/SQLite: that shows STALE data with no
-            // signal it's wrong (a first-user lands on someone's pre-migration
-            // specs and never knows). Point at `aida init`, which bootstraps
-            // the worktree from the existing `aida-store` branch via
-            // handle_init_post_clone. `aida init` itself is dispatched earlier
-            // (line ~873), so it is never blocked by this guard.
-            // trace:BUG-428 | ai:claude
+            // Distributed mode is declared in `.aida/config.toml` but the store
+            // worktree isn't resolvable here — the hallmark of a freshly-cloned
+            // AIDA project (`.aida-store/` is gitignored and only created by
+            // `aida init`). We must NOT silently fall back to the legacy
+            // requirements.yaml/SQLite: that shows STALE data with no signal
+            // it's wrong (a first-user lands on someone's pre-migration specs
+            // and never knows). trace:BUG-428 | ai:claude
             if let Some(project_root) = distributed_mode_declared() {
                 let on_origin =
                     aida_core::git_ops::remote_branch_exists(&project_root, "origin", "aida-store");
+                // TASK-621: make reads "just work" on a fresh clone without a
+                // manual `aida init` — auto-attach the store worktree from the
+                // `aida-store` branch (the same fetch + worktree-add the
+                // post-clone init does). Only the node-id / scaffolding steps
+                // stay with `aida init` / `aida node acquire`: a node id is
+                // needed before WRITING, not reading. One-time cost — once the
+                // worktree exists, detect_distributed_store fast-paths above.
+                // trace:TASK-621 | ai:claude
+                if on_origin {
+                    match try_attach_store_worktree(&project_root) {
+                        Ok(store_path) => {
+                            eprintln!(
+                                "{} attached the AIDA store worktree from `aida-store`. \
+                                 Run `{}` to claim a node id before issuing new IDs (`aida add`).",
+                                "Note:".dimmed(),
+                                "aida node acquire".cyan()
+                            );
+                            if matches!(&cli.command, Command::McpServe) {
+                                let mcp_storage = Storage::new(&store_path);
+                                let project_root =
+                                    find_project_root().unwrap_or_else(|_| store_path.clone());
+                                mcp::run_mcp_server(&mcp_storage, project_root)?;
+                                return Ok(());
+                            }
+                            return handle_git_backend_command(&store_path, &cli.command);
+                        }
+                        // Auto-attach failed (offline, diverged/locked branch,
+                        // git too old, …). Don't fall to legacy — drop to the
+                        // explicit setup guidance below, naming the cause.
+                        Err(e) => {
+                            eprintln!(
+                                "{} couldn't auto-attach the store worktree: {}",
+                                "Note:".dimmed(),
+                                e
+                            );
+                        }
+                    }
+                }
                 let branch_hint = if on_origin {
                     "\n  Its `aida-store` branch is on origin, ready to attach."
                 } else {
@@ -4793,6 +4827,26 @@ fn distributed_mode_declared_from(start: &std::path::Path) -> Option<std::path::
 fn distributed_mode_declared() -> Option<std::path::PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     distributed_mode_declared_from(&cwd)
+}
+
+/// TASK-621: attach the `.aida-store` worktree from the existing `aida-store`
+/// branch so read commands "just work" on a fresh clone without a manual
+/// `aida init`. Reuses the exact fetch + worktree-add sequence the post-clone
+/// init bootstrap uses (handle_init_post_clone) — but NOT its node-id /
+/// scaffolding steps. Those stay with `aida init` / `aida node acquire`: a
+/// node id is the namespace for newly-issued spec ids, needed only before
+/// WRITING. Reading the store needs only the worktree. Idempotent at the
+/// git-ops layer (create_store_worktree no-ops when the worktree already
+/// exists), but in practice only called when the worktree is absent.
+/// trace:TASK-621 | ai:claude
+fn try_attach_store_worktree(project_root: &std::path::Path) -> Result<std::path::PathBuf> {
+    use aida_core::git_ops;
+    let worktree_dir = ".aida-store";
+    let branch = "aida-store";
+    // Create the local tracking branch from origin/<branch> (network fetch;
+    // fails closed → caller drops to the explicit `aida init` guidance).
+    git_ops::fetch_branch_into_local(project_root, "origin", branch)?;
+    git_ops::create_store_worktree(project_root, worktree_dir, branch)
 }
 
 /// Walk-up resolver split out from `detect_distributed_store` so the search
