@@ -1,0 +1,37 @@
+id: 019e81b1-5fec-7c72-91bc-e6f5e37bf43e
+spec_id: BUG-431
+agreed_id: BUG-431
+title: queue work --no-human drain is unusable for multiple stories under one epic (epic-scope contention + multi-spec PR + cascade lease-block)
+description: |-
+  Reported by an external project (quizdom) on 2026-06-01. Ran 'aida queue work next 11 --no-human=both' to autonomously drain 11 stories, 7 of them children of EPIC-11. THREE bugs compounded so only the first story per epic was attempted:
+
+  1. EPIC-SCOPING. queue-work derives the session worktree scope from the story's CLUSTER (the parent epic), not the story: output shows 'scope: EPIC-11 ... role: implementer (cluster-derived)', worktree quizdom-epic-11, branches epic-11 / epic-11-2. So every same-epic story tries to own the SAME epic scope.
+
+  2. MULTI-SPEC PR breaks the reviewer. Because the session is epic-scoped, the PR title leads with the epic ('EPIC-11: ...') while the commit references the story, so the PR backs TWO specs. Phase 3 (headless reviewer) fails: 'PR-N has multiple backing specs: EPIC-11, STORY-76. Use a single SPEC-ID.' (cf BUG-412.)
+
+  3. CASCADE LEASE-BLOCK. When phase 3 fails, the implementer session does NOT complete cleanly, so the epic lease is NEVER RELEASED. Every subsequent same-epic story then fails at phase 1: 'scope EPIC-11 is owned by lease 019e81a5 ... pass --steal or aida session end manually.' STORY-83/82/81/80/78 all failed in 1s each.
+
+  NET: of 11 queued, only 2 could be hand-merged by the operator (single-file, I merged their PRs manually); 5 same-epic siblings were scope-blocked with zero work; the rest never reached. The autonomous drain is effectively broken whenever a queued batch has >1 story under the same epic.
+
+  Suggested fixes (any one helps; together they fix it):
+  - Scope queue-work sessions to the STORY, not the cluster/epic — siblings shouldn't contend for one scope.
+  - Reviewer spec-resolver: when a PR backs an epic + its child, pick the most-specific (the child story).
+  - On ANY phase failure, RELEASE the lease (or park the worktree) so siblings aren't blocked by a dead session.
+  - Provide a true skip-review / autonomous-merge mode for solo drains (--no-human=both still runs phase 3; a solo dev wants to skip it).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T05:39:05.836892426Z
+modified_at: 2026-06-01T05:39:05.836892426Z
+req_type: Bug
+tags:
+- autonomous
+- drain
+- epic-scope
+- external-report
+- lease
+- multi-spec
+- queue-work
+- quizdom
+- reviewer
