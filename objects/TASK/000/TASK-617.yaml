@@ -3,15 +3,19 @@ spec_id: TASK-617
 agreed_id: TASK-617
 title: Capture the two-advisor functional-split coordination protocol (multi-advisor-coordination.md)
 description: 'Operator-settled 2026-05-31: the near-term functional two-advisor split (intake/product + execution/ops) + its coordination protocol (continuous-substrate-sync, arch-flag findings for reversible forks, block-on-irreversible, the arch-class bar, product''s review cadence). Documented as a new section in docs/multi-advisor-coordination.md (distinct from that doc''s SPIKE-10 subsystem tracks) + captured in the feedback_one_master_advisor memory. trace:self'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T01:47:13.148375303Z
-modified_at: 2026-06-01T01:47:13.148375303Z
+modified_at: 2026-06-01T01:52:16.047453345Z
 req_type: Task
 tags:
 - advisor-model
 - coordination
 - docs
 - from-operator
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T01:52:16.047453345Z
+  completion_sha: 0344c4480b09a0d4bd5d9de47255678bd0dbcafa
