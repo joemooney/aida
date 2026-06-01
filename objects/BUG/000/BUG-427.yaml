@@ -15,5 +15,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T02:31:31.474868150Z
-modified_at: 2026-06-01T02:31:31.474868150Z
+modified_at: 2026-06-01T02:47:57.044882471Z
 req_type: Bug
+comments:
+- id: 019e8114-af74-74c1-8197-901c35f04a10
+  author: joe
+  content: Commit 18101b9db references this requirement
+  created_at: 2026-06-01T02:47:57.044882471Z
+  modified_at: 2026-06-01T02:47:57.044882471Z
