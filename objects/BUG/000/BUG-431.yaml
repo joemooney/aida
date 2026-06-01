@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:39:05.836892426Z
-modified_at: 2026-06-01T13:43:09.017686217Z
+modified_at: 2026-06-01T13:56:49.172937558Z
 req_type: Bug
 tags:
 - autonomous
@@ -41,3 +41,8 @@ comments:
   content: 'OPERATOR SIGN-OFF (2026-06-01): #1 (scope queue-work sessions to the STORY, not the parent epic/cluster) is APPROVED to implement. This is the architectural root — it removes the same-epic scope contention at the source, so siblings stop fighting over one epic-scoped lease/worktree/branch. With this approved, all three of BUG-431''s compounding fixes are now in scope: #1 story-scoping (root), #2 reviewer picks most-specific spec (epic→child), #3 release/park the lease on ANY phase failure (kill the cascade-block). Tracked under EPIC-33 (orchestrator correctness floor) invariants 1+2. Implementation is loop-eligible (supervised advisor work, with tests + a SUPERVISED --zen --auto-complete validation drain, not unsupervised --no-human). Suggested order: #2 (most bounded) → #3 → #1 (the scoping change has the widest blast radius; do it last with the most care + the validation drain). trace:BUG-431'
   created_at: 2026-06-01T13:43:09.017686217Z
   modified_at: 2026-06-01T13:43:09.017686217Z
+- id: 019e8379-0d94-7f30-83fc-981a46f8e7b2
+  author: joe
+  content: '#3 scoping (advisor, 2026-06-01): NOT a clean auto-fix — flagging a design fork for the operator. The drain''s failure path deliberately does NOT auto-end the lease (auto_complete.rs ~947 emits ''commit or discard in the worktree, then end it'' + a --steal hint) because the failed worktree may hold uncommitted work a human must triage; auto-removing it would destroy that. Also: the sibling-CASCADE that #3 describes is mostly a CONSEQUENCE of #1 (epic-scoping) — once sessions are story-scoped (#1), a failed story''s held lease only blocks re-attempts of THAT story, not its siblings. So the residual #3 work is: on a shelvable failure, RELEASE the lease (free the scope) WHILE PRESERVING the worktree (don''t delete it) — i.e. decouple lease-ownership from worktree-existence. That''s a real lifecycle design change with a preserve-for-triage tension → operator/keyboard call, and best done AFTER #1 (which moots the urgent cascade). Recommend: do #1 first (signed off), re-evaluate whether #3''s residual is even needed, then design the lease/worktree decoupling deliberately if so. trace:BUG-431'
+  created_at: 2026-06-01T13:56:49.172937558Z
+  modified_at: 2026-06-01T13:56:49.172937558Z
