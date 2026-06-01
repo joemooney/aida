@@ -20,6 +20,7 @@ For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For 
 - Branch: `aida-store` on origin
 - Cache: `.aida/cache.db` (gitignored)
 - Manage cache: `aida cache status`, `aida cache rebuild`
+- Fresh clone: the first store-reading command **auto-attaches** the `.aida-store/` worktree from the `aida-store` branch and rebuilds the cache, so `aida list`/`findings`/`queue` work with no manual step (TASK-621). Writing new spec ids needs a node id — `aida init` (full bootstrap) or `aida node acquire`. If distributed mode is declared but the store can't be attached (offline, etc.), reads error with setup guidance rather than silently falling back to a legacy `requirements.yaml` (BUG-428). trace:TASK-621 trace:BUG-428
 
 **Per-spec transition history lives INSIDE the YAML.** Every `objects/TYPE/000/SPEC-ID.yaml` carries a `history:` array of `HistoryEntry` records, each with `id` (UUID), `author`, `timestamp`, and a `changes:` list of `{field_name, old_value, new_value}` triples. Every status flip, priority change, tag edit, owner change, etc. lands here as a structured row. **This is the source-of-truth for spec-state time series** — `aida history --events` and `--spec <id>` read from it; reviewers building burn-down charts or status-flow analyses should walk these arrays directly rather than approximating from `modified_at`. The cache (`.aida/cache.db`) is a derived read-projection and does NOT currently expose history rows; for substrate-grounded time series, read the YAML or the orphan-branch git log. trace:TASK-121 | ai:claude
 
