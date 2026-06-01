@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:39:05.836892426Z
-modified_at: 2026-06-01T13:56:49.172937558Z
+modified_at: 2026-06-01T15:04:13.104292478Z
 req_type: Bug
 tags:
 - autonomous
@@ -46,3 +46,11 @@ comments:
   content: '#3 scoping (advisor, 2026-06-01): NOT a clean auto-fix — flagging a design fork for the operator. The drain''s failure path deliberately does NOT auto-end the lease (auto_complete.rs ~947 emits ''commit or discard in the worktree, then end it'' + a --steal hint) because the failed worktree may hold uncommitted work a human must triage; auto-removing it would destroy that. Also: the sibling-CASCADE that #3 describes is mostly a CONSEQUENCE of #1 (epic-scoping) — once sessions are story-scoped (#1), a failed story''s held lease only blocks re-attempts of THAT story, not its siblings. So the residual #3 work is: on a shelvable failure, RELEASE the lease (free the scope) WHILE PRESERVING the worktree (don''t delete it) — i.e. decouple lease-ownership from worktree-existence. That''s a real lifecycle design change with a preserve-for-triage tension → operator/keyboard call, and best done AFTER #1 (which moots the urgent cascade). Recommend: do #1 first (signed off), re-evaluate whether #3''s residual is even needed, then design the lease/worktree decoupling deliberately if so. trace:BUG-431'
   created_at: 2026-06-01T13:56:49.172937558Z
   modified_at: 2026-06-01T13:56:49.172937558Z
+- id: 019e83b6-c230-7151-8a85-068aaccc5e4c
+  author: joe
+  content: |-
+    Re-evaluation of #3 (cascade lease-block) after #1 shipped (story-scope session, 2026-06-01): #3 is mooted by #1. With each child story scoped to its own id (not the parent epic), same-epic siblings no longer contend for one scope — sibling A's lease is on STORY-A, sibling B's on STORY-B, so a dead/dormant session on A does not block B at phase 1. The 'scope EPIC-11 is owned by lease ...' cascade required the shared epic scope that #1 removes.
+
+    Residual (per the EPIC-33 invariant-1 plan): a shelvable failure still leaves the failed story's own dormant lease, so a RETRY of that same story needs --steal/--force-claim — but that is the normal single-spec dormant-lease behavior, not the sibling cascade, and EPIC-28 shelves+continues anyway. The plan's lease-release-preserve-worktree decoupling is deferred to post-drain evaluation: only build it if the supervised 'queue work next N --zen --auto-complete' drain shows a residual block. Not implementing speculatively (lease/worktree-ownership decoupling is delicate; don't auto-delete a worktree with uncommitted triage state).
+  created_at: 2026-06-01T15:04:13.104292478Z
+  modified_at: 2026-06-01T15:04:13.104292478Z
