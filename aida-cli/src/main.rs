@@ -61547,6 +61547,88 @@ fn extract_all_spec_ids(text: &str) -> Vec<String> {
     out
 }
 
+/// Is `ancestor` a transitive parent of `node`, per a `child → parent uuids`
+/// map? trace:BUG-431 | ai:claude
+fn is_transitive_ancestor(
+    parents: &std::collections::HashMap<uuid::Uuid, Vec<uuid::Uuid>>,
+    ancestor: uuid::Uuid,
+    node: uuid::Uuid,
+) -> bool {
+    let mut stack: Vec<uuid::Uuid> = parents.get(&node).cloned().unwrap_or_default();
+    let mut seen = std::collections::HashSet::new();
+    while let Some(p) = stack.pop() {
+        if p == ancestor {
+            return true;
+        }
+        if seen.insert(p) {
+            if let Some(gps) = parents.get(&p) {
+                stack.extend(gps.iter().copied());
+            }
+        }
+    }
+    false
+}
+
+/// BUG-431 #2: when a PR backs several specs that form a parent chain (an epic
+/// and its child story, say), the most-specific one IS the answer — the
+/// reviewer must not bail "multiple backing specs." Drop any spec in the set
+/// that is a proven transitive ANCESTOR of another spec in the set; keep the
+/// rest. Specs absent from the store, or genuinely unrelated to the others,
+/// are left intact, so the caller still bails on real ambiguity. Order-
+/// preserving. trace:BUG-431 | ai:claude
+fn reduce_to_most_specific_specs(store: &RequirementsStore, specs: &[String]) -> Vec<String> {
+    if specs.len() < 2 {
+        return specs.to_vec();
+    }
+    let uuid_of = |s: &str| -> Option<uuid::Uuid> {
+        store
+            .requirements
+            .iter()
+            .find(|r| {
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|x| x.eq_ignore_ascii_case(s))
+                    || r.agreed_id
+                        .as_deref()
+                        .is_some_and(|x| x.eq_ignore_ascii_case(s))
+            })
+            .map(|r| r.id)
+    };
+    // child uuid → its parent uuids. RelationshipType::Parent means "this is
+    // parent of target" (→ target's parent is this req); Child means "this is
+    // child of target" (→ this req's parent is target). trace:BUG-431
+    let mut parents: std::collections::HashMap<uuid::Uuid, Vec<uuid::Uuid>> =
+        std::collections::HashMap::new();
+    for req in &store.requirements {
+        for rel in &req.relationships {
+            match rel.rel_type {
+                aida_core::RelationshipType::Parent => {
+                    parents.entry(rel.target_id).or_default().push(req.id);
+                }
+                aida_core::RelationshipType::Child => {
+                    parents.entry(req.id).or_default().push(rel.target_id);
+                }
+                _ => {}
+            }
+        }
+    }
+    let resolved: Vec<(String, Option<uuid::Uuid>)> =
+        specs.iter().map(|s| (s.clone(), uuid_of(s))).collect();
+    let mut out = Vec::new();
+    for s in specs {
+        let keep = match uuid_of(s) {
+            None => true, // unresolved → can't prove ancestry → keep
+            Some(a) => !resolved.iter().any(|(other, ou)| {
+                other != s && ou.is_some_and(|ou| is_transitive_ancestor(&parents, a, ou))
+            }),
+        };
+        if keep {
+            out.push(s.clone());
+        }
+    }
+    out
+}
+
 pub fn resolve_pr_to_spec(
     project_root: &std::path::Path,
     pr: u32,
@@ -61617,6 +61699,13 @@ pub fn resolve_pr_to_spec(
             }
         }
     }
+
+    // BUG-431 #2: a PR can legitimately back an epic + its child story (the
+    // session was epic-scoped). Reduce to the most-specific before deciding —
+    // drop proven ancestors so epic+child collapses to the child. Genuinely
+    // unrelated specs survive the reduction and still bail below.
+    // trace:BUG-431 | ai:claude
+    let specs = reduce_to_most_specific_specs(store, &specs);
 
     if specs.is_empty() {
         anyhow::bail!("PR-{} has no backing specs (could not find any associated spec IDs in review stories or PR metadata)", pr);
@@ -61695,6 +61784,47 @@ mod task_518_pr_to_spec_tests {
         let root = std::path::Path::new("/tmp");
         let resolved = resolve_pr_to_spec(root, 123, &store).unwrap();
         assert_eq!(resolved, "TASK-102");
+    }
+
+    #[test]
+    fn reduce_to_most_specific_drops_epic_keeps_child() {
+        // BUG-431 #2: a PR backing an epic + its child story resolves to the
+        // child, not "multiple backing specs".
+        let mut store = RequirementsStore::new();
+        let mut epic = mock_req("Epic", "", Some("EPIC-11"));
+        let story = mock_req("Story", "", Some("STORY-76"));
+        // EPIC is parent of STORY.
+        epic.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: story.id,
+            created_at: None,
+            created_by: None,
+        });
+        store.requirements.push(epic);
+        store.requirements.push(story);
+
+        assert_eq!(
+            reduce_to_most_specific_specs(&store, &["EPIC-11".into(), "STORY-76".into()]),
+            vec!["STORY-76".to_string()]
+        );
+        // Order-independent.
+        assert_eq!(
+            reduce_to_most_specific_specs(&store, &["STORY-76".into(), "EPIC-11".into()]),
+            vec!["STORY-76".to_string()]
+        );
+    }
+
+    #[test]
+    fn reduce_to_most_specific_keeps_genuinely_unrelated() {
+        // No ancestry between them → both survive → caller still bails (real
+        // ambiguity, not an epic/child collapse).
+        let mut store = RequirementsStore::new();
+        store.requirements.push(mock_req("A", "", Some("STORY-1")));
+        store.requirements.push(mock_req("B", "", Some("STORY-2")));
+        assert_eq!(
+            reduce_to_most_specific_specs(&store, &["STORY-1".into(), "STORY-2".into()]).len(),
+            2
+        );
     }
 
     #[test]
