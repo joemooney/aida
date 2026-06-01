@@ -18,12 +18,12 @@ description: |-
   - Reviewer spec-resolver: when a PR backs an epic + its child, pick the most-specific (the child story).
   - On ANY phase failure, RELEASE the lease (or park the worktree) so siblings aren't blocked by a dead session.
   - Provide a true skip-review / autonomous-merge mode for solo drains (--no-human=both still runs phase 3; a solo dev wants to skip it).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:39:05.836892426Z
-modified_at: 2026-06-01T15:04:13.104292478Z
+modified_at: 2026-06-01T16:13:39.481419330Z
 req_type: Bug
 tags:
 - autonomous
@@ -54,3 +54,7 @@ comments:
     Residual (per the EPIC-33 invariant-1 plan): a shelvable failure still leaves the failed story's own dormant lease, so a RETRY of that same story needs --steal/--force-claim — but that is the normal single-spec dormant-lease behavior, not the sibling cascade, and EPIC-28 shelves+continues anyway. The plan's lease-release-preserve-worktree decoupling is deferred to post-drain evaluation: only build it if the supervised 'queue work next N --zen --auto-complete' drain shows a residual block. Not implementing speculatively (lease/worktree-ownership decoupling is delicate; don't auto-delete a worktree with uncommitted triage state).
   created_at: 2026-06-01T15:04:13.104292478Z
   modified_at: 2026-06-01T15:04:13.104292478Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T16:13:39.481419330Z
+  completion_sha: ff1935a1fe1c5dcdf0b6c168c8ab3935aa76b6f0
