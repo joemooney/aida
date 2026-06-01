@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T07:13:50.655568174Z
-modified_at: 2026-06-01T07:13:50.655568174Z
+modified_at: 2026-06-01T07:20:54.227368908Z
 req_type: Task
 tags:
 - claude-code-compose
@@ -30,3 +30,19 @@ tags:
 - docs
 - from-product
 - positioning
+comments:
+- id: 019e820e-94d3-7713-8a44-5e893dabe3dd
+  author: joe
+  content: |-
+    Scope expanded (product seat, 2026-06-01). DONE in-session:
+    - Created docs/positioning/vs-claude-code-workflows.md (links verified).
+    - Created docs/using-aida-with-claude-code.md — ecosystem orientation doc for Claude-Code-literate readers (maps subagents/Workflows/agent-teams/MCP/--bg/skills → AIDA's layer; both-direction composition; "a day using both"; what AIDA defers).
+    - README.md: added vs-claude-code-workflows bullet to "How AIDA compares"; added using-aida-with-claude-code pointer in 3 spots (compares-intro, With-Claude-Code section, Documentation table); fixed "all five"→"all of these".
+    - Deck moat slide (docs/presentation/2026-06-management-demo.md): folded in the "doesn't Claude Code already do this?" one-liner + expanded speaker note.
+
+    REMAINING (mechanical wiring):
+    - [ ] Add vs-claude-code-workflows.md + using-aida-with-claude-code.md to docs/positioning/README.md index.
+    - [ ] Add both to the CLAUDE.md positioning enumeration (alongside vs-claude-code-subagents).
+    - [ ] Link-verify pass (aida plan verify / markdown link check) across the edited set.
+  created_at: 2026-06-01T07:20:54.227368908Z
+  modified_at: 2026-06-01T07:20:54.227368908Z
