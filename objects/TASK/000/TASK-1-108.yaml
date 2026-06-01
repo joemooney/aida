@@ -12,12 +12,12 @@ description: |-
   Root-cause hypothesis: the phase-1 startup sequence should be (1) acquire lease, (2) bump status. Today it appears to be (1) bump status, (2) acquire lease — failing at step 2 strands the substrate in InProgress (then NeedsAttention via the failure handler). Sibling finding: the error message at this failure point says 'spec is already In Progress' — should say 'phase-1 startup failed to acquire lease (current status: <actual>)'.
 
   Pair with TASK-115 (agent-discipline ceiling pattern) and TASK-116 (overnight unauthorized pickup) — same root cause expressed in different operator flows.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T16:01:59.180510461Z
-modified_at: 2026-06-01T14:35:32.713625786Z
+modified_at: 2026-06-01T16:06:04.780087769Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -84,3 +84,7 @@ comments:
   content: Commit 8d6d0a753 references this requirement
   created_at: 2026-06-01T14:35:32.713625786Z
   modified_at: 2026-06-01T14:35:32.713625786Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T16:06:04.780087769Z
+  completion_sha: 1bc74de9fcb258e2cab9f204ee075e9a066ca4cb
