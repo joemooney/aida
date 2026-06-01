@@ -10,12 +10,12 @@ description: |-
   Action: on the next `scripts/release.sh` run, watch the Release workflow's `Download all artifacts` step output for the actual directory layout and confirm the four `files:` paths in `Create Release` resolve. If v5 flattened or renamed the layout, scripts/release.sh will surface a missing-file error; if so, file a fix-forward to add explicit `name:` per artifact or restructure the paths.
 
   Raised in review of PR-142: https://github.com/joemooney/aida/pull/142#issuecomment-4504297695
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:40:59.788089262Z
-modified_at: 2026-06-01T14:00:07.744161710Z
+modified_at: 2026-06-01T14:00:52.588484599Z
 req_type: Task
 tags:
 - ci
@@ -43,3 +43,7 @@ comments:
     Side observation (out of scope, not a download-artifact issue): the v0.10.0 git tag exists but has no GitHub Release and no release-workflow run — worth a separate look.
   created_at: 2026-06-01T14:00:07.744161710Z
   modified_at: 2026-06-01T14:00:07.744161710Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-01T14:00:52.588484599Z
+  implemented_by: joe
