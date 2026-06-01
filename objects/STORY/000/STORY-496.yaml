@@ -1,0 +1,58 @@
+id: 019e818d-4b09-7412-9796-4a6869e178b4
+spec_id: STORY-496
+agreed_id: STORY-496
+title: 'aida doctor: reap dead-PID agent-registry entries (stale agents) — new check+heal category'
+description: |-
+  ## Problem (observed)
+
+  Operator's `aida status` on a dogfood project showed `─── Active agents (35) ───` where ~29 rows were `stale` and only a handful live. In agent_registry.rs `classify_status`, `stale` ⟺ `!pid_is_alive(record.pid)` — i.e. every "stale" row is a CONFIRMED-DEAD process whose registry file under `.aida/agents/` was never reaped. The headline count is counting corpses, and there is no command that cleans them up.
+
+  Gaps confirmed in code:
+  - No reaper. `remove_agent()` removes a single entry; nothing bulk-reaps dead-PID files. `aida agent ls` has no prune; `aida agent stop` only targets a (live) agent by name.
+  - No doctor category. `doctor check`/`heal` categories are: stale-leases, abandoned-leases, orphan-queue-entries, orphan-branches, stale-reviewer-leases, stale-locks, OBE-briefs. NONE cover the agent registry — so `aida doctor --heal` cannot touch these, and `doctor check`/`fsck` won't even report them.
+
+  Doctor's mandate is literally "Diagnose and heal AIDA multi-agent state drift" (STORY-462). A dead process's lingering registry file is textbook drift. This is a missing category, not out-of-scope.
+
+  ## Desired behaviour
+
+  Add a doctor category (e.g. `dead-agents`, alias `stale-agents`) that detects and reaps `.aida/agents/` registry entries whose PID is not alive.
+
+  ## SAFETY INVARIANT (must encode)
+
+  Reaping a stale entry must be **registry-file removal ONLY — never send a signal to the PID**. A "dead" PID may have been recycled to an unrelated process since the entry was written; signaling it would kill a bystander. This is the key difference from `aida agent stop` (which intentionally signals a *live* agent by name). The existing stop path's `terminate_pids_with_grace` must NOT be reused for the reaper.
+
+  ## Acceptance criteria
+
+  - [ ] `aida doctor check dead-agents` lists registry entries whose PID is not alive (count + identities), read-only, exits non-zero when any found.
+  - [ ] `aida doctor heal dead-agents` removes those registry files only. NO signal/kill is sent to any PID. Live (Busy/Idle) entries are preserved untouched.
+  - [ ] The category participates in the full `aida doctor --heal` sweep and the `aida doctor fsck` unified report.
+  - [ ] The passive doctor scan integrated into `aida status` (STORY-464) surfaces the dead-agent count as a hygiene finding ("N dead agents — run `aida doctor heal dead-agents`").
+  - [ ] `aida status` "Active agents (N)" headline no longer presents confirmed-dead (Stale) entries as part of an "active" count — reap-then-count, OR split/relabel the headline (e.g. "6 live · 29 stale"). (Separable slice; implementer may take it as a follow-up TASK if it bloats the heal work.)
+  - [ ] Idempotent; safe when `.aida/agents/` is absent or empty; no panic on malformed entry files.
+  - [ ] Regression test: seed a registry with a guaranteed-dead PID + a live PID; heal removes only the dead one and emits no signal.
+
+  ## Open design question (physical/implementer seat decides)
+
+  Reap ONLY on explicit `doctor heal` (conservative; keeps brief "what just died" forensics), OR also opportunistically reap-on-read during `aida status`? Reap-on-read removes the cruft with zero operator action but adds a write side-effect to a read command. Recommend explicit-heal first; consider opportunistic reap as a follow-up gated on operator preference.
+
+  ## Notes
+
+  - Root surface: aida-cli/src/agent_registry.rs (classify_status, remove_agent, list_agent_views), doctor category dispatch in aida-cli/src/main.rs (~17637 normalize, ~17792 heal dispatch), status render main.rs:54564.
+  - Builds on STORY-431/435 (registry), STORY-462 (doctor), STORY-464 (passive scan in status).
+  - Filed during bug-clearing-before-marketing phase: dogfood papercut on a daily-driver surface (`aida status`), Medium.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T04:59:41.193610449Z
+modified_at: 2026-06-01T04:59:41.193610449Z
+req_type: Story
+tags:
+- agent-registry
+- aida:agent
+- aida:doctor
+- aida:status
+- dogfood-papercut
+- from-product
+- kind:bug-spotted
+- multi-agent-drift
