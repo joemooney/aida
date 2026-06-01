@@ -1,0 +1,30 @@
+id: 019e8197-7c23-7383-ac29-317b8ae23b9d
+spec_id: BUG-430
+agreed_id: BUG-430
+title: Per-clone node identity (.aida/node.toml) is committed to the shared aida-store branch → every clone inherits node 1, issues colliding ids
+description: |-
+  FOUND while taking TASK-623 (advisor, 2026-05-31). Node IDENTITY lives at .aida-store/.aida/node.toml (store worktree). The orphan-branch .gitignore excludes .aida/*.lock, mcp-cache.yaml, cache.db* — but NOT .aida/node.toml. A broad 'aida db sync' (git add -A / 'chore: sync pending changes', last on 2026-05-11) therefore committed node.toml to the shared aida-store branch. Verified: 'git ls-tree origin/aida-store' lists .aida/node.toml = {node_id=1}.
+
+  CONSEQUENCE: every fresh clone checks out the branch and inherits node 1's identity file. So (a) node_config_path.exists() is TRUE in every clone and reads node 1 — 'aida node acquire' refuses with 'already has node id 1' (seen in clone test); (b) until a force-acquire, a clone would issue spec ids AS node 1, colliding with the origin and other clones — the multi-clone collision at the identity layer.
+
+  FIX (arch — on-disk schema of the shared branch; needs master sign-off):
+  1. Add '.aida/node.toml' to the orphan-branch .gitignore (per-clone identity must never be shared).
+  2. git rm --cached the committed .aida/node.toml from the aida-store branch (one-time cleanup; existing clones keep their local copy).
+  3. Make the per-clone 'do I have my own node-id?' predicate registry-based (is there a nodes.toml entry for THIS clone — hostname+email+clone_path?) rather than trusting the (was-shared) node.toml.
+  AUDIT: there appear to be two node.toml path conventions in code — store_path/.aida/node.toml (node cmd + register_node_full) vs project .aida/node.toml (other sites). Confirm which is canonical and converge.
+
+  UNBLOCKS TASK-623 (init idempotency toward node-id) — that fix needs a reliable per-clone predicate, which this provides. Host-agnostic (pure git remote 'origin' — applies to GitHub AND GitLab origins).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T05:10:49.123567989Z
+modified_at: 2026-06-01T05:10:49.123567989Z
+req_type: Bug
+tags:
+- aida:node
+- blocks:TASK-623
+- distributed-coordination
+- from-self-test
+- kind:bug
+- onboarding-flow
