@@ -10223,6 +10223,39 @@ fn handle_init_distributed_worktree(
 
     // Check if already initialized
     if aida_dir.join("config.toml").exists() && !force {
+        // TASK-623: don't dead-end at "already initialized" when the store is
+        // attached but this clone never acquired its own node id. That happens
+        // when a read command auto-attached the worktree (TASK-621) and the
+        // user then runs `aida init` to finish setup — or when a clone's
+        // node-id step soft-failed (BUG-429). Route back through the post-clone
+        // bootstrap, which is idempotent for the already-done parts (worktree
+        // present → no-op, scaffolding force=false → skips existing) and runs
+        // the node-id setup. Reliable now that node.toml is strictly per-clone
+        // (BUG-430): a missing `.aida-store/.aida/node.toml` means no id yet.
+        // trace:TASK-623 | ai:claude
+        let node_configured = cwd
+            .join(worktree_dir)
+            .join(".aida")
+            .join("node.toml")
+            .exists();
+        if worktree_present
+            && !node_configured
+            && git_ops::remote_branch_exists(&cwd, "origin", branch_name)
+        {
+            eprintln!(
+                "{} store is attached but this clone has no node id yet — finishing setup.",
+                "Note:".dimmed()
+            );
+            return handle_init_post_clone(
+                &cwd,
+                worktree_dir,
+                branch_name,
+                no_skills,
+                agent,
+                no_hooks,
+                verbose,
+            );
+        }
         eprintln!(
             "{} AIDA distributed mode is already initialized (.aida/config.toml exists).",
             "!".yellow()
@@ -10545,23 +10578,33 @@ fn handle_init_post_clone(
         branch_name
     );
 
-    // Fetch + create local tracking branch for the orphan
-    git_ops::fetch_branch_into_local(cwd, "origin", branch_name)?;
-    println!(
-        "  {} fetched origin/{} into local {}",
-        "Done".green(),
-        branch_name,
-        branch_name
-    );
-
-    // Create the worktree pointing at the existing branch
-    let store_path = git_ops::create_store_worktree(cwd, worktree_dir, branch_name)?;
-    println!(
-        "  {} worktree at {} → {}",
-        "Done".green(),
-        worktree_dir,
-        branch_name
-    );
+    // Fetch + create local tracking branch for the orphan — UNLESS the
+    // worktree is already attached. A read command may have auto-attached it
+    // (TASK-621), which already created the local `aida-store` branch and
+    // checked it out; re-fetching `branch:branch` into a checked-out branch
+    // errors ("refusing to fetch into branch ... checked out"), and
+    // create_store_worktree would no-op anyway. So when `aida init` is
+    // re-run on an auto-attached clone to finish node-id setup (TASK-623),
+    // skip straight past the worktree steps. trace:TASK-623 | ai:claude
+    let store_path = if cwd.join(worktree_dir).exists() {
+        cwd.join(worktree_dir)
+    } else {
+        git_ops::fetch_branch_into_local(cwd, "origin", branch_name)?;
+        println!(
+            "  {} fetched origin/{} into local {}",
+            "Done".green(),
+            branch_name,
+            branch_name
+        );
+        let sp = git_ops::create_store_worktree(cwd, worktree_dir, branch_name)?;
+        println!(
+            "  {} worktree at {} → {}",
+            "Done".green(),
+            worktree_dir,
+            branch_name
+        );
+        sp
+    };
 
     // Configure git user in the worktree (so future commits attribute correctly)
     let git_name = git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
