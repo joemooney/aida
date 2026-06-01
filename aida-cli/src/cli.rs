@@ -1065,6 +1065,24 @@ pub enum PrCommand {
         #[clap(long, value_enum, value_name = "BUCKET")]
         effort: Option<crate::effort_calibration::EffortBucket>,
     },
+
+    /// Deliberately HOLD the PR on the current session — push the branch but
+    /// intentionally do not open the PR yet, pending a manual gate (a smoke
+    /// test, an out-of-band review, an operator decision).
+    ///
+    /// Under an `--auto-complete` drain this is a clean finish outcome, NOT a
+    /// failure: the orchestrator reads the hold signal this writes and reports
+    /// a `Held` outcome (branch pushed, PR held) with the right recovery hint
+    /// instead of mis-filing the missing PR as a phase-1 failure. Resolve the
+    /// spec + branch from the active session lease; record `{spec, branch,
+    /// reason}` for the orchestrator handshake.
+    // trace:BUG-250 | ai:claude
+    Hold {
+        /// Why the PR is held — the gate you're running first. Surfaced in the
+        /// drain epilogue.
+        #[clap(long, value_name = "REASON")]
+        reason: Option<String>,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.

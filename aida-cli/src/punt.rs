@@ -324,6 +324,77 @@ pub fn read_signal(path: &Path) -> Option<PuntSignal> {
     serde_json::from_str(&body).ok()
 }
 
+// --- Orchestrator PR-hold handshake (BUG-250) -------------------------------
+//
+// A deliberate *push-branch, hold-PR* finish is a legitimate phase-1 outcome:
+// the implementer backed the branch up on origin but is holding the PR until a
+// manual gate runs (a smoke test, an out-of-band review, an operator decision).
+// Without a signal the orchestrator sees "branch pushed, no PR" and mis-files
+// it as a phase-1 *failure* with a wrong recovery hint ("run /aida-pr"), which
+// for a deliberate hold would ship un-gated code (BUG-250).
+//
+// So `aida pr hold` drops a small signal file — mirroring the punt handshake
+// exactly: the orchestrator provisions an absolute path under the *main*
+// worktree root, passes it via [`HOLD_SIGNAL_FILE_ENV`], and reads it back
+// after the implementer session exits. A hold is NOT a punt (no design-fork,
+// no NeedsAttention) — it is a clean, deliberate stop — so it gets its own
+// signal type and its own [`crate::auto_complete::ImplementerOutcome::Held`]
+// drain action. trace:BUG-250 | ai:claude
+
+/// Env var the `--auto-complete` orchestrator sets on the implementer
+/// subprocess. `aida pr hold` writes its signal file here when the var is set.
+pub const HOLD_SIGNAL_FILE_ENV: &str = "AIDA_HOLD_SIGNAL_FILE";
+
+/// The payload of a PR-hold signal file — enough for the orchestrator to
+/// confirm a deliberate hold happened and name the held branch + reason in its
+/// run epilogue and recovery hint.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HoldSignal {
+    /// Display ID of the spec whose PR is deliberately held.
+    pub spec: String,
+    /// The branch that was pushed (so the epilogue's `gh pr create` hint and a
+    /// later resume can target it).
+    pub branch: String,
+    /// Why the PR is held — the manual gate the operator is running first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl HoldSignal {
+    /// One-line hold summary for the orchestrator's run epilogue.
+    pub fn summary(&self) -> String {
+        match &self.reason {
+            Some(r) => format!("PR held on `{}` — {r}", self.branch),
+            None => format!("PR held on `{}`", self.branch),
+        }
+    }
+}
+
+/// Path the orchestrator provisions for a spec's PR-hold signal —
+/// `.aida/pr-holds/<spec>.json` under the (main) project root.
+pub fn hold_signal_path(project_root: &Path, spec: &str) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("pr-holds")
+        .join(format!("{spec}.json"))
+}
+
+/// Write a PR-hold signal file, creating `.aida/pr-holds/` if needed.
+pub fn write_hold_signal(path: &Path, signal: &HoldSignal) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(signal)?)?;
+    Ok(())
+}
+
+/// Read a PR-hold signal file. `None` when the file is absent or unparseable —
+/// either way the orchestrator reads it as "no deliberate hold happened".
+pub fn read_hold_signal(path: &Path) -> Option<HoldSignal> {
+    let body = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&body).ok()
+}
+
 // --- Advisor punt-request / punt-response channel (STORY-306) ---------------
 //
 // STORY-306 inserts a headless *advisor* tier between the implementer's punt
@@ -498,6 +569,46 @@ mod tests {
         // A garbage file reads as "no punt" rather than erroring.
         std::fs::write(&path, "not json").unwrap();
         assert_eq!(read_signal(&path), None);
+    }
+
+    #[test]
+    fn hold_signal_round_trips_and_summarises() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = hold_signal_path(dir.path(), "STORY-306");
+        assert!(
+            path.ends_with("pr-holds/STORY-306.json"),
+            "{}",
+            path.display()
+        );
+        // Absent file → no deliberate hold.
+        assert_eq!(read_hold_signal(&path), None);
+
+        let signal = HoldSignal {
+            spec: "STORY-306".to_string(),
+            branch: "story-306".to_string(),
+            reason: Some("SPIKE-7 smoke before merge".to_string()),
+        };
+        write_hold_signal(&path, &signal).unwrap();
+        assert_eq!(read_hold_signal(&path), Some(signal.clone()));
+        let summary = signal.summary();
+        assert!(summary.contains("story-306"), "{summary}");
+        assert!(summary.contains("SPIKE-7 smoke"), "{summary}");
+
+        // A garbage file reads as "no hold" rather than erroring.
+        std::fs::write(&path, "not json").unwrap();
+        assert_eq!(read_hold_signal(&path), None);
+    }
+
+    #[test]
+    fn hold_signal_summary_omits_absent_reason() {
+        let signal = HoldSignal {
+            spec: "STORY-306".to_string(),
+            branch: "story-306".to_string(),
+            reason: None,
+        };
+        let summary = signal.summary();
+        assert!(summary.contains("PR held on `story-306`"), "{summary}");
+        assert!(!summary.contains("—"), "{summary}");
     }
 
     #[test]
