@@ -55,12 +55,12 @@ description: |-
   ## Origin
 
   2026-05-19 — STORY-306's "push branch, hold PR" finish (advisor's call) was mis-classified as phase-1 failure. The advisor explicitly held the PR until a SPIKE-7 smoke; the orchestrator treated that deliberate choice as failure with a wrong recovery hint. Later the same day, attempting to re-enter the dormant worktree via `aida queue work STORY-306 --resume 019e415c` errored *"isn't queued. Status is Done"* — same outcome-model gap, second symptom: the queue verbs don't recognise `deliberate-hold` as a re-enterable state.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:03:27.895703170Z
-modified_at: 2026-06-01T15:03:32.158087884Z
+modified_at: 2026-06-01T16:13:39.481419330Z
 req_type: Bug
 tags:
 - bug-241-extension
@@ -104,3 +104,7 @@ comments:
   content: Commit e4e973234 references this requirement
   created_at: 2026-06-01T15:03:32.158087884Z
   modified_at: 2026-06-01T15:03:32.158087884Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T16:13:39.481419330Z
+  completion_sha: 70baa510f339618935c51d33b7bd10af4a5e5ddc
