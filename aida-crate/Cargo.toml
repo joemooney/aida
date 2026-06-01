@@ -1,6 +1,6 @@
 [package]
 name = "aida"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2021"
 authors = ["Joe Mooney"]
 license = "MIT"
@@ -12,4 +12,4 @@ keywords = ["requirements", "ai", "traceability", "project-management", "mcp"]
 categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
-aida-core = { version = "0.10", path = "../aida-core" }
+aida-core = { version = "0.11", path = "../aida-core" }
