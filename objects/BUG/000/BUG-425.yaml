@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:03:52.208648036Z
-modified_at: 2026-06-01T06:31:35.418533130Z
+modified_at: 2026-06-01T06:44:41.032242740Z
 req_type: Bug
 tags:
 - aida:archive
@@ -34,3 +34,8 @@ comments:
     DO NOT reuse the existing BulkWriter for this: its add() is built for NEW reqs (assigns spec_ids) and its finish() records OpKind::Create for every staged req — using it for archive UPDATES would log false Create ops in the oplog and bump metadata counters needlessly. The batch-commit mechanism (write_object_if_changed loop + single stage+commit) is the part to mirror, with Update-op bookkeeping. Tests: bulk_update writes N, commits once (count git log on the orphan branch before/after), records Update ops, cache reflects archived=true after rebuild. trace:BUG-425
   created_at: 2026-06-01T05:38:52.573801351Z
   modified_at: 2026-06-01T05:38:52.573801351Z
+- id: 019e81ed-6bc8-76e2-92ad-7612d88b2f29
+  author: joe
+  content: Commit c6453d389 references this requirement
+  created_at: 2026-06-01T06:44:41.032242740Z
+  modified_at: 2026-06-01T06:44:41.032242740Z
