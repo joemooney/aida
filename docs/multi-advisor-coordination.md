@@ -13,6 +13,53 @@
 
 Track A files immediately as approved. Track B files as approved but lower priority — file now to lock the design, implement when a second project genuinely exists. Track A also files a small follow-up SPIKE on retroactive tagging of the existing pack.
 
+## Near-term: the functional two-advisor split (2026-05-31)
+
+Before the subsystem-advisor model below (SPIKE-10's Track A/B) is needed, a solo
+operator can already run **two advisor seats split by workflow stage** — a
+different, simpler axis than subsystem scoping, and a way to move faster:
+
+- **Intake / product advisor** (`product` persona) — shapes *what* to build and
+  *why* with the operator; captures requirements as well-formed backlog
+  (acceptance + rationale); **proposes** into the queue. Does not drive execution.
+- **Execution / ops advisor** (`advisor` persona) — **drives** the agreed queue,
+  oversees drains + agents, triages findings, promotes. Does not freelance the
+  product direction.
+
+This does not violate "one master advisor": that rule is about who holds
+**architecture coherence** (one tiebreaker), which is orthogonal to splitting the
+advisor's *functional throughput*. The win is decoupling intake from execution so
+they run in parallel — gated entirely on **handoff quality** (specs complete
+enough that execution drives them without round-tripping the operator).
+
+### Coordination protocol
+
+1. **Sync is continuous via the substrate — there is no deferred "big sync."**
+   Both seats read the same specs / queue / findings / comments / shared
+   `~/.claude` memories. Ops *records* every non-trivial decision (a
+   decision-comment, a finding); product stays converged by reading. A deferred
+   sync event is the trap where divergence hides.
+2. **Ops is empowered to decide *reversible* architecture forks and proceed** —
+   recording the call and filing an **arch-flag finding** (`aida findings add`,
+   `kind:arch-flag` + `for:product`) as a *priority signal* on the continuous
+   baseline: "review this one promptly."
+3. **Irreversible / high-blast-radius forks → ops BLOCKS** and gates on product
+   first (sync-before-decide), punt-style. The seam is **reversibility**, not
+   "ask vs don't" — the Type A/B/C calibration.
+4. **The arch-class bar** that triggers a flag/block = the master-sign-off list
+   (file formats, tool contracts, conventions, orchestrator behavior, EPIC-shaped
+   work). Routine implementation choices stay autonomous — flag *everything* and
+   you've rebuilt the bottleneck with extra steps.
+5. **The empowerment is only as safe as product's review cadence.** Product
+   clears `kind:arch-flag` findings at the **start of each session**. If that
+   cadence lapses, continuous-sync silently degrades to "product fell behind and
+   divergence accumulated" — the return-path mirror of forward-path handoff
+   quality. The operator arbitrates genuine product↔ops disagreements.
+
+This is the same pre-PR-flag / sketch-first discipline used for sibling agents
+flagging architecture to the master — applied advisor-to-advisor. It's proven,
+not new. The subsystem-advisor tracks below remain the *later* evolution.
+
 ## Gaps + mechanisms
 
 ### Gap 1 — Subsystem-advisor within a monolithic repo
