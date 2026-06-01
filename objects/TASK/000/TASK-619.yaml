@@ -1,0 +1,18 @@
+id: 019e816e-9bec-7712-9d11-4cac0a7e7fe9
+spec_id: TASK-619
+agreed_id: TASK-619
+title: 'Cross-machine duplicate work: leases are local (.aida/sessions), so only the eventually-consistent status flip guards against two people grabbing the same spec'
+description: 'VERIFIED 2026-05-31 (advisor). Session leases live at .aida/sessions/<id>.toml (lease_path → leases_dir, gitignored, machine-local) — NOT in the orphan branch. So ''aida session leases'' / the lease-occupancy guard that stops two sessions grabbing the same scope is SINGLE-MACHINE only. Across machines, the only shared ''someone is on this'' signal is the spec''s status flip to in-progress, which is git-canonical but eventually-consistent: person B can pick up spec X in the window between person A flipping it in-progress (+push) and person B''s next ''aida db sync --pull''. Leases don''t help because they never leave the machine. For a tool whose thesis is multi-agent coordination over a shared substrate, lease-locality is a real limitation. Options: (a) project a lightweight ''claim'' into the orphan branch (registry/claims/<spec>.yaml) on pickup, advisory-locked; (b) have ''queue work''/pickup pull-then-recheck status immediately before claiming; (c) document the dup-work window + recommend pull-before-pickup. Pairs with the same-user_id queue-collision observation.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T04:26:10.284281805Z
+modified_at: 2026-06-01T04:26:10.284281805Z
+req_type: Task
+tags:
+- aida:queue
+- distributed-coordination
+- from-advisor
+- kind:observation
+- lease
