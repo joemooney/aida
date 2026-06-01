@@ -42,7 +42,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T18:12:10.930679221Z
-modified_at: 2026-06-01T05:28:08.678193229Z
+modified_at: 2026-06-01T05:31:03.105070050Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -65,3 +65,8 @@ comments:
   content: 'Master decision (advisor, 2026-05-31, charge-forward): implementing Option B — ''aida pr ship'' auto-ends the session lease whose scope matches the shipped branch after a successful merge+auto-bump (no-op when no lease matches). Chosen over A (opt-in flag, doesn''t fix the default forget) because the bug rightly invokes substrate-as-bouncer: ship a programmatic gate, not a discipline reminder. Safe: pr ship runs only after the branch merged (worktree work is shipped); session end''s own clean-worktree guard still applies. trace:BUG-362'
   created_at: 2026-06-01T05:28:08.678193229Z
   modified_at: 2026-06-01T05:28:08.678193229Z
+- id: 019e81aa-0241-7fe0-9764-891b9239cd90
+  author: joe
+  content: 'RESOLVED — already implemented (verify-before-building; supersedes my earlier ''implementing Option B'' comment). aida pr ship Step 5 (aida-cli/src/main.rs ~29742, pr_ship.rs ShipStep::EndLease) already implements Option B: after merge+pull it finds list_leases().find(|l| l.branch == branch) and runs ''aida session end <lease> --yes --skip-ci'', with guards for shell-inside-worktree (skip + instruct) and no-matching-lease (''nothing to clean up''). 71 pr_ship tests pass. The 2026-05-23 repro predates this step. The ''1 stale lease hidden'' in the current session is unrelated — main-repo branch ships (no session worktree) have no lease to end. Closing as Completed.'
+  created_at: 2026-06-01T05:31:03.105070050Z
+  modified_at: 2026-06-01T05:31:03.105070050Z
