@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:03:27.895703170Z
-modified_at: 2026-06-01T14:13:16.888567020Z
+modified_at: 2026-06-01T15:03:32.158087884Z
 req_type: Bug
 tags:
 - bug-241-extension
@@ -99,3 +99,8 @@ comments:
     DECISIONS FOR YOU: (a) signal mechanism — dedicated pr-held sentinel (recommended, mirrors punt) vs reuse the punt/NeedsAttention path (rejected: hold ≠ needs-attention; work is done-on-branch, not stuck). (b) the held state — a new lifecycle status 'Held'/'PR-Held' vs a tag/marker on Done. Recommend a marker (avoid a new lifecycle status unless it earns its keep). (c) whether to fold this into the same supervised --zen drain as TASK-133/BUG-431-#1 (all three are queue-work/orchestrator outcome paths; one drain validates the set). Awaiting sign-off before implementing. trace:BUG-250
   created_at: 2026-06-01T14:13:16.888567020Z
   modified_at: 2026-06-01T14:13:16.888567020Z
+- id: 019e83b6-223e-73d2-beac-259cc78c4a18
+  author: joe
+  content: Commit e4e973234 references this requirement
+  created_at: 2026-06-01T15:03:32.158087884Z
+  modified_at: 2026-06-01T15:03:32.158087884Z
