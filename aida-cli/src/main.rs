@@ -31810,6 +31810,48 @@ fn shelve_spec_on_failure(
     Ok(Some(fr))
 }
 
+/// TASK-133: undo the orchestrator parent's pre-spawn phase-1 status bump.
+///
+/// `prepare_auto_complete_phase1_status` flips a spec Approved/Planned/Draft →
+/// InProgress *before* spawning the implementer child (BUG-369). When phase 1
+/// then fails without the child ever acquiring a lease, no work happened — but
+/// the spec is now InProgress and, because `finish_failure` shelves shelvable
+/// phase failures, typically NeedsAttention with a `failure_reason`. That
+/// strands a spec the operator should be able to re-queue: there is nothing to
+/// triage, only a transient spawn / contention error.
+///
+/// This restores the captured pre-bump status and clears the (spurious)
+/// `failure_reason` so the spec drops out of `aida findings list` and is
+/// cleanly pickable again. Best-effort, like the shelve it compensates: a
+/// store-write error is logged but never aborts the drain epilogue. Writes
+/// through `CachedGitBackend` so the read-projection (`aida list`) reflects
+/// the reset immediately rather than waiting for a stale-detection rebuild.
+/// trace:TASK-133 | ai:claude
+fn restore_phase1_status_on_lease_failure(
+    project_root: &std::path::Path,
+    spec: &str,
+    prior: &aida_core::RequirementStatus,
+) -> anyhow::Result<()> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Ok(());
+    };
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    let Some(mut req) = backend.get_requirement_by_spec_id(spec)? else {
+        return Ok(());
+    };
+    req.status = prior.clone();
+    // The shelve that ran on the failure path stamped a FailureReason; with no
+    // lease and no work behind it that finding is spurious — clear it.
+    req.failure_reason = None;
+    req.modified_at = chrono::Utc::now();
+    backend.update_requirement(&req)?;
+    Ok(())
+}
+
 /// TASK-358 tests — the `--escalate-blocks` worktree cleanup.
 ///
 /// The wiring exercised here:
@@ -71020,10 +71062,17 @@ fn run_auto_complete(
         eprintln!("{} {}", "✗".red().bold(), e);
         std::process::exit(1);
     }
-    if let Err(e) = prepare_auto_complete_phase1_status(storage, spec) {
-        eprintln!("{} {}", "✗".red().bold(), e);
-        std::process::exit(1);
-    }
+    // TASK-133: capture the pre-spawn status bump (BUG-369) so the parent can
+    // restore it if phase 1 fails without the child ever acquiring a lease.
+    // `Some((display_id, prior_status))` when a flip happened; `None` when the
+    // spec was already InProgress/Planned and the parent left it untouched.
+    let phase1_bump = match prepare_auto_complete_phase1_status(storage, spec) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("{} {}", "✗".red().bold(), e);
+            std::process::exit(1);
+        }
+    };
     let lifecycle_skip = match resolve_lifecycle_skip(storage, spec) {
         Ok(s) => s,
         Err(e) => {
@@ -71123,6 +71172,43 @@ fn run_auto_complete(
         lifecycle_skip,
     );
     let completed_at = chrono::Utc::now();
+
+    // TASK-133: compensate the pre-spawn phase-1 status bump. If phase 1
+    // failed *and* the implementer child never recorded a lease, no work
+    // happened — restore the captured prior status (clearing the spurious
+    // shelve `failure_reason`) so the spec is cleanly re-queueable rather than
+    // stranded InProgress→NeedsAttention behind a transient spawn/contention
+    // error. A lease-acquired or later-phase failure leaves real work to
+    // triage and is left shelved. trace:TASK-133 | ai:claude
+    if let Some((display_id, prior)) = &phase1_bump {
+        let lease_acquired = driver.implementer_lease.is_some();
+        if auto_complete::should_compensate_phase1_bump(true, lease_acquired, result.failed_phase) {
+            match restore_phase1_status_on_lease_failure(&project_root, spec, prior) {
+                Ok(()) => {
+                    if !json {
+                        eprintln!(
+                            "  {} phase-1 startup failed before acquiring a lease — \
+                             status restored to {:?} (re-queueable); no work was stranded",
+                            "↩".cyan(),
+                            prior
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  {} could not restore {}'s status after a lease-less phase-1 \
+                         failure: {} — reset it manually with `aida edit {} --status {}`",
+                        "ⓘ".cyan(),
+                        display_id,
+                        e,
+                        display_id,
+                        format!("{prior:?}").to_lowercase(),
+                    );
+                }
+            }
+        }
+    }
+
     // TASK-336: the run-UUID is no longer needed once `orchestrate` has
     // returned — every phase child has been spawned and reaped. Clear it on
     // the drain-state file so a would-be straggler child carrying this token
