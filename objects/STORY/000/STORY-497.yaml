@@ -1,0 +1,42 @@
+id: 019e81f8-1b90-7031-a9a9-ac2fd504806d
+spec_id: STORY-497
+agreed_id: STORY-497
+title: Management demo deck rebuild — replace OBE 2025-12 slideshow with current-positioning live-demo deck
+description: |-
+  ## Why
+
+  Management demo (technical leadership, buy-in/resources goal) in ~2 days (filed 2026-05-31). The existing docs/slideshow.html is from 2025-12-07 — ~6 months stale and PRE-PIVOT: it's a GUI feature-tour (Kanban/Timeline/Sprint/Themes) of surfaces, some since extracted (native/WASM clients left 2026-05-02). It tells the wrong story (pretty requirements tracker) and misses the entire current thesis: agent-collaboration moat, git-canonical substrate, MCP graph, autonomy ladder, multi-vendor. Showing it today would actively undersell AIDA.
+
+  ## Done in this session (product seat)
+
+  - `docs/presentation/2026-06-management-demo.md` — Marp deck (7 spine slides + 5 backup), speaker notes, live-demo cue cards. Narrative: problem (amnesiac agents) → what AIDA is → LIVE drain → LIVE MCP graph → moat (why-not-20-lines-of-bash) → where-we-are + ask. Proof points pulled live: 1671 specs / 983 completed / 19 releases / v0.11.0 / 1429 commits / fully dogfooded.
+  - `docs/presentation/demo-runbook.md` — rehearsable runbook: exact commands, narration lines, timing, Q&A answers, and a failure-fallback cheat-sheet (recorded asciinema cast as live-stall insurance).
+
+  ## Remaining (acceptance criteria)
+
+  - [ ] Operator fills the `<resources>` placeholder on the "ask" slide with the concrete request (headcount/time/priority) — buy-in needs a number.
+  - [ ] Refresh the proof-point numbers the morning of (runbook §0) if they've moved.
+  - [ ] Render the deck: `npx @marp-team/marp-cli ... -o aida-demo.html` (+ `--pdf` portable fallback). Confirm it renders cleanly.
+  - [ ] Record the backup asciinema cast of a drain (runbook §6) as live-stall insurance.
+  - [ ] Retire or redirect `docs/slideshow.html` — it is actively misleading. Either delete it or replace its body with a pointer to the new deck (do NOT leave the Dec-2025 version discoverable).
+  - [ ] One full rehearsal end-to-end against the runbook before the room.
+
+  ## Notes
+
+  - Phase note: project is in bug-clearing-before-public-marketing phase, but this is an INTERNAL stakeholder demo for buy-in — operator-directed, legitimately overrides the defer-marketing posture. The deck is honest about the stabilization phase (reads as discipline to a technical audience).
+  - Format decision (operator, 2026-05-31): live-demo-led, slides as scaffold — for AIDA the depth shows through use; slides alone invite the "20 lines of bash" reaction.
+  - HOW for rendering/screenshots/retire-mechanics is physical-seat; the narrative + runbook (the product-seat core) are drafted.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-01T06:56:21.392043137Z
+modified_at: 2026-06-01T06:56:21.392043137Z
+req_type: Story
+tags:
+- buy-in
+- deck-rebuild
+- demo
+- from-product
+- management
+- presentation
