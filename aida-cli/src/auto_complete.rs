@@ -1696,6 +1696,38 @@ fn resume_after_advisor(
     }
 }
 
+/// TASK-133: should the orchestrator parent compensate its pre-spawn phase-1
+/// status bump?
+///
+/// `prepare_auto_complete_phase1_status` flips Approved/Planned/Draft →
+/// InProgress *before* the implementer child is spawned (BUG-369: the child
+/// then treats InProgress-without-lease as "parent corroborated" rather than
+/// refusing). That bump is correct only when the child goes on to acquire a
+/// lease and do work. If phase 1 instead fails *without the child ever
+/// recording a lease* — a spawn error, a scope-contention bail, a clean exit
+/// with no commits — no work happened, yet the spec is now stranded
+/// InProgress (then shelved to NeedsAttention by `finish_failure`) behind a
+/// transient error. The parent must restore the pre-bump status so the spec
+/// is cleanly re-queueable instead of parked in `aida findings list`.
+///
+/// Returns `true` only when all three hold:
+/// - `bumped` — the parent actually flipped the status (an already-InProgress
+///   / Planned spec the parent left untouched needs no compensation),
+/// - `!lease_acquired` — the child never recorded a lease, so there is no
+///   real work to triage (a lease-acquired phase-1 failure leaves commits /
+///   a worktree worth keeping shelved),
+/// - `failed_phase == Some(Phase::Implementer)` — phase 1 is what failed (a
+///   later-phase failure means the implementer shipped a PR, so the bump was
+///   legitimate; a success / punt / inconclusive is not a failure at all).
+/// trace:TASK-133 | ai:claude
+pub(crate) fn should_compensate_phase1_bump(
+    bumped: bool,
+    lease_acquired: bool,
+    failed_phase: Option<Phase>,
+) -> bool {
+    bumped && !lease_acquired && failed_phase == Some(Phase::Implementer)
+}
+
 /// Drive the phases in order, stopping at the variant's last phase or at the
 /// first failure. Returns an [`OrchestrationResult`] — the process exit code
 /// (`0` on success, else the 1-based index of the phase that failed) plus
@@ -3638,6 +3670,62 @@ mod tests {
         assert_eq!(result.exit_code, 1);
         assert_eq!(result.failed_phase, Some(Phase::Implementer));
         assert!(result.failure.is_some());
+    }
+
+    /// TASK-133: the orchestrator-parent phase-1 status-bump compensation
+    /// decision. The bug it guards: `prepare_auto_complete_phase1_status`
+    /// flips Approved → InProgress before spawning the implementer; a phase-1
+    /// failure with no lease ever recorded then strands the spec in
+    /// NeedsAttention with no work behind it.
+    #[test]
+    fn compensate_phase1_bump_when_bumped_no_lease_phase1_failed() {
+        // The stranded case: parent bumped, child never leased, phase 1 failed.
+        assert!(should_compensate_phase1_bump(
+            true,
+            false,
+            Some(Phase::Implementer)
+        ));
+    }
+
+    #[test]
+    fn no_compensation_when_lease_acquired() {
+        // A lease was recorded → real work (commits / worktree) exists to
+        // triage; leave the spec shelved rather than silently resetting it.
+        assert!(!should_compensate_phase1_bump(
+            true,
+            true,
+            Some(Phase::Implementer)
+        ));
+    }
+
+    #[test]
+    fn no_compensation_when_parent_did_not_bump() {
+        // The parent left the status untouched (e.g. already InProgress /
+        // Planned) → nothing to restore.
+        assert!(!should_compensate_phase1_bump(
+            false,
+            false,
+            Some(Phase::Implementer)
+        ));
+    }
+
+    #[test]
+    fn no_compensation_when_a_later_phase_failed() {
+        // The implementer shipped a PR and a later phase failed → the bump
+        // was legitimate, the work is real; do not reset.
+        assert!(!should_compensate_phase1_bump(true, false, Some(Phase::Ci)));
+        assert!(!should_compensate_phase1_bump(
+            true,
+            true,
+            Some(Phase::Reviewer)
+        ));
+    }
+
+    #[test]
+    fn no_compensation_on_success() {
+        // No failed phase at all (clean ship / punt / inconclusive) → the
+        // status is legitimately advanced or deliberately held; never reset.
+        assert!(!should_compensate_phase1_bump(true, false, None));
     }
 
     /// Regression guard at phase 3 — a genuine no-verdict failure (reality
