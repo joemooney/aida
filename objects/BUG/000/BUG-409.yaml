@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T10:29:20.746775632Z
-modified_at: 2026-06-01T05:47:21.945969058Z
+modified_at: 2026-06-01T06:51:06.774126289Z
 req_type: Bug
 tags:
 - ci
@@ -25,3 +25,13 @@ comments:
     FIX DIRECTION (not yet implemented — needs focus + can't be locally repro'd since it's CI-load/parallelism-dependent): (a) every git-op test must use an isolated 'git init' tmp repo AND pass that path explicitly to git (never rely on process CWD); (b) audit resolve_phase3_stale_overlap + the auto-rebase path for std::env::set_current_dir or implicit-CWD git calls — those are the race; thread an explicit repo path instead. This is orchestrator-adjacent + un-reproducible locally, so it wants a focused keyboard session, not autonomous saturated-context work. trace:BUG-409
   created_at: 2026-06-01T05:47:21.945969058Z
   modified_at: 2026-06-01T05:47:21.945969058Z
+- id: 019e81f3-4e96-7530-9158-bf4461678203
+  author: joe
+  content: |-
+    Repro/diagnosis (advisor, 2026-05-31) — narrowed, not yet fixed. The test's OWN git path is properly isolated: resolve_phase3_stale_overlap → attempt_phase3_auto_rebase shells the (faked) 'aida pr rebase' with an EXPLICIT .current_dir(&self.project_root) (= the test's tmp), and should_auto_rebase_stale_base is a pure decision (no git). So clean_auto_rebase_proceeds_without_retrying_preflight does NOT rely on process CWD — it's a VICTIM, not the cause. The '/nonexistent-repo-path-xyz' in the CI panic is a RED HERRING: it's from a different test (classify_sha_unknown_when_git_unavailable, main.rs ~53587) that passes that bad path to git on purpose; its stderr interleaved in the shared cargo-test output.
+
+    REAL CAUSE: process-global std::env::set_current_dir in PRODUCTION paths (main.rs sites ~20663/20680 session-start cd-and-restore, ~25155, ~26928, ~69479) exercised by sibling tests under parallel execution — between a test's set_current_dir(X) and its restore, other concurrent tests that DO rely on process CWD for a real git op (merge/checkout) operate on the wrong tree → 'untracked files overwritten by merge'. CI load widens that window, hence flaky-only-under-load + a docs-only PR tripping it.
+
+    FIX OPTIONS (needs a focused repro session — un-reproducible locally without load): (a) eliminate process-CWD reliance — make the cd-and-restore paths pass an explicit cwd to git instead of set_current_dir (removes the landmine at the root; ~5 sites); (b) serialize CWD-mutating + real-git tests with the serial_test crate (#[serial]) so the race can't occur. (a) is the durable fix. Can't verify either is effective without reproducing the flake, so don't claim 'fixed' until a load-repro is green. trace:BUG-409
+  created_at: 2026-06-01T06:51:06.774126289Z
+  modified_at: 2026-06-01T06:51:06.774126289Z
