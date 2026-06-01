@@ -10,15 +10,19 @@ description: |-
   SUBTLETY (why this needs care / a nod): reliably detecting 'this clone needs its own node-id'. .aida/node.toml absence is NOT a valid marker — the main repo runs as node 1 WITHOUT node.toml (verified), so gating on node.toml would wrongly re-bootstrap it. 'aida node acquire' already computes 'this clone already has node id X' vs needs-acquire; reuse that predicate, and confirm it correctly treats a clone defaulting to node 1 (sharing the origin's id) as needs-acquire. Node-identity-lifecycle adjacent → master sign-off before implementing.
 
   ALT considered: auto-acquire on first write ('aida add' with no node-id). Rejected as default — a write silently CAS-pushing to the shared registry is surprising; keep node-id acquisition explicit (init / node acquire).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:06:17.320300945Z
-modified_at: 2026-06-01T05:06:17.320300945Z
+modified_at: 2026-06-01T05:28:46.105928064Z
 req_type: Task
 tags:
 - aida:init
 - distributed-coordination
 - from-advisor
 - onboarding-flow
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-01T05:28:46.105928064Z
+  completion_sha: 9322cce1fc56793c411aa96a9e0995ce98c500bf
