@@ -1368,3 +1368,10 @@
   note: auto-queued by `session end` (019e7f9b); covers 1 spec
   added_at: 2026-05-31T20:06:51.463844941Z
   for_role: reviewer
+- user_id: joe
+  requirement_id: 019e811a-d7b1-7fd2-9f09-f7e9f4a9c427
+  position: 326000
+  added_by: joe
+  note: Faithful-launcher convention flip — product seat, operator-decided 2026-05-31. Sequence after open bug stack (bug-clearing phase).
+  added_at: 2026-06-01T02:55:04.740768058Z
+  for_role: implementer
