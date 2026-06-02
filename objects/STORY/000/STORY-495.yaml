@@ -45,12 +45,12 @@ description: |-
   - HOW (exact config key, precedence layering, where the knob is read, force-vs-refuse for --bg) is the physical/implementer seat's lane. The operator's preferred config shape is recorded above as a hint, not a mandate.
   - Builds directly on TASK-557 (agents.toml default_flags) and the `--bypass-sandbox` plumbing. trace anchors: cli.rs:458 / :558 / :4044.
   - Project context: filed during the bug-clearing-before-marketing phase — this is convention polish, Medium priority; sequence after the open bug stack.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T02:54:40.561121692Z
-modified_at: 2026-06-02T02:55:56.314322357Z
+modified_at: 2026-06-02T03:16:52.227490152Z
 req_type: Story
 tags:
 - aida:agent:new
@@ -82,3 +82,7 @@ comments:
     TESTS: faithful default (no --permission-mode injected for claude by default); knob on → per-tool bypass injected; explicit override wins over knob; headless path still forces; --bg forces (or refuses) per (1). Est. ~1-2h focused. trace:STORY-495
   created_at: 2026-06-01T07:23:03.514904978Z
   modified_at: 2026-06-01T07:23:03.514904978Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-02T03:16:52.227490152Z
+  implemented_by: joe
