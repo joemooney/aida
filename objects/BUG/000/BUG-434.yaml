@@ -1,0 +1,24 @@
+id: 019e8628-b934-74b2-883c-3d8d14d16623
+spec_id: BUG-434
+agreed_id: BUG-434
+title: aida pr ship --delete-branch orphans stacked children — add a stacked-children guard before deleting the base branch
+description: |-
+  Self-test 2026-06-01: merging stacked PRs (#438←#439←#440), 'gh pr merge 438 --squash --delete-branch' deleted the task-133 base branch, which auto-CLOSED the stacked #439. 'aida pr ship' has the SAME footgun — its Merge ShipStep defaults delete_branch:true (pr_ship.rs:328); it only skips --delete-branch when the branch is in a sibling worktree (BUG-289), with NO stacked-children awareness.
+
+  GUARD (substrate-as-bouncer, not a CLAUDE.md reminder): before --delete-branch, detect stacked children of the merged branch and skip the delete (warn, or offer to retarget children to main first). AIDA already holds the data — TWO sources: (a) .aida/stacks.json parent_branch (STORY-248: 'aida queue work --stack' records each branch's parent) → any tracked branch whose parent_branch == the merged branch is a child; (b) gh: 'gh pr list --base <branch> --state open' → any open PR based on it. Use either/both. Natural extension of the existing 'skip --delete-branch when sibling worktree' conditional.
+
+  Pure-testable core: fn should_delete_branch(branch, stacked_children: &[..], open_child_prs: &[..]) -> bool = children.is_empty(). Recovery guidance when children exist: 'N stacked PR(s) (#X..) are based on <branch>; retarget them to main first (gh pr edit <X> --base main) then re-run, or pass --force-delete-branch to orphan them deliberately.' Bounded; would have prevented the #439 slip. trace:BUG-289-family
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-02T02:27:56.340660773Z
+modified_at: 2026-06-02T02:27:56.340660773Z
+req_type: Bug
+tags:
+- aida:pr:ship
+- delete-branch
+- from-self-test
+- multi-pr
+- stacked-branches
+- substrate-as-bouncer
