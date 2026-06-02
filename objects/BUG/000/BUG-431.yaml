@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:39:05.836892426Z
-modified_at: 2026-06-02T02:35:01.790119194Z
+modified_at: 2026-06-02T02:48:24.809529004Z
 req_type: Bug
 tags:
 - autonomous
@@ -59,6 +59,22 @@ comments:
   content: 'Motivating real-world case + resolution provenance (advisor, 2026-06-01): quizdom is the origin report — its agent ran ''aida queue work next 11 --no-human=both'' on EPIC-11''s children, hit this exact cascade (epic-scope contention → multi-spec PR breaks reviewer → stuck leases), and had to FALL BACK to the Claude Code Workflow tool (the harness''s native orchestrator) to ship the 7 stories — explicitly stepping outside the AIDA fleet + flagging the lost dogfooding value. That bypass is the strongest possible signal this bug mattered: a real drain became unusable and a user reached for a competitor mechanism. NOW FIXED on aida main (invariant-1: #1 story-scoping + #2 resolver + #3 mooted + TASK-133 + BUG-250, EPIC-33). The on-mission path (aida queue work --no-human for a multi-story-epic batch) is restored — BUT the fix is merged-not-released, so quizdom benefits only after the next aida release (or pointing quizdom at a fixed dev build). Strategic note: the harness Workflow tool can ORCHESTRATE this fine; AIDA''s differentiation is substrate-NATIVE orchestration (the drain reads/writes the spec graph + lifecycle + leases + traces as it ships), which the bypass lost. Don''t compete on orchestration mechanics; compete on substrate integration. trace:BUG-431'
   created_at: 2026-06-02T02:35:01.790119194Z
   modified_at: 2026-06-02T02:35:01.790119194Z
+- id: 019e863b-77e9-7611-844d-fbdc3be584bb
+  author: joe
+  content: |-
+    STRATEGIC NOTE — motivating use case + the moat lesson (2026-06-01).
+
+    CONCRETE USE: when this bug blocked the autonomous 'aida queue work --no-human=both' drain on the quizdom project, we fell back to Claude Code's HARNESS Workflow tool (NOT an AIDA feature) to drain the 7 remaining stories — sequential, worktree-isolated, dependency-aware. It orchestrated the work fine and shipped the code.
+
+    THE LESSON (and why it does NOT undercut EPIC-33 — it sharpens it):
+    - Raw orchestration is COMMODITIZED. The harness Workflow tool did dependency-aware, worktree-isolated multi-agent orchestration out of the box. AIDA cannot out-orchestrate the harness, and should not try.
+    - But the bypass SHIPPED THE CODE AND LOST THE SUBSTRATE: no spec-lifecycle updates (specs not auto-bumped), no lease / trace / graph integration — exactly the VIS-2 value the original quizdom finding flagged. A harness workflow populates NOTHING in the knowledge graph.
+    - So AIDA's moat is NOT drain-as-orchestrator; it is drain-as-SUBSTRATE-NATIVE: the drain reads/writes the graph AS it ships (claims leases, writes trace comments, advances spec status, files review items, updates relationships).
+    - Fixing BUG-431 is ON-THESIS precisely because it keeps autonomous work INSIDE the substrate, instead of leaking it to a harness workflow that populates nothing.
+
+    MOAT-DOC FRAMING: compete on SUBSTRATE INTEGRATION; concede ORCHESTRATION MECHANICS.
+  created_at: 2026-06-02T02:48:24.809529004Z
+  modified_at: 2026-06-02T02:48:24.809529004Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-01T16:13:39.481419330Z
