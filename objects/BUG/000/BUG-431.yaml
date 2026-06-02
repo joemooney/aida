@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:39:05.836892426Z
-modified_at: 2026-06-01T16:13:39.481419330Z
+modified_at: 2026-06-02T02:35:01.790119194Z
 req_type: Bug
 tags:
 - autonomous
@@ -54,6 +54,11 @@ comments:
     Residual (per the EPIC-33 invariant-1 plan): a shelvable failure still leaves the failed story's own dormant lease, so a RETRY of that same story needs --steal/--force-claim — but that is the normal single-spec dormant-lease behavior, not the sibling cascade, and EPIC-28 shelves+continues anyway. The plan's lease-release-preserve-worktree decoupling is deferred to post-drain evaluation: only build it if the supervised 'queue work next N --zen --auto-complete' drain shows a residual block. Not implementing speculatively (lease/worktree-ownership decoupling is delicate; don't auto-delete a worktree with uncommitted triage state).
   created_at: 2026-06-01T15:04:13.104292478Z
   modified_at: 2026-06-01T15:04:13.104292478Z
+- id: 019e862f-371e-7e61-b2ca-441c7b6146d0
+  author: joe
+  content: 'Motivating real-world case + resolution provenance (advisor, 2026-06-01): quizdom is the origin report — its agent ran ''aida queue work next 11 --no-human=both'' on EPIC-11''s children, hit this exact cascade (epic-scope contention → multi-spec PR breaks reviewer → stuck leases), and had to FALL BACK to the Claude Code Workflow tool (the harness''s native orchestrator) to ship the 7 stories — explicitly stepping outside the AIDA fleet + flagging the lost dogfooding value. That bypass is the strongest possible signal this bug mattered: a real drain became unusable and a user reached for a competitor mechanism. NOW FIXED on aida main (invariant-1: #1 story-scoping + #2 resolver + #3 mooted + TASK-133 + BUG-250, EPIC-33). The on-mission path (aida queue work --no-human for a multi-story-epic batch) is restored — BUT the fix is merged-not-released, so quizdom benefits only after the next aida release (or pointing quizdom at a fixed dev build). Strategic note: the harness Workflow tool can ORCHESTRATE this fine; AIDA''s differentiation is substrate-NATIVE orchestration (the drain reads/writes the spec graph + lifecycle + leases + traces as it ships), which the bypass lost. Don''t compete on orchestration mechanics; compete on substrate integration. trace:BUG-431'
+  created_at: 2026-06-02T02:35:01.790119194Z
+  modified_at: 2026-06-02T02:35:01.790119194Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-01T16:13:39.481419330Z
