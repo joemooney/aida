@@ -59,6 +59,10 @@ tags:
 - convention-change
 - from-product
 - launch-posture
+relationships:
+- rel_type: Parent
+  target_id: 019e8655-a07a-71d1-96c9-83ab57386235
+  created_at: 2026-06-02T03:17:05.750046254Z
 comments:
 - id: 019e8210-8dda-71a3-930d-ff068aead73e
   author: joe
