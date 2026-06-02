@@ -1,0 +1,12 @@
+id: 019e8655-cc4b-7963-a81b-b8f2fa0d94ed
+spec_id: TASK-633
+agreed_id: TASK-633
+title: Consider extending session-new/start to honor AIDA_PERMISSION_MODE env like queue work (deferred — not required by acceptance)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-02T03:17:10.347624752Z
+modified_at: 2026-06-02T03:17:10.347624752Z
+req_type: Task
