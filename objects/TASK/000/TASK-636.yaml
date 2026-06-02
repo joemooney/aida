@@ -1,0 +1,28 @@
+id: 019e8669-7dd1-7870-8bc5-d2f1a454c9ac
+spec_id: TASK-636
+agreed_id: TASK-636
+title: Trim scaffolded .claude/AIDA.md (prose→pointer) to cut per-session context on consumer projects
+description: |-
+  Every project that runs 'aida init' auto-loads .claude/AIDA.md (~10-12k rendered) into context EVERY session via the @.claude/AIDA.md import in the generated CLAUDE.md (aida-core/src/scaffolding/aida_md.rs, generate_aida_md). It is the single largest always-in-context chunk a consumer project pays — the discipline README is only 2.7k and the 90k pack is read-on-demand plain links (well-designed).
+
+  Apply the same prose→pointer lever just used on this repo's own CLAUDE.md (the 42.3k→34.4k trim): keep the per-session essentials inline (trace format, commit format, daily commands, capture rule, lifecycle vocabulary) and push the read-on-demand-able prose to the discipline pack with a one-line pointer. Prime candidates: the divergent-branch git recipe (## When aida pull refuses) and the review-workflow detail (## Review workflow) — both belong in a discipline guide, not inline in every session's context.
+
+  Goal: cut the downstream per-session footprint without losing any convention an agent needs to follow. Same audience-split principle — inline only what's needed every turn, pointer to the rest.
+
+  Acceptance:
+  - generate_aida_md's rendered output is materially smaller (target: divergent-branch recipe + review-workflow detail moved to docs/aida/discipline/ with inline pointers).
+  - No convention an agent must follow every session is lost (trace/commit format, daily commands, capture, lifecycle vocab stay inline).
+  - claude_md.rs + aida_md.rs scaffolding tests still pass; a fresh 'aida init' in /tmp produces a coherent CLAUDE.md + AIDA.md.
+  - Verified by: scaffold a throwaway project, confirm the @-imports resolve and the moved content is reachable via the discipline links.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-02T03:38:40.977521952Z
+modified_at: 2026-06-02T03:38:40.977521952Z
+req_type: Task
+tags:
+- aida:init
+- context-budget
+- papercut
+- scaffolding
