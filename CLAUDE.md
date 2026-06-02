@@ -93,72 +93,33 @@ aida db merge-gate                     # Assign agreed short IDs (FR-7-001 → F
 aida db sync --pull --push             # Sync orphan branch with remote
 aida fetch                             # Read-only two-leg refresh of remote refs (TASK-107)
 aida fetch --code-only --quiet         # Background-safe code-leg-only refresh
-aida db reconcile-status               # Replay Done→Completed bumps the pull missed (TASK-226)
-aida db reconcile-status --spec STORY-86  # Targeted replay for a single spec
-aida db reconcile-status --since v0.5.1 --dry-run  # Preview a bounded replay
+aida db reconcile-status [--spec ID] [--since REF] [--dry-run]  # Replay Done→Completed bumps the pull missed (TASK-226)
 aida cache status                      # Compare cache HEAD vs git HEAD
-aida plan verify docs/plans/<file>.md  # Lint a plan: drifted refs, missing files/sections (TASK-93)
-aida plan verify <file> --fix          # Rewrite drifted path:line refs in place
-aida plan helpers <spec>               # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
-aida plan helpers <spec> --append <file>  # Append the derived section to a plan file
-aida ultraplan <spec>                  # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
-aida ultraplan <spec> --stdout         # Print the assembled prompt instead of copying
-aida ultraplan <spec> --json           # Emit prompt + warnings + token estimate as JSON
-aida goal --batch <name>               # Derive a machine-checkable /goal completion condition from AIDA metadata (TASK-242)
-aida goal --epic <ID> --pr <N>         # Flags (--batch/--epic/--spec/--pr/--queue-empty) compose with AND
-aida goal --spec <ID> --copy           # --copy → clipboard; --invoke → bare `/goal …` line for scripting
-aida changelog generate                # Print structured CHANGELOG.md to stdout — every release + [Unreleased] (TASK-299)
-aida changelog refresh                 # Rewrite CHANGELOG.md (idempotent — same git state → byte-identical output)
-aida changelog preview                 # Stdout-only preview of the [Unreleased] section
-aida brief <agent> TASK-492 --note "why this, why now"  # Write a local pickup brief under .aida/agent-briefs/
-aida brief list --for-agent <agent>      # List pending briefs for a target agent; add --include-acked for audit
-aida brief ack .aida/agent-briefs/<agent>/<file>.md  # Mark a brief acknowledged
-aida agent new claude --role implementer --spec <SPEC-ID>  # Supervised launcher with registry + role context
-aida agent new claude --role advisor --show-context        # Print the generated launch-context snapshot
-aida --asciinema queue work --batch overnight-X --auto-complete  # Record a demo/training/audit cast under project-local .aida/casts/ (falls back to ~/.aida/casts/)
+aida plan verify <file> [--fix]        # Lint a plan: drifted refs, missing files/sections (--fix rewrites refs) (TASK-93)
+aida plan helpers <spec> [--append <file>]  # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
+aida ultraplan <spec> [--stdout|--json]     # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
+aida goal --batch|--epic|--spec|--pr|--queue-empty ...  # Derive a machine-checkable /goal condition; flags AND-compose; --copy/--invoke (TASK-242)
+aida changelog refresh|generate|preview     # Rewrite/print structured CHANGELOG.md (idempotent) (TASK-299)
+aida brief <agent> <SPEC> --note "..."      # Write/list/ack local pickup briefs under .aida/agent-briefs/ (list --for-agent, ack <path>)
+aida agent new claude --role implementer|advisor --spec <ID>  # Supervised launcher w/ registry + role-context snapshot (--show-context)
+aida --asciinema <subcommand>          # Record a demo/training/audit cast under .aida/casts/ (falls back to ~/.aida/casts/)
 ```
 
-`aida brief <agent> <SPEC-ID> [--note <STR>|--note -]` turns the
-operator's pickup message into a substrate-resident markdown file at
-`.aida/agent-briefs/<agent>/`. The directory is local runtime state under
-the existing `.aida/*` deny-by-default gitignore block. Use `brief list`
-to route work without scrollback and `brief ack` after the agent has read
-the file. MCP-speaking agents should use the equivalent brief tools:
-`list_briefs`, `read_brief`, and `ack_brief`.
+- **Briefs** route work without scrollback (`.aida/agent-briefs/<agent>/`, local runtime state). MCP-speaking agents use the equivalent tools `list_briefs` / `read_brief` / `ack_brief`.
+- **`aida agent new`**'s role-context snapshot is a *startup* snapshot only — keep polling briefs/MCP for work filed after launch.
+- **MCP client setup + marketplace surfaces:** `docs/agents/aida-mcp-install-matrix.md` (Claude Code, Codex, Cursor, Windsurf, Continue, Cline, Copilot, Devin, Amp, …). Before publishing through a marketplace/registry, run `docs/security/marketplace-publication-checklist.md`.
+- **`aida --asciinema`** no-ops gracefully without `asciinema` or a TTY.
+- **`aida queue list`** appends a **Done — awaiting merge** section so freshly-shipped work stays visible until auto-bump; `--no-in-flight` / `--in-flight-only` narrow the view.
 
-`aida agent new <type>` is the supervised launch path for Claude, Codex,
-and Antigravity. It registers the child process under `.aida/agents/`,
-writes a point-in-time role-context snapshot under
-`.aida/agents/context/`, and passes that path as
-`AIDA_AGENT_CONTEXT_FILE`. The snapshot includes role guidance, the active
-lease/spec, pending brief paths with titles, and queue-head hints. Use
-`--show-context` to print it before spawn, or `--no-context` for a bare
-launch. The file is a startup snapshot only; keep polling briefs/MCP for
-work filed after launch.
+**Tag conventions.** Subcommand-identifying tags use the colon-namespaced `aida:<subcommand>[:<verb>]` form (`aida:queue:work`) so `aida list --tags 'aida:queue:*'` matches the surface; behavior / provenance / severity tags stay flat (`orchestrator`, `papercut`, `severity:cosmetic`, `batch:NAME`, `parent:EPIC-31`, `depends-on:phase-1`, …). `scripts/migrate-tag-namespace.sh` re-sweeps stray flat hyphen-forms. Full rules + anti-patterns: `docs/aida/discipline/tag-conventions.md`.
 
-For non-Claude MCP client setup and marketplace/distribution surfaces, keep
-`docs/agents/aida-mcp-install-matrix.md` current. It is the operational matrix
-for connecting AIDA to Claude Code, Codex, Cursor, Windsurf, Continue, Cline,
-Copilot, Devin, Sourcegraph/Amp, and adjacent agent clients.
-Before publishing AIDA through a marketplace or registry, run
-`docs/security/marketplace-publication-checklist.md`.
+**Batch tags.** Items sharing `batch:NAME` (set via `aida edit <id> --tags batch:NAME`) compose: `aida queue list / work / progress --batch NAME` filter or drain that batch. `aida queue work --batch NAME --auto-complete` drains the whole batch — one implementer→CI→reviewer→merge→pull→build lifecycle per member (`=through-ci`/`through-merge` variants stop earlier). **EPIC-28 resilient drain**: a *shelvable* phase failure (CI red, RequestChanges, build fail) parks the spec `NeedsAttention` and the drain continues; dependents (`BlockedBy → <shelved>`) skip; the drain exits **`2`** when anything shelved/skipped so scripts triage. Cap with `--max-failures N` (default 5; `0` = first-failure-stops). Triage with `aida findings list`. Details: `docs/autonomous-drain.md`.
 
-`aida --asciinema [--cast-out PATH] [--cast-title STR] <subcommand>` is
-the first-class capture wrapper for demos, training corpus material, and
-autonomous-drain audit trails. It no-ops gracefully when `asciinema` is
-missing or the invocation is not attached to a TTY. By default, casts are written to `.aida/casts/` at the project root, falling back to `~/.aida/casts/` if not run inside a project directory (defined by the presence of `.git` or `.aida/`).
+**Lifecycle short-circuit tags.** `lifecycle:no-ci-wait` / `no-review` / `no-build` each skip that one non-integrity phase during `--auto-complete` (`lifecycle:trivial` = all three). CI still runs remotely; merge + pull/auto-bump never skip. Use only for low-risk, small-blast-radius work.
 
-`aida queue list` (TASK-222) appends a **Done — awaiting merge** section below the queued items so freshly-shipped work stays visible until the auto-bump fires. Pass `--no-in-flight` for the queued-only view, or `--in-flight-only` to focus on "what am I waiting on a PR for."
+**Calibration mode.** `[advisor] calibration_mode = "on"` (or `--calibrate` per-drain) makes every advisor punt emit two verdicts — cold-boot drives the drain, fork-from-live shadows — to mine substrate gaps; review with `aida findings calibration [--stats]`. Cost is real (both runs fire). Details: `docs/autonomous-drain.md`.
 
-**Tag conventions** (TASK-512): subcommand-identifying tags use the `aida:<subcommand>[:<verb>][:<sub-verb>]` colon-namespaced form (`aida:status`, `aida:queue:work`, `aida:db:sync:pull`) so `aida list --tags 'aida:queue:*'` returns every spec touching that surface. Behavior / pattern / provenance / severity tags stay flat (`orchestrator`, `papercut`, `from-self-test`, `ceiling-pattern`). Existing colon namespaces continue unchanged — `batch:NAME`, `lifecycle:trivial`, `severity:cosmetic`, `parent:EPIC-31`, `depends-on:phase-1`, `subsumes:TASK-N`, `from-review:PR-N`, `kind:bug-spotted`. Multi-touch specs get multiple subcommand tags. TASK-511 swept the historic flat forms (`aida-*`, `queue-*`, `session-*`) onto this namespace — re-runnable via `scripts/migrate-tag-namespace.sh` when new flat hyphen-form tags slip in. Full rules + anti-patterns: `docs/aida/discipline/tag-conventions.md`. trace:TASK-512 trace:TASK-511
-
-**Batch tag convention** (TASK-229): items sharing a `batch:NAME` tag (set via `aida edit <id> --tags batch:NAME`) compose with two commands. `aida queue list --batch NAME` filters both the queued and in-flight sections to that batch. `aida queue work --batch NAME` picks the head queued member of that batch (head-pickup loop — re-run after each session exits to drain the next one); `--dry-run --batch NAME` lists the pickup order without acting. `aida queue progress --batch NAME` (TASK-232) shows the bucketed view of the batch's lifecycle (Shipped / In flight / Working now / Remaining). `aida queue work --batch NAME --auto-complete` (TASK-285) drains the whole batch autonomously — one full implementer→CI→reviewer→merge→pull→build lifecycle per member, advancing the head after each — until the batch is empty, `--max N` is reached, or a phase fails un-shelvably. The `--auto-complete=through-ci` / `through-merge` variants compose too. **EPIC-28 resilient drain**: a *shelvable* phase failure (CI red, reviewer RequestChanges, build failed, …) parks the spec in `NeedsAttention` with a structured `FailureReason` and the drain *continues*; dependent members (`BlockedBy → <shelved>`) skip automatically via the existing pickability gate. The drain exits **`2`** (not `0`/`1`/`3..=8`) when at least one member shelved or skipped, so scripts know to triage. Cap shelving with `--max-failures N` (default `5`); pass `--max-failures 0` for the historical "first failure stops" behaviour. Triage shelved + skipped with `aida findings list`. Full details: `docs/autonomous-drain.md` → "Shelving on failure".
-
-**Lifecycle short-circuit tags** (STORY-442): specs tagged `lifecycle:no-ci-wait`, `lifecycle:no-review`, or `lifecycle:no-build` skip only that non-integrity phase during `aida queue work --auto-complete`; `lifecycle:trivial` is shorthand for all three. CI still runs remotely when `no-ci-wait` is set; the orchestrator just does not block on it. Merge and pull/auto-bump never skip, so completed-state hygiene is preserved. Use these tags only for low-risk, small-blast-radius work where lower latency is worth less redundancy.
-
-**Calibration mode** (STORY-347): with `[advisor] calibration_mode = "on"` in `.aida/config.toml` (or `--calibrate` per-drain) every advisor-tier punt produces **two** verdicts side-by-side — cold-boot (drives the drain) plus fork-from-live (shadow only). Recorded to `.aida/punts/<punt-id>/calibration.yaml`; review with `aida findings calibration` (default shows disagreements — the substrate-gap signal), `--stats` for the rolling agreement rate, `aida findings calibration annotate <punt-id> "gap → wrote memory <name>"` to record the closing memory. Cost is real (both runs fire); turn it on to mine substrate gaps, off when you trust the substrate. Full guidance in `docs/autonomous-drain.md`.
-
-**Headless drain** (`--no-human`, STORY-263 / STORY-276): `aida queue work --auto-complete --no-human` launches orchestrator phases headless (`claude -p`) so they advance without a Ctrl+D — the basis for an unattended overnight drain. Two modes: bare `--no-human` / `--no-human=reviewer-only` runs the reviewer (phase 3) headless and leaves the implementer (phase 1) interactive; `--no-human=both` runs phase 1 headless too (STORY-276). The headless implementer's safety net is the **punt** — on a design-fork it cannot safely resolve it runs `/aida-punt` instead of guessing, parking the spec in NeedsAttention; the orchestrator detects the punt (via the `AIDA_PUNT_SIGNAL_FILE` handshake) and routes it through the **advisor tier** (STORY-306): it spawns a headless advisor (`/aida-advise`) that either resolves the fork — the implementer session resumes (`claude -p --resume`) with the judged answer and the drain continues — or escalates it to a human. `--escalate-blocks` (the default) parks an escalated spec for morning triage; `--escalate-defaults` resumes the implementer to ship the defensible default instead. The advisor's bias is conservative: it resolves only a fork grounded in a recorded principle/preference and escalates everything else. `aida findings list` shows what the overnight advisor resolved vs escalated. The escalation handshake also covers the reviewer — a headless reviewer that won't auto-merge writes `merge: escalated-to-human` in its verdict file, and the orchestrator treats that as a first-class non-failure outcome. `--unattended` / `--headless` are aliases. Kickoff prints a per-mode scope banner requiring a one-time ack (skip with `AIDA_NO_HUMAN_ACKNOWLEDGED=1`), and an orchestrated interactive phase shows `auto:N/6` + `pause-here` in the statusline (TASK-306). The trade-off is real — **interactive = better quality decisions, autonomous = better throughput** — so pick per session: drive known design-fork specs at the keyboard, drain mechanical batches headless. Headless launches force `--permission-mode bypassPermissions` and stream their JSON to `.aida/headless-logs/`. Full guidance + the SPIKE-7 evidence behind every flag: `docs/autonomous-drain.md`.
+**Headless drain (`--no-human`).** `aida queue work --auto-complete --no-human` runs orchestrator phases headless (`claude -p`) for unattended drains; `--no-human=both` runs the implementer headless too. A headless implementer that hits a design-fork *punts* (parks `NeedsAttention`); the orchestrator routes the punt to a headless advisor tier (`/aida-advise`) that either resolves-and-resumes the implementer or escalates (`--escalate-blocks` default parks for triage; `--escalate-defaults` ships the defensible default). Trade-off: **interactive = better decisions, headless = better throughput.** Modes, escalation flags, and the SPIKE-7 evidence: `docs/autonomous-drain.md`.
 
 ### Queue identity (BUG-89)
 
@@ -180,15 +141,7 @@ Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Us
 
 **Symbol refs over line refs.** When citing code from a plan, prefer symbol refs (`fn handle_pull_command`, `struct ImplementationInfo`) over line refs (`main.rs:19713`). Symbol refs survive edits; line refs drift fast and are often stale within hours of generation. Worked example: `docs/plans/2026-05-13-story-86-done-status.md`.
 
-**Verify before relying on a plan.** `aida plan verify docs/plans/<file>.md` (TASK-93) lints a plan against the template: it reports drifted `path:line` refs (with the corrected line, located by symbol name), missing files, and absent required sections (Critical Files, Verification, Followups are hard requirements). It exits non-zero on any missing file or section, so it works as a pre-commit hook on `docs/plans/`. `--fix` rewrites drifted refs in place; `--quiet` drops the per-check OK lines. Refs inside `<!-- -->` comments and fenced code blocks are skipped. trace:TASK-93
-
-**Followups get filed, not forgotten.** When a spec reaches Done (`aida queue done`) or Completed (the STORY-86 auto-bump on merge), AIDA parses the `## Followups` section of any plan that owns that spec and offers to file each bullet as a child TASK. `aida queue done` prompts per bullet (`[y/N/skip]`); `--yes` and the non-interactive auto-bump path file all. Idempotent — a `[aida:followups]` marker comment on the spec records what was filed and declined, so whichever path runs first wins and declines are never re-filed. Opt out with `AIDA_AUTO_FOLLOWUPS=false`. trace:TASK-96
-
-**The plan rides into the session.** `aida queue work <spec>` discovers any plan that owns the spec and pre-populates the session manifest with a *plan brief* — the `## Critical Files`, `## Followups`, and `## Verification` sections. `aida session show --plan` renders it, and `/aida-pickup` leads its first message with it so the implementer gets the blast radius and definition of done without grepping for the plan. Graceful no-op when no plan file exists. trace:TASK-95
-
-**Reusable helpers come from the trace graph.** `aida plan helpers <spec>` derives a `## Reusable helpers` section by walking the requirement graph — sibling specs (same parent), tag-mates, and (when discriminating) same-feature specs — and harvesting their `// trace:` comments for the files + symbols they already touch. It ranks siblings and tag-mates above the coarse same-feature set and only surfaces specs that name a helper, so the output stays a focused "don't reimplement this" brief. `--append <plan-file>` writes the section straight into a plan. trace:TASK-94
-
-**Hand `/ultraplan` a fully-contextualised prompt.** `aida ultraplan <spec>` assembles a structured planning prompt — the spec's description, extracted `## Acceptance` criteria, parent/child/sibling context, the AIDA 11-section plan structure, and the trace-graph reusable helpers — and copies it to the clipboard (`--stdout` / `--json` for piping). It turns a terse ask into a brief `/ultraplan`'s explorers can anchor on, and the inlined plan structure means the returned plan already matches `docs/plans/_TEMPLATE.md`. trace:TASK-113
+The plan tooling closes the loop end-to-end: `aida ultraplan <spec>` assembles a context-rich `/ultraplan` prompt (description + `## Acceptance` + graph context + the 11-section structure); `aida plan helpers <spec>` derives a "don't reimplement this" section from the trace graph; `aida plan verify <file>` lints for drifted refs / missing files+sections (exits non-zero → pre-commit-hook-able, `--fix` rewrites refs); `aida queue work <spec>` rides the plan's Critical-Files/Followups/Verification brief into the session (`/aida-pickup` leads with it); and reaching Done/Completed offers to file each `## Followups` bullet as a child TASK (idempotent via a `[aida:followups]` marker; `AIDA_AUTO_FOLLOWUPS=false` to opt out). trace:TASK-93 trace:TASK-94 trace:TASK-95 trace:TASK-96 trace:TASK-113
 
 ## AIDA-developer workflow (only when working on AIDA itself)
 
