@@ -94,6 +94,24 @@ The boundary that matters: hooks make the substrate **capture** any orchestrator
 
 ---
 
+## What AIDA loads into context — and when
+
+A persistent project memory is only an asset if it doesn't drown every session in tokens. AIDA's scaffolding is built around one Claude Code mechanism: **a `@path` in `CLAUDE.md` is expanded into context at session start; a plain markdown link is not.** The two behave very differently, and AIDA uses each deliberately.
+
+| | `@`-import (e.g. `@.claude/AIDA.md`) | plain link (e.g. `[tag-conventions.md](tag-conventions.md)`) |
+|---|---|---|
+| **When loaded** | every session, at start, unconditionally | only if the agent opens it with Read |
+| **Across compaction** | sticky — re-injected into each fresh context window | transient — can be summarized away, re-read only if needed again |
+| **Cost model** | a fixed floor every session pays | pay-per-use; **zero in the sessions that never open it** |
+
+A project scaffolded by `aida init` auto-loads a deliberately small set every session: the generated `CLAUDE.md` stub, `@.claude/AIDA.md` (the conventions an agent needs every turn — trace + commit format, daily commands, capture rules, lifecycle vocabulary), and `@docs/aida/discipline/README.md` (a ~3k pointer-table). The deep discipline pack behind that README — the dozen-plus per-topic guides — is reached through **plain links, not `@`-imports**, so it never auto-expands. It's deep on disk, lean in context.
+
+One honest caveat on "read on demand": once a guide *is* read, its contents sit in the transcript for the rest of that session — within a session that opens it, it's no cheaper than an import. The saving is across the *other* sessions: a typical session reads zero or one of those guides, not all of them, so the pack's **expected** per-session cost is near zero even though its on-disk size is large. Read-on-demand optimizes the average case; `@`-import pays the worst case every time.
+
+> Net: **inline only what every session needs; link to the rest.** The discipline you reach for occasionally lives one Read away, not in every session's opening token budget — the same prose-to-pointer discipline that keeps a `CLAUDE.md` itself from bloating.
+
+---
+
 ## What AIDA deliberately does NOT do
 
 AIDA is not trying to be a better orchestrator than Claude Code. It deliberately *defers*:
