@@ -1,0 +1,32 @@
+id: 019e8656-7f13-7022-9085-980032447b1f
+spec_id: TASK-635
+agreed_id: TASK-635
+title: Cut aida v0.12.0 (minor) once EPIC-33 floor is green — propagates the BUG-431 fix + correctness floor to quizdom + consumers
+description: |-
+  Tee-up (advisor, 2026-06-01). The whole orchestrator-correctness-floor + this session's fixes are merged to main but UNRELEASED at v0.11.0 — so quizdom (which hit BUG-431 and defected to the Claude Code Workflow tool) + every other AIDA consumer is still running the broken binary. Release to propagate.
+
+  TRIGGER (gate): TASK-615 + STORY-492 merged (EPIC-33 invariants 1-4 all green). Don't release a half-done floor; ship it as one trustworthy drop.
+
+  PRE-GATE: cross-platform CI green within 24h (scripts/pre-release-check.sh enforces; currently GREEN — nightly 2026-06-01 11:50 success — re-confirm at tag time or let release.sh dispatch a fresh run).
+
+  COMMAND: scripts/release.sh minor  (0.11.0 → 0.12.0; minor = substantial features+fixes, no breaking changes). It bumps the workspace version, regenerates CHANGELOG via 'aida changelog refresh --released-as v0.12.0', commits, tags, pushes → release.yml builds + publishes tarballs.
+
+  SCOPE (the [Unreleased] changelog auto-captures these merged specs): EPIC-33 floor — TASK-133, BUG-431 (#1/#2/#3), BUG-250, BUG-422; plus TASK-615 + STORY-492 (when landed); plus the session's other ships — BUG-427 (role-enter escape), the fresh-clone arc (BUG-428/429/430, TASK-621/623), BUG-425 (bulk-archive batching), BUG-423 (flaky-spawn retry), STORY-496 (dead-agent reaper). Filed-but-unbuilt (NOT in this release): TASK-631 (init-commit), BUG-432/433/434 (pr-ship/store-detection guards).
+
+  POST-RELEASE: tell quizdom (+ consumers) to update — Pulling from origin/aida-store...
+    Pull complete.
+  export AIDA_SESSION_ID='019e863bd12c' is the on-mission multi-story-epic drain again. See docs/positioning/vs-claude-code-workflows.md (the worked example).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-02T03:17:56.115691596Z
+modified_at: 2026-06-02T03:17:56.115691596Z
+req_type: Task
+tags:
+- aida:release
+- epic-33
+- from-advisor
+- propagate-fix
+- quizdom
+- release
