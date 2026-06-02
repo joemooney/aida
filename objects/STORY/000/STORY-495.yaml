@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T02:54:40.561121692Z
-modified_at: 2026-06-02T03:16:52.227490152Z
+modified_at: 2026-06-02T03:17:25.083211758Z
 req_type: Story
 tags:
 - aida:agent:new
@@ -89,6 +89,13 @@ comments:
     TESTS: faithful default (no --permission-mode injected for claude by default); knob on → per-tool bypass injected; explicit override wins over knob; headless path still forces; --bg forces (or refuses) per (1). Est. ~1-2h focused. trace:STORY-495
   created_at: 2026-06-01T07:23:03.514904978Z
   modified_at: 2026-06-01T07:23:03.514904978Z
+- id: 019e8656-087e-7e93-866e-126df567c44e
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-01-story-495-faithful-launcher.md
+    filed 2 task(s): TASK-632, TASK-633
+  created_at: 2026-06-02T03:17:25.758097803Z
+  modified_at: 2026-06-02T03:17:25.758097803Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-02T03:16:52.227490152Z
