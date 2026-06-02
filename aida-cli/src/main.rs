@@ -66917,6 +66917,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             json,
             max,
             max_failures,
+            no_progress_minutes,
+            phase_ceiling_minutes,
             no_human,
             escalate_blocks,
             escalate_defaults,
@@ -67128,6 +67130,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     std::env::set_var("AIDA_CALIBRATE", if *calibrate { "1" } else { "0" });
                 } else {
                     std::env::remove_var("AIDA_CALIBRATE");
+                }
+                // BUG-420: map the watchdog flags to env vars so the resolved
+                // `DrainTuning` (read in `RealPhaseDriver::new`) picks them up
+                // across single-spec / batch / nextN drains without threading
+                // through every handler signature — the same pattern
+                // `AIDA_CALIBRATE` uses just above. trace:BUG-420 | ai:claude
+                if let Some(m) = no_progress_minutes {
+                    std::env::set_var("AIDA_NO_PROGRESS_MINUTES", m.to_string());
+                }
+                if let Some(m) = phase_ceiling_minutes {
+                    std::env::set_var("AIDA_PHASE_CEILING_MINUTES", m.to_string());
                 }
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
                 // batch — one full lifecycle per member, advancing the head
@@ -71224,6 +71237,11 @@ fn run_auto_complete(
         lifecycle_skip,
     );
     let started_at = chrono::Utc::now();
+    // TASK-136: a batch / nextN member (`owns_drain_state == false`) shelves a
+    // still-inconclusive phase-1 verify so the drain advances; a standalone
+    // single-spec drain keeps the Inconclusive pause. The two are exact
+    // inverses, so `batch` derives directly from `owns_drain_state`.
+    let batch = !owns_drain_state;
     let result = auto_complete::orchestrate_with_lifecycle_skip(
         &mut driver,
         spec,
@@ -71231,6 +71249,7 @@ fn run_auto_complete(
         json,
         escalate_mode,
         lifecycle_skip,
+        batch,
     );
     let completed_at = chrono::Utc::now();
 
@@ -74206,6 +74225,271 @@ fn build_implementer_phase_args(
     args
 }
 
+/// TASK-136 / BUG-420: drain-reliability tunables for the orchestrator's phase
+/// loop. Resolved once per `RealPhaseDriver` from the `[drain]` section of
+/// `.aida/config.toml`, then overridden by env vars (which the `queue work`
+/// dispatch sets from the `--no-progress-minutes` / `--phase-ceiling-minutes`
+/// flags so the values compose across single-spec / batch / nextN drains
+/// without threading through every signature — the same env-var pattern
+/// `AIDA_CALIBRATE` uses). A `0`-minute value disables that watchdog check.
+/// trace:TASK-136 BUG-420 | ai:claude
+#[derive(Debug, Clone, Copy)]
+struct DrainTuning {
+    /// TASK-136: how many times to retry the phase-1 GH PR-verify on a
+    /// transient GH-API outage before declaring the run inconclusive. The
+    /// backoff cadence is [`auto_complete::gh_verify_backoff_schedule`]
+    /// (30s / 1m / 5m / then 15m). Default 3.
+    gh_verify_retries: usize,
+    /// BUG-420: no-progress window — a headless phase that makes no commit /
+    /// file-change for this long is killed and shelved. Default 10m; `0`
+    /// disables.
+    no_progress: std::time::Duration,
+    /// BUG-420: hard wall-clock ceiling per headless phase, a backstop in case
+    /// progress-detection misses. Default 45m; `0` disables.
+    ceiling: std::time::Duration,
+}
+
+impl DrainTuning {
+    /// Resolve from `[drain]` config then env overrides. Env wins so the
+    /// per-invocation flags (mapped to env at dispatch) override the project
+    /// default. trace:TASK-136 BUG-420 | ai:claude
+    fn resolve(project_root: &std::path::Path) -> Self {
+        let cfg = read_drain_config(project_root);
+        let env_usize = |k: &str| -> Option<usize> {
+            std::env::var(k).ok().and_then(|s| s.trim().parse().ok())
+        };
+        let env_u64 =
+            |k: &str| -> Option<u64> { std::env::var(k).ok().and_then(|s| s.trim().parse().ok()) };
+        let gh_verify_retries = env_usize("AIDA_GH_VERIFY_RETRIES")
+            .or(cfg.gh_verify_retries)
+            .unwrap_or(3);
+        let no_progress_min = env_u64("AIDA_NO_PROGRESS_MINUTES")
+            .or(cfg.no_progress_minutes)
+            .unwrap_or(10);
+        let ceiling_min = env_u64("AIDA_PHASE_CEILING_MINUTES")
+            .or(cfg.phase_ceiling_minutes)
+            .unwrap_or(45);
+        Self {
+            gh_verify_retries,
+            no_progress: std::time::Duration::from_secs(no_progress_min.saturating_mul(60)),
+            ceiling: std::time::Duration::from_secs(ceiling_min.saturating_mul(60)),
+        }
+    }
+}
+
+/// BUG-420: a phase-scoped no-progress + wall-clock-ceiling watchdog for a
+/// *headless* orchestrator phase. While the `claude -p` child runs, the
+/// orchestrator's [`exit_signal::spawn_and_wait_watched`] poll loop calls
+/// [`PhaseWatchdog::check`]; it (rate-limited) probes the phase worktree for
+/// new commits / file changes and trips when both stall for `no_progress` or
+/// when wall-clock exceeds `ceiling`. The pure verdict is
+/// [`auto_complete::watchdog_verdict`]; this struct is just the I/O shell that
+/// gathers the facts and remembers the last-progress timestamp.
+///
+/// The worktree is created by the phase child, so it is not known at spawn
+/// time — `check` resolves it lazily from the session lease and, until it
+/// appears, treats the phase as "making progress" (startup grace) so a slow
+/// session launch never trips the watchdog. trace:BUG-420 | ai:claude
+struct PhaseWatchdog {
+    project_root: std::path::PathBuf,
+    session_id: String,
+    phase_start: std::time::Instant,
+    last_progress: std::time::Instant,
+    last_sig: Option<String>,
+    last_poll: std::time::Instant,
+    poll_every: std::time::Duration,
+    no_progress: std::time::Duration,
+    ceiling: std::time::Duration,
+    worktree: Option<std::path::PathBuf>,
+}
+
+impl PhaseWatchdog {
+    /// How often to actually shell out to git — far coarser than the
+    /// `spawn_and_wait` poll cadence (which is ~100ms) so the watchdog never
+    /// spins git. trace:BUG-420 | ai:claude
+    const GIT_POLL: std::time::Duration = std::time::Duration::from_secs(30);
+
+    fn new(
+        project_root: std::path::PathBuf,
+        session_id: String,
+        no_progress: std::time::Duration,
+        ceiling: std::time::Duration,
+    ) -> Self {
+        let now = std::time::Instant::now();
+        Self {
+            project_root,
+            session_id,
+            phase_start: now,
+            last_progress: now,
+            last_sig: None,
+            last_poll: now,
+            poll_every: Self::GIT_POLL,
+            no_progress,
+            ceiling,
+            worktree: None,
+        }
+    }
+
+    /// A progress signature for the worktree: HEAD sha + a hash of the
+    /// porcelain status + the newest mtime among changed files. A degenerate
+    /// echo/sleep spin moves none of these; a real session commits, stages, or
+    /// re-edits a file (advancing its mtime). `None` when git can't be read.
+    /// trace:BUG-420 | ai:claude
+    fn progress_signature(worktree: &std::path::Path) -> Option<String> {
+        let sha = git_capture(worktree, &["rev-parse", "HEAD"]).unwrap_or_default();
+        let porcelain = git_capture(worktree, &["status", "--porcelain"]).unwrap_or_default();
+        // Newest mtime among the changed paths — catches repeated edits to an
+        // already-dirty file (porcelain text alone would not change).
+        let mut newest: u128 = 0;
+        for line in porcelain.lines() {
+            // Porcelain lines are `XY <path>`; take everything after the status
+            // columns. Rename lines (`R  old -> new`) end with the new path.
+            let path = line
+                .get(3..)
+                .unwrap_or("")
+                .rsplit(" -> ")
+                .next()
+                .unwrap_or("");
+            let path = path.trim().trim_matches('"');
+            if path.is_empty() {
+                continue;
+            }
+            if let Ok(meta) = std::fs::metadata(worktree.join(path)) {
+                if let Ok(m) = meta.modified() {
+                    if let Ok(d) = m.duration_since(std::time::UNIX_EPOCH) {
+                        newest = newest.max(d.as_nanos());
+                    }
+                }
+            }
+        }
+        if sha.is_empty() && porcelain.is_empty() {
+            return None;
+        }
+        Some(format!("{sha}|{}|{newest}", porcelain.len()))
+    }
+
+    /// Probe (rate-limited) and return `Some(reason)` if the watchdog should
+    /// trip — the caller then reaps the child. trace:BUG-420 | ai:claude
+    fn check(&mut self) -> Option<String> {
+        // Both checks disabled → never trips.
+        if self.no_progress.is_zero() && self.ceiling.is_zero() {
+            return None;
+        }
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_poll) < self.poll_every {
+            return None;
+        }
+        self.last_poll = now;
+
+        // Lazily resolve the worktree from the session lease. Until it appears
+        // (the child is still starting up), keep resetting last_progress so a
+        // slow launch can't trip the no-progress check.
+        if self.worktree.is_none() {
+            self.worktree =
+                find_orchestrated_lease(&self.project_root, &self.session_id).map(|(_, _, wt)| wt);
+            if self.worktree.is_none() {
+                self.last_progress = now;
+                // Ceiling still applies even before the worktree resolves.
+                return auto_complete::watchdog_verdict(
+                    now.duration_since(self.last_progress),
+                    now.duration_since(self.phase_start),
+                    self.no_progress,
+                    self.ceiling,
+                )
+                .map(|t| self.trip_reason(t));
+            }
+        }
+        let worktree = self.worktree.clone().unwrap();
+
+        if let Some(sig) = Self::progress_signature(&worktree) {
+            if self.last_sig.as_deref() != Some(sig.as_str()) {
+                self.last_sig = Some(sig);
+                self.last_progress = now;
+            }
+        }
+        auto_complete::watchdog_verdict(
+            now.duration_since(self.last_progress),
+            now.duration_since(self.phase_start),
+            self.no_progress,
+            self.ceiling,
+        )
+        .map(|t| self.trip_reason(t))
+    }
+
+    fn trip_reason(&self, trip: auto_complete::WatchdogTrip) -> String {
+        match trip {
+            auto_complete::WatchdogTrip::NoProgress => format!(
+                "no commit or file-change for {}m — likely a degenerate session",
+                self.no_progress.as_secs() / 60
+            ),
+            auto_complete::WatchdogTrip::Ceiling => format!(
+                "phase exceeded the {}m wall-clock ceiling",
+                self.ceiling.as_secs() / 60
+            ),
+        }
+    }
+}
+
+/// Run `git -C <worktree> <args>` and capture trimmed stdout, or `None` on any
+/// spawn / non-zero / decode error. trace:BUG-420 | ai:claude
+fn git_capture(worktree: &std::path::Path, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(args)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// The `[drain]` config values, all optional. trace:TASK-136 BUG-420 | ai:claude
+#[derive(Debug, Default, Clone, Copy)]
+struct DrainConfigToml {
+    gh_verify_retries: Option<usize>,
+    no_progress_minutes: Option<u64>,
+    phase_ceiling_minutes: Option<u64>,
+}
+
+/// Hand-rolled `[drain]`-section scanner for `.aida/config.toml`, mirroring the
+/// other section readers (e.g. `read_behavior_permission_mode`) so the crate
+/// stays serde-free for one small optional section. Unknown keys are ignored.
+/// trace:TASK-136 BUG-420 | ai:claude
+fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
+    let mut out = DrainConfigToml::default();
+    let config_path = project_dir.join(".aida").join("config.toml");
+    let Ok(content) = std::fs::read_to_string(&config_path) else {
+        return out;
+    };
+    let mut in_drain = false;
+    for raw in content.lines() {
+        let line = strip_toml_inline_comment(raw).trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_drain = rest.trim_start_matches('[').starts_with("drain");
+            continue;
+        }
+        if !in_drain {
+            continue;
+        }
+        if let Some((key, val)) = line.split_once('=') {
+            let key = key.trim();
+            let val = val.trim().trim_matches('"').trim();
+            match key {
+                "gh_verify_retries" => out.gh_verify_retries = val.parse().ok(),
+                "no_progress_minutes" => out.no_progress_minutes = val.parse().ok(),
+                "phase_ceiling_minutes" => out.phase_ceiling_minutes = val.parse().ok(),
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
 struct RealPhaseDriver {
     project_root: std::path::PathBuf,
     spec: String,
@@ -74272,12 +74556,33 @@ struct RealPhaseDriver {
     /// phases. Phase 2 owns CI waiting; phases 3/6 are sequenced in
     /// `auto_complete.rs`.
     lifecycle_skip: auto_complete::LifecycleSkip,
+    /// TASK-136 / BUG-420: GH-verify retry budget + watchdog thresholds,
+    /// resolved once from `[drain]` config + env/flag overrides.
+    drain_tuning: DrainTuning,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum Phase3StaleOverlapAction {
     Proceed,
     Refuse(String),
+}
+
+/// TASK-136: the outcome of one phase-1 PR-verify attempt. The verify can
+/// settle definitively (a PR found, no PR, or a hard failure) or hit a
+/// *transient* GH-API outage that leaves it unable to confirm a PR — only the
+/// last case is retried (with the [`auto_complete::gh_verify_backoff_schedule`]
+/// backoff). trace:TASK-136 | ai:claude
+enum Phase1PrResolve {
+    /// An open PR was found (directly or recovered via the spec-id search).
+    Found(OpenPrInfo),
+    /// Definitively no open PR — falls through to the punt / NoPr path.
+    NoPr,
+    /// A definitive hard failure (gh missing / gh errored / branch not on
+    /// origin) — return it as the phase failure, no retry.
+    Fail(auto_complete::PhaseFailure),
+    /// Transient: GH was unreachable but the branch may carry a PR — retry,
+    /// then declare Inconclusive with this reason if the budget is exhausted.
+    Retry(String),
 }
 
 impl RealPhaseDriver {
@@ -74294,6 +74599,7 @@ impl RealPhaseDriver {
         no_auto_rebase: bool,
         lifecycle_skip: auto_complete::LifecycleSkip,
     ) -> Self {
+        let drain_tuning = DrainTuning::resolve(&project_root);
         Self {
             project_root,
             spec,
@@ -74315,6 +74621,7 @@ impl RealPhaseDriver {
             no_auto_rebase,
             auto_rebase_events: Vec::new(),
             lifecycle_skip,
+            drain_tuning,
         }
     }
 
@@ -74710,6 +75017,75 @@ fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::Calibrat
     }
 }
 
+impl RealPhaseDriver {
+    /// TASK-136: one phase-1 PR-verify attempt, factored out of
+    /// [`Self::run_implementer`] so the transient GH-unreachable case can be
+    /// retried with a backoff. Encapsulates the BUG-223 branch-then-spec
+    /// fallback and the BUG-257 `git ls-remote` narrowing. Mutates `self.branch`
+    /// when the spec-id search recovers a swapped branch. trace:TASK-136
+    fn detect_phase1_pr(&mut self, branch: &str) -> Phase1PrResolve {
+        match detect_open_pr_for_branch(&self.project_root, branch) {
+            PrLookup::Found(pr) => Phase1PrResolve::Found(pr),
+            PrLookup::NoOpenPr => match detect_open_pr_for_spec(&self.project_root, &self.spec) {
+                PrLookup::Found(pr) => {
+                    // Realign the branch so the CI / merge phases probe the
+                    // PR's actual head, not the worktree HEAD the branch-keyed
+                    // lookup just missed on. trace:BUG-223
+                    if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
+                        self.branch = Some(head);
+                    }
+                    eprintln!(
+                        "  {} no open PR on branch `{}` — recovered PR-{} via a `{}` \
+                         search (the implementer branch was swapped by /aida-pr's \
+                         merged-branch guard)",
+                        "ⓘ".cyan(),
+                        branch,
+                        pr.number,
+                        self.spec,
+                    );
+                    Phase1PrResolve::Found(pr)
+                }
+                _ => Phase1PrResolve::NoPr,
+            },
+            PrLookup::GhMissing => Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::MissingTool,
+                "`gh` is not on PATH — auto-complete needs it to track the PR",
+            )),
+            PrLookup::GhFailed(why) => Phase1PrResolve::Fail(auto_complete::PhaseFailure::new(
+                format!("could not look up the PR for `{branch}`: {why}"),
+            )),
+            // BUG-257: the GH API was unreachable — *transient*, not "no PR".
+            // Narrow with `git ls-remote` (git protocol, separate from the
+            // HTTPS API): if the branch isn't on origin no PR can exist, so
+            // that collapses to a genuine NoPR failure. Otherwise it is a
+            // retryable inconclusive. trace:BUG-257 TASK-136 | ai:claude
+            PrLookup::GhUnreachable(why) => {
+                match probe_branch_on_origin(&self.project_root, branch) {
+                    BranchOriginProbe::Absent => {
+                        Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::NoPr,
+                            format!(
+                                "GH API unreachable ({why}), and `git ls-remote` confirms \
+                             branch `{branch}` is not on origin — no PR can exist. \
+                             Resume the session and push: `aida queue work {spec} --resume`",
+                                spec = self.spec
+                            ),
+                        ))
+                    }
+                    BranchOriginProbe::Present => Phase1PrResolve::Retry(format!(
+                        "GH API unreachable ({why}); branch `{branch}` is on origin \
+                     so a PR may exist — cannot confirm without the API"
+                    )),
+                    BranchOriginProbe::LsRemoteFailed => Phase1PrResolve::Retry(format!(
+                        "GH API unreachable ({why}); `git ls-remote` also failed — \
+                     cannot determine whether a PR exists for `{branch}`"
+                    )),
+                }
+            }
+        }
+    }
+}
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn run_implementer(
         &mut self,
@@ -74790,12 +75166,39 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // additive, not a replacement. Protocol: see the `exit_signal` module.
         // trace:TASK-329 | ai:claude
         let sentinel = exit_signal::sentinel_path(&self.sessions_dir(), &session_uuid);
-        let outcome = exit_signal::spawn_and_wait(cmd, &sentinel, &self.exit_cfg).map_err(|e| {
+        // BUG-420: arm the no-progress / ceiling watchdog for a *headless*
+        // implementer only — an interactive REPL legitimately idles waiting for
+        // the user, so it must never be killed for "no progress". The closure
+        // owns its own coarse git-poll cadence; the spawn loop just consults it.
+        // trace:BUG-420 | ai:claude
+        let mut watchdog = headless_impl.then(|| {
+            PhaseWatchdog::new(
+                self.project_root.clone(),
+                session_uuid.clone(),
+                self.drain_tuning.no_progress,
+                self.drain_tuning.ceiling,
+            )
+        });
+        let mut wd_closure = watchdog.as_mut().map(|w| move || w.check());
+        let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
+            .as_mut()
+            .map(|c| c as &mut dyn FnMut() -> Option<String>);
+        let outcome = exit_signal::spawn_and_wait_watched(cmd, &sentinel, &self.exit_cfg, wd_dyn)
+            .map_err(|e| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Spawn,
                 format!("could not launch the implementer session: {e}"),
             )
         })?;
+        // BUG-420: the watchdog killed a degenerate headless session — surface
+        // it as a shelvable phase-1 failure so a batch drain parks the spec and
+        // advances. trace:BUG-420 | ai:claude
+        if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Watchdog,
+                format!("the implementer phase watchdog stopped the session — {reason}"),
+            ));
+        }
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
                 // BUG-266: before classifying this as a phase-1 failure,
@@ -74929,78 +75332,45 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // reconciliation above could not catch (detached HEAD, worktree
         // already gone) — fall back to a spec-id search before declaring a
         // false negative. trace:BUG-223 | ai:claude
-        let pr = match detect_open_pr_for_branch(&self.project_root, &branch) {
-            PrLookup::Found(pr) => Some(pr),
-            PrLookup::NoOpenPr => match detect_open_pr_for_spec(&self.project_root, &self.spec) {
-                PrLookup::Found(pr) => {
-                    // Realign the branch so the CI / merge phases probe the
-                    // PR's actual head, not the worktree HEAD the
-                    // branch-keyed lookup just missed on. trace:BUG-223
-                    if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
-                        self.branch = Some(head);
+        //
+        // TASK-136: a *transient* GH-API outage (the BUG-257 `Inconclusive`
+        // case) is retried with a bounded backoff before the orchestrator
+        // gives up — a momentary blip clears here rather than pausing /
+        // shelving the whole drain. Only the unreachable case retries; a
+        // definitive Found / NoPr / hard-failure breaks out immediately.
+        // trace:TASK-136 | ai:claude
+        let schedule =
+            auto_complete::gh_verify_backoff_schedule(self.drain_tuning.gh_verify_retries);
+        let mut attempt = 0usize;
+        let pr = loop {
+            match self.detect_phase1_pr(&branch) {
+                Phase1PrResolve::Found(pr) => break Some(pr),
+                Phase1PrResolve::NoPr => break None,
+                Phase1PrResolve::Fail(f) => return Err(f),
+                Phase1PrResolve::Retry(reason) => {
+                    if attempt < schedule.len() {
+                        let wait = schedule[attempt];
+                        attempt += 1;
+                        if !self.json {
+                            eprintln!(
+                                "  {} GH verify inconclusive (attempt {}/{}) — retrying in {}s: {}",
+                                "⏳".yellow(),
+                                attempt,
+                                schedule.len(),
+                                wait.as_secs(),
+                                reason,
+                            );
+                        }
+                        std::thread::sleep(wait);
+                        continue;
                     }
-                    eprintln!(
-                        "  {} no open PR on branch `{}` — recovered PR-{} via a `{}` \
-                         search (the implementer branch was swapped by /aida-pr's \
-                         merged-branch guard)",
-                        "ⓘ".cyan(),
-                        branch,
-                        pr.number,
-                        self.spec,
-                    );
-                    Some(pr)
-                }
-                _ => None,
-            },
-            PrLookup::GhMissing => {
-                return Err(auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::MissingTool,
-                    "`gh` is not on PATH — auto-complete needs it to track the PR",
-                ));
-            }
-            PrLookup::GhFailed(why) => {
-                return Err(auto_complete::PhaseFailure::new(format!(
-                    "could not look up the PR for `{branch}`: {why}"
-                )));
-            }
-            // BUG-257: the GH API was unreachable — *transient*, not "no PR".
-            // Narrow with `git ls-remote` (git protocol, separate from the
-            // HTTPS API): if the branch isn't on origin no PR can exist
-            // regardless, and that case collapses to a genuine NoPR failure.
-            // Otherwise the orchestrator cannot tell whether a PR was opened
-            // — return Inconclusive so the drain pauses (not fails).
-            // trace:BUG-257 | ai:claude
-            PrLookup::GhUnreachable(why) => {
-                match probe_branch_on_origin(&self.project_root, &branch) {
-                    BranchOriginProbe::Absent => {
-                        return Err(auto_complete::PhaseFailure::of(
-                            auto_complete::FailureKind::NoPr,
-                            format!(
-                                "GH API unreachable ({why}), and `git ls-remote` confirms \
-                             branch `{branch}` is not on origin — no PR can exist. \
-                             Resume the session and push: `aida queue work {spec} --resume`",
-                                spec = self.spec
-                            ),
-                        ));
-                    }
-                    BranchOriginProbe::Present => {
-                        return Ok(auto_complete::ImplementerOutcome::Inconclusive {
-                            reason: format!(
-                                "GH API unreachable ({why}); branch `{branch}` is on origin \
-                             so a PR may exist — cannot confirm without the API"
-                            ),
-                            retry_hint: None,
-                        });
-                    }
-                    BranchOriginProbe::LsRemoteFailed => {
-                        return Ok(auto_complete::ImplementerOutcome::Inconclusive {
-                            reason: format!(
-                                "GH API unreachable ({why}); `git ls-remote` also failed — \
-                             cannot determine whether a PR exists for `{branch}`"
-                            ),
-                            retry_hint: None,
-                        });
-                    }
+                    // Retry budget exhausted and still unreachable. The
+                    // batch-vs-single shelve/pause decision is made upstream in
+                    // `orchestrate_with_lifecycle_skip` from this Inconclusive.
+                    return Ok(auto_complete::ImplementerOutcome::Inconclusive {
+                        reason,
+                        retry_hint: None,
+                    });
                 }
             }
         };
@@ -75405,12 +75775,35 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // would otherwise sit at the REPL with no EOF to synthesize (BUG-230).
         // trace:TASK-329 | ai:claude
         let sentinel = exit_signal::sentinel_path(&self.sessions_dir(), &session_uuid);
-        let outcome = exit_signal::spawn_and_wait(cmd, &sentinel, &self.exit_cfg).map_err(|e| {
+        // BUG-420: arm the no-progress / ceiling watchdog for a *headless*
+        // reviewer (both `--no-human` variants run the reviewer headless). An
+        // interactive `--zen` reviewer is left unwatched — it may sit at the
+        // REPL legitimately. trace:BUG-420 | ai:claude
+        let mut watchdog = self.no_human.is_some().then(|| {
+            PhaseWatchdog::new(
+                self.project_root.clone(),
+                session_uuid.clone(),
+                self.drain_tuning.no_progress,
+                self.drain_tuning.ceiling,
+            )
+        });
+        let mut wd_closure = watchdog.as_mut().map(|w| move || w.check());
+        let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
+            .as_mut()
+            .map(|c| c as &mut dyn FnMut() -> Option<String>);
+        let outcome = exit_signal::spawn_and_wait_watched(cmd, &sentinel, &self.exit_cfg, wd_dyn)
+            .map_err(|e| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Spawn,
                 format!("could not launch the reviewer session: {e}"),
             )
         })?;
+        if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Watchdog,
+                format!("the reviewer phase watchdog stopped the session — {reason}"),
+            ));
+        }
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
                 return Err(auto_complete::PhaseFailure::new(format!(
@@ -76904,6 +77297,99 @@ mod queue_work_resume_tests {
         let body = std::fs::read_to_string(sessions.join("019eaaaa-bbbb.toml")).unwrap();
         let reloaded: SessionLease = toml::from_str(&body).unwrap();
         assert_eq!(reloaded.branch, "epic-23-10");
+    }
+}
+
+#[cfg(test)]
+mod drain_reliability_wiring_tests {
+    //! TASK-136 / BUG-420: the I/O-shell wiring around the pure decision cores
+    //! (`gh_verify_backoff_schedule`, `watchdog_verdict`). The pure cores are
+    //! tested in `auto_complete`; here we lock the config parsing, the watchdog
+    //! trip-reason text, and the worktree progress signature.
+    use super::*;
+
+    #[test]
+    fn read_drain_config_parses_drain_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[node]\nid = \"x\"\n\n[drain]\ngh_verify_retries = 2  # transient blips\n\
+             no_progress_minutes = 3\nphase_ceiling_minutes = 20\n",
+        )
+        .unwrap();
+        let cfg = read_drain_config(tmp.path());
+        assert_eq!(cfg.gh_verify_retries, Some(2));
+        assert_eq!(cfg.no_progress_minutes, Some(3));
+        assert_eq!(cfg.phase_ceiling_minutes, Some(20));
+    }
+
+    #[test]
+    fn read_drain_config_absent_section_is_all_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(tmp.path().join(".aida/config.toml"), "[node]\nid = \"x\"\n").unwrap();
+        let cfg = read_drain_config(tmp.path());
+        assert_eq!(cfg.gh_verify_retries, None);
+        assert_eq!(cfg.no_progress_minutes, None);
+        assert_eq!(cfg.phase_ceiling_minutes, None);
+    }
+
+    #[test]
+    fn watchdog_trip_reason_names_the_threshold_minutes() {
+        let wd = PhaseWatchdog::new(
+            std::path::PathBuf::from("/tmp/nonexistent"),
+            "sess".to_string(),
+            std::time::Duration::from_secs(10 * 60),
+            std::time::Duration::from_secs(45 * 60),
+        );
+        assert!(wd
+            .trip_reason(auto_complete::WatchdogTrip::NoProgress)
+            .contains("10m"));
+        assert!(wd
+            .trip_reason(auto_complete::WatchdogTrip::Ceiling)
+            .contains("45m"));
+    }
+
+    #[test]
+    fn progress_signature_changes_when_a_file_is_edited_then_committed() {
+        // A real worktree: an edit and a commit each move the signature, so the
+        // no-progress timer resets; an idle worktree keeps it stable.
+        let tmp = tempfile::tempdir().unwrap();
+        let wt = tmp.path();
+        let git = |args: &[&str]| {
+            assert!(std::process::Command::new("git")
+                .arg("-C")
+                .arg(wt)
+                .args(args)
+                .output()
+                .unwrap()
+                .status
+                .success());
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@t.t"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(wt.join("a.txt"), "one").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "first"]);
+
+        let sig1 = PhaseWatchdog::progress_signature(wt).expect("sig after first commit");
+        // Idle: same signature.
+        assert_eq!(
+            sig1,
+            PhaseWatchdog::progress_signature(wt).unwrap(),
+            "an idle worktree must not register as progress",
+        );
+        // A new uncommitted edit changes the porcelain status → progress.
+        std::fs::write(wt.join("b.txt"), "two").unwrap();
+        let sig2 = PhaseWatchdog::progress_signature(wt).unwrap();
+        assert_ne!(sig1, sig2, "an uncommitted edit is progress");
+        // Committing it advances HEAD → progress again.
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "second"]);
+        let sig3 = PhaseWatchdog::progress_signature(wt).unwrap();
+        assert_ne!(sig2, sig3, "a new commit is progress");
     }
 }
 

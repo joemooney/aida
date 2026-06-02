@@ -132,6 +132,13 @@ pub(crate) enum ExitOutcome {
     /// (signal-terminated) status. The status is retained for diagnostics and
     /// the reap tests — the orchestrator itself does not branch on it.
     Reaped(#[allow(dead_code)] ExitStatus),
+    /// BUG-420: the phase watchdog tripped — the child made no progress for the
+    /// no-progress window (a degenerate echo/sleep spin) or blew past the
+    /// wall-clock ceiling — so the orchestrator killed its process tree. The
+    /// `String` is the one-line trip reason for the phase failure / shelve.
+    /// This is NOT a clean completion: the caller turns it into a shelvable
+    /// phase failure. trace:BUG-420 | ai:claude
+    WatchdogTripped(String),
 }
 
 /// Spawn `cmd` and wait for it to finish — either by exiting on its own or by
@@ -141,9 +148,27 @@ pub(crate) enum ExitOutcome {
 /// which file to touch, clears any stale sentinel before spawning, and removes
 /// the sentinel again before returning so a re-run starts clean.
 pub(crate) fn spawn_and_wait(
+    cmd: Command,
+    sentinel: &Path,
+    config: &ExitSignalConfig,
+) -> std::io::Result<ExitOutcome> {
+    spawn_and_wait_watched(cmd, sentinel, config, None)
+}
+
+/// BUG-420: [`spawn_and_wait`] plus an optional **watchdog**. On each poll tick
+/// the watchdog closure is consulted; when it returns `Some(reason)` the child's
+/// process tree is reaped (the same SIGTERM→grace→SIGKILL cascade as the
+/// sentinel path) and the call returns [`ExitOutcome::WatchdogTripped`]. The
+/// orchestrator arms this only for *headless* phases — an interactive REPL
+/// legitimately idles waiting for the user, so it passes `None` and behaves
+/// exactly as before. The closure owns its own git/mtime polling cadence
+/// (rate-limited internally) so this tight poll loop stays cheap.
+/// trace:BUG-420 | ai:claude
+pub(crate) fn spawn_and_wait_watched(
     mut cmd: Command,
     sentinel: &Path,
     config: &ExitSignalConfig,
+    mut watchdog: Option<&mut dyn FnMut() -> Option<String>>,
 ) -> std::io::Result<ExitOutcome> {
     // A stale sentinel from a crashed prior run would make us reap the new
     // child instantly — clear it before spawning.
@@ -168,6 +193,17 @@ pub(crate) fn spawn_and_wait(
         // Check 2: did the skill ask to be reaped?
         if sentinel.exists() {
             break ExitOutcome::Reaped(reap(&mut child, config)?);
+        }
+        // Check 3 (BUG-420): did the watchdog trip? A degenerate headless phase
+        // that stops making progress (no commit / file-change) or runs past the
+        // ceiling is killed here rather than blocking the drain forever.
+        if let Some(ref mut wd) = watchdog {
+            if let Some(reason) = wd() {
+                // Reap the tree before returning so we never leave a zombie /
+                // an orphaned `claude -p` spinning in the background.
+                let _ = reap(&mut child, config)?;
+                break ExitOutcome::WatchdogTripped(reason);
+            }
         }
         std::thread::sleep(config.poll);
     };
@@ -359,8 +395,55 @@ mod tests {
         let clean = match outcome {
             ExitOutcome::Natural(status) => status.success(),
             ExitOutcome::Reaped(_) => true,
+            ExitOutcome::WatchdogTripped(_) => false,
         };
         assert!(clean, "race outcome should be a clean exit");
+        assert!(!sentinel.exists());
+    }
+
+    /// BUG-420: a watchdog that trips reaps a long-running child and returns
+    /// `WatchdogTripped` with the reason — the orchestrator never blocks forever
+    /// on a degenerate phase. The child here would otherwise loop indefinitely.
+    #[cfg(unix)]
+    #[test]
+    fn watchdog_trip_reaps_a_running_child() {
+        let dir = tempfile::tempdir().unwrap();
+        let sentinel = dir.path().join("s.exit-requested");
+
+        let mut cmd = Command::new("sh");
+        // Never touches the sentinel, never exits — only the watchdog can stop it.
+        cmd.arg("-c").arg("while true; do sleep 0.05; done");
+
+        let config = ExitSignalConfig {
+            poll: Duration::from_millis(20),
+            grace: Duration::from_millis(200),
+        };
+        // Trip on the second poll so the child is genuinely running first.
+        let mut ticks = 0;
+        let mut watchdog = move || {
+            ticks += 1;
+            (ticks >= 2).then(|| "no-progress (test)".to_string())
+        };
+        let start = Instant::now();
+        let outcome = spawn_and_wait_watched(
+            cmd,
+            &sentinel,
+            &config,
+            Some(&mut watchdog as &mut dyn FnMut() -> Option<String>),
+        )
+        .unwrap();
+        let elapsed = start.elapsed();
+
+        match outcome {
+            ExitOutcome::WatchdogTripped(reason) => {
+                assert_eq!(reason, "no-progress (test)");
+            }
+            other => panic!("expected WatchdogTripped, got {other:?}"),
+        }
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "watchdog reap hung: {elapsed:?}"
+        );
         assert!(!sentinel.exists());
     }
 
