@@ -320,6 +320,19 @@ pub(crate) enum FailureKind {
     /// Phase 3: the reviewer session wrote no verdict file, or an unreadable
     /// one — the review never produced a usable decision.
     NoVerdict,
+    /// TASK-136: phase 1 ended *inconclusively* — the orchestrator could not
+    /// confirm or deny a PR (a transient GH-API outage) even after the bounded
+    /// `gh_verify_backoff_schedule` retry. In a *batch* drain this is shelved
+    /// (parked for retry) rather than pausing the whole batch; the shelve
+    /// carries this kind so triage knows the spec is retry-pending, not broken.
+    /// trace:TASK-136 | ai:claude
+    PrVerificationInconclusive,
+    /// BUG-420: a headless phase tripped the no-progress / wall-clock-ceiling
+    /// watchdog — it made no commit or file-change for the no-progress window
+    /// (likely a degenerate echo/sleep spin) or exceeded the phase ceiling. The
+    /// orchestrator killed the child and shelved the spec for a human to look
+    /// at. trace:BUG-420 | ai:claude
+    Watchdog,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -337,6 +350,8 @@ impl FailureKind {
             Self::CiRed => "ci-red",
             Self::CiTimeout => "ci-timeout",
             Self::NoVerdict => "no-verdict",
+            Self::PrVerificationInconclusive => "pr-verification-inconclusive",
+            Self::Watchdog => "no-progress-watchdog",
             Self::Failed => "failed",
         }
     }
@@ -359,7 +374,13 @@ impl FailureKind {
     pub(crate) fn is_shelvable(self) -> bool {
         matches!(
             self,
-            Self::NoPr | Self::CiRed | Self::CiTimeout | Self::NoVerdict | Self::Failed
+            Self::NoPr
+                | Self::CiRed
+                | Self::CiTimeout
+                | Self::NoVerdict
+                | Self::PrVerificationInconclusive
+                | Self::Watchdog
+                | Self::Failed
         )
     }
 }
@@ -916,6 +937,30 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 phase.index()
             );
         }
+        // TASK-136: the GH API stayed unreachable through the retry backoff, so
+        // the orchestrator could not confirm whether a PR was opened. The work
+        // may well be on a branch — this is a transient-network shelve, not a
+        // failed implementation. Re-run the drain once GH is reachable.
+        // trace:TASK-136 | ai:claude
+        FailureKind::PrVerificationInconclusive => {
+            return format!(
+                "GH could not be reached to confirm a PR after retrying — the spec is \
+                 shelved, not failed. Re-run the drain when GH is reachable \
+                 (`gh api /rate_limit` to check), then `aida queue work {spec} --auto-complete`."
+            );
+        }
+        // BUG-420: the no-progress / ceiling watchdog killed a degenerate
+        // headless phase. The partial work (if any) is on the branch; a human
+        // should inspect why the session stopped making progress.
+        // trace:BUG-420 | ai:claude
+        FailureKind::Watchdog => {
+            return format!(
+                "The phase watchdog stopped a headless session that made no progress \
+                 (no commit or file-change) within its window — likely a degenerate spin. \
+                 Inspect the worktree and pick the spec back up by hand: \
+                 `aida queue rework {spec} --work`."
+            );
+        }
         _ => {}
     }
 
@@ -1370,6 +1415,101 @@ fn finish_inconclusive(
     }
 }
 
+/// TASK-136: phase 1 ended *inconclusively* (GH unreachable through the whole
+/// `gh_verify_backoff_schedule` retry) inside a **batch** drain — *shelve* the
+/// spec instead of pausing. Routing it through [`PhaseDriver::shelve_on_failure`]
+/// (as [`FailureKind::PrVerificationInconclusive`], a shelvable kind) parks it
+/// in `NeedsAttention` and stamps `shelved_reason`, so [`drain_batch`]'s
+/// existing EPIC-28 shelve→advance path carries it: the spec leaves the queue
+/// head, the batch continues, and a human triages the parked set via
+/// `aida findings list`. The single-spec path keeps the [`finish_inconclusive`]
+/// pause (reasonable when nothing is queued behind it). The epilogue says
+/// *shelved, not failed* — this is a transient-network park, not a botched
+/// implementation. trace:TASK-136 | ai:claude
+fn finish_inconclusive_shelved(
+    driver: &mut dyn PhaseDriver,
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+    reason: &str,
+) -> OrchestrationResult {
+    let phase = Phase::Implementer;
+    let elapsed = start.elapsed().as_millis();
+    let failure = PhaseFailure::of(FailureKind::PrVerificationInconclusive, reason);
+    let hint = recovery_hint(phase, failure.kind, &driver.hint_context());
+    // Best-effort shelve — a shelve-side error leaves `shelved_reason` None, so
+    // `drain_batch` falls back to treating the inconclusive as a hard pause
+    // rather than silently swallowing the spec.
+    let shelved_reason: Option<aida_core::FailureReason> =
+        match driver.shelve_on_failure(spec, phase, &failure, &hint) {
+            Ok(fr) => fr,
+            Err(e) => {
+                eprintln!(
+                    "  {} could not shelve {} into Needs Attention: {} \
+                     — the batch drain will treat it as a pause",
+                    "ⓘ".cyan(),
+                    spec,
+                    e
+                );
+                None
+            }
+        };
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                phase.slug(),
+                "inconclusive-shelved",
+                spec,
+                elapsed,
+                Some(phase.index()),
+                &[("reason", reason), ("hint", hint.as_str())],
+            )
+        );
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "shelved",
+                spec,
+                elapsed,
+                Some(phase.index()),
+                &[("kind", failure.kind.slug())],
+            )
+        );
+    } else {
+        eprintln!();
+        eprintln!(
+            "{} phase 1 (implementer session) inconclusive — GH unreachable after retries: {}",
+            "⏸".yellow().bold(),
+            reason
+        );
+        eprintln!("  {} {}", "→".dimmed(), hint.cyan());
+        eprintln!();
+        eprintln!(
+            "{} {} shelved ({}) — transient verify failure, batch advances; \
+             triage with `aida findings list`",
+            "⚠".yellow().bold(),
+            spec.bold(),
+            fmt_duration(elapsed)
+        );
+    }
+    OrchestrationResult {
+        exit_code: phase.index(),
+        failed_phase: Some(phase),
+        failure: Some(failure),
+        phase_durations: durations,
+        total_ms: elapsed,
+        punt_reason: None,
+        shipped_spec_id: None,
+        escalation: None,
+        inconclusive_reason: None,
+        shelved_reason,
+        held_reason: None,
+    }
+}
+
 /// BUG-250: print the deliberate-PR-hold epilogue and build a clean *non-
 /// failure* [`OrchestrationResult`]. When phase 1 ends with the branch pushed
 /// but the PR deliberately held (the `aida pr hold` signal), the pre-BUG-250
@@ -1688,6 +1828,7 @@ fn resolve_punt_via_advisor(
     durations: &[(Phase, u128)],
     punt_reason: &str,
     escalate_mode: EscalateMode,
+    batch: bool,
 ) -> PuntFlow {
     if !json {
         eprintln!();
@@ -1714,7 +1855,7 @@ fn resolve_punt_via_advisor(
                     "✓".green()
                 );
             }
-            resume_after_advisor(driver, spec, json, start, durations, &answer)
+            resume_after_advisor(driver, spec, json, start, durations, &answer, batch)
         }
         Ok(AdvisorOutcome::Escalated { reason, .. }) => match escalate_mode {
             EscalateMode::Blocks => {
@@ -1749,7 +1890,15 @@ fn resolve_punt_via_advisor(
                         "⏵".yellow()
                     );
                 }
-                resume_after_advisor(driver, spec, json, start, durations, ADVISOR_DEFAULT_PROMPT)
+                resume_after_advisor(
+                    driver,
+                    spec,
+                    json,
+                    start,
+                    durations,
+                    ADVISOR_DEFAULT_PROMPT,
+                    batch,
+                )
             }
         },
     }
@@ -1767,6 +1916,7 @@ fn resume_after_advisor(
     start: &Instant,
     durations: &[(Phase, u128)],
     answer: &str,
+    batch: bool,
 ) -> PuntFlow {
     match driver.resume_implementer(answer) {
         Err(f) => PuntFlow::Terminal(resolve_phase_failure(
@@ -1793,14 +1943,26 @@ fn resume_after_advisor(
         // retry, no second advisor round. BUG-266: same path when the
         // Anthropic API took out the resumed `claude -p` itself.
         Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
-            PuntFlow::Terminal(finish_inconclusive(
-                spec,
-                json,
-                start,
-                durations.to_vec(),
-                &reason,
-                retry_hint.as_deref(),
-            ))
+            // TASK-136: batch → shelve-and-advance; single-spec → pause.
+            if batch {
+                PuntFlow::Terminal(finish_inconclusive_shelved(
+                    driver,
+                    spec,
+                    json,
+                    start,
+                    durations.to_vec(),
+                    &reason,
+                ))
+            } else {
+                PuntFlow::Terminal(finish_inconclusive(
+                    spec,
+                    json,
+                    start,
+                    durations.to_vec(),
+                    &reason,
+                    retry_hint.as_deref(),
+                ))
+            }
         }
         // BUG-250: the resumed implementer deliberately held the PR — a clean
         // terminal stop, same as the first-pass hold (the advisor's fork is
@@ -1872,9 +2034,19 @@ pub(crate) fn orchestrate(
         json,
         escalate_mode,
         LifecycleSkip::none(),
+        // TASK-136: the no-skip facade is the single-spec entry point — a
+        // phase-1 Inconclusive pauses for retry, it is not shelved.
+        false,
     )
 }
 
+/// TASK-136: `batch` selects how a still-inconclusive phase-1 verify (GH
+/// unreachable through the retry backoff) is handled. In a **batch** drain it
+/// is *shelved* — parked in `NeedsAttention` so the batch loop advances past it
+/// (the existing EPIC-28 shelve→advance path) rather than the whole batch
+/// pausing at the head. In a **single-spec** drain it stays an Inconclusive
+/// pause (the historical behaviour) — pausing one spec to retry later is
+/// reasonable when there is nothing else queued behind it. trace:TASK-136
 pub(crate) fn orchestrate_with_lifecycle_skip(
     driver: &mut dyn PhaseDriver,
     spec: &str,
@@ -1882,6 +2054,7 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
     json: bool,
     escalate_mode: EscalateMode,
     lifecycle_skip: LifecycleSkip,
+    batch: bool,
 ) -> OrchestrationResult {
     let start = Instant::now();
     // Per-phase wall time, captured as each phase runs so a failure carries
@@ -1933,6 +2106,7 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
                 &durations,
                 &reason,
                 escalate_mode,
+                batch,
             ) {
                 PuntFlow::Terminal(result) => return result,
                 // The advisor resolved the fork and the implementer resumed
@@ -1956,6 +2130,11 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
         // trace:BUG-257 BUG-266
         Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
             durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+            // TASK-136: in a batch drain, shelve-and-advance instead of pausing
+            // the whole batch at this head; single-spec keeps the pause.
+            if batch {
+                return finish_inconclusive_shelved(driver, spec, json, &start, durations, &reason);
+            }
             return finish_inconclusive(
                 spec,
                 json,
@@ -2755,6 +2934,11 @@ mod tests {
         /// every non-escalation flow must leave it at zero so an advisor
         /// resume's worktree is preserved.
         mark_escalated_calls: usize,
+        /// TASK-136: when `true`, `shelve_on_failure` succeeds and returns a
+        /// `FailureReason` the way a real store-backed driver does, so a
+        /// batch-mode inconclusive can route through the EPIC-28 shelve→advance
+        /// path. `false` (default) keeps the trait default `Ok(None)`.
+        shelve_succeeds: bool,
     }
 
     impl MockPhaseDriver {
@@ -2776,11 +2960,25 @@ mod tests {
                 inconclusive: None,
                 held: None,
                 mark_escalated_calls: 0,
+                shelve_succeeds: false,
             }
         }
 
         fn all_ok() -> Self {
             Self::base()
+        }
+
+        /// TASK-136: `run_implementer` returns
+        /// [`ImplementerOutcome::Inconclusive`] AND `shelve_on_failure`
+        /// succeeds — the batch-mode shelve→advance path. In a single-spec
+        /// drain the same driver still pauses (the `batch` flag, not the
+        /// driver, decides).
+        fn inconclusive_and_shelves(reason: &str) -> Self {
+            Self {
+                inconclusive: Some(reason.to_string()),
+                shelve_succeeds: true,
+                ..Self::base()
+            }
         }
 
         fn failing_at(phase: Phase) -> Self {
@@ -2969,6 +3167,26 @@ mod tests {
         fn mark_implementer_lease_escalated(&mut self) {
             self.mark_escalated_calls += 1;
         }
+        fn shelve_on_failure(
+            &mut self,
+            _spec: &str,
+            phase: Phase,
+            failure: &PhaseFailure,
+            recovery_hint: &str,
+        ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+            if !self.shelve_succeeds {
+                return Ok(None);
+            }
+            Ok(Some(aida_core::FailureReason {
+                phase: phase.slug().to_string(),
+                phase_index: phase.index() as u8,
+                kind: failure.kind.slug().to_string(),
+                detail: failure.reason.clone(),
+                recovery_hint: Some(recovery_hint.to_string()),
+                shelved_by: None,
+                shelved_at: chrono::Utc::now(),
+            }))
+        }
     }
 
     // --- Core orchestration: the mock-Claude integration test -------------
@@ -3058,6 +3276,7 @@ mod tests {
                 no_review: true,
                 ..LifecycleSkip::none()
             },
+            false,
         );
         assert_eq!(result.exit_code, 0);
         assert_eq!(
@@ -3085,6 +3304,7 @@ mod tests {
                 no_build: true,
                 ..LifecycleSkip::none()
             },
+            false,
         );
         assert_eq!(result.exit_code, 0);
         assert_eq!(
@@ -3109,6 +3329,7 @@ mod tests {
             true,
             EscalateMode::Blocks,
             LifecycleSkip::from_tags(["lifecycle:trivial"]),
+            false,
         );
         assert_eq!(result.exit_code, 0);
         assert_eq!(
@@ -3134,6 +3355,7 @@ mod tests {
                 no_ci_wait: true,
                 ..LifecycleSkip::none()
             },
+            false,
         );
         assert_eq!(result.exit_code, 0);
         assert!(
@@ -3167,6 +3389,7 @@ mod tests {
                 no_review: true,
                 ..LifecycleSkip::none()
             },
+            false,
         );
         assert_eq!(result.exit_code, 0);
         assert!(result.escalation.is_none());
@@ -3396,6 +3619,76 @@ mod tests {
         assert!(result.shipped_spec_id.is_none(), "nothing shipped");
         // Phases 2-6 never ran — the drain paused at phase 1.
         assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    // --- TASK-136: inconclusive → shelve-and-advance in a batch drain -----
+
+    /// TASK-136 acceptance: a phase-1 Inconclusive in BATCH mode shelves the
+    /// spec (stamps `shelved_reason`, exit = phase-1 index) so `drain_batch`'s
+    /// EPIC-28 shelve→advance path carries it — the whole batch does not pause
+    /// at the head. trace:TASK-136 | ai:claude
+    #[test]
+    fn inconclusive_after_retries_shelves_and_advances_in_batch() {
+        let mut driver =
+            MockPhaseDriver::inconclusive_and_shelves("GH unreachable after the retry backoff");
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip::none(),
+            true, // batch
+        );
+        let fr = result
+            .shelved_reason
+            .as_ref()
+            .expect("a batch-mode inconclusive must shelve, not pause");
+        assert_eq!(
+            fr.kind, "pr-verification-inconclusive",
+            "the shelve records the inconclusive-verify kind for triage"
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.exit_code,
+            Phase::Implementer.index(),
+            "a shelve keeps the failed-phase exit code so drain_batch routes it",
+        );
+        assert!(
+            result.inconclusive_reason.is_none(),
+            "in batch mode it is shelved, NOT left as an inconclusive pause",
+        );
+        // Phases 2-6 never ran.
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// TASK-136: the single-spec path is UNCHANGED — the same driver pauses
+    /// (exit 0, `inconclusive_reason` set, nothing shelved). The `batch` flag,
+    /// not the driver, picks the behaviour. trace:TASK-136 | ai:claude
+    #[test]
+    fn single_spec_inconclusive_still_pauses() {
+        let mut driver = MockPhaseDriver::inconclusive_and_shelves("GH unreachable");
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip::none(),
+            false, // single-spec
+        );
+        assert_eq!(
+            result.exit_code, 0,
+            "single-spec inconclusive is a clean pause"
+        );
+        assert!(
+            result.inconclusive_reason.is_some(),
+            "single-spec keeps the historical Inconclusive pause",
+        );
+        assert!(
+            result.shelved_reason.is_none(),
+            "single-spec never shelves an inconclusive",
+        );
     }
 
     // --- BUG-250: deliberate PR-hold phase-1 outcome ---------------------
