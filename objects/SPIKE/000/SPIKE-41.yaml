@@ -8,10 +8,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T07:09:30.835858568Z
-modified_at: 2026-05-29T07:09:30.835858568Z
+modified_at: 2026-06-02T02:55:25.489224629Z
 req_type: Spike
 tags:
 - claude-code-compose
 - from-strategic-recompose-round-3
 - hooks
 - priority:high
+comments:
+- id: 019e8641-e331-73c0-a6a0-decb4001236f
+  author: joe
+  content: |-
+    Strategic extension (advisor + operator, 2026-06-01): the hook bundle isn't just lifecycle convenience — it's how AIDA's SUBSTRATE survives even when a Claude Code Workflow (or any harness orchestrator) does the work. Motivating evidence: quizdom (BUG-431) fell back to the Workflow tool when AIDA's drain broke; it shipped code but populated ZERO substrate (no lifecycle flips, leases, traces). A hook bundle would have captured all of it. See docs/positioning/vs-claude-code-workflows.md → 'Worked example: quizdom'.
+
+    NEW HOOK→SUBSTRATE MAPPINGS to add to this spike (events postdating the original catalogue):
+    - WorktreeCreate / WorktreeRemove ↔ AIDA leases — THE standout. Workflow/subagent 'isolation: worktree' fires these and 'replaces default git behavior' → register a lease on create, release on remove. Turns harness worktree-isolation into lease-tracked substrate work (the exact thing quizdom's bypass lost).
+    - PostToolUse / PostToolBatch on Bash git commit / gh pr ↔ spec lifecycle + auto-bump + trace-comment enforcement (reconstruct the drain's lifecycle effects from the harness's real git actions).
+    - SubagentStart / SubagentStop ↔ provenance (which agent did what — the who/why the graph records, the script doesn't).
+    - TaskCreated / TaskCompleted ↔ mirror harness tasks to AIDA specs (or AIDA as their durable backend).
+
+    THE BOUNDARY (scope this spike honestly): hooks deliver substrate-CAPTURE (mirror effects in — the moat survives any orchestrator), NOT substrate-DRIVEN orchestration (the drain reading the graph to DECIDE next — that stays uniquely AIDA's drain; a Workflow's plan is in its script, not the graph). Don't oversell hooks as making Workflows substrate-driven; they make them substrate-aware-on-output. This is the SECOND composition direction (Workflows-populate-AIDA); SPIKE-32 is the first (AIDA-compiles-to-workflow.js). The hooks direction is the higher-leverage near-term win: it makes the substrate antifragile to which orchestrator runs. trace:SPIKE-41
+  created_at: 2026-06-02T02:55:25.489224629Z
+  modified_at: 2026-06-02T02:55:25.489224629Z
