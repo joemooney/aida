@@ -66919,6 +66919,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             max_failures,
             no_progress_minutes,
             phase_ceiling_minutes,
+            resume_drain,
+            drain_id,
+            resume_dry_run,
             no_human,
             escalate_blocks,
             escalate_defaults,
@@ -67141,6 +67144,27 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
                 if let Some(m) = phase_ceiling_minutes {
                     std::env::set_var("AIDA_PHASE_CEILING_MINUTES", m.to_string());
+                }
+                // STORY-492: `--resume-drain` is its own entry — read the crashed
+                // drain-state, gate on PID-liveness, reconcile from reality, and
+                // re-enter (or `--dry-run` preview). It never returns. Routed
+                // before the batch/single dispatch since it replaces them.
+                // trace:STORY-492 | ai:claude
+                if *resume_drain {
+                    handle_drain_resume(
+                        storage,
+                        &user_id,
+                        drain_id.as_deref(),
+                        *resume_dry_run,
+                        *json,
+                        permission_mode.as_deref(),
+                        no_human_mode,
+                        escalate_mode,
+                        *steal,
+                        *force_claim,
+                        *allow_stale_base,
+                        *no_auto_rebase,
+                    );
                 }
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
                 // batch — one full lifecycle per member, advancing the head
@@ -71042,6 +71066,320 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
     }
 }
 
+/// STORY-492: clamp a reconciled resume phase to one a *fresh* resume process
+/// can actually run. Phases 1-2 are coupled to the implementer session/lease,
+/// which a restarted process does not hold: phase 1 (branch absent) re-runs the
+/// whole drain cleanly, but a reconciled CI(2) — implementer done, CI
+/// postcondition unmet — is bumped to the reviewer (phase 3), because the
+/// lease-coupled CI-end step cannot be replayed and the reviewer + merge phases
+/// re-establish gating (`gh pr merge` still respects required checks). Pure so
+/// the safety clamp is unit-pinned. trace:STORY-492 | ai:claude
+fn clamp_resume_start_phase(reconciled: auto_complete::Phase) -> auto_complete::Phase {
+    if reconciled == auto_complete::Phase::Ci {
+        auto_complete::Phase::Reviewer
+    } else {
+        reconciled
+    }
+}
+
+/// STORY-492 (slice 2c): probe the real world for a crashed drain member's
+/// per-phase postconditions, returning the [`drain_resume::ResumeFacts`] plus
+/// the branch + PR the re-entry must seed into the driver.
+///
+/// Conservative by design: a postcondition we cannot confirm stays `false`
+/// (re-run that phase). Re-running an already-merged `merge()` is redeemed by
+/// the BUG-241 reconcile, and CI / reviewer / build are idempotent — so the
+/// only postconditions that MUST be accurate are the ones gating the
+/// irreversible tail: `pr_merged` (don't re-merge) and `spec_completed` (don't
+/// re-pull). trace:STORY-492 | ai:claude
+fn probe_resume_facts(
+    project_root: &std::path::Path,
+    storage: &Storage,
+    spec: &str,
+    member: Option<&drain_state::DrainMember>,
+) -> (drain_resume::ResumeFacts, Option<String>, Option<u32>) {
+    let mut sink = network_retry::StderrSink;
+
+    // PR number: prefer what drain-state recorded; else look it up by spec.
+    let mut pr = member.and_then(|m| m.pr);
+    if pr.is_none() {
+        if let PrLookup::Found(p) = detect_open_pr_for_spec(project_root, spec) {
+            pr = Some(p.number as u32);
+        }
+    }
+    // The PR's head branch (the merge / CI phases probe against it).
+    let branch = pr.and_then(|n| pr_head_branch(project_root, n as u64));
+
+    // pr_merged — ACCURATE (gates skipping the irreversible merge).
+    let pr_merged = pr
+        .and_then(|n| pr_is_merged_with_sink(project_root, n, &mut sink))
+        .unwrap_or(false);
+
+    // branch_exists — a PR (open or merged) exists, or the branch is on origin.
+    let branch_exists = pr.is_some()
+        || branch
+            .as_deref()
+            .map(|b| {
+                matches!(
+                    probe_branch_on_origin(project_root, b),
+                    BranchOriginProbe::Present
+                )
+            })
+            .unwrap_or(false);
+
+    // ci_green — a point-in-time CI probe; a merged PR implies CI cleared.
+    let ci_green = pr_merged
+        || branch
+            .as_deref()
+            .map(|b| matches!(probe_ci_state_for_branch(b), CiProbe::Green { .. }))
+            .unwrap_or(false);
+
+    // reviewed — an Approved verdict file exists for the PR.
+    let reviewed = pr
+        .map(|n| {
+            let path = project_root
+                .join(".aida")
+                .join("review-verdicts")
+                .join(format!("PR-{n}.json"));
+            matches!(
+                read_verdict_file(&path),
+                Ok(auto_complete::ReviewerOutcome::Verdict(
+                    auto_complete::Verdict::Approved
+                ))
+            )
+        })
+        .unwrap_or(false);
+
+    // spec_completed — ACCURATE (gates skipping the pull/auto-bump).
+    let spec_completed = storage
+        .load()
+        .ok()
+        .and_then(|store| {
+            store
+                .requirements
+                .iter()
+                .find(|r| {
+                    r.spec_id.as_deref() == Some(spec) || r.agreed_id.as_deref() == Some(spec)
+                })
+                .map(|r| r.status == RequirementStatus::Completed)
+        })
+        .unwrap_or(false);
+
+    let facts = drain_resume::ResumeFacts {
+        branch_exists,
+        ci_green,
+        reviewed,
+        pr_merged,
+        // Build is idempotent — always re-run on resume (plan note).
+        build_ok: false,
+        spec_completed,
+    };
+    (facts, branch, pr)
+}
+
+/// STORY-492 (slice 2d): the `--resume-drain` entry point. Reads the
+/// crashed-drain state, runs the PID-liveness gate (refuse if the original
+/// orchestrator is still alive — the catastrophic double-drive guard),
+/// reconciles the re-entry phase from probed git/PR/spec reality, prints the
+/// decision, and — unless `--dry-run` — re-enters the current member at the
+/// reconciled phase. Never returns. trace:STORY-492 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_drain_resume(
+    storage: &Storage,
+    user_id: &str,
+    drain_id: Option<&str>,
+    dry_run: bool,
+    json: bool,
+    permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
+    steal: bool,
+    force_claim: bool,
+    allow_stale_base: bool,
+    no_auto_rebase: bool,
+) -> ! {
+    let project_root = match storage.path().parent() {
+        Some(p) => p.to_path_buf(),
+        None => {
+            eprintln!("✗ cannot derive project root from the store path");
+            std::process::exit(1);
+        }
+    };
+    let Some(state) = drain_state::DrainState::read(&project_root) else {
+        eprintln!(
+            "{} no `.aida/drain-state.json` — there is no crashed drain to resume.",
+            "✗".red().bold()
+        );
+        eprintln!(
+            "  {} a clean drain removes its state file on exit; only a crashed/killed \
+             drain leaves one behind.",
+            "→".dimmed()
+        );
+        std::process::exit(1);
+    };
+
+    // Optional `--drain-id` corroboration — match the run UUID or the start
+    // timestamp so a stale state file isn't resumed by mistake.
+    if let Some(id) = drain_id {
+        let matches = state.run_uuid == id || state.started_at.starts_with(id);
+        if !matches {
+            eprintln!(
+                "{} --drain-id `{}` does not match the recorded drain (run `{}`, started {}).",
+                "✗".red().bold(),
+                id,
+                state.run_uuid,
+                state.started_at
+            );
+            std::process::exit(1);
+        }
+    }
+
+    // PID-liveness gate — the catastrophic double-drive guard. Conservative:
+    // any doubt resolves to "alive". trace:STORY-492 | ai:claude
+    let orchestrator_alive = process_probe::pid_is_alive(state.orchestrator_pid);
+
+    let current = state.current.clone();
+    let member = current
+        .as_ref()
+        .and_then(|c| state.members.iter().find(|m| &m.spec == c))
+        .cloned();
+    let member_in_flight = current.is_some();
+    let member_state_in_phase = member
+        .as_ref()
+        .map(|m| m.state.starts_with("in-phase-"))
+        .unwrap_or(false);
+    let has_failure_reason = member
+        .as_ref()
+        .map(|m| m.state == drain_state::STATE_FAILED)
+        .unwrap_or(false);
+
+    // Probe the world for the current member's per-phase postconditions.
+    let (facts, branch, pr) = match &current {
+        Some(spec) => probe_resume_facts(&project_root, storage, spec, member.as_ref()),
+        None => (drain_resume::ResumeFacts::default(), None, None),
+    };
+
+    let outcome = drain_resume::resume_plan(
+        orchestrator_alive,
+        member_in_flight,
+        member_state_in_phase,
+        has_failure_reason,
+        &facts,
+    );
+
+    let spec_label = current.as_deref().unwrap_or("<none>");
+    match outcome {
+        drain_resume::ResumeOutcome::RefuseOrchestratorAlive => {
+            eprintln!(
+                "{} refusing to resume — the original orchestrator (pid {}) is still alive.",
+                "✗".red().bold(),
+                state.orchestrator_pid
+            );
+            eprintln!(
+                "  {} resuming a live drain would DOUBLE-DRIVE the same spec (two processes \
+                 merging the same PR). Stop the running drain first, then re-run --resume-drain.",
+                "→".dimmed()
+            );
+            std::process::exit(1);
+        }
+        drain_resume::ResumeOutcome::NothingToResume => {
+            println!(
+                "{} nothing to resume — no member was mid-flight in `{}`.",
+                "ⓘ".cyan(),
+                drain_state::drain_state_path(&project_root).display()
+            );
+            std::process::exit(0);
+        }
+        drain_resume::ResumeOutcome::LeaveShelved => {
+            println!(
+                "{} `{}` was deliberately shelved, not crashed — leave it parked and triage \
+                 with `aida findings list` (don't resume).",
+                "ⓘ".cyan(),
+                spec_label
+            );
+            std::process::exit(0);
+        }
+        drain_resume::ResumeOutcome::AlreadyComplete => {
+            println!(
+                "{} every phase of `{}` is already complete — clearing the stale drain-state.",
+                "✓".green().bold(),
+                spec_label
+            );
+            let _ = drain_state::DrainState::clear(&project_root);
+            std::process::exit(0);
+        }
+        drain_resume::ResumeOutcome::ResumeAt(reconciled) => {
+            // SAFETY clamp: phases 1-2 (implementer + CI-wait) are coupled to the
+            // implementer session/lease, which a fresh resume process does not
+            // hold. Phase 1 (branch absent) re-runs the whole drain cleanly. A
+            // reconciled CI(2) means the implementer finished but CI's
+            // postcondition is unmet — we cannot re-run the lease-coupled CI-end
+            // step, so re-enter at the reviewer (phase 3); the reviewer + merge
+            // re-establish gating and `gh pr merge` still respects required
+            // checks. trace:STORY-492 | ai:claude
+            let start_phase = clamp_resume_start_phase(reconciled);
+            if reconciled != start_phase {
+                println!(
+                    "{} reconciled to phase {} (CI) — re-entering at phase {} (reviewer) instead \
+                     (CI-wait is coupled to the implementer session a resume cannot hold).",
+                    "ⓘ".cyan(),
+                    reconciled.index(),
+                    start_phase.index()
+                );
+            }
+            println!(
+                "{} resuming `{}` at phase {} ({}) — earlier phases reconciled as already done.",
+                "↩".cyan().bold(),
+                spec_label,
+                start_phase.index(),
+                start_phase.slug()
+            );
+            if let Some(n) = pr {
+                println!("  {} seeded PR-{}", "→".dimmed(), n);
+            }
+            if dry_run {
+                println!(
+                    "  {} --dry-run — not re-entering. Drop --dry-run to resume.",
+                    "→".dimmed()
+                );
+                std::process::exit(0);
+            }
+            // Live re-entry: phase 1 means a from-scratch redo (no seed); any
+            // later phase seeds the probed branch + PR.
+            let spec = current.expect("ResumeAt implies a current member");
+            let variant = auto_complete::AutoCompleteVariant::Full;
+            let resume_entry = if start_phase == auto_complete::Phase::Implementer {
+                None
+            } else {
+                Some(ResumeEntry {
+                    start_phase,
+                    branch,
+                    pr,
+                })
+            };
+            let result = run_auto_complete(
+                storage,
+                user_id,
+                &spec,
+                variant,
+                json,
+                permission_mode,
+                no_human,
+                escalate_mode,
+                // The resume owns the drain-state file (updates it, clears on a
+                // clean finish).
+                true,
+                steal,
+                force_claim,
+                allow_stale_base,
+                no_auto_rebase,
+                resume_entry,
+            );
+            std::process::exit(result.exit_code);
+        }
+    }
+}
+
 /// Entry point for `aida queue work <SPEC> --auto-complete`. Never returns:
 /// always terminates the process with an exit code (0 success, 1-6 = the
 /// 1-based index of the phase that failed). trace:STORY-246 | ai:claude
@@ -71083,6 +71421,8 @@ fn handle_auto_complete(
         force_claim,
         allow_stale_base,
         no_auto_rebase,
+        // STORY-492: not a resume — start at phase 1.
+        None,
     );
     std::process::exit(result.exit_code);
 }
@@ -71128,6 +71468,12 @@ fn run_auto_complete(
     // false, fully-headless phase 3 can attempt one clean PR rebase before
     // falling back to STORY-281 refusal.
     no_auto_rebase: bool,
+    // STORY-492: `None` for a normal drain (start at phase 1, run everything).
+    // `Some` for a `--resume-drain` re-entry — carries the reconciled
+    // `start_phase` (skip earlier phases) plus the branch + PR to seed into the
+    // driver so the resumed phases have the context the skipped phases would
+    // have discovered. trace:STORY-492 | ai:claude
+    resume: Option<ResumeEntry>,
 ) -> auto_complete::OrchestrationResult {
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
@@ -71236,13 +71582,23 @@ fn run_auto_complete(
         no_auto_rebase,
         lifecycle_skip,
     );
+    // STORY-492: a resume re-entry seeds the driver with the branch + PR the
+    // skipped phases would otherwise have discovered, so the resumed phases
+    // (CI / reviewer / merge / …) have the context they need.
+    let start_phase = match &resume {
+        Some(r) => {
+            driver.seed_resume_state(r.branch.clone(), r.pr);
+            r.start_phase
+        }
+        None => auto_complete::Phase::Implementer,
+    };
     let started_at = chrono::Utc::now();
     // TASK-136: a batch / nextN member (`owns_drain_state == false`) shelves a
     // still-inconclusive phase-1 verify so the drain advances; a standalone
     // single-spec drain keeps the Inconclusive pause. The two are exact
     // inverses, so `batch` derives directly from `owns_drain_state`.
     let batch = !owns_drain_state;
-    let result = auto_complete::orchestrate_with_lifecycle_skip(
+    let result = auto_complete::orchestrate_with_resume(
         &mut driver,
         spec,
         variant,
@@ -71250,6 +71606,7 @@ fn run_auto_complete(
         escalate_mode,
         lifecycle_skip,
         batch,
+        start_phase,
     );
     let completed_at = chrono::Utc::now();
 
@@ -71511,6 +71868,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             self.force_claim,
             self.allow_stale_base,
             self.no_auto_rebase,
+            None,
         )
     }
 }
@@ -72471,6 +72829,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             self.force_claim,
             self.allow_stale_base,
             self.no_auto_rebase,
+            None,
         )
     }
 }
@@ -74585,6 +74944,17 @@ enum Phase1PrResolve {
     Retry(String),
 }
 
+/// STORY-492: a `--resume-drain` re-entry context for [`run_auto_complete`] —
+/// the reconciled phase to re-enter at plus the branch + PR to seed into the
+/// driver (the skipped earlier phases would have discovered these). `None`
+/// passed to `run_auto_complete` means a normal phase-1 drain.
+/// trace:STORY-492 | ai:claude
+struct ResumeEntry {
+    start_phase: auto_complete::Phase,
+    branch: Option<String>,
+    pr: Option<u32>,
+}
+
 impl RealPhaseDriver {
     fn new(
         project_root: std::path::PathBuf,
@@ -75018,6 +75388,19 @@ fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::Calibrat
 }
 
 impl RealPhaseDriver {
+    /// STORY-492: seed the branch + PR a `--resume-drain` re-entry skipped
+    /// phases would have discovered, so the resumed phases (CI / reviewer /
+    /// merge / pull) have the context they need. Called once before
+    /// `orchestrate_with_resume` on a resume. trace:STORY-492 | ai:claude
+    fn seed_resume_state(&mut self, branch: Option<String>, pr: Option<u32>) {
+        if branch.is_some() {
+            self.branch = branch;
+        }
+        if pr.is_some() {
+            self.pr_number = pr;
+        }
+    }
+
     /// TASK-136: one phase-1 PR-verify attempt, factored out of
     /// [`Self::run_implementer`] so the transient GH-unreachable case can be
     /// retried with a backoff. Encapsulates the BUG-223 branch-then-spec
@@ -77349,6 +77732,44 @@ mod drain_reliability_wiring_tests {
         assert!(wd
             .trip_reason(auto_complete::WatchdogTrip::Ceiling)
             .contains("45m"));
+    }
+
+    #[test]
+    fn resume_start_phase_clamp_bumps_ci_to_reviewer_only() {
+        use auto_complete::Phase;
+        // CI is the one unsafe re-entry (lease-coupled) → bumped to reviewer.
+        assert_eq!(
+            clamp_resume_start_phase(Phase::Ci),
+            Phase::Reviewer,
+            "a reconciled CI re-entry must clamp up to the reviewer",
+        );
+        // Every other phase is left exactly as reconciled.
+        for p in [
+            Phase::Implementer,
+            Phase::Reviewer,
+            Phase::Merge,
+            Phase::Pull,
+            Phase::Build,
+        ] {
+            assert_eq!(clamp_resume_start_phase(p), p);
+        }
+    }
+
+    #[test]
+    fn probe_resume_facts_is_conservative_when_nothing_exists() {
+        // No git / gh / store → every postcondition is conservatively false, so
+        // reconcile would re-run from the start rather than skip a real phase.
+        let tmp = tempfile::tempdir().unwrap();
+        let storage = Storage::new(tmp.path().join("requirements.db"));
+        let (facts, branch, pr) = probe_resume_facts(tmp.path(), &storage, "TASK-1", None);
+        assert!(!facts.branch_exists);
+        assert!(!facts.pr_merged);
+        assert!(!facts.spec_completed);
+        assert!(!facts.ci_green);
+        assert!(!facts.reviewed);
+        assert!(!facts.build_ok);
+        assert_eq!(branch, None);
+        assert_eq!(pr, None);
     }
 
     #[test]

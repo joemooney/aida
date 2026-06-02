@@ -147,6 +147,10 @@ pub(crate) enum ExitOutcome {
 /// Exports `AIDA_EXIT_SENTINEL=<sentinel>` to the child so the skill knows
 /// which file to touch, clears any stale sentinel before spawning, and removes
 /// the sentinel again before returning so a re-run starts clean.
+// The orchestrator's real phases all pass a (possibly-`None`) watchdog via
+// `spawn_and_wait_watched`; this unwatched convenience wrapper is currently
+// exercised only by the reap tests, so silence dead-code in the non-test build.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn spawn_and_wait(
     cmd: Command,
     sentinel: &Path,
