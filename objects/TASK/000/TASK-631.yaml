@@ -1,0 +1,29 @@
+id: 019e8626-69a0-7eb1-9bca-eb5de80d86ce
+spec_id: TASK-631
+agreed_id: TASK-631
+title: 'aida init: commit the scaffolding itself — auto when non-interactive, prompt (default-Y) when TTY — scoped to init''s own paths'
+description: |-
+  Decision (operator + advisor, 2026-06-01). Today 'aida init' leaves the scaffolding UNTRACKED + enqueues an onboarding task to commit it; until committed, session worktrees + fresh clones lack it and fall to legacy/wrong data (BUG-433) and session-end refuses on untracked paths (BUG-73 family). Make init commit it:
+
+  - NON-INTERACTIVE (no TTY: orchestrator / agent / CI / piped): auto-commit. Same non-TTY-fast-path discipline as BUG-422/BUG-407.
+  - INTERACTIVE (TTY): prompt 'Commit the AIDA scaffolding now? [Y/n]' default-Y, after PRINTING the paths it will stage.
+
+  CRITICAL — scope the commit to init's OWN created paths, NEVER 'git add .': stage only .aida/config.toml (+ the gitignore allowlist), .claude/, CLAUDE.md, AGENTS.md, docs/plans/, docs/aida/, .gitignore. A blind 'git add .' in an existing repo with WIP would sweep the user's unrelated changes into the 'chore: scaffold AIDA' commit. (The current CLAUDE.md guidance says 'git add . && git commit' — fix that too.)
+
+  DEDUP: when init commits, skip enqueuing the onboarding 'Commit AIDA scaffolding' task (TASK-510/TASK-007 family) — or mark it done — so the first-user isn't told to do an already-done step.
+
+  COMPLEMENTARY to BUG-433 (detect store from .aida-store even without committed config) — do both: this fixes the root (durable scaffolding), BUG-433 is the belt-and-suspenders. Commit message: 'chore: scaffold AIDA' (the existing suggested form).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-02T02:25:24.896723449Z
+modified_at: 2026-06-02T02:25:24.896723449Z
+req_type: Task
+tags:
+- aida:init
+- first-user-papercut
+- from-advisor
+- non-tty
+- onboarding-flow
+- scaffolding
