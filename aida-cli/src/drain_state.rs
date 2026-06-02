@@ -42,7 +42,7 @@ pub(crate) const STATE_QUEUED: &str = "queued";
 /// Member state: the spec finished its full lifecycle successfully.
 pub(crate) const STATE_COMPLETED: &str = "completed";
 /// Member state: the spec's lifecycle stopped on a phase failure.
-const STATE_FAILED: &str = "failed";
+pub(crate) const STATE_FAILED: &str = "failed";
 
 /// Path of the drain-state file under `project_root`.
 pub(crate) fn drain_state_path(project_root: &Path) -> PathBuf {

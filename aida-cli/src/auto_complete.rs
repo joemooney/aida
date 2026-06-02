@@ -2056,6 +2056,45 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
     lifecycle_skip: LifecycleSkip,
     batch: bool,
 ) -> OrchestrationResult {
+    // Normal (non-resume) entry: start at phase 1.
+    orchestrate_with_resume(
+        driver,
+        spec,
+        variant,
+        json,
+        escalate_mode,
+        lifecycle_skip,
+        batch,
+        Phase::Implementer,
+    )
+}
+
+/// STORY-492: the orchestration loop with a `start_phase` — used by `--resume`
+/// to re-enter a crashed drain at the first phase whose effect is *not* yet
+/// present in the world (computed by `drain_resume::reconcile_resume_phase`
+/// from probed git/PR/spec reality). Phases before `start_phase` are skipped
+/// because their side effects already exist (the branch is pushed, the PR is
+/// merged, …); the caller must have **seeded the driver** with the branch + PR
+/// the skipped phases would otherwise have discovered, so the resumed phases
+/// have the context they need. A normal drain passes `Phase::Implementer`
+/// (skip nothing), so this is a strict superset of the historical behaviour.
+///
+/// SAFETY: re-entering at an earlier phase than strictly necessary is safe —
+/// re-running an already-merged `merge()` is caught by the BUG-241 reconcile
+/// (`detect_merged_pr` → `ShippedOutOfBand` → success), and CI/reviewer/build
+/// are idempotent. The catastrophic case (double-drive) is prevented *before*
+/// this is called, by the PID-liveness gate in the resume handler.
+/// trace:STORY-492 | ai:claude
+pub(crate) fn orchestrate_with_resume(
+    driver: &mut dyn PhaseDriver,
+    spec: &str,
+    variant: AutoCompleteVariant,
+    json: bool,
+    escalate_mode: EscalateMode,
+    lifecycle_skip: LifecycleSkip,
+    batch: bool,
+    start_phase: Phase,
+) -> OrchestrationResult {
     let start = Instant::now();
     // Per-phase wall time, captured as each phase runs so a failure carries
     // the timing of the phases that did complete. trace:TASK-266 | ai:claude
@@ -2075,111 +2114,133 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
         );
     }
 
-    // Phase 1 — implementer session. Outcomes: a PR was opened (run on), a
-    // genuine failure (reconcile then report), or a punt. STORY-306: a punt no
-    // longer stops the drain outright — it routes through the headless advisor
-    // tier, which resolves the fork (the implementer resumes, the pipeline
-    // continues) or escalates it (the run ends per `escalate_mode`).
-    // trace:STORY-276, STORY-306 | ai:claude
-    emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
-    let phase_start = Instant::now();
-    match driver.run_implementer() {
-        Err(f) => {
-            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-            return resolve_phase_failure(
-                driver,
-                Phase::Implementer,
-                spec,
-                json,
-                &start,
-                &f,
-                durations,
+    // STORY-492: on a resume that re-enters past phase 1, the implementer
+    // already ran in the crashed drain — the branch is pushed and the PR exists
+    // (seeded into the driver by the resume handler). Skip the whole phase-1
+    // block + the BUG-245 credit check; the resumed phases use the seeded
+    // branch/PR. trace:STORY-492 | ai:claude
+    let credited: String;
+    if start_phase.index() > Phase::Implementer.index() {
+        if !json {
+            eprintln!(
+                "  {} resumed past phase 1 (implementer) — branch + PR already exist",
+                "↩".cyan()
             );
         }
-        Ok(ImplementerOutcome::Punted { reason }) => {
-            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-            match resolve_punt_via_advisor(
-                driver,
-                spec,
-                json,
-                &start,
-                &durations,
-                &reason,
-                escalate_mode,
-                batch,
-            ) {
-                PuntFlow::Terminal(result) => return result,
-                // The advisor resolved the fork and the implementer resumed
-                // with a PR — the pipeline continues to CI.
-                PuntFlow::Proceed => {
-                    emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+        credited = spec.to_string();
+    } else {
+        // Phase 1 — implementer session. Outcomes: a PR was opened (run on), a
+        // genuine failure (reconcile then report), or a punt. STORY-306: a punt no
+        // longer stops the drain outright — it routes through the headless advisor
+        // tier, which resolves the fork (the implementer resumes, the pipeline
+        // continues) or escalates it (the run ends per `escalate_mode`).
+        // trace:STORY-276, STORY-306 | ai:claude
+        emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
+        let phase_start = Instant::now();
+        match driver.run_implementer() {
+            Err(f) => {
+                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Implementer,
+                    spec,
+                    json,
+                    &start,
+                    &f,
+                    durations,
+                );
+            }
+            Ok(ImplementerOutcome::Punted { reason }) => {
+                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                match resolve_punt_via_advisor(
+                    driver,
+                    spec,
+                    json,
+                    &start,
+                    &durations,
+                    &reason,
+                    escalate_mode,
+                    batch,
+                ) {
+                    PuntFlow::Terminal(result) => return result,
+                    // The advisor resolved the fork and the implementer resumed
+                    // with a PR — the pipeline continues to CI.
+                    PuntFlow::Proceed => {
+                        emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+                    }
                 }
             }
-        }
-        Ok(ImplementerOutcome::PrOpened) => {
-            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-            emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
-        }
-        // BUG-257 / BUG-266: the orchestrator could not determine whether a
-        // PR was opened — either a transient GH-API blip during the PR
-        // lookup (BUG-257) or a transient Anthropic-API outage that killed
-        // the headless `claude -p` mid-session (BUG-266). The pipeline halts
-        // cleanly — exit `0`, no `failed_phase` — and the spec is left in
-        // its current state for the next drain. Distinct from a punt (no
-        // design-fork was raised) and from a failure (nothing is broken).
-        // trace:BUG-257 BUG-266
-        Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
-            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-            // TASK-136: in a batch drain, shelve-and-advance instead of pausing
-            // the whole batch at this head; single-spec keeps the pause.
-            if batch {
-                return finish_inconclusive_shelved(driver, spec, json, &start, durations, &reason);
+            Ok(ImplementerOutcome::PrOpened) => {
+                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
             }
-            return finish_inconclusive(
-                spec,
-                json,
-                &start,
-                durations,
-                &reason,
-                retry_hint.as_deref(),
-            );
+            // BUG-257 / BUG-266: the orchestrator could not determine whether a
+            // PR was opened — either a transient GH-API blip during the PR
+            // lookup (BUG-257) or a transient Anthropic-API outage that killed
+            // the headless `claude -p` mid-session (BUG-266). The pipeline halts
+            // cleanly — exit `0`, no `failed_phase` — and the spec is left in
+            // its current state for the next drain. Distinct from a punt (no
+            // design-fork was raised) and from a failure (nothing is broken).
+            // trace:BUG-257 BUG-266
+            Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
+                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                // TASK-136: in a batch drain, shelve-and-advance instead of pausing
+                // the whole batch at this head; single-spec keeps the pause.
+                if batch {
+                    return finish_inconclusive_shelved(
+                        driver, spec, json, &start, durations, &reason,
+                    );
+                }
+                return finish_inconclusive(
+                    spec,
+                    json,
+                    &start,
+                    durations,
+                    &reason,
+                    retry_hint.as_deref(),
+                );
+            }
+            // BUG-250: the implementer deliberately held the PR (branch pushed, PR
+            // intentionally not opened, pending a manual gate). A clean non-failure
+            // stop — exit `0`, no `failed_phase` — distinct from a punt (no
+            // design-fork) and a failure (nothing broke). The drain halts at phase
+            // 1 with the correct "open the PR when your gate passes" hint.
+            // trace:BUG-250
+            Ok(ImplementerOutcome::Held { reason, branch }) => {
+                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                return finish_held(spec, json, &start, durations, reason.as_deref(), &branch);
+            }
         }
-        // BUG-250: the implementer deliberately held the PR (branch pushed, PR
-        // intentionally not opened, pending a manual gate). A clean non-failure
-        // stop — exit `0`, no `failed_phase` — distinct from a punt (no
-        // design-fork) and a failure (nothing broke). The drain halts at phase
-        // 1 with the correct "open the PR when your gate passes" hint.
-        // trace:BUG-250
-        Ok(ImplementerOutcome::Held { reason, branch }) => {
-            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-            return finish_held(spec, json, &start, durations, reason.as_deref(), &branch);
-        }
-    }
 
-    // BUG-245: before running phases 2-6 on the PR, ask the driver whose
-    // SPEC-ID the PR's commits actually credit. The implementer can
-    // pragmatically ship a *different* spec — e.g., the dispatched spec was
-    // blocked and the implementer worked a release blocker instead. Phases
-    // 2-6 (CI / reviewer / merge / pull / build) are PR-anchored, not spec-
-    // anchored, so they run unchanged on whichever PR is open; the change
-    // is in *attribution*: on mismatch, credit the truth in the success
-    // epilogue and surface the mismatch as an explicit anomaly. A driver
-    // that cannot inspect the PR returns `None`, which preserves pre-BUG-245
-    // behaviour (the dispatched id is credited). trace:BUG-245 | ai:claude
-    let credited = driver
-        .shipped_spec_id()
-        .filter(|id| id != spec)
-        .unwrap_or_else(|| spec.to_string());
-    if credited != spec {
-        emit_shipped_mismatch(spec, &credited, json, start.elapsed().as_millis());
-    }
+        // BUG-245: before running phases 2-6 on the PR, ask the driver whose
+        // SPEC-ID the PR's commits actually credit. The implementer can
+        // pragmatically ship a *different* spec — e.g., the dispatched spec was
+        // blocked and the implementer worked a release blocker instead. Phases
+        // 2-6 (CI / reviewer / merge / pull / build) are PR-anchored, not spec-
+        // anchored, so they run unchanged on whichever PR is open; the change
+        // is in *attribution*: on mismatch, credit the truth in the success
+        // epilogue and surface the mismatch as an explicit anomaly. A driver
+        // that cannot inspect the PR returns `None`, which preserves pre-BUG-245
+        // behaviour (the dispatched id is credited). trace:BUG-245 | ai:claude
+        credited = driver
+            .shipped_spec_id()
+            .filter(|id| id != spec)
+            .unwrap_or_else(|| spec.to_string());
+        if credited != spec {
+            emit_shipped_mismatch(spec, &credited, json, start.elapsed().as_millis());
+        }
+    } // end phase-1 gate (STORY-492)
 
     // Phase 2 — end + wait for CI. lifecycle:no-ci-wait (incl. lifecycle:trivial)
     // skips the BLOCKING wait — CI still runs remotely, the orchestrator just
     // doesn't block on it (STORY-442). Mirrors the no_review / no_build skips;
     // the variant last_phase cap below still applies either way. (Review
     // finding: this flag was parsed + bannered but never acted on.)
-    if lifecycle_skip.no_ci_wait {
+    if start_phase.index() > Phase::Ci.index() {
+        if !json {
+            eprintln!("  {} resumed past phase 2 (CI)", "↩".cyan());
+        }
+    } else if lifecycle_skip.no_ci_wait {
         if !json {
             eprintln!(
                 "  {} skipping CI-wait per lifecycle tag (CI still runs remotely)",
@@ -2202,7 +2263,11 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
 
     // Phase 3 — reviewer session. lifecycle:no-review skips only this model
     // phase; merge and pull still run so substrate state stays coherent.
-    if lifecycle_skip.no_review {
+    if start_phase.index() > Phase::Reviewer.index() {
+        if !json {
+            eprintln!("  {} resumed past phase 3 (reviewer)", "↩".cyan());
+        }
+    } else if lifecycle_skip.no_review {
         if !json {
             eprintln!("  {} skipping reviewer phase per lifecycle tag", "↷".cyan());
         }
@@ -2268,33 +2333,55 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
         return finish_success(spec, &credited, json, &start, durations);
     }
 
-    // Phase 4 — merge.
-    emit_start(Phase::Merge, spec, json, start.elapsed().as_millis());
-    let phase_start = Instant::now();
-    if let Err(f) = driver.merge() {
+    // Phase 4 — merge. STORY-492: skipped on a resume that re-enters past it —
+    // the PR is already merged (the resume handler probed it), and re-running
+    // merge would either no-op or get redeemed by the BUG-241 reconcile anyway,
+    // but skipping is cleaner. trace:STORY-492 | ai:claude
+    if start_phase.index() > Phase::Merge.index() {
+        if !json {
+            eprintln!(
+                "  {} resumed past phase 4 (merge) — PR already merged",
+                "↩".cyan()
+            );
+        }
+    } else {
+        emit_start(Phase::Merge, spec, json, start.elapsed().as_millis());
+        let phase_start = Instant::now();
+        if let Err(f) = driver.merge() {
+            durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
+            return resolve_phase_failure(driver, Phase::Merge, spec, json, &start, &f, durations);
+        }
         durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
-        return resolve_phase_failure(driver, Phase::Merge, spec, json, &start, &f, durations);
+        emit_done(Phase::Merge, spec, json, start.elapsed().as_millis());
     }
-    durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
-    emit_done(Phase::Merge, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 4 {
         return finish_success(spec, &credited, json, &start, durations);
     }
 
     // Phase 5 — pull + auto-bump.
-    emit_start(Phase::Pull, spec, json, start.elapsed().as_millis());
-    let phase_start = Instant::now();
-    if let Err(f) = driver.pull() {
+    if start_phase.index() > Phase::Pull.index() {
+        if !json {
+            eprintln!(
+                "  {} resumed past phase 5 (pull) — spec already promoted",
+                "↩".cyan()
+            );
+        }
+    } else {
+        emit_start(Phase::Pull, spec, json, start.elapsed().as_millis());
+        let phase_start = Instant::now();
+        if let Err(f) = driver.pull() {
+            durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
+            return resolve_phase_failure(driver, Phase::Pull, spec, json, &start, &f, durations);
+        }
         durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
-        return resolve_phase_failure(driver, Phase::Pull, spec, json, &start, &f, durations);
+        emit_done(Phase::Pull, spec, json, start.elapsed().as_millis());
     }
-    durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
-    emit_done(Phase::Pull, spec, json, start.elapsed().as_millis());
     if variant.last_phase() <= 5 {
         return finish_success(spec, &credited, json, &start, durations);
     }
 
-    // Phase 6 — build verify.
+    // Phase 6 — build verify. (Resume always re-runs build — its postcondition
+    // is the weakest signal and the build is idempotent. trace:STORY-492)
     if lifecycle_skip.no_build {
         if !json {
             eprintln!("  {} skipping build phase per lifecycle tag", "↷".cyan());
@@ -3689,6 +3776,81 @@ mod tests {
             result.shelved_reason.is_none(),
             "single-spec never shelves an inconclusive",
         );
+    }
+
+    // --- STORY-492: resume re-entry skips already-complete phases ----------
+
+    /// STORY-492: `start_phase = Implementer` (the normal entry) runs the full
+    /// pipeline — resume is a strict superset of the historical behaviour.
+    #[test]
+    fn resume_at_implementer_runs_the_full_pipeline() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_resume(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip::none(),
+            false,
+            Phase::Implementer,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build
+            ]
+        );
+    }
+
+    /// STORY-492: re-entering at Merge skips implementer / CI / reviewer — their
+    /// effects already exist (the resume handler seeded branch + PR) — and runs
+    /// merge → pull → build. The implementer is NEVER re-run, so no PR is
+    /// re-opened. trace:STORY-492 | ai:claude
+    #[test]
+    fn resume_at_merge_skips_implementer_ci_reviewer() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_resume(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip::none(),
+            false,
+            Phase::Merge,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Merge, Phase::Pull, Phase::Build],
+            "resume at merge re-runs only merge/pull/build",
+        );
+    }
+
+    /// STORY-492: re-entering at Pull (crashed after the merge landed but before
+    /// the auto-bump) runs only pull → build — never re-merges. trace:STORY-492
+    #[test]
+    fn resume_at_pull_runs_only_pull_and_build() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_resume(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip::none(),
+            false,
+            Phase::Pull,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(driver.calls, vec![Phase::Pull, Phase::Build]);
     }
 
     // --- BUG-250: deliberate PR-hold phase-1 outcome ---------------------
