@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T07:09:30.835858568Z
-modified_at: 2026-06-02T02:55:25.489224629Z
+modified_at: 2026-06-02T03:20:32.116546578Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -30,3 +30,8 @@ comments:
     THE BOUNDARY (scope this spike honestly): hooks deliver substrate-CAPTURE (mirror effects in — the moat survives any orchestrator), NOT substrate-DRIVEN orchestration (the drain reading the graph to DECIDE next — that stays uniquely AIDA's drain; a Workflow's plan is in its script, not the graph). Don't oversell hooks as making Workflows substrate-driven; they make them substrate-aware-on-output. This is the SECOND composition direction (Workflows-populate-AIDA); SPIKE-32 is the first (AIDA-compiles-to-workflow.js). The hooks direction is the higher-leverage near-term win: it makes the substrate antifragile to which orchestrator runs. trace:SPIKE-41
   created_at: 2026-06-02T02:55:25.489224629Z
   modified_at: 2026-06-02T02:55:25.489224629Z
+- id: 019e8658-e074-7071-8868-c3ea8ee9d2e7
+  author: joe
+  content: Commit 5d3610cc3 references this requirement
+  created_at: 2026-06-02T03:20:32.116546578Z
+  modified_at: 2026-06-02T03:20:32.116546578Z
