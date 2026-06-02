@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T11:19:17.845028040Z
-modified_at: 2026-06-02T03:04:47.207146437Z
+modified_at: 2026-06-02T04:05:24.380699874Z
 req_type: Story
 tags:
 - durable-execution
@@ -42,3 +42,8 @@ comments:
   content: Commit c821f1518 references this requirement
   created_at: 2026-06-02T03:04:47.207146437Z
   modified_at: 2026-06-02T03:04:47.207146437Z
+- id: 019e8681-f51c-7211-99ea-64b6583a05aa
+  author: joe
+  content: 'Validation (2026-06-01, advisor supervised) — live integration on freshly-built stack binary c821f1518, all read-only --resume-dry-run: (A) live orchestrator PID → REFUSES (double-drive guard fires: ''would DOUBLE-DRIVE the same spec''); (B) dead PID + member.state=failed → recognizes deliberately-shelved, refuses auto-resume, points to findings list; (C) dead PID + member in-phase-2(CI) + real PR-441 → reconciles earlier phases done, seeds PR-441, RESUMES AT PHASE 3 (reviewer) — the clamp_resume_start_phase CI→reviewer lease-coupled clamp confirmed end-to-end. No dry-run mutated state. REMAINING: a real (drop --dry-run) re-entry + the full supervised --zen drain (operator keyboard).'
+  created_at: 2026-06-02T04:05:24.380699874Z
+  modified_at: 2026-06-02T04:05:24.380699874Z
