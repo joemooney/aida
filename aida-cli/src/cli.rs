@@ -436,27 +436,30 @@ pub enum SessionCommand {
     /// Launch a new Claude Code session, recording the active role + a
     /// user-chosen title so `aida session list` can show them
     /// reliably (instead of greping the auto-generated subject). Execs
-    /// `claude --permission-mode <mode>` once the launch metadata is
-    /// recorded; permission-mode defaults to `bypassPermissions`
-    /// (matching the user's typical "auto" workflow).
-    // trace:FR-1-044 | ai:claude
+    /// `claude` once the launch metadata is recorded. By default this is
+    /// a faithful launch — Claude's own native permission posture (it
+    /// prompts). Turn on bypass for the whole fleet with `[agents] bypass
+    /// = true` in `~/.aida/agents.toml` (project `.aida/agents.toml`
+    /// overrides), or per-launch with `--permission-mode`.
+    // trace:FR-1-044 trace:STORY-495 | ai:claude
     New {
         /// Title for the session (shown in `aida session list`). When
         /// omitted, you'll be prompted interactively.
         #[clap(long, short = 't')]
         title: Option<String>,
 
-        /// Claude Code permission mode. Most common values:
-        /// `bypassPermissions` (default — no prompts), `acceptEdits`
-        /// (auto-accept edits, prompt other tools), `auto` (research
-        /// preview: auto-approves tool calls with background safety
-        /// checks — fills the gap between acceptEdits and bypass),
-        /// `default` (prompt for everything), `plan`. The string is
-        /// passed straight through to `claude --permission-mode`, so
-        /// any value the installed Claude Code understands works.
-        // trace:TASK-83 | ai:claude
-        #[clap(long, default_value = "bypassPermissions")]
-        permission_mode: String,
+        /// Claude Code permission mode. When omitted, no `--permission-mode`
+        /// is injected — Claude uses its native posture (the faithful
+        /// default). Most common explicit values: `bypassPermissions`
+        /// (no prompts), `acceptEdits` (auto-accept edits, prompt other
+        /// tools), `auto` (research preview: auto-approves tool calls with
+        /// background safety checks), `default` (prompt for everything),
+        /// `plan`. The string is passed straight through to
+        /// `claude --permission-mode`, so any value the installed Claude
+        /// Code understands works.
+        // trace:TASK-83 trace:STORY-495 | ai:claude
+        #[clap(long)]
+        permission_mode: Option<String>,
 
         /// Override the role recorded for this session (defaults to
         /// $AIDA_SESSION_ROLE).
@@ -548,15 +551,17 @@ pub enum SessionCommand {
         #[clap(long, short = 'n')]
         name: Option<String>,
 
-        /// Claude Code permission mode for the launch. Common values:
-        /// `bypassPermissions` (default), `acceptEdits`, `auto`
-        /// (research-preview middle ground — see `aida queue work
-        /// --help` for the tradeoff), `default`, `plan`. Pass-through
-        /// to `claude --permission-mode`, so any installed-claude value
-        /// works. Ignored without --launch.
-        // trace:STORY-54, TASK-83 | ai:claude
-        #[clap(long, default_value = "bypassPermissions")]
-        permission_mode: String,
+        /// Claude Code permission mode for the launch. When omitted, no
+        /// `--permission-mode` is injected — Claude uses its native posture
+        /// (the faithful default; turn on bypass fleet-wide with
+        /// `[agents] bypass = true`). Common explicit values:
+        /// `bypassPermissions`, `acceptEdits`, `auto` (research-preview
+        /// middle ground — see `aida queue work --help` for the tradeoff),
+        /// `default`, `plan`. Pass-through to `claude --permission-mode`, so
+        /// any installed-claude value works. Ignored without --launch.
+        // trace:STORY-54, TASK-83 trace:STORY-495 | ai:claude
+        #[clap(long)]
+        permission_mode: Option<String>,
 
         /// Override the role recorded in this session's lease (and, when
         /// `--launch` is set, the persona the launched Claude inherits).
@@ -4058,9 +4063,13 @@ pub enum AgentNewCommand {
         #[clap(long, value_name = "PATH")]
         cwd: Option<PathBuf>,
 
-        /// Claude Code permission mode passed through to `claude`.
-        #[clap(long, default_value = "bypassPermissions")]
-        permission_mode: String,
+        /// Claude Code permission mode passed through to `claude`. When
+        /// omitted, no `--permission-mode` is injected — Claude uses its
+        /// native posture (the faithful default; turn on bypass fleet-wide
+        /// with `[agents] bypass = true` in agents.toml).
+        // trace:STORY-495 | ai:claude
+        #[clap(long)]
+        permission_mode: Option<String>,
 
         /// Do not write/inject the AIDA launch-context snapshot.
         #[clap(long)]

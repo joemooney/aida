@@ -20027,7 +20027,16 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             title,
             permission_mode,
             role,
-        } => session::new_session(title.clone(), permission_mode, role.clone(), None),
+        } => {
+            // STORY-495: faithful default — resolve to None (native) unless an
+            // explicit `--permission-mode` or the uniform `[agents] bypass`
+            // knob says otherwise.
+            let mode = resolve_interactive_launch_mode(permission_mode.as_deref());
+            if mode.is_none() {
+                maybe_show_faithful_launcher_notice();
+            }
+            session::new_session(title.clone(), mode.as_deref(), role.clone(), None)
+        }
         SessionCommand::Start {
             owns,
             branch,
@@ -20045,6 +20054,11 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         } => {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
+            // STORY-495: faithful default for the `--launch` path.
+            let mode = resolve_interactive_launch_mode(permission_mode.as_deref());
+            if *launch && mode.is_none() {
+                maybe_show_faithful_launcher_notice();
+            }
             session_start(
                 owns,
                 branch.as_deref(),
@@ -20056,7 +20070,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 *launch,
                 title.clone(),
                 name.clone(),
-                permission_mode,
+                mode.as_deref(),
                 role.clone(),
                 *force_claim,
             )
@@ -20126,7 +20140,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             role.clone(),
             spec.clone(),
             cwd.as_deref(),
-            permission_mode,
+            permission_mode.as_deref(),
             AgentContextOptions::new(!*no_context, *show_context),
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
@@ -20266,30 +20280,56 @@ impl AgentDefaultFlagOptions {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
-struct AgentsFlagConfigFile {
-    #[serde(default)]
-    agents: std::collections::HashMap<String, AgentFlagConfig>,
-}
-
-#[derive(Debug, Default, Clone, Deserialize)]
-struct AgentFlagConfig {
-    #[serde(default)]
-    default_flags: Vec<String>,
+/// STORY-495: each agent's bypass flag(s), injected when the uniform
+/// `[agents] bypass = true` knob is on and the launch has no explicit posture.
+/// Mirrors the per-tool opt-in flags the launchers already inject for
+/// `--bypass-sandbox` / `--permission-mode`. trace:STORY-495 | ai:claude
+fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
+    match agent_type {
+        "claude" => vec![
+            "--permission-mode".to_string(),
+            "bypassPermissions".to_string(),
+        ],
+        "codex" => vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
+        "antigravity" => vec!["--dangerously-skip-permissions".to_string()],
+        _ => Vec::new(),
+    }
 }
 
 fn agent_new_claude(
     role: Option<String>,
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
-    permission_mode: &str,
+    permission_mode: Option<&str>,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     bg: bool,
 ) -> Result<()> {
-    let mut default_args = vec!["--permission-mode".to_string(), permission_mode.to_string()];
+    // STORY-495: faithful default — inject `--permission-mode` only when the
+    // operator passed it explicitly. Otherwise leave Claude on its native
+    // posture and let the uniform `[agents] bypass` knob (applied in
+    // `apply_agent_default_flags`) decide whether to flip the whole fleet.
+    let mut default_args = Vec::new();
+    let mut explicit = permission_mode.is_some();
+    if let Some(m) = permission_mode {
+        default_args.push("--permission-mode".to_string());
+        default_args.push(m.to_string());
+    } else if bg {
+        // STORY-495: a detached `--bg` launch has no answerable TTY, so a
+        // native (prompting) child would hang forever on the first
+        // permission prompt. Force bypass and say so. An explicit
+        // `--permission-mode` still wins (handled above).
+        eprintln!(
+            "{} --bg detaches from this terminal (no answerable prompt); forcing \
+             --permission-mode bypassPermissions. Pass --permission-mode <mode> to override.",
+            "ℹ".cyan()
+        );
+        default_args.push("--permission-mode".to_string());
+        default_args.push("bypassPermissions".to_string());
+        explicit = true;
+    }
     // SPIKE-34: when `--bg` is set, append it to the argv so `claude --bg`
     // dispatches the session to the background supervisor instead of
     // running foreground in this terminal. Forces the bg-aware dispatch
@@ -20304,9 +20344,29 @@ fn agent_new_claude(
         prompt_style: AgentPromptStyle::Positional,
     };
     if bg {
-        agent_new_bg_dispatch(config, role, spec, cwd, context, prompt, flag_options, name)
+        agent_new_bg_dispatch(
+            config,
+            role,
+            spec,
+            cwd,
+            context,
+            prompt,
+            flag_options,
+            name,
+            explicit,
+        )
     } else {
-        agent_new_with_config(config, role, spec, cwd, context, prompt, flag_options, name)
+        agent_new_with_config(
+            config,
+            role,
+            spec,
+            cwd,
+            context,
+            prompt,
+            flag_options,
+            name,
+            explicit,
+        )
     }
 }
 
@@ -20331,7 +20391,19 @@ fn agent_new_codex(
         default_args,
         prompt_style: AgentPromptStyle::Positional,
     };
-    agent_new_with_config(config, role, spec, cwd, context, prompt, flag_options, name)
+    // STORY-495: `--bypass-sandbox` is an explicit posture; without it the
+    // uniform knob is free to inject the bypass flag.
+    agent_new_with_config(
+        config,
+        role,
+        spec,
+        cwd,
+        context,
+        prompt,
+        flag_options,
+        name,
+        bypass_sandbox,
+    )
 }
 
 // trace:STORY-434 | ai:codex
@@ -20355,7 +20427,19 @@ fn agent_new_antigravity(
         default_args,
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
     };
-    agent_new_with_config(config, role, spec, cwd, context, prompt, flag_options, name)
+    // STORY-495: `--bypass-sandbox` is an explicit posture; without it the
+    // uniform knob is free to inject the bypass flag.
+    agent_new_with_config(
+        config,
+        role,
+        spec,
+        cwd,
+        context,
+        prompt,
+        flag_options,
+        name,
+        bypass_sandbox,
+    )
 }
 
 fn agent_new_with_config(
@@ -20367,6 +20451,7 @@ fn agent_new_with_config(
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
+    explicit_permission: bool,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -20382,7 +20467,22 @@ fn agent_new_with_config(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = main_worktree_root_from(&discovered_root);
-    apply_agent_default_flags(&mut config, &project_root, flag_options)?;
+    apply_agent_default_flags(
+        &mut config,
+        &project_root,
+        flag_options,
+        explicit_permission,
+    )?;
+
+    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
+    // launch lands on the native posture (no `--permission-mode` in the argv).
+    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
+    // for those paths.
+    if config.agent_type == "claude"
+        && !config.default_args.iter().any(|a| a == "--permission-mode")
+    {
+        maybe_show_faithful_launcher_notice();
+    }
 
     // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
     // snapshot from a dry plan and return without launching — no `session_start`,
@@ -20455,6 +20555,7 @@ fn agent_new_bg_dispatch(
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
+    explicit_permission: bool,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -20467,7 +20568,22 @@ fn agent_new_bg_dispatch(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = main_worktree_root_from(&discovered_root);
-    apply_agent_default_flags(&mut config, &project_root, flag_options)?;
+    apply_agent_default_flags(
+        &mut config,
+        &project_root,
+        flag_options,
+        explicit_permission,
+    )?;
+
+    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
+    // launch lands on the native posture (no `--permission-mode` in the argv).
+    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
+    // for those paths.
+    if config.agent_type == "claude"
+        && !config.default_args.iter().any(|a| a == "--permission-mode")
+    {
+        maybe_show_faithful_launcher_notice();
+    }
 
     // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
     // snapshot from a dry plan and return without launching — no `session_start`,
@@ -20662,11 +20778,23 @@ fn apply_agent_default_flags(
     config: &mut AgentLaunchConfig,
     project_root: &std::path::Path,
     flag_options: AgentDefaultFlagOptions,
+    explicit_permission: bool,
 ) -> Result<()> {
     if flag_options.use_config_defaults {
-        config
-            .default_args
-            .extend(load_agent_default_flags(project_root, config.agent_type)?);
+        let per_tool = load_agent_default_flags(project_root, config.agent_type)?;
+        // STORY-495: the uniform `[agents] bypass` knob injects this tool's
+        // bypass flag UNLESS (a) the launcher already set an explicit posture
+        // (`--permission-mode` / `--bypass-sandbox` / forced `--bg`), or
+        // (b) the tool carries its own per-tool `default_flags`, which take
+        // precedence over the uniform knob (TASK-557 raw passthrough). A
+        // `--no-default-flags` launch skips this block entirely (agents.toml
+        // is never read), so it lands on the faithful native default.
+        if !explicit_permission && per_tool.is_empty() && load_agents_bypass(project_root)? {
+            config
+                .default_args
+                .extend(tool_bypass_flags(config.agent_type));
+        }
+        config.default_args.extend(per_tool);
     }
     config.default_args.extend(flag_options.extra_flags);
     Ok(())
@@ -20688,24 +20816,116 @@ fn load_agent_default_flags(
     Ok(flags)
 }
 
+/// Parse an `agents.toml` into a generic `toml::Value`. STORY-495 uses raw
+/// `Value` extraction (rather than a typed struct) so the `[agents] bypass`
+/// scalar and the `[agents.<tool>] default_flags` tables can coexist in one
+/// `[agents]` table without serde-flatten fragility on the `toml` backend.
+fn parse_agents_toml(path: &std::path::Path) -> Result<Option<toml::Value>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let body = std::fs::read_to_string(path)
+        .with_context(|| format!("reading agent defaults config {}", path.display()))?;
+    let value: toml::Value = toml::from_str(&body)
+        .with_context(|| format!("parsing agent defaults config {}", path.display()))?;
+    Ok(Some(value))
+}
+
 fn merge_agent_flags_from_file(
     flags: &mut Vec<String>,
     path: &std::path::Path,
     agent_type: &str,
 ) -> Result<()> {
-    if !path.exists() {
+    let Some(value) = parse_agents_toml(path)? else {
         return Ok(());
-    }
-    let body = std::fs::read_to_string(path)
-        .with_context(|| format!("reading agent defaults config {}", path.display()))?;
-    let parsed: AgentsFlagConfigFile = toml::from_str(&body)
-        .with_context(|| format!("parsing agent defaults config {}", path.display()))?;
-    if let Some(agent) = parsed.agents.get(agent_type) {
+    };
+    if let Some(arr) = value
+        .get("agents")
+        .and_then(|agents| agents.get(agent_type))
+        .and_then(|tool| tool.get("default_flags"))
+        .and_then(|f| f.as_array())
+    {
         // Project config is applied after user config, so replacing here
         // implements the documented "user base, project override" rule.
-        *flags = agent.default_flags.clone();
+        *flags = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect();
     }
     Ok(())
+}
+
+/// STORY-495: resolve the uniform `[agents] bypass` knob — user base
+/// (`~/.aida/agents.toml`) overridable by project (`.aida/agents.toml`).
+/// Defaults to `false` (faithful native posture) when unset in both.
+fn load_agents_bypass(project_root: &std::path::Path) -> Result<bool> {
+    let mut bypass = false;
+    if let Some(home) = aida_home_dir() {
+        if let Some(v) = read_agents_bypass_from_file(&home.join(".aida/agents.toml"))? {
+            bypass = v;
+        }
+    }
+    if let Some(v) = read_agents_bypass_from_file(&project_root.join(".aida/agents.toml"))? {
+        bypass = v;
+    }
+    Ok(bypass)
+}
+
+fn read_agents_bypass_from_file(path: &std::path::Path) -> Result<Option<bool>> {
+    let Some(value) = parse_agents_toml(path)? else {
+        return Ok(None);
+    };
+    Ok(value
+        .get("agents")
+        .and_then(|agents| agents.get("bypass"))
+        .and_then(|b| b.as_bool()))
+}
+
+/// STORY-495: resolve the effective `--permission-mode` for the
+/// `session new` / `session start --launch` interactive launchers. `None`
+/// means honor Claude's native posture (the faithful default). Precedence:
+/// explicit flag > `[agents] bypass` knob > native. (Unlike `queue work`,
+/// these launchers do not layer the `AIDA_PERMISSION_MODE` env or
+/// `[behavior] permission_mode` config — that resolution is queue-work
+/// specific and predates this change.)
+fn resolve_interactive_launch_mode(flag: Option<&str>) -> Option<String> {
+    if let Some(m) = flag.filter(|s| !s.is_empty()) {
+        return Some(m.to_string());
+    }
+    if let Ok(root) = find_main_worktree_root() {
+        if load_agents_bypass(&root).unwrap_or(false) {
+            return Some("bypassPermissions".to_string());
+        }
+    }
+    None
+}
+
+/// STORY-495: one-time, discoverable migration pointer printed the first time
+/// an interactive Claude launch lands on the faithful native default (no
+/// `--permission-mode` injected). A marker under `~/.aida/` makes it fire at
+/// most once per machine. Best-effort: any IO error silently no-ops so the
+/// notice never blocks a launch.
+fn maybe_show_faithful_launcher_notice() {
+    let Some(home) = aida_home_dir() else {
+        return;
+    };
+    let marker = home.join(".faithful-launcher-notice");
+    if marker.exists() {
+        return;
+    }
+    eprintln!(
+        "{} {}",
+        "ℹ".cyan(),
+        "AIDA launchers now honor Claude's native permission posture (it will \
+         prompt). To restore bypass-by-default for every agent, set `[agents] \
+         bypass = true` in ~/.aida/agents.toml (or per-project .aida/agents.toml), \
+         or pass --permission-mode bypassPermissions per launch."
+            .dimmed()
+    );
+    if let Some(parent) = marker.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&marker, "shown\n");
 }
 
 fn agent_initial_prompt_args(
@@ -20787,7 +21007,10 @@ fn prepare_agent_launch(
                 /* launch_claude */ false,
                 /* launch_title */ None,
                 /* launch_name */ None,
-                /* launch_permission_mode */ "bypassPermissions",
+                // STORY-495: inert here (launch_claude=false). The agent-new
+                // launch path injects its own posture via `config.default_args`.
+                /* launch_permission_mode */
+                None,
                 role.clone(),
                 /* force_claim */ false,
             );
@@ -21677,7 +21900,7 @@ mod agent_launcher_tests {
         assert_eq!(role.as_deref(), Some("reviewer"));
         assert_eq!(spec.as_deref(), Some("STORY-432"));
         assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
-        assert_eq!(permission_mode, "acceptEdits");
+        assert_eq!(permission_mode.as_deref(), Some("acceptEdits"));
         assert!(!no_context);
         assert!(!show_context);
         assert_eq!(prompt.as_deref(), Some("review STORY-432"));
@@ -21832,6 +22055,7 @@ mod agent_launcher_tests {
             &mut codex,
             &project,
             AgentDefaultFlagOptions::new(true, vec!["--extra".to_string()]),
+            false,
         )
         .unwrap();
         assert_eq!(
@@ -21849,6 +22073,7 @@ mod agent_launcher_tests {
             &mut antigravity,
             &project,
             AgentDefaultFlagOptions::new(true, Vec::new()),
+            false,
         )
         .unwrap();
         assert_eq!(antigravity.default_args, vec!["--user-agy"]);
@@ -21863,12 +22088,207 @@ mod agent_launcher_tests {
             &mut claude,
             &project,
             AgentDefaultFlagOptions::new(false, vec!["--one-shot".to_string()]),
+            true,
         )
         .unwrap();
         assert_eq!(
             claude.default_args,
             vec!["--permission-mode", "acceptEdits", "--one-shot"]
         );
+    }
+
+    /// STORY-495: each tool maps to its own bypass flag(s).
+    /// trace:STORY-495 | ai:claude
+    #[test]
+    fn tool_bypass_flags_per_agent() {
+        assert_eq!(
+            tool_bypass_flags("claude"),
+            vec!["--permission-mode", "bypassPermissions"]
+        );
+        assert_eq!(
+            tool_bypass_flags("codex"),
+            vec!["--dangerously-bypass-approvals-and-sandbox"]
+        );
+        assert_eq!(
+            tool_bypass_flags("antigravity"),
+            vec!["--dangerously-skip-permissions"]
+        );
+        assert!(tool_bypass_flags("unknown").is_empty());
+    }
+
+    /// STORY-495: the `[agents] bypass` knob is off when no agents.toml
+    /// declares it; project overrides the user base. trace:STORY-495 | ai:claude
+    #[test]
+    fn agents_bypass_knob_user_base_and_project_override() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        // Neither file present → off (faithful default).
+        assert!(!load_agents_bypass(&project).unwrap());
+
+        // User base on, no project file → on.
+        std::fs::write(home.join(".aida/agents.toml"), "[agents]\nbypass = true\n").unwrap();
+        assert!(load_agents_bypass(&project).unwrap());
+
+        // Project explicitly off → overrides user base on.
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\nbypass = false\n",
+        )
+        .unwrap();
+        assert!(!load_agents_bypass(&project).unwrap());
+
+        // `[agents] bypass` coexists with `[agents.<tool>] default_flags` in
+        // the same file without breaking the default_flags loader.
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\nbypass = true\n\n[agents.codex]\ndefault_flags = [\"--foo\"]\n",
+        )
+        .unwrap();
+        assert!(load_agents_bypass(&project).unwrap());
+        let mut flags = Vec::new();
+        merge_agent_flags_from_file(&mut flags, &project.join(".aida/agents.toml"), "codex")
+            .unwrap();
+        assert_eq!(flags, vec!["--foo"]);
+    }
+
+    /// STORY-495: with the knob on and no explicit posture / per-tool flags,
+    /// the tool's bypass flag is injected. trace:STORY-495 | ai:claude
+    #[test]
+    fn apply_agent_default_flags_knob_injects_when_native() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\nbypass = true\n",
+        )
+        .unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        let mut claude = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        apply_agent_default_flags(
+            &mut claude,
+            &project,
+            AgentDefaultFlagOptions::new(true, Vec::new()),
+            /* explicit_permission */ false,
+        )
+        .unwrap();
+        assert_eq!(
+            claude.default_args,
+            vec!["--permission-mode", "bypassPermissions"]
+        );
+    }
+
+    /// STORY-495: an explicit posture (e.g. `--permission-mode`) skips the
+    /// knob even when it is on. trace:STORY-495 | ai:claude
+    #[test]
+    fn apply_agent_default_flags_explicit_skips_knob() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\nbypass = true\n",
+        )
+        .unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        let mut claude = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: vec!["--permission-mode".to_string(), "plan".to_string()],
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        apply_agent_default_flags(
+            &mut claude,
+            &project,
+            AgentDefaultFlagOptions::new(true, Vec::new()),
+            /* explicit_permission */ true,
+        )
+        .unwrap();
+        // No extra bypass flag appended — the explicit posture stands.
+        assert_eq!(claude.default_args, vec!["--permission-mode", "plan"]);
+    }
+
+    /// STORY-495: per-tool `default_flags` (TASK-557) override the uniform
+    /// knob — the bypass flag is NOT additionally injected.
+    /// trace:STORY-495 | ai:claude
+    #[test]
+    fn apply_agent_default_flags_per_tool_flags_override_knob() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\nbypass = true\n\n[agents.codex]\ndefault_flags = [\"--my-flag\"]\n",
+        )
+        .unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        let mut codex = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        apply_agent_default_flags(
+            &mut codex,
+            &project,
+            AgentDefaultFlagOptions::new(true, Vec::new()),
+            /* explicit_permission */ false,
+        )
+        .unwrap();
+        // Only the per-tool flag — no `--dangerously-bypass-...` injected.
+        assert_eq!(codex.default_args, vec!["--my-flag"]);
+    }
+
+    /// STORY-495: `--no-default-flags` skips agents.toml entirely, so the
+    /// knob is never read → faithful native (empty argv).
+    /// trace:STORY-495 | ai:claude
+    #[test]
+    fn apply_agent_default_flags_no_default_flags_is_native() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\nbypass = true\n",
+        )
+        .unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        let mut claude = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        apply_agent_default_flags(
+            &mut claude,
+            &project,
+            AgentDefaultFlagOptions::new(/* use_config_defaults */ false, Vec::new()),
+            /* explicit_permission */ false,
+        )
+        .unwrap();
+        assert!(claude.default_args.is_empty());
     }
 
     #[test]
@@ -24464,7 +24884,8 @@ fn session_start(
     launch_claude: bool,
     launch_title: Option<String>,
     launch_name: Option<String>,
-    launch_permission_mode: &str,
+    // STORY-495: `None` → faithful native launch (no `--permission-mode`).
+    launch_permission_mode: Option<&str>,
     launch_role: Option<String>,
     // BUG-379: claim a spec stuck in InProgress (no local lease) or
     // NeedsAttention. Done/Completed/Rejected/Draft still refuse.
@@ -25308,9 +25729,11 @@ fn session_start(
             "{} {}",
             "▶".green().bold(),
             format!(
-                "launching claude in {} (permission-mode {})",
+                "launching claude in {} ({})",
                 worktree_path.display(),
                 launch_permission_mode
+                    .map(|m| format!("permission-mode {}", m))
+                    .unwrap_or_else(|| "native permission posture".to_string())
             )
             .cyan()
         );
@@ -52976,60 +53399,61 @@ mod queue_work_tests {
         assert_eq!(got.id, "freshh");
     }
 
-    /// --permission-mode flag beats everything else.
-    /// trace:TASK-84 | ai:claude
+    /// --permission-mode flag beats everything else (incl. the bypass knob).
+    /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_flag_wins() {
         let (m, o) =
             resolve_queue_work_permission_mode(Some("plan"), Some("auto"), Some("default"), true);
-        assert_eq!(m, "plan");
+        assert_eq!(m.as_deref(), Some("plan"));
         assert_eq!(o, "--permission-mode flag");
     }
 
-    /// AIDA_PERMISSION_MODE env wins over config + worktree default.
-    /// trace:TASK-84 | ai:claude
+    /// AIDA_PERMISSION_MODE env wins over config + the bypass knob.
+    /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_env_beats_config() {
         let (m, o) = resolve_queue_work_permission_mode(None, Some("auto"), Some("default"), true);
-        assert_eq!(m, "auto");
+        assert_eq!(m.as_deref(), Some("auto"));
         assert_eq!(o, "AIDA_PERMISSION_MODE env");
     }
 
-    /// config.toml [behavior] beats the worktree default.
-    /// trace:TASK-84 | ai:claude
+    /// config.toml [behavior] beats the bypass knob.
+    /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_config_beats_worktree_default() {
         let (m, o) = resolve_queue_work_permission_mode(None, None, Some("acceptEdits"), true);
-        assert_eq!(m, "acceptEdits");
+        assert_eq!(m.as_deref(), Some("acceptEdits"));
         assert_eq!(o, ".aida/config.toml");
     }
 
-    /// Inside an AIDA worktree with no overrides → bypassPermissions
-    /// (the autonomous-overnight default). trace:TASK-84 | ai:claude
+    /// STORY-495: the `[agents] bypass` knob (no other overrides) →
+    /// bypassPermissions. trace:STORY-495 | ai:claude
     #[test]
-    fn permission_mode_aida_worktree_default_is_bypass() {
+    fn permission_mode_bypass_knob_injects_bypass() {
         let (m, o) = resolve_queue_work_permission_mode(None, None, None, true);
-        assert_eq!(m, "bypassPermissions");
-        assert_eq!(o, "aida-worktree default");
+        assert_eq!(m.as_deref(), Some("bypassPermissions"));
+        assert_eq!(o, "[agents] bypass knob");
     }
 
-    /// Outside an AIDA worktree → acceptEdits (foreign cwd, safe).
-    /// trace:TASK-84 | ai:claude
+    /// STORY-495: faithful default — no flag, no env, no config, knob off →
+    /// native (None), so no `--permission-mode` is injected.
+    /// trace:STORY-495 | ai:claude
     #[test]
-    fn permission_mode_non_aida_default_is_acceptedits() {
+    fn permission_mode_faithful_default_is_native() {
         let (m, o) = resolve_queue_work_permission_mode(None, None, None, false);
-        assert_eq!(m, "acceptEdits");
-        assert_eq!(o, "non-aida default");
+        assert_eq!(m, None);
+        assert_eq!(o, "native (faithful default)");
     }
 
-    /// Empty string from env/config is treated as absent (so an empty
-    /// shell variable doesn't accidentally lock the user out of the
-    /// AIDA-worktree default). trace:TASK-84 | ai:claude
+    /// Empty string from flag/env/config is treated as absent (so an empty
+    /// shell variable doesn't accidentally pin a mode); with the knob on the
+    /// resolution falls through to the bypass knob. trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_empty_strings_are_ignored() {
         let (m, o) = resolve_queue_work_permission_mode(Some(""), Some(""), Some(""), true);
-        assert_eq!(m, "bypassPermissions");
-        assert_eq!(o, "aida-worktree default");
+        assert_eq!(m.as_deref(), Some("bypassPermissions"));
+        assert_eq!(o, "[agents] bypass knob");
     }
 
     // --- AutonomyMode (STORY-287) -----------------------------------------
@@ -69334,17 +69758,22 @@ fn handle_queue_work(
     let config_mode = project_root_for_config
         .as_deref()
         .and_then(read_behavior_permission_mode);
-    let is_aida_worktree = detect_distributed_store().is_some()
-        || project_root_for_config
-            .as_deref()
-            .map(|p| p.join(".aida").join("config.toml").exists())
-            .unwrap_or(false);
+    // STORY-495: the interactive worktree default is now faithful (native).
+    // The uniform `[agents] bypass` knob is the single opt-in that restores
+    // bypass posture — read it from user-base + project agents.toml.
+    let bypass_knob = project_root_for_config
+        .as_deref()
+        .map(|r| load_agents_bypass(r).unwrap_or(false))
+        .unwrap_or(false);
     let (permission_mode, permission_mode_origin) = resolve_queue_work_permission_mode(
         permission_mode,
         env_mode.as_deref(),
         config_mode.as_deref(),
-        is_aida_worktree,
+        bypass_knob,
     );
+    if permission_mode.is_none() {
+        maybe_show_faithful_launcher_notice();
+    }
 
     let prompt = derive_queue_work_prompt(&plan, &role);
 
@@ -69434,7 +69863,7 @@ fn handle_queue_work(
         "mode",
         format!(
             "{} {}",
-            permission_mode.cyan(),
+            permission_mode.as_deref().unwrap_or("native").cyan(),
             format!("({})", permission_mode_origin).dimmed()
         ),
     );
@@ -69753,7 +70182,10 @@ fn handle_queue_work(
         /* launch */ false,
         /* launch_title */ None,
         /* launch_name */ None,
-        /* permission_mode */ &permission_mode,
+        // STORY-495: inert here (launch=false); the real launch below threads
+        // the resolved `permission_mode` into the exec call directly.
+        /* permission_mode */
+        permission_mode.as_deref(),
         /* role */ Some(role.clone()),
         /* force_claim */ force_claim,
     )?;
@@ -69901,10 +70333,14 @@ fn handle_queue_work(
             let sid = claude_session_id.as_deref().unwrap_or_default();
             eprintln!("  {}", headless_launch_hint(&prompt, sid).cyan());
         } else {
+            // STORY-495: omit `--permission-mode` from the hint when native.
+            let mode_prefix = permission_mode
+                .as_deref()
+                .map(|m| format!("--permission-mode {} ", m))
+                .unwrap_or_default();
             eprintln!(
-                "  {} {}",
-                "claude --permission-mode".cyan(),
-                format!("{} \"{}\"", permission_mode, prompt).cyan()
+                "  {}",
+                format!("claude {}\"{}\"", mode_prefix, prompt).cyan()
             );
         }
         return Ok(());
@@ -69979,7 +70415,7 @@ fn handle_queue_work(
             pr,
             launch,
             &prompt,
-            &permission_mode,
+            permission_mode.as_deref(),
             &plan.scope,
             &lease.branch,
             &role,
@@ -70031,14 +70467,17 @@ fn handle_queue_work(
                 "{} {}",
                 "▶".green().bold(),
                 format!(
-                    "resuming claude session {} in {} (permission-mode {})",
+                    "resuming claude session {} in {} ({})",
                     &id[..id.len().min(8)],
                     lease.worktree_path.display(),
                     permission_mode
+                        .as_deref()
+                        .map(|m| format!("permission-mode {}", m))
+                        .unwrap_or_else(|| "native permission posture".to_string())
                 )
                 .cyan()
             );
-            session::exec_claude_resume(&id, Some(&permission_mode))
+            session::exec_claude_resume(&id, permission_mode.as_deref())
         }
         QueueWorkLaunch::Fresh(id) => {
             let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
@@ -70080,14 +70519,22 @@ fn handle_queue_work(
                 "{} {}",
                 "▶".green().bold(),
                 format!(
-                    "launching claude in {} (permission-mode {}, prompt `{}`)",
+                    "launching claude in {} ({}, prompt `{}`)",
                     lease.worktree_path.display(),
-                    permission_mode,
+                    permission_mode
+                        .as_deref()
+                        .map(|m| format!("permission-mode {}", m))
+                        .unwrap_or_else(|| "native permission posture".to_string()),
                     prompt
                 )
                 .cyan()
             );
-            session::exec_claude_with_session(&permission_mode, name.as_deref(), &prompt, &id)
+            session::exec_claude_with_session(
+                permission_mode.as_deref(),
+                name.as_deref(),
+                &prompt,
+                &id,
+            )
         }
     }
 }
@@ -70109,7 +70556,8 @@ fn run_standalone_reviewer(
     pr: u64,
     launch: QueueWorkLaunch,
     prompt: &str,
-    permission_mode: &str,
+    // STORY-495: `None` → faithful native launch (no `--permission-mode`).
+    permission_mode: Option<&str>,
     scope: &str,
     branch: &str,
     role: &str,
@@ -70157,17 +70605,16 @@ fn run_standalone_reviewer(
                     "{} {}",
                     "▶".green().bold(),
                     format!(
-                        "resuming claude reviewer session {} in {} (permission-mode {})",
+                        "resuming claude reviewer session {} in {} ({})",
                         &id[..id.len().min(8)],
                         worktree.display(),
                         permission_mode
+                            .map(|m| format!("permission-mode {}", m))
+                            .unwrap_or_else(|| "native permission posture".to_string())
                     )
                     .cyan()
                 );
-                (
-                    session::spawn_claude_resume(&id, Some(permission_mode))?,
-                    None,
-                )
+                (session::spawn_claude_resume(&id, permission_mode)?, None)
             }
         }
         QueueWorkLaunch::Fresh(id) => {
@@ -70204,9 +70651,11 @@ fn run_standalone_reviewer(
                     "{} {}",
                     "▶".green().bold(),
                     format!(
-                        "launching claude reviewer in {} (permission-mode {}, prompt `{}`)",
+                        "launching claude reviewer in {} ({}, prompt `{}`)",
                         worktree.display(),
-                        permission_mode,
+                        permission_mode
+                            .map(|m| format!("permission-mode {}", m))
+                            .unwrap_or_else(|| "native permission posture".to_string()),
                         prompt
                     )
                     .cyan()
@@ -76181,25 +76630,40 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 /// Returns the mode + a short origin string for the pre-flight summary.
 /// Pure decision helper — kept separate so unit tests can pin the
 /// resolution order without env/config side effects. trace:TASK-84 | ai:claude
+/// STORY-495: resolve the effective `--permission-mode` for an interactive
+/// `aida queue work` launch. `None` → honor Claude's native posture (no flag
+/// injected — the faithful default). Precedence, highest first:
+///   1. `--permission-mode` flag (explicit override)
+///   2. `AIDA_PERMISSION_MODE` env (process-level opt-in)
+///   3. `.aida/config.toml [behavior] permission_mode` (project policy)
+///   4. `[agents] bypass` knob → `bypassPermissions` (uniform fleet opt-in)
+///   5. otherwise → `None` (native)
+///
+/// Pre-STORY-495 this defaulted to `bypassPermissions` inside an AIDA worktree
+/// and `acceptEdits` elsewhere; both auto-injections are gone — the uniform
+/// knob is the single place that restores bypass posture. trace:STORY-495
 fn resolve_queue_work_permission_mode(
     flag: Option<&str>,
     env: Option<&str>,
     config: Option<&str>,
-    is_aida_worktree: bool,
-) -> (String, &'static str) {
+    bypass_knob: bool,
+) -> (Option<String>, &'static str) {
     if let Some(m) = flag.filter(|s| !s.is_empty()) {
-        return (m.to_string(), "--permission-mode flag");
+        return (Some(m.to_string()), "--permission-mode flag");
     }
     if let Some(m) = env.filter(|s| !s.is_empty()) {
-        return (m.to_string(), "AIDA_PERMISSION_MODE env");
+        return (Some(m.to_string()), "AIDA_PERMISSION_MODE env");
     }
     if let Some(m) = config.filter(|s| !s.is_empty()) {
-        return (m.to_string(), ".aida/config.toml");
+        return (Some(m.to_string()), ".aida/config.toml");
     }
-    if is_aida_worktree {
-        return ("bypassPermissions".to_string(), "aida-worktree default");
+    if bypass_knob {
+        return (
+            Some("bypassPermissions".to_string()),
+            "[agents] bypass knob",
+        );
     }
-    ("acceptEdits".to_string(), "non-aida default")
+    (None, "native (faithful default)")
 }
 
 /// STORY-287: the three-mode autonomy ladder for `aida queue work`. Aligns

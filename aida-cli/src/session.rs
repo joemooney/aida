@@ -443,9 +443,13 @@ pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
 /// match) to surface the user-chosen title and authoritative role —
 /// instead of falling back to the grep heuristic.
 /// trace:FR-1-044 | ai:claude
+///
+/// STORY-495: `permission_mode` is now `Option<&str>`. `None` means honor
+/// Claude's native permission posture — no `--permission-mode` is injected
+/// (the faithful-launcher default). `Some(mode)` injects it explicitly.
 pub fn new_session(
     title: Option<String>,
-    permission_mode: &str,
+    permission_mode: Option<&str>,
     role_override: Option<String>,
     display_name: Option<String>,
 ) -> Result<()> {
@@ -462,14 +466,18 @@ pub fn new_session(
             .unwrap_or_default(),
     };
 
-    append_launch_log(&role, permission_mode, &title)?;
+    // STORY-495: record `native` in the launch-log when no mode is injected.
+    append_launch_log(&role, permission_mode.unwrap_or("native"), &title)?;
 
     let name_for_log = display_name.as_deref().unwrap_or("(auto)");
+    let mode_display = permission_mode
+        .map(|m| format!("--permission-mode {}", m))
+        .unwrap_or_else(|| "(native permission posture)".to_string());
     eprintln!(
-        "{} {} → claude --permission-mode {} (name: {})",
+        "{} {} → claude {} (name: {})",
         "▶".green().bold(),
         format!("session new (role:{}, title:{:?})", role, title).dimmed(),
-        permission_mode,
+        mode_display,
         name_for_log,
     );
 
@@ -609,7 +617,7 @@ fn sanitize_for_tsv(s: &str) -> String {
 /// Replace this process with `claude --permission-mode <mode>`. When `name`
 /// is `Some(...)`, also passes `--name <n>` so the launched session is
 /// labeled in the /resume picker and terminal title. trace:TASK-31 | ai:claude
-fn exec_claude_new(permission_mode: &str, name: Option<&str>) -> Result<()> {
+fn exec_claude_new(permission_mode: Option<&str>, name: Option<&str>) -> Result<()> {
     exec_claude(permission_mode, name, None, None)
 }
 
@@ -623,7 +631,7 @@ fn exec_claude_new(permission_mode: &str, name: Option<&str>) -> Result<()> {
 /// `exec` replaces this process. `session_id` must be a valid UUID —
 /// claude rejects anything else. trace:STORY-42, TASK-112 | ai:claude
 pub fn exec_claude_with_session(
-    permission_mode: &str,
+    permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: &str,
     session_id: &str,
@@ -642,13 +650,23 @@ pub fn exec_claude_with_session(
 /// `exec_claude` (process replacement) and `spawn_claude_session`
 /// (spawn + wait, BUG-226) so the two launch paths can never drift.
 /// trace:BUG-226 | ai:claude
+///
+/// STORY-495: `permission_mode` is `Option<&str>`. `None` omits
+/// `--permission-mode` entirely so the spawned `claude` uses its native
+/// permission posture (the faithful-launcher default). The headless launch
+/// path uses a separate [`claude_headless_args`] builder that always forces
+/// `bypassPermissions`, so this change never touches the unattended drain.
 pub fn claude_session_args(
-    permission_mode: &str,
+    permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: Option<&str>,
     session_id: Option<&str>,
 ) -> Vec<String> {
-    let mut args = vec!["--permission-mode".to_string(), permission_mode.to_string()];
+    let mut args = Vec::new();
+    if let Some(m) = permission_mode {
+        args.push("--permission-mode".to_string());
+        args.push(m.to_string());
+    }
     if let Some(n) = name {
         args.push("--name".to_string());
         args.push(n.to_string());
@@ -668,7 +686,7 @@ pub fn claude_session_args(
 }
 
 fn exec_claude(
-    permission_mode: &str,
+    permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: Option<&str>,
     session_id: Option<&str>,
@@ -700,7 +718,7 @@ fn exec_claude(
 /// end-of-command summary — `exec_claude` (process replacement) cannot.
 /// trace:BUG-226 | ai:claude
 pub fn spawn_claude_session(
-    permission_mode: &str,
+    permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: &str,
     session_id: &str,
@@ -2126,6 +2144,60 @@ mod tests {
         // The prompt and the session id both survive into the argv.
         assert!(args.contains(&"/aida-review --pr 7".to_string()));
         assert!(args.contains(&"019e0000-0000-7000-8000-000000000000".to_string()));
+    }
+
+    /// STORY-495: a native interactive launch (`permission_mode = None`)
+    /// injects NO `--permission-mode` — Claude uses its own default posture.
+    /// trace:STORY-495 | ai:claude
+    #[test]
+    fn claude_session_args_native_omits_permission_mode() {
+        let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"));
+        assert!(
+            !args.iter().any(|a| a == "--permission-mode"),
+            "native launch must not inject --permission-mode: {args:?}"
+        );
+        // The session-id and prompt still thread through.
+        assert!(args.contains(&"--session-id".to_string()), "{args:?}");
+        assert!(args.contains(&"/aida-pickup".to_string()), "{args:?}");
+    }
+
+    /// STORY-495: an explicit mode is injected as `--permission-mode <m>`.
+    /// trace:STORY-495 | ai:claude
+    #[test]
+    fn claude_session_args_some_injects_permission_mode() {
+        let args = claude_session_args(Some("bypassPermissions"), None, None, None);
+        let pos = args
+            .iter()
+            .position(|a| a == "--permission-mode")
+            .expect("--permission-mode present");
+        assert_eq!(
+            args.get(pos + 1).map(String::as_str),
+            Some("bypassPermissions")
+        );
+    }
+
+    /// STORY-495 safety invariant: the headless argv ALWAYS forces
+    /// `bypassPermissions` regardless of the interactive faithful default —
+    /// a prompting (`default`) headless child has no TTY to answer and would
+    /// hang the unattended drain forever. This is structurally separate from
+    /// `claude_session_args`, so flipping the interactive default can never
+    /// reach it. trace:STORY-495 | ai:claude
+    #[test]
+    fn headless_args_force_bypass_regardless_of_interactive_default() {
+        // The interactive builder is now native-by-default…
+        let interactive = claude_session_args(None, None, Some("/aida-review"), Some("sid"));
+        assert!(!interactive.iter().any(|a| a == "--permission-mode"));
+        // …yet the headless builder still hard-forces bypass.
+        let headless = claude_headless_args("/aida-review", "sid");
+        let pos = headless
+            .iter()
+            .position(|a| a == "--permission-mode")
+            .expect("headless must inject --permission-mode");
+        assert_eq!(
+            headless.get(pos + 1).map(String::as_str),
+            Some("bypassPermissions"),
+            "headless must force bypassPermissions: {headless:?}"
+        );
     }
 
     /// `--bare` strips OAuth/keychain auth and breaks login (spike Q1) — the
