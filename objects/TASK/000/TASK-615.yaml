@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:50:48.081133903Z
-modified_at: 2026-06-02T02:39:22.678205425Z
+modified_at: 2026-06-02T04:05:23.205645868Z
 req_type: Task
 tags:
 - drain
@@ -23,3 +23,8 @@ comments:
   content: Commit aeb71b30f references this requirement
   created_at: 2026-06-02T02:39:22.678205425Z
   modified_at: 2026-06-02T02:39:22.678205425Z
+- id: 019e8681-f085-76f3-aa6b-2b2fba5eb2c2
+  author: joe
+  content: 'Validation (2026-06-01, advisor supervised) — GATE 1 (deterministic) GREEN: cargo test -p aida-cli build clean; full suite 1543 passed / 0 failed; the 12 new reliability tests pass (inconclusive_after_retries_shelves_and_advances_in_batch, single_spec_inconclusive_still_pauses, watchdog_trip_reaps_a_running_child, watchdog_trip_reason_names_the_threshold_minutes, read_drain_config_*). GATE 2 (live integration on freshly-built stack binary c821f1518): flag wiring + no-state graceful path OK. Watchdog/retry/inconclusive-shelve paths covered by unit tests (not live — need an induced stalled/failed phase). REMAINING: the supervised --zen --auto-complete full-pipeline drain (operator keyboard, per TASK-456 recursive-failure-risk).'
+  created_at: 2026-06-02T04:05:23.205645868Z
+  modified_at: 2026-06-02T04:05:23.205645868Z
