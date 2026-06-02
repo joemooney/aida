@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T11:19:17.845028040Z
-modified_at: 2026-05-31T14:36:11.146393309Z
+modified_at: 2026-06-02T02:21:18.978452156Z
 req_type: Story
 tags:
 - durable-execution
@@ -32,3 +32,8 @@ comments:
     Paused here at deep fatigue-tail (autonomous session, ~24 PRs): the verified core is banked; the irreversible wiring earns fresh, careful work per the double-drive sign-off discussion.
   created_at: 2026-05-31T14:36:11.146393309Z
   modified_at: 2026-05-31T14:36:11.146393309Z
+- id: 019e8622-a902-7a63-8cd9-689be3479512
+  author: joe
+  content: 'SIGN-OFF (operator + advisor/master, 2026-06-01): the reconcile-from-reality + PID-liveness design for slice 2 is APPROVED to implement. Resume must NOT blindly re-run phases — it probes each phase''s postcondition from git/PR/spec truth (branch exists? PR merged? spec promoted?) → reconcile_resume_phase → re-enter orchestrate_with_lifecycle_skip at the actually-incomplete phase; AND a PID-liveness gate (reuse classify_for_auto_release) refuses to resume a drain whose original process is still alive. Those two gates together prevent the CATASTROPHIC double-drive. The sketch-first/needs-design-signoff gate is now CLEARED. Implement slice 2 (wire the probing + PID gate + --resume re-entry into run_auto_complete) per docs/plans/2026-05-31-p1-resumable-drain-checkpointing.md; validate with a supervised --zen drain (kill-and-resume scenario). trace:STORY-492'
+  created_at: 2026-06-02T02:21:18.978452156Z
+  modified_at: 2026-06-02T02:21:18.978452156Z
