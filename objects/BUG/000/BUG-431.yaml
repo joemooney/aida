@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:39:05.836892426Z
-modified_at: 2026-06-02T02:48:24.809529004Z
+modified_at: 2026-06-02T03:03:55.817307128Z
 req_type: Bug
 tags:
 - autonomous
@@ -75,6 +75,16 @@ comments:
     MOAT-DOC FRAMING: compete on SUBSTRATE INTEGRATION; concede ORCHESTRATION MECHANICS.
   created_at: 2026-06-02T02:48:24.809529004Z
   modified_at: 2026-06-02T02:48:24.809529004Z
+- id: 019e8649-aca9-7972-a9e8-1555a012c0b6
+  author: joe
+  content: |-
+    FOLLOW-UP — the actual drain outcome sharpens the thesis (2026-06-01). The harness Workflow drain of the 7 quizdom stories SUCCEEDED: all merged, 188 tests green, EPIC-11 + EPIC-84 closed. And the agents DID write '// trace:STORY-N' comments and ran 'aida edit --status completed' — so the substrate wasn't entirely empty.
+
+    BUT: that only happened because the orchestrator (me) HAND-INSTRUCTED each agent in the workflow prompt to use the trace format + mark status. It is substrate-by-manual-prompt, NOT substrate-native. What was still lost with zero recourse: leases (the agents ran in harness-managed .claude/worktrees, no aida session/lease — so no concurrency coordination), the review-item lifecycle (no 'Review PR-N' stories filed), and graph relationships beyond the traces.
+
+    So the refined moat statement: AIDA's defensible value is AUTOMATIC, native substrate integration — the drain populates leases/traces/status/review-items/graph by construction, not because someone remembered to prompt for it. A harness workflow can only fake it by hand-wiring every agent, and even then misses the coordination layer (leases). Compete on substrate-native automation; concede orchestration mechanics. (For EPIC-33 / moat docs.)
+  created_at: 2026-06-02T03:03:55.817307128Z
+  modified_at: 2026-06-02T03:03:55.817307128Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-01T16:13:39.481419330Z
