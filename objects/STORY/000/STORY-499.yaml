@@ -15,11 +15,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:53.171836263Z
-modified_at: 2026-06-03T05:40:53.171836263Z
+modified_at: 2026-06-03T05:41:39.069192036Z
 req_type: Story
 tags:
-- blocked
 - ci-gate
+- depends-on:SPIKE-47
 - foundations
 - parent:EPIC-34
 - traceability
