@@ -75,14 +75,24 @@ if [[ ${#CASTS[@]} -gt 0 ]]; then
   INIT_JS=""
   for cast in "${CASTS[@]}"; do
     base="$(basename "$cast")"
-    [[ -e "$OUT/$base" && ! "$cast" -ef "$OUT/$base" ]] && { echo "skip (dup cast name): $base"; continue; }
-    cp "$cast" "$OUT/$base"
+    # Skip a second cast with the same basename (e.g. the same file in both
+    # docs/casts/ and docs/presentation/) — tracked per-run, not via $OUT, so a
+    # re-run into an existing build/ doesn't false-skip. (bash-3 portable.)
+    case " ${SEEN_CASTS:-} " in *" $base "*) echo "skip (dup cast name): $base"; continue ;; esac
+    SEEN_CASTS="${SEEN_CASTS:-} $base"
+    cp "$cast" "$OUT/$base"   # keep a copy too (for http serving / download)
     # Title: drop .cast + any leading ISO timestamp (2026-05-24T025421Z-foo → foo).
     title="$(echo "${base%.cast}" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z-//')"
     id="cap$CAST_COUNT"
     echo "embedding cast: $title"
+    # Inline the cast as base64 and decode it UTF-8-safe in the browser, so the
+    # player never has to fetch() the file — that fetch is blocked by the
+    # Same-Origin Policy when the page is opened from file:// (the "CORS request
+    # not http" error). Inlining makes casts.html self-contained: it plays
+    # double-clicked AND over http. trace:TASK-637 | ai:claude
+    b64="$(base64 -w0 "$cast" 2>/dev/null || base64 "$cast" | tr -d '\n')"
     PLAYERS_HTML+="    <div class=\"cast\"><h2>$title</h2><div id=\"$id\"></div></div>"$'\n'
-    INIT_JS+="    AsciinemaPlayer.create('$base', document.getElementById('$id'), { fit: 'width', terminalFontSize: '14px' });"$'\n'
+    INIT_JS+="    (function(){var d=new TextDecoder().decode(Uint8Array.from(atob('$b64'),function(c){return c.charCodeAt(0)}));AsciinemaPlayer.create({data:d},document.getElementById('$id'),{fit:'width',terminalFontSize:'14px'});})();"$'\n'
     CAST_COUNT=$((CAST_COUNT + 1))
   done
 
