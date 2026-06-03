@@ -3206,6 +3206,19 @@ pub enum QueueCommand {
         // trace:EPIC-28 | ai:claude
         #[clap(long, value_name = "N", requires = "auto_complete")]
         max_failures: Option<usize>,
+        /// With `--auto-complete`: minutes a *headless* phase may make no
+        /// commit / file-change before the watchdog kills + shelves it (a
+        /// degenerate echo/sleep spin). Default 10; `0` disables. Overrides
+        /// `[drain] no_progress_minutes`.
+        // trace:BUG-420 | ai:claude
+        #[clap(long, value_name = "MIN", requires = "auto_complete")]
+        no_progress_minutes: Option<u64>,
+        /// With `--auto-complete`: hard wall-clock ceiling (minutes) per
+        /// *headless* phase — a backstop in case progress-detection misses.
+        /// Default 45; `0` disables. Overrides `[drain] phase_ceiling_minutes`.
+        // trace:BUG-420 | ai:claude
+        #[clap(long, value_name = "MIN", requires = "auto_complete")]
+        phase_ceiling_minutes: Option<u64>,
         /// Run `--auto-complete` phases headless (`claude -p`) so the drain
         /// needs no Ctrl+D.
         ///
