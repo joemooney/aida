@@ -29,12 +29,12 @@ description: |-
   - Primary-caller check: the caller is a human running `aida init` on a fresh machine/clone. Walk each criterion against that — esp. the "global write from a project command" surprise, mitigated by the explicit report line.
   - Existing surface to reuse: `handle_role_scaffold()` (aida-cli/src/main.rs ~16705), the `STARTER`/role-set definition (~16676), and the `aida role scaffold` hint (~16443).
   - Immediate operator unblock (no code change needed): run `aida role scaffold` once per machine.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:48:47.576602659Z
-modified_at: 2026-06-03T06:33:02.138866451Z
+modified_at: 2026-06-03T06:36:36.632064269Z
 req_type: Task
 tags:
 - aida:init
@@ -49,3 +49,7 @@ comments:
   content: Commit bc4063ce2 references this requirement
   created_at: 2026-06-03T06:32:30.375056453Z
   modified_at: 2026-06-03T06:32:30.375056453Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-03T06:36:36.632064269Z
+  completion_sha: bc4063ce233548cb7500cdb1f488fd69621bc757

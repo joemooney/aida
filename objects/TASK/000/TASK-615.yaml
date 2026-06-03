@@ -3,12 +3,12 @@ spec_id: TASK-615
 agreed_id: TASK-615
 title: 'Implement drain-reliability wiring (slice 2): inconclusive→retry-then-shelve + phase no-progress/ceiling watchdog'
 description: 'The implementation of the two operator-approved drain-reliability fixes, per docs/plans/2026-05-31-drain-reliability-136-420.md (sharpened with the real wiring findings). The decision CORES already shipped (watchdog_verdict + gh_verify_backoff_schedule, PR-420). This is the WIRING: (1) TASK-136 — in run_spec''s phase-1 finish, wrap the GH-verify in the backoff retry, then in BATCH mode route a still-inconclusive result through the driver''s shelve_on_failure (so drain_batch''s existing shelve→advance at ~2217 carries it) instead of finish_inconclusive; requires threading a batch-mode flag through run_spec + the driver trait. (2) BUG-420 — wrap the headless phase spawn-wait with watchdog_verdict (no-progress poll of worktree commit/mtime + wall-clock ceiling), kill+shelve on trip. NOTE: validation requires a SUPERVISED --zen --auto-complete drain (keyboard, advisor watching). The umbrella findings TASK-136/BUG-420 auto-completed off the cores/plan commits (agreed-id matching) — this fresh spec tracks the open wiring. trace:self'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:50:48.081133903Z
-modified_at: 2026-06-02T04:05:23.205645868Z
+modified_at: 2026-06-03T06:36:36.632064269Z
 req_type: Task
 tags:
 - drain
@@ -28,3 +28,7 @@ comments:
   content: 'Validation (2026-06-01, advisor supervised) — GATE 1 (deterministic) GREEN: cargo test -p aida-cli build clean; full suite 1543 passed / 0 failed; the 12 new reliability tests pass (inconclusive_after_retries_shelves_and_advances_in_batch, single_spec_inconclusive_still_pauses, watchdog_trip_reaps_a_running_child, watchdog_trip_reason_names_the_threshold_minutes, read_drain_config_*). GATE 2 (live integration on freshly-built stack binary c821f1518): flag wiring + no-state graceful path OK. Watchdog/retry/inconclusive-shelve paths covered by unit tests (not live — need an induced stalled/failed phase). REMAINING: the supervised --zen --auto-complete full-pipeline drain (operator keyboard, per TASK-456 recursive-failure-risk).'
   created_at: 2026-06-02T04:05:23.205645868Z
   modified_at: 2026-06-02T04:05:23.205645868Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-03T06:36:36.632064269Z
+  completion_sha: aeb71b30fb91246337d3f98d8259889406c273d4
