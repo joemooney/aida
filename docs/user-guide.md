@@ -184,18 +184,28 @@ aida feature move SPEC-001 "New Feature"
 
 ### Database Management
 
+The store is the orphan-branch `aida-store` worktree (distributed mode). There is
+no project registry — each repo has one store, attached on init/clone. Manage it
+with:
+
 ```bash
-# List registered projects
-aida db list
+# Where is the active store?
+aida db path
 
-# Add a new project
-aida db add --name "my-project" --path "/path/to/requirements.yaml"
+# Store statistics + info
+aida db info
 
-# Set default project
-aida db default "my-project"
+# Sync the git-backed store with the remote
+aida db sync --pull --push
 
-# Remove a project
-aida db remove "my-project"
+# Health
+aida db status              # changes, sync state, conflicts
+aida db check --collisions # audit for two specs claiming one short id
+
+# Distributed-ID housekeeping
+aida db merge-gate         # assign agreed short IDs at merge-to-trunk
+aida db block claim        # reserve a block of agreed IDs for offline trace comments
+aida db reconcile-status   # replay missed Done → Completed auto-bumps
 ```
 
 ### Opening the User Guide
@@ -548,104 +558,62 @@ aida add --title "New auth requirement"  # Automatically uses Authentication
 
 ---
 
-## Multi-Project Support
+## One store per repo (no project registry)
 
-Manage multiple requirement sets using the registry system.
+AIDA tracks **one requirement store per git repository** — the orphan-branch
+`aida-store` worktree created by `aida init`. The old multi-project registry
+(`~/.aida.config`, `aida db add/default`, `aida list --project`) was removed in
+the kernel/module audit; there is nothing to register. To work on a different
+project, `cd` into its repo.
 
-### Registry Location
+### Store resolution order
 
-Default: `~/.aida.config`
+1. **Distributed mode (default):** `.aida/config.toml` with `mode = "distributed"`
+   → the git-canonical store at the configured path (default `.aida-store/`).
+2. `--file <path>` explicit override (directory → git store, `.db` → legacy SQLite,
+   `.yaml` → legacy YAML, `postgres://…` → PostgreSQL).
+3. Legacy fallbacks (deprecated, warn at use): a local `requirements.db` /
+   `requirements.yaml` in the current directory.
 
-Override with: `AIDA_REGISTRY_PATH` environment variable
-
-### Project Resolution Order
-
-1. Distributed mode: `.aida/config.toml` with `mode = "distributed"` → git-canonical store at the configured path (default: `.aida-store/`)
-2. `--file <path>` explicit override (directory → git store, `.db` → legacy SQLite, `.yaml` → legacy YAML, `postgres://...` → PostgreSQL)
-3. Legacy: local `requirements.db` in current directory (SQLite-canonical, deprecated)
-4. Legacy: local `requirements.yaml` in current directory (YAML-canonical, deprecated)
-5. `--project` command line option
-6. `AIDA_DB_NAME` environment variable
-7. Single project in registry (if only one exists)
-8. Default project from registry
-
-### Example Setup
-
-```bash
-# Register projects
-aida db add --name "frontend" --path ~/projects/frontend/requirements.yaml
-aida db add --name "backend" --path ~/projects/backend/requirements.yaml
-
-# Set default
-aida db default frontend
-
-# Work with specific project
-aida list --project backend
-```
+On a fresh clone the first store-reading command auto-attaches the `.aida-store/`
+worktree from origin and rebuilds the cache, so reads work with no manual step
+(writing new spec IDs still needs a node id — `aida init` or `aida node acquire`).
 
 ---
 
-## Storage Backends
+## Storage backends
 
-AIDA supports three storage backends. `aida init` creates a SQLite database by default.
+`aida init` creates a **git-canonical distributed store** by default — the only
+recommended mode. The legacy single-file backends remain only for the deprecated
+`--centralized` path and print a warning.
 
-### SQLite Storage (Default)
+### Git-canonical (default, recommended)
 
-SQLite database storage (`.db`) is created by `aida init` and recommended for most use cases.
+The orphan `aida-store` branch is the **writer of record**: one YAML file per
+requirement under `objects/<TYPE>/000/<SPEC-ID>.yaml`. A SQLite cache at
+`.aida/cache.db` (gitignored, auto-rebuilt) is a rebuildable read projection that
+makes `list`/`search`/`filter` fast.
 
-**Advantages:**
-- Better concurrent access (CLI + web dashboard + MCP server)
-- Faster for large datasets (1000+ requirements)
-- Efficient single-record operations with optimistic locking
+**Why it's the default:**
+- **Portable + vendor-neutral** — the data lives in git, clones cleanly, no SaaS.
+- **Diffable history** — every change is a commit on the orphan branch, plus a
+  structured `history:` array inside each spec's YAML.
+- **Offline-safe distributed IDs** — node-aware IDs (`FR-JM-048`) never collide
+  across clones; promoted to short agreed IDs (`FR-048`) at merge-gate.
+- **Cache is disposable** — `aida cache rebuild` reprojects it from git anytime.
 
-**Best for:**
-- Most projects (this is the default)
-- Scenarios with concurrent access from multiple tools
-- Web dashboard and MCP server usage
+### Legacy SQLite / YAML (deprecated)
 
-### YAML Storage
+Single-file `requirements.db` / `requirements.yaml` backends still load for the
+deprecated `aida init --centralized` path. Don't start new projects on them.
 
-Requirements stored in human-readable YAML files (`.yaml` or `.yml`).
+### PostgreSQL (opt-in, `postgres` feature)
 
-**Advantages:**
-- Human-readable and editable with any text editor
-- Version control friendly — meaningful Git diffs
-- Easy to backup (just copy the file)
-
-**Best for:**
-- Small projects with single-user access
-- When you need to manually inspect or edit data
-- Teams using Git for collaboration on requirements files
-
-### PostgreSQL Storage
-
-Enterprise-grade database for multi-user/team deployments.
-
-**Best for:**
-- Team environments with multiple concurrent users
-- Integration with existing PostgreSQL infrastructure
+A server-backed shared projection for team deployments. Build with
+`cargo build --features postgres`, then point clients at it:
 
 ```bash
 aida --file "postgres://user:pass@localhost:5432/aida" list
-```
-
-### Choosing Your Storage Format
-
-The system automatically detects the storage format based on file extension:
-- `.db`, `.sqlite`, `.sqlite3` → SQLite storage
-- `.yaml`, `.yml` → YAML storage
-- `postgres://...` → PostgreSQL
-
-```bash
-# Initialize with SQLite (recommended)
-aida init
-
-# Or register a specific path
-aida db add --name "my-project" --path ~/project/requirements.db
-
-# Migrate between backends
-aida db migrate --from yaml --to sqlite
-aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
 ```
 
 ### Exporting and Importing
