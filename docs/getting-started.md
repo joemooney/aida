@@ -25,17 +25,21 @@ aida --version
 
 ### Option B: Download Pre-built Binary
 
+Each release publishes per-platform tarballs (`aida-{linux,darwin}-{x86_64,arm64}.tar.gz`):
+
 ```bash
 # Linux x86_64
-curl -L https://github.com/joemooney/aida/releases/latest/download/aida-linux-x86_64 -o ~/.local/bin/aida
+curl -L https://github.com/joemooney/aida/releases/latest/download/aida-linux-x86_64.tar.gz \
+  | tar -xz -C ~/.local/bin aida
 chmod +x ~/.local/bin/aida
 
 # macOS (Apple Silicon)
-curl -L https://github.com/joemooney/aida/releases/latest/download/aida-darwin-arm64 -o /usr/local/bin/aida
+curl -L https://github.com/joemooney/aida/releases/latest/download/aida-darwin-arm64.tar.gz \
+  | tar -xz -C /usr/local/bin aida
 chmod +x /usr/local/bin/aida
 ```
 
-> **Note**: Pre-built binaries will be available once GitHub releases are set up. Until then, use cargo install or build from source.
+Other targets: `aida-linux-arm64.tar.gz`, `aida-darwin-x86_64.tar.gz`. Verify with `aida --version`.
 
 ### Option C: Docker (No Installation)
 
