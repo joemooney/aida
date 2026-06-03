@@ -18,23 +18,31 @@ are the spine + fallback.
 
 ## Rendering
 
-The decks need no build to read (they're plain markdown). To render to HTML or PDF:
+The decks need no build to read (they're plain markdown). To render them all to
+HTML **plus a browsable `index.html`**, run the build script:
 
 ```bash
-# HTML (one deck)
-npx --yes @marp-team/marp-cli@latest docs/presentation/aida-executive-briefing.md -o aida-executive-briefing.html
-
-# PDF
-npx --yes @marp-team/marp-cli@latest docs/presentation/aida-executive-briefing.md --pdf -o aida-executive-briefing.pdf
-
-# All decks to HTML
-for d in executive-briefing developer-deep-dive administrator-guide user-walkthrough; do
-  npx --yes @marp-team/marp-cli@latest docs/presentation/aida-$d.md -o aida-$d.html
-done
+./docs/presentation/build.sh           # → docs/presentation/build/ (gitignored)
+PDF=1 ./docs/presentation/build.sh     # also emit a .pdf per deck
+./docs/presentation/build.sh /tmp/out  # render to a custom dir
 ```
 
-(The exact `RENDER:` command for each deck is in an HTML comment at the top of
-that deck.)
+Then open `docs/presentation/build/index.html`. The script renders every
+`aida-*.md` deck here (and the management live-demo deck when present) and
+generates the index that links them.
+
+To render a single deck by hand:
+
+```bash
+# HTML
+npx --yes @marp-team/marp-cli@latest docs/presentation/aida-executive-briefing.md -o aida-executive-briefing.html
+# PDF
+npx --yes @marp-team/marp-cli@latest docs/presentation/aida-executive-briefing.md --pdf -o aida-executive-briefing.pdf
+```
+
+(The exact `RENDER:` command for each deck is also in an HTML comment at the top
+of that deck.) Generated HTML/PDF and the `build/` dir are gitignored — they're
+artifacts; commit the markdown, not the renders.
 
 ## Keeping them current
 
