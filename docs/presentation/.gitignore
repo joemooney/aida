@@ -1,0 +1,6 @@
+# Generated presentation artifacts — regenerate with build.sh
+build/
+aida-executive-briefing.html
+aida-developer-deep-dive.html
+aida-administrator-guide.html
+aida-user-walkthrough.html
