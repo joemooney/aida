@@ -874,6 +874,7 @@ fn run() -> Result<()> {
         no_skills,
         agent,
         no_hooks,
+        no_roles,
         force,
         distributed: _,
         centralized,
@@ -917,6 +918,36 @@ fn run() -> Result<()> {
                 *verbose,
                 name.as_deref(),
             )?;
+        }
+        // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
+        // ready out of the box — consistent with how init already scaffolds
+        // skills / hooks / discipline-pack. Idempotent + non-destructive
+        // (existing roles preserved). The write lands in GLOBAL ~/.aida/roles/
+        // from a project-scoped command, so report it explicitly. Non-fatal:
+        // a hiccup writing global state must not abort an otherwise-successful
+        // init. trace:TASK-638 | ai:claude
+        if !*no_roles {
+            match scaffold_starter_roles(&statusline_project_root()) {
+                Ok((created, skipped)) => {
+                    if created.is_empty() {
+                        println!(
+                            "  {} starter global roles already present at ~/.aida/roles/ ({} role(s))",
+                            "Note:".dimmed(),
+                            skipped.len()
+                        );
+                    } else {
+                        println!(
+                            "  {} scaffolded {} starter global role(s) at ~/.aida/roles/: {}",
+                            "+".green(),
+                            created.len(),
+                            created.join(", ")
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("  {} starter roles skipped: {}", "Note:".dimmed(), e);
+                }
+            }
         }
         // Starter memory pack — opt-in, orthogonal to storage mode. Failure
         // is non-fatal: it writes outside the project root, so a hiccup
@@ -16702,16 +16733,20 @@ const STARTER_ROLES: &[(&str, &str)] = &[
     ),
 ];
 
-fn handle_role_scaffold() -> Result<()> {
-    let project_root = statusline_project_root();
-    let mut created = 0usize;
-    let mut skipped = 0usize;
-    println!("Installing starter global roles at ~/.aida/roles/");
-    println!();
+/// Core of `aida role scaffold` (TASK-608): install the [`STARTER_ROLES`] into
+/// global `~/.aida/roles/`, skipping any that already exist (idempotent,
+/// non-destructive). Returns the (created, skipped) role names so callers can
+/// report in their own voice — both the `role scaffold` command and `aida init`
+/// (TASK-638) reuse this rather than re-deriving the role set.
+/// trace:TASK-608 TASK-638 | ai:claude
+fn scaffold_starter_roles(
+    project_root: &std::path::Path,
+) -> Result<(Vec<&'static str>, Vec<&'static str>)> {
+    let mut created: Vec<&'static str> = Vec::new();
+    let mut skipped: Vec<&'static str> = Vec::new();
     for (name, purpose) in STARTER_ROLES {
-        if load_role(&project_root, name).is_ok() {
-            println!("  {} {} (already exists, skipped)", "~".yellow(), name);
-            skipped += 1;
+        if load_role(project_root, name).is_ok() {
+            skipped.push(name);
             continue;
         }
         let state = RoleState {
@@ -16727,25 +16762,40 @@ fn handle_role_scaffold() -> Result<()> {
             scope_status: None,
             system_prompt: None,
         };
-        let path = role_save_path(&project_root, &state)?;
+        let path = role_save_path(project_root, &state)?;
         save_role_at(&state, &path)?;
-        println!("  {} {} — {}", "+".green(), name, purpose);
-        created += 1;
+        created.push(name);
+    }
+    Ok((created, skipped))
+}
+
+fn handle_role_scaffold() -> Result<()> {
+    let project_root = statusline_project_root();
+    println!("Installing starter global roles at ~/.aida/roles/");
+    println!();
+    let (created, skipped) = scaffold_starter_roles(&project_root)?;
+    // Report per role in STARTER_ROLES order (created vs already-present).
+    for (name, purpose) in STARTER_ROLES {
+        if created.contains(name) {
+            println!("  {} {} — {}", "+".green(), name, purpose);
+        } else {
+            println!("  {} {} (already exists, skipped)", "~".yellow(), name);
+        }
     }
     println!();
-    if created == 0 {
+    if created.is_empty() {
         println!(
             "{}: all {} starter role(s) already exist — nothing to do.",
             "OK".green(),
-            skipped
+            skipped.len()
         );
     } else {
         println!(
             "{}: scaffolded {} role(s){}.",
             "OK".green(),
-            created,
-            if skipped > 0 {
-                format!(" ({} already existed)", skipped)
+            created.len(),
+            if !skipped.is_empty() {
+                format!(" ({} already existed)", skipped.len())
             } else {
                 String::new()
             }
