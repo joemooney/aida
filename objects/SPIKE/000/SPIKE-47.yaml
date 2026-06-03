@@ -30,3 +30,7 @@ tags:
 - parent:EPIC-34
 - sketch-first
 - traceability
+relationships:
+- rel_type: Child
+  target_id: 019e8bfe-8dbc-7493-8cbe-5324878590c3
+  created_at: 2026-06-03T05:40:46.350754052Z
