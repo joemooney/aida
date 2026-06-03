@@ -3219,6 +3219,29 @@ pub enum QueueCommand {
         // trace:BUG-420 | ai:claude
         #[clap(long, value_name = "MIN", requires = "auto_complete")]
         phase_ceiling_minutes: Option<u64>,
+        /// Resume a crashed `--auto-complete` drain from `.aida/drain-state.json`
+        /// instead of starting fresh. Probes git/PR/spec reality to re-enter at
+        /// the first incomplete phase (never re-merging a merged PR), and
+        /// refuses if the original orchestrator process is still alive
+        /// (double-drive guard). Pair with `--dry-run` to preview the plan
+        /// without re-entering. Distinct from `--resume` (which continues a
+        /// Claude *session*).
+        // trace:STORY-492 | ai:claude
+        #[clap(long, requires = "auto_complete")]
+        resume_drain: bool,
+        /// With `--resume-drain`: only resume if the recorded drain matches this
+        /// id (its run UUID or start-timestamp prefix) — a guard against
+        /// resuming a stale state file.
+        // trace:STORY-492 | ai:claude
+        #[clap(long, value_name = "ID", requires = "resume_drain")]
+        drain_id: Option<String>,
+        /// With `--resume-drain`: print the reconciled re-entry plan (liveness
+        /// verdict + which phase resume would re-enter at) WITHOUT re-entering.
+        /// The safe way to preview a resume. (The plain `--dry-run` cannot be
+        /// combined with `--auto-complete`, hence a dedicated flag.)
+        // trace:STORY-492 | ai:claude
+        #[clap(long, requires = "resume_drain")]
+        resume_dry_run: bool,
         /// Run `--auto-complete` phases headless (`claude -p`) so the drain
         /// needs no Ctrl+D.
         ///

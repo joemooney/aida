@@ -18,11 +18,11 @@
 //!
 //! trace:STORY-491 | ai:claude
 
-// Slice 1 is the pure decision logic; its callers land in slice 2 (the probing
-// + live re-entry wiring, sign-off-gated). Until then these items have only
-// test callers, so scope a dead-code allow to this module rather than leave
-// warnings for the next session to triage. trace:STORY-491
-#![allow(dead_code)]
+// STORY-492 wired slice 2 (the probing + PID-liveness gate + live re-entry in
+// `main.rs::handle_drain_resume`), so `resume_plan` + `ResumeFacts` now have
+// real callers. `classify_resumability` / `reconcile_resume_phase` /
+// `phase_postcondition_met` stay crate-visible building blocks exercised
+// directly by the unit tests below. trace:STORY-491 STORY-492
 
 use crate::auto_complete::Phase;
 
