@@ -1,0 +1,32 @@
+id: 019e8bff-738c-76b1-8c09-accca88f3f77
+spec_id: SPIKE-47
+agreed_id: SPIKE-47
+title: Define 'trace coverage' for a diff — what code requires a // trace:, and the exemptions
+description: |-
+  Gap #1 (coverage, not just format) is the hard part of EPIC-34 and its acceptance is genuinely undecided — so de-risk it with a spike before building, rather than guessing a definition into a CI gate that then fights every PR.
+
+  Open questions to settle:
+  - What is a 'coverable unit' that should require a // trace: — a function/method? a changed hunk? a new file? Language-aware (Rust today, but the convention is language-agnostic)?
+  - Exemptions that must NOT be flagged: tests, generated code, docs, mechanical refactors/renames, fmt-only diffs, trivial one-liners, vendored code.
+  - Measurement without false positives: how to attribute a diff hunk to a trace comment in scope, and how to avoid punishing legitimately-untraceable changes.
+  - Default posture: hard-gate (block) vs report-only (annotate) — and whether it's a per-repo config (mirroring AIDA_COMMIT_STRICT's warn-vs-reject dial).
+
+  ## Acceptance
+  - A written definition of 'trace coverage' precise enough to implement deterministically.
+  - An explicit exemption list with rationale.
+  - A measurement approach + a recommendation on default posture (block vs report).
+  - A go/no-go on building the diff-level gate, with the smallest valuable first slice named.
+  trace:self
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-03T05:40:34.828606283Z
+modified_at: 2026-06-03T05:40:34.828606283Z
+req_type: Spike
+tags:
+- foundations
+- needs-design-signoff
+- parent:EPIC-34
+- sketch-first
+- traceability
