@@ -1,0 +1,45 @@
+id: 019e8c06-f858-7d50-bf38-376207acccd6
+spec_id: TASK-638
+agreed_id: TASK-638
+title: aida init should bootstrap the default role set (role scaffold) — fresh clone shows empty 'aida role list'
+description: |-
+  ## Problem (operator-reported, 2026-06-02)
+
+  Cloned AIDA on a fresh (work) machine, ran `aida init` in a new repo, then `aida role list` — empty. Expected the default roles to be present.
+
+  Root cause (verified): roles are GLOBAL per-machine state at `~/.aida/roles/`. The starter set (implementer, advisor, reviewer) is installed only by the explicit `aida role scaffold` command. **`aida init` does not run scaffold.** On a machine where `~/.aida/roles/` was populated long ago (e.g. the operator's home box), roles appear; on a fresh machine they don't — and nothing during `init` bootstraps them or nudges toward `role scaffold`.
+
+  This is the same shape as STORY-255 (init scaffolds the discipline pack) — but roles were left out, so the bootstrap is asymmetric.
+
+  ## Desired behaviour
+
+  `aida init` bootstraps the default role set so a fresh machine is ready out of the box, consistent with how init already scaffolds skills/hooks/discipline-pack.
+
+  ## Acceptance criteria
+
+  - [ ] On a machine with an empty `~/.aida/roles/`, `aida init` installs the agent-wired starter roles (implementer, advisor, reviewer) — i.e. runs the existing idempotent `role scaffold` logic. Afterwards `aida role list` shows them.
+  - [ ] Idempotent + non-destructive: existing global roles are preserved (scaffold skips any that already exist); a user with curated `~/.aida/roles/` is never clobbered or reset.
+  - [ ] Not silent: `aida init` output reports that it scaffolded global roles (since init is project-scoped but this write is GLOBAL — surface it so the global side-effect is legible).
+  - [ ] Opt-out flag `--no-roles`, consistent with init's existing `--no-skills` / `--no-hooks` pattern.
+  - [ ] Belt-and-suspenders: when `aida role list` finds zero roles, its empty-state output nudges `aida role scaffold` (helps anyone who passed `--no-roles` or hits it standalone). Confirm/extend the existing "Or install a starter set" hint so it fires on the empty-list path.
+
+  ## Notes / design
+
+  - Scaffold target stays GLOBAL `~/.aida/roles/` (roles are cross-project personas by design); `aida role list` already merges global + project, so global scaffolding is sufficient to fix the symptom.
+  - Primary-caller check: the caller is a human running `aida init` on a fresh machine/clone. Walk each criterion against that — esp. the "global write from a project command" surprise, mitigated by the explicit report line.
+  - Existing surface to reuse: `handle_role_scaffold()` (aida-cli/src/main.rs ~16705), the `STARTER`/role-set definition (~16676), and the `aida role scaffold` hint (~16443).
+  - Immediate operator unblock (no code change needed): run `aida role scaffold` once per machine.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-03T05:48:47.576602659Z
+modified_at: 2026-06-03T05:48:47.576602659Z
+req_type: Task
+tags:
+- aida:init
+- aida:role:scaffold
+- bootstrap
+- first-user-papercut
+- from-product
+- onboarding-flow
