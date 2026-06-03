@@ -3,12 +3,12 @@ spec_id: TASK-637
 agreed_id: TASK-637
 title: Doc refresh to v0.11.0 state + audience-targeted slide decks (exec/dev/admin/user)
 description: ''
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T03:03:28.408028158Z
-modified_at: 2026-06-03T03:04:00.325463993Z
+modified_at: 2026-06-03T03:04:42.492604211Z
 req_type: Task
 tags:
 - docs
