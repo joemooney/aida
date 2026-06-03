@@ -44,6 +44,28 @@ npx --yes @marp-team/marp-cli@latest docs/presentation/aida-executive-briefing.m
 of that deck.) Generated HTML/PDF and the `build/` dir are gitignored — they're
 artifacts; commit the markdown, not the renders.
 
+## Casts (recorded terminal sessions)
+
+`build.sh` also embeds an **in-browser [asciinema](https://asciinema.org)
+player** for every `.cast` it finds in `docs/casts/` (curated, tracked) and
+`docs/presentation/` (e.g. a live-demo cast) — generating a `casts.html` gallery
+and a **Casts** card on the index. Clones play them inline with **no asciinema
+install**.
+
+To add a cast:
+
+```bash
+# record straight into the tracked location
+aida --asciinema --cast-out docs/casts/<name>.cast queue work <SPEC> --auto-complete
+git add docs/casts/<name>.cast      # docs/casts/ is outside the .aida/* gitignore
+./docs/presentation/build.sh        # regenerate — the cast now appears in the index
+```
+
+The player JS/CSS are **vendored** in `vendor/` (Apache-2.0) so casts play
+offline / air-gapped; the script falls back to a CDN with a warning if the
+vendored assets are missing. **Review casts for secrets before committing** —
+asciinema records whatever was on screen, and it's permanent in history.
+
 ## Keeping them current
 
 The decks quote live numbers (spec counts, releases, commits) and version

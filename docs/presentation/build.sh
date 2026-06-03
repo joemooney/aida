@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 #
-# Render every AIDA presentation deck to HTML and generate an index.html that
-# links them. Output goes to docs/presentation/build/ by default (gitignored).
+# Render every AIDA presentation deck to HTML, embed an in-browser player for
+# every asciinema .cast (docs/casts/ + docs/presentation/), and generate an
+# index.html that links them all. Output → docs/presentation/build/ (gitignored).
 #
 #   ./docs/presentation/build.sh            # render to docs/presentation/build/
 #   ./docs/presentation/build.sh /tmp/out   # render to a custom dir
 #   PDF=1 ./docs/presentation/build.sh      # also emit a .pdf per deck
 #
-# Requires: npx (Node). marp-cli is fetched on demand via `npx --yes`.
+# Requires: npx (Node) for the decks; marp-cli is fetched on demand via `npx
+# --yes`. Casts use the vendored asciinema-player in vendor/ (offline-capable),
+# falling back to CDN when those assets are absent.
 # trace:TASK-637 | ai:claude
 set -euo pipefail
 
@@ -47,6 +50,72 @@ for entry in "${DECKS[@]}"; do
   CARDS+="      <li><a class=\"deck\" href=\"$slug.html\">$title</a>$pdflink<p>$desc</p></li>"$'\n'
   RENDERED=$((RENDERED + 1))
 done
+
+# --- asciinema casts -------------------------------------------------------
+# Embed an in-browser player for every .cast found in docs/casts/ (curated,
+# tracked) and docs/presentation/ (the live-demo cast). Player assets are
+# vendored (docs/presentation/vendor/) so casts play offline / air-gapped;
+# falls back to CDN with a warning when the vendored assets are absent.
+ASCIINEMA_VER="3.8.0"
+shopt -s nullglob
+CASTS=("$HERE/../casts"/*.cast "$HERE"/*.cast)
+shopt -u nullglob
+CAST_COUNT=0
+if [[ ${#CASTS[@]} -gt 0 ]]; then
+  if [[ -f "$HERE/vendor/asciinema-player.min.js" && -f "$HERE/vendor/asciinema-player.css" ]]; then
+    cp "$HERE/vendor/asciinema-player.min.js" "$HERE/vendor/asciinema-player.css" "$OUT/"
+    PLAYER_JS="asciinema-player.min.js"
+    PLAYER_CSS="asciinema-player.css"
+  else
+    echo "warning: vendored asciinema-player assets not found in vendor/ — using CDN (needs network to view)"
+    PLAYER_JS="https://cdn.jsdelivr.net/npm/asciinema-player@${ASCIINEMA_VER}/dist/bundle/asciinema-player.min.js"
+    PLAYER_CSS="https://cdn.jsdelivr.net/npm/asciinema-player@${ASCIINEMA_VER}/dist/bundle/asciinema-player.css"
+  fi
+  PLAYERS_HTML=""
+  INIT_JS=""
+  for cast in "${CASTS[@]}"; do
+    base="$(basename "$cast")"
+    [[ -e "$OUT/$base" && ! "$cast" -ef "$OUT/$base" ]] && { echo "skip (dup cast name): $base"; continue; }
+    cp "$cast" "$OUT/$base"
+    # Title: drop .cast + any leading ISO timestamp (2026-05-24T025421Z-foo → foo).
+    title="$(echo "${base%.cast}" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z-//')"
+    id="cap$CAST_COUNT"
+    echo "embedding cast: $title"
+    PLAYERS_HTML+="    <div class=\"cast\"><h2>$title</h2><div id=\"$id\"></div></div>"$'\n'
+    INIT_JS+="    AsciinemaPlayer.create('$base', document.getElementById('$id'), { fit: 'width', terminalFontSize: '14px' });"$'\n'
+    CAST_COUNT=$((CAST_COUNT + 1))
+  done
+
+  if [[ $CAST_COUNT -gt 0 ]]; then
+    cat >"$OUT/casts.html" <<HTML
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIDA — Casts</title>
+<link rel="stylesheet" href="$PLAYER_CSS">
+<style>
+  body { font: 16px/1.5 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+         max-width: 900px; margin: 2.5rem auto; padding: 0 1.25rem; color-scheme: light dark; }
+  a.back { color: #888; text-decoration: none; font-size: .9rem; }
+  .cast { margin: 2rem 0; }
+  .cast h2 { font-size: 1rem; margin: 0 0 .5rem; }
+</style>
+</head>
+<body>
+  <a class="back" href="index.html">&larr; index</a>
+  <h1>AIDA — Casts</h1>
+$PLAYERS_HTML
+  <script src="$PLAYER_JS"></script>
+  <script>
+$INIT_JS  </script>
+</body>
+</html>
+HTML
+    CARDS+="      <li><a class=\"deck\" href=\"casts.html\">&#9654; Casts ($CAST_COUNT)</a><p>Recorded terminal sessions — play inline in the browser, no install.</p></li>"$'\n'
+  fi
+fi
 
 # Version for the index footer — read from the workspace Cargo.toml (repo-local,
 # deterministic; no dependence on whichever `aida` is on PATH).
@@ -90,4 +159,4 @@ $CARDS  </ul>
 HTML
 
 echo
-echo "Done: $RENDERED deck(s) + index.html → $OUT/index.html"
+echo "Done: $RENDERED deck(s)${CAST_COUNT:+ + $CAST_COUNT cast(s)} + index.html → $OUT/index.html"
