@@ -1,0 +1,30 @@
+id: 019e8bff-0da3-7493-ade2-4f3238acc8e3
+spec_id: STORY-498
+agreed_id: STORY-498
+title: 'CI spec-id validity gate: reject a PR whose commits reference a SPEC-ID that isn''t a live spec'
+description: |-
+  The MVP slice of EPIC-34 — close gaps #2 (validity) and #3 (server-side) first, because it's buildable from existing parts and shuts the worst hole (an agent hallucinates a plausible (REQ-ID), or a --no-verify'd commit, sails onto main with a dangling provenance link).
+
+  A CI job (runs in PR CI, so it is non-bypassable from a dev machine) walks every commit on the branch, extracts the (SPEC-ID) trailer(s) via the existing parser, and resolves each against the live requirement graph. A reference that resolves to nothing — or to a rejected/nonexistent spec — fails the check with a clear message naming the offending commit + id.
+
+  Reuse: the trailer-parsing + the TASK-488 mechanical-commit exemption (release-script/scaffold commits skip the check). Pairs naturally with EPIC-21 (code↔store SHA pinning).
+
+  ## Acceptance
+  - A branch commit trailer referencing a nonexistent id (e.g. (FR-99999)) fails the PR CI check; the failure names the commit + id.
+  - A trailer referencing a live spec passes.
+  - The check runs in CI (server-side), not only the local hook — a --no-verify'd local commit is still caught at the PR.
+  - Mechanical/release/docs commits with no REQ-ID are exempt by the existing audited rule, not silently skipped.
+  - Verify the criteria in the PRIMARY CALLER environment: GitHub PR CI on a real branch, not just a local unit test.
+  trace:self
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-03T05:40:08.739188377Z
+modified_at: 2026-06-03T05:40:08.739188377Z
+req_type: Story
+tags:
+- ci-gate
+- foundations
+- parent:EPIC-34
+- traceability
