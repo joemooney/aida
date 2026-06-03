@@ -387,6 +387,8 @@ After `aida init`, the most-used skills:
 
 Run `aida` (no args) for the full CLI surface.
 
+If you already know Claude Code's primitives — subagents, Workflows, agent teams, MCP, `claude --bg` — and want the one-page map of where AIDA fits and how they compose, read [**Using AIDA with Claude Code**](docs/using-aida-with-claude-code.md). The short version: *Claude Code orchestrates a task; AIDA remembers your project — and runs on top of that orchestration, across every vendor.*
+
 ## How AIDA compares
 
 <!-- trace:TASK-276 | ai:claude -->
@@ -396,10 +398,11 @@ You've tried AIDA — so *what is it actually for, next to the tools you already
 - [**AIDA vs `/ultraplan`**](docs/positioning/vs-ultraplan.md) — AIDA layers requirement structure on top of Claude's planning; `/ultraplan` is the planning primitive AIDA composes with.
 - [**AIDA vs `/ultrareview`**](docs/positioning/vs-ultrareview.md) — AIDA's `/aida-review` is workflow-integrated, single-perspective; `/ultrareview` is parallel cloud multi-agent. Complementary, not competing.
 - [**AIDA vs Claude Code subagents (`/agents`)**](docs/positioning/vs-claude-code-subagents.md) — Subagents are a within-conversation primitive; AIDA's roles are a cross-conversation workflow layer. Different layers — AIDA roles compose subagents inside them. <!-- trace:TASK-337 | ai:claude -->
+- [**AIDA vs Claude Code Workflows (`/workflows`)**](docs/positioning/vs-claude-code-workflows.md) — Workflows orchestrate a *task* (ephemeral fan-out of subagents → an answer); AIDA is the *cross-session* substrate + lifecycle that persists. They compose, and the orchestration mechanism is commoditizing in AIDA's favor — the moat was never the mechanism. <!-- trace:TASK-628 | ai:claude -->
 - [**AIDA vs Karpathy-style markdown**](docs/positioning/vs-karpathy-md.md) — Structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
 - [**AIDA vs SaaS PM tools**](docs/positioning/vs-saas-pm.md) — Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.
 
-For the broader problem statement behind all five, see [Why AIDA?](docs/WHY-AIDA.md).
+For the broader problem statement behind all of these, see [Why AIDA?](docs/WHY-AIDA.md). **Already know Claude Code and just want to place AIDA in that world?** → [Using AIDA with Claude Code](docs/using-aida-with-claude-code.md) maps every Claude Code primitive (subagents, Workflows, agent teams, MCP, `--bg`, skills) to where AIDA sits and how they compose.
 
 ## Architecture (one paragraph)
 
@@ -420,6 +423,7 @@ Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Lin
 | [User Guide](docs/user-guide.md) | Daily-use reference for the CLI and dashboard |
 | [Why AIDA?](docs/WHY-AIDA.md) | Problem statement and competitive positioning |
 | [Future Vision](docs/future-vision.md) | AIDA in the agentic coding era |
+| [Using AIDA with Claude Code](docs/using-aida-with-claude-code.md) | For Claude Code users: where AIDA sits vs subagents / Workflows / agent teams / MCP, and how they compose |
 | [Skills vs Commands](docs/UNDERSTANDING_SKILLS.md) | How Claude Code skills and commands differ |
 | [Claude Code Plugin Package](docs/agents/claude-plugin-package.md) | Marketplace/package skeleton for installing AIDA's Claude Code-facing setup |
 | [`docs/plans/`](docs/plans/) | Implementation plan archive (chronological) |
