@@ -5384,6 +5384,13 @@ pub enum Command {
         #[clap(long)]
         no_hooks: bool,
 
+        /// Skip bootstrapping the default global role set (implementer, advisor,
+        /// reviewer) into ~/.aida/roles/. By default `aida init` scaffolds them
+        /// so a fresh machine is ready out of the box.
+        // trace:TASK-638 | ai:claude
+        #[clap(long)]
+        no_roles: bool,
+
         /// Overwrite existing files if already initialized
         #[clap(long)]
         force: bool,
