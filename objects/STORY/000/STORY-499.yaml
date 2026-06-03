@@ -1,0 +1,25 @@
+id: 019e8bff-bb33-7440-8339-250e4cec3cb3
+spec_id: STORY-499
+agreed_id: STORY-499
+title: Diff-level trace-coverage check in CI (gated on the coverage-definition spike)
+description: |-
+  Gap #1 of EPIC-34: enforce (or report) that a PR's diff actually carries // trace: coverage over the code it changes, per the definition + exemptions settled by the coverage-definition spike. Draft until that spike lands a go decision — building this before the definition is settled would ship a gate that false-positives on every legitimate test/refactor PR.
+
+  ## Acceptance (to be sharpened by the spike)
+  - A PR adding un-traced coverable code (per the spike's definition) is flagged/blocked per the configured posture.
+  - Exempt categories (tests/generated/docs/mechanical) are not flagged.
+  - Default posture matches the spike's recommendation; the block-vs-report dial is per-repo config.
+  trace:self
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-03T05:40:53.171836263Z
+modified_at: 2026-06-03T05:40:53.171836263Z
+req_type: Story
+tags:
+- blocked
+- ci-gate
+- foundations
+- parent:EPIC-34
+- traceability
