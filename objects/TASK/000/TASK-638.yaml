@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:48:47.576602659Z
-modified_at: 2026-06-03T05:48:47.576602659Z
+modified_at: 2026-06-03T06:32:30.375056453Z
 req_type: Task
 tags:
 - aida:init
@@ -43,3 +43,9 @@ tags:
 - first-user-papercut
 - from-product
 - onboarding-flow
+comments:
+- id: 019e8c2e-fda7-7050-a8e1-cd1941c18207
+  author: joe
+  content: Commit bc4063ce2 references this requirement
+  created_at: 2026-06-03T06:32:30.375056453Z
+  modified_at: 2026-06-03T06:32:30.375056453Z
