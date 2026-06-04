@@ -1,26 +1,31 @@
-id: 019e9355-94e3-7f52-831f-ddfa254f4278
+id: 019e9355-9481-78c2-91ae-f3f260e3ff87
 spec_id: STORY-506
 agreed_id: STORY-506
-title: 'Review PR-466: [AI:codex] docs(spike): multi-vendor store interop contract sketch (SPIKE-44)'
+title: 'Review PR-462: [AI:codex] docs(spike): Codex architecture and AIDA integration analysis (SPIKE-24)'
 description: |
-  Auto-filed by `aida session end` (backup trigger) (session `019e9353`) for branch `spike-44`.
+  Auto-filed by `aida session end` (backup trigger) (session `019e9349`) for branch `spike-24`.
 
-  - PR: <https://github.com/joemooney/aida/pull/466>
-  - Branch: `spike-44` → `main`
+  - PR: <https://github.com/joemooney/aida/pull/462>
+  - Branch: `spike-24` → `main`
 
   ## Covers
 
-  - SPIKE-44
+  - SPIKE-24
 
   ## Acceptance
 
-  - Generate a structured review prompt with `aida review prompt --pr 466` and verify each spec's acceptance criteria.
+  - Generate a structured review prompt with `aida review prompt --pr 462` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-06-04T15:51:59.971828263Z
-modified_at: 2026-06-04T15:51:59.971828263Z
+created_at: 2026-06-04T15:51:59.873957672Z
+modified_at: 2026-06-04T15:52:53.418814694Z
 req_type: Story
+relationships:
+- rel_type: !Custom implements
+  target_id: 019e7ca4-a443-79c2-a854-6a5af3f086ad
+  created_at: 2026-06-04T15:52:53.418802441Z
+  created_by: joe
