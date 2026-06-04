@@ -1435,3 +1435,10 @@
   added_by: joe
   added_at: 2026-06-04T05:21:12.574069736Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e9114-21ef-7ca2-a094-7bde64a5645b
+  position: 338000
+  added_by: joe
+  note: auto-queued by `session end` (019e9114); covers 1 spec
+  added_at: 2026-06-04T05:21:25.471048762Z
+  for_role: reviewer
