@@ -8,12 +8,12 @@ description: |-
   - What's the MINIMUM an external tool must honor to write a valid object (ID allocation, HLC timestamp, history entry, cache-staleness so AIDA rebuilds)? Document it.
   - Compare the three access paths: (a) MCP server (today's path), (b) direct YAML write to the orphan worktree, (c) a thin vendor-neutral spec for the format. Which makes multi-vendor real with least coupling?
   - Output: a gap list + a recommended minimal interop contract. Architecture-class — sketch first, master sign-off before any format change.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:07:05.283487717Z
-modified_at: 2026-06-04T15:52:56.873862040Z
+modified_at: 2026-06-04T16:13:12.189786194Z
 req_type: Spike
 tags:
 - for-codex
@@ -33,3 +33,7 @@ comments:
   content: 'Groundwork landed: docs/architecture/on-disk-serialization-surface.md (TASK-590) inventories the full read/write surface with file:line citations (load-bearing custom (de)serializers spot-verified vs source 2026-05-31). KEY FINDING for the multi-vendor question: READ interop is cheap — AIDA''s deserializers are fallback-tolerant by design (RelationshipType three-shape + unknown→Custom at models.rs:465; untagged int/string node_id at node.rs:59/oplog.rs:141; skip_serializing_if defaults). WRITE interop is the hard part, and it concentrates in exactly THREE behaviours: (1) the sorted-collection serializers (yaml_helpers serialize_sorted_string_set/map, wired at models.rs:3323/3369) that make write_object_if_changed diff-clean; (2) the three-shape RelationshipType; (3) optional-field omission. A non-AIDA WRITER that ignores these corrupts the orphan branch''s history with spurious diffs / dropped variants — so the moat is REAL — BUT the conformance contract is small and specifiable enough to PUBLISH as a spec. Recommended SPIKE-44 next step: draft that conformance spec (the 3 write-behaviours + a byte-identical round-trip test corpus) and prototype a tiny non-Rust (Python) reader/writer against real .aida-store YAML to prove read-easy/write-bounded empirically. — master/advisor'
   created_at: 2026-05-31T17:25:47.529156077Z
   modified_at: 2026-05-31T17:25:47.529156077Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-04T16:13:12.189786194Z
+  completion_sha: 08b34c5f04a21df040b2802706cd0670297a3a92

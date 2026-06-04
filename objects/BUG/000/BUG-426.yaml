@@ -3,12 +3,12 @@ spec_id: BUG-426
 agreed_id: BUG-426
 title: Auto-bump false-completes umbrella specs from cores/plan commits (agreed-id matching) — recurring, mechanism unclear vs push_paren code
 description: 'Observed repeatedly 2026-05-31: TASK-136/BUG-420 (stored as node-aware TASK-1-111 etc.) auto-completed off commits that shipped only their CORES + PLAN — not the fix. Reopened with --force; the BUG-410 same-commit guard held against the SAME commit, but they re-completed after subsequent referencing commits. CONTRADICTION worth instrumenting: extract_spec_ids_from_commit (main.rs ~60813) only matches a TRAILING (SPEC-ID) group (all-tokens-must-be-spec-ids, so ''(TASK-136 + BUG-420 approaches)'' should DROP on the ''+''/''approaches'' tokens) or a LEADING ''SPEC-ID:'' prefix — neither my plan-PR title nor slice-1 title fits. Yet they completed. Likely interaction with agreed-id↔spec_id matching (BUG-1-113 reconcile change) and/or the reconcile path. Per instrument-don''t-infer: add opt-in logging of WHICH commit + WHICH extraction path completes a spec, then reproduce. Impact: umbrella bug-specs read Completed while the bug is unfixed (silent-loss risk). trace:self'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:51:03.697171101Z
-modified_at: 2026-06-04T15:25:13.703372923Z
+modified_at: 2026-06-04T16:13:12.189786194Z
 req_type: Bug
 tags:
 - aida:pull
@@ -28,3 +28,7 @@ comments:
   content: Commit 6725007e0 references this requirement
   created_at: 2026-06-04T15:25:13.703372923Z
   modified_at: 2026-06-04T15:25:13.703372923Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-04T16:13:12.189786194Z
+  completion_sha: 8d6685159ad0a9fc47743bf899393d4e4c900534
