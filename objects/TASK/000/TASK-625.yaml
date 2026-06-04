@@ -28,7 +28,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:34:16.077853065Z
-modified_at: 2026-06-01T05:34:16.077853065Z
+modified_at: 2026-06-04T16:57:18.631567292Z
 req_type: Task
 tags:
 - from-product
@@ -36,3 +36,9 @@ tags:
 - lifecycle:trivial
 - papercut
 - release-hygiene
+comments:
+- id: 019e9391-6027-75a3-9dca-181a10b5baf7
+  author: joe
+  content: Commit 525608da4 references this requirement
+  created_at: 2026-06-04T16:57:18.631567292Z
+  modified_at: 2026-06-04T16:57:18.631567292Z
