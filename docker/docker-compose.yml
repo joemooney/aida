@@ -1,136 +1,16 @@
 version: "3.9"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# AIDA deployment — server (REST/gRPC) + web (React dashboard).
+#
+# The reverse proxy (Traefik), TLS, GitLab, the Cloudflare tunnel, and the
+# `proxy` network itself are owned by the personal homelab stack, which lives in
+# a PRIVATE repo (joemooney/homegitlab) — kept out of this public repo so secrets
+# never land here. This compose joins `proxy` as an EXTERNAL network, so bring the
+# homegitlab stack up first.
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
-  traefik:
-    image: docker.io/traefik:v3.2
-    container_name: traefik
-    restart: unless-stopped
-
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.endpoint=unix:///var/run/docker.sock
-
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-
-      # Let's Encrypt via Cloudflare DNS-01
-      - --certificatesresolvers.cloudflare.acme.email=you@joemooney.com
-      - --certificatesresolvers.cloudflare.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.cloudflare.acme.dnschallenge=true
-      - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
-
-      - --log.level=INFO
-
-    ports:
-      - "80:80"
-      - "443:443"
-
-    environment:
-      CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_token
-
-    secrets:
-      - cloudflare_api_token
-
-    volumes:
-      - traefik_letsencrypt:/letsencrypt
-      #podman
-      - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro
-
-    networks:
-      - proxy
-
-
-  # Dummy service to trigger wildcard cert issuance
-  wildcard:
-    image: docker.io/library/alpine:3.19
-    container_name: traefik-wildcard
-    command: ["sleep", "infinity"]
-    networks:
-      - proxy
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.wildcard.rule=Host(`wildcard.joemooney.com`)
-      - traefik.http.routers.wildcard.entrypoints=websecure
-      - traefik.http.routers.wildcard.tls=true
-      - traefik.http.routers.wildcard.tls.certresolver=cloudflare
-      - traefik.http.routers.wildcard.tls.domains[0].main=joemooney.com
-      - traefik.http.routers.wildcard.tls.domains[0].sans=*.joemooney.com
-
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # GitLab - Self-hosted git mirror for private repos
-  # ═══════════════════════════════════════════════════════════════════════════
-
-  gitlab:
-    image: docker.io/gitlab/gitlab-ce:18.7.0-ce.0
-    container_name: gitlab
-    restart: unless-stopped
-    shm_size: "256m"
-
-    hostname: gitlab.joemooney.com
-
-    # Git over SSH (direct)
-    ports:
-      - "2222:22"
-
-    environment:
-      GITLAB_OMNIBUS_CONFIG: |
-        external_url 'https://gitlab.joemooney.com'
-        gitlab_rails['gitlab_shell_ssh_port'] = 2222
-
-        # GitLab's bundled nginx listens HTTP internally; Traefik terminates TLS
-        nginx['listen_port'] = 80
-        nginx['listen_https'] = false
-
-    volumes:
-      - gitlab_config:/etc/gitlab
-      - gitlab_logs:/var/log/gitlab
-      - gitlab_data:/var/opt/gitlab
-
-    networks:
-      - proxy
-
-    labels:
-      - traefik.enable=true
-
-      # HTTPS router
-      - traefik.http.routers.gitlab.rule=Host(`gitlab.joemooney.com`)
-      - traefik.http.routers.gitlab.entrypoints=websecure
-      - traefik.http.routers.gitlab.tls=true
-      - traefik.http.routers.gitlab.tls.certresolver=cloudflare
-
-      # Service port inside container
-      - traefik.http.services.gitlab.loadbalancer.server.port=80
-
-      # HTTP -> HTTPS redirect
-      - traefik.http.routers.gitlab-http.rule=Host(`gitlab.joemooney.com`)
-      - traefik.http.routers.gitlab-http.entrypoints=web
-      - traefik.http.routers.gitlab-http.middlewares=gitlab-https-redirect
-      - traefik.http.middlewares.gitlab-https-redirect.redirectscheme.scheme=https
-
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Cloudflare Tunnel - Secure public access without opening ports
-  # ═══════════════════════════════════════════════════════════════════════════
-
-  cloudflared:
-    image: docker.io/cloudflare/cloudflared:latest
-    container_name: cloudflared
-    restart: unless-stopped
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
-    networks:
-      - proxy
-    depends_on:
-      - gitlab
-
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # AIDA - AI Design Assistant
-  # ═══════════════════════════════════════════════════════════════════════════
-
   aida-server:
     build:
       context: ..
@@ -138,7 +18,6 @@ services:
     image: aida-server:latest
     container_name: aida-server
     restart: unless-stopped
-
     environment:
       RUST_LOG: info
       # Auth: PIN + OIDC (GitLab SSO)
@@ -155,7 +34,6 @@ services:
       # AIDA_OIDC_TOKEN_URL: https://gitlab.joemooney.com/oauth/token
       # AIDA_OIDC_USERINFO_URL: https://gitlab.joemooney.com/oauth/userinfo
       # AIDA_OIDC_REDIRECT_URL: https://aida.joemooney.com/auth/callback
-
     volumes:
       # Git-backed requirements store (standalone clone of aida-store branch)
       - /home/joe/ai/aida-docker-store:/store
@@ -164,15 +42,12 @@ services:
       - /home/joe/ai/aida/.claude:/store/.claude:ro
       - /home/joe/ai/aida/aida-core/templates:/store/aida-core/templates:ro
       - /home/joe/ai/aida/docs:/store/docs:ro
-
     networks:
       - proxy
-
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
       - traefik.http.services.aida-rest.loadbalancer.server.port=8080
-
 
   aida-web:
     build:
@@ -181,43 +56,26 @@ services:
     image: aida-web:latest
     container_name: aida-web
     restart: unless-stopped
-
     networks:
       - proxy
-
     depends_on:
       - aida-server
-
     labels:
       - traefik.enable=true
-
-      # React dashboard at aida.joemooney.com
-      # HTTPS router
+      # React dashboard at aida.joemooney.com — HTTPS router
       - traefik.http.routers.aida-web.rule=Host(`aida.joemooney.com`)
       - traefik.http.routers.aida-web.entrypoints=websecure
       - traefik.http.routers.aida-web.tls=true
       - traefik.http.routers.aida-web.tls.certresolver=cloudflare
       - traefik.http.services.aida-web.loadbalancer.server.port=80
-
       # HTTP -> HTTPS redirect
       - traefik.http.routers.aida-web-http.rule=Host(`aida.joemooney.com`)
       - traefik.http.routers.aida-web-http.entrypoints=web
       - traefik.http.routers.aida-web-http.middlewares=aida-https-redirect
       - traefik.http.middlewares.aida-https-redirect.redirectscheme.scheme=https
 
-
 networks:
+  # Owned by the homegitlab stack (Traefik + proxy). Bring that stack up first.
   proxy:
+    external: true
     name: proxy
-
-
-volumes:
-  traefik_letsencrypt:
-  gitlab_config:
-  gitlab_logs:
-  gitlab_data:
-
-
-secrets:
-  cloudflare_api_token:
-    file: ./secrets/cloudflare_api_token.txt
