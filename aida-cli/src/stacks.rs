@@ -141,6 +141,21 @@ pub fn update_parent_sha(graph: &mut StackGraph, parent: &str, new_sha: &str) {
     }
 }
 
+/// Branch names whose recorded `parent_branch` is `parent` — the stacked
+/// children that would be orphaned (and whose PRs GitHub auto-closes) if
+/// `parent` were deleted. Sorted for stable output. Used by `aida pr ship`'s
+/// `--delete-branch` guard. trace:BUG-434 | ai:claude
+pub fn children_of<'a>(graph: &'a StackGraph, parent: &str) -> Vec<&'a str> {
+    let mut out: Vec<&str> = graph
+        .entries
+        .values()
+        .filter(|e| e.parent_branch == parent)
+        .map(|e| e.branch.as_str())
+        .collect();
+    out.sort_unstable();
+    out
+}
+
 /// Derive ordered chains from the graph. Each chain is bottom-of-stack
 /// first — i.e. the entry directly forked from a non-stack-entry parent
 /// (typically `main`) comes first.
@@ -238,6 +253,22 @@ mod tests {
             spec_id: None,
             created_at: Utc::now(),
         }
+    }
+
+    /// BUG-434: `children_of` returns exactly the branches forked from a
+    /// given parent, sorted, and ignores unrelated entries.
+    #[test]
+    fn children_of_returns_direct_children_sorted() {
+        let mut g = StackGraph::default();
+        add(&mut g, entry("task-c", "base", "sha"));
+        add(&mut g, entry("task-a", "base", "sha"));
+        add(&mut g, entry("grandchild", "task-a", "sha")); // not a child of base
+        add(&mut g, entry("other", "main", "sha"));
+
+        assert_eq!(children_of(&g, "base"), vec!["task-a", "task-c"]);
+        assert_eq!(children_of(&g, "task-a"), vec!["grandchild"]);
+        assert!(children_of(&g, "task-c").is_empty());
+        assert!(children_of(&g, "nonexistent").is_empty());
     }
 
     #[test]
