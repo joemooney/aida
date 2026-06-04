@@ -19,6 +19,7 @@ mod drain_state;
 mod effort_calibration;
 mod exit_signal;
 mod findings;
+mod forge;
 mod global_queue;
 mod headless_tail;
 mod headless_tee;
@@ -10538,6 +10539,8 @@ fn handle_init_distributed_worktree(
          #   auto_claim_size = 200\n",
         worktree_dir, branch_name
     );
+    // EPIC-35: scaffold the [forge] section with the auto-detected provider.
+    let config_content = config_content + &forge::init_forge_config_section(&cwd);
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
@@ -10692,6 +10695,8 @@ fn handle_init_post_clone(
          #   auto_claim_size = 200\n",
         worktree_dir, branch_name
     );
+    // EPIC-35: scaffold the [forge] section with the auto-detected provider.
+    let config_content = config_content + &forge::init_forge_config_section(&cwd);
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
     println!(
         "  {} {}",
