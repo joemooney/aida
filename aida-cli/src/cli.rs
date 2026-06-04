@@ -1050,6 +1050,14 @@ pub enum PrCommand {
         #[clap(long)]
         dry_run: bool,
 
+        /// Delete the merged branch even when branches/PRs are stacked on
+        /// it. Without this, ship keeps the branch alive when it detects
+        /// stacked children, so deleting it can't auto-close their PRs;
+        /// pass this to orphan the children deliberately.
+        // trace:BUG-434 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        force_delete_branch: bool,
+
         /// Implementer's self-assessed actual complexity at ship time:
         /// `low` / `med` / `high`. Captured to
         /// `.aida/complexity-calibration/<SPEC>.yaml` alongside the

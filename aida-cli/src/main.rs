@@ -29736,9 +29736,18 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             no_pull,
             no_cleanup,
             dry_run,
+            force_delete_branch,
             complexity,
             effort,
-        } => pr_ship_handler(*n, *no_pull, *no_cleanup, *dry_run, *complexity, *effort),
+        } => pr_ship_handler(
+            *n,
+            *no_pull,
+            *no_cleanup,
+            *dry_run,
+            *force_delete_branch,
+            *complexity,
+            *effort,
+        ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
     }
 }
@@ -30233,6 +30242,7 @@ fn pr_ship_handler(
     no_pull: bool,
     no_cleanup: bool,
     dry_run: bool,
+    force_delete_branch: bool,
     complexity: Option<complexity_calibration::ComplexityLevel>,
     effort: Option<effort_calibration::EffortBucket>,
 ) -> Result<()> {
@@ -30354,14 +30364,69 @@ fn pr_ship_handler(
     // the local cleanup (which knows how to remove the worktree first).
     let branch_in_sibling = branch_in_sibling_worktree(&main_worktree, &branch, &project_root);
 
+    // ---- BUG-434: detect branches/PRs stacked ON this branch. ----
+    // Deleting the merged branch orphans local children and GitHub
+    // auto-CLOSES any PR based on it (the #439 slip). Two substrate
+    // sources: (a) `.aida/stacks.json` parent_branch links (STORY-248),
+    // (b) `gh pr list --base <branch> --state open`. Either populated ⇒
+    // keep the branch unless `--force-delete-branch`. trace:BUG-434
+    let stack_graph = stacks::load(&project_root);
+    let stacked_children: Vec<String> = stacks::children_of(&stack_graph, &branch)
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
+    let open_child_prs = open_child_prs(&project_root, &branch);
+    let delete_branch = pr_ship::should_delete_branch(
+        branch_in_sibling,
+        stacked_children.len(),
+        open_child_prs.len(),
+        force_delete_branch,
+    );
+    if !delete_branch
+        && !branch_in_sibling
+        && (!stacked_children.is_empty() || !open_child_prs.is_empty())
+    {
+        // The merge still proceeds; we just keep the base branch alive so
+        // the stacked PRs survive. Tell the operator how to clean up.
+        let child_prs: Vec<String> = open_child_prs.iter().map(|n| format!("#{n}")).collect();
+        eprintln!(
+            "  {} keeping branch `{}` after merge — {} stacked on it",
+            "⚠".yellow(),
+            branch,
+            if child_prs.is_empty() {
+                format!(
+                    "{} child branch(es): {}",
+                    stacked_children.len(),
+                    stacked_children.join(", ")
+                )
+            } else {
+                format!("open child PR(s): {}", child_prs.join(", "))
+            }
+        );
+        if !child_prs.is_empty() {
+            eprintln!(
+                "    retarget them to main first ({}), then delete `{}` — or re-run with --force-delete-branch to orphan them.",
+                open_child_prs
+                    .iter()
+                    .map(|n| format!("gh pr edit {n} --base main"))
+                    .collect::<Vec<_>>()
+                    .join("; "),
+                branch
+            );
+        } else {
+            eprintln!(
+                "    re-target those branches off `{}` before deleting it — or re-run with --force-delete-branch to orphan them.",
+                branch
+            );
+        }
+    }
+
     let steps = vec![
         ShipStep::ResolvePr {
             create_if_needed: opts.pr_number.is_none(),
         },
         ShipStep::WatchCi,
-        ShipStep::Merge {
-            delete_branch: !branch_in_sibling,
-        },
+        ShipStep::Merge { delete_branch },
         ShipStep::Pull,
         ShipStep::EndLease,
     ];
@@ -31049,6 +31114,39 @@ fn prepare_main_worktree_for_pr_ship_pull(main_worktree: &std::path::Path) -> Re
 /// worktree at `main_worktree`. Used by `aida pr ship` to decide
 /// whether `gh pr merge --delete-branch` will fail its local cleanup
 /// step (the friction class from TASK-406).
+/// BUG-434: open PR numbers whose base branch is `branch` — the PRs GitHub
+/// would auto-close if `branch` were deleted. Best-effort: returns empty on
+/// any `gh` error (offline, not a GitHub remote, gh absent), so the guard
+/// degrades to the stacks.json-only signal rather than blocking the ship.
+/// trace:BUG-434 | ai:claude
+fn open_child_prs(project_root: &std::path::Path, branch: &str) -> Vec<u64> {
+    let out = std::process::Command::new("gh")
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--base",
+            branch,
+            "--state",
+            "open",
+            "--json",
+            "number",
+            "-q",
+            ".[].number",
+        ])
+        .output();
+    let Ok(out) = out else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| l.trim().parse::<u64>().ok())
+        .collect()
+}
+
 fn branch_in_sibling_worktree(
     main_worktree: &std::path::Path,
     branch: &str,

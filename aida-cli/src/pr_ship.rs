@@ -249,6 +249,32 @@ fn parse_spec_id_group(inner: &str) -> Vec<String> {
     }
 }
 
+/// BUG-434: decide whether `aida pr ship` may pass `--delete-branch`.
+///
+/// Deleting the just-merged branch is the convenient default, but it has two
+/// footguns the substrate already has the data to prevent:
+///   - `branch_in_sibling` (BUG-289): the branch is checked out in a sibling
+///     worktree, so `gh pr merge --delete-branch`'s local-cleanup step fails;
+///     `aida session end` removes the worktree-bound branch instead.
+///   - `stacked_child_count` / `open_child_pr_count` (BUG-434): one or more
+///     branches/PRs are stacked ON this branch. Deleting it orphans the local
+///     children and GitHub auto-CLOSES the stacked PRs (the #439 slip).
+///
+/// `force` is the operator's explicit `--force-delete-branch` override — it
+/// deletes regardless (deliberately orphaning children). Kept pure so the
+/// guard is unit-testable without a worktree or `gh`. trace:BUG-434 | ai:claude
+pub fn should_delete_branch(
+    branch_in_sibling: bool,
+    stacked_child_count: usize,
+    open_child_pr_count: usize,
+    force: bool,
+) -> bool {
+    if force {
+        return true;
+    }
+    !branch_in_sibling && stacked_child_count == 0 && open_child_pr_count == 0
+}
+
 /// Build the `gh pr merge` argv. Kept pure so SPEC-410 can pin the
 /// contract that the wrapper passes `--subject` when it repairs a squash
 /// subject.
@@ -329,7 +355,7 @@ pub fn format_dry_run_plan(opts: &PrShipOptions, steps: &[ShipStep]) -> String {
             } => "gh pr merge <N> --squash --delete-branch".to_string(),
             ShipStep::Merge {
                 delete_branch: false,
-            } => "gh pr merge <N> --squash  (skip --delete-branch: branch in sibling worktree)"
+            } => "gh pr merge <N> --squash  (skip --delete-branch: branch protected — sibling worktree or stacked children)"
                 .to_string(),
             ShipStep::Pull => "aida pull (from main worktree)".to_string(),
             ShipStep::EndLease => "aida session end <lease>".to_string(),
@@ -458,6 +484,25 @@ mod tests {
     fn parse_pr_number_from_create_output_canonical() {
         let out = "https://github.com/joemooney/aida/pull/458\n";
         assert_eq!(parse_pr_number_from_create_output(out), Some(458));
+    }
+
+    /// BUG-434: the `--delete-branch` guard truth table. Delete only when
+    /// nothing protects the branch; `force` overrides every guard.
+    #[test]
+    fn should_delete_branch_truth_table() {
+        // Clean: no sibling, no children → delete.
+        assert!(should_delete_branch(false, 0, 0, false));
+        // Sibling worktree (BUG-289) → keep.
+        assert!(!should_delete_branch(true, 0, 0, false));
+        // Stacked child branch (stacks.json) → keep.
+        assert!(!should_delete_branch(false, 1, 0, false));
+        // Open child PR (gh) → keep.
+        assert!(!should_delete_branch(false, 0, 2, false));
+        // Both stacked signals → keep.
+        assert!(!should_delete_branch(false, 3, 2, false));
+        // force overrides sibling + children → delete (deliberate orphan).
+        assert!(should_delete_branch(true, 5, 5, true));
+        assert!(should_delete_branch(false, 1, 1, true));
     }
 
     #[test]
