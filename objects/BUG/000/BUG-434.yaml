@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T02:27:56.340660773Z
-modified_at: 2026-06-02T02:27:56.340660773Z
+modified_at: 2026-06-04T16:00:19.392895224Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -22,3 +22,9 @@ tags:
 - multi-pr
 - stacked-branches
 - substrate-as-bouncer
+comments:
+- id: 019e935d-33c0-7992-99b0-291161bd1404
+  author: joe
+  content: Commit b5d198380 references this requirement
+  created_at: 2026-06-04T16:00:19.392895224Z
+  modified_at: 2026-06-04T16:00:19.392895224Z
