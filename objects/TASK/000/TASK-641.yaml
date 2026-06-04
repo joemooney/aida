@@ -12,12 +12,12 @@ description: |-
   - No other files changed.
 
   NOTE: validation artifact — git rm after the test. trace:STORY-492 trace:BUG-438
-status: Done
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:32:18.477666741Z
-modified_at: 2026-06-04T04:36:29.303062894Z
+modified_at: 2026-06-04T04:43:25.267712447Z
 req_type: Task
 tags:
 - bug-438-revalidation
