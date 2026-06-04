@@ -10,12 +10,12 @@ description: |-
   Two fix paths: (a) implement completed-only in git_backend by reading the queue YAML, filtering entries whose requirement_id has status Completed, and rewriting; (b) drop the --completed flag entirely and document that 'aida queue done <SPEC>' is the per-spec atomic mark-and-remove (use that in a loop, or extend queue done to accept multiple SPECs / a status filter).
 
   Help text was updated in the same commit to flag the no-op behavior so operators don't silently expect it to filter.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T16:22:11.120922103Z
-modified_at: 2026-06-04T16:51:04.961006108Z
+modified_at: 2026-06-04T16:51:08.316225511Z
 req_type: Task
 tags:
 - aida:queue:clear
