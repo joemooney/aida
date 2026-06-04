@@ -1,0 +1,19 @@
+id: 019e9357-bbef-7b72-a1de-2fdba610638c
+spec_id: STORY-511
+agreed_id: STORY-511
+title: '[EPIC-35 s5] End-to-end GitLab drain + MR linkage in aida show + docs + init UX'
+description: 'Size M, validation slice. Full `aida queue work --auto-complete` on a GitLab project (MR opened→CI→reviewed→merged→spec auto-bumped); MR linkage in `aida show` (TASK-241 PR→MR); docs + the init forge-detection UX. Depends on s4. Validate against joe/aida-gl-test. Acceptance: a GitLab spec drains to Completed unattended; aida show renders the MR.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T15:54:21.039341210Z
+modified_at: 2026-06-04T15:54:21.039341210Z
+req_type: Story
+tags:
+- forge-provider
+- from-product
+- gitlab
+- parent:EPIC-35
+- slice:5
+- validation
