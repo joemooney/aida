@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:51:03.697171101Z
-modified_at: 2026-06-04T15:24:47.608993920Z
+modified_at: 2026-06-04T15:25:13.703372923Z
 req_type: Bug
 tags:
 - aida:pull
@@ -23,3 +23,8 @@ comments:
   content: 'ROOT CAUSE (verified against store, not inferred): the false-complete was NOT mysterious. completion_sha for TASK-1-111 (agreed TASK-136) was the PLAN commit 3f8fc276 ''[AI:claude] docs(plans): drain-reliability hardening plan ... (TASK-136 BUG-420)''. Its trailing (TASK-136 BUG-420) group is two spec-id-shaped tokens, so push_paren_spec_ids_from_line extracts BOTH; auto_bump_eligible_status includes Approved, so the candidate scan completed two Approved umbrella specs off a plan-only commit whose own body says ''specs stay Approved''. Store scan: exactly 2 historic docs(plans) completions, BOTH false (3f8fc276 + a62866a2 STORY-491 ''sketch''); 0 legitimate docs(plans) completions, so the gate strands nothing. FIX: is_plan_commit_subject() gates docs(plans)/docs(plan) commits out of the completion-candidate scan in BOTH auto_bump_done_to_completed (pull/sync) AND handle_db_reconcile_status (manual replay). This is the substrate-as-bouncer form of the feedback_commit_trailer_completes_the_spec discipline (don''t trailer umbrellas on plan commits). Tests: auto_bump_ignores_plan_commit_trailers, is_plan_commit_subject_classifies_plan_commits.'
   created_at: 2026-06-04T15:24:47.608993920Z
   modified_at: 2026-06-04T15:24:47.608993920Z
+- id: 019e933d-1267-70b0-83dd-f432b21272e6
+  author: joe
+  content: Commit 6725007e0 references this requirement
+  created_at: 2026-06-04T15:25:13.703372923Z
+  modified_at: 2026-06-04T15:25:13.703372923Z
