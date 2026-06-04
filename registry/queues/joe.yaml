@@ -1410,3 +1410,9 @@
   note: Onboarding bootstrap papercut, operator-reported from a fresh work clone 2026-06-02. Symmetric with STORY-255 (init scaffolds discipline pack but not roles).
   added_at: 2026-06-03T05:49:06.016804183Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e90a2-5f1c-7982-9019-c21ca2da847b
+  position: 334000
+  added_by: joe
+  added_at: 2026-06-04T03:31:44.357710915Z
+  for_role: implementer
