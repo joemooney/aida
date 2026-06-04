@@ -9,12 +9,12 @@ description: |-
 
   Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/12-codex-mcp.md
   Acceptance: protocol diff documented, recommendations for AIDA's Codex-MCP scaffolding.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:22:52.817068713Z
-modified_at: 2026-05-29T03:22:52.817068713Z
+modified_at: 2026-06-04T15:46:49.770959797Z
 req_type: Spike
 tags:
 - batch:research-claude-overlap-2026-05-29
