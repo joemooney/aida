@@ -1,0 +1,26 @@
+id: 019e90ce-192a-7993-8e7d-31d93c1741eb
+spec_id: STORY-500
+agreed_id: STORY-500
+title: 'Review PR-450: test(resume): resume-drain re-validation probe (TASK-640)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e90c4`) for branch `task-640`.
+
+  - PR: <https://github.com/joemooney/aida/pull/450>
+  - Branch: `task-640` → `main`
+
+  ## Covers
+
+  - TASK-640
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 450` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T04:04:46.506555906Z
+modified_at: 2026-06-04T04:04:46.506555906Z
+req_type: Story
