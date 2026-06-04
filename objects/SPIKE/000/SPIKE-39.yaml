@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T06:48:56.362636646Z
-modified_at: 2026-05-29T06:48:56.362636646Z
+modified_at: 2026-06-04T15:55:20.045206400Z
 req_type: Spike
 tags:
 - claude-code-compose
 - forge-portability
 - from-strategic-recompose-round-2
 - priority:5
+comments:
+- id: 019e9358-a26d-70e2-9289-3001b5b54e01
+  author: joe
+  content: 'Recommend DISMISSAL (superseded-by EPIC-35). SPIKE-49 (slice 0) fully subsumes this: verified gh inventory, Forge trait sketch, glab-vs-REST decision, and a proven token-free GitLab MR-creation round-trip — see docs/plans/2026-06-04-forge-provider.md and PR #465. Leaving status unchanged; master''s call to reject as superseded. — product agent 2026-06-04'
+  created_at: 2026-06-04T15:55:20.045206400Z
+  modified_at: 2026-06-04T15:55:20.045206400Z
