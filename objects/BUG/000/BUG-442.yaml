@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:27:48.950629573Z
-modified_at: 2026-06-04T15:27:48.950629573Z
+modified_at: 2026-06-04T16:46:38.401491171Z
 req_type: Bug
 tags:
 - aida:list
@@ -48,3 +48,9 @@ tags:
 - from-validation
 - onboarding-flow
 - store-resolution
+comments:
+- id: 019e9387-9b41-7721-b520-2a6fd7fc78a8
+  author: joe
+  content: Commit f4ca4818d references this requirement
+  created_at: 2026-06-04T16:46:38.401491171Z
+  modified_at: 2026-06-04T16:46:38.401491171Z
