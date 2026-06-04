@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T03:35:55.552797621Z
-modified_at: 2026-06-04T03:35:55.552797621Z
+modified_at: 2026-06-04T03:46:54.079284158Z
 req_type: Bug
 tags:
 - drain
@@ -42,3 +42,9 @@ tags:
 - orchestrator
 - resume
 - reviewer
+comments:
+- id: 019e90bd-bbff-76c3-af37-7dc3a1f0f600
+  author: joe
+  content: Commit 81746cbfa references this requirement
+  created_at: 2026-06-04T03:46:54.079284158Z
+  modified_at: 2026-06-04T03:46:54.079284158Z
