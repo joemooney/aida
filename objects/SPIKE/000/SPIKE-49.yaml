@@ -26,12 +26,12 @@ description: |-
   - Gated on gitlab.joemooney.com being operational (need a real MR target). Pairs with the homegitlab cutover.
   - Keep GitHub behavior untouched — this is design + proof only, no refactor yet.
   - Reuse existing gh-call locations as the map; pr_ship.rs + auto_complete.rs are the densest.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:15:13.219637949Z
-modified_at: 2026-06-04T15:58:57.561096296Z
+modified_at: 2026-06-04T16:47:35.067655059Z
 req_type: Spike
 tags:
 - forge-provider
@@ -54,3 +54,7 @@ comments:
     SPIKE-39 flagged for dismissal (comment, status unchanged). Slice 1 (STORY-512) NOT queued — gated on master sign-off of the trait surface.
   created_at: 2026-06-04T15:58:57.561096296Z
   modified_at: 2026-06-04T15:58:57.561096296Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-04T16:47:35.067655059Z
+  completion_sha: 84776c85808fad6da117adc297d066fcb16993f2
