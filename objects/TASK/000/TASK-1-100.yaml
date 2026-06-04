@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-26T03:44:22.413224176Z
-modified_at: 2026-06-04T16:22:13.517170772Z
+modified_at: 2026-06-04T16:53:56.794081630Z
 req_type: Task
 tags:
 - aida:commit-msg-hook
@@ -24,3 +24,8 @@ comments:
   content: 'Promoted by joe 2026-06-04: First-user papercut: scaffold commits emit confusing ''Staged files trace to:'' warnings for FOREIGN trace IDs. Cheap, onboarding-facing.'
   created_at: 2026-06-04T16:22:13.517170772Z
   modified_at: 2026-06-04T16:22:13.517170772Z
+- id: 019e938e-4bba-7a62-a2fc-42fbcf03d405
+  author: joe
+  content: Commit ca0f4ba42 references this requirement
+  created_at: 2026-06-04T16:53:56.794081630Z
+  modified_at: 2026-06-04T16:53:56.794081630Z
