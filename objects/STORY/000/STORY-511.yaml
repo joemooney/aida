@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:54:21.039341210Z
-modified_at: 2026-06-04T15:54:21.039341210Z
+modified_at: 2026-06-04T15:54:50.265107305Z
 req_type: Story
 tags:
 - forge-provider
@@ -17,3 +17,8 @@ tags:
 - parent:EPIC-35
 - slice:5
 - validation
+relationships:
+- rel_type: Child
+  target_id: 019e9333-7505-78f1-a063-06851ee7f85c
+  created_at: 2026-06-04T15:54:50.265102831Z
+  created_by: joe
