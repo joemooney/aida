@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:26:47.990941681Z
-modified_at: 2026-06-04T04:40:20.093625974Z
+modified_at: 2026-06-04T04:40:21.792329495Z
 req_type: Story
 tags:
 - orchestrator
@@ -28,3 +28,9 @@ tags:
 - resume
 - reviewer
 - shared-root
+comments:
+- id: 019e90ee-ae20-74f0-b9e8-28b7f810e939
+  author: joe
+  content: 'CONFIRMED BLOCKING (TASK-641 live run, 2026-06-03): with BUG-436 + BUG-438 both fixed, the resume got past the Done-guard AND released the dead lease — then revealed this root in full. The phase-3 ''reviewer'' resolved PR-453 → TASK-641 and spawned an IMPLEMENTER /aida-pickup session on a fresh branch (task-641-2), which RE-IMPLEMENTED the work and opened a DUPLICATE PR-454 instead of reviewing PR-453. Resume-specific aggravator: the CI clamp skips phase 2 (finish_ci), which in a normal drain is what ENDS the implementer session and queues the ''Review PR-N'' hand-off — so on resume the reviewer phase has no review queued and falls back to re-implementing. This is no longer cleanup-tier: the resume→reviewer→merge path cannot complete until the reviewer reviews PR-N without owning/re-implementing the spec. Recommend prioritizing this over more symptom patches.'
+  created_at: 2026-06-04T04:40:21.792329495Z
+  modified_at: 2026-06-04T04:40:21.792329495Z
