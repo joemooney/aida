@@ -12,12 +12,12 @@ description: |-
   - No other files changed.
 
   NOTE: this is a validation artifact, not real work — revert/delete after the test (git rm docs/scratch/resume-probe.md). Safe to merge; trivial blast radius. trace:STORY-492
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T03:17:00.828166595Z
-modified_at: 2026-06-04T03:17:00.828166595Z
+modified_at: 2026-06-04T03:18:29.765775049Z
 req_type: Task
 tags:
 - from-validation
