@@ -21,10 +21,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T05:25:24.116781885Z
-modified_at: 2026-06-04T05:25:24.116781885Z
+modified_at: 2026-06-04T16:09:31.680696098Z
 req_type: Bug
 tags:
 - from-validation
 - pr-resolution
 - resume
 - reviewer
+comments:
+- id: 019e9365-a120-7bf3-aa47-a531d7769d06
+  author: joe
+  content: Commit 710ebd5a9 references this requirement
+  created_at: 2026-06-04T16:09:31.680696098Z
+  modified_at: 2026-06-04T16:09:31.680696098Z
