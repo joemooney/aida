@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:26:47.990941681Z
-modified_at: 2026-06-04T07:07:11.693673048Z
+modified_at: 2026-06-04T07:26:58.568507670Z
 req_type: Story
 tags:
 - orchestrator
@@ -49,6 +49,11 @@ comments:
   content: 'RE-OPENED — fix insufficient, premise disproven (TASK-643 live run, 2026-06-04). The ensure-handoff fix (PR #455, on main) DID mint the review story (''filed STORY-503 (covers TASK-643)''), but ''queue work PR-457'' STILL resolved PR→backing-spec TASK-643 and ran role=implementer / skill=/aida-pickup — the review story was never consulted. So minting the ''Review PR-N'' story does NOT route ''queue work PR-N'' to the reviewer; the unconditional PR→spec resolution at the dispatch (main.rs ~67214) short-circuits it. My mechanism model (from the slice-2 explore synthesis) was WRONG about how a review is triggered. STOP patching; needs a GROUND-TRUTH trace of how a NORMAL (non-resume) drain''s phase-3 actually produces a review: read the /aida-pickup skill + whether it honors AIDA_REVIEW_VERDICT_FILE, how (or whether) review_target ever becomes Some via ''queue work PR-N'' given the dispatch always resolves PR→spec, and what actually makes the reviewer write a verdict vs implement. The merged ensure-handoff code is currently a mild liability (it files orphan Review-PR-N stories that aren''t consumed) — revisit once the real routing is understood. trace:STORY-501'
   created_at: 2026-06-04T07:07:11.693673048Z
   modified_at: 2026-06-04T07:07:11.693673048Z
+- id: 019e9187-3808-7ad3-b8ff-364f5e5d71bb
+  author: joe
+  content: Commit e21ffc1cf references this requirement
+  created_at: 2026-06-04T07:26:58.568507670Z
+  modified_at: 2026-06-04T07:26:58.568507670Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-04T05:19:48.389041859Z
