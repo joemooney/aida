@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:07:33.355449802Z
-modified_at: 2026-06-04T04:07:33.355449802Z
+modified_at: 2026-06-04T04:25:35.648667108Z
 req_type: Bug
 tags:
 - drain
@@ -44,3 +44,9 @@ tags:
 - orchestrator
 - resume
 - reviewer
+comments:
+- id: 019e90e1-28a0-7a32-b19c-d7a780ff9f88
+  author: joe
+  content: Commit aead9314e references this requirement
+  created_at: 2026-06-04T04:25:35.648667108Z
+  modified_at: 2026-06-04T04:25:35.648667108Z
