@@ -126,9 +126,11 @@ The decision checks above cover every path EXCEPT the actual live re-entry
   # terminal A — start a drain on a small spec and let it begin a phase
   aida queue work <SPEC> --auto-complete --zen
 
-  # terminal B — find the orchestrator and kill it mid-phase
-  grep -o '"orchestrator_pid":[0-9]*' .aida/drain-state.json
-  kill -9 <pid>
+  # terminal B — find the orchestrator pid and kill it mid-phase
+  # (drain-state.json is pretty-printed — "orchestrator_pid": N has a space, so
+  #  grep the line and pull the digits rather than matching ":N" directly)
+  PID=$(grep orchestrator_pid .aida/drain-state.json | grep -oE '[0-9]+'); echo "$PID"
+  kill -9 "$PID"
 
   # preview the reconcile (safe), then do the live re-entry
   aida queue work --auto-complete --resume-drain --resume-dry-run
