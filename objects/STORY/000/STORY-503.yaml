@@ -1,0 +1,26 @@
+id: 019e9171-cbd4-72c3-a64b-0e3672c9cef4
+spec_id: STORY-503
+agreed_id: STORY-503
+title: 'Review PR-457: [AI:claude] test(resume): add resume-drain clean-run probe artifact (TASK-643)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e9171`) for branch `task-643`.
+
+  - PR: <https://github.com/joemooney/aida/pull/457>
+  - Branch: `task-643` → `main`
+
+  ## Covers
+
+  - TASK-643
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 457` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T07:03:34.612265028Z
+modified_at: 2026-06-04T07:03:34.612265028Z
+req_type: Story
