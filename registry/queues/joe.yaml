@@ -1487,6 +1487,6 @@
   requirement_id: 019e9355-9481-78c2-91ae-f3f260e3ff87
   position: 345000
   added_by: joe
-  note: auto-queued by `session end` (019e9353); covers 1 spec
-  added_at: 2026-06-04T15:53:01.311872210Z
+  note: auto-queued by `session end` (019e9349); covers 1 spec
+  added_at: 2026-06-04T15:53:42.544517295Z
   for_role: reviewer
