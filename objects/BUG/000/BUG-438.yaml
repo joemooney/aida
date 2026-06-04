@@ -1,0 +1,46 @@
+id: 019e90d0-a4eb-7033-a13a-e64c8a9df6f5
+spec_id: BUG-438
+agreed_id: BUG-438
+title: 'Resume→reviewer robustness: fast-resume collides with the crashed implementer''s lease, and a phase-failed resume clears drain-state'
+description: |-
+  Found by the STORY-492 second supervised kill-and-resume run (TASK-640, 2026-06-03), AFTER BUG-436 was fixed. The BUG-436 fix worked — resume re-entered at the reviewer and got past the Done-refusal — but two further resume-robustness gaps then blocked the reviewer→merge path:
+
+  ## Finding 1 — fast resume collides with the crashed implementer's lease
+  The reviewer phase runs `aida queue work PR-N`, which resolves PR-N → its backing spec and tries to start a session OWNING that spec. The crashed implementer still holds a lease on the same spec:
+
+      Error: scope `TASK-640` is owned by lease 019e90c4 (implementer, worktree: …/aida-task-640)
+             — pass --steal …, or `aida session end 019e90c4` manually.
+
+  Lease auto-release (classify_for_auto_release) needs the process dead AND the lease stale (>= [orchestrator] stale_lease_threshold_minutes, default 10). A FAST resume (within that window) outruns it, so the dead implementer's lease is still 'live' and the reviewer collides. (The first TASK-639 run only worked because ~13m had elapsed, so auto-release had fired.)
+
+  The STORY-492 plan explicitly intended this: 'resume should clean the dead orchestrator's lease before re-creating the phase child.' That cleanup isn't wired — resume leans on the time-based auto-release.
+
+  Shared root with BUG-436: the reviewer phase takes OWNERSHIP of the backing spec to review a PR. Both the Done-refusal (BUG-436) and this lease collision stem from that. A deeper fix: the reviewer reviews PR-N WITHOUT claiming the backing spec's implementation scope.
+
+  ## Finding 2 — a phase-failed resume clears drain-state
+  When the resumed run failed at phase 3, run_auto_complete (owns_drain_state=true) cleared `.aida/drain-state.json` on exit (single-spec drains clear on return, success OR failure). So after fixing the blocker you canNOT `--resume-drain` again — the checkpoint is consumed even on failure:
+
+      ✗ no `.aida/drain-state.json` — there is no crashed drain to resume.
+
+  A resume (or any drain) that fails a *shelvable/transient* phase should preserve the drain-state so the operator can fix and re-resume, rather than consuming the checkpoint on failure.
+
+  ## Acceptance criteria
+  - [ ] On resume, the crashed orchestrator's member lease(s) are proactively released (PID-dead ⇒ release, independent of the staleness clock) before re-entering the phase — so a fast resume doesn't collide. Reuse the PID-liveness side of classify_for_auto_release.
+  - [ ] A resume/drain that fails at a phase does NOT clear drain-state when the failure is recoverable — the crashed drain stays re-resumable after the operator addresses the blocker. (Clean success still clears it.)
+  - [ ] Re-validate end-to-end: a fast kill-and-resume carries TASK-640-shaped work through reviewer → merge → pull (the path that's been blocked).
+  - [ ] Consider (separate slice if large): reviewer phase reviews PR-N without owning the backing spec — the shared root of BUG-436 + Finding 1.
+  trace:STORY-492 trace:BUG-436
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T04:07:33.355449802Z
+modified_at: 2026-06-04T04:07:33.355449802Z
+req_type: Bug
+tags:
+- drain
+- from-self-test
+- from-validation
+- orchestrator
+- resume
+- reviewer
