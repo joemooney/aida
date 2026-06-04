@@ -16,11 +16,11 @@ description: |-
   - Regression: implementer pickups + the existing review flow (verdict file) unchanged.
   trace:BUG-436 trace:BUG-438
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:26:47.990941681Z
-modified_at: 2026-06-04T04:26:47.990941681Z
+modified_at: 2026-06-04T04:40:20.093625974Z
 req_type: Story
 tags:
 - orchestrator
