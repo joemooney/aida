@@ -12,14 +12,18 @@ description: |-
   - No other files changed.
 
   NOTE: this is a validation artifact, not real work — revert/delete after the test (git rm docs/scratch/resume-probe.md). Safe to merge; trivial blast radius. trace:STORY-492
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T03:17:00.828166595Z
-modified_at: 2026-06-04T03:18:29.765775049Z
+modified_at: 2026-06-04T03:19:40.762292256Z
 req_type: Task
 tags:
 - from-validation
 - resume-drain-test
 - throwaway
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-04T03:19:40.762292256Z
+  implemented_by: joe
