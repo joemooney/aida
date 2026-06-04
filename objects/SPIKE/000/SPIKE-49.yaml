@@ -1,0 +1,42 @@
+id: 019e9333-e8c3-7a43-8f8b-ed9e92b02b6a
+spec_id: SPIKE-49
+agreed_id: SPIKE-49
+title: '[EPIC-35 slice 0] Forge-provider SPIKE — inventory gh coupling, define the trait, prove a glab MR round-trip'
+description: |-
+  ## Goal
+
+  De-risk EPIC-35 (GitLab as a first-class forge) before committing to the refactor slices. Three deliverables:
+
+  1. **Inventory the GitHub coupling.** Enumerate the ~181 `gh`-CLI call sites (pr_ship, auto_complete, pr_rebase, network_retry, workflow_hints, status_cleanup, …) and group them by operation: open-PR, PR-status, merge, CI-status/checks, PR-linkage, comment, rebase, auth. Output: the canonical operation list the provider trait must cover.
+
+  2. **Define the forge-provider trait surface.** From the inventory, propose the Rust trait (method signatures + the data types: PrRef/MrRef, PrStatus, CiStatus, MergeResult, …). Identify which gh calls are genuinely forge-specific vs incidental. Note the `none`/pure-git provider's no-op/degraded semantics for each method.
+
+  3. **Choose the GitLab backend + prove a round-trip.** Decide glab-CLI vs GitLab REST API (auth model, availability, JSON ergonomics, CI/pipeline access). Then PROVE a minimal end-to-end against gitlab.joemooney.com: open an MR, read its status + pipeline status, merge it. Record the exact commands/API calls.
+
+  ## Acceptance
+
+  - [ ] Written inventory of gh call sites grouped by operation (the trait's method list).
+  - [ ] Proposed forge-provider trait (signatures + types) captured in a plan/doc under docs/plans/ or docs/architecture/.
+  - [ ] glab-vs-API decision recorded with rationale (auth, pipeline access, ergonomics).
+  - [ ] A demonstrated MR round-trip (open→status→pipeline→merge) against the real GitLab, with the commands/calls documented.
+  - [ ] Refined slice 1–5 breakdown for EPIC-35 (sizes + ordering) based on findings.
+
+  ## Notes
+
+  - Gated on gitlab.joemooney.com being operational (need a real MR target). Pairs with the homegitlab cutover.
+  - Keep GitHub behavior untouched — this is design + proof only, no refactor yet.
+  - Reuse existing gh-call locations as the map; pr_ship.rs + auto_complete.rs are the densest.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T15:15:13.219637949Z
+modified_at: 2026-06-04T15:15:13.219637949Z
+req_type: Spike
+tags:
+- forge-provider
+- from-product
+- gitlab
+- multi-vendor
+- parent:EPIC-35
+- spike
