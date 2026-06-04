@@ -1,0 +1,1051 @@
+//! Forge-provider abstraction (EPIC-35, slice 1).
+//!
+//! AIDA's git-canonical *store* is already forge-agnostic — the orphan
+//! `aida-store` branch rides whatever `origin` is. The *collaboration
+//! lifecycle* (PR/MR open → CI/pipeline wait → review → merge → linkage),
+//! however, was hard-wired to GitHub via ~113 `gh`-CLI invocation sites. This
+//! module introduces the [`Forge`] trait those sites route through so GitLab
+//! (Merge Requests + GitLab CI) — and a forge-less `pure-git` mode — become
+//! first-class alongside GitHub.
+//!
+//! Slice 1 (this) lands the trait, the forge-neutral data types, the three
+//! providers ([`GitHubForge`], [`GitLabForge`], [`PureGitForge`]), the
+//! `[forge]` config section + origin-host auto-detection, and the
+//! [`forge_for`] factory. The ~113 call sites are migrated behind the trait in
+//! follow-on commits — GitHub behavior is preserved byte-for-byte (the GitHub
+//! provider issues the exact `gh` argv the call sites issue today).
+//!
+//! Design + verified inventory: `docs/plans/2026-06-04-forge-provider.md`
+//! (SPIKE-49, master-approved 2026-06-04). trace:EPIC-35 trace:SPIKE-49 | ai:claude
+#![allow(dead_code)] // Providers/trait are wired into call sites in follow-on slice-1 commits.
+
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// Which forge backs a project's collaboration lifecycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForgeKind {
+    GitHub,
+    GitLab,
+    /// No forge — the project works direct-to-default-branch; "is it merged?"
+    /// is a git-ancestry query and `(SPEC-ID)`-trailer auto-complete drives the
+    /// lifecycle. Makes any git remote (incl. a fresh GitLab) usable immediately,
+    /// before MR-drain parity lands.
+    None,
+}
+
+impl ForgeKind {
+    /// The CLI binary this forge shells out to — used to template user-facing
+    /// hint text ("run `gh run view …`" vs `glab`). Empty for pure-git.
+    pub fn cli_name(self) -> &'static str {
+        match self {
+            ForgeKind::GitHub => "gh",
+            ForgeKind::GitLab => "glab",
+            ForgeKind::None => "",
+        }
+    }
+
+    /// The `[forge] provider` config token.
+    pub fn config_token(self) -> &'static str {
+        match self {
+            ForgeKind::GitHub => "github",
+            ForgeKind::GitLab => "gitlab",
+            ForgeKind::None => "pure-git",
+        }
+    }
+
+    /// Parse a `[forge] provider` token. Accepts `pure-git`/`none`/`git` for the
+    /// forge-less mode; case-insensitive.
+    pub fn from_config_token(s: &str) -> Option<ForgeKind> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "github" | "gh" => Some(ForgeKind::GitHub),
+            "gitlab" | "glab" => Some(ForgeKind::GitLab),
+            "pure-git" | "puregit" | "none" | "git" => Some(ForgeKind::None),
+            _ => None,
+        }
+    }
+}
+
+/// A change request: a GitHub PR or a GitLab MR. `id` is the forge-native
+/// number (PR number / MR iid). `id == 0` is the pure-git sentinel ("the
+/// branch *is* the change").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangeRef {
+    pub id: u64,
+    pub url: String,
+    pub branch: String,
+    pub base: String,
+}
+
+/// Inputs to open a new change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenChange {
+    pub branch: String,
+    pub base: String,
+    pub title: String,
+    pub body: String,
+    pub draft: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeState {
+    Open,
+    Merged,
+    Closed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewDecision {
+    Approved,
+    ChangesRequested,
+    ReviewRequired,
+    None,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangeStatus {
+    pub state: ChangeState,
+    pub mergeable: bool,
+    pub review: ReviewDecision,
+    pub head_sha: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CiState {
+    /// No CI configured / no forge — drain treats like `lifecycle:no-ci-wait`.
+    None,
+    Pending,
+    Running,
+    Success,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CiStatus {
+    pub state: CiState,
+    pub url: Option<String>,
+    pub failing_checks: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeMethod {
+    Squash,
+    Merge,
+    Rebase,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeResult {
+    pub merged: bool,
+    pub sha: Option<String>,
+    pub method: MergeMethod,
+}
+
+/// What a CI query is about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CiTarget {
+    Branch(String),
+    Commit(String),
+    Change(ChangeRef),
+}
+
+/// Filter for `list_changes`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChangeFilter {
+    /// Restrict to changes whose base branch is this.
+    pub base: Option<String>,
+    /// Only open changes when true (default), all states when false.
+    pub open_only: bool,
+}
+
+/// The forge-provider interface the lifecycle routes through. Each method maps
+/// to one of the ~9 operation classes the SPIKE-49 inventory found behind the
+/// `gh` call sites. Providers shell out (gh/glab) or use pure git.
+pub trait Forge {
+    fn kind(&self) -> ForgeKind;
+
+    /// CLI binary name for user-facing hint text. Defaults from `kind()`.
+    fn cli_name(&self) -> &'static str {
+        self.kind().cli_name()
+    }
+
+    /// `gh pr create` / `glab mr create` (or push-options) / pure-git no-op.
+    fn open_change(&self, req: OpenChange) -> Result<ChangeRef>;
+
+    /// `gh pr view` for the branch's open change (linkage). `None` when none.
+    fn change_for_branch(&self, branch: &str) -> Result<Option<ChangeRef>>;
+
+    /// `gh pr view` status (state + mergeable + review + head sha).
+    fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus>;
+
+    /// `gh run` / `glab ci` / pure-git `CiState::None`.
+    fn ci_status(&self, target: CiTarget) -> Result<CiStatus>;
+
+    /// `gh pr merge` / `glab mr merge` / pure-git git merge.
+    fn merge_change(&self, c: &ChangeRef, method: MergeMethod) -> Result<MergeResult>;
+
+    /// `gh pr comment` / `glab mr note` / pure-git log-only.
+    fn comment(&self, c: &ChangeRef, body: &str) -> Result<()>;
+
+    /// `gh pr checkout` / pure git checkout (mostly forge-agnostic).
+    fn checkout_change(&self, c: &ChangeRef) -> Result<()>;
+
+    /// `gh pr list` / `glab mr list` / local branches.
+    fn list_changes(&self, filter: ChangeFilter) -> Result<Vec<ChangeRef>>;
+}
+
+// ─────────────────────────── detection + factory ───────────────────────────
+
+/// Map a git `origin` remote URL to a forge. `github.com` → GitHub; any host
+/// whose label contains `gitlab` (covers `gitlab.com` and self-hosted
+/// `gitlab.example.com`) → GitLab; anything else → pure-git. Handles both SSH
+/// (`git@host:owner/repo.git`) and HTTPS (`https://host/owner/repo.git`) forms.
+/// Pure — the unit of auto-detection. trace:EPIC-35 | ai:claude
+pub fn detect_forge_kind(origin_url: &str) -> ForgeKind {
+    let host = forge_host_of(origin_url)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if host == "github.com" || host.ends_with(".github.com") {
+        ForgeKind::GitHub
+    } else if host == "gitlab.com" || host.contains("gitlab") {
+        ForgeKind::GitLab
+    } else {
+        ForgeKind::None
+    }
+}
+
+/// Extract the host from an SSH or HTTPS git remote URL.
+fn forge_host_of(url: &str) -> Option<String> {
+    let url = url.trim();
+    if url.is_empty() {
+        return None;
+    }
+    // scp-like SSH: [user@]host:path
+    if !url.contains("://") {
+        if let Some(at) = url.rfind('@') {
+            let rest = &url[at + 1..];
+            return rest.split(':').next().map(|h| h.to_string());
+        }
+        // host:path without a user
+        if let Some(colon) = url.find(':') {
+            // Avoid mistaking a URL scheme — already handled above.
+            return Some(url[..colon].to_string());
+        }
+        return None;
+    }
+    // scheme://[user@]host[:port]/path
+    let after_scheme = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+    let authority = after_scheme.split('/').next().unwrap_or("");
+    let authority = authority.rsplit('@').next().unwrap_or(authority); // drop user[:pass]@
+    let host = authority.split(':').next().unwrap_or(authority); // drop :port
+    if host.is_empty() {
+        None
+    } else {
+        Some(host.to_string())
+    }
+}
+
+/// Read the `[forge] provider` token from `<project>/.aida/config.toml`, if
+/// present. Mirrors the hand-rolled section parser used for `[drain]`/`[advisor]`.
+pub fn read_forge_config(project_dir: &Path) -> Option<ForgeKind> {
+    let config_path = project_dir.join(".aida").join("config.toml");
+    let content = std::fs::read_to_string(&config_path).ok()?;
+    let mut in_forge = false;
+    for raw in content.lines() {
+        let line = raw.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_forge = rest.trim_start_matches('[').starts_with("forge");
+            continue;
+        }
+        if !in_forge {
+            continue;
+        }
+        if let Some((key, val)) = line.split_once('=') {
+            if key.trim() == "provider" {
+                return ForgeKind::from_config_token(val.trim().trim_matches('"'));
+            }
+        }
+    }
+    None
+}
+
+/// Read `origin`'s URL via `git remote get-url origin`.
+pub fn origin_url(project_root: &Path) -> Option<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let url = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if url.is_empty() {
+        None
+    } else {
+        Some(url)
+    }
+}
+
+/// Resolve the forge a project uses: explicit `[forge] provider` config wins;
+/// otherwise auto-detect from `origin`'s host; otherwise pure-git.
+/// trace:EPIC-35 | ai:claude
+pub fn resolve_forge_kind(project_root: &Path) -> ForgeKind {
+    if let Some(k) = read_forge_config(project_root) {
+        return k;
+    }
+    origin_url(project_root)
+        .map(|u| detect_forge_kind(&u))
+        .unwrap_or(ForgeKind::None)
+}
+
+/// The `[forge]` config block to scaffold at `aida init`, with the provider
+/// auto-detected from `origin`'s host. Written so a GitLab-origin project is
+/// GitLab-aware out of the box and an unknown remote degrades to pure-git —
+/// the operator never has to "point" AIDA at a forge. trace:EPIC-35 | ai:claude
+pub fn init_forge_config_section(project_root: &Path) -> String {
+    let kind = origin_url(project_root)
+        .map(|u| detect_forge_kind(&u))
+        .unwrap_or(ForgeKind::None);
+    format!(
+        "\n# trace:EPIC-35 | ai:claude\n\
+         # Which forge backs the PR/MR + CI lifecycle. Auto-detected from the\n\
+         # origin host at init: github.com -> github, gitlab.* -> gitlab,\n\
+         # otherwise pure-git (works direct-to-default-branch; merge = git\n\
+         # ancestry + (SPEC-ID)-trailer auto-complete, no forge needed).\n\
+         [forge]\n\
+         provider = \"{}\"\n",
+        kind.config_token()
+    )
+}
+
+/// The forge provider for a project (config → detect → pure-git).
+pub fn forge_for(project_root: &Path) -> Box<dyn Forge> {
+    match resolve_forge_kind(project_root) {
+        ForgeKind::GitHub => Box::new(GitHubForge::new(project_root)),
+        ForgeKind::GitLab => Box::new(GitLabForge::new(project_root)),
+        ForgeKind::None => Box::new(PureGitForge::new(project_root)),
+    }
+}
+
+// ─────────────────────────── GitHub provider ───────────────────────────
+
+/// GitHub provider — shells out to `gh`, preserving the exact behavior of the
+/// pre-EPIC-35 call sites.
+pub struct GitHubForge {
+    project_root: PathBuf,
+}
+
+impl GitHubForge {
+    pub fn new(project_root: &Path) -> Self {
+        Self {
+            project_root: project_root.to_path_buf(),
+        }
+    }
+
+    fn gh(&self, args: &[&str]) -> Result<std::process::Output> {
+        Command::new("gh")
+            .current_dir(&self.project_root)
+            .args(args)
+            .output()
+            .context("could not invoke `gh` — is the GitHub CLI installed?")
+    }
+}
+
+impl Forge for GitHubForge {
+    fn kind(&self) -> ForgeKind {
+        ForgeKind::GitHub
+    }
+
+    fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
+        let mut args = vec![
+            "pr".to_string(),
+            "create".to_string(),
+            "--base".to_string(),
+            req.base.clone(),
+            "--head".to_string(),
+            req.branch.clone(),
+            "--title".to_string(),
+            req.title.clone(),
+            "--body".to_string(),
+            req.body.clone(),
+        ];
+        if req.draft {
+            args.push("--draft".to_string());
+        }
+        let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+        let out = self.gh(&argv)?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr create failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let url = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .rev()
+            .find(|l| l.contains("/pull/"))
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let id = url
+            .rsplit("/pull/")
+            .next()
+            .and_then(|s| {
+                s.chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect::<String>()
+                    .parse()
+                    .ok()
+            })
+            .unwrap_or(0);
+        Ok(ChangeRef {
+            id,
+            url,
+            branch: req.branch,
+            base: req.base,
+        })
+    }
+
+    fn change_for_branch(&self, branch: &str) -> Result<Option<ChangeRef>> {
+        let out = self.gh(&[
+            "pr",
+            "view",
+            branch,
+            "--json",
+            "number,url,headRefName,baseRefName",
+            "-q",
+            "[.number, .url, .headRefName, .baseRefName] | @tsv",
+        ])?;
+        if !out.status.success() {
+            return Ok(None);
+        }
+        let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let mut f = line.split('\t');
+        let id = f.next().unwrap_or("").parse().unwrap_or(0);
+        let url = f.next().unwrap_or("").to_string();
+        let head = f.next().unwrap_or(branch).to_string();
+        let base = f.next().unwrap_or("").to_string();
+        if id == 0 {
+            return Ok(None);
+        }
+        Ok(Some(ChangeRef {
+            id,
+            url,
+            branch: head,
+            base,
+        }))
+    }
+
+    fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
+        let out = self.gh(&[
+            "pr",
+            "view",
+            &c.id.to_string(),
+            "--json",
+            "state,mergeable,reviewDecision,headRefOid",
+            "-q",
+            "[.state, .mergeable, .reviewDecision, .headRefOid] | @tsv",
+        ])?;
+        anyhow::ensure!(out.status.success(), "gh pr view failed for #{}", c.id);
+        let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let mut f = line.split('\t');
+        let state = match f.next().unwrap_or("") {
+            "MERGED" => ChangeState::Merged,
+            "CLOSED" => ChangeState::Closed,
+            _ => ChangeState::Open,
+        };
+        let mergeable = f.next().unwrap_or("") == "MERGEABLE";
+        let review = match f.next().unwrap_or("") {
+            "APPROVED" => ReviewDecision::Approved,
+            "CHANGES_REQUESTED" => ReviewDecision::ChangesRequested,
+            "REVIEW_REQUIRED" => ReviewDecision::ReviewRequired,
+            _ => ReviewDecision::None,
+        };
+        let head_sha = f.next().unwrap_or("").to_string();
+        Ok(ChangeStatus {
+            state,
+            mergeable,
+            review,
+            head_sha,
+        })
+    }
+
+    fn ci_status(&self, target: CiTarget) -> Result<CiStatus> {
+        let r#ref = match target {
+            CiTarget::Branch(b) => b,
+            CiTarget::Commit(c) => c,
+            CiTarget::Change(c) => c.branch,
+        };
+        let out = self.gh(&[
+            "pr",
+            "checks",
+            &r#ref,
+            "--json",
+            "state,name",
+            "-q",
+            ".[] | [.state, .name] | @tsv",
+        ])?;
+        if !out.status.success() {
+            return Ok(CiStatus {
+                state: CiState::None,
+                url: None,
+                failing_checks: Vec::new(),
+            });
+        }
+        let body = String::from_utf8_lossy(&out.stdout);
+        let mut any = false;
+        let mut pending = false;
+        let mut failing = Vec::new();
+        for line in body.lines() {
+            any = true;
+            let mut f = line.split('\t');
+            let st = f.next().unwrap_or("");
+            let name = f.next().unwrap_or("").to_string();
+            match st {
+                "SUCCESS" | "NEUTRAL" | "SKIPPED" => {}
+                "FAILURE" | "ERROR" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" => {
+                    failing.push(name)
+                }
+                _ => pending = true,
+            }
+        }
+        let state = if !any {
+            CiState::None
+        } else if !failing.is_empty() {
+            CiState::Failed
+        } else if pending {
+            CiState::Running
+        } else {
+            CiState::Success
+        };
+        Ok(CiStatus {
+            state,
+            url: None,
+            failing_checks: failing,
+        })
+    }
+
+    fn merge_change(&self, c: &ChangeRef, method: MergeMethod) -> Result<MergeResult> {
+        let m = match method {
+            MergeMethod::Squash => "--squash",
+            MergeMethod::Merge => "--merge",
+            MergeMethod::Rebase => "--rebase",
+        };
+        let out = self.gh(&["pr", "merge", &c.id.to_string(), m])?;
+        Ok(MergeResult {
+            merged: out.status.success(),
+            sha: None,
+            method,
+        })
+    }
+
+    fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
+        let out = self.gh(&["pr", "comment", &c.id.to_string(), "--body", body])?;
+        anyhow::ensure!(out.status.success(), "gh pr comment failed for #{}", c.id);
+        Ok(())
+    }
+
+    fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
+        let out = self.gh(&["pr", "checkout", &c.id.to_string()])?;
+        anyhow::ensure!(out.status.success(), "gh pr checkout failed for #{}", c.id);
+        Ok(())
+    }
+
+    fn list_changes(&self, filter: ChangeFilter) -> Result<Vec<ChangeRef>> {
+        let mut args = vec![
+            "pr",
+            "list",
+            "--json",
+            "number,url,headRefName,baseRefName",
+            "-q",
+            ".[] | [.number, .url, .headRefName, .baseRefName] | @tsv",
+        ];
+        if let Some(base) = filter.base.as_deref() {
+            args.insert(2, "--base");
+            args.insert(3, base);
+        }
+        let out = self.gh(&args)?;
+        if !out.status.success() {
+            return Ok(Vec::new());
+        }
+        let body = String::from_utf8_lossy(&out.stdout);
+        Ok(body
+            .lines()
+            .filter_map(|line| {
+                let mut f = line.split('\t');
+                let id = f.next()?.parse().ok()?;
+                Some(ChangeRef {
+                    id,
+                    url: f.next().unwrap_or("").to_string(),
+                    branch: f.next().unwrap_or("").to_string(),
+                    base: f.next().unwrap_or("").to_string(),
+                })
+            })
+            .collect())
+    }
+}
+
+// ─────────────────────────── GitLab provider ───────────────────────────
+
+/// GitLab provider — shells out to `glab` (symmetric with GitHub→`gh`), with a
+/// REST fallback to be added for gaps. Slice-1 scaffold: `open_change` uses
+/// token-free push options (proven live against gitlab.joemooney.com in
+/// SPIKE-49); status/merge are filled in by slice 3.
+pub struct GitLabForge {
+    project_root: PathBuf,
+}
+
+impl GitLabForge {
+    pub fn new(project_root: &Path) -> Self {
+        Self {
+            project_root: project_root.to_path_buf(),
+        }
+    }
+
+    fn glab(&self, args: &[&str]) -> Result<std::process::Output> {
+        Command::new("glab")
+            .current_dir(&self.project_root)
+            .args(args)
+            .output()
+            .context("could not invoke `glab` — is the GitLab CLI installed?")
+    }
+}
+
+impl Forge for GitLabForge {
+    fn kind(&self) -> ForgeKind {
+        ForgeKind::GitLab
+    }
+
+    fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
+        // SPIKE-49 proved MR creation is achievable token-free via push options.
+        // glab is the primary path; slice 3 finalizes the parsing + fallback.
+        let out = self.glab(&[
+            "mr",
+            "create",
+            "--source-branch",
+            &req.branch,
+            "--target-branch",
+            &req.base,
+            "--title",
+            &req.title,
+            "--description",
+            &req.body,
+            "--yes",
+        ])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab mr create failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let url = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .rev()
+            .find(|l| l.contains("/merge_requests/"))
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let id = url
+            .rsplit("/merge_requests/")
+            .next()
+            .and_then(|s| {
+                s.chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect::<String>()
+                    .parse()
+                    .ok()
+            })
+            .unwrap_or(0);
+        Ok(ChangeRef {
+            id,
+            url,
+            branch: req.branch,
+            base: req.base,
+        })
+    }
+
+    fn change_for_branch(&self, _branch: &str) -> Result<Option<ChangeRef>> {
+        anyhow::bail!("GitLab change_for_branch lands in EPIC-35 slice 3")
+    }
+
+    fn change_status(&self, _c: &ChangeRef) -> Result<ChangeStatus> {
+        anyhow::bail!("GitLab change_status lands in EPIC-35 slice 3")
+    }
+
+    fn ci_status(&self, _target: CiTarget) -> Result<CiStatus> {
+        anyhow::bail!("GitLab ci_status lands in EPIC-35 slice 4")
+    }
+
+    fn merge_change(&self, _c: &ChangeRef, _method: MergeMethod) -> Result<MergeResult> {
+        anyhow::bail!("GitLab merge_change lands in EPIC-35 slice 3")
+    }
+
+    fn comment(&self, _c: &ChangeRef, _body: &str) -> Result<()> {
+        anyhow::bail!("GitLab comment lands in EPIC-35 slice 3")
+    }
+
+    fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
+        pure_git_checkout(&self.project_root, &c.branch)
+    }
+
+    fn list_changes(&self, _filter: ChangeFilter) -> Result<Vec<ChangeRef>> {
+        anyhow::bail!("GitLab list_changes lands in EPIC-35 slice 3")
+    }
+}
+
+// ─────────────────────────── pure-git provider ───────────────────────────
+
+/// Forge-less provider — no PR/MR concept. "Is it merged?" is a git-ancestry
+/// query; the existing `(SPEC-ID)`-trailer auto-complete drives completion. Lets
+/// any git remote (a fresh GitLab, a bare server) be usable immediately.
+pub struct PureGitForge {
+    project_root: PathBuf,
+}
+
+impl PureGitForge {
+    pub fn new(project_root: &Path) -> Self {
+        Self {
+            project_root: project_root.to_path_buf(),
+        }
+    }
+
+    fn default_branch(&self) -> String {
+        default_branch_of(&self.project_root)
+    }
+}
+
+impl Forge for PureGitForge {
+    fn kind(&self) -> ForgeKind {
+        ForgeKind::None
+    }
+
+    fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
+        // No forge: the branch IS the change. Synthetic ref, id == 0.
+        Ok(ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: req.branch,
+            base: req.base,
+        })
+    }
+
+    fn change_for_branch(&self, branch: &str) -> Result<Option<ChangeRef>> {
+        Ok(Some(ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: branch.to_string(),
+            base: self.default_branch(),
+        }))
+    }
+
+    fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
+        // Merged iff the branch tip is an ancestor of the default branch.
+        let base = if c.base.is_empty() {
+            self.default_branch()
+        } else {
+            c.base.clone()
+        };
+        let merged = branch_is_ancestor_of(&self.project_root, &c.branch, &base);
+        let head_sha = rev_parse(&self.project_root, &c.branch).unwrap_or_default();
+        Ok(ChangeStatus {
+            state: if merged {
+                ChangeState::Merged
+            } else {
+                ChangeState::Open
+            },
+            mergeable: true,
+            review: ReviewDecision::None,
+            head_sha,
+        })
+    }
+
+    fn ci_status(&self, _target: CiTarget) -> Result<CiStatus> {
+        Ok(CiStatus {
+            state: CiState::None,
+            url: None,
+            failing_checks: Vec::new(),
+        })
+    }
+
+    fn merge_change(&self, c: &ChangeRef, method: MergeMethod) -> Result<MergeResult> {
+        let base = if c.base.is_empty() {
+            self.default_branch()
+        } else {
+            c.base.clone()
+        };
+        // Checkout base, merge the branch. Squash collapses, others fast-forward/merge.
+        let co = Command::new("git")
+            .arg("-C")
+            .arg(&self.project_root)
+            .args(["checkout", &base])
+            .output()?;
+        anyhow::ensure!(
+            co.status.success(),
+            "pure-git merge: could not checkout {base}"
+        );
+        let merge_arg: &[&str] = match method {
+            MergeMethod::Squash => &["merge", "--squash"],
+            MergeMethod::Rebase => &["rebase"],
+            MergeMethod::Merge => &["merge", "--no-ff"],
+        };
+        let mut args: Vec<&str> = merge_arg.to_vec();
+        args.push(&c.branch);
+        let m = Command::new("git")
+            .arg("-C")
+            .arg(&self.project_root)
+            .args(&args)
+            .output()?;
+        let sha = rev_parse(&self.project_root, &base);
+        Ok(MergeResult {
+            merged: m.status.success(),
+            sha,
+            method,
+        })
+    }
+
+    fn comment(&self, _c: &ChangeRef, _body: &str) -> Result<()> {
+        Ok(()) // pure-git: nowhere to post; callers may log.
+    }
+
+    fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
+        pure_git_checkout(&self.project_root, &c.branch)
+    }
+
+    fn list_changes(&self, _filter: ChangeFilter) -> Result<Vec<ChangeRef>> {
+        Ok(Vec::new())
+    }
+}
+
+// ─────────────────────────── shared git helpers ───────────────────────────
+
+fn pure_git_checkout(project_root: &Path, branch: &str) -> Result<()> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["checkout", branch])
+        .output()?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git checkout {branch} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(())
+}
+
+fn branch_is_ancestor_of(project_root: &Path, branch: &str, base: &str) -> bool {
+    Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["merge-base", "--is-ancestor", branch, base])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", r#ref])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+fn default_branch_of(project_root: &Path) -> String {
+    // Prefer origin/HEAD; fall back to current branch ∈ {main, master}; else main.
+    if let Ok(out) = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .output()
+    {
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if let Some(b) = s.strip_prefix("origin/") {
+                if !b.is_empty() {
+                    return b.to_string();
+                }
+            }
+        }
+    }
+    "main".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detect_github_ssh_and_https() {
+        assert_eq!(
+            detect_forge_kind("git@github.com:joemooney/aida.git"),
+            ForgeKind::GitHub
+        );
+        assert_eq!(
+            detect_forge_kind("https://github.com/joemooney/aida.git"),
+            ForgeKind::GitHub
+        );
+    }
+
+    #[test]
+    fn detect_gitlab_dotcom_and_self_hosted() {
+        assert_eq!(
+            detect_forge_kind("git@gitlab.com:joe/aida.git"),
+            ForgeKind::GitLab
+        );
+        // Self-hosted.
+        assert_eq!(
+            detect_forge_kind("https://gitlab.joemooney.com/joe/aida.git"),
+            ForgeKind::GitLab
+        );
+        assert_eq!(
+            detect_forge_kind("git@gitlab.joemooney.com:2222/joe/aida.git"),
+            ForgeKind::GitLab
+        );
+    }
+
+    #[test]
+    fn detect_unknown_host_is_pure_git() {
+        assert_eq!(
+            detect_forge_kind("git@git.example.org:team/repo.git"),
+            ForgeKind::None
+        );
+        assert_eq!(
+            detect_forge_kind("https://bitbucket.org/team/repo.git"),
+            ForgeKind::None
+        );
+        assert_eq!(detect_forge_kind(""), ForgeKind::None);
+    }
+
+    #[test]
+    fn config_token_round_trips() {
+        for k in [ForgeKind::GitHub, ForgeKind::GitLab, ForgeKind::None] {
+            assert_eq!(ForgeKind::from_config_token(k.config_token()), Some(k));
+        }
+        // Aliases.
+        assert_eq!(ForgeKind::from_config_token("GH"), Some(ForgeKind::GitHub));
+        assert_eq!(ForgeKind::from_config_token("none"), Some(ForgeKind::None));
+        assert_eq!(ForgeKind::from_config_token("git"), Some(ForgeKind::None));
+        assert_eq!(ForgeKind::from_config_token("bogus"), None);
+    }
+
+    #[test]
+    fn read_forge_config_parses_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida").join("config.toml"),
+            "[node]\nid = \"x\"\n\n[forge]\nprovider = \"gitlab\"  # self-hosted\n",
+        )
+        .unwrap();
+        assert_eq!(read_forge_config(tmp.path()), Some(ForgeKind::GitLab));
+    }
+
+    #[test]
+    fn read_forge_config_absent_is_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida").join("config.toml"),
+            "[node]\nid = \"x\"\n",
+        )
+        .unwrap();
+        assert_eq!(read_forge_config(tmp.path()), None);
+    }
+
+    #[test]
+    fn config_overrides_detection() {
+        // A github.com origin but an explicit pure-git config → config wins.
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+        assert_eq!(resolve_forge_kind(tmp.path()), ForgeKind::None);
+    }
+
+    /// Pure-git `change_status`: merged iff the branch is an ancestor of base.
+    #[test]
+    fn pure_git_status_reflects_ancestry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            let out = Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?}: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t.t"]);
+        g(&["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "base"]);
+        // Feature branch with a commit not on main → Open.
+        g(&["checkout", "-q", "-b", "feature"]);
+        std::fs::write(root.join("b"), "2").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "work"]);
+
+        let forge = PureGitForge::new(root);
+        let cref = ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: "feature".to_string(),
+            base: "main".to_string(),
+        };
+        let st = forge.change_status(&cref).unwrap();
+        assert_eq!(st.state, ChangeState::Open, "feature ahead of main → Open");
+        assert_eq!(st.review, ReviewDecision::None);
+        assert!(st.mergeable);
+
+        // Merge feature into main → now ancestor → Merged.
+        g(&["checkout", "-q", "main"]);
+        g(&["merge", "-q", "--no-ff", "feature", "-m", "merge"]);
+        let st2 = forge.change_status(&cref).unwrap();
+        assert_eq!(st2.state, ChangeState::Merged, "feature merged → Merged");
+    }
+
+    #[test]
+    fn pure_git_ci_is_none_and_open_change_is_synthetic() {
+        let tmp = tempfile::tempdir().unwrap();
+        let forge = PureGitForge::new(tmp.path());
+        assert_eq!(
+            forge.ci_status(CiTarget::Branch("x".into())).unwrap().state,
+            CiState::None
+        );
+        let cr = forge
+            .open_change(OpenChange {
+                branch: "feat".into(),
+                base: "main".into(),
+                title: "t".into(),
+                body: "b".into(),
+                draft: false,
+            })
+            .unwrap();
+        assert_eq!(cr.id, 0, "pure-git change is synthetic");
+        assert_eq!(cr.branch, "feat");
+    }
+}
