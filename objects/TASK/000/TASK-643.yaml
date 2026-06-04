@@ -15,9 +15,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T05:25:37.982713944Z
-modified_at: 2026-06-04T07:01:37.019939670Z
+modified_at: 2026-06-04T07:02:17.507996078Z
 req_type: Task
 tags:
 - from-validation
 - resume-drain-test
 - throwaway
+comments:
+- id: 019e9170-9ea3-7b03-a4fd-52172b676f2d
+  author: joe
+  content: Commit 7a5cb27ac references this requirement
+  created_at: 2026-06-04T07:02:17.507996078Z
+  modified_at: 2026-06-04T07:02:17.507996078Z
