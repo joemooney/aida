@@ -3,12 +3,12 @@ spec_id: SPIKE-39
 agreed_id: SPIKE-39
 title: Abstract forge integration (gh vs glab) so AIDA composes with GitLab CI/CD
 description: 'Claude Code''s GitLab CI/CD integration shows the forge-agnostic pattern: install via shell script, invoke ''claude -p'' with --allowedTools, use gitlab-mcp-server for forge actions. AIDA''s orchestrator is gh-coupled today (gh pr view, gh pr comment, gh pr merge). Worth abstracting to a ''forge trait'' so AIDA composes with GitLab projects too. Lower priority than the GH-side reviewer work (no near-term GitLab users), but the architecture matters when one arrives. trace:strategic-recompose-round-2'
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T06:48:56.362636646Z
-modified_at: 2026-06-04T15:55:20.045206400Z
+modified_at: 2026-06-04T16:25:20.706759661Z
 req_type: Spike
 tags:
 - claude-code-compose
