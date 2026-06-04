@@ -15,12 +15,12 @@ description: |-
   - The session's role surfaces as reviewer, not implementer.
   - Regression: implementer pickups + the existing review flow (verdict file) unchanged.
   trace:BUG-436 trace:BUG-438
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:26:47.990941681Z
-modified_at: 2026-06-04T05:11:09.132020412Z
+modified_at: 2026-06-04T05:19:48.389041859Z
 req_type: Story
 tags:
 - orchestrator
@@ -44,3 +44,7 @@ comments:
   content: Commit 00b432a6d references this requirement
   created_at: 2026-06-04T05:10:43.925030497Z
   modified_at: 2026-06-04T05:10:43.925030497Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-04T05:19:48.389041859Z
+  completion_sha: 00b432a6d91a9e6049de1e52846a20bcfc571b8d
