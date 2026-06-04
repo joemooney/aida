@@ -1,0 +1,30 @@
+id: 019e90e2-4336-7193-96b2-2cfcd93312f4
+spec_id: STORY-501
+agreed_id: STORY-501
+title: Reviewer phase should review PR-N without taking ownership of the backing spec
+description: |-
+  Shared root of BUG-436 + BUG-438. The phase-3 reviewer runs 'aida queue work PR-N', which resolves the PR to its backing spec and starts a session that OWNS that spec (lease on the spec scope, implementer-style). A reviewer reviews a PR — it doesn't implement or own the spec — and that ownership caused two distinct defects:
+  - BUG-436: the Done/Completed implement-guard refused the reviewer (fixed with a review-aware exemption).
+  - BUG-438 finding 1: the reviewer collided with the crashed implementer's lease on the same spec scope (fixed with a resume-time dead-lease release).
+
+  Both were treated at the symptom. The deeper fix: a review session reviews PR-N on its own scope (PR-N / a review worktree) WITHOUT claiming the backing spec's implementation lease/status. That dissolves the whole class — no Done-guard exemption needed, no spec-scope lease collision — and makes the role/scope honest (the reviewer phase currently mislabels itself 'role: implementer (cluster-derived)' on PR-N).
+
+  ## Acceptance (sketch — needs design)
+  - A reviewer session keyed on PR-N takes a PR-scoped lease, not the backing spec's lease.
+  - It does not trip the implementer status/ownership gates at all (so the BUG-436 exemption + BUG-438 resume-release become belt-and-suspenders, not load-bearing).
+  - The session's role surfaces as reviewer, not implementer.
+  - Regression: implementer pickups + the existing review flow (verdict file) unchanged.
+  trace:BUG-436 trace:BUG-438
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T04:26:47.990941681Z
+modified_at: 2026-06-04T04:26:47.990941681Z
+req_type: Story
+tags:
+- orchestrator
+- refactor
+- resume
+- reviewer
+- shared-root
