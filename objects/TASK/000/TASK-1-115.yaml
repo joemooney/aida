@@ -10,12 +10,12 @@ description: |-
   Content is 100% correct — only the subject line is misleading. Not worth a history-rewrite on main to fix.
 
   Hypothesis: aida pr ship's squash-message construction derived the subject from main's tip (git log -1 on the base?) rather than the PR branch's head commit, while taking the body from the branch. The other 6 PRs shipped tonight (343/351/344/346/345/353) all got correct subjects — the differentiator may be that PR-347 was created during the original batch drain (stale PR title) vs ship creating a fresh PR. Worth checking whether `aida pr ship` on a PRE-EXISTING PR uses the stale PR title as the squash subject while regenerating the body. Low priority (cosmetic), but a wrong commit subject pollutes git archaeology + changelog generation.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T16:56:46.220862956Z
-modified_at: 2026-05-29T16:56:46.220862956Z
+modified_at: 2026-06-04T16:22:47.452617410Z
 req_type: Task
 tags:
 - aida:pr:ship
@@ -25,3 +25,9 @@ tags:
 - linked:TASK-575
 - papercut
 - severity:minor
+comments:
+- id: 019e9371-c59c-7f83-97a9-41aad3a1d30b
+  author: joe
+  content: 'Promoted by joe 2026-06-04: Correctness: wrong spec credited on squash-merge → bad auto-bump (spec-credit family, BUG-426/440).'
+  created_at: 2026-06-04T16:22:47.452617410Z
+  modified_at: 2026-06-04T16:22:47.452617410Z
