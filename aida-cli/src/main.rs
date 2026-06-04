@@ -24103,9 +24103,79 @@ fn effective_force_claim_for_session_start(
 mod preflight_spec_status_tests {
     use super::{
         effective_force_claim_for_session_start, preflight_spec_status,
-        session_start_status_bump_preconditions_met, PreflightDecision, RequirementStatus,
+        preflight_spec_status_review_aware, session_start_status_bump_preconditions_met,
+        PreflightDecision, RequirementStatus,
     };
     use tempfile::TempDir;
+
+    // BUG-436: a review session must be allowed to start against a Done /
+    // Completed spec (reviewing a PR is not implementing the spec); a non-review
+    // (implementer) session must still be refused (the BUG-379 re-implement
+    // guard stays intact). trace:BUG-436 | ai:claude
+    #[test]
+    fn review_session_allowed_on_done_spec() {
+        assert_eq!(
+            preflight_spec_status_review_aware(
+                "TASK-639",
+                Some(&RequirementStatus::Done),
+                false,
+                true, // is_review
+            ),
+            PreflightDecision::Allow,
+            "reviewing a Done spec's PR is the normal pre-review state"
+        );
+    }
+
+    #[test]
+    fn review_session_allowed_on_completed_spec() {
+        assert_eq!(
+            preflight_spec_status_review_aware(
+                "TASK-639",
+                Some(&RequirementStatus::Completed),
+                false,
+                true,
+            ),
+            PreflightDecision::Allow,
+        );
+    }
+
+    #[test]
+    fn implementer_session_still_refused_on_done_spec() {
+        // The re-implement guard must NOT regress for non-review sessions.
+        assert!(matches!(
+            preflight_spec_status_review_aware(
+                "TASK-639",
+                Some(&RequirementStatus::Done),
+                false,
+                false, // not a review
+            ),
+            PreflightDecision::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn review_session_does_not_loosen_other_states() {
+        // is_review only exempts Done/Completed; an Approved spec still bumps,
+        // a Draft still refuses — the wrapper delegates for everything else.
+        assert_eq!(
+            preflight_spec_status_review_aware(
+                "TASK-1",
+                Some(&RequirementStatus::Approved),
+                false,
+                true,
+            ),
+            PreflightDecision::AllowAndBump,
+        );
+        assert!(matches!(
+            preflight_spec_status_review_aware(
+                "TASK-1",
+                Some(&RequirementStatus::Draft),
+                false,
+                true,
+            ),
+            PreflightDecision::Refuse(_)
+        ));
+    }
 
     /// trace:TASK-1-108 | ai:claude
     #[test]
@@ -24493,6 +24563,32 @@ fn preflight_spec_status(
     }
 }
 
+/// BUG-436: review-aware wrapper around [`preflight_spec_status`]. A *review*
+/// session (the orchestrator's phase-3 reviewer, or a human running
+/// `aida queue work PR-N`) reviews a PR — it does not implement or own the
+/// spec — so the BUG-379 "work already shipped, refusing to start a session"
+/// guard must not block it. `Done` is the **normal** pre-review state (work on a
+/// branch, PR open, awaiting review); `Completed` (merged) is harmless to open
+/// read-only. For a non-review (implementer) session this is exactly
+/// [`preflight_spec_status`], so the re-implement guard is fully preserved.
+/// trace:BUG-436 | ai:claude
+fn preflight_spec_status_review_aware(
+    owns: &str,
+    status: Option<&RequirementStatus>,
+    force_claim: bool,
+    is_review: bool,
+) -> PreflightDecision {
+    if is_review
+        && matches!(
+            status,
+            Some(RequirementStatus::Done | RequirementStatus::Completed)
+        )
+    {
+        return PreflightDecision::Allow;
+    }
+    preflight_spec_status(owns, status, force_claim)
+}
+
 fn session_start_status_bump_preconditions_met(
     preflight_status: Option<&RequirementStatus>,
     worktree_path: &std::path::Path,
@@ -24658,7 +24754,21 @@ fn session_start(
     let orchestrator_corroborated = orchestrator::detect(&project_root).is_orchestrated();
     let force_claim_effective =
         effective_force_claim_for_session_start(force_claim, orchestrator_corroborated);
-    match preflight_spec_status(owns, preflight_status.as_ref(), force_claim_effective) {
+    // BUG-436: a review session reviews a PR, it doesn't implement the spec, so
+    // the Done/Completed implement-guard must not block it. The orchestrator's
+    // reviewer phase always exports `AIDA_REVIEW_VERDICT_FILE`; `review_target`
+    // covers any path where the scope reached here still PR-shaped. Without this,
+    // resume-to-reviewer (and any drain whose spec reached Done before phase 3)
+    // dies with "spec is Done — refusing to start a new session".
+    // trace:BUG-436 | ai:claude
+    let is_review_session =
+        review_target.is_some() || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
+    match preflight_spec_status_review_aware(
+        owns,
+        preflight_status.as_ref(),
+        force_claim_effective,
+        is_review_session,
+    ) {
         PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),
         PreflightDecision::AllowWithWarning(msg) => {
             eprintln!("{} {}", "⚠".yellow().bold(), msg);
