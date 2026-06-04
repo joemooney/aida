@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T11:19:17.845028040Z
-modified_at: 2026-06-04T03:18:34.079283780Z
+modified_at: 2026-06-04T04:09:12.775794836Z
 req_type: Story
 tags:
 - durable-execution
@@ -52,6 +52,11 @@ comments:
   content: Commit 16cc47ac1 references this requirement
   created_at: 2026-06-03T06:42:06.853935412Z
   modified_at: 2026-06-03T06:42:06.853935412Z
+- id: 019e90d2-2947-7f52-885a-dde781265c8b
+  author: joe
+  content: Commit 7b7420103 references this requirement
+  created_at: 2026-06-04T04:09:12.775794836Z
+  modified_at: 2026-06-04T04:09:12.775794836Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-04T03:18:34.079283780Z
