@@ -33,7 +33,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:39:18.948594093Z
-modified_at: 2026-05-24T06:38:34.150198705Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:queue:progress
@@ -56,6 +56,8 @@ comments:
     Test status: 609/609 workspace tests green (3 new tests in queue_progress_tests)
   created_at: 2026-05-15T00:33:21.401571136Z
   modified_at: 2026-05-15T00:33:21.401571136Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:15:06.902084644Z

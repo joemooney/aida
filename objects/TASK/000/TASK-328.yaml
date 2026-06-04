@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:02:16.201957127Z
-modified_at: 2026-05-21T05:56:29.769362283Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - audit
@@ -56,6 +56,8 @@ relationships:
   target_id: 019e4912-7045-7671-8dbf-59839f76233b
   created_at: 2026-05-21T05:46:50.234837955Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T05:43:20.225231653Z

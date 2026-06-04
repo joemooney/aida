@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T07:30:34.073658760Z
-modified_at: 2026-05-21T04:00:15.562728611Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Spike
 tags:
 - advisor-mentoring
@@ -96,6 +96,8 @@ comments:
   content: Commit 6b5ab61e references this requirement
   created_at: 2026-05-21T02:19:50.356060133Z
   modified_at: 2026-05-21T02:19:50.356060133Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-21T04:00:15.562728611Z

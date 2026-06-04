@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:00:40.636427753Z
-modified_at: 2026-05-20T17:57:22.406753178Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:TASK-359
@@ -48,6 +48,8 @@ comments:
   content: Commit 81c9b8fe references this requirement
   created_at: 2026-05-20T17:46:16.502938968Z
   modified_at: 2026-05-20T17:46:16.502938968Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T17:47:03.341423788Z

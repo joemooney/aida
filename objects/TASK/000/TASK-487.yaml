@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T01:53:34.840091117Z
-modified_at: 2026-05-23T05:41:16.951038802Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - cli
@@ -32,6 +32,8 @@ relationships:
   target_id: 019e5348-dc2d-7a80-b42a-10590e021f36
   created_at: 2026-05-23T05:22:30.400601421Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-23T05:17:57.471857601Z

@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:39:35.603116422Z
-modified_at: 2026-05-28T04:40:01.816304442Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -22,3 +22,5 @@ comments:
   content: 'Dismissed by joe 2026-05-28: self-test of TASK-120 severity vocabulary extension — safe to drop'
   created_at: 2026-05-28T04:40:01.816304442Z
   modified_at: 2026-05-28T04:40:01.816304442Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

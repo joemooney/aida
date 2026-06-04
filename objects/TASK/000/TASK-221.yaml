@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:18:32.164336313Z
-modified_at: 2026-05-24T06:36:45.558500167Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - activate
@@ -94,6 +94,8 @@ comments:
     Follow-up: composes with BUG-97/TASK-223 (parse-failure recovery hints) — those catch version-skew at the parse site; this one prevents it at the activate site.
   created_at: 2026-05-14T07:12:33.058580439Z
   modified_at: 2026-05-14T07:12:33.058580439Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:50:34.515601974Z

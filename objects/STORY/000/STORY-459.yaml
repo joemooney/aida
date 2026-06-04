@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:58:48.735617683Z
-modified_at: 2026-05-25T06:10:45.760841617Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - aida:queue
@@ -91,6 +91,8 @@ comments:
   content: 'Master verdict 2026-05-25: implemented BUNDLED with TASK-542 in PR-314 — the implementations are deeply coupled (naming + prefix-match are foundation-and-building). Shipping together rather than artificially splitting. After PR-314 merges with multi-spec trailer ''(TASK-542 STORY-459)'', this spec auto-bumps to Completed alongside TASK-542. Substrate-discipline reflection on coupled-bundled-ships in STORY-467 comments. — master'
   created_at: 2026-05-25T05:14:34.665629938Z
   modified_at: 2026-05-25T05:14:34.665629938Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-25T06:10:45.760841617Z

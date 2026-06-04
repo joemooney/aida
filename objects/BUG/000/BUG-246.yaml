@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:59:59.231766599Z
-modified_at: 2026-05-19T15:14:29.567057020Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - cross-platform
@@ -63,6 +63,8 @@ tags:
 - fs-atomic
 - release-blocker
 - windows
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T15:13:28.727056287Z

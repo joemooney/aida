@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:35:08.698774491Z
-modified_at: 2026-05-24T05:49:48.709597024Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - convention
@@ -95,6 +95,8 @@ comments:
       the namespace rename. AC paths update accordingly.
   created_at: 2026-05-24T03:54:13.686426443Z
   modified_at: 2026-05-24T03:54:13.686426443Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-24T03:57:29.184961843Z

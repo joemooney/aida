@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:45:10.025970424Z
-modified_at: 2026-05-30T02:05:50.223872284Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:init
@@ -27,6 +27,8 @@ comments:
   content: Commit 92c78c9e references this requirement
   created_at: 2026-05-30T02:01:16.247123729Z
   modified_at: 2026-05-30T02:01:16.247123729Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-30T02:05:50.223872284Z

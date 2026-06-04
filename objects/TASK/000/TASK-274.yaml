@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:20.288052451Z
-modified_at: 2026-05-18T04:49:05.387426132Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -67,6 +67,8 @@ comments:
     Test status: docs-only change; cargo fmt clean. Markdown anchors + cross-doc links verified.
   created_at: 2026-05-18T04:42:12.850288459Z
   modified_at: 2026-05-18T04:42:12.850288459Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T04:40:38.987044309Z

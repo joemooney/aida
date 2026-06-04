@@ -55,7 +55,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:33:10.822701627Z
-modified_at: 2026-05-24T06:29:02.284930026Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida-cli
@@ -93,6 +93,8 @@ comments:
     PR: https://github.com/joemooney/aida/pull/277
   created_at: 2026-05-24T06:18:23.800095314Z
   modified_at: 2026-05-24T06:18:23.800095314Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-24T06:18:51.199348321Z

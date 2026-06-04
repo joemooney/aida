@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T02:21:15.784867728Z
-modified_at: 2026-05-20T15:52:06.497108995Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - autonomous-drain
@@ -51,6 +51,8 @@ comments:
     filed 2 task(s): TASK-407, TASK-408
   created_at: 2026-05-20T15:52:06.936808955Z
   modified_at: 2026-05-20T15:52:06.936808955Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-20T15:51:50.260197084Z

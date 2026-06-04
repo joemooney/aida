@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:00:21.418436461Z
-modified_at: 2026-05-20T17:28:42.345363630Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:TASK-359
@@ -44,6 +44,8 @@ comments:
     Test status: cargo build --workspace green (pre-existing warnings only; markdown-only edit)
   created_at: 2026-05-20T17:20:07.183088322Z
   modified_at: 2026-05-20T17:20:07.183088322Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T17:19:24.319412490Z

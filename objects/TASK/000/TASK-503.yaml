@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:58:09.136851118Z
-modified_at: 2026-05-24T01:00:37.791453783Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - cargo-fmt
@@ -62,6 +62,8 @@ tags:
 - git-hook
 - scaffolding-pack
 - substrate-as-bouncer
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T01:00:37.791453783Z

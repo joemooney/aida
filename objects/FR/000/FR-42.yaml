@@ -10,7 +10,7 @@ priority: Medium
 owner: joe
 feature: 14-NAV
 created_at: 2025-11-25T22:36:17.393702816Z
-modified_at: 2026-05-30T01:44:08.093433616Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Functional
 tags:
 - gui
@@ -49,3 +49,5 @@ history:
   - field_name: description
     old_value: The arrow keys should work for the different panels and behave intuitively.
     new_value: The arrow keys should work for the same the different panels where we have lists and behave intuitively.
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

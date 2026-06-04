@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:28:40.252645413Z
-modified_at: 2026-05-20T14:34:13.711639272Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -91,6 +91,8 @@ comments:
     Test status: 798/798 aida-cli tests green; 8 new tests cover the classifier (5) and the orchestrator/drain (3).
   created_at: 2026-05-20T14:25:32.706273887Z
   modified_at: 2026-05-20T14:25:32.706273887Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T14:24:02.089490344Z

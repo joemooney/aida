@@ -53,7 +53,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T21:20:08.496657542Z
-modified_at: 2026-05-24T06:37:31.341006113Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:review
@@ -118,6 +118,8 @@ comments:
     Proceed to implementation. Standard sibling-worktree + aida pr ship. — master advisor
   created_at: 2026-05-23T01:24:34.805303061Z
   modified_at: 2026-05-23T01:24:34.805303061Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T01:35:57.564688880Z

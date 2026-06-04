@@ -38,7 +38,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:13:19.368962045Z
-modified_at: 2026-05-24T06:38:27.086472197Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:queue:move
@@ -65,6 +65,8 @@ comments:
     Test status: 564/564 aida-cli tests green; live-queue smoke test passed and queue restored.
   created_at: 2026-05-17T19:42:42.508468282Z
   modified_at: 2026-05-17T19:42:42.508468282Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T19:36:48.256666388Z

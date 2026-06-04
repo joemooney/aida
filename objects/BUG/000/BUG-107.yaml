@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T19:29:04.230402571Z
-modified_at: 2026-05-24T06:38:48.406369840Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:session:end
@@ -78,6 +78,8 @@ comments:
   content: 'Implemented via PR #43 (commit aa5c9121): auto-queue gh spawn routed through a surviving project dir — fixes the removed-worktree ENOENT mis-blamed on the gh binary. Tests: 737/737 workspace green; cargo fmt + clippy clean.'
   created_at: 2026-05-15T22:58:34.326337680Z
   modified_at: 2026-05-15T22:58:34.326337680Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T22:12:51.920331198Z

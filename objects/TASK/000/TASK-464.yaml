@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:53:00.309174297Z
-modified_at: 2026-05-22T21:31:50.527300434Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - coordination
@@ -17,3 +17,5 @@ tags:
 - from-story-407
 - mcp
 - worker-directives
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

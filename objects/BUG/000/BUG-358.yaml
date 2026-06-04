@@ -52,7 +52,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:10:54.425142081Z
-modified_at: 2026-05-23T16:51:02.305129317Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - bug-346-sibling
@@ -62,6 +62,8 @@ tags:
 - regression
 - release-blocker
 - windows
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T16:51:02.305129317Z

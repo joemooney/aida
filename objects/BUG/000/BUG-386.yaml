@@ -72,7 +72,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T20:13:45.004660235Z
-modified_at: 2026-05-27T07:00:10.675578376Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:init
@@ -87,3 +87,5 @@ comments:
   content: Commit 6eab4081 references this requirement
   created_at: 2026-05-25T20:24:48.285815336Z
   modified_at: 2026-05-25T20:24:48.285815336Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

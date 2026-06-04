@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T19:27:17.511575840Z
-modified_at: 2026-05-22T19:38:01.169283032Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:BUG-332
@@ -19,3 +19,5 @@ comments:
   content: Resolved in PR-195 (BUG-332's bundle). The test rename + count fix landed at 42d82f71. Auto-bump didn't fire on this spec because PR-195's title referenced only BUG-332, not SPEC-409. Marking Completed manually.
   created_at: 2026-05-22T19:37:59.577243436Z
   modified_at: 2026-05-22T19:37:59.577243436Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

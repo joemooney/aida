@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T18:11:00.363548308Z
-modified_at: 2026-05-21T04:48:55.829654493Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:TASK-398
@@ -40,3 +40,5 @@ comments:
   content: 'Dismissed by joe 2026-05-21: Defensible constraint. Events without timestamps cannot be filtered by time by definition — the alternative would be to either include all untimestamped events (defeating --since''s purpose) or drop them silently (data loss). The current behavior is the principled choice; --help text could mention it as a follow-up if confusion recurs.'
   created_at: 2026-05-21T04:48:55.829654493Z
   modified_at: 2026-05-21T04:48:55.829654493Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

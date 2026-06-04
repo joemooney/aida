@@ -80,7 +80,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T15:18:05.742873896Z
-modified_at: 2026-05-22T23:28:07.686073481Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -100,6 +100,8 @@ comments:
   content: 'Ecosystem-watch seed entry (2026-05-18): **Agent Teams** — Claude Code experimental feature (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), multiple Claude Code sessions coordinating via a shared task list (kanban model) + direct teammate messaging. ASSESSMENT: **complement + architecture-validation**. It is the SAME shared-task-list coordination model AIDA''s queue/roles/store already implements — Claude Code''s team independently converged on AIDA''s architecture, which validates it. But Agent Teams is Claude-Code-LOCKED; AIDA''s model is agent-agnostic by substrate (git+YAML+MCP — Codex etc. can participate). ACTION: filed SPIKE-9 (SPIKE: MCP-as-bus for inter-agent comms) — the no-regret takeaway. STRATEGIC NOTE for the review to track: this strengthens the ''AIDA as agent-agnostic multi-agent coordination platform'' direction — captured, NOT a roadmap pivot; revisit-trigger = real users + stable autonomy layer + a validating Codex user. Add to ecosystem-watch.md alongside /goal, /agents, /remote-control.'
   created_at: 2026-05-19T05:40:39.216373469Z
   modified_at: 2026-05-19T05:40:39.216373469Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T23:28:07.686073481Z

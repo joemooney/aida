@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T15:57:47.684036219Z
-modified_at: 2026-05-28T16:49:08.714787759Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:doctor
@@ -47,6 +47,8 @@ comments:
     Test status: 12/12 doctor tests green; full aida-cli test suite has 2 pre-existing failures in cli.rs:2729 (a /// trace:TASK-537 leak introduced by TASK-537's PR — not from this work).
   created_at: 2026-05-28T16:20:32.919716570Z
   modified_at: 2026-05-28T16:20:32.919716570Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-28T16:21:29.943633015Z

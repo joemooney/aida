@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T14:22:00.802820936Z
-modified_at: 2026-05-20T18:23:47.821999636Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - autonomy
@@ -87,6 +87,8 @@ comments:
     Follow-up: TASK-418 (advisor triage) — `--since` semantics on events without a `timestamp` field; conservative reading vs strict cutoff is a design call worth a second pass.
   created_at: 2026-05-20T18:12:41.374772495Z
   modified_at: 2026-05-20T18:12:41.374772495Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T18:11:38.693701192Z

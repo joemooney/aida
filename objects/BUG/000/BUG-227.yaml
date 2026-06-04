@@ -28,7 +28,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:55:30.643881256Z
-modified_at: 2026-05-18T02:43:30.688834634Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - from-implementer:TASK-265
@@ -62,6 +62,8 @@ comments:
     Test status: 603/603 aida-cli tests green; cargo fmt --check + clippy clean.
   created_at: 2026-05-18T02:35:02.755600753Z
   modified_at: 2026-05-18T02:35:02.755600753Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T02:33:54.475539346Z

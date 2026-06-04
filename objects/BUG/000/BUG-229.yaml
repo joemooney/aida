@@ -74,7 +74,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T18:25:20.609292583Z
-modified_at: 2026-05-24T06:38:21.735136872Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:queue:list
@@ -106,6 +106,8 @@ comments:
   content: 'PR opened: https://github.com/joemooney/aida/pull/99 (PR-99). Reviewer story STORY-322 queued.'
   created_at: 2026-05-18T16:52:38.592172994Z
   modified_at: 2026-05-18T16:52:38.592172994Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T16:50:22.747085003Z

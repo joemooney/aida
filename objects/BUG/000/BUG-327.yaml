@@ -63,7 +63,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T15:45:26.219016285Z
-modified_at: 2026-05-24T06:37:29.676605708Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:review
@@ -79,6 +79,8 @@ relationships:
   target_id: 019e507e-bc62-74b3-9c8c-e7b9b1b49377
   created_at: 2026-05-22T16:22:28.886589443Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T16:18:04.612963084Z

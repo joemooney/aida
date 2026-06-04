@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:42:13.417792965Z
-modified_at: 2026-05-24T06:37:26.014883876Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:pull
@@ -90,6 +90,8 @@ comments:
     Test status: 609/609 workspace tests green (skill template change; no code logic to test)
   created_at: 2026-05-15T00:33:22.489501004Z
   modified_at: 2026-05-15T00:33:22.489501004Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T15:16:09.545155692Z

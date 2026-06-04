@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:10:18.145352052Z
-modified_at: 2026-05-22T01:20:39.109680755Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - advisor
@@ -85,3 +85,5 @@ comments:
     filed 3 task(s): TASK-441, TASK-442, TASK-443
   created_at: 2026-05-22T01:20:39.604629779Z
   modified_at: 2026-05-22T01:20:39.604629779Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

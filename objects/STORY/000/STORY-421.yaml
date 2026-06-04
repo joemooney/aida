@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T01:50:08.628010036Z
-modified_at: 2026-05-23T01:54:03.086820045Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,6 +35,8 @@ comments:
   content: 'Auto-completed: PR #223 merged without a re-review iteration — the review story was left at In Progress.'
   created_at: 2026-05-23T01:54:03.086790316Z
   modified_at: 2026-05-23T01:54:03.086790316Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T01:54:02.572879954Z

@@ -51,13 +51,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T21:08:51.878996643Z
-modified_at: 2026-05-24T21:50:56.664604099Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida-chat-blocker
 - mcp
 - read-path
 - silent-empty
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T21:50:56.664604099Z

@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T02:23:58.408972956Z
-modified_at: 2026-05-20T08:11:11.158431784Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - advisor-routing
@@ -77,6 +77,8 @@ comments:
   content: Commit 9c9cfc6c references this requirement
   created_at: 2026-05-20T07:59:56.660303827Z
   modified_at: 2026-05-20T07:59:56.660303827Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T08:00:53.556324363Z

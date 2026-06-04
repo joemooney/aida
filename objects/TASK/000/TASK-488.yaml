@@ -44,7 +44,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:24:39.960455739Z
-modified_at: 2026-05-23T16:04:28.363949117Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-23
@@ -78,6 +78,8 @@ comments:
     Test status: 4/4 hook regression cases green; cargo check clean; cargo fmt clean.
   created_at: 2026-05-23T15:57:10.511729304Z
   modified_at: 2026-05-23T15:57:10.511729304Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-23T15:57:22.610919422Z

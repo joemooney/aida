@@ -8,13 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T07:07:48.782982236Z
-modified_at: 2026-05-28T04:52:34.148820719Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Doc
 tags:
 - coding-agents
 - competitive-analysis
 - from-research
 - kind:doc
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-28T04:52:34.148820719Z

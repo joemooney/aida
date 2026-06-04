@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:15:00.639594423Z
-modified_at: 2026-05-22T20:31:40.907538102Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:STORY-407
@@ -19,3 +19,5 @@ comments:
   content: 'Dismissed by joe 2026-05-22: Duplicate of SPEC-403 (identical title + description; promoting SPEC-403, dismissing this)'
   created_at: 2026-05-22T20:31:40.907538102Z
   modified_at: 2026-05-22T20:31:40.907538102Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

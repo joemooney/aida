@@ -74,7 +74,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T02:25:19.101203419Z
-modified_at: 2026-05-25T16:00:12.187586734Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - batch:agent-launch-ux
@@ -92,3 +92,5 @@ comments:
   content: Commit c48886c8 references this requirement
   created_at: 2026-05-25T07:47:25.243100685Z
   modified_at: 2026-05-25T07:47:25.243100685Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

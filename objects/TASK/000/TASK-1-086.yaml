@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T06:29:58.682708712Z
-modified_at: 2026-05-27T07:03:52.696659228Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:findings
@@ -34,3 +34,5 @@ comments:
   content: Commit 4af532b5 references this requirement
   created_at: 2026-05-27T07:03:18.709841974Z
   modified_at: 2026-05-27T07:03:18.709841974Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

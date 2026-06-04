@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:42:58.758955507Z
-modified_at: 2026-05-24T06:39:05.547233253Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:session:list
@@ -115,6 +115,8 @@ comments:
   content: 'Acceptance amendment 2026-05-17 (per reviewer judgment + advisor ratification): criterion 3 (dialog fallback to most recent comment by session ID) is **deferred to TASK-330**. The Comment data model has no `claude_session_id` field; the join key required for this fallback doesn''t exist yet. TASK-330 ships the prerequisite wiring; criterion 3 lands as a follow-up after TASK-330 (or as part of it). BUG-112''s shipped scope satisfies Option A criteria 1 + 2 (drop INITIAL TOPIC + add RECENT FOCUS column) which delivers the primary ''returning user, what was I doing?'' value. Per `feedback_refinements_must_be_acceptance_criteria.md`: deferrals belong in the acceptance contract, not just in commit messages — this comment captures it for the record.'
   created_at: 2026-05-18T00:43:07.518094049Z
   modified_at: 2026-05-18T00:43:07.518094049Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T00:30:08.165736604Z

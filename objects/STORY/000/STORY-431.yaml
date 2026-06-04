@@ -61,7 +61,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:04.204214328Z
-modified_at: 2026-05-24T06:38:01.352462536Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - agent-registry
@@ -122,6 +122,8 @@ comments:
     — master advisor
   created_at: 2026-05-23T18:08:18.866565830Z
   modified_at: 2026-05-23T18:08:18.866565830Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T18:26:55.356405770Z

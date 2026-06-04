@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:22:57.960825348Z
-modified_at: 2026-05-24T06:37:44.580501802Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:review
@@ -95,6 +95,8 @@ comments:
     Test status: skill-template (markdown) change only — no Rust touched; cargo fmt --all --check clean.
   created_at: 2026-05-17T00:52:34.100802297Z
   modified_at: 2026-05-17T00:52:34.100802297Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T23:29:04.874908193Z

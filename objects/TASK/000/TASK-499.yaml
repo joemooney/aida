@@ -53,7 +53,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:37:38.745329065Z
-modified_at: 2026-05-24T06:37:52.250036801Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:session
@@ -63,6 +63,8 @@ tags:
 - from-user-friction
 - papercut
 - ux
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T22:56:44.353913317Z

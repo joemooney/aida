@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T07:29:50.341470987Z
-modified_at: 2026-05-28T15:43:04.600735376Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - advisor-discipline
@@ -24,3 +24,5 @@ comments:
   content: 'Dismissed by joe 2026-05-28: STORY-463''s lock-holder-visibility message + the existing retry-with-backoff (AIDA_CACHE_RETRY_MS/COUNT) already mitigate. Behavior pattern (serialize advisor writes when operator is active) is captured in feedback memory. Substrate-side shorter-critical-section fix is a separate consideration; no need to keep this as an open finding.'
   created_at: 2026-05-28T15:43:04.600735376Z
   modified_at: 2026-05-28T15:43:04.600735376Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

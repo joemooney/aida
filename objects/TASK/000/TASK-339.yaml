@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T02:11:50.315618425Z
-modified_at: 2026-05-22T21:18:53.559279896Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - architecture
@@ -69,6 +69,8 @@ relationships:
   target_id: 019e5188-5937-7c22-8ca3-1889a6b4fa91
   created_at: 2026-05-22T21:12:35.396871897Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T21:08:27.180282085Z

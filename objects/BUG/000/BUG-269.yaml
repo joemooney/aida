@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T01:06:38.763040178Z
-modified_at: 2026-05-24T06:38:18.095321742Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:queue:done
@@ -64,6 +64,8 @@ relationships:
   target_id: 019e4838-9475-77f0-983e-53bdea549671
   created_at: 2026-05-21T01:48:52.200911817Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T01:48:58.203126273Z

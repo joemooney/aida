@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T04:21:47.654331082Z
-modified_at: 2026-05-21T04:48:53.001124911Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:BUG-110
@@ -35,3 +35,5 @@ comments:
   content: 'Dismissed by joe 2026-05-21: Defensible design choice. Signal-handling end-to-end automation is impractical (terminal-state assertions require pseudo-TTY orchestration); unit tests + a documented manual recipe is the appropriate coverage shape for this class of fix.'
   created_at: 2026-05-21T04:48:53.001124911Z
   modified_at: 2026-05-21T04:48:53.001124911Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

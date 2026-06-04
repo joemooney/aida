@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T19:10:56.557219921Z
-modified_at: 2026-05-24T20:41:46.298325075Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida-chat-blocker
@@ -110,6 +110,8 @@ comments:
     Fix scope for BUG-377: repair add_comment + triage_finding comment construction, then add explicit MCP write-field roundtrip tests for add_requirement, update_requirement, add_comment, triage_finding comments, and a descriptor assertion that add_relationship is absent rather than untested.
   created_at: 2026-05-24T20:28:38.544462646Z
   modified_at: 2026-05-24T20:28:38.544462646Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T20:41:46.298325075Z

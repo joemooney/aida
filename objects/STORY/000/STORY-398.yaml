@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:01:00.210674229Z
-modified_at: 2026-05-22T16:58:59.463862106Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - agent-agnostic
@@ -71,3 +71,5 @@ comments:
   content: mcp
   created_at: 2026-05-22T16:36:38.250819520Z
   modified_at: 2026-05-22T16:36:38.250819520Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

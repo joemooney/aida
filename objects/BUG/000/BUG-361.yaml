@@ -89,7 +89,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T17:11:48.750765844Z
-modified_at: 2026-05-23T17:35:13.453882097Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - antigravity-task-497
@@ -107,6 +107,8 @@ comments:
   content: 'Codex implementation sketch before code: inject the visibility check in session_end after the target lease is resolved and before confirmation/cleanup, while the worktree and lease still exist. Detection will reuse the existing BUG-360 primitives: branch_commits_ahead_main(project_root, target.branch) > 0 plus detect_open_pr_for_branch(project_root, target.branch) == NoOpenPr; unknown gh states do not assert missing PR. Warning shape follows BUG-360: yellow warning: prefix, names lease/spec, branch, commit count, and missing PR, and remains non-blocking for both normal and --force session end. Recording will append a best-effort STORY-325 punt-ledger entry with category other, raised_by session-end, detail describing the unshipped local commit/no-PR state, and resolution_path punted so the morning sweep has a durable signal. Tests: pure classifier/formatter tests for commit/no-PR vs open-PR/no-commit/unknown-PR cases, plus ledger append coverage if the helper is separated cleanly. Limitation: this closes explicit aida session end/orchestrator cleanup paths; a raw process exit still needs a future shell/harness exit hook if no AIDA command runs at all.'
   created_at: 2026-05-23T17:26:15.426476648Z
   modified_at: 2026-05-23T17:26:15.426476648Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T17:35:13.453882097Z

@@ -59,7 +59,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:46:22.530604784Z
-modified_at: 2026-05-24T15:56:57.419605070Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - cli-ux
@@ -70,6 +70,8 @@ tags:
 - operator-mental-model
 - papercut
 - ultraplan
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T15:56:57.419605070Z

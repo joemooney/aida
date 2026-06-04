@@ -31,12 +31,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T18:05:37.611821652Z
-modified_at: 2026-05-24T15:42:59.289366960Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-review:PR-248
 - kind:test-framing
 - severity:cosmetic
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T15:42:59.289366960Z

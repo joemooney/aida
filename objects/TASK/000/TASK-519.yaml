@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:59:13.454679134Z
-modified_at: 2026-05-24T05:37:33.399722910Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:edit
@@ -65,3 +65,5 @@ comments:
   content: 'Rejecting: aida edit --add-tag / --remove-tag already exist (verified via aida edit --help). My filing proposed --tags-add / --tags-remove as the names; actual implementation uses --add-tag / --remove-tag with identical semantics (non-clobbering, repeatable, conflicts with --tags). TASK-519 is duplicate — the substrate already has the right surface. Discipline gap: should have run --help before filing.'
   created_at: 2026-05-24T05:37:33.399722910Z
   modified_at: 2026-05-24T05:37:33.399722910Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

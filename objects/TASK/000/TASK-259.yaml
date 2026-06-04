@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:21:23.113629365Z
-modified_at: 2026-05-24T06:37:09.131368618Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:pr
@@ -125,6 +125,8 @@ comments:
     Dialog-role spec drafted without running \`/aida-pr --help\` or reading \`aida-core/templates/skills/aida-pr.md\` first. Same pattern as the \`session prune\` flag-guessing failure from earlier today. The \`feedback_run_help_before_suggesting_flags.md\` memory should be extended to include \"verify skill workflows by reading templates, not just CLI help.\"
   created_at: 2026-05-16T16:56:35.011278341Z
   modified_at: 2026-05-16T16:56:35.011278341Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T17:08:06.717374094Z

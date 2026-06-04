@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T06:56:33.113932015Z
-modified_at: 2026-05-23T15:46:57.425062596Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - bouncer-principle
@@ -88,6 +88,8 @@ comments:
     Open question: whether auto-punt should change status to NeedsAttention immediately via the same store transition as aida punt; I propose yes so batch drains see the same substrate state as explicit /aida-punt.
   created_at: 2026-05-23T15:35:56.105616682Z
   modified_at: 2026-05-23T15:35:56.105616682Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T15:46:57.425062596Z

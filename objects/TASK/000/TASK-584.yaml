@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T22:43:11.143891975Z
-modified_at: 2026-05-29T22:57:00.799699544Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:doctor
@@ -24,6 +24,8 @@ comments:
   content: Commit ec6ac0a9 references this requirement
   created_at: 2026-05-29T22:52:03.162675955Z
   modified_at: 2026-05-29T22:52:03.162675955Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-29T22:57:00.799699544Z

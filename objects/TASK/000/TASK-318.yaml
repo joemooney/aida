@@ -23,7 +23,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T19:51:17.579740126Z
-modified_at: 2026-05-24T06:38:30.581070731Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - TASK-268
@@ -36,6 +36,8 @@ relationships:
   target_id: 019e3861-3667-71e2-8861-aa0582ee3fb9
   created_at: 2026-05-17T23:59:19.337518129Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T23:57:13.268048431Z

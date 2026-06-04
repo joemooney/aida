@@ -56,7 +56,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:15:44.845827922Z
-modified_at: 2026-05-24T06:38:32.311390824Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:queue
@@ -71,6 +71,8 @@ relationships:
   target_id: 019e55ff-bf92-7a52-aa05-30ed91153af0
   created_at: 2026-05-23T18:01:29.962384426Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-23T17:57:04.586784909Z

@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T02:27:49.026573463Z
-modified_at: 2026-05-18T03:14:22.075240967Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - auto-complete
@@ -96,6 +96,8 @@ comments:
     PR: https://github.com/joemooney/aida/pull/85
   created_at: 2026-05-18T03:07:00.370018604Z
   modified_at: 2026-05-18T03:07:00.370018604Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T03:05:11.137697341Z

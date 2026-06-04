@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T04:21:37.513080534Z
-modified_at: 2026-05-21T04:48:54.529990440Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:BUG-110
@@ -28,3 +28,5 @@ comments:
   content: 'Dismissed by joe 2026-05-21: Defensible. Exit 130 is the conventional code for SIGINT; unifying SIGTERM to the same code simplifies the contract without losing meaningful information — callers that want to distinguish signals can inspect the signal itself, not the exit code.'
   created_at: 2026-05-21T04:48:54.529990440Z
   modified_at: 2026-05-21T04:48:54.529990440Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

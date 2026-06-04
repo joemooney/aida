@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T05:39:42.574770218Z
-modified_at: 2026-05-19T02:20:24.322103903Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - auto-complete
@@ -84,6 +84,8 @@ comments:
     Test status: 84/84 relevant tests green (auto_complete 65, queue_work not_queued 8, queue_rework 11). Includes a new regression guard `recovery_hints_never_route_done_spec_through_queue_work` covering phases 3-6 × every FailureKind.
   created_at: 2026-05-19T02:10:08.327500413Z
   modified_at: 2026-05-19T02:10:08.327500413Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T02:08:49.366488911Z

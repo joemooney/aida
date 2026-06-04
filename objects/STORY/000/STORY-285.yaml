@@ -101,7 +101,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:56:20.866430726Z
-modified_at: 2026-05-19T07:30:20.866381832Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - advisor-triage
@@ -129,6 +129,8 @@ comments:
     Test status: 706/706 aida-cli tests green; clippy-clean; cargo fmt --check clean.
   created_at: 2026-05-19T07:19:51.197740705Z
   modified_at: 2026-05-19T07:19:51.197740705Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T07:18:36.553671150Z

@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:45:18.469713543Z
-modified_at: 2026-05-24T06:39:10.814380268Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:session:forget
@@ -80,6 +80,8 @@ comments:
   content: '→ Shipped as PR #81: https://github.com/joemooney/aida/pull/81 — review queued as STORY-299.'
   created_at: 2026-05-18T01:03:47.626526360Z
   modified_at: 2026-05-18T01:03:47.626526360Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T00:58:10.732849062Z

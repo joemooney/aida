@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:50:21.133425879Z
-modified_at: 2026-05-24T06:36:53.298431481Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:init
@@ -42,6 +42,8 @@ tags:
 - enabler-for-codex-antigravity-stories
 - parent:STORY-416
 - scaffolding
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T00:18:53.174398148Z

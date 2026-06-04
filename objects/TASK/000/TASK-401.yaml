@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:15:17.793130739Z
-modified_at: 2026-05-24T06:37:05.382028584Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:pickup
@@ -21,6 +21,8 @@ relationships:
   target_id: 019e4640-ef71-7b80-ac6c-5893ce7447fd
   created_at: 2026-05-20T16:38:47.219367233Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T16:33:38.221180728Z

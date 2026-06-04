@@ -77,7 +77,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:02:43.248239099Z
-modified_at: 2026-05-18T06:38:26.932532764Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - advisor
@@ -108,6 +108,8 @@ comments:
     Test status: 29/29 role-suite tests green, including 3 new `role_identity_tests`; `cargo fmt --all -- --check` clean.
   created_at: 2026-05-18T06:28:25.526844108Z
   modified_at: 2026-05-18T06:28:25.526844108Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T06:27:19.910003814Z

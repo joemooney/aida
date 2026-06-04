@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:46:10.798310979Z
-modified_at: 2026-05-24T02:31:18.072899060Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - cluster-derivation
@@ -54,6 +54,8 @@ tags:
 - queue
 - routing
 - task-474-related
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T02:31:18.072899060Z

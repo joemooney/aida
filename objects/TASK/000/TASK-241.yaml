@@ -104,7 +104,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T04:20:55.937732251Z
-modified_at: 2026-05-24T06:37:53.926743157Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:show
@@ -131,6 +131,8 @@ comments:
   content: 'Implemented via PR-30 (commit e77cfdba). Test status: 640/640 tests green (cargo test -p aida-cli -p aida-core).'
   created_at: 2026-05-15T13:21:46.276143130Z
   modified_at: 2026-05-15T13:21:46.276143130Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T07:33:32.051559268Z

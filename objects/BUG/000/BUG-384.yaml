@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:05.629882721Z
-modified_at: 2026-05-25T16:07:10.927576069Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:session
@@ -17,6 +17,8 @@ tags:
 - ceiling-pattern
 - from-overnight-drain-2026-05-25
 - from-self-test
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-25T16:07:10.927576069Z

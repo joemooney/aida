@@ -7,12 +7,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T04:30:34.305214468Z
-modified_at: 2026-05-23T04:51:22.362707635Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:TASK-486
 - kind:bug-spotted
 - severity:minor
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T04:51:22.362707635Z

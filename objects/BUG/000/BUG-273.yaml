@@ -69,7 +69,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T04:31:26.644175360Z
-modified_at: 2026-05-24T07:09:42.340376132Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - ci-watch
@@ -85,6 +85,8 @@ comments:
   content: 'Side benefit: `scripts/dedup-scrollback.py` (just landed in this branch) processes the polluted scrollback exactly. Its before/after pair (e.g., `~/aida-keystone-morning-scrollback-2026-05-20.md` → `*-clean.md`) is a ready-made fixture for this BUG''s regression test — assert the orchestrator''s tee''d phase-2 output matches the cleaned format (one state transition per emit, no redraws). Reduction observed on the morning scrollback: 9,837 → 3,042 lines (69% reduction); 365 redraws elided across 40 distinct CI-watch episodes.'
   created_at: 2026-05-21T04:45:54.908358665Z
   modified_at: 2026-05-21T04:45:54.908358665Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T07:09:42.340376132Z

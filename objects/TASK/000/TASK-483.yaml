@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:11:56.696199463Z
-modified_at: 2026-05-30T03:04:32.137775321Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-review:PR-210
@@ -31,3 +31,5 @@ comments:
   content: Rejected 2026-05-29 (operator triage). The .local.md append-merge happens INSIDE Claude Code at skill-load time, not in any AIDA build step (docs/extending-skills.md:36-41) — so there's nothing in AIDA's build to integration-test. The indirect proxy (test_aida_md_documents_local_extension + the discovery/re-sync tests) already covers what AIDA can verify. Not feasible/valuable as a separate test here; closing.
   created_at: 2026-05-30T03:04:30.571644637Z
   modified_at: 2026-05-30T03:04:30.571644637Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

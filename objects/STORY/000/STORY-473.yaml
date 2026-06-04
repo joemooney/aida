@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:55:39.712313175Z
-modified_at: 2026-05-27T07:31:40.038511196Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - claude-code
@@ -21,6 +21,8 @@ relationships:
   target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
   created_at: 2026-05-27T06:58:51.740622929Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-27T07:31:40.038511196Z

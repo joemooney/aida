@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:35:44.137066478Z
-modified_at: 2026-05-22T03:00:31.193683689Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -40,3 +40,5 @@ comments:
     filed 3 task(s): TASK-444, TASK-445, TASK-446
   created_at: 2026-05-22T03:00:31.663878052Z
   modified_at: 2026-05-22T03:00:31.663878052Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

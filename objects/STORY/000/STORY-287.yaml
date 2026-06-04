@@ -137,7 +137,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:28:11.451611274Z
-modified_at: 2026-05-22T18:51:16.554648528Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - advisor-pattern
@@ -198,6 +198,8 @@ comments:
   content: Commit 66b1e22b references this requirement
   created_at: 2026-05-22T18:51:16.554648528Z
   modified_at: 2026-05-22T18:51:16.554648528Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T23:32:38.472239478Z

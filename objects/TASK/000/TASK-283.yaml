@@ -41,7 +41,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:09:53.777068711Z
-modified_at: 2026-05-20T06:53:16.301536096Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - comment-accuracy
@@ -58,6 +58,8 @@ relationships:
   target_id: 019e4426-9b98-79e3-8073-f8d2fefd766b
   created_at: 2026-05-20T06:50:45.532196829Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T06:43:18.101580597Z

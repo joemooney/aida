@@ -60,7 +60,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T06:41:37.114943469Z
-modified_at: 2026-05-24T06:37:27.785889233Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:review
@@ -105,6 +105,8 @@ comments:
     Filed BUG-NEW (see findings) as the structural follow-up: BUG-280's fix was skill-template description (paper enforcement); the systemic fix is a programmatic gate (permission-denial intercept under AIDA_HEADLESS=1, recommended Path A) per the BUG-269 ceiling pattern. Not reopening BUG-280 itself — its scope was the skill template doc; the new bug captures the programmatic-gate work.
   created_at: 2026-05-22T21:20:12.257579551Z
   modified_at: 2026-05-22T21:20:12.257579551Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T07:06:52.972574713Z

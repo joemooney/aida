@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:37:01.000764398Z
-modified_at: 2026-05-19T16:37:55.552658779Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,5 @@ comments:
   content: Redundant with STORY-325 (the punt ledger spec, already Approved). STORY-332 seeds .aida/punts.jsonl; STORY-325 owns the analysis layer. Tracked by STORY-325 directly — rejecting this duplicate followup TASK.
   created_at: 2026-05-19T16:37:53.982930143Z
   modified_at: 2026-05-19T16:37:53.982930143Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

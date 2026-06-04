@@ -21,9 +21,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T07:39:27.946340980Z
-modified_at: 2026-05-27T06:59:11.845535905Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - dead-code
 - from-review:PR-282
 - severity:cosmetic
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

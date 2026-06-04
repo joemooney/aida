@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:25:39.769407423Z
-modified_at: 2026-05-22T04:15:01.749309221Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -23,6 +23,8 @@ relationships:
   target_id: 019e4de1-ccab-79d0-ba9c-28ee206eac0b
   created_at: 2026-05-22T04:11:49.642461258Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T04:08:00.418613301Z

@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:24:52.915808633Z
-modified_at: 2026-05-25T08:00:58.447128001Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - aida:status
@@ -26,6 +26,8 @@ comments:
   content: Commit 75183edc references this requirement
   created_at: 2026-05-25T07:55:59.941535224Z
   modified_at: 2026-05-25T07:55:59.941535224Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-25T08:00:58.447128001Z

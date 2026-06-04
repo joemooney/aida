@@ -45,7 +45,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:08:25.950472276Z
-modified_at: 2026-05-28T15:53:57.131664649Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - backlog
@@ -53,3 +53,5 @@ tags:
 - from-self-test:TASK-299
 - papercut
 - verification-scripts
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

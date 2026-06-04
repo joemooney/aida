@@ -67,7 +67,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T14:37:10.550678589Z
-modified_at: 2026-05-24T06:37:37.613274238Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:review
@@ -81,6 +81,8 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T14:37:13.234988909Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-15T15:21:44.869522207Z

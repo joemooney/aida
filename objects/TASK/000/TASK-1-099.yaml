@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:13.346483215Z
-modified_at: 2026-05-29T08:07:31.815596876Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:init
@@ -46,6 +46,8 @@ comments:
   content: Commit 0fafea3d references this requirement
   created_at: 2026-05-29T03:07:23.545626868Z
   modified_at: 2026-05-29T03:07:23.545626868Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-29T03:08:04.898693371Z

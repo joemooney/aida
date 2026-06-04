@@ -104,7 +104,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:39:26.005961879Z
-modified_at: 2026-05-20T05:33:10.681744115Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -147,6 +147,8 @@ comments:
     filed 4 task(s): TASK-384, TASK-385, TASK-386, TASK-387
   created_at: 2026-05-20T05:07:41.657845959Z
   modified_at: 2026-05-20T05:07:41.657845959Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T05:07:13.428921009Z

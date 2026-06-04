@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:39:16.472243845Z
-modified_at: 2026-05-22T23:50:53.953670852Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - environmental-assumption
@@ -56,6 +56,8 @@ tags:
 - post-merge-pull
 - pr-ship
 - task-458-followup
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T23:50:53.953670852Z

@@ -86,7 +86,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:31:11.178643234Z
-modified_at: 2026-05-24T06:36:51.017912628Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - aida:init
@@ -197,6 +197,8 @@ comments:
     filed 1 task(s): TASK-332
   created_at: 2026-05-18T04:06:13.991167889Z
   modified_at: 2026-05-18T04:06:13.991167889Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T03:56:14.507497654Z

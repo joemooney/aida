@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:54:51.704744157Z
-modified_at: 2026-05-29T07:29:28.825510356Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:queue:list
@@ -31,6 +31,8 @@ comments:
   content: Commit 90b6743e references this requirement
   created_at: 2026-05-28T17:06:56.771697617Z
   modified_at: 2026-05-28T17:06:56.771697617Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-28T17:07:47.188248338Z

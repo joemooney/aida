@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:22:15.696421776Z
-modified_at: 2026-05-24T00:57:28.273119809Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - agent-launcher
@@ -57,6 +57,8 @@ tags:
 - depends-on:phase-2
 - parent:EPIC-31
 - phase-3b
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T00:57:28.273119809Z
