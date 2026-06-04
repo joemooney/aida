@@ -1,0 +1,23 @@
+id: 019e9118-203e-78a1-a907-8ee1cb85970f
+spec_id: TASK-643
+agreed_id: TASK-643
+title: 'Clean resume-drain end-to-end run: create docs/scratch/resume-probe.md (throwaway, single-spec)'
+description: |-
+  Clean STORY-492 live kill-and-resume. IMPLEMENTER CONTRACT: create docs/scratch/resume-probe.md (new dir + file) containing exactly one line: 'resume-drain clean run'. Commit crediting ONLY this spec — the commit message trailer is the spec id and NOTHING else. Do NOT add any 'trace:' lines or reference any other spec ids in the commit (a multi-spec commit breaks the reviewer's PR resolution). Change no other files.
+
+  ## Acceptance
+  - docs/scratch/resume-probe.md exists with the one line.
+  - The commit credits a single spec; no other files changed.
+
+  Validation artifact — git rm after the run.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T05:25:37.982713944Z
+modified_at: 2026-06-04T05:25:37.982713944Z
+req_type: Task
+tags:
+- from-validation
+- resume-drain-test
+- throwaway
