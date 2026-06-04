@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:06:20.667580668Z
-modified_at: 2026-05-28T04:42:03.906541919Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - batch:substrate-architecture
@@ -33,3 +33,5 @@ comments:
   content: Commit 555cc359 references this requirement
   created_at: 2026-05-28T04:41:43.303100260Z
   modified_at: 2026-05-28T04:41:43.303100260Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

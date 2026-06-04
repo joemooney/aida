@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:30:35.541902232Z
-modified_at: 2026-05-24T06:38:25.374622647Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:queue:list
@@ -85,6 +85,8 @@ comments:
     Test status: 12 new tests cover every state transition; 83 queue + 5 in-flight tests green; cargo fmt --check clean.
   created_at: 2026-05-16T19:08:25.904394907Z
   modified_at: 2026-05-16T19:08:25.904394907Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T19:05:37.434046536Z

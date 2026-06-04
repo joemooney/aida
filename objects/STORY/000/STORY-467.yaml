@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:47:58.886480242Z
-modified_at: 2026-05-25T07:19:29.277494145Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -346,6 +346,8 @@ comments:
   content: Commit b39d8117 references this requirement
   created_at: 2026-05-25T07:10:29.207152192Z
   modified_at: 2026-05-25T07:10:29.207152192Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-25T07:13:43.717589446Z

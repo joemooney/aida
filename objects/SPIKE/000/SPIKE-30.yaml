@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:45:37.967507610Z
-modified_at: 2026-05-29T05:16:17.354710655Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Spike
 tags:
 - aida:status
@@ -21,6 +21,8 @@ comments:
   content: Commit dc9b7bf2 references this requirement
   created_at: 2026-05-29T05:02:55.081273400Z
   modified_at: 2026-05-29T05:02:55.081273400Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-29T05:16:17.354710655Z

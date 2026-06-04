@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T14:42:01.001513842Z
-modified_at: 2026-05-20T06:39:00.697573683Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - autonomous-drain
@@ -70,6 +70,8 @@ comments:
   content: Commit 1b11a3ff references this requirement
   created_at: 2026-05-20T06:04:22.837779101Z
   modified_at: 2026-05-20T06:04:22.837779101Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T06:04:56.114307985Z

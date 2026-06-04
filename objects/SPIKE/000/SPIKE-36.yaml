@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T06:48:33.120198062Z
-modified_at: 2026-05-29T07:36:01.990993943Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -22,3 +22,5 @@ comments:
   content: 'Rejected — subsumed by SPIKE-37 (shipped on spike-35-v2). AGY1''s review verdict (concurred by master): the inline bughunter-severity parse + NeedsAttention fail-safe in SPIKE-37''s run_reviewer is sufficient. A separate heavyweight check-run-parser-as-phase-3-gate would add schema-drift parsing overhead without improving the safety guarantee — the fail-safe already parks the spec on any missing/malformed/timeout. Don''t over-engineer the bouncer. trace:SPIKE-37'
   created_at: 2026-05-29T07:35:59.656454233Z
   modified_at: 2026-05-29T07:35:59.656454233Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

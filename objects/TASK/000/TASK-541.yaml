@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:02:38.898092570Z
-modified_at: 2026-05-24T22:02:54.217591754Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:brief
@@ -50,6 +50,8 @@ tags:
 - multi-agent
 - routing
 - substrate-gap
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T22:02:54.217591754Z

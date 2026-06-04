@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T15:54:26.114824266Z
-modified_at: 2026-05-30T02:56:35.343978058Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:list
@@ -26,3 +26,5 @@ tags:
 - kind:observation
 - linked:TASK-1-106
 - severity:major
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

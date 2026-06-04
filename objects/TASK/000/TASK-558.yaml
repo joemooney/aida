@@ -42,7 +42,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:13.658815421Z
-modified_at: 2026-05-25T16:17:30.139862796Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:cache
@@ -51,6 +51,8 @@ tags:
 - from-overnight-drain-2026-05-25
 - from-self-test
 - resilience
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-25T16:17:30.139862796Z

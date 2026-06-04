@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T01:57:50.502161417Z
-modified_at: 2026-05-22T06:23:42.250001779Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - clap-help
@@ -34,6 +34,8 @@ comments:
     Follow-up: filed TASK-447 — the sibling `--skip-pr-check` flag (BUG-285) has the same blank-description-column problem; spotted incidentally and out of scope for TASK-423.
   created_at: 2026-05-22T04:38:22.167894351Z
   modified_at: 2026-05-22T04:38:22.167894351Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T04:39:19.114696655Z

@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:09:29.404339079Z
-modified_at: 2026-05-20T04:40:38.935933300Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -71,6 +71,8 @@ comments:
   content: Commit 44b13f98 references this requirement
   created_at: 2026-05-20T04:40:38.935933300Z
   modified_at: 2026-05-20T04:40:38.935933300Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T04:19:41.968488888Z

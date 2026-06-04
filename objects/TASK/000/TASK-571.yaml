@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:22:00.829658042Z
-modified_at: 2026-05-28T16:52:19.645567321Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:cli
@@ -46,3 +46,5 @@ tags:
 - from-task-570
 - papercut
 - trace-leak
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

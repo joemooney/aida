@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:31:38.878522976Z
-modified_at: 2026-05-18T14:38:08.602097548Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - auto-complete
@@ -118,6 +118,8 @@ comments:
   content: 'PR opened: https://github.com/joemooney/aida/pull/94 (PR-94). Review story STORY-315 queued for the reviewer role.'
   created_at: 2026-05-18T07:26:05.957351001Z
   modified_at: 2026-05-18T07:26:05.957351001Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T07:22:04.083748923Z

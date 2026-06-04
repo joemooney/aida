@@ -62,7 +62,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T02:11:49.446234402Z
-modified_at: 2026-05-25T06:28:26.680973541Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - build-hygiene
@@ -70,6 +70,8 @@ tags:
 - first-user-papercut
 - lints
 - maintenance
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-25T06:28:26.680973541Z

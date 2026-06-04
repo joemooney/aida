@@ -44,7 +44,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:59:07.716532125Z
-modified_at: 2026-05-24T14:52:28.724693311Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - brief
@@ -55,6 +55,8 @@ tags:
 - papercut
 - sibling-of-BUG-366
 - sibling-of-TASK-506
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T14:52:28.724693311Z

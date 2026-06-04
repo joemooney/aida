@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:20:34.905803870Z
-modified_at: 2026-05-24T06:11:51.999566456Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - batch
@@ -134,6 +134,8 @@ comments:
     filed 4 task(s): TASK-523, TASK-524, TASK-525, TASK-526
   created_at: 2026-05-24T06:11:52.589801375Z
   modified_at: 2026-05-24T06:11:52.589801375Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T06:11:14.728189130Z

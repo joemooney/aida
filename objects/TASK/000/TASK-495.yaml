@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T15:29:46.939768888Z
-modified_at: 2026-05-23T15:43:54.244420486Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - antigravity
@@ -64,6 +64,8 @@ tags:
 - from-self-test
 - parent:STORY-425
 - skill
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T15:43:54.244420486Z

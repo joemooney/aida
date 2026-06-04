@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:04:34.050931963Z
-modified_at: 2026-05-19T01:23:01.215483530Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
@@ -45,3 +45,5 @@ comments:
   content: 'Closed 2026-05-18 as resolved-by-supersession. TASK-329 (Fix A.5, the sentinel-file graceful-exit mechanism) shipped via PR #83 — `exit_signal.rs` exists, docs + the 4 core skill templates already describe the sentinel correctly. The original Fix A (honest annotation) is moot — implementing it would regress those correct docs. Per the implementer''s BUG-230 design-checkpoint catch: do NOT implement the stale acceptance criteria; BUG-230 = Completed, no code, no PR. The acceptance was never updated when I redirected the fix path on 2026-05-17 — advisor process miss (refinement-in-comment, acceptance-not-updated; the feedback_refinements_must_be_acceptance_criteria.md failure mode). The description header now records the reconciliation.'
   created_at: 2026-05-19T01:22:58.961354187Z
   modified_at: 2026-05-19T01:22:58.961354187Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

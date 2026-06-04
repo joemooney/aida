@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:04:11.292264458Z
-modified_at: 2026-05-25T07:09:59.064148573Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - batch:overnight-orthogonal
@@ -57,6 +57,8 @@ tags:
 - mcp
 - test-coverage
 - tests
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-25T07:09:59.064148573Z

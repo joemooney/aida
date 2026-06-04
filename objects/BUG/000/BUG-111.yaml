@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T01:49:24.323883905Z
-modified_at: 2026-05-19T05:40:24.239145379Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - intra-workspace
@@ -68,6 +68,8 @@ comments:
     Test status: tests/test_release_dep_discovery.sh 5/5 green
   created_at: 2026-05-19T05:32:47.532747873Z
   modified_at: 2026-05-19T05:32:47.532747873Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T05:31:14.935653254Z

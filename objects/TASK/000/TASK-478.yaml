@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T22:59:56.065588456Z
-modified_at: 2026-05-23T00:10:31.071380218Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:STORY-305
@@ -52,3 +52,5 @@ comments:
   content: 'Dismissed by joe 2026-05-23: Advisor verdict: the AIDA.md location for the merge rule is correct as shipped. Per-skill stub alternative is 34x the maintenance churn (one stub per stock skill) for marginal enforcement benefit. The instruction-based limitation (which TASK-478 correctly identifies) IS real but addressed structurally by TASK-479''s hardening path — `aida skill render` CLI is the substrate gate the bouncer principle prefers. Ship the design choice as-is; queue TASK-479 for when the merge needs guaranteed enforcement under autonomous use.'
   created_at: 2026-05-23T00:10:31.071380218Z
   modified_at: 2026-05-23T00:10:31.071380218Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

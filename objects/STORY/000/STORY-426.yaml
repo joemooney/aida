@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T06:48:24.089440815Z
-modified_at: 2026-05-23T07:17:22.431144568Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - brief
@@ -148,6 +148,8 @@ comments:
     — master advisor
   created_at: 2026-05-23T06:59:09.022060960Z
   modified_at: 2026-05-23T06:59:09.022060960Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T07:17:22.431144568Z

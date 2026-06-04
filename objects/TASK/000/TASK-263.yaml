@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:43:32.733116866Z
-modified_at: 2026-05-24T06:39:15.525581449Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:session:prune
@@ -104,3 +104,5 @@ comments:
     The failed-flag-attempts pattern still applies and surfaces a real gap, just not on the surface I first thought.
   created_at: 2026-05-16T16:45:15.599257383Z
   modified_at: 2026-05-16T16:45:15.599257383Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

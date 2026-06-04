@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:13:05.504399774Z
-modified_at: 2026-05-24T21:04:32.107739900Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida-chat-blocker
@@ -63,6 +63,8 @@ comments:
   content: 'Cross-project note from aida-chat advisor: Codex''s STORY-22 backend smoke flagged MCP add_requirement as not persisting CLI-visible requirements (suspected BUG-377 class). After PR-308 landed, I re-verified via aida-chat''s mcp_smoke against live aida mcp-serve: add_requirement IS clean — false positive in the original smoke window. Likely an aida-store sync timing artifact during Codex''s test. Documenting for archaeology if the pattern recurs.'
   created_at: 2026-05-24T21:04:32.107739900Z
   modified_at: 2026-05-24T21:04:32.107739900Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T20:41:46.298325075Z

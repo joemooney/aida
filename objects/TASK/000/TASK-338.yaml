@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T01:55:47.108981725Z
-modified_at: 2026-05-21T06:41:36.866664516Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - documentation
@@ -77,6 +77,8 @@ relationships:
   target_id: 019e493e-7775-7c53-8a74-120e6378e713
   created_at: 2026-05-21T06:34:55.353211324Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T06:31:26.845090958Z

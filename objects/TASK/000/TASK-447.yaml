@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T04:37:15.075418240Z
-modified_at: 2026-05-22T20:14:46.464694492Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - clap-help
@@ -16,6 +16,8 @@ tags:
 - from-implementer:TASK-423
 - kind:bug-spotted
 - severity:cosmetic
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T19:31:56.590867793Z

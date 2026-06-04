@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T23:47:46.920808117Z
-modified_at: 2026-05-18T15:26:01.476934498Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - autonomy-modes
@@ -58,6 +58,8 @@ comments:
     Test status: cargo build -p aida-cli + cargo fmt --all --check green locally; full workspace suite runs on CI.
   created_at: 2026-05-18T15:18:05.829079601Z
   modified_at: 2026-05-18T15:18:05.829079601Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T15:16:40.364197343Z

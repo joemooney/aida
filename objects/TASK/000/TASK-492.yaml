@@ -80,7 +80,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:30:38.859366257Z
-modified_at: 2026-05-24T06:36:41.885355500Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:brief
@@ -89,6 +89,8 @@ tags:
 - parent:STORY-425
 - routing
 - scaffolding
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T05:48:22.858725830Z

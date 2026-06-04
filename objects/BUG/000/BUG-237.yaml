@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:41:43.423344247Z
-modified_at: 2026-05-19T03:43:58.064863466Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - autonomy-modes
@@ -97,6 +97,8 @@ comments:
     Follow-up: TASK-341 (audit AIDA_EXIT_SENTINEL / AIDA_REVIEW_VERDICT_FILE), TASK-342 (doc update)
   created_at: 2026-05-19T03:31:06.542288297Z
   modified_at: 2026-05-19T03:31:06.542288297Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T02:49:46.747160007Z

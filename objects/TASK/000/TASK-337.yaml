@@ -61,7 +61,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T15:11:01.047654937Z
-modified_at: 2026-05-21T06:21:37.660891135Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -76,6 +76,8 @@ relationships:
   target_id: 019e4930-10d7-71a0-8043-85ad10842b21
   created_at: 2026-05-21T06:19:11.602671087Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-21T06:21:37.660891135Z

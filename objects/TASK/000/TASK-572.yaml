@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:32:51.693725962Z
-modified_at: 2026-05-28T16:43:14.619215803Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:init
@@ -29,3 +29,5 @@ tags:
 - first-user-experience
 - from-research
 - scaffolding
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

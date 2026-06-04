@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:25:05.134497601Z
-modified_at: 2026-05-22T21:22:26.796593540Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - e2e
@@ -32,6 +32,8 @@ comments:
   content: mcp
   created_at: 2026-05-22T21:16:16.687158669Z
   modified_at: 2026-05-22T21:16:16.687158669Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T21:22:26.796593540Z

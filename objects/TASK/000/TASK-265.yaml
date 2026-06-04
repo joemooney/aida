@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-05-24T06:36:58.639437127Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:pickup
@@ -125,6 +125,8 @@ comments:
     Test status: 551/551 aida-cli tests green; cargo fmt + clippy clean.
   created_at: 2026-05-17T16:57:50.224164388Z
   modified_at: 2026-05-17T16:57:50.224164388Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T16:46:19.049103844Z

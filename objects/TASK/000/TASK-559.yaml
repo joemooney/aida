@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:21.281409585Z
-modified_at: 2026-05-25T16:29:48.023481205Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:queue
@@ -41,6 +41,8 @@ tags:
 - from-overnight-drain-2026-05-25
 - from-self-test
 - ux-papercut
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-25T16:29:48.023481205Z

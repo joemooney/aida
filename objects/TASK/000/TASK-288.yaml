@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:47:37.909197709Z
-modified_at: 2026-05-22T19:45:37.153274034Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - batch:strategic-docs
@@ -55,6 +55,8 @@ tags:
 - research
 - story-244-prereq
 - tui
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T19:45:37.153274034Z

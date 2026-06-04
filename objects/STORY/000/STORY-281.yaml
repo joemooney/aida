@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:16:43.368789467Z
-modified_at: 2026-05-22T20:25:53.632754179Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - auto-complete
@@ -114,6 +114,8 @@ comments:
   content: Commit a95b886a references this requirement
   created_at: 2026-05-22T20:13:46.643443055Z
   modified_at: 2026-05-22T20:13:46.643443055Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-22T20:15:26.161135971Z

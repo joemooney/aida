@@ -82,7 +82,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:35:04.141728639Z
-modified_at: 2026-05-24T06:51:43.927092165Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-24
@@ -103,6 +103,8 @@ relationships:
   target_id: 019e58bc-cc09-7eb1-9548-e612e051738c
   created_at: 2026-05-24T06:47:16.558058356Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-24T06:43:07.569238833Z

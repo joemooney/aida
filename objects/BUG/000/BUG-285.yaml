@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:22:09.162880518Z
-modified_at: 2026-05-24T06:38:19.920475330Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:queue:done
@@ -97,6 +97,8 @@ comments:
     Note: tonight's TASK-413 / TASK-416 headless-log inspection showed BUG-285's four hypothesized causes were all wrong — the BUG-269 gate was firing correctly. The real root cause was layered: (a) the implementer's `aida queue done <SPEC> [--yes] 2>&1 | tail -N` pipe masked the non-zero exit, and (b) the model treated the soft refusal text as a hint rather than a hard error. This commit addresses (b) substrate-side; the model-behavior guardrail (forbid composing a closing summary when queue-done exited non-zero) is a follow-up for the implementer skill template.
   created_at: 2026-05-21T15:12:16.476007880Z
   modified_at: 2026-05-21T15:12:16.476007880Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T15:13:02.578282480Z

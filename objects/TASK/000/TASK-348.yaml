@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:37:06.479585019Z
-modified_at: 2026-05-19T16:37:58.200535861Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,5 @@ comments:
   content: Redundant with STORY-276 + STORY-306, which already exist and are hard-blocked on STORY-332. The dependency is captured by those specs — rejecting this duplicate followup TASK.
   created_at: 2026-05-19T16:37:56.733935062Z
   modified_at: 2026-05-19T16:37:56.733935062Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

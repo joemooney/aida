@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T07:01:49.987073204Z
-modified_at: 2026-05-24T08:01:04.042954062Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - bug-354-family
@@ -68,6 +68,8 @@ tags:
 - sibling-of-BUG-354
 - sibling-of-BUG-369
 - text-question
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T08:01:04.042954062Z

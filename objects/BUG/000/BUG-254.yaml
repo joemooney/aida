@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:00:09.649032232Z
-modified_at: 2026-05-20T15:39:38.379966094Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - auto-pull
@@ -88,6 +88,8 @@ comments:
   content: "TASK-397 (finding from implementer) dismissed 2026-05-20: implementer's broader-scope fix propagating both code-leg AND store-leg failures \n  is the correct call. Spec was terse but consistent treatment of both legs is the defensible default — store-leg pull failures during phase-1 pre-flight should \n  surface as phase-1 failures, not be silently swallowed."
   created_at: 2026-05-20T15:39:38.379966094Z
   modified_at: 2026-05-20T15:39:38.379966094Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T13:52:46.704547288Z

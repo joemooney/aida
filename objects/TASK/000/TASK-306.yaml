@@ -89,7 +89,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:55:51.242806850Z
-modified_at: 2026-05-19T06:27:04.839964373Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -110,6 +110,8 @@ comments:
   content: 'STORY-286 (three-mode autonomy taxonomy: default / --zen / --no-human) filed 2026-05-17 — extends this TASK''s mode-flag clarity work to three modes instead of two. STORY-286 is load-bearing on TASK-306''s flag plumbing; this TASK should ship first to provide the foundation.'
   created_at: 2026-05-17T17:28:18.494880399Z
   modified_at: 2026-05-17T17:28:18.494880399Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T06:17:04.777358660Z

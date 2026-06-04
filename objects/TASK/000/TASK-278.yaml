@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:53:57.712289137Z
-modified_at: 2026-05-24T06:37:42.872058240Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:review
@@ -65,6 +65,8 @@ comments:
     Test status: no automated tests — skill template (markdown) change; `cargo fmt --all -- --check` clean.
   created_at: 2026-05-16T19:32:09.841460493Z
   modified_at: 2026-05-16T19:32:09.841460493Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-16T19:29:04.973883778Z

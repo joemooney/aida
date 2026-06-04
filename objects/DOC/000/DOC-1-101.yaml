@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:54:48.258713838Z
-modified_at: 2026-05-28T04:52:34.148820719Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Doc
 tags:
 - competitive-analysis
@@ -21,6 +21,8 @@ comments:
   content: Commit 3da49358 references this requirement
   created_at: 2026-05-27T06:58:15.284865664Z
   modified_at: 2026-05-27T06:58:15.284865664Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-28T04:52:34.148820719Z

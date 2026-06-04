@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T04:42:04.768517402Z
-modified_at: 2026-05-28T15:47:58.154176752Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,5 @@ comments:
   content: Duplicate of TASK-373. Both filed independently; the older keeps the canonical scope. trace:triage-2026-05-28 | ai:claude
   created_at: 2026-05-28T15:47:58.154176752Z
   modified_at: 2026-05-28T15:47:58.154176752Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

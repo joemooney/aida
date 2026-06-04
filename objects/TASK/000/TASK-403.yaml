@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:25:56.023469640Z
-modified_at: 2026-05-30T02:59:57.090997246Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - autonomy-keystone
@@ -101,4 +101,6 @@ comments:
   content: 'Rejected 2026-05-29 (operator). Premature: the autonomy keystone needs more stability before it''s worth a public demo/narrative — recording a keystone drain now would showcase the very bugs we''re clearing. The capture TOOLING already exists ( generates a cast), so demo recording is NOT blocked on tooling; it''s gated on stability. Operator''s stated phase: clear out all known bugs first, achieve stability, THEN consider marketing/visibility. Revive this (or re-file) once the bug backlog is cleared and the keystone runs clean.'
   created_at: 2026-05-30T02:59:52.313637113Z
   modified_at: 2026-05-30T02:59:52.313637113Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 human_only: true

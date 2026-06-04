@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T02:31:03.411158624Z
-modified_at: 2026-05-25T06:56:00.395165287Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:agent
@@ -24,6 +24,8 @@ relationships:
   target_id: 019e5de5-e792-7d73-9779-74e8e6909e56
   created_at: 2026-05-25T06:50:32.275762457Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-25T06:56:00.395165287Z

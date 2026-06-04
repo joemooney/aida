@@ -111,7 +111,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:35:41.965231513Z
-modified_at: 2026-05-22T21:31:28.318144659Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - composition
@@ -283,6 +283,8 @@ comments:
     The four primitives aren't all worth filing immediate AIDA integrations — /goal is the highest-leverage. The others are noted for completeness.
   created_at: 2026-05-15T06:44:19.584090786Z
   modified_at: 2026-05-15T06:44:19.584090786Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T21:31:28.318144659Z

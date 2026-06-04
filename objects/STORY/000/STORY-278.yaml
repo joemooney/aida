@@ -101,7 +101,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T06:44:52.445178527Z
-modified_at: 2026-05-22T21:31:28.318144659Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - advisor-triage
@@ -146,6 +146,8 @@ comments:
   content: 'STORY-306 filed 2026-05-18 — it promotes the ''headless advisor auto-triage'' that this STORY''s Out-of-scope explicitly deferred into a real (dependency-gated) future direction. STORY-306 is the advisor escalation tier for --no-human: design-forks punt to a headless advisor that resolves-or-escalates before reaching the human.'
   created_at: 2026-05-18T03:38:50.570331066Z
   modified_at: 2026-05-18T03:38:50.570331066Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T21:31:28.318144659Z

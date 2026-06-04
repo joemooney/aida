@@ -37,7 +37,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T19:13:21.970743293Z
-modified_at: 2026-05-20T07:29:02.322215118Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - block-status
@@ -70,6 +70,8 @@ comments:
     Test status: 273/273 aida-core lib tests green (5 new aggregate tests added)
   created_at: 2026-05-20T07:18:32.130965586Z
   modified_at: 2026-05-20T07:18:32.130965586Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T07:17:29.864636810Z

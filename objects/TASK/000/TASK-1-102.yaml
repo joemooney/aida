@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-27T06:55:39.005508926Z
-modified_at: 2026-05-28T15:43:03.212586044Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida-chat
@@ -34,3 +34,5 @@ comments:
   content: 'Dismissed by joe 2026-05-28: Out of scope for this repo — verify_trace_drift''s rate-limit issue lives in aida-chat. If actionable there, file directly in aida-chat''s substrate. Closing in AIDA.'
   created_at: 2026-05-28T15:43:03.212586044Z
   modified_at: 2026-05-28T15:43:03.212586044Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

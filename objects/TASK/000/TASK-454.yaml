@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T07:45:17.071208198Z
-modified_at: 2026-05-23T00:47:22.362576038Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-review:PR-173
@@ -31,6 +31,8 @@ comments:
   content: mcp
   created_at: 2026-05-22T18:22:40.270624693Z
   modified_at: 2026-05-22T18:22:40.270624693Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T00:47:22.362576038Z

@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:57:57.210361345Z
-modified_at: 2026-05-22T21:31:28.318144659Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -427,6 +427,8 @@ comments:
   content: 'docs/session-lifecycle.md expanded 2026-05-13 (commit pending) with ''Why roles don''t share Claude sessions'' section. Names the architectural rationale: implementer/reviewer split is the critic-must-be-separate principle (borrowed from /ultraplan''s multi-agent architecture) internalized in AIDA''s session model. Anchoring-bias protection in exchange for cold-restart tax — same trade /ultraplan makes for its parallel explorers. Also captures the TUI orchestration vision (home-vs-work split mirroring Linear/Jira and Claude Code Cloud), with a gap analysis showing most TUI prerequisites exist or are filed except the visual surface itself.'
   created_at: 2026-05-13T14:42:34.046740791Z
   modified_at: 2026-05-13T14:42:34.046740791Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T21:31:28.318144659Z

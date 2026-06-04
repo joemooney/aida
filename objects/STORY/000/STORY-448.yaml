@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:08:42.711612539Z
-modified_at: 2026-05-24T17:41:41.903554728Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -35,6 +35,8 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-05-24T04:08:45.104772807Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T17:41:41.903554728Z

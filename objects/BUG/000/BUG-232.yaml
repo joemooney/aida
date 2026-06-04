@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T01:01:37.117971412Z
-modified_at: 2026-05-18T16:02:35.076493523Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - batch:orchestrator-hardening
@@ -123,6 +123,8 @@ comments:
     Test status: 16/16 workflow_hints + 14/14 orchestrator tests green; cargo fmt --check clean
   created_at: 2026-05-18T15:51:35.243777699Z
   modified_at: 2026-05-18T15:51:35.243777699Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T15:50:23.034226593Z

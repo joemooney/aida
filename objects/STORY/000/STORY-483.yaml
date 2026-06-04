@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:50:08.045518931Z
-modified_at: 2026-05-29T08:15:33.055690166Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,6 +35,8 @@ comments:
   content: 'Auto-completed: PR #346 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
   created_at: 2026-05-29T08:15:33.055660009Z
   modified_at: 2026-05-29T08:15:33.055660009Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-29T08:15:32.443574736Z

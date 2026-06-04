@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T19:12:22.997890688Z
-modified_at: 2026-05-25T07:50:30.093927835Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - batch:ceiling-pattern
@@ -75,6 +75,8 @@ comments:
   content: Commit 6fa7788c references this requirement
   created_at: 2026-05-25T07:50:30.093927835Z
   modified_at: 2026-05-25T07:50:30.093927835Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-24T19:41:56.585340332Z

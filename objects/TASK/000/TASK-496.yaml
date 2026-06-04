@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T15:37:06.801531216Z
-modified_at: 2026-05-24T06:36:43.825367671Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:capture
@@ -74,6 +74,8 @@ tags:
 - settings-json
 - stop-hook
 - substrate-as-bouncer
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T17:38:41.538271610Z

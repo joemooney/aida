@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:41:46.264019075Z
-modified_at: 2026-05-21T06:43:28.059066052Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - corroboration
@@ -38,6 +38,8 @@ relationships:
   target_id: 019e48ea-4622-74e2-8af0-5eec5420facc
   created_at: 2026-05-21T05:02:57.673430605Z
   created_by: joe
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T04:59:22.969028600Z

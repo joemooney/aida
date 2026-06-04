@@ -46,7 +46,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T14:57:39.144983056Z
-modified_at: 2026-05-24T06:38:52.290556847Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:session:end
@@ -55,6 +55,8 @@ tags:
 - cargo
 - gotcha
 - worktree
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T07:34:40.306818650Z

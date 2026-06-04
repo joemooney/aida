@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T07:05:21.735843047Z
-modified_at: 2026-05-24T06:36:55.018834674Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:mcp-serve
@@ -155,6 +155,8 @@ comments:
   content: 'Correction to prior Codex sketch comment: shell quoting stripped code fragments. Accurate sketch: implement locked Option B inside aida mcp-serve as a per-request post-response respawn check. Pre-request would make a stale server disappear before answering the triggering request; post-response gives explicit in-flight draining: handle request, write and flush response, then respawn. Version model: parse the existing aida --version banner into package version, git sha, and dirty flag; compare current process values from CARGO_PKG_VERSION plus build.rs git stamps against resolve_aida_exe() invoked with --version. Stale means on-disk package version is greater OR same version with different sha/dirty state; equal tuple does nothing. Respawn: preserve original argv via std::env::args_os(), inherit stdin/stdout/stderr/env, and on Unix call CommandExt::exec() after flushing stdout. On Windows use spawn plus immediate parent exit as the fallback because true exec is unavailable. Test strategy: pure parser/decision tests plus command-plan tests for argv/exe preservation; avoid actually replacing the test process. Docs: update AGENTS.md, CLAUDE.md, and docs/agents/cross-agent-onboarding.md with transparent MCP self-respawn behavior. Risk: exec preserves file descriptors, but some MCP clients may see a latency blip; stderr should log before respawn for diagnosis.'
   created_at: 2026-05-23T17:42:55.879930862Z
   modified_at: 2026-05-23T17:42:55.879930862Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T17:53:20.766516138Z

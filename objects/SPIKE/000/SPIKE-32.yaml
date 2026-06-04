@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:46:13.320093082Z
-modified_at: 2026-05-29T07:35:18.600954651Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -78,6 +78,8 @@ comments:
     Recommendation for SPIKE-32: reshape the compiler around substrate checkpoint/retry rather than exact run-local resume. Compile workflows should treat punts as terminal checkpoint events: write substrate punt, stop with a machine-readable status, let AIDA/advisor resolve, then rerun/continue from `.aida/punts/<spec>.response.json` and skip already-completed phases from substrate state. Exact STORY-306-style resume should stay parked until Claude workflows expose subagent resume handles or a programmatic workflow resume API.
   created_at: 2026-05-29T07:35:18.600954651Z
   modified_at: 2026-05-29T07:35:18.600954651Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-29T07:15:59.087535672Z

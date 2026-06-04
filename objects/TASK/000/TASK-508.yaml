@@ -45,7 +45,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T00:58:56.413102025Z
-modified_at: 2026-05-24T05:49:48.709597024Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - cleanup
@@ -73,6 +73,8 @@ comments:
     Test status: test_pre_commit_hook_scaffolded_and_works + test_pre_commit_hook_runs_cargo_fmt_on_staged_rust_files both green; manual scaffolded-fresh-repo commit produces clean stderr.
   created_at: 2026-05-24T02:57:06.845530383Z
   modified_at: 2026-05-24T02:57:06.845530383Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-24T02:57:53.198614656Z

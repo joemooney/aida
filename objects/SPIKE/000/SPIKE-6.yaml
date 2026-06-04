@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:47:40.188887884Z
-modified_at: 2026-05-22T19:59:29.620780924Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Spike
 tags:
 - competitive-analysis
@@ -72,6 +72,8 @@ comments:
     4. Non-Claude-Code experience: YAML acts as a machine-readable execution protocol for agents (like Antigravity and Codex), replacing manual prose parsing with deterministic inputs/outputs.
   created_at: 2026-05-22T19:59:29.620780924Z
   modified_at: 2026-05-22T19:59:29.620780924Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-22T19:59:04.512486236Z

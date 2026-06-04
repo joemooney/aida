@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T08:09:58.203850724Z
-modified_at: 2026-05-20T16:56:07.776288339Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-review:PR-121
@@ -49,6 +49,8 @@ comments:
     Test status: docs-only change; no test suite runs needed. `cargo fmt --all -- --check` passes (pre-flight).
   created_at: 2026-05-20T16:48:10.020587849Z
   modified_at: 2026-05-20T16:48:10.020587849Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-20T16:47:13.672182837Z

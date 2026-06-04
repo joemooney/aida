@@ -74,7 +74,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T14:53:49.305129956Z
-modified_at: 2026-05-23T06:51:17.704030891Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - advisor-skill
@@ -90,6 +90,8 @@ comments:
   content: 'Design refinement 2026-05-18 (binding — folded into acceptance below): the INVOCATION MODEL is load-bearing, not incidental. `/aida-recover` must be **auto-employed by the advisor (and any role) on situational recognition** — the user must NEVER need to know the skill exists or type `/aida-recover`. Explicit invocation is a power-user fallback only. Mechanism: the skill''s frontmatter description is written for situational auto-recognition (a pasted orchestrator-failure block, an ''Unknown command'' error, a ''scope owned by lease'' message → Claude matches and invokes the skill itself). The advisor role''s discipline also names it explicitly. The acceptance test: *a first-time AIDA user who has never heard of `/aida-recover` still gets rescued when a divergence hits.* If recovery requires knowing a magic word, the skill is mis-designed. This aligns with AIDA''s Trojan-horse positioning — value (here, resilience) surfaces through use, not through a vocabulary the user must learn.'
   created_at: 2026-05-18T15:02:06.561456539Z
   modified_at: 2026-05-18T15:02:06.561456539Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T06:51:17.704030891Z

@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:28:35.539711055Z
-modified_at: 2026-05-24T06:37:24.070464708Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - aida:queue:done
@@ -80,6 +80,8 @@ comments:
   content: Commit e0c1e412 references this requirement
   created_at: 2026-05-23T16:44:37.272543613Z
   modified_at: 2026-05-23T16:44:37.272543613Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T16:54:26.878743288Z

@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:52:48.869228104Z
-modified_at: 2026-05-27T07:05:49.494066601Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - codex
@@ -45,6 +45,8 @@ comments:
   content: 'Marketplace research memo drafted at docs/competitive-analysis/2026-05-26-marketplace-research.md. Filed linked follow-ups: STORY-473 (Claude plugin), STORY-474 (MCP profiles), STORY-475 (remote/auth MCP), TASK-566 (install matrix), TASK-567 (marketplace security checklist), STORY-476 (external issue refs), STORY-477 (agent-lift metrics).'
   created_at: 2026-05-27T06:59:50.921170633Z
   modified_at: 2026-05-27T06:59:50.921170633Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-27T07:05:49.494066601Z

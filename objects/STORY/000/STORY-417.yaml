@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:50:13.236747050Z
-modified_at: 2026-05-23T00:18:53.174398148Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - codex
@@ -100,6 +100,8 @@ comments:
     — master advisor
   created_at: 2026-05-23T00:07:37.595960611Z
   modified_at: 2026-05-23T00:07:37.595960611Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T00:18:53.174398148Z

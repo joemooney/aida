@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:20.827435358Z
-modified_at: 2026-05-20T03:41:17.815261166Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - auto-complete
@@ -170,6 +170,8 @@ comments:
     filed 6 task(s): TASK-352, TASK-353, TASK-354, TASK-355, TASK-356, TASK-357
   created_at: 2026-05-19T17:49:56.514169246Z
   modified_at: 2026-05-19T17:49:56.514169246Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-19T17:36:13.711341637Z

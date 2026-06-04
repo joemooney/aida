@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:37:48.985304743Z
-modified_at: 2026-05-24T06:37:55.733960169Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:show
@@ -115,6 +115,8 @@ comments:
     Follow-up: TASK-314 (gRPC client.rs retrofit), TASK-315 (optional in-table glyph for aida list)
   created_at: 2026-05-17T17:35:19.777491680Z
   modified_at: 2026-05-17T17:35:19.777491680Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-17T17:29:32.277975169Z

@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:03:22.256550988Z
-modified_at: 2026-05-24T17:46:08.549043179Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - agents
@@ -59,6 +59,8 @@ tags:
 - parent:EPIC-31
 - phase-1-followup
 - registry
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T17:46:08.549043179Z

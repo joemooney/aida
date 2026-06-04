@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:22.589954018Z
-modified_at: 2026-05-18T04:19:46.225691666Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -83,6 +83,8 @@ comments:
     Test status: doc-only change, no Rust touched; cargo fmt --all --check clean
   created_at: 2026-05-18T04:11:57.744788974Z
   modified_at: 2026-05-18T04:11:57.744788974Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T04:10:28.042526843Z

@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:51:27.574885685Z
-modified_at: 2026-05-18T06:10:41.558546583Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -74,6 +74,8 @@ comments:
     Each verified against aida-cli/src/main.rs. Docs-only; no Rust touched. Pushed to PR-91 as a fast-forward on top of the original doc commit, so STORY-312's re-review is a clean delta.
   created_at: 2026-05-18T05:53:06.191169295Z
   modified_at: 2026-05-18T05:53:06.191169295Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T05:06:30.633625009Z

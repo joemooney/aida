@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:32:59.159476838Z
-modified_at: 2026-05-29T08:15:32.443574736Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:init
@@ -58,6 +58,8 @@ comments:
     filed 1 task(s): TASK-580
   created_at: 2026-05-29T03:45:26.054264480Z
   modified_at: 2026-05-29T03:45:26.054264480Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-29T03:45:04.748429929Z

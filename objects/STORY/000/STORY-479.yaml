@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:32:44.278965881Z
-modified_at: 2026-05-28T16:43:10.567498869Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - aida:learn
@@ -29,3 +29,5 @@ tags:
 - from-research
 - scaffolding
 - skill
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

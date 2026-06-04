@@ -73,7 +73,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T02:21:35.904151679Z
-modified_at: 2026-05-23T07:18:30.041913983Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -89,6 +89,8 @@ comments:
   content: 'Schema requirement 2026-05-18: punt records MUST carry `paused_at` and `resolved_at` timestamps (or `paused_at` + `wait_ms`). A punt record without ''when it paused / when it resolved'' is incomplete — and it''s the data source for the autonomy metric (TASK-340): Σ(resolved_at − paused_at) over escalate-to-human records = total human-wait time; count of those records = intervention count. Fold the timestamp fields into STORY-325''s record schema acceptance.'
   created_at: 2026-05-19T02:33:04.508940051Z
   modified_at: 2026-05-19T02:33:04.508940051Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-23T07:18:30.041913983Z

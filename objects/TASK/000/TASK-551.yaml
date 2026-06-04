@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:45:45.042799845Z
-modified_at: 2026-05-24T21:37:55.655640949Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-aida-chat
@@ -16,6 +16,8 @@ tags:
 - mcp
 - mcp-surface
 - parity-gap
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T21:37:55.655640949Z

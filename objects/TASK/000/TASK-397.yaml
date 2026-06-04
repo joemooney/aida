@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T13:53:12.984594928Z
-modified_at: 2026-05-20T15:39:52.730580937Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-implementer:BUG-254
@@ -42,3 +42,5 @@ comments:
   content: Dismissed by advisor during findings triage.
   created_at: 2026-05-20T15:39:52.730580937Z
   modified_at: 2026-05-20T15:39:52.730580937Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

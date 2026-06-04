@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T20:04:50.998768012Z
-modified_at: 2026-05-24T21:55:57.463463767Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - batch:ceiling-pattern
@@ -66,6 +66,8 @@ tags:
 - implementer-discipline
 - session-lifecycle
 - substrate-as-bouncer
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-24T21:55:57.463463767Z

@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: 236-Uncategorized
 created_at: 2026-02-23T05:49:01.227228469Z
-modified_at: 2026-05-26T04:16:12.552487814Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - docker
@@ -24,3 +24,5 @@ comments:
   content: Commit bbb6e1f7 references this requirement
   created_at: 2026-05-26T04:16:12.552487814Z
   modified_at: 2026-05-26T04:16:12.552487814Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

@@ -121,7 +121,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:07:49.456346316Z
-modified_at: 2026-05-18T02:20:13.659484710Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - batch:autonomy-modes
@@ -160,6 +160,8 @@ comments:
     Follow-up: none — STORY-287 --no-human punt-case extension is explicitly deferred per the spec's Out of scope.
   created_at: 2026-05-18T02:10:31.301247783Z
   modified_at: 2026-05-18T02:10:31.301247783Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-18T02:08:15.321610167Z

@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:09:26.094137392Z
-modified_at: 2026-05-21T04:32:09.520616866Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Bug
 tags:
 - batch:tui-v2
@@ -64,6 +64,8 @@ comments:
     Two implementer findings filed for advisor triage: TASK-427 (collapsed exit code 130 for both SIGINT and SIGTERM — ctrlc loses the originating signum), TASK-428 (acceptance #4 covered by unit tests + manual smoke-test recipe rather than end-to-end PTY automation).
   created_at: 2026-05-21T04:23:18.896192862Z
   modified_at: 2026-05-21T04:23:18.896192862Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T04:25:04.225794006Z

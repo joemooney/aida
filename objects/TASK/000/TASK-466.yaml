@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T19:52:22.696998299Z
-modified_at: 2026-05-22T20:31:39.435839664Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - from-review:PR-198
@@ -28,3 +28,5 @@ comments:
   content: 'Dismissed by joe 2026-05-22: Duplicate of TASK-467 (filed earlier from same Probe-4 finding; already Approved + queued)'
   created_at: 2026-05-22T20:31:39.435839664Z
   modified_at: 2026-05-22T20:31:39.435839664Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

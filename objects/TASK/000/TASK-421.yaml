@@ -36,7 +36,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T00:40:07.620668478Z
-modified_at: 2026-05-21T02:14:47.230091704Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - cleanup
@@ -70,6 +70,8 @@ comments:
     Follow-up: TASK-424 (child) — workspace-level lint config to prevent warning regression.
   created_at: 2026-05-21T02:06:39.843400749Z
   modified_at: 2026-05-21T02:06:39.843400749Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-21T02:07:41.233430261Z

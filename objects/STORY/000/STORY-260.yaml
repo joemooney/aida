@@ -59,7 +59,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T22:47:35.568291884Z
-modified_at: 2026-05-22T20:39:15.505516681Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Story
 tags:
 - alpha-readiness
@@ -88,3 +88,5 @@ comments:
     Saves ~2 days of meta-work; keeps the analysis's value intact.
   created_at: 2026-05-17T02:14:34.451409652Z
   modified_at: 2026-05-17T02:14:34.451409652Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

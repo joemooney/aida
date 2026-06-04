@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:10:49.568278564Z
-modified_at: 2026-05-24T06:38:06.948679082Z
+modified_at: 2026-06-04T04:48:58.810128065Z
 req_type: Task
 tags:
 - aida:status
@@ -23,3 +23,5 @@ comments:
   content: Subsumed by EPIC-31 Phase 1 STORY (just filed). The 'aida status surface active leases + worktrees' work expanded into the broader agent-registry effort per user direction 2026-05-23. Marking as Rejected with the subsume rationale — the work happens under the EPIC's Phase 1 instead.
   created_at: 2026-05-23T16:22:27.480720132Z
   modified_at: 2026-05-23T16:22:27.480720132Z
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
