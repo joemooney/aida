@@ -1,0 +1,61 @@
+id: 019e9333-7505-78f1-a063-06851ee7f85c
+spec_id: EPIC-35
+agreed_id: EPIC-35
+title: GitLab as a first-class forge — forge-provider abstraction for the PR/CI/drain lifecycle
+description: |-
+  ## Why (operator need + strategic)
+
+  Operator is standing up a private self-hosted GitLab (gitlab.joemooney.com) and wants AIDA to fully support projects that use it — including the autonomous drain (operator-chosen scope, 2026-06-04).
+
+  Strategic: AIDA's differentiator is "git-canonical, vendor-neutral, portable across vendors." Today that holds for the STORE but NOT the lifecycle. Verified split (2026-06-04):
+  - **Store = already forge-agnostic.** The orphan `aida-store` branch rides on `origin` generically (push_store / maybe_auto_push_store / remote_branch_exists never name GitHub). A GitLab-origin repo stores + syncs the graph with zero config today.
+  - **Collaboration/drain = GitHub-locked.** ~181 `gh`-CLI call sites (pr_ship 20, auto_complete 16, pr_rebase 10, network_retry 9, workflow_hints 7, status_cleanup 4, …) hardcode GitHub PRs + GitHub Actions. No forge abstraction, no `[forge]` config.
+  - Note: the existing `aida gitlab` subcommand is a separate thing (specs↔GitLab *issues* sync), NOT the lifecycle.
+
+  GitLab parity makes the vendor-neutral claim true end-to-end — moat-reinforcing, not just a work convenience.
+
+  ## Goal
+
+  The PR/CI/reviewer/`--auto-complete` lifecycle works against GitLab (Merge Requests + GitLab CI) as a first-class forge alongside GitHub, behind a forge-provider abstraction that `aida init` auto-detects from the origin host.
+
+  ## Design pillars
+
+  1. **Forge-provider abstraction** — a trait over the gh-hardcoded ops: open PR/MR, PR/MR status, merge, CI/pipeline status + checks, PR/MR linkage, comment. Impls: `github` (gh, existing behavior), `gitlab` (glab CLI or GitLab REST API — SPIKE to choose), `none`/`pure-git` (direct-to-main; trailer auto-complete only).
+  2. **Config + auto-detection** — `[forge] provider` in `.aida/config.toml`, auto-detected at `aida init` from the origin host (github.com→github, gitlab.*→gitlab, else→pure-git). Override flag. Operator never "points" AIDA at a remote — it reads what git already knows.
+  3. **Pure-git mode falls out for free** — the `none` provider makes a GitLab (or any) project usable immediately for graph + commit-to-main + `(SPEC-ID)` trailer auto-complete, even before MR-drain parity lands.
+
+  ## Slice roadmap (vertical; SPIKE refines slices 2+)
+
+  - **Slice 0 / SPIKE** — inventory the gh coupling, define the provider trait surface, choose glab-CLI vs GitLab REST API, prove a minimal MR round-trip (open MR → read status → merge). De-risks the EPIC.
+  - **Slice 1** — forge trait + `[forge]` config + init auto-detection + `none`/pure-git provider; refactor the 181 gh sites behind the trait with the GitHub impl (PURE refactor, no behavior change — the dogfood-safe step). Also ships pure-git mode.
+  - **Slice 2** — GitLab provider: MR open/status/merge (glab/API).
+  - **Slice 3** — GitLab CI pipeline-wait replacing the Actions wait in the drain.
+  - **Slice 4** — reviewer phase + full `--auto-complete` drain end-to-end on GitLab; MR linkage in `aida show` (the TASK-241 PR linkage → MR).
+  - **Slice 5** — docs + init forge-detection UX + cross-platform validation.
+
+  ## Sequencing / revisit triggers
+
+  - Gated on (a) gitlab.joemooney.com operational (homegitlab cutover) so there's a real test target, and (b) the bugs-before-marketing phase — start the SPIKE once a real GitLab project exists to validate against.
+  - The operator can START using AIDA on GitLab for graph + pure-git lifecycle as soon as GitLab is up (no EPIC dependency); the EPIC adds drain parity.
+
+  ## Acceptance (epic-level)
+
+  - [ ] `aida init` on a gitlab.* origin auto-selects the gitlab forge; on github.com selects github; otherwise pure-git.
+  - [ ] Full `aida queue work --auto-complete` runs against a GitLab project (MR opened, GitLab CI waited on, reviewed, merged, spec auto-bumped) with no gh dependency.
+  - [ ] GitHub behavior is byte-for-byte unchanged (the refactor is provider-routed, GitHub impl preserves current behavior).
+  - [ ] `aida show` renders MR linkage on GitLab projects.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T15:14:43.589196772Z
+modified_at: 2026-06-04T15:14:43.589196772Z
+req_type: Epic
+tags:
+- collaboration-layer
+- drain
+- forge-provider
+- from-product
+- gitlab
+- multi-vendor
+- strategic
