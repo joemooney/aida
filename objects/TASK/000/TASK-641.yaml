@@ -1,0 +1,26 @@
+id: 019e90e7-4e2d-75d0-8694-184c3d4dbbe5
+spec_id: TASK-641
+agreed_id: TASK-641
+title: 'Final --resume-drain confirmation (post BUG-436+BUG-438): create docs/scratch/resume-probe.md (throwaway)'
+description: |-
+  Third + final STORY-492 live kill-and-resume run, now that BUG-436 (reviewer-on-Done) AND BUG-438 (fast-resume lease collision + drain-state-cleared-on-failure) are both fixed. Goal: confirm resume re-enters at the reviewer AND carries THROUGH merge → pull → Completed — the path blocked the last two runs.
+
+  Implementer: create docs/scratch/resume-probe.md (new dir + file) with one line: 'resume-drain final confirmation — <date>'. Change nothing else.
+
+  ## Acceptance
+  - docs/scratch/resume-probe.md exists with the one line.
+  - No other files changed.
+
+  NOTE: validation artifact — git rm after the test. trace:STORY-492 trace:BUG-438
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T04:32:18.477666741Z
+modified_at: 2026-06-04T04:32:18.477666741Z
+req_type: Task
+tags:
+- bug-438-revalidation
+- from-validation
+- resume-drain-test
+- throwaway
