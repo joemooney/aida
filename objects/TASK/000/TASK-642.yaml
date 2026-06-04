@@ -12,12 +12,12 @@ description: |-
   - No other files changed.
 
   NOTE: validation artifact — git rm after the run. trace:STORY-492 trace:STORY-501
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T05:19:02.117398658Z
-modified_at: 2026-06-04T05:19:02.117398658Z
+modified_at: 2026-06-04T05:19:44.504585158Z
 req_type: Task
 tags:
 - from-validation
