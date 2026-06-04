@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:53:23.969580556Z
-modified_at: 2026-06-04T15:53:23.969580556Z
+modified_at: 2026-06-04T15:54:37.644370491Z
 req_type: Story
 tags:
 - forge-provider
@@ -16,3 +16,8 @@ tags:
 - papercut
 - parent:EPIC-35
 - slice:2
+relationships:
+- rel_type: Child
+  target_id: 019e9333-7505-78f1-a063-06851ee7f85c
+  created_at: 2026-06-04T15:54:37.644359731Z
+  created_by: joe
