@@ -1,0 +1,50 @@
+id: 019e933f-70d6-7c41-b385-031f67efac7f
+spec_id: BUG-442
+agreed_id: BUG-442
+title: Fresh clone with no local .aida silently reads a WRONG ambient store instead of auto-attaching origin/aida-store (TASK-621 doesn't fire)
+description: |-
+  ## Caught by
+
+  The 2026-06-04 GitLab store round-trip validation (joe/aida-gl-test on self-hosted GitLab). NOT GitLab-specific — the failing path is local fresh-clone store resolution, so it reproduces on any remote (GitHub too).
+
+  ## Reproduction (deterministic, reproduced in /tmp AND ~/)
+
+  1. Have an AIDA-distributed project pushed to a remote (origin has `main` + `aida-store` branches).
+  2. `git clone <repo> /path/clone` (fresh — no local `.aida`).
+  3. `cd /path/clone && aida list`
+
+  **Expected** (per CLAUDE.md / TASK-621): "the first store-reading command auto-attaches the .aida-store worktree from the aida-store branch and rebuilds the cache, so aida list/findings/queue work with no manual step."
+
+  **Actual:**
+  - No `.aida` and no `.aida-store` are created — **auto-attach (TASK-621) does NOT fire.**
+  - `aida list` **silently returns the requirement graph of a DIFFERENT, unrelated project** (a deterministic 8-spec set incl. "A: depends on B", "BUG-380 dogfood", "TASK-474 … hint should NOT fire from /tmp" — same UUIDs every run), instead of the clone's actual specs (TASK-1, TASK-007) or an error.
+
+  Verified the data IS correct on the remote: `git ls-tree -r origin/aida-store` shows `objects/TASK/000/TASK-1.yaml` etc., and the ORIGINAL project + a clone AFTER `aida init` both list TASK-1 correctly. So write + the documented `aida init`-attach path work; only the auto path is broken.
+
+  ## Why this is HIGH
+
+  - **Silent wrong data.** A teammate (or you on a new machine) clones and sees a completely wrong requirement graph with no warning — the most dangerous failure mode. (BUG-428 added "refuse legacy fallback when distributed mode is DECLARED"; a fresh clone has no local `.aida/config.toml`, so distributed mode is NOT declared yet and that guard doesn't apply — this is the gap it left.)
+  - Contradicts the documented TASK-621 "git clone → just works" promise, which is core to teammate onboarding and the self-hosted-GitLab story (EPIC-35).
+
+  ## Likely root cause (for the implementer)
+
+  Chicken-and-egg: TASK-621 auto-attach appears gated on local `.aida/config.toml` to know the project is distributed — but a fresh clone doesn't have it yet (config comes FROM attaching). Auto-attach should instead detect the project is AIDA-distributed directly from the presence of `origin/aida-store` (or a local `aida-store` ref) and attach off that. AND: when no valid local store is resolvable, aida must ERROR (or attach), never silently read an ambient/global/MRU cache from an unrelated project — find and kill that fallback path.
+
+  ## Workaround
+
+  `aida init` in the fresh clone bootstraps + attaches correctly (the documented teammate path) — but the auto path is what's advertised and the silent-wrong-read is the real danger.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T15:27:48.950629573Z
+modified_at: 2026-06-04T15:27:48.950629573Z
+req_type: Bug
+tags:
+- aida:list
+- auto-attach
+- data-integrity
+- fresh-clone
+- from-validation
+- onboarding-flow
+- store-resolution
