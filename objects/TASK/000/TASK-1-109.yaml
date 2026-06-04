@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T16:22:11.120922103Z
-modified_at: 2026-06-04T16:22:51.043531570Z
+modified_at: 2026-06-04T16:51:04.961006108Z
 req_type: Task
 tags:
 - aida:queue:clear
@@ -38,3 +38,8 @@ comments:
   content: 'Promoted by joe 2026-06-04: Correctness: ''aida queue clear --completed'' silent no-op on the DEFAULT git-canonical backend.'
   created_at: 2026-06-04T16:22:51.043531570Z
   modified_at: 2026-06-04T16:22:51.043531570Z
+- id: 019e938b-ac81-7980-a47f-cca18d45294f
+  author: joe
+  content: 'Verified already fixed (2026-06-04): git_backend::queue_clear implements completed_only filtering (reads queue YAML, keeps entries whose backing spec is not Completed, rewrites) with two passing tests (queue_clear_completed_only_filters_by_backing_spec_status, queue_clear_without_completed_flag_wipes_everything). The finding described the old _completed_only no-op, since resolved. Closing as already-fixed; no new work.'
+  created_at: 2026-06-04T16:51:04.961006108Z
+  modified_at: 2026-06-04T16:51:04.961006108Z
