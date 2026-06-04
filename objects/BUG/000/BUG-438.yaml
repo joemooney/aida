@@ -30,12 +30,12 @@ description: |-
   - [ ] Re-validate end-to-end: a fast kill-and-resume carries TASK-640-shaped work through reviewer → merge → pull (the path that's been blocked).
   - [ ] Consider (separate slice if large): reviewer phase reviews PR-N without owning the backing spec — the shared root of BUG-436 + Finding 1.
   trace:STORY-492 trace:BUG-436
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:07:33.355449802Z
-modified_at: 2026-06-04T04:25:35.648667108Z
+modified_at: 2026-06-04T04:26:53.031385147Z
 req_type: Bug
 tags:
 - drain
