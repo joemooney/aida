@@ -775,4 +775,28 @@ mod auto_release_tests {
         let d = classify_for_auto_release(false, 0, false, true, 0, 0);
         assert!(matches!(d, AutoReleaseDecision::SafelyDormant { .. }));
     }
+
+    /// BUG-438: the fast-resume case. A crashed implementer's lease is dead-PID
+    /// but its mtime is still *fresh* (e.g. 30s) — under the default threshold
+    /// that pins it `Live`, so the reviewer phase collides with it. Resume forces
+    /// `threshold = 0` so the same dead-PID, clean-worktree lease releases
+    /// instead. trace:BUG-438 | ai:claude
+    #[test]
+    fn classify_fresh_dead_lease_releases_only_at_zero_threshold() {
+        // dead pid, 30s-fresh mtime, no live claude, worktree present + clean.
+        let live = classify_for_auto_release(false, 30, false, true, 0, 10);
+        assert_eq!(
+            live,
+            AutoReleaseDecision::Live,
+            "default threshold keeps a fresh dead lease Live — the bug"
+        );
+        let released = classify_for_auto_release(false, 30, false, true, 0, 0);
+        assert!(
+            matches!(released, AutoReleaseDecision::SafelyDormant { .. }),
+            "resume forces threshold 0 → the dead clean lease releases — the fix"
+        );
+        // A dirty worktree is still protected even at threshold 0.
+        let dirty = classify_for_auto_release(false, 30, false, true, 2, 0);
+        assert!(matches!(dirty, AutoReleaseDecision::DormantDirty { .. }));
+    }
 }

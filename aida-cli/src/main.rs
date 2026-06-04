@@ -71517,6 +71517,15 @@ fn handle_drain_resume(
                     pr,
                 })
             };
+            // BUG-438: when we re-enter past phase 1, the crashed implementer's
+            // lease on this spec may still be held (a fast resume outruns the
+            // mtime-based auto-release). Release it now — process-dead +
+            // clean-worktree only — so the reviewer phase doesn't collide with
+            // it (it resolves PR→spec and would otherwise hit "scope owned by
+            // lease …"). trace:BUG-438 | ai:claude
+            if resume_entry.is_some() {
+                release_dead_leases_for_resume(&project_root, &spec);
+            }
             let result = run_auto_complete(
                 storage,
                 user_id,
@@ -71844,11 +71853,67 @@ fn run_auto_complete(
     // STORY-301: a single-spec drain owns the file — clear it now the run is
     // over. A clean exit removes the file; only a crash leaves it behind for
     // `aida drain status` to flag as a stale drain. trace:STORY-301
+    //
+    // BUG-438: but a *resume* that FAILED at a phase must KEEP the drain-state,
+    // or the operator can't `--resume-drain` again after fixing the blocker —
+    // the checkpoint would be consumed on failure. A resume that succeeded
+    // clears it (the work is done); a non-resume drain clears as before.
+    // trace:BUG-438 | ai:claude
     if owns_drain_state {
-        let _ = drain_state::DrainState::clear(&project_root);
+        if should_clear_drain_state(owns_drain_state, resume.is_some(), result.exit_code) {
+            let _ = drain_state::DrainState::clear(&project_root);
+        } else if !json {
+            eprintln!(
+                "  {} keeping drain-state — fix the blocker, then re-run \
+                 `aida queue work --auto-complete --resume-drain`",
+                "ⓘ".cyan()
+            );
+        }
     }
 
     result
+}
+
+/// BUG-438: should a finished single-spec drain clear its `drain-state.json`?
+/// Clear when this run owns the file AND it is not a *failed resume* — a resume
+/// that failed keeps the checkpoint so the operator can fix the blocker and
+/// `--resume-drain` again, rather than the checkpoint being consumed on
+/// failure. A successful resume (work done) and any non-resume drain clear as
+/// before. Pure so the rule is unit-pinned. trace:BUG-438 | ai:claude
+fn should_clear_drain_state(owns_drain_state: bool, is_resume: bool, exit_code: i32) -> bool {
+    owns_drain_state && !(is_resume && exit_code != 0)
+}
+
+#[cfg(test)]
+mod drain_state_clear_tests {
+    use super::should_clear_drain_state;
+
+    #[test]
+    fn failed_resume_keeps_drain_state() {
+        // BUG-438: a resume that failed at a phase must NOT consume the
+        // checkpoint — it stays re-resumable after the operator fixes the blocker.
+        assert!(!should_clear_drain_state(true, true, 3));
+    }
+
+    #[test]
+    fn successful_resume_clears() {
+        assert!(should_clear_drain_state(true, true, 0));
+    }
+
+    #[test]
+    fn non_resume_drain_unchanged() {
+        // Pre-BUG-438 behaviour preserved for a normal drain: clear on both
+        // success and failure (the file is only left behind by a true crash,
+        // not a clean run that happened to fail a phase).
+        assert!(should_clear_drain_state(true, false, 0));
+        assert!(should_clear_drain_state(true, false, 4));
+    }
+
+    #[test]
+    fn non_owner_never_clears() {
+        assert!(!should_clear_drain_state(false, true, 0));
+        assert!(!should_clear_drain_state(false, false, 0));
+    }
 }
 
 /// Resolve the queued members of a `batch:NAME` tag in pickup order, filtered
@@ -77300,6 +77365,49 @@ fn auto_release_decision_for_lease(
         worktree_dirty_count,
         config.stale_lease_threshold_minutes,
     )
+}
+
+/// BUG-438: on `--resume-drain`, proactively release the crashed orchestrator's
+/// lease(s) on `scope` whose creator process is dead — *independent of the
+/// staleness clock*. The time-based auto-release ([`auto_release_decision_for_lease`])
+/// keeps a dead-PID lease "Live" while its mtime is still fresh, so a **fast**
+/// resume (within `stale_lease_threshold_minutes`) collides with the crashed
+/// implementer's lease when the reviewer phase resolves PR→spec. We have already
+/// passed the PID-liveness double-drive gate, so the original orchestrator is
+/// dead — its child leases are too. We force `threshold = 0` so a dead-PID
+/// *clean-worktree* lease releases regardless of mtime, while a **dirty**
+/// worktree still classifies `DormantDirty` and is left untouched (no
+/// uncommitted work is lost — the operator handles it). trace:BUG-438 | ai:claude
+fn release_dead_leases_for_resume(project_root: &std::path::Path, scope: &str) {
+    let mut cfg = orchestrator::OrchestratorConfig::load(project_root);
+    // Resume is a deliberate recovery — release the crashed lease even if the
+    // project disabled the dormant-lease auto-release, and ignore the mtime
+    // clock (PID-death is the authoritative signal here).
+    cfg.auto_release_dormant_leases = true;
+    cfg.stale_lease_threshold_minutes = 0;
+    let mut remaining = 16usize; // defense-in-depth bound, mirrors session_start
+    while remaining > 0 {
+        let leases = list_leases(project_root);
+        let Some(conflict) = find_scope_lease_conflict(&leases, scope) else {
+            break;
+        };
+        match auto_release_decision_for_lease(project_root, &conflict, &cfg) {
+            orchestrator::AutoReleaseDecision::SafelyDormant { .. } => {
+                eprintln!(
+                    "  {} released the crashed drain's lease {} on `{}` (process dead)",
+                    "ⓘ".cyan(),
+                    (&conflict.id[..conflict.id.len().min(8)]).yellow(),
+                    scope
+                );
+                let _ = force_cleanup_lease(project_root, &conflict);
+                remaining -= 1;
+            }
+            // Live (process somehow still alive — won't happen post-gate) or
+            // DormantDirty (uncommitted work) → leave it; the reviewer phase's
+            // own conflict path / the operator handles those cases.
+            _ => break,
+        }
+    }
 }
 
 /// BUG-307: format a seconds-old duration into the short human form used in
