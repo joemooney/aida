@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T10:29:20.746775632Z
-modified_at: 2026-06-01T06:51:06.774126289Z
+modified_at: 2026-06-04T16:19:55.112260502Z
 req_type: Bug
 tags:
 - ci
@@ -35,3 +35,8 @@ comments:
     FIX OPTIONS (needs a focused repro session — un-reproducible locally without load): (a) eliminate process-CWD reliance — make the cd-and-restore paths pass an explicit cwd to git instead of set_current_dir (removes the landmine at the root; ~5 sites); (b) serialize CWD-mutating + real-git tests with the serial_test crate (#[serial]) so the race can't occur. (a) is the durable fix. Can't verify either is effective without reproducing the flake, so don't claim 'fixed' until a load-repro is green. trace:BUG-409
   created_at: 2026-06-01T06:51:06.774126289Z
   modified_at: 2026-06-01T06:51:06.774126289Z
+- id: 019e936f-2468-7b23-bc5e-ecbf68513694
+  author: joe
+  content: 'Investigation (2026-06-04): the named test is hermetic — it fakes the aida exe and the production rebase (pr_rebase_handler) uses ''git -C <wt_path>'' isolation, and the git() test helper uses current_dir. Root suspicion: global-CWD contention under parallel test execution (several production handlers — session_start/session_end/handle_queue_work/prepare_agent_launch — call std::env::set_current_dir, which is process-global). The named test''s project_root tempdir was never git-init''d, so any git op reaching it had no repo. FIX shipped: git-init the fixture per the spec''s ''fresh temp repo per run'' remedy (30/30 deterministic locally). If CI flakes again, the next step is to confirm the parallel hypothesis (run the suite with --test-threads=1) and add serialization (#[serial]) to the set_current_dir-exercising tests — that is the deeper fix the global-CWD hazard implies.'
+  created_at: 2026-06-04T16:19:55.112260502Z
+  modified_at: 2026-06-04T16:19:55.112260502Z
