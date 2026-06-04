@@ -31717,6 +31717,25 @@ mod story_429_auto_rebase_tests {
         perms.set_mode(0o755);
         std::fs::set_permissions(&fake_aida, perms).unwrap();
 
+        // BUG-409: make the fixture a fresh, fully-isolated git repo (the spec's
+        // prescribed fix). The driver runs git/aida against `project_root`; an
+        // un-init'd tempdir left any stray git op to fall through to whatever
+        // working tree the process happened to inherit — the source of the
+        // "untracked working tree files would be overwritten by merge" CI flake
+        // on unrelated (docs-only) PRs. A real repo here contains every git
+        // operation to this throwaway dir. trace:BUG-409 | ai:claude
+        let g = |args: &[&str]| {
+            std::process::Command::new("git")
+                .current_dir(tmp.path())
+                .args(args)
+                .output()
+                .expect("git spawn in fixture");
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t.t"]);
+        g(&["config", "user.name", "t"]);
+        g(&["commit", "-q", "--allow-empty", "-m", "init"]);
+
         let mut driver = driver(Some(auto_complete::NoHumanMode::Both), false, false);
         driver.aida_exe = fake_aida;
         driver.project_root = tmp.path().to_path_buf();
