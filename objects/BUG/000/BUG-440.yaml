@@ -16,12 +16,12 @@ description: |-
   - When a 'Review PR-N' story exists, the reviewer path uses it (review_target) rather than re-resolving the PR's commit specs.
   - Regression: a genuinely ambiguous PR (multiple DELIVERED specs, no review story) still surfaces a clear message.
   trace:STORY-501
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T05:25:24.116781885Z
-modified_at: 2026-06-04T16:09:31.680696098Z
+modified_at: 2026-06-04T16:47:35.067655059Z
 req_type: Bug
 tags:
 - from-validation
@@ -34,3 +34,7 @@ comments:
   content: Commit 710ebd5a9 references this requirement
   created_at: 2026-06-04T16:09:31.680696098Z
   modified_at: 2026-06-04T16:09:31.680696098Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-04T16:47:35.067655059Z
+  completion_sha: 8b713ddaa30f7e1f4fb6ec33231714453698099e
