@@ -1265,18 +1265,33 @@ fn run() -> Result<()> {
             // requirements.yaml/SQLite: that shows STALE data with no signal
             // it's wrong (a first-user lands on someone's pre-migration specs
             // and never knows). trace:BUG-428 | ai:claude
-            if let Some(project_root) = distributed_mode_declared() {
-                let on_origin =
-                    aida_core::git_ops::remote_branch_exists(&project_root, "origin", "aida-store");
-                // TASK-621: make reads "just work" on a fresh clone without a
-                // manual `aida init` — auto-attach the store worktree from the
-                // `aida-store` branch (the same fetch + worktree-add the
-                // post-clone init does). Only the node-id / scaffolding steps
-                // stay with `aida init` / `aida node acquire`: a node id is
-                // needed before WRITING, not reading. One-time cost — once the
-                // worktree exists, detect_distributed_store fast-paths above.
-                // trace:TASK-621 | ai:claude
-                if on_origin {
+            // BUG-442 / TASK-621: a project is distributed if local
+            // `.aida/config.toml` declares it OR — on a FRESH CLONE with no
+            // local config yet — the `aida-store` branch exists (origin or
+            // local). Detecting from the git ref is what makes auto-attach fire
+            // on a fresh clone AND, critically, prevents falling through to
+            // `determine_requirements_path`'s global-registry fallback, which
+            // would SILENTLY read an UNRELATED project's store (the worst
+            // failure mode — wrong data, no warning). BUG-428's refuse-fallback
+            // guard only covered the *declared* case; a fresh clone isn't
+            // declared yet, which is exactly the gap this closes.
+            // trace:BUG-442 trace:TASK-621 trace:BUG-428 | ai:claude
+            let distributed_root = distributed_mode_declared().or_else(|| {
+                let root = find_project_root().ok()?;
+                branch_exists_anywhere(&root, "aida-store").then_some(root)
+            });
+            if let Some(project_root) = distributed_root {
+                // An already-attached fresh clone (no config, but the worktree
+                // exists from a prior auto-attach) must be used directly — no
+                // re-fetch, no repeated "attached…" noise on every command.
+                let existing_worktree = project_root.join(".aida-store");
+                let store_path_opt = if existing_worktree.join("objects").is_dir() {
+                    Some(existing_worktree)
+                } else if branch_exists_anywhere(&project_root, "aida-store") {
+                    // Auto-attach the store worktree from the `aida-store` branch
+                    // (the same fetch + worktree-add the post-clone init does).
+                    // Node-id / scaffolding stay with `aida init` / `aida node
+                    // acquire`: a node id is needed before WRITING, not reading.
                     match try_attach_store_worktree(&project_root) {
                         Ok(store_path) => {
                             eprintln!(
@@ -1285,29 +1300,36 @@ fn run() -> Result<()> {
                                 "Note:".dimmed(),
                                 "aida node acquire".cyan()
                             );
-                            if matches!(&cli.command, Command::McpServe) {
-                                let mcp_storage = Storage::new(&store_path);
-                                let project_root =
-                                    find_project_root().unwrap_or_else(|_| store_path.clone());
-                                mcp::run_mcp_server(&mcp_storage, project_root)?;
-                                return Ok(());
-                            }
-                            return handle_git_backend_command(&store_path, &cli.command);
+                            Some(store_path)
                         }
                         // Auto-attach failed (offline, diverged/locked branch,
-                        // git too old, …). Don't fall to legacy — drop to the
-                        // explicit setup guidance below, naming the cause.
+                        // git too old, …). Don't fall to legacy/ambient — drop to
+                        // the explicit setup guidance below, naming the cause.
                         Err(e) => {
                             eprintln!(
                                 "{} couldn't auto-attach the store worktree: {}",
                                 "Note:".dimmed(),
                                 e
                             );
+                            None
                         }
                     }
+                } else {
+                    None
+                };
+                if let Some(store_path) = store_path_opt {
+                    if matches!(&cli.command, Command::McpServe) {
+                        let mcp_storage = Storage::new(&store_path);
+                        let project_root =
+                            find_project_root().unwrap_or_else(|_| store_path.clone());
+                        mcp::run_mcp_server(&mcp_storage, project_root)?;
+                        return Ok(());
+                    }
+                    return handle_git_backend_command(&store_path, &cli.command);
                 }
-                let branch_hint = if on_origin {
-                    "\n  Its `aida-store` branch is on origin, ready to attach."
+                let on_store_ref = branch_exists_anywhere(&project_root, "aida-store");
+                let branch_hint = if on_store_ref {
+                    "\n  Its `aida-store` branch is available, ready to attach."
                 } else {
                     ""
                 };
@@ -1316,8 +1338,8 @@ fn run() -> Result<()> {
                      this working copy yet (no `.aida-store/` worktree).{branch_hint}\n\n  \
                      Run `aida init` to attach it — it creates the `.aida-store` worktree \
                      from the `aida-store` branch and rebuilds the cache.\n\n  \
-                     (Refusing to fall back to a legacy requirements file: that would show \
-                     stale, pre-migration data with no indication it's wrong.)"
+                     (Refusing to fall back to a legacy or ambient requirements store: \
+                     that would show stale or UNRELATED data with no indication it's wrong.)"
                 );
             }
         } // close is_external_integration check
@@ -24210,6 +24232,62 @@ fn branch_exists_anywhere(project_root: &std::path::Path, branch: &str) -> bool 
         return true;
     }
     aida_core::git_ops::remote_branch_exists(project_root, "origin", branch)
+}
+
+#[cfg(test)]
+mod bug_442_distributed_detection_tests {
+    use super::*;
+
+    fn git(root: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {:?}: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// BUG-442: a fresh clone has NO local `.aida/config.toml`, so
+    /// `distributed_mode_declared_from` is None — but the project IS distributed
+    /// when the `aida-store` branch exists. The dispatch must detect that from
+    /// the git ref (and then auto-attach / refuse the silent ambient fallback),
+    /// never treat a config-less clone as a non-AIDA dir. This locks the two
+    /// halves of that signal so a future change can't re-gate detection on a
+    /// local config. trace:BUG-442 | ai:claude
+    #[test]
+    fn distributed_detected_from_git_ref_without_local_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        git(root, &["init", "-q", "-b", "main"]);
+        git(root, &["config", "user.email", "t@t.t"]);
+        git(root, &["config", "user.name", "t"]);
+        std::fs::write(root.join("f"), "x").unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-q", "-m", "init"]);
+        // Simulate the orphan store branch existing locally (as a fresh clone's
+        // origin/aida-store would), with NO `.aida/config.toml`.
+        git(root, &["branch", "aida-store"]);
+
+        assert!(
+            distributed_mode_declared_from(root).is_none(),
+            "no config.toml → not declared (the fresh-clone state)"
+        );
+        assert!(
+            branch_exists_anywhere(root, "aida-store"),
+            "aida-store ref present → the git-only distributed signal must fire"
+        );
+        // Without the ref it must NOT look distributed (would otherwise refuse
+        // every plain git repo).
+        assert!(
+            !branch_exists_anywhere(root, "no-such-branch"),
+            "absent ref → not distributed"
+        );
+    }
 }
 
 /// TASK-245: decide whether `aida session start` should check out an
