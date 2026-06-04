@@ -1,0 +1,25 @@
+id: 019e90a2-5f1c-7982-9019-c21ca2da847b
+spec_id: TASK-639
+agreed_id: TASK-639
+title: 'Live --resume-drain validation: append a one-line note to docs/scratch/resume-probe.md (throwaway)'
+description: |-
+  Throwaway spec to exercise the STORY-492 live kill-and-resume path end-to-end. Deliberately trivial + isolated so the drain produces a small, safe PR.
+
+  Implementer: create docs/scratch/resume-probe.md (new dir + file) containing a single line: 'resume-drain live validation — <date>'. Change nothing else.
+
+  ## Acceptance
+  - docs/scratch/resume-probe.md exists with the one line.
+  - No other files changed.
+
+  NOTE: this is a validation artifact, not real work — revert/delete after the test (git rm docs/scratch/resume-probe.md). Safe to merge; trivial blast radius. trace:STORY-492
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T03:17:00.828166595Z
+modified_at: 2026-06-04T03:17:00.828166595Z
+req_type: Task
+tags:
+- from-validation
+- resume-drain-test
+- throwaway
