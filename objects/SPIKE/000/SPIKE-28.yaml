@@ -9,12 +9,12 @@ description: |-
 
   Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/15-agy-multi-agent.md
   Acceptance: AGY's multi-agent primitives documented, AIDA's AGY-dispatch policy refined.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:23:15.377840835Z
-modified_at: 2026-05-29T03:23:15.377840835Z
+modified_at: 2026-06-04T15:45:01.723329090Z
 req_type: Spike
 tags:
 - antigravity
