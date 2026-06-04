@@ -62631,38 +62631,81 @@ fn queued_review_story_for_pr(
     })
 }
 
+/// BUG-440: outcome of choosing a single review target from a PR's spec sets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PrSpecChoice {
+    One(String),
+    None,
+    Ambiguous(Vec<String>),
+}
+
+/// BUG-440: pick the single spec a PR should be reviewed against, given the
+/// DELIVERED specs (subject `(SPEC-ID)` trailers + review-story covers
+/// relationships) and the broader REFERENCED specs (anything spec-id-shaped in
+/// titles/bodies/trace lines). Delivered wins outright when non-empty, so a PR
+/// that delivers one spec while merely *tracing* others resolves cleanly
+/// instead of bailing on false ambiguity (the STORY-501 / TASK-642 case). Only
+/// a genuinely ambiguous *delivered* set — or, absent any delivery signal, an
+/// ambiguous referenced set — is reported as ambiguous. Both inputs are assumed
+/// already reduced to most-specific. Pure, so the precedence is unit-testable
+/// without `gh`. trace:BUG-440 | ai:claude
+fn pick_pr_spec(delivered: &[String], referenced: &[String]) -> PrSpecChoice {
+    let pool = if !delivered.is_empty() {
+        delivered
+    } else {
+        referenced
+    };
+    match pool.len() {
+        0 => PrSpecChoice::None,
+        1 => PrSpecChoice::One(pool[0].clone()),
+        _ => PrSpecChoice::Ambiguous(pool.to_vec()),
+    }
+}
+
 pub fn resolve_pr_to_spec(
     project_root: &std::path::Path,
     pr: u32,
     store: &RequirementsStore,
 ) -> Result<String> {
-    let mut specs = Vec::new();
+    // BUG-440: keep DELIVERED specs (the authoritative "this PR ships X" signal:
+    // a review story's covers/implements relationships + the `(SPEC-ID)` subject
+    // trailers) separate from REFERENCED specs (the broad net: any spec-id-shaped
+    // token in titles/descriptions/trace lines). A PR can legitimately deliver
+    // one spec while tracing others; preferring delivered avoids a false
+    // "multiple backing specs" bail. trace:BUG-440 | ai:claude
+    let mut delivered: Vec<String> = Vec::new();
+    let mut referenced: Vec<String> = Vec::new();
+    let push_unique = |v: &mut Vec<String>, id: String| {
+        if !v.contains(&id) {
+            v.push(id);
+        }
+    };
 
     for req in &store.requirements {
         if let Some(num) = parse_review_story_pr_number(&req.title) {
             if num == pr as u64 {
-                for id in extract_all_spec_ids(&req.title) {
-                    if !specs.contains(&id) {
-                        specs.push(id);
-                    }
-                }
-                for id in extract_all_spec_ids(&req.description) {
-                    if !specs.contains(&id) {
-                        specs.push(id);
-                    }
-                }
+                // covers/implements relationships = authoritative delivery link.
                 for rel in &req.relationships {
                     if let Some(target) = store.requirements.iter().find(|r| r.id == rel.target_id)
                     {
                         if let Some(spec_id) = &target.spec_id {
                             let canon = spec_id.to_uppercase();
                             if !canon.starts_with("PR-") {
-                                if !specs.contains(&canon) {
-                                    specs.push(canon);
-                                }
+                                push_unique(&mut delivered, canon);
                             }
                         }
                     }
+                }
+                // The title carries the PR's `(SPEC-ID)` delivery trailer; the
+                // free-text description is referenced-only (stray trace refs).
+                for id in extract_spec_ids_from_commit(&req.title) {
+                    push_unique(&mut delivered, id);
+                }
+                for id in extract_all_spec_ids(&req.title) {
+                    push_unique(&mut referenced, id);
+                }
+                for id in extract_all_spec_ids(&req.description) {
+                    push_unique(&mut referenced, id);
                 }
             }
         }
@@ -62683,42 +62726,43 @@ pub fn resolve_pr_to_spec(
         if let Ok(out) = c.output() {
             if out.status.success() {
                 let stdout = String::from_utf8_lossy(&out.stdout);
-                let mut fields = stdout.trim_end().split('\t');
-                if let Some(title) = fields.next() {
-                    for id in extract_all_spec_ids(title) {
-                        if !specs.contains(&id) {
-                            specs.push(id);
-                        }
+                let fields = stdout.trim_end().split('\t');
+                for field in fields {
+                    // Delivered = the trailing `(SPEC-ID)` / leading `SPEC-ID:`
+                    // group only; everything spec-id-shaped goes to referenced.
+                    for id in extract_spec_ids_from_commit(field) {
+                        push_unique(&mut delivered, id);
                     }
-                }
-                for subject in fields {
-                    for id in extract_all_spec_ids(subject) {
-                        if !specs.contains(&id) {
-                            specs.push(id);
-                        }
+                    for id in extract_all_spec_ids(field) {
+                        push_unique(&mut referenced, id);
                     }
                 }
             }
         }
     }
 
-    // BUG-431 #2: a PR can legitimately back an epic + its child story (the
-    // session was epic-scoped). Reduce to the most-specific before deciding —
-    // drop proven ancestors so epic+child collapses to the child. Genuinely
-    // unrelated specs survive the reduction and still bail below.
-    // trace:BUG-431 | ai:claude
-    let specs = reduce_to_most_specific_specs(store, &specs);
+    // Referenced is the fallback pool only — drop anything already delivered.
+    referenced.retain(|r| !delivered.contains(r));
 
-    if specs.is_empty() {
-        anyhow::bail!("PR-{} has no backing specs (could not find any associated spec IDs in review stories or PR metadata)", pr);
-    } else if specs.len() > 1 {
-        anyhow::bail!(
+    // BUG-431 #2: a PR can legitimately back an epic + its child story (the
+    // session was epic-scoped). Reduce each pool to the most-specific before
+    // deciding — drop proven ancestors so epic+child collapses to the child.
+    // Genuinely unrelated specs survive and still bail below.
+    // trace:BUG-431 | ai:claude
+    let delivered = reduce_to_most_specific_specs(store, &delivered);
+    let referenced = reduce_to_most_specific_specs(store, &referenced);
+
+    match pick_pr_spec(&delivered, &referenced) {
+        PrSpecChoice::One(s) => Ok(s),
+        PrSpecChoice::None => anyhow::bail!(
+            "PR-{} has no backing specs (could not find any associated spec IDs in review stories or PR metadata)",
+            pr
+        ),
+        PrSpecChoice::Ambiguous(specs) => anyhow::bail!(
             "PR-{} has multiple backing specs: {}. Use a single SPEC-ID instead.",
             pr,
             specs.join(", ")
-        );
-    } else {
-        Ok(specs[0].clone())
+        ),
     }
 }
 
@@ -62882,6 +62926,65 @@ mod task_518_pr_to_spec_tests {
         let root = std::path::Path::new("/tmp");
         let err = resolve_pr_to_spec(root, 123, &store).unwrap_err();
         assert!(err.to_string().contains("has multiple backing specs"));
+    }
+
+    /// BUG-440: delivered wins over referenced; falls back to referenced when
+    /// nothing is delivered; ambiguity is reported within the chosen pool.
+    #[test]
+    fn pick_pr_spec_prefers_delivered() {
+        let d = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // Delivers TASK-642, merely traces STORY-492 → TASK-642.
+        assert_eq!(
+            pick_pr_spec(&d(&["TASK-642"]), &d(&["STORY-492"])),
+            PrSpecChoice::One("TASK-642".into())
+        );
+        // No delivery signal → fall back to the single referenced spec.
+        assert_eq!(
+            pick_pr_spec(&d(&[]), &d(&["STORY-492"])),
+            PrSpecChoice::One("STORY-492".into())
+        );
+        // Nothing anywhere.
+        assert_eq!(pick_pr_spec(&d(&[]), &d(&["x"; 0])), PrSpecChoice::None);
+        // Two genuinely-delivered specs still ambiguous (referenced ignored).
+        assert_eq!(
+            pick_pr_spec(&d(&["A-1", "B-2"]), &d(&["C-3"])),
+            PrSpecChoice::Ambiguous(d(&["A-1", "B-2"]))
+        );
+        // No delivery, ambiguous references → ambiguous.
+        assert_eq!(
+            pick_pr_spec(&d(&[]), &d(&["A-1", "B-2"])),
+            PrSpecChoice::Ambiguous(d(&["A-1", "B-2"]))
+        );
+    }
+
+    /// BUG-440: a review story that COVERS one spec (relationship = delivered)
+    /// while its free-text description merely traces another resolves to the
+    /// covered spec — not an ambiguity error. The STORY-501 / TASK-642 case.
+    #[test]
+    fn resolve_pr_to_spec_prefers_covered_over_traced() {
+        let mut store = RequirementsStore::new();
+        let delivered = mock_req("Delivered spec", "", Some("TASK-642"));
+        // A second spec exists in the store and is only *traced* in the desc.
+        store
+            .requirements
+            .push(mock_req("Traced spec", "", Some("STORY-492")));
+        let mut review_story = mock_req(
+            "Review PR-456: ship the thing",
+            "Implements per design. trace:STORY-492 (informational).",
+            None,
+        );
+        review_story.relationships.push(Relationship {
+            rel_type: RelationshipType::Custom("implements".into()),
+            target_id: delivered.id,
+            created_at: None,
+            created_by: None,
+        });
+        store.requirements.push(delivered);
+        store.requirements.push(review_story);
+
+        let root = std::path::Path::new("/nonexistent-no-gh");
+        let resolved = resolve_pr_to_spec(root, 456, &store).unwrap();
+        assert_eq!(resolved, "TASK-642");
     }
 }
 
