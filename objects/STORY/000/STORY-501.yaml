@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:26:47.990941681Z
-modified_at: 2026-06-04T04:40:21.792329495Z
+modified_at: 2026-06-04T05:05:17.146532297Z
 req_type: Story
 tags:
 - orchestrator
@@ -34,3 +34,8 @@ comments:
   content: 'CONFIRMED BLOCKING (TASK-641 live run, 2026-06-03): with BUG-436 + BUG-438 both fixed, the resume got past the Done-guard AND released the dead lease — then revealed this root in full. The phase-3 ''reviewer'' resolved PR-453 → TASK-641 and spawned an IMPLEMENTER /aida-pickup session on a fresh branch (task-641-2), which RE-IMPLEMENTED the work and opened a DUPLICATE PR-454 instead of reviewing PR-453. Resume-specific aggravator: the CI clamp skips phase 2 (finish_ci), which in a normal drain is what ENDS the implementer session and queues the ''Review PR-N'' hand-off — so on resume the reviewer phase has no review queued and falls back to re-implementing. This is no longer cleanup-tier: the resume→reviewer→merge path cannot complete until the reviewer reviews PR-N without owning/re-implementing the spec. Recommend prioritizing this over more symptom patches.'
   created_at: 2026-06-04T04:40:21.792329495Z
   modified_at: 2026-06-04T04:40:21.792329495Z
+- id: 019e9105-7f5a-7583-8efc-495d13f56848
+  author: joe
+  content: 'DESIGN SKETCH — APPROVED (Option A, operator sign-off 2026-06-03). Root: BUG-436+BUG-438+re-implement are one root — the review path needs a queued ''Review PR-N'' story (→ review_target=Some → /aida-review on a PR-scoped lease, no spec ownership), minted by phase-2 finish_ci→aida session end→try_auto_queue_pr_review. Resume skips phase 2, so the story is missing and queue work PR-N falls back to PR→spec→/aida-pickup (owns the spec). FIX: in run_reviewer, before spawning ''aida queue work PR-N'', call the idempotent try_auto_queue_pr_review on the PR head branch to ensure the hand-off exists (normal drain: already_exists no-op; resume: mints it → reviewer path). Reuses the proven mechanism, zero change to the normal path or queue-work resolution; makes BUG-436/438 belt-and-suspenders. NOT doing the bigger queue-work-review-first rewrite. trace:STORY-501'
+  created_at: 2026-06-04T05:05:17.146532297Z
+  modified_at: 2026-06-04T05:05:17.146532297Z
