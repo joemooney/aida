@@ -53826,6 +53826,76 @@ mod queue_work_tests {
         assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
     }
 
+    fn queue_review_story(storage: &Storage, root: &std::path::Path) {
+        let backend = aida_core::GitBackend::new(root).unwrap();
+        let mut review =
+            aida_core::Requirement::new("Review PR-457: throwaway".to_string(), String::new());
+        review.spec_id = Some("STORY-901".to_string());
+        review.status = RequirementStatus::Approved;
+        let review_id = review.id.clone();
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(review);
+        backend.save(&store).unwrap();
+        storage
+            .queue_add(aida_core::QueueEntry {
+                user_id: "u".into(),
+                requirement_id: review_id,
+                position: 0,
+                added_by: "u".into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: Some("reviewer".into()),
+                for_scope: None,
+                for_session: None,
+            })
+            .unwrap();
+    }
+
+    /// STORY-501: the dispatch gate's signal — `queued_review_story_for_pr`
+    /// detects a queued "Review PR-N" story (so the dispatch DEFERS PR→spec
+    /// resolution to the reviewer pickup). trace:STORY-501 | ai:claude
+    #[test]
+    fn queued_review_story_for_pr_detects_queued_story() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let storage = Storage::new(&root);
+        queue_review_story(&storage, &root);
+        assert!(queued_review_story_for_pr(
+            &storage,
+            "u",
+            ReviewForge::GitHub,
+            457
+        ));
+        assert!(!queued_review_story_for_pr(
+            &storage,
+            "u",
+            ReviewForge::GitHub,
+            999
+        ));
+    }
+
+    /// STORY-501: with a "Review PR-N" story queued, resolve_queue_work_plan
+    /// routes `PR-N` to the reviewer (review_target set → `/aida-review --pr N`)
+    /// — the path the dispatch gate now lets run instead of resolving
+    /// PR→backing-spec into an implementer pickup. trace:STORY-501 | ai:claude
+    #[test]
+    fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let storage = Storage::new(&root);
+        queue_review_story(&storage, &root);
+        let plan = resolve_queue_work_plan(&storage, "u", Some("PR-457"), None, false)
+            .expect("PR-N with a queued review story resolves to a plan");
+        assert!(
+            plan.review_target.is_some(),
+            "PR-N pickup must set review_target so it routes to the reviewer"
+        );
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "reviewer"),
+            "/aida-review --pr 457"
+        );
+    }
+
     /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
     /// inner subprocess's error must name the lease + actual reason — not
     /// the canned "pass --steal" message. anyhow's `{:#}` collapses the
@@ -61878,6 +61948,36 @@ fn reduce_to_most_specific_specs(store: &RequirementsStore, specs: &[String]) ->
     out
 }
 
+/// STORY-501 / BUG-440: is a non-terminal "Review PR-N" story currently queued
+/// for this user? When one is, `aida queue work PR-N` must NOT be resolved to
+/// the PR's backing spec at the dispatch (TASK-518) — it must reach
+/// `resolve_queue_work_plan`'s review-story pickup (TASK-85) so it routes to the
+/// reviewer (`/aida-review` on a PR-scoped lease) instead of an implementer
+/// pickup that re-implements the spec. trace:STORY-501 | ai:claude
+fn queued_review_story_for_pr(
+    storage: &Storage,
+    user_id: &str,
+    forge: ReviewForge,
+    n: u64,
+) -> bool {
+    let Ok(entries) = storage.queue_list(user_id, /* include_completed */ false) else {
+        return false;
+    };
+    let Ok(store) = storage.load() else {
+        return false;
+    };
+    entries.iter().any(|e| {
+        store
+            .requirements
+            .iter()
+            .find(|r| r.id == e.requirement_id)
+            .map(|req| {
+                !is_terminal_status(&req.status) && review_title_matches(&req.title, forge, n)
+            })
+            .unwrap_or(false)
+    })
+}
+
 pub fn resolve_pr_to_spec(
     project_root: &std::path::Path,
     pr: u32,
@@ -67213,13 +67313,33 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // trace:TASK-518 | ai:antigravity
             let resolved_spec_id = if let Some(s) = effective_id {
                 if let Some(pr) = parse_pr_arg(s) {
-                    let store = storage.load()?;
-                    let project_root = storage.path().parent().ok_or_else(|| {
-                        anyhow::anyhow!("cannot derive project root from store path")
-                    })?;
-                    let resolved = resolve_pr_to_spec(project_root, pr, &store)?;
-                    println!("working on {} (backs {})", resolved, s);
-                    Some(resolved)
+                    // STORY-501/BUG-440: when a "Review PR-N" story is queued,
+                    // DON'T resolve PR→backing-spec here. The TASK-518 resolution
+                    // (resolve to the implemented spec) is right for a human who
+                    // wants to keep working the spec, but it runs BEFORE
+                    // resolve_queue_work_plan's review-story pickup (TASK-85) and
+                    // so defeated it: `queue work PR-N` became `queue work
+                    // <spec>` → an implementer pickup that OWNS + re-implements
+                    // the spec (the shared root of the resume reviewer
+                    // re-implementing, BUG-436, BUG-438, BUG-440). Leaving "PR-N"
+                    // when a review story exists lets TASK-85 route to the
+                    // reviewer (/aida-review, PR-scoped lease — no spec
+                    // ownership). Resolve to the backing spec only when there is
+                    // no review story to pick up. trace:STORY-501 | ai:claude
+                    let review_queued = parse_review_scope(s)
+                        .map(|(forge, n)| queued_review_story_for_pr(storage, &user_id, forge, n))
+                        .unwrap_or(false);
+                    if review_queued {
+                        None
+                    } else {
+                        let store = storage.load()?;
+                        let project_root = storage.path().parent().ok_or_else(|| {
+                            anyhow::anyhow!("cannot derive project root from store path")
+                        })?;
+                        let resolved = resolve_pr_to_spec(project_root, pr, &store)?;
+                        println!("working on {} (backs {})", resolved, s);
+                        Some(resolved)
+                    }
                 } else {
                     None
                 }
