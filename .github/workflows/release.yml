@@ -82,6 +82,13 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download all artifacts
+        # Multi-artifact mode (no `name:`, just `path:`) nests each artifact in
+        # artifacts/<artifact-name>/, which the `files:` paths below depend on.
+        # v5's only breaking change was single-artifact-BY-ID downloads; the
+        # multi-artifact layout is unchanged from v4. Verified against v5.0.0
+        # release notes + README, and empirically by the v0.9.1 and v0.11.0
+        # release runs (post-v5-upgrade) which uploaded all four tarballs.
+        # trace:TASK-425 | ai:claude
         uses: actions/download-artifact@v5
         with:
           path: artifacts
