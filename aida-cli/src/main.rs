@@ -76116,6 +76116,38 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })?;
 
+        // STORY-501: ensure the "Review PR-N" hand-off story exists before we
+        // hand the PR to `aida queue work PR-N`. Normally phase 2 (finish_ci →
+        // `aida session end`) mints it — but a `--resume-drain` that re-enters
+        // here SKIPPED phase 2, so without this the review story is missing and
+        // `queue work PR-N` falls back to PR→spec→`/aida-pickup`: an implementer
+        // pickup that OWNS and re-implements the spec (the shared root of
+        // BUG-436, BUG-438, and the duplicate-PR). With the story present,
+        // `queue work PR-N` takes the review path (review_target=Some → role
+        // reviewer, `/aida-review`, PR-scoped lease — no spec ownership).
+        //
+        // Idempotent: a normal drain finds the story already queued and no-ops
+        // (silent). A transient `gh` failure to mint is non-fatal — the reviewer
+        // proceeds and the BUG-436/BUG-438 guards backstop the fallback.
+        // trace:STORY-501 | ai:claude
+        if let Some(branch) = self.branch.clone() {
+            let outcome = try_auto_queue_pr_review(
+                &self.project_root,
+                &branch,
+                &uuid::Uuid::now_v7().to_string(),
+                AutoQueueOrigin::SessionEnd,
+            );
+            match outcome.status {
+                // Minted now (the resume case) or couldn't mint (gh down) —
+                // surface it. AlreadyExists (normal drain) / by-design skips
+                // stay silent so the normal path is unchanged.
+                AutoQueueStatus::Filed | AutoQueueStatus::SkippedNeedsAttention => {
+                    render_auto_queue_outcome(&outcome);
+                }
+                AutoQueueStatus::AlreadyExists | AutoQueueStatus::SkippedByDesign => {}
+            }
+        }
+
         // STORY-281: pre-flight stale-base check before launching the
         // headless reviewer. The 2026-05-17 self-test surfaced the
         // failure mode — PR queued for review with two PRs merged in
