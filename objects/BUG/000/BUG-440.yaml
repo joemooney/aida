@@ -1,0 +1,30 @@
+id: 019e9117-ea14-7f92-8282-ca8452cd6226
+spec_id: BUG-440
+agreed_id: BUG-440
+title: queue work PR-N / reviewer bails on a PR with multiple backing specs instead of preferring the trailer-credited spec
+description: |-
+  Surfaced in the STORY-501 live validation (TASK-642, 2026-06-03). The resume re-entered at the reviewer and STORY-501 correctly minted the 'Review PR-N' hand-off ('filed STORY-502 (covers TASK-642) → reviewer queue'), but phase 3 then died:
+
+      Error: PR-456 has multiple backing specs: STORY-492, TASK-642. Use a single SPEC-ID instead.
+
+  Cause: PR-456's commit referenced multiple specs — the (TASK-642) delivery trailer PLUS informational 'trace:STORY-492' lines (copied from the spec description in this test). resolve_pr_to_spec / the reviewer's PR→spec resolution treats all referenced specs equally and bails on the ambiguity, rather than preferring the DELIVERED spec (the '(SPEC-ID)' subject trailer — BUG-85's 'delivered vs referenced' distinction already exists) or the minted 'Review PR-N' story's spec.
+
+  Aggravated by test data here, BUT a real edge: a legitimate PR can deliver one spec while tracing others. The reviewer should not hard-fail on it.
+
+  ## Acceptance
+  - A PR whose commits deliver one spec (subject '(SPEC-ID)' trailer) but reference others (trace/body) resolves to the DELIVERED spec for review, not an ambiguity error.
+  - When a 'Review PR-N' story exists, the reviewer path uses it (review_target) rather than re-resolving the PR's commit specs.
+  - Regression: a genuinely ambiguous PR (multiple DELIVERED specs, no review story) still surfaces a clear message.
+  trace:STORY-501
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T05:25:24.116781885Z
+modified_at: 2026-06-04T05:25:24.116781885Z
+req_type: Bug
+tags:
+- from-validation
+- pr-resolution
+- resume
+- reviewer
