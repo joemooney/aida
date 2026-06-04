@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:26:47.990941681Z
-modified_at: 2026-06-04T05:05:17.146532297Z
+modified_at: 2026-06-04T05:10:43.925030497Z
 req_type: Story
 tags:
 - orchestrator
@@ -39,3 +39,8 @@ comments:
   content: 'DESIGN SKETCH — APPROVED (Option A, operator sign-off 2026-06-03). Root: BUG-436+BUG-438+re-implement are one root — the review path needs a queued ''Review PR-N'' story (→ review_target=Some → /aida-review on a PR-scoped lease, no spec ownership), minted by phase-2 finish_ci→aida session end→try_auto_queue_pr_review. Resume skips phase 2, so the story is missing and queue work PR-N falls back to PR→spec→/aida-pickup (owns the spec). FIX: in run_reviewer, before spawning ''aida queue work PR-N'', call the idempotent try_auto_queue_pr_review on the PR head branch to ensure the hand-off exists (normal drain: already_exists no-op; resume: mints it → reviewer path). Reuses the proven mechanism, zero change to the normal path or queue-work resolution; makes BUG-436/438 belt-and-suspenders. NOT doing the bigger queue-work-review-first rewrite. trace:STORY-501'
   created_at: 2026-06-04T05:05:17.146532297Z
   modified_at: 2026-06-04T05:05:17.146532297Z
+- id: 019e910a-7bd5-7151-8a75-2c6ba64841a4
+  author: joe
+  content: Commit 00b432a6d references this requirement
+  created_at: 2026-06-04T05:10:43.925030497Z
+  modified_at: 2026-06-04T05:10:43.925030497Z
