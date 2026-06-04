@@ -1,0 +1,18 @@
+id: 019e937b-8adc-7461-901e-fc8707d4cbdc
+spec_id: STORY-513
+agreed_id: STORY-513
+title: 'EPIC-35 slice 1a: forge-provider foundation (trait + 3 providers + [forge] config + init auto-detection)'
+description: 'The foundation half of EPIC-35 slice 1: the Forge trait + forge-neutral data types, the GitHub/GitLab/PureGit providers, the [forge] config section, origin-host auto-detection (detect_forge_kind), the forge_for factory, and init scaffolding the detected [forge] provider. Behavior-preserving/additive — the ~113 gh call sites are migrated behind the trait in slice-1b follow-on commits. GitHub provider issues the same gh argv the call sites issue today. Verified: 11 unit tests + end-to-end init smoke (gitlab/github/pure-git detection). Design: docs/plans/2026-06-04-forge-provider.md (SPIKE-49, master-approved).'
+status: InProgress
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T16:33:27.772978790Z
+modified_at: 2026-06-04T16:33:27.772978790Z
+req_type: Story
+tags:
+- epic-35-slice-1
+- forge-provider
+- gitlab
+- multi-vendor
+- parent:EPIC-35
