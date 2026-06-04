@@ -1,0 +1,18 @@
+id: 019e9357-224b-7af1-a922-3bf32644ae2c
+spec_id: STORY-509
+agreed_id: STORY-509
+title: '[EPIC-35 s3] GitLab provider — open_change/status/merge/comment/list via glab (+ REST fallback)'
+description: 'Size L, core GitLab work. Implement the GitLab `Forge` impl: open_change (push options — token-free, proven in SPIKE-49), change_status, merge_change, comment, list_changes via `glab` CLI with REST-API fallback. glab as a documented dependency for GitLab projects (parallel to gh). Depends on s1. Acceptance: each trait method works against a real GitLab project; MR round-trip (open→status→merge) green.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T15:53:41.707793607Z
+modified_at: 2026-06-04T15:53:41.707793607Z
+req_type: Story
+tags:
+- forge-provider
+- from-product
+- gitlab
+- parent:EPIC-35
+- slice:3
